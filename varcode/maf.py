@@ -24,8 +24,6 @@ import pickle
 import pandas
 import Bio.SeqIO
 
-import common
-
 TCGA_PATIENT_ID_LENGTH = 12
 
 MAF_COLUMN_NAMES = [
@@ -51,7 +49,7 @@ MAF_COLUMN_NAMES = [
 ]
 
 
-def load_maf(filename, nrows=None, verbose=False):
+def load_maf_dataframe(filename, nrows=None, verbose=False):
     """
     Load the guaranteed columns of a TCGA MAF file into a DataFrame
     """
@@ -65,37 +63,12 @@ def load_maf(filename, nrows=None, verbose=False):
                 lines_to_skip += 1
             else:
                 break
-    df = pandas.read_csv(
+    return pandas.read_csv(
         filename,
         skiprows=lines_to_skip,
         sep="\t",
         usecols=range(len(MAF_COLUMN_NAMES)),
         low_memory=False,
         names=MAF_COLUMN_NAMES)
-    if verbose:
-        print df[['NCBI_Build', 'Variant_Type', 'Chromosome',
-                  'Start_Position', 'Reference_Allele',
-                  'Tumor_Seq_Allele1', 'Tumor_Seq_Allele2',
-                  'Tumor_Sample_Barcode']]
-    build_37 = df['NCBI_Build'] == 37
-    build_hg19 = df['NCBI_Build'].astype(str) == 'hg19'
-    ok_reference = build_37 | build_hg19
-    assert ok_reference.all(), "Invalid NCBI build '%s' in MAF file %s" % (
-        df[~ok_reference]['NCBI_Build'].ix[0], filename)
-    return df
 
 
-def is_valid_tcga(tcga_barcode):
-    return tcga_barcode.startswith("TCGA") and len(tcga_barcode) >= (
-            TCGA_PATIENT_ID_LENGTH)
-
-
-def get_patient_id(tcga_barcode):
-    """
-    Accepts a TCGA barcode (full or partial), and returns the
-    portion corresponding to the patient ID.
-    See https://wiki.nci.nih.gov/display/TCGA/TCGA+Barcode
-    """
-    assert is_valid_tcga(tcga_barcode), (
-            "Invalid TCGA barcode: %s" % tcga_barcode)
-    return tcga_barcode[:TCGA_PATIENT_ID_LENGTH]
