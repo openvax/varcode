@@ -14,15 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import gzip
 import logging
-import argparse
-import glob
-import re
-import pickle
 
 import pandas
-import Bio.SeqIO
 
 TCGA_PATIENT_ID_LENGTH = 12
 
