@@ -1,0 +1,29 @@
+##fileformat=VCFv4.1
+##reference=file:///projects/ngs/resources/gatk/2.3/ucsc.hg19.fasta
+##INFO=<ID=GE,Number=.,Type=String,Description="HGNC Gene Symbol (could be more than one)">
+##INFO=<ID=EG,Number=.,Type=String,Description="Entrez Gene ID (could be more than one)">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##contig=<ID=chrM,length=16571>
+##contig=<ID=chr1,length=249250621>
+##contig=<ID=chr10,length=135534747>
+##contig=<ID=chr11,length=135006516>
+##contig=<ID=chr12,length=133851895>
+##contig=<ID=chr14,length=107349540>
+##contig=<ID=chr15,length=102531392>
+##contig=<ID=chr16,length=90354753>
+##contig=<ID=chr17,length=81195210>
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	metastasis
+chr1	53513530	.	A	C	.	.	GE=SCP2;EG=6342	GT	0/1
+chr1	228295398	.	G	T	.	.	GE=MRPL55;EG=128308	GT	0/1
+chr10	49658590	.	T	C	.	.	GE=ARHGAP22;EG=58504	GT	0/1
+chr10	51585166	.	G	T	.	.	GE=NCOA4;EG=8031	GT	0/1
+chr10	96709040	.	A	C	.	.	GE=CYP2C9;EG=1559	GT	0/1
+chr10	119134281	.	G	T	.	.	GE=PDZD8;EG=118987	GT	0/1
+chr11	118244286	.	G	G	.	.	GE=UBE4A;EG=9354	GT	0/1
+chr12	14794076	.	C	A	.	.	GE=GUCY2C;EG=2984	GT	0/1
+chr12	25398284	.	C	G	.	.	GE=KRAS;EG=3845	GT	0/1
+chr12	42778752	.	T	A	.	.	GE=PPHLN1;EG=51535	GT	0/1
+chr14	31144202	.	A	C	.	.	GE=SCFD1;EG=23256	GT	0/1
+chr16	25704209	.	G	A	.	.	GE=HS3ST4;EG=9951	GT	0/1
+chr17	7577548	.	C	CA	.	.	GE=TP53;EG=7157	GT	0/1
+chr17	36731197	.	C	AAT	.	.	GE=SRCIN1;EG=80725	GT	0/1
