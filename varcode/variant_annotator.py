@@ -1,7 +1,10 @@
+from common import reverse_complement
 from variant import Variant
+from annot import Annot
 
 import pyensembl
 from pyensembl.biotypes import is_coding_biotype
+
 
 class VariantAnnotator(object):
     def __init__(self, ensembl_release):
@@ -92,48 +95,93 @@ class VariantAnnotator(object):
             "No transcripts found for mutation %s:%d %s>%s" % (
                 contig, pos, ref, alt)
 
-        exonic = any(
-            self.overlaps_any_exon(
-                transcript, contig, start=pos, end=end_pos)
-            for transcript in
-            overlapping_transcripts
-        )
-
         # group transcripts by their gene ID
         overlapping_transcript_groups = self.group_by(
             overlapping_transcripts, field_name='gene_id')
 
-        if not exonic:
-            return self.make_intronic(
-                variant=variant,
-                genes=overlapping_genes,
-                transcripts=overlapping_transcript_groups)
-
         protein_variants = {}
         for transcript in overlapping_transcripts:
-            if is_coding_biotype(transcript.biotype) and transcript.complete:
-                seq = transcript.coding_sequence
-                variant_start_offset = transcript.spliced_offset(pos)
-                variant_end_offset = transcript.spliced_offset(end_pos)
-                if variant_start_offset > variant_end_offset:
-                    assert transcript.strand == "-"
-                    original_cdna = seq[variant_end_offset:variant_start_offset+1:-1]
-                    print type(original_cdna)
-                    original_dna = original_cdna.complement
-                else:
-                    assert transcript.strand == "+"
-                    original_dna = seq[variant_start_offset:variant_end_offset+1]
-                assert original_dna == variant.ref, (variant, original_dna, pos, end_pos)
+            if not is_coding_biotype(transcript.biotype):
+                protein_variants[transcript.id] = "non-coding"
+                continue
+
+            if not transcript.complete:
+                protein_variants[transcript.id] = "incomplete"
+                continue
+
+            exonic = self.overlaps_any_exon(
+                transcript, contig, start=pos, end=end_pos)
+
+            if not exonic:
+                protein_variants[transcript.id] = "intronic"
+                continue
+
+            seq = transcript.coding_sequence
+            if transcript.on_backward_strand:
+                ref = reverse_complement(variant.ref)
+                alt = reverse_complement(variant.alt)
+            else:
+                ref = variant.ref
+                alt = variant.alt
+            # get offsets into coding sequence by subtracting off
+            # untranslated region lengths
+            # TODO: move subtraction of 5' UTR length into
+            # pyensembl.Transcript, call the method "coding_offset"
+            positions = [
+                transcript.spliced_offset(pos),
+                transcript.spliced_offset(end_pos)
+            ]
+            start_offset_with_utr5 = min(positions)
+            end_offset_with_utr5 = max(positions)
+
+            assert start_offset_with_utr5 >= 0, \
+                "Position %d is before start of transcript %s" % (
+                    start_offset_with_utr5, transcript)
+            assert end_offset_with_utr5 >= 0, \
+                "Position %d is before start of transcript %s" % (
+                    end_offset_with_utr5, transcript)
+            utr5_length = transcript.first_start_codon_spliced_offset
+            if (utr5_length >= start_offset_with_utr5 and
+                utr5_length >= end_offset_with_utr5):
+                protein_variants[transcript.id] = "5' UTR"
+                continue
+            start_offset = start_offset_with_utr5 - utr5_length
+            end_offset = end_offset_with_utr5 - utr5_length
+
+            if start_offset >= len(seq) and end_offset >= len(seq):
+                protein_variants[transcript.id] = "3' UTR"
+                continue
+
+            original_dna = seq[start_offset:end_offset+1]
+
+            # indexing into Sequence objects gives us another Sequence,
+            # but we actually just need an ordinary string
+            original_dna = str(original_dna)
+            assert original_dna == ref, \
+                "Expected ref '%s', got '%s' in %s (offset %d:%d)" % (
+                    ref,
+                    original_dna, variant,
+                    start_offset, end_offset)
+
+            aa_position = start_offset / 3
+            if len(original_dna) - len(alt) % 3 != 0:
+                variant_string = "%dfs" % aa_position
+            else:
+
                 original_aa = "V"
-                aa_position = 600
                 new_aa = "E"
                 variant_string = "%s%d%s" % (original_aa, aa_position, new_aa)
-                protein_variants[transcript.id] = variant_string
+            protein_variants[transcript.id] = "coding %s" % variant_string
 
-        if len(protein_variants) > 0:
+        n_coding = sum(
+            descriptor.startswith("coding")
+            for descriptor
+            in protein_variants.values())
+
+        if n_coding > 0:
             variant_type = "coding"
         else:
-            variant_type = "coding-without-complete-transcripts"
+            variant_type = "non-coding"
 
         return Annot(
             variant=variant,

@@ -12,7 +12,7 @@ class Variant(object):
 
     @property
     def end_pos(self):
-        return self.pos + len(self.ref)
+        return self.pos + len(self.ref) - 1
 
     def __str__(self):
         return "Variant(contig=%s, pos=%d, ref=%s, alt=%s, info=%s)" % (

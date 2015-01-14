@@ -25,10 +25,9 @@ def validate_transcript_mutation(
 
 
 def test_dbnsfp_validation_set():
-    """
-    test_dbnsfp_validation_set : check that amino acid substitution gives
-    same answer as subset of dbNSFP entries (using Ensembl 75)
-    """
+    # check that amino acid substitution gives
+    # same answer as subset of dbNSFP entries (using Ensembl 75)
+
     # columns for validation dataset:
     # - aa_pos : base-1 position within protein
     # - dna_alt : non-reference DNA nucleotide
@@ -38,14 +37,20 @@ def test_dbnsfp_validation_set():
     # - dna_ref : reference DNA nucleotide
     validation_set = pd.read_csv('dbnsfp_validation_set.csv')
     for _, row in validation_set.iterrows():
-        print row
-        validate_transcript_mutation(
+        args = (
             row['chrom'],
             row['dna_position'],
             row['dna_ref'],
             row['dna_alt'],
             row['aa_pos'],
-            row['aa_alt'])
+            row['aa_alt']
+        )
+        # making this a generator so every row shows up as its
+        # owns test in nose
+        yield (validate_transcript_mutation,) + args
 
 if __name__ == '__main__':
-  test_dbnsfp_validation_set()
+    for test_tuple in test_dbnsfp_validation_set():
+        f = test_tuple[0]
+	args = test_tuple[1:]
+	f(*args)
