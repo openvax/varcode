@@ -117,9 +117,9 @@ def protein_mutation_description(
         return "%s%d%s" % \
             (aa_ref, aa_position+1, aa_mut)
 
-Mutation = \
+ProteinMutation = \
     namedtuple(
-        "Mutation",
+        "ProteinMutation",
         (
             "seq",    # mutated region sequence
             "start",  # start position of region in the protein
@@ -180,7 +180,7 @@ def mutate_protein_from_transcript(
     if str(original_protein) == str(mutated_protein):
         # if protein product is unmodified then
         # this is a silent mutation
-        return Mutation(
+        return ProteinMutation(
             seq = "",
             start = 0,
             stop = 0,
@@ -251,7 +251,7 @@ def mutate_protein_from_transcript(
             frameshift,
             early_stop)
 
-    return Mutation(
+    return ProteinMutation(
         seq = str(seq_region),
         start = start_pos,
         stop = end_pos,

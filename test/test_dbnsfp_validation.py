@@ -14,6 +14,7 @@
 
 import pandas as pd
 from varcode import VariantAnnotator
+from varcode.mutate import ProteinMutation
 
 annot = VariantAnnotator(75)
 
@@ -21,8 +22,17 @@ def validate_transcript_mutation(
         chrom, dna_position,
         dna_ref, dna_alt,
         aa_pos, aa_alt):
-    print annot.describe_variant(chrom, dna_position, dna_ref, dna_alt)
+    result = annot.describe_variant(chrom, dna_position, dna_ref, dna_alt)
 
+    assert any(
+        isinstance(annot, ProteinMutation) and
+        annot.mutation_start + 1 == aa_pos and
+        annot.seq[annot.mutation_start] == aa_alt
+        for annot in result.coding_effects.values()
+    ), "Mutation p.%d%s not found for mutation chr%s:%s %s>%s : %s" % (
+        aa_pos, aa_alt,
+        chrom, dna_position,
+        dna_ref, dna_alt, result.coding_effects)
 
 def test_dbnsfp_validation_set():
     # check that amino acid substitution gives

@@ -1,6 +1,7 @@
 from common import reverse_complement
 from variant import Variant
 from annot import Annot
+from mutate import mutate_protein_from_transcript, ProteinMutation
 
 import pyensembl
 from pyensembl.biotypes import is_coding_biotype
@@ -52,7 +53,7 @@ class VariantAnnotator(object):
             variant_type='intergenic',
             genes=[],
             transcripts={},
-            coding_effects={})
+            transcript_effects={})
 
 
     def make_intronic(self, variant, genes, transcripts):
@@ -61,7 +62,7 @@ class VariantAnnotator(object):
             variant_type='intronic',
             genes=genes,
             transcripts=transcripts,
-            coding_effects={})
+            transcript_effects={})
 
     def overlaps_any_exon(self, transcript, contig, start, end):
         return any(
@@ -99,21 +100,21 @@ class VariantAnnotator(object):
         overlapping_transcript_groups = self.group_by(
             overlapping_transcripts, field_name='gene_id')
 
-        protein_variants = {}
+        transcript_effects = {}
         for transcript in overlapping_transcripts:
             if not is_coding_biotype(transcript.biotype):
-                protein_variants[transcript.id] = "non-coding"
+                transcript_effects[transcript.id] = "non-coding"
                 continue
 
             if not transcript.complete:
-                protein_variants[transcript.id] = "incomplete"
+                transcript_effects[transcript.id] = "incomplete"
                 continue
 
             exonic = self.overlaps_any_exon(
                 transcript, contig, start=pos, end=end_pos)
 
             if not exonic:
-                protein_variants[transcript.id] = "intronic"
+                transcript_effects[transcript.id] = "intronic"
                 continue
 
             seq = transcript.coding_sequence
@@ -143,13 +144,13 @@ class VariantAnnotator(object):
             utr5_length = transcript.first_start_codon_spliced_offset
             if (utr5_length >= start_offset_with_utr5 and
                 utr5_length >= end_offset_with_utr5):
-                protein_variants[transcript.id] = "5' UTR"
+                transcript_effects[transcript.id] = "5' UTR"
                 continue
             start_offset = start_offset_with_utr5 - utr5_length
             end_offset = end_offset_with_utr5 - utr5_length
 
             if start_offset >= len(seq) and end_offset >= len(seq):
-                protein_variants[transcript.id] = "3' UTR"
+                transcript_effects[transcript.id] = "3' UTR"
                 continue
 
             original_dna = seq[start_offset:end_offset+1]
@@ -163,20 +164,22 @@ class VariantAnnotator(object):
                     original_dna, variant,
                     start_offset, end_offset)
 
-            aa_position = start_offset / 3
-            if len(original_dna) - len(alt) % 3 != 0:
-                variant_string = "%dfs" % aa_position
-            else:
+            descriptor = mutate_protein_from_transcript(
+                    seq,
+                    start_offset,
+                    ref,
+                    alt)
 
-                original_aa = "V"
-                new_aa = "E"
-                variant_string = "%s%d%s" % (original_aa, aa_position, new_aa)
-            protein_variants[transcript.id] = "coding %s" % variant_string
+            if descriptor.n_inserted == 0 and descriptor.n_removed == 0:
+                transcript_effects[transcript.id] = "silent"
+            else:
+                transcript_effects[transcript.id] = descriptor
+
 
         n_coding = sum(
-            descriptor.startswith("coding")
-            for descriptor
-            in protein_variants.values())
+            isinstance(v, ProteinMutation)
+            for v
+            in transcript_effects.values())
 
         if n_coding > 0:
             variant_type = "coding"
@@ -187,5 +190,5 @@ class VariantAnnotator(object):
             variant=variant,
             variant_type=variant_type,
             genes=overlapping_genes,
-            transcripts=overlapping_transcripts,
-            coding_effects=protein_variants)
+            transcripts={t.id : t for t in overlapping_transcripts},
+            transcript_effects=transcript_effects)

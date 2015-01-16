@@ -7,7 +7,7 @@ class Annot(object):
             variant_type,
             genes,
             transcripts,
-            coding_effects):
+            transcript_effects):
         """
         variant : Variant
 
@@ -23,14 +23,14 @@ class Annot(object):
         transcripts : dict
             Dictionary mapping gene IDs to list of Transcript objects
 
-        coding_effects : dict
+        transcript_effects : dict
             Dictionary from transcript ID to description of protein variant
         """
         self.variant = variant
         self.variant_type = variant_type
         self.genes = genes
         self.transcripts = transcripts
-        self.coding_effects = coding_effects
+        self.transcript_effects = transcript_effects
 
     @property
     def coding_genes(self):
@@ -52,6 +52,6 @@ class Annot(object):
             ("n_genes", len(self.genes)),
             ("n_coding_genes", len(self.coding_genes)),
             ("coding_genes", self.coding_genes),
-            ("coding_effects", self.coding_effects)
+            ("transcript_effects", self.transcript_effects)
         ]
         return "Annot(%s)" % ", ".join(["%s=%s" % (k,v) for (k,v) in fields])
