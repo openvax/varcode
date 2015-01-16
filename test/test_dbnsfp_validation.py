@@ -19,20 +19,22 @@ from varcode.mutate import ProteinMutation
 annot = VariantAnnotator(75)
 
 def validate_transcript_mutation(
+	ensembl_transcript,
         chrom, dna_position,
         dna_ref, dna_alt,
         aa_pos, aa_alt):
     result = annot.describe_variant(chrom, dna_position, dna_ref, dna_alt)
-
-    assert any(
-        isinstance(annot, ProteinMutation) and
-        annot.mutation_start + 1 == aa_pos and
-        annot.seq[annot.mutation_start] == aa_alt
-        for annot in result.coding_effects.values()
+    assert ensembl_transcript in result.transcript_effects, \
+        "%s not found in %s" % (ensembl_transcript, result)
+    effect = result.transcript_effects[ensembl_transcript]
+    assert (
+        isinstance(effect, ProteinMutation) and
+        effect.mutation_start + 1 == aa_pos and
+        effect.seq[effect.mutation_start] == aa_alt
     ), "Mutation p.%d%s not found for mutation chr%s:%s %s>%s : %s" % (
         aa_pos, aa_alt,
         chrom, dna_position,
-        dna_ref, dna_alt, result.coding_effects)
+        dna_ref, dna_alt, effect)
 
 def test_dbnsfp_validation_set():
     # check that amino acid substitution gives
@@ -48,6 +50,7 @@ def test_dbnsfp_validation_set():
     validation_set = pd.read_csv('dbnsfp_validation_set.csv')
     for _, row in validation_set.iterrows():
         args = (
+	    row['ensembl_transcript'],
             row['chrom'],
             row['dna_position'],
             row['dna_ref'],
