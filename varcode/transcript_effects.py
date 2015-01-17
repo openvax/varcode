@@ -30,10 +30,6 @@ class MutationEffect(object):
             "mutant_protein_sequence not implemented for %s" % (
                 self.__class__.__name__,)
 
-    def is_coding(self):
-        return False
-
-
 class NoncodingTranscript(MutationEffect):
     """
     Any mutation to a transcript with a non-coding biotype

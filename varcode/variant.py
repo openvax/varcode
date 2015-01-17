@@ -20,3 +20,16 @@ class Variant(object):
 
     def __repr__(self):
         return str(self)
+
+    def mutation_description(self):
+        chrom, pos, ref, alt = self.contig, self.pos, self.ref, self.alt
+
+        if ref == alt:
+            return "chr%s g.%d %s=%s" % (chrom, pos, ref, alt)
+        elif len(ref) == 0 or alt.startswith(ref):
+            return "chr%s g.%d ins%s" % (chrom, pos + len(ref),  alt[len(ref):])
+        elif len(alt) == 0 or ref.startswith(alt):
+            return "chr%s g.%d_%d del%s" % (
+                chrom, pos + len(alt), pos + len(ref), ref[len(alt):])
+        else:
+            return "chr%s g.%d %s>%s" % (chrom, pos, ref, alt)

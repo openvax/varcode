@@ -229,6 +229,140 @@ def mutate_protein_from_transcript(
         start_pos = max(start_pos, prefix_stop_codon + 1)
 
     suffix_stop_codon = str(mutated_protein[aa_position:]).find("*")
+
+    # stop codon found to the right
+    early_stop = False
+    if suffix_stop_codon != -1:
+        if suffix_stop_codon < n_aa_inserted:
+            n_aa_inserted = suffix_stop_codon
+            early_stop = True
+        end_pos = min(end_pos, suffix_stop_codon + aa_position)
+
+
+    seq_region = mutated_protein[start_pos : end_pos]
+    mutation_start_pos_in_region = aa_position - start_pos
+
+    annot = \
+        protein_mutation_description(
+            original_protein,
+            mutated_protein,
+            aa_position,
+            n_aa_deleted,
+            n_aa_inserted,
+            frameshift,
+            early_stop)
+
+    return ProteinMutation(
+        seq = str(seq_region),
+        start = start_pos,
+        stop = end_pos,
+        mutation_start = mutation_start_pos_in_region,
+        n_removed = n_aa_deleted,
+        n_inserted = n_aa_inserted,
+        annot = annot)
+
+
+
+def mutate_transcript(
+        transcript,
+        cds_position,
+        cds_ref,
+        cds_alt):
+    """
+    Mutate a sequence by inserting the allele into the genomic transcript
+    and translate to protein sequence
+
+    Parameters
+    ----------
+    transcript :  Transcript
+        Transcript we're going to mutate
+
+    cds_position : int
+        Position in transcript's cDNA coding sequence we're mutating (base 0)
+
+    cds_ref : sequence or str
+        What's already supposed to be at the given position
+
+    cds_alt : sequence or str
+        Alternate substring to insert
+    """
+    assert all(
+        nucleotide in {'A', 'C', 'T', 'G'}
+        for nucleotide in cds_ref), \
+        "Invalid variant reference sequence: %s" % cds_ref
+
+    assert all(
+        nucleotide in {'A', 'C', 'T', 'G'}
+        for nucleotide in cds_alt), \
+        "Invalid variant alt sequence: %s" % cds_alt
+
+    # turn any character sequence into a BioPython sequence
+    transcript_seq = Seq(str(transcript.coding_sequence))
+
+    transcript_ref = transcript_seq[position:position+len(cds_ref)]
+
+    assert str(transcript_ref) == str(dna_ref), \
+        "Transcript %s reference base %s at position %d != expected %s" % (
+            transcript, transcript_ref, cds_position, dna_ref)
+
+    original_protein = transcript_seq.translate()
+    n_original_protein = len(original_protein)
+
+
+    mutated_dna = mutate(transcript_seq, position, dna_ref, dna_alt)
+    mutated_protein = mutated_dna.translate()
+    n_mutated_protein = len(mutated_protein)
+
+    if str(original_protein) == str(mutated_protein):
+        # if protein product is unmodified then
+        # this is a silent mutation
+        return ProteinMutation(
+            seq = "",
+            start = 0,
+            stop = 0,
+            mutation_start = 0,
+            n_removed = 0,
+            n_inserted = 0,
+            annot = "SILENT"
+        )
+
+    aa_position = int(position / 3)  # genomic position to codon position
+
+    n_dna_ref = len(dna_ref)
+    n_dna_alt = len(dna_alt)
+
+    # is this a frameshift mutation?
+    if abs(n_dna_ref - n_dna_alt) % 3 != 0:
+        # frameshifts 'delete' the rest of the origin protein string
+        # and 'insert' the frameshifted residues.
+        # These numbers, since they encompass the entire protein,
+        # will typically be larger than n_wildtype_deleted/n_mutant_inserted
+        # on the region struct below, since that restricts the residues counts
+        # to those within a particular region
+        n_aa_deleted = n_original_protein - aa_position
+        # careful, this doesn't include stop codons, will
+        # have to update it later
+        n_aa_inserted = n_mutated_protein - aa_position
+        frameshift = True
+    else:
+        n_aa_deleted = int(math.ceil(n_dna_ref / 3.0))
+
+        n_aa_inserted = int(math.ceil(n_dna_alt / 3.0))
+        frameshift = False
+
+    start_pos = 0
+    end_pos = n_mutated_protein
+
+
+
+    # move padding to not include stop codons
+    prefix_stop_codon = str(mutated_protein[:aa_position]).rfind("*")
+    #  stop codon found to the left
+    if prefix_stop_codon != -1:
+        start_pos = max(start_pos, prefix_stop_codon + 1)
+
+    suffix_stop_codon = str(mutated_protein[aa_position:]).find("*")
+
     # stop codon found to the right
     early_stop = False
     if suffix_stop_codon != -1:
