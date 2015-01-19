@@ -21,7 +21,7 @@ class Variant(object):
     def __repr__(self):
         return str(self)
 
-    def mutation_description(self):
+    def description(self):
         chrom, pos, ref, alt = self.contig, self.pos, self.ref, self.alt
 
         if ref == alt:

@@ -30,12 +30,11 @@ class VariantEffect(object):
             Dictionary mapping transcript IDs to Transcript objects
 
         transcript_effects : dict
-            Dictionary from transcript ID to description of protein variant
+            Dictionary from gene ID to list of transcript variant effects
         """
         self.variant = variant
         self.variant_type = variant_type
         self.genes = genes
-        self.transcripts = transcripts
         self.transcript_effects = transcript_effects
 
     @property
@@ -62,9 +61,10 @@ class VariantEffect(object):
         if len(self.genes) == 0:
             return "intergenic"
 
-        for effect in self.transcript_effects.values():
-            if isinstance(effect, Exonic):
-                return "exonic"
+        for _, transcript_effects in sorted(self.transcript_effects.iteriems()):
+            for effect in transcript_effects:
+                if isinstance(effect, Exonic):
+                    return "exonic"
         return "intronic"
 
     def __str__(self):

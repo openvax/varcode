@@ -19,3 +19,4 @@ def test_vcf_number_entries():
 
 def test_vcf_gene_names():
     variants = VariantCollection(VCF_FILENAME)
+    annot = VariantAnnotator()
