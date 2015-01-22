@@ -1,4 +1,5 @@
 import Bio.Seq
+from memoized_property import memoized_property
 
 class TranscriptMutationEffect(object):
 
@@ -17,25 +18,24 @@ class TranscriptMutationEffect(object):
         raise ValueError(
             "Method short_description() not implemented for %s" % self)
 
-    def is_coding():
-        return False
+    is_coding = False
 
-    @property
+    @memoized_property
     def original_nucleotide_sequence(self):
-        return self.transcript.sequence
+        return self.transcript.coding_sequence
 
-    @property
+    @memoized_property
     def original_protein_sequence(self):
         return Bio.Seq.translate(
-            self.original_nucleotide_sequence,
+            str(self.original_nucleotide_sequence),
             to_stop=True,
             cds=True)
 
-    @property
+    @memoized_property
     def mutant_protein_sequence(self):
         raise ValueError(
             "mutant_protein_sequence not implemented for %s" % (
-                self.__class__.__name__,)
+                self.__class__.__name__,))
 
 class NoncodingTranscript(TranscriptMutationEffect):
     """
@@ -57,8 +57,7 @@ class FivePrimeUTR(TranscriptMutationEffect):
     coding transcript.
     """
     def short_description(self):
-        retunr "5' UTR"
-
+        return "5' UTR"
 
 class ThreePrimeUTR(TranscriptMutationEffect):
     """
@@ -66,7 +65,8 @@ class ThreePrimeUTR(TranscriptMutationEffect):
     coding transcript.
     """
     def short_description(self):
-        retunr "3' UTR"
+        return "3' UTR"
+
 
 class Intronic(TranscriptMutationEffect):
     """
@@ -76,11 +76,30 @@ class Intronic(TranscriptMutationEffect):
         return "intronic"
 
 class Exonic(TranscriptMutationEffect):
-    def __init__(self, variant, transcript, cdna_pos):
-        TranscriptMutationEffect.__init__(self, variant, transcript)
-        self.cdna_pos = cdna_pos
+    pass
 
-class Silent(Exonic):
+
+class CodingSequenceMutation(Exonic):
+    def __init__(self, variant, transcript, cds_pos, aa_ref):
+        Exonic.__init__(self, variant, transcript)
+        self.cds_pos = cds_pos
+        self.aa_ref = aa_ref
+
+    def __str__(self):
+        return "%s(variant=%s, transcript=%s, effect_description=%s)" % (
+            self.__class__.__name__,
+            self.variant,
+            self.transcript,
+            self.short_description())
+
+    @memoized_property
+    def aa_pos(self):
+        return self.cds_pos / 3
+
+    is_coding = True
+
+
+class Silent(CodingSequenceMutation):
     """
     Mutation to an exon of a coding region which doesn't change the
     amino acid sequence.
@@ -88,61 +107,245 @@ class Silent(Exonic):
     def short_description(self):
         return "silent"
 
-class Coding(Exonic):
-    def __init__(self, variant, transcript, cdna_pos, aa_pos, aa_ref):
-        Exonic.__init__(self, variant, transcript, cdna_pos)
-    def __str__(self):
-        return "%s(%s, %s, %s)" % (
-            self.__class__.__name__,
-            self.variant,
-            self.transcript,
-            self.short_description())
 
-    def is_coding(self):
-        return True
-
-
-class Substitution(Coding):
+class Substitution(CodingSequenceMutation):
     """
-    Coding mutation which removes or inserts amino acids at a locus.
+    Coding mutation which replaces some amino acids into others.
+    The total number of amino acids changed must be greater than one on
+    either the reference or alternate.
     """
     def __init__(
             self,
-            variant, transcript, cdna_pos,
-            aa_pos, aa_ref, aa_alt):
-        Coding.__init__(self, variant, transcript, cdna_pos, aa_pos, aa_ref)
+            variant,
+            transcript,
+            cds_pos,
+            aa_ref,
+            aa_alt):
+
+        CodingSequenceMutation.__init__(
+            self,
+            variant=variant,
+            transcript=transcript,
+            cds_pos=cds_pos,
+            aa_ref=aa_ref)
+
         self.aa_alt = aa_alt
+        self.mutation_start = self.aa_pos
+        self.mutation_end = self.aa_pos + len(aa_alt)
 
     def short_description(self):
-        return "p.%s%d%s" % (
-            self.aa_ref,
-            self.aa_pos,
-            self.aa_alt)
+        if len(self.aa_ref) == 0:
+            return "p.%dins%s" % (self.aa_pos, self.aa_alt)
+        elif len(self.aa_alt) == 0:
+            return "p.%s%ddel" % (self.aa_ref, self.aa_pos)
+        else:
+            return "p.%s%d%s" % (
+                    self.aa_ref,
+                    self.aa_pos + 1,
+                    self.aa_alt)
 
-    @property
+    @memoized_property
     def mutant_protein_sequence(self):
         original = self.original_protein_sequence
         prefix = original[:self.aa_pos]
         suffix = original[self.aa_pos + len(self.aa_ref):]
         return prefix + self.aa_alt + suffix
 
-class PrematureStop(Coding):
+class Insertion(Substitution):
+    """
+    In-frame insertion of one or more amino acids.
+    """
+    def __init__(self, variant, transcript, cds_pos, aa_ref, inserted):
+        """
+        By convention, aa_ref is the amino acid before the insertion
+        and aa_pos is the position of aa_ref
+            Q>QL
+        """
+        Substitution.__init__(
+            self,
+            variant=variant,
+            transcript=transcript,
+            cds_pos=cds_pos,
+            aa_ref=aa_ref,
+            aa_alt=inserted)
+
+    def short_description(self):
+        return "p.%s%dins%s" % (self.aa_ref, self.aa_pos  + 1, self.aa_alt)
+
+
+class Deletion(Substitution):
+    """
+    In-frame deletion of one or more amino acids.
+    """
+    def __init__(
+            self,
+            variant,
+            transcript,
+            cds_pos,
+            n_kept,
+            deleted):
+        Substitution.__init__(
+            self,
+            variant=variant,
+            transcript=transcript,
+            cds_pos=cds_pos,
+            aa_ref=deleted,
+            aa_alt="")
+        self.n_kept = n_kept
+
+    def short_description(self):
+        return "p.%s%ddel" % (self.aa_ref, self.aa_pos + self.n_kept + 1)
+
+
+    @memoized_property
+    def mutant_protein_sequence(self):
+        original = self.original_protein_sequence
+        prefix = original[:self.aa_pos + self.n_kept]
+        suffix = original[self.aa_pos + self.n_kept + len(self.aa_ref):]
+        return prefix + suffix
+
+
+class PrematureStop(Substitution):
+    def __init__(
+            self,
+            variant,
+            transcript,
+            cds_pos,
+            aa_ref):
+        Substitution.__init__(
+            self,
+            variant,
+            transcript,
+            cds_pos,
+            aa_ref=aa_ref,
+            aa_alt="*")
+
     def short_description(self):
         return "p.%s%d*" % (
             self.aa_ref,
-            self.aa_pos)
+            self.aa_pos + 1)
 
-class FrameShift(Coding):
-    def __init__(
-            self, variant, transcript,
-            cdna_pos, aa_pos, aa_ref, shifted_sequence):
-        Coding.__init__(self, variant, transcript, cdna_pos, aa_pos, aa_ref)
-        self.shifted_sequence = shifted_sequence
+    @memoized_property
+    def mutant_protein_sequence(self):
+        return self.original_protein_sequence[:self.aa_pos]
+
+
+class UnpredictableSubstitution(Substitution):
+    """
+    Variants for which we can't confidently determine a protein sequence.
+
+    Splice site mutations are unpredictable since they require a model of
+    alternative splicing that goes beyond this library. Similarly,
+    when a start codon is lost it's difficult to determine if there is
+    an alternative Kozak consensus sequence (either before or after the
+    original) from which an alternative start codon can be inferred.
+    """
 
     @property
-    def mutant_sequence(self):
+    def mutant_protein_sequence(self):
+        raise ValueError("Can't determine the protein sequence of %s" % self)
+
+class StopLoss(UnpredictableSubstitution):
+    def short_description(self):
+        return "*%d%s (stop-loss)" % (self.aa_pos, self.aa_alt)
+
+
+class StartLoss(UnpredictableSubstitution):
+    def __init__(
+            self,
+            variant,
+            transcript,
+            cds_pos,
+            aa_alt):
+        UnpredictableSubstitution.__init__(
+            self,
+            variant,
+            transcript,
+            cds_pos,
+            aa_ref="M",
+            aa_alt=aa_alt)
+
+    def short_description(self):
+        return "p.? (start-loss)" % (self.aa_pos, self.aa_)
+
+class FrameShift(CodingSequenceMutation):
+    def __init__(
+            self,
+            variant,
+            transcript,
+            cds_pos,
+            aa_ref,
+            shifted_sequence):
+        """
+        Unlike an insertion, which we denote with aa_ref as the chracter before
+        the variant sequence, a frameshift starts at aa_ref
+        """
+        CodingSequenceMutation.__init__(
+            self,
+            variant=variant,
+            transcript=transcript,
+            cds_pos=cds_pos,
+            aa_ref=aa_ref)
+        self.shifted_sequence = shifted_sequence
+        self.mutation_start = self.aa_pos
+        self.mutation_end = self.aa_pos + len(shifted_sequence)
+
+    @memoized_property
+    def mutant_protein_sequence(self):
         original_aa_sequence = self.original_protein_sequence[:self.aa_pos]
         return original_aa_sequence + self.shifted_sequence
 
     def short_description(self):
-        return "p.%s%dfs" % (self.aa_ref, self.aa_pos)
+        return "p.%s%dfs" % (self.aa_ref, self.aa_pos + 1)
+
+
+class _MultipleSubstitution(object):
+    """
+    We're ordering mutations by their class names,
+    need to create this dummy class to capture the
+    difference between simple subsitutions (e.g. V600E)
+    and compound subsitutions (e.g. QF34YY)
+    """
+    pass
+
+def get_class(effect):
+    if isinstance(effect, Substitution):
+        if len(effect.aa_ref) > 1 or len(effect.aa_alt) > 1:
+            return _MultipleSubstitution
+    return effect.__class__
+
+variant_effect_priority_list = [
+    IncompleteTranscript,
+    NoncodingTranscript,
+    Intronic,
+    FivePrimeUTR,
+    ThreePrimeUTR,
+    Silent,
+    Substitution,
+    Insertion,
+    Deletion,
+    _MultipleSubstitution,
+    StopLoss,
+    PrematureStop,
+    StartLoss,
+    FrameShift
+]
+
+variant_effect_priority_dict = {
+    variant_effect_class : priority
+    for (priority, variant_effect_class)
+    in enumerate(variant_effect_priority_list)
+}
+
+def top_priority_variant_effect(variant_effects):
+    """
+    Given a collection of variant effects, return the top priority object.
+    """
+    best_effect = None
+    best_priority = -1
+    for variant_effect in variant_effects:
+        priority = variant_effect_priority_dict[get_class(variant_effect)]
+        if priority > best_priority:
+            best_effect = variant_effect
+            best_priority = priority
+    return best_effect

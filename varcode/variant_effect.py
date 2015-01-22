@@ -1,11 +1,4 @@
-from transcript_effects import (
-    Coding,
-    Exonic,
-    IncompleteTranscript,
-)
-
 from pyensembl.biotypes import is_coding_biotype
-
 
 class VariantEffect(object):
     """
@@ -17,25 +10,29 @@ class VariantEffect(object):
     def __init__(
             self,
             variant,
+            variant_type,
             genes,
-            transcripts,
-            transcript_effects):
+            gene_transcript_effects):
         """
         variant : Variant
+
+        variant_type : str
+            Summary of variant effect across all transcripts
 
         genes : list
             List of Gene objects
 
-        transcripts : dict
-            Dictionary mapping transcript IDs to Transcript objects
-
-        transcript_effects : dict
+        gene_transcript_effects : dict
             Dictionary from gene ID to list of transcript variant effects
         """
         self.variant = variant
         self.variant_type = variant_type
         self.genes = genes
-        self.transcript_effects = transcript_effects
+        self.gene_transcript_effects = gene_transcript_effects
+        self.transcript_effects = {}
+        for (_, transcript_effects) in self.gene_transcript_effects.iteritems():
+            for effect in transcript_effects:
+                self.transcript_effects[effect.transcript.id] = effect
 
     @property
     def coding_genes(self):
@@ -50,30 +47,15 @@ class VariantEffect(object):
             if is_coding_biotype(gene.biotype)
         ]
 
-    @property
-    def variant_type(self):
-         """
-         Returns one of the following strings:
-             - intergenic: not mapped to any gene in Ensembl
-             - intronic: on a gene but not on or near an exon
-             - exonic: on a gene inside an exon
-        """
-        if len(self.genes) == 0:
-            return "intergenic"
-
-        for _, transcript_effects in sorted(self.transcript_effects.iteriems()):
-            for effect in transcript_effects:
-                if isinstance(effect, Exonic):
-                    return "exonic"
-        return "intronic"
-
     def __str__(self):
         fields = [
             ("variant", self.variant),
-            ("n_genes", len(self.genes)),
+            ("genes", [gene.name for gene in self.genes]),
             ("n_coding_genes", len(self.coding_genes)),
-            ("coding_genes", self.coding_genes),
             ("transcript_effects", self.transcript_effects)
         ]
         return "VariantEffect(%s)" % (
             ", ".join(["%s=%s" % (k,v) for (k,v) in fields]))
+
+    def __repr__(self):
+        return str(self)

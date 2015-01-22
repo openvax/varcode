@@ -1,5 +1,9 @@
-from reference_name import infer_reference_name
+from reference_name import (
+    infer_reference_name,
+    ensembl_release_number_for_reference_name
+)
 from variant import Variant
+from variant_annotator import VariantAnnotator
 import maf
 
 import vcf
@@ -95,10 +99,28 @@ class VariantCollection(object):
         else:
             raise ValueErrr("Unrecognized file type: %s" % filename)
 
+
+        self.filename = filename
         self.reference_name = infer_reference_name(self.raw_reference_name)
+        self.ensembl_release = ensembl_release_number_for_reference_name(
+            self.reference_name)
+        self.annot = VariantAnnotator(ensembl_release=self.ensembl_release)
 
     def __len__(self):
         return len(self.records)
 
     def __iter__(self):
         return iter(self.records)
+
+    def __str__(self):
+        s = "VariantCollection(filename=%s, reference=%s)" % (
+            self.filename, self.reference_name)
+        for record in self.records:
+            s += "\n\t%s" % record
+        return s
+
+    def variant_effects(self):
+        return [
+            (variant, self.annot.describe_variant(variant))
+            for variant in self.records
+        ]

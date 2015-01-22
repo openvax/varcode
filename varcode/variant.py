@@ -1,5 +1,6 @@
 from nucleotides import normalize_nucleotide_string
 
+from memoized_property import memoized_property
 from pyensembl.locus import normalize_chromosome
 
 class Variant(object):
@@ -10,7 +11,7 @@ class Variant(object):
         self.alt = normalize_nucleotide_string(alt)
         self.info = {} if info is None else info
 
-    @property
+    @memoized_property
     def end_pos(self):
         return self.pos + len(self.ref) - 1
 

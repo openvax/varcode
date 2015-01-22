@@ -16,6 +16,7 @@ import logging
 import math
 from collections import namedtuple
 
+from common import reverse_complement
 from variant import Variant
 from transcript_mutation_effects import (
     NoncodingTranscript,
@@ -24,13 +25,16 @@ from transcript_mutation_effects import (
     ThreePrimeUTR,
     Intronic,
     Silent,
-    Coding,
+    Insertion,
+    Deletion,
     Substitution,
     PrematureStop,
-    FrameShift)
+    StartLoss,
+    FrameShift
+)
 
 from Bio.Seq import Seq
-from pyensembl import Transcript
+from pyensembl.transcript import Transcript
 from pyensembl.biotypes import is_coding_biotype
 
 def mutate(sequence, position, variant_ref, variant_alt):
@@ -54,10 +58,9 @@ def mutate(sequence, position, variant_ref, variant_alt):
     """
     n_variant_ref = len(variant_ref)
     sequence_ref = sequence[position:position+n_variant_ref]
-    if ref != '.':
-        assert str(sequence_ref) == str(ref), \
-            "Reference %s at position %d != expected reference %s" % \
-            (sequence_ref, position, variant_ref)
+    assert str(sequence_ref) == str(variant_ref), \
+        "Reference %s at position %d != expected reference %s" % \
+        (sequence_ref, position, variant_ref)
     prefix = sequence[:position]
     suffix = sequence[position+n_variant_ref:]
     return prefix + variant_alt + suffix
@@ -147,7 +150,7 @@ def apply_variant_to_transcript(variant, transcript):
     if not transcript.complete:
         return IncompleteTranscript(variant, transcript)
 
-    if overlaps_any_exon(transcript, variant):
+    if not overlaps_any_exon(variant, transcript):
         return Intronic(variant, transcript)
 
     if not is_coding_biotype(transcript.biotype):
@@ -165,8 +168,8 @@ def apply_variant_to_transcript(variant, transcript):
     # TODO: move subtraction of 5' UTR length into
     # pyensembl.Transcript, call the method "coding_offset"
     positions = [
-        transcript.spliced_offset(pos),
-        transcript.spliced_offset(end_pos)
+        transcript.spliced_offset(variant.pos),
+        transcript.spliced_offset(variant.end_pos)
     ]
     start_offset_with_utr5 = min(positions)
     end_offset_with_utr5 = max(positions)
@@ -178,13 +181,15 @@ def apply_variant_to_transcript(variant, transcript):
         "Position %d is before start of transcript %s" % (
             end_offset_with_utr5, transcript)
     utr5_length = transcript.first_start_codon_spliced_offset
-    if (utr5_length >= start_offset_with_utr5 and
-        utr5_length >= end_offset_with_utr5):
+    if utr5_length > start_offset_with_utr5:
+        # TODO: what do we do if the variant spans the beginning of
+        # the coding sequence?
+        assert utr5_length > end_offset_with_utr5, \
+            "Variant which span the 5' UTR and CDS not yet supported: %s" % (
+                variant)
         return FivePrimeUTR(variant, transcript)
-
     cds_start_offset = start_offset_with_utr5 - utr5_length
     cds_end_offset = end_offset_with_utr5 - utr5_length
-
 
     # Don't need a pyfaidx.Sequence object here, just convert it to the an str
     cds_seq = str(transcript.coding_sequence)
@@ -207,7 +212,12 @@ def apply_variant_to_transcript(variant, transcript):
     # to amino acids. For the original CDS make sure that it starts with
     # a start codon and ends with a stop codon. Don't include the stop codon
     # in the translated sequence.
-    original_protein = str(Seq(original_cdna).translate(cds=True, to_stop=True))
+    original_protein = str(Seq(cds_seq).translate(cds=True, to_stop=True))
+    assert len(original_protein) > 0, \
+        "Translated protein sequence of %s is empty" % (transcript,)
+    assert original_protein[0] == "M", \
+        "Expected coding sequence of %s to start with M, instead got '%s'" % (
+            transcript, original_protein[0])
 
     variant_cds_seq = mutate(cds_seq, cds_start_offset, ref, alt)
 
@@ -220,41 +230,101 @@ def apply_variant_to_transcript(variant, transcript):
     variant_protein = str(Seq(truncated_variant_cds_seq).translate(
         cds=False, to_stop=False))
 
-    if variant_protein[:-1] == "*" and original_protein == variant_protein[:-1]:
-        return Silent(variant, transcript)
+    aa_position = int(cds_start_offset / 3) # genomic position to codon position
+
+    assert len(variant_protein) > 0, \
+        "Protein sequence empty for variant %s on transcript %s" % (
+            variant, transcript)
+
+    if variant_protein[0] != "M":
+        assert aa_position == 0, \
+            "Unexpected change to start codon (M>%s) when aa_pos=%s" % (
+                variant_protein[0], aa_position)
+        return StartLoss(
+            variant,
+            transcript,
+            cds_start_offset,
+            aa_alt=variant_protein[0])
+    if variant_protein[-1] == "*" and original_protein == variant_protein[:-1]:
+        return Silent(
+            variant,
+            transcript,
+            cds_start_offset,
+            aa_ref=variant_protein[aa_position])
 
     stop_codon_index = variant_protein.find("*")
-
 
     # if contained stop codon, truncate sequence before it
     if stop_codon_index > -1:
         variant_protein = variant_protein[:stop_codon_index]
 
-    aa_position = int(cds_start_offset / 3) # genomic position to codon position
-
     n_cdna_ref = len(ref)
     n_cdna_alt = len(alt)
 
     last_aa_ref_position = (cds_start_offset + n_cdna_ref) / 3
-    aa_ref = original_protein[aa_position:last_aa_ref_position]
+    aa_ref = original_protein[aa_position:last_aa_ref_position+1]
+    assert len(aa_ref) > 0, \
+        "len(aa_ref) = 0 for variant %s on transcript %s (aa_pos=%d:%d)" % (
+            variant, transcript, aa_position, last_aa_ref_position)
 
     # is this a premature stop codon?
     if stop_codon_index == aa_position:
         return PrematureStop(
-            variant, transcript,
-            cds_start_offset, aa_position, aa_ref)
-    # is this a frameshift mutation?
+            variant,
+            transcript,
+            cds_start_offset,
+            aa_ref)
     elif abs(n_cdna_ref - n_cdna_alt) % 3 != 0:
         shifted_sequence = variant_protein[aa_position:]
         return FrameShift(
             variant, transcript, cds_start_offset,
-            aa_position, aa_ref, shifted_sequence)
+            aa_ref, shifted_sequence)
+
+    last_aa_alt_position = (cds_start_offset + n_cdna_alt) / 3
+    aa_alt = variant_protein[aa_position:last_aa_alt_position+1]
+
+    assert len(aa_alt) > 0, \
+        "len(aa_alt) = 0 for variant %s on transcript %s (aa_pos=%d:%d)" % (
+            variant, transcript, aa_position, last_aa_ref_position)
+
+    assert aa_alt != aa_ref, \
+        "Unexpected silent mutation for variant %s on transcript %s (aa=%s)" % (
+            variant, transcript, aa_ref)
+
+    # Deletion e.g. FYPQ > F
+    if aa_ref.startswith(aa_alt):
+        assert len(aa_ref) > 0, \
+            "Can't have empty ref and alt for variant %s on transcript %s" % (
+                variant, transcript)
+        # if aa_ref = FYPQ and aa_alt = F, then deleted = YPQ
+        n_kept = len(aa_alt)
+        deleted = aa_ref[n_kept:]
+
+        return Deletion(
+            variant,
+            transcript,
+            cds_start_offset,
+            n_kept,
+            deleted)
+
+    # Insertion, e.g. Q > QLLQ
+    elif aa_alt.startswith(aa_ref):
+        assert len(aa_alt) > 0, \
+            "Can't have empty ref and alt for variant %s on transcript %s" % (
+                variant, transcript)
+        inserted = aa_alt[len(aa_ref):]
+        return Insertion(
+            variant, transcript,
+            cds_start_offset,
+            aa_ref,
+            inserted)
     else:
-        last_aa_alt_position = (cds_start_offset + n_cdna_alt) / 3
-        aa_alt = variant_protein[aa_position:last_aa_alt_position]
         return Substitution(
-            variant, transcript, cds_start_offset,
-            aa_pos, aa_ref, aa_alt)
+            variant,
+            transcript,
+            cds_start_offset,
+            aa_ref,
+            aa_alt)
 
 def apply_variant(ensembl, variant):
     """

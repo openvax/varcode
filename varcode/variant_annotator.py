@@ -1,8 +1,7 @@
-from common import reverse_complement
 from variant import Variant
 from variant_effect import VariantEffect
 from apply_variant import apply_variant
-
+from transcript_mutation_effects import top_priority_variant_effect
 
 import pyensembl
 from pyensembl.biotypes import is_coding_biotype
@@ -48,13 +47,23 @@ class VariantAnnotator(object):
         return self.ensembl.transcript_ids_at_locus(
             contig, pos, pos + number_modified_bases)
 
-
-    def describe_variant(self, contig, pos, ref, alt):
-        variant = Variant(contig=contig, pos=pos, ref=ref, alt=alt)
+    def describe_variant(self, variant):
         overlapping_genes, transcript_effects_groups = apply_variant(
             self.ensembl, variant)
 
+        # if our variant overlaps any genes, then choose the highest
+        # priority transcript variant, otherwise call the variant "Intergenic"
+        if len(overlapping_genes) == 0:
+            variant_type = "Intergenic"
+        else:
+            all_variant_effects = []
+            for _, variant_effects in transcript_effects_groups.iteritems():
+                all_variant_effects.extend(variant_effects)
+            summary_effect = top_priority_variant_effect(all_variant_effects)
+            variant_type = summary_effect.__class__.__name__
+
         return VariantEffect(
             variant=variant,
+            variant_type=variant_type,
             genes=overlapping_genes,
-            transcript_effects=transcript_effects_groups)
+            gene_transcript_effects=transcript_effects_groups)
