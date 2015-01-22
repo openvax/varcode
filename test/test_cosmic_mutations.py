@@ -1,6 +1,43 @@
-from varcode import VariantAnnotator, Variant
+from varcode import (
+    VariantAnnotator,
+    Variant,
+    Substitution,
+    Deletion,
+    Insertion
+)
 
 annot = VariantAnnotator(75)
+
+def _get_effect(chrom, pos, dna_ref, dna_alt, transcript_id):
+    variant = Variant(chrom, pos, dna_ref, dna_alt)
+    result = annot.describe_variant(variant)
+    assert transcript_id in result.transcript_effects, \
+        "Expected transcript ID %s for variant %s but only got %s" % (
+            transcript_id, variant, result.transcript_effects.keys())
+    return result.transcript_effects[transcript_id]
+
+def _substitution(chrom, pos, dna_ref, dna_alt, transcript_id, aa_ref, aa_alt):
+    effect = _get_effect(chrom, pos, dna_ref, dna_alt, transcript_id)
+    assert isinstance(effect, Substitution), \
+        "Expected effect of variant %s on %s to be Substitution, got %s" % (
+            variant, transcript, effect)
+    assert effect.aa_ref == aa_ref, \
+        "Wrong aa_ref='%s', expected '%s' for variant %s" % (
+            effect.aa_ref, aa_ref, variant)
+    assert effect.aa_alt == aa_alt, \
+        "Wrong aa_alt='%s', expected '%s' for variant %s" % (
+            effect.aa_alt, aa_alt, variant)
+
+def _deletion(chrom, pos, dna_ref, dna_alt, transcript_id, aa_ref):
+     effect = _get_effect(chrom, pos, dna_ref, dna_alt, transcript_id)
+    assert isinstance(effect, Deletion)
+    assert effect.aa_ref == aa_ref
+
+
+def _insertion(chrom, pos, dna_ref, dna_alt, transcript_id, inserted):
+     effect = _get_effect(chrom, pos, dna_ref, dna_alt, transcript_id)
+    assert isinstance(effect, Insertion)
+    assert effect.inserted == inserted
 
 def test_COSM3747785_NBPF10_Q363L():
     # 1   145311839   COSM3747785 A>T
@@ -8,7 +45,7 @@ def test_COSM3747785_NBPF10_Q363L():
     # STRAND=+
     # CDS=c.1088A>T
     # AA=p.Q363L
-    result = annot.describe_variant(Variant("1", 145311839, "A", "T"))
+    _substitution("1", 145311839, "A", "T", "ENST00000369338", "Q", "L")
 
 def test_COSM1333672_BCL9_Q1150delQ():
     """
@@ -19,7 +56,7 @@ def test_COSM1333672_BCL9_Q1150delQ():
     # STRAND=+
     # CDS=c.3445_3447delCAG
     # AA=p.Q1150delQ
-    result = annot.describe_variant(Variant("1", 147095923, "ACAG", "T"))
+    _deletion("1", 147095923, "ACAG", "T", "ENST00000234739", "Q")
 
 def test_COSM1190996_FBX011_P57insQQQ():
     """
@@ -30,7 +67,7 @@ def test_COSM1190996_FBX011_P57insQQQ():
     # STRAND=-
     # CDS=c.146_147insGCAGCAGCA
     # AA=p.Q56_P57insQQQ;CNT=1
-    result = annot.describe_variant(Variant("1", 48132713, "C", "CTGCTGCTGC"))
+    _insertion("1", 48132713, "C", "CTGCTGCTGC", "ENST00000403359", "QQ")
 
 def test_COSM1732848_CCDC109B_F264fs():
     """

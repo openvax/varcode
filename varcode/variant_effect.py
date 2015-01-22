@@ -26,9 +26,12 @@ class VariantEffect(object):
             Dictionary from gene ID to list of transcript variant effects
         """
         self.variant = variant
+        # add "highest priority" this name
         self.variant_type = variant_type
         self.genes = genes
         self.gene_transcript_effects = gene_transcript_effects
+
+        # dictionary mapping from transcript IDs to transcript mutation effects
         self.transcript_effects = {}
         for (_, transcript_effects) in self.gene_transcript_effects.iteritems():
             for effect in transcript_effects:

@@ -11,7 +11,7 @@ class TranscriptMutationEffect(object):
         return str(self)
 
     def __str__(self):
-        return "%s(%s, %s)" % (
+        return "%s(variant=%s, transcript=%s)" % (
             self.__class__.__name__, self.variant, self.transcript)
 
     def short_description():
@@ -317,9 +317,13 @@ def get_class(effect):
 variant_effect_priority_list = [
     IncompleteTranscript,
     NoncodingTranscript,
+    # TODO: Add SpliceDonor and SpliceReceptor mutations and #
+    # place them at higher priority positions in this list
     Intronic,
-    FivePrimeUTR,
     ThreePrimeUTR,
+    # mutations to the upstream 5' UTR may change the ORF (reading frame),
+    # so give 5' UTR mutations higher prioriry
+    FivePrimeUTR,
     Silent,
     Substitution,
     Insertion,

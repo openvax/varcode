@@ -101,7 +101,6 @@ def protein_mutation_description(
         return "%s%d%s" % \
             (aa_ref, aa_position+1, aa_mut)
 
-
 def overlaps_any_exon(variant, transcript):
     return any(
         exon.overlaps(
@@ -109,7 +108,6 @@ def overlaps_any_exon(variant, transcript):
             start=variant.pos,
             end=variant.end_pos)
         for exon in transcript.exons)
-
 
 def group_by(records, field_name):
     groups = {}
@@ -120,8 +118,6 @@ def group_by(records, field_name):
         else:
             groups[value] = [record]
     return groups
-
-
 
 def apply_variant_to_transcript(variant, transcript):
     """
@@ -150,11 +146,11 @@ def apply_variant_to_transcript(variant, transcript):
     if not transcript.complete:
         return IncompleteTranscript(variant, transcript)
 
-    if not overlaps_any_exon(variant, transcript):
-        return Intronic(variant, transcript)
-
     if not is_coding_biotype(transcript.biotype):
         return NoncodingTranscript(variant, transcript)
+
+    if not overlaps_any_exon(variant, transcript):
+        return Intronic(variant, transcript)
 
     if transcript.on_backward_strand:
         ref = reverse_complement(variant.ref)
@@ -163,16 +159,15 @@ def apply_variant_to_transcript(variant, transcript):
         ref = variant.ref
         alt = variant.alt
 
-    # get offsets into coding sequence by subtracting off
-    # untranslated region lengths
-    # TODO: move subtraction of 5' UTR length into
-    # pyensembl.Transcript, call the method "coding_offset"
-    positions = [
+    # offsets into the spliced transcript
+    offsets = [
         transcript.spliced_offset(variant.pos),
         transcript.spliced_offset(variant.end_pos)
     ]
-    start_offset_with_utr5 = min(positions)
-    end_offset_with_utr5 = max(positions)
+
+
+    start_offset_with_utr5 = min(offsets)
+    end_offset_with_utr5 = max(offsets)
 
     assert start_offset_with_utr5 >= 0, \
         "Position %d is before start of transcript %s" % (
@@ -180,6 +175,7 @@ def apply_variant_to_transcript(variant, transcript):
     assert end_offset_with_utr5 >= 0, \
         "Position %d is before start of transcript %s" % (
             end_offset_with_utr5, transcript)
+
     utr5_length = transcript.first_start_codon_spliced_offset
     if utr5_length > start_offset_with_utr5:
         # TODO: what do we do if the variant spans the beginning of
@@ -188,6 +184,11 @@ def apply_variant_to_transcript(variant, transcript):
             "Variant which span the 5' UTR and CDS not yet supported: %s" % (
                 variant)
         return FivePrimeUTR(variant, transcript)
+
+    # get offsets into coding sequence by subtracting off
+    # untranslated region lengths
+    # TODO: move subtraction of 5' UTR length into
+    # pyensembl.Transcript, call the method "coding_offset"
     cds_start_offset = start_offset_with_utr5 - utr5_length
     cds_end_offset = end_offset_with_utr5 - utr5_length
 
@@ -197,8 +198,13 @@ def apply_variant_to_transcript(variant, transcript):
     if cds_start_offset >= len(cds_seq) and cds_end_offset >= len(cds_seq):
         return ThreePrimeUTR(variant, transcript)
 
+    # past this point we know that we're somewhere in the coding sequence
     cds_ref = cds_seq[cds_start_offset:cds_end_offset+1]
 
+    # Make sure that the reference sequence agrees with what we expected
+    # from the VCF
+    # TODO: check that the ref allele is correct for UTR by looking
+    # at transcript.sequence instead of transcript.coding_sequence
     assert cds_ref == ref, \
         "Expected ref '%s', got '%s' in %s (offset %d:%d)" % (
             ref,
@@ -207,12 +213,12 @@ def apply_variant_to_transcript(variant, transcript):
             cds_start_offset,
             cds_end_offset)
 
-
     # turn cDNA sequence into a BioPython sequence, translate
     # to amino acids. For the original CDS make sure that it starts with
     # a start codon and ends with a stop codon. Don't include the stop codon
     # in the translated sequence.
     original_protein = str(Seq(cds_seq).translate(cds=True, to_stop=True))
+
     assert len(original_protein) > 0, \
         "Translated protein sequence of %s is empty" % (transcript,)
     assert original_protein[0] == "M", \
@@ -221,7 +227,9 @@ def apply_variant_to_transcript(variant, transcript):
 
     variant_cds_seq = mutate(cds_seq, cds_start_offset, ref, alt)
 
-    # in case sequence isn't a multiple of 3, then truncate it
+    # In case sequence isn't a multiple of 3, then truncate it
+    # TODO: if we get a frameshift by the end of a CDS (e.g. in the stop codon)
+    # then we should use some of the 3' UTR to finish translation.
     truncated_variant_cds_seq = variant_cds_seq[:len(variant_cds_seq) / 3 * 3]
 
     # Can't be sure that the variant is a complete CDS, so passing cds=False
@@ -230,11 +238,11 @@ def apply_variant_to_transcript(variant, transcript):
     variant_protein = str(Seq(truncated_variant_cds_seq).translate(
         cds=False, to_stop=False))
 
-    aa_position = int(cds_start_offset / 3) # genomic position to codon position
-
     assert len(variant_protein) > 0, \
         "Protein sequence empty for variant %s on transcript %s" % (
             variant, transcript)
+
+    aa_position = int(cds_start_offset / 3) # genomic position to codon position
 
     if variant_protein[0] != "M":
         assert aa_position == 0, \
@@ -245,6 +253,9 @@ def apply_variant_to_transcript(variant, transcript):
             transcript,
             cds_start_offset,
             aa_alt=variant_protein[0])
+
+    # variant_protein sequence includes stop codon, whereas original_protein
+    # doesn't
     if variant_protein[-1] == "*" and original_protein == variant_protein[:-1]:
         return Silent(
             variant,
@@ -274,7 +285,8 @@ def apply_variant_to_transcript(variant, transcript):
             transcript,
             cds_start_offset,
             aa_ref)
-    elif abs(n_cdna_ref - n_cdna_alt) % 3 != 0:
+
+    if abs(n_cdna_ref - n_cdna_alt) % 3 != 0:
         shifted_sequence = variant_protein[aa_position:]
         return FrameShift(
             variant, transcript, cds_start_offset,

@@ -14,7 +14,8 @@ from varcode import (
     StopLoss,
     StartLoss,
     PrematureStop,
-    FrameShift
+    FrameShift,
+    # TODO: SpliceDonor, SpliceReceptor
 )
 
 annot = VariantAnnotator(ensembl_release=77)
