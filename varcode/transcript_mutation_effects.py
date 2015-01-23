@@ -298,6 +298,19 @@ class FrameShift(CodingSequenceMutation):
     def short_description(self):
         return "p.%s%dfs" % (self.aa_ref, self.aa_pos + 1)
 
+class FrameShiftTruncation(PrematureStop, FrameShift):
+    """
+    A frame-shift mutation which immediately introduces a stop codon.
+    """
+    def __init__(self, *args, **kwargs):
+        super(PrematureStop, self).__init__(*args, **kwargs)
+
+    @memoized_property
+    def mutant_protein_sequence(self):
+        return self.original_protein_sequence[:self.aa_pos]
+
+    def short_description(self):
+        return "p.%s%dfs*" % (self.aa_ref, self.aa_pos + 1)
 
 class _MultipleSubstitution(object):
     """
@@ -331,6 +344,8 @@ variant_effect_priority_list = [
     _MultipleSubstitution,
     StopLoss,
     PrematureStop,
+    # frame-shift which creates immediate stop codon, same as PrematureStop
+    FrameShiftTruncation,
     StartLoss,
     FrameShift
 ]
