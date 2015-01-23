@@ -53,21 +53,25 @@ def _insertion(chrom, pos, dna_ref, dna_alt, transcript_id, inserted):
         "Expected insertion of '%s' but got '%s' for %s:%d%s>%s" % (
             inserted, effect.aa_alt, chrom, pos, dna_ref, dna_alt)
 
-def _frameshift(chrom, pos, dna_ref, dna_alt, transcript_id, aa_ref):
+def _frameshift(
+        chrom, pos, dna_ref, dna_alt, transcript_id,
+        aa_pos,
+        aa_ref):
     effect = _get_effect(chrom, pos, dna_ref, dna_alt, transcript_id)
     assert isinstance(effect, FrameShift), \
         "Expected frameshift, got %s" % (effect,)
-    assert effect.aa_ref == aa_ref, \
-        "Expected frameshift to replace '%s' but instead got aa_ref='%s'" % (
-            effect.aa_ref, aa_ref)
+    assert effect.aa_ref == aa_ref and effect.aa_pos + 1 == aa_pos, \
+        "Expected frameshift to replace p.%d%s but instead got p.%d%s" % (
+            aa_pos, aa_ref, effect.aa_pos + 1, effect.aa_ref)
+
 
 def _frameshift_truncation(chrom, pos, dna_ref, dna_alt, transcript_id, aa_ref):
     effect = _get_effect(chrom, pos, dna_ref, dna_alt, transcript_id)
     assert isinstance(effect, FrameShiftTruncation), \
         "Expected truncating frameshift, got %s" % (effect,)
-    assert effect.aa_ref == aa_ref, \
-        "Expected frameshift to replace '%s' but instead got aa_ref='%s'" % (
-            effect.aa_ref, aa_ref)
+    assert effect.aa_ref == aa_ref and effect.aa_pos + 1 == aa_pos, \
+        "Expected frameshift to replace p.%d%s but instead got p.%d%s" % (
+            aa_pos, aa_ref, effect.aa_pos + 1, effect.aa_ref)
 
 
 
@@ -155,8 +159,13 @@ def test_COSM1732848_CCDC109B_F264fs():
     """
     # 4   110605772   COSM1732848 CT>C
     # GENE=CCDC109B_ENST00000394650
-    # STRAND=+;CDS=c.787delT;AA=p.F264fs*5;CNT=1
-    _frameshift("4", 110605772, "CT", "C", "ENST00000394650", aa_ref="F")
+    # STRAND=+
+    # CDS=c.787delT
+    # AA=p.F264fs*5
+    _frameshift(
+        "4", 110605772, "CT", "C", "ENST00000394650",
+        aa_pos=264,
+        aa_ref="F")
 
 def test_COSM87531_SYNE1_E4738fs():
     """
@@ -173,7 +182,10 @@ def test_COSM87531_SYNE1_E4738fs():
     # STRAND=-
     # CDS=c.14211_14212insA
     # AA=p.E4738fs*34
-    _frameshift("6", 152651608, "C", "GT", "ENST00000265368", aa_ref="E")
+    _frameshift(
+        "6", 152651608, "C", "GT", "ENST00000265368",
+        aa_pos=4738,
+        aa_ref="E")
 
 
 
