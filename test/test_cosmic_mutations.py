@@ -3,7 +3,9 @@ from varcode import (
     Variant,
     Substitution,
     Deletion,
-    Insertion
+    Insertion,
+    FrameShift,
+    Silent,
 )
 
 annot = VariantAnnotator(75)
@@ -12,32 +14,49 @@ def _get_effect(chrom, pos, dna_ref, dna_alt, transcript_id):
     variant = Variant(chrom, pos, dna_ref, dna_alt)
     result = annot.describe_variant(variant)
     assert transcript_id in result.transcript_effects, \
-        "Expected transcript ID %s for variant %s but only got %s" % (
-            transcript_id, variant, result.transcript_effects.keys())
+        "Expected transcript ID %s for variant %s not found in %s" % (
+            transcript_id, variant, result)
     return result.transcript_effects[transcript_id]
 
 def _substitution(chrom, pos, dna_ref, dna_alt, transcript_id, aa_ref, aa_alt):
     effect = _get_effect(chrom, pos, dna_ref, dna_alt, transcript_id)
     assert isinstance(effect, Substitution), \
-        "Expected effect of variant %s on %s to be Substitution, got %s" % (
-            variant, transcript, effect)
+        "Expected effect to be substitution, got %s" % (effect,)
     assert effect.aa_ref == aa_ref, \
-        "Wrong aa_ref='%s', expected '%s' for variant %s" % (
-            effect.aa_ref, aa_ref, variant)
+        "Expected aa_ref='%s' but got %s" % (
+            aa_ref, effect)
     assert effect.aa_alt == aa_alt, \
-        "Wrong aa_alt='%s', expected '%s' for variant %s" % (
-            effect.aa_alt, aa_alt, variant)
+        "Expected aa_alt='%s' but got %s" % (
+            aa_alt, effect)
 
-def _deletion(chrom, pos, dna_ref, dna_alt, transcript_id, aa_ref):
-     effect = _get_effect(chrom, pos, dna_ref, dna_alt, transcript_id)
-    assert isinstance(effect, Deletion)
-    assert effect.aa_ref == aa_ref
+def _silent(chrom, pos, dna_ref, dna_alt, transcript_id, aa_ref):
+    effect = _get_effect(chrom, pos, dna_ref, dna_alt, transcript_id)
+    assert isinstance(effect, Silent), \
+        "Expected effect to be silent, got %s" % (effect,)
+    assert effect.aa_ref == aa_ref, "Expected aa_ref='%s', got '%s'" % (
+        aa_ref, effect.aa_ref)
 
+def _deletion(chrom, pos, dna_ref, dna_alt, transcript_id, deleted):
+    effect = _get_effect(chrom, pos, dna_ref, dna_alt, transcript_id)
+    assert isinstance(effect, Deletion), \
+        "Expected deletion, got %s" % (effect,)
+    assert effect.aa_ref == deleted, \
+        "Expected deletion of '%s' but got deletion of '%s' for %s:%d%s>%s" % (
+            deleted, effect.aa_ref, chrom, pos, dna_ref, dna_alt)
 
 def _insertion(chrom, pos, dna_ref, dna_alt, transcript_id, inserted):
-     effect = _get_effect(chrom, pos, dna_ref, dna_alt, transcript_id)
-    assert isinstance(effect, Insertion)
-    assert effect.inserted == inserted
+    effect = _get_effect(chrom, pos, dna_ref, dna_alt, transcript_id)
+    assert isinstance(effect, Insertion), \
+        "Expected insertion, got %s" % (effect,)
+    assert effect.aa_alt == inserted, \
+        "Expected insertion of '%s' but got '%s' for %s:%d%s>%s" % (
+            inserted, effect.aa_alt, chrom, pos, dna_ref, dna_alt)
+
+def _frameshift(chrom, pos, dna_ref, dna_alt, transcript_id):
+    effect = _get_effect(chrom, pos, dna_ref, dna_alt, transcript_id)
+    assert isinstance(effect, FrameShift), \
+        "Expected frameshift, got %s" % (effect,)
+
 
 def test_COSM3747785_NBPF10_Q363L():
     # 1   145311839   COSM3747785 A>T
@@ -56,7 +75,7 @@ def test_COSM1333672_BCL9_Q1150delQ():
     # STRAND=+
     # CDS=c.3445_3447delCAG
     # AA=p.Q1150delQ
-    _deletion("1", 147095923, "ACAG", "T", "ENST00000234739", "Q")
+    _deletion("1", 147095923, "ACAG", "A", "ENST00000234739", "Q")
 
 def test_COSM1190996_FBX011_P57insQQQ():
     """
@@ -67,7 +86,7 @@ def test_COSM1190996_FBX011_P57insQQQ():
     # STRAND=-
     # CDS=c.146_147insGCAGCAGCA
     # AA=p.Q56_P57insQQQ;CNT=1
-    _insertion("1", 48132713, "C", "CTGCTGCTGC", "ENST00000403359", "QQ")
+    _insertion("2", 48132713, "C", "CTGCTGCTGC", "ENST00000403359", "QQQ")
 
 def test_COSM1732848_CCDC109B_F264fs():
     """
@@ -76,7 +95,7 @@ def test_COSM1732848_CCDC109B_F264fs():
     # 4   110605772   COSM1732848 CT>C
     # GENE=CCDC109B_ENST00000394650
     # STRAND=+;CDS=c.787delT;AA=p.F264fs*5;CNT=1
-    result = annot.describe_variant(Variant("4", 110605772, "CT", "C"))
+    _frameshift("4", 110605772, "CT", "C", "ENST00000394650")
 
 def test_COSM87531_SYNE1_E4738fs():
     """
@@ -87,7 +106,7 @@ def test_COSM87531_SYNE1_E4738fs():
     # STRAND=-
     # CDS=c.14211_14212insA
     # AA=p.E4738fs*34
-    result = annot.describe_variant(Variant("6", 152651608, "C", "CA"))
+    _frameshift("6", 152651608, "C", "CA", "ENST00000265368")
 
 
 def test_COSM3368867_SMUG1_Q133L():
@@ -96,7 +115,7 @@ def test_COSM3368867_SMUG1_Q133L():
     # STRAND=-
     # CDS=c.398A>T
     # AA=p.Q133L
-    result = annot.describe_variant(Variant("12", 54576295, "T", "A"))
+    _substitution("12", 54576295, "T", "A", "ENST00000513838", "Q", "L")
 
 def test_COSM3508871_FBRS_K224N():
     # 16  30676364    COSM3508871 A>T
@@ -104,7 +123,7 @@ def test_COSM3508871_FBRS_K224N():
     # STRAND=+
     # CDS=c.1572A>T
     # AA=p.K524N
-    result = annot.describe_variant(Variant("16", 30676364, "A", "T"))
+    _substitution("16", 30676364, "A", "T", "ENST00000356166", "K", "N")
 
 def test_COSM4140493_silent():
     """
@@ -115,7 +134,7 @@ def test_COSM4140493_silent():
     # STRAND=+
     # CDS=c.393G>A
     # AA=p.R131R;CNT=1
-    result = annot.describe_variant(Variant("19", 33696447, "G", "A"))
+    _silent("19", 33696447, "G", "A", "ENST00000590278", "R")
 
 def test_COSM1616161_L1724R():
     # 21  46932218    COSM1616161 T>G
@@ -123,7 +142,7 @@ def test_COSM1616161_L1724R():
     # STRAND=+
     # CDS=c.5171T>G
     # AA=p.L1724R
-    result = annot.describe_variant(Variant("21", 46932218, "T", "G"))
+    _substitution("21", 46932218, "T", "G", "ENST00000359759", "L", "R")
 
 
 def test_COSM3939556_silent():
@@ -132,7 +151,7 @@ def test_COSM3939556_silent():
     # STRAND=-
     # CDS=c.1140C>A
     # AA=p.A380A
-    result = annot.describe_variant(Variant("22", 19222059, "G", "T"))
+    _silent("22", 19222059, "G", "T", "ENST00000427926", "A")
 
 def test_COSM1651074_IL9R_D148Y():
     # X   155234091   COSM1651074 TGG>TCT
@@ -140,7 +159,7 @@ def test_COSM1651074_IL9R_D148Y():
     # STRAND=+
     # CDS=c.441_442GG>CT
     # AA=p.D148Y
-    result = annot.describe_variant(Variant("X", 155234091, "TGG", "TCT"))
+    _substitution("X", 155234091, "TGG", "TCT", "ENST00000244174", "D", "Y")
 
 def test_COSM3682816_RBMY1D_V193A():
     # Y   24030663    COSM3682816 A>G
@@ -148,6 +167,6 @@ def test_COSM3682816_RBMY1D_V193A():
     # STRAND=-
     # CDS=c.578T>C
     # AA=p.V193A
-    result = annot.describe_variant(Variant("Y", 24030663, "A", "G"))
+    _substitution("Y", 24030663, "A", "G", "ENST00000382680", "V", "A")
 
 
