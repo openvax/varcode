@@ -13,8 +13,7 @@
 # limitations under the License.
 
 import pandas as pd
-from varcode import VariantAnnotator
-from varcode.mutate import ProteinMutation
+from varcode import VariantAnnotator, Substitution, Variant
 
 annot = VariantAnnotator(75)
 
@@ -23,14 +22,15 @@ def validate_transcript_mutation(
         chrom, dna_position,
         dna_ref, dna_alt,
         aa_pos, aa_alt):
-    result = annot.describe_variant(chrom, dna_position, dna_ref, dna_alt)
+    result = annot.describe_variant(
+        Variant(chrom, dna_position, dna_ref, dna_alt))
     assert ensembl_transcript in result.transcript_effects, \
         "%s not found in %s" % (ensembl_transcript, result)
     effect = result.transcript_effects[ensembl_transcript]
     assert (
-        isinstance(effect, ProteinMutation) and
-        effect.mutation_start + 1 == aa_pos and
-        effect.seq[effect.mutation_start] == aa_alt
+        isinstance(effect, Substitution) and
+        effect.aa_pos + 1 == aa_pos and
+        effect.mutant_protein_sequence[effect.aa_pos] == aa_alt
     ), "Mutation p.%d%s not found for mutation chr%s:%s %s>%s : %s" % (
         aa_pos, aa_alt,
         chrom, dna_position,
