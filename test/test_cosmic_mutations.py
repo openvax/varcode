@@ -64,17 +64,6 @@ def _frameshift(
         "Expected frameshift to replace p.%d%s but instead got p.%d%s" % (
             aa_pos, aa_ref, effect.aa_pos + 1, effect.aa_ref)
 
-
-def _frameshift_truncation(chrom, pos, dna_ref, dna_alt, transcript_id, aa_ref):
-    effect = _get_effect(chrom, pos, dna_ref, dna_alt, transcript_id)
-    assert isinstance(effect, FrameShiftTruncation), \
-        "Expected truncating frameshift, got %s" % (effect,)
-    assert effect.aa_ref == aa_ref and effect.aa_pos + 1 == aa_pos, \
-        "Expected frameshift to replace p.%d%s but instead got p.%d%s" % (
-            aa_pos, aa_ref, effect.aa_pos + 1, effect.aa_ref)
-
-
-
 def test_COSM3939556_silent():
     # 22  19222059    COSM3939556 G>T
     # GENE=CLTCL1_ENST00000427926
@@ -186,6 +175,3 @@ def test_COSM87531_SYNE1_E4738fs():
         "6", 152651608, "C", "GT", "ENST00000265368",
         aa_pos=4738,
         aa_ref="E")
-
-
-

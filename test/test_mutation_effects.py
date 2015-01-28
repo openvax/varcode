@@ -1,7 +1,7 @@
 from varcode import (
     VariantAnnotator,
     Variant,
-    apply_variant_to_transcript,
+    infer_transcript_effect,
     NoncodingTranscript,
     IncompleteTranscript,
     FivePrimeUTR,
@@ -30,7 +30,7 @@ def test_incomplete():
     variant = Variant("7", 55109723, "A", "T")
 
     transcript = annot.ensembl.transcript_by_id("ENST00000450046")
-    effect = apply_variant_to_transcript(variant, transcript)
+    effect = infer_transcript_effect(variant, transcript)
     assert isinstance(effect, IncompleteTranscript), \
         "Expected %s on %s to be IncompleteTranscript, got %s" % (
             variant, transcript, effect)
@@ -45,7 +45,7 @@ def test_start_loss():
     # making what used to be a start codon into TTG (Leucine)
     variant = Variant("7", 55019278, "A", "T")
     transcript = annot.ensembl.transcript_by_id("ENST00000420316")
-    effect = apply_variant_to_transcript(variant, transcript)
+    effect = infer_transcript_effect(variant, transcript)
     assert isinstance(effect, StartLoss), \
         "Expected StartLoss, got %s for %s on %s" % (
             effect, variant, transcript, )

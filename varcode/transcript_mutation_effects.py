@@ -80,9 +80,26 @@ class Exonic(TranscriptMutationEffect):
 
 
 class CodingSequenceMutation(Exonic):
-    def __init__(self, variant, transcript, cds_pos, aa_ref):
+    """
+    Base class for all mutations which result in a modified coding sequence.
+    """
+    def __init__(self, variant, transcript, aa_pos, aa_ref):
+        """
+        Parameters
+        ----------
+        variant : varcode.Variant
+
+        transcript : pyensembl.Transcript
+
+        aa_pos : int
+            Position of first modified amino aicd (starting from 0)
+
+        aa_ref : str
+            Amino acid string of what used to be at aa_pos in the
+            wildtype (unmutated) protein.
+        """
         Exonic.__init__(self, variant, transcript)
-        self.cds_pos = cds_pos
+        self.aa_pos = aa_pos
         self.aa_ref = aa_ref
 
     def __str__(self):
@@ -91,10 +108,6 @@ class CodingSequenceMutation(Exonic):
             self.variant,
             self.transcript,
             self.short_description())
-
-    @memoized_property
-    def aa_pos(self):
-        return self.cds_pos / 3
 
     is_coding = True
 
@@ -118,7 +131,7 @@ class Substitution(CodingSequenceMutation):
             self,
             variant,
             transcript,
-            cds_pos,
+            aa_pos,
             aa_ref,
             aa_alt):
 
@@ -126,12 +139,12 @@ class Substitution(CodingSequenceMutation):
             self,
             variant=variant,
             transcript=transcript,
-            cds_pos=cds_pos,
+            aa_pos=aa_pos,
             aa_ref=aa_ref)
 
         self.aa_alt = aa_alt
-        self.mutation_start = self.aa_pos
-        self.mutation_end = self.aa_pos + len(aa_alt)
+        self.mutation_start = aa_pos
+        self.mutation_end = aa_pos + len(aa_alt)
 
     def short_description(self):
         if len(self.aa_ref) == 0:
@@ -155,68 +168,41 @@ class Insertion(Substitution):
     """
     In-frame insertion of one or more amino acids.
     """
-    def __init__(self, variant, transcript, cds_pos, aa_ref, inserted):
-        """
-        By convention, aa_ref is the amino acid before the insertion
-        and aa_pos is the position of aa_ref
-            Q>QL
-        """
+    def __init__(self, variant, transcript, aa_pos, aa_alt):
         Substitution.__init__(
             self,
             variant=variant,
             transcript=transcript,
-            cds_pos=cds_pos,
-            aa_ref=aa_ref,
-            aa_alt=inserted)
-
-    def short_description(self):
-        return "p.%s%dins%s" % (self.aa_ref, self.aa_pos  + 1, self.aa_alt)
-
+            aa_pos=aa_pos,
+            aa_ref="",
+            aa_alt=aa_alt)
 
 class Deletion(Substitution):
     """
     In-frame deletion of one or more amino acids.
     """
-    def __init__(
-            self,
-            variant,
-            transcript,
-            cds_pos,
-            n_kept,
-            deleted):
+
+    def __init__(self, variant, transcript, aa_pos, aa_ref):
         Substitution.__init__(
             self,
             variant=variant,
             transcript=transcript,
-            cds_pos=cds_pos,
-            aa_ref=deleted,
+            aa_pos=aa_pos,
+            aa_ref=aa_ref,
             aa_alt="")
-        self.n_kept = n_kept
-
-    def short_description(self):
-        return "p.%s%ddel" % (self.aa_ref, self.aa_pos + self.n_kept + 1)
-
-
-    @memoized_property
-    def mutant_protein_sequence(self):
-        original = self.original_protein_sequence
-        prefix = original[:self.aa_pos + self.n_kept]
-        suffix = original[self.aa_pos + self.n_kept + len(self.aa_ref):]
-        return prefix + suffix
-
 
 class PrematureStop(Substitution):
     def __init__(
             self,
             variant,
             transcript,
-            cds_pos,
+            aa_pos,
             aa_ref):
         Substitution.__init__(
             self,
             variant,
             transcript,
-            cds_pos,
+            aa_pos=aa_pos,
             aa_ref=aa_ref,
             aa_alt="*")
 
@@ -255,13 +241,13 @@ class StartLoss(UnpredictableSubstitution):
             self,
             variant,
             transcript,
-            cds_pos,
+            aa_pos,
             aa_alt):
         UnpredictableSubstitution.__init__(
             self,
             variant,
             transcript,
-            cds_pos,
+            aa_pos=aa_pos,
             aa_ref="M",
             aa_alt=aa_alt)
 
@@ -273,7 +259,7 @@ class FrameShift(CodingSequenceMutation):
             self,
             variant,
             transcript,
-            cds_pos,
+            aa_pos,
             aa_ref,
             shifted_sequence):
         """
@@ -284,7 +270,7 @@ class FrameShift(CodingSequenceMutation):
             self,
             variant=variant,
             transcript=transcript,
-            cds_pos=cds_pos,
+            aa_pos=aa_pos,
             aa_ref=aa_ref)
         self.shifted_sequence = shifted_sequence
         self.mutation_start = self.aa_pos

@@ -1,6 +1,6 @@
 from variant import Variant
 from variant_effect import VariantEffect
-from apply_variant import apply_variant
+from infer_effect import infer_effects
 from transcript_mutation_effects import top_priority_variant_effect
 
 import pyensembl
@@ -48,7 +48,7 @@ class VariantAnnotator(object):
             contig, pos, pos + number_modified_bases)
 
     def describe_variant(self, variant):
-        overlapping_genes, transcript_effects_groups = apply_variant(
+        overlapping_genes, transcript_effects_groups = infer_effects(
             self.ensembl, variant)
 
         # if our variant overlaps any genes, then choose the highest
