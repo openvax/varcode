@@ -22,9 +22,8 @@ class Variant(object):
     def __repr__(self):
         return str(self)
 
-    def description(self):
+    def short_description(self):
         chrom, pos, ref, alt = self.contig, self.pos, self.ref, self.alt
-
         if ref == alt:
             return "chr%s g.%d %s=%s" % (chrom, pos, ref, alt)
         elif len(ref) == 0 or alt.startswith(ref):
