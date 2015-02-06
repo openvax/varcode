@@ -32,7 +32,6 @@ def _load_vcf(filename):
 
     Drop any entries whose FILTER field is not one of "." or "PASS".
     """
-
     vcf_reader = vcf.Reader(filename=filename)
     raw_reference_name = vcf_reader.metadata['reference']
 
@@ -129,8 +128,22 @@ class VariantCollection(object):
             s += "\n\t%s" % record
         return s
 
+    def __repr__(self):
+        return str(self)
+
     def variant_effects(self):
         return [
-            (variant, self.annot.describe_variant(variant))
-            for variant in self.records
+            self.annot.describe_variant(variant)
+            for variant
+            in self.records
         ]
+
+    def print_variant_effects(self):
+        for effect in self.variant_effects():
+            print
+            print effect.variant
+            transcript_effect_lists = effect.gene_transcript_effects.iteritems()
+            for gene, transcript_effects in transcript_effect_lists:
+                print "  Gene:", gene
+                for transcript_effect in transcript_effects:
+                    print "  --", transcript_effect

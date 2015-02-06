@@ -18,9 +18,6 @@ class VariantEffect(object):
         """
         variant : Variant
 
-        variant_type : str
-            Summary of variant effect across all transcripts
-
         genes : list
             List of Gene objects
 
@@ -39,6 +36,17 @@ class VariantEffect(object):
             for effect in transcript_effects:
                 self.transcript_effects[effect.transcript.id] = effect
 
+        # if our variant overlaps any genes, then choose the highest
+        # priority transcript variant, otherwise call the variant "Intergenic"
+        if len(self.transcript_effects) > 0:
+            self.highest_priority_effect = top_priority_variant_effect(
+                self.transcript_effects.values())
+            highest_priority_class = self.highest_priority_effect.__class__
+            self.variant_summary = highest_priority_class.__name__
+        else:
+            self.highest_priority_effect = _
+            self.variant_summary = "Intergenic"
+
     @property
     def coding_genes(self):
         """
@@ -54,12 +62,11 @@ class VariantEffect(object):
 
     def __str__(self):
         fields = [
-            ("variant", self.variant),
             ("genes", [gene.name for gene in self.genes]),
-            ("n_coding_genes", len(self.coding_genes)),
             ("transcript_effects", self.transcript_effects)
         ]
-        return "VariantEffect(%s)" % (
+        return "VariantEffect(%s, %s)" % (
+            self.variant,
             ", ".join(["%s=%s" % (k,v) for (k,v) in fields]))
 
     def __repr__(self):

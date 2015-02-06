@@ -76,16 +76,6 @@ def overlaps_any_exon(variant, transcript):
             end=variant.end_pos)
         for exon in transcript.exons)
 
-def group_by(records, field_name):
-    groups = {}
-    for record in records:
-        value = getattr(record, field_name)
-        if value in groups:
-            groups[value].append(record)
-        else:
-            groups[value] = [record]
-    return groups
-
 def first_transcript_offset(start_pos, end_pos, transcript):
     """
     Given a variant and a particular transcript,
@@ -379,53 +369,3 @@ def infer_transcript_effect(variant, transcript):
         return Intronic(variant, transcript)
 
     return infer_exonic_effect(variant, transcript)
-
-
-
-
-def infer_effects(ensembl, variant):
-    """
-    Determine the effects of a variant on any transcripts it overlaps,
-    return the list of overlapping Gene objects, and a dictionary
-    mapping gene IDs to a list of transcript mutation effects (e.g. FrameShift).
-
-    Parameters
-    ----------
-
-    ensembl : Ensembl
-        Ensembl release which lets us query which genes/transcripts are at a
-        particular locus.
-
-    variant : Variant
-    """
-
-    contig = variant.contig
-    pos = variant.pos
-    end_pos = variant.end_pos
-    ref = variant.ref
-    alt = variant.alt
-
-    overlapping_genes = ensembl.genes_at_locus(contig, pos, end_pos)
-
-    if len(overlapping_genes) == 0:
-        return [], {}
-    else:
-        overlapping_transcripts = ensembl.transcripts_at_locus(
-                contig, pos, end_pos)
-
-        assert len(overlapping_transcripts) > 0, \
-            "No transcripts found for mutation %s:%d %s>%s" % (
-                contig, pos, ref, alt)
-
-    # group transcripts by their gene ID
-    overlapping_transcript_groups = group_by(
-        overlapping_transcripts, field_name='gene_id')
-
-    variant_effect_groups = {}
-    for gene_id, transcripts in overlapping_transcript_groups.items():
-        effects = []
-        for transcript in transcripts:
-            effect = infer_transcript_effect(variant, transcript)
-            effects.append(effect)
-        variant_effect_groups[gene_id] = effects
-    return overlapping_genes, variant_effect_groups

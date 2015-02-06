@@ -61,3 +61,14 @@ def trim_shared_flanking_strings(ref, alt):
     ref, alt, prefix = trim_shared_prefix(ref, alt)
     ref, alt, suffix = trim_shared_suffix(ref, alt)
     return ref, alt, prefix, suffix
+
+
+def group_by(records, field_name):
+    groups = {}
+    for record in records:
+        value = getattr(record, field_name)
+        if value in groups:
+            groups[value].append(record)
+        else:
+            groups[value] = [record]
+    return groups

@@ -14,7 +14,9 @@ class TranscriptMutationEffect(object):
 
     def __str__(self):
         return "%s(variant=%s, transcript=%s)" % (
-            self.__class__.__name__, self.variant, self.transcript)
+            self.__class__.__name__,
+            self.variant.short_description(),
+            self.transcript.name)
 
     def short_description():
         raise ValueError(
@@ -107,8 +109,8 @@ class CodingSequenceMutation(Exonic):
     def __str__(self):
         return "%s(variant=%s, transcript=%s, effect_description=%s)" % (
             self.__class__.__name__,
-            self.variant,
-            self.transcript,
+            self.variant.short_description(),
+            self.transcript.name,
             self.short_description())
 
     is_coding = True
