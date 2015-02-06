@@ -1,6 +1,5 @@
-
 from __future__ import print_function, division, absolute_import
-from transcript_mutation_effects import top_priority_variant_effect
+from transcript_mutation_effects import top_priority_transcript_effect
 
 from pyensembl.biotypes import is_coding_biotype
 
@@ -38,7 +37,7 @@ class VariantEffect(object):
         # if our variant overlaps any genes, then choose the highest
         # priority transcript variant, otherwise call the variant "Intergenic"
         if len(self.transcript_effects) > 0:
-            self.highest_priority_effect = top_priority_variant_effect(
+            self.highest_priority_effect = top_priority_transcript_effect(
                 self.transcript_effects.values())
             highest_priority_class = self.highest_priority_effect.__class__
             self.variant_summary = highest_priority_class.__name__

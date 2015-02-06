@@ -317,7 +317,7 @@ def get_class(effect):
             return _MultipleSubstitution
     return effect.__class__
 
-variant_effect_priority_list = [
+transcript_effect_priority_list = [
     IncompleteTranscript,
     NoncodingTranscript,
     # TODO: Add SpliceDonor and SpliceReceptor mutations and #
@@ -340,21 +340,37 @@ variant_effect_priority_list = [
     FrameShift
 ]
 
-variant_effect_priority_dict = {
-    variant_effect_class : priority
-    for (priority, variant_effect_class)
-    in enumerate(variant_effect_priority_list)
+transcript_effect_priority_dict = {
+    transcript_effect_class : priority
+    for (priority, transcript_effect_class)
+    in enumerate(transcript_effect_priority_list)
 }
 
-def top_priority_variant_effect(variant_effects):
+def top_priority_transcript_effect(effects):
     """
-    Given a collection of variant effects, return the top priority object.
+    Given a collection of variant transcript effects,
+    return the top priority object. In case of multiple transcript
+    effects with the same priority, return the one affecting the longest
+    transcript.
     """
-    best_effect = None
+    if len(effects) == 0:
+        raise ValueError("List of effects cannot be empty")
+
+    best_effects = []
     best_priority = -1
-    for variant_effect in variant_effects:
-        priority = variant_effect_priority_dict[get_class(variant_effect)]
+    for effect in effects:
+        effect_class = get_class(effect)
+        priority = transcript_effect_priority_dict[effect_class]
         if priority > best_priority:
-            best_effect = variant_effect
+            best_effects = [effect]
             best_priority = priority
-    return best_effect
+        elif priority == best_priority:
+            best_effects.append(effect)
+
+    def effect_cds_len(effect):
+        """
+        Returns length of coding sequence of transcript associated with effect
+        """
+        return len(effect.transcript.coding_sequence)
+
+    return max(best_effects, key=effect_cds_len)

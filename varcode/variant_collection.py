@@ -139,11 +139,16 @@ class VariantCollection(object):
         ]
 
     def print_variant_effects(self):
-        for effect in self.variant_effects():
+        for variant_effect in self.variant_effects():
+            transcript_effect_count = 0
             print
-            print effect.variant
-            transcript_effect_lists = effect.gene_transcript_effects.iteritems()
-            for gene, transcript_effects in transcript_effect_lists:
+            print variant_effect.variant
+            transcript_effect_lists = variant_effect.gene_transcript_effects
+            for gene, transcript_effects in transcript_effect_lists.iteritems():
                 print "  Gene:", gene
                 for transcript_effect in transcript_effects:
+                    transcript_effect_count += 1
                     print "  --", transcript_effect
+            if transcript_effect_count > 1:
+                best = variant_effect.highest_priority_effect
+                print "  Highest Priority Effect:", best
