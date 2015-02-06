@@ -17,7 +17,8 @@ def test_vcf_number_entries():
     assert len(variants) == 14, \
         "Expected 14 mutations, got %d" % (len(variants),)
 
-def _check_effect_gene_name(variant, effect):
+def _check_effect_gene_name(effect):
+    variant = effect.variant
     expected_gene_name = variant.info['GE']
     gene_names = [gene.name for gene in effect.genes]
     assert expected_gene_name in gene_names, \
@@ -26,5 +27,5 @@ def _check_effect_gene_name(variant, effect):
 
 def test_vcf_gene_names():
     variants = VariantCollection(VCF_FILENAME)
-    for variant, effect in variants.variant_effects():
-        yield (_check_effect_gene_name, variant, effect)
+    for effect in variants.variant_effects():
+        yield (_check_effect_gene_name, effect)

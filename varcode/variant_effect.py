@@ -1,4 +1,6 @@
+
 from __future__ import print_function, division, absolute_import
+from transcript_mutation_effects import top_priority_variant_effect
 
 from pyensembl.biotypes import is_coding_biotype
 
@@ -12,7 +14,6 @@ class VariantEffect(object):
     def __init__(
             self,
             variant,
-            variant_type,
             genes,
             gene_transcript_effects):
         """
@@ -25,8 +26,6 @@ class VariantEffect(object):
             Dictionary from gene ID to list of transcript variant effects
         """
         self.variant = variant
-        # add "highest priority" this name
-        self.variant_type = variant_type
         self.genes = genes
         self.gene_transcript_effects = gene_transcript_effects
 
@@ -62,11 +61,11 @@ class VariantEffect(object):
 
     def __str__(self):
         fields = [
+            ("variant", self.variant.short_description()),
             ("genes", [gene.name for gene in self.genes]),
             ("transcript_effects", self.transcript_effects)
         ]
-        return "VariantEffect(%s, %s)" % (
-            self.variant,
+        return "VariantEffect(%s)" % (
             ", ".join(["%s=%s" % (k,v) for (k,v) in fields]))
 
     def __repr__(self):
