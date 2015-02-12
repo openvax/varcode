@@ -59,6 +59,15 @@ def trim_shared_suffix(ref, alt):
     return tuple(s[::-1] for s in results)
 
 def trim_shared_flanking_strings(ref, alt):
+    """
+    Given two nucleotide or amino acid strings, identify
+    if they have a common prefix, a common suffix, and return
+    their unique components along with the prefix and suffix.
+
+    For example, if the input ref = "SYFFQGR" and alt = "SYMLLFIFQGR"
+    then the result will be:
+        ("F", "MLLFI", "SY", "FQGR")
+    """
     ref, alt, prefix = trim_shared_prefix(ref, alt)
     ref, alt, suffix = trim_shared_suffix(ref, alt)
     return ref, alt, prefix, suffix

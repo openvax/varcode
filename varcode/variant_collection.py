@@ -1,12 +1,13 @@
 from __future__ import print_function, division, absolute_import
 
+from . import maf
+from .effect_ordering import effect_priority
 from .reference_name import (
     infer_reference_name,
     ensembl_release_number_for_reference_name
 )
 from .variant import Variant
 from .variant_annotator import VariantAnnotator
-from . import maf
 
 import vcf
 
@@ -132,23 +133,45 @@ class VariantCollection(object):
         return str(self)
 
     def variant_effects(self):
+        """
+        Determine the impact of each variant, return a list of
+        VariantEffect objects.
+        """
         return [
             self.annot.describe_variant(variant)
             for variant
             in self.records
         ]
 
-    def print_variant_effects(self):
+    def effects_to_string(self):
+        """
+        Create a long string with all transcript effects for each mutation,
+        grouped by gene (if a mutation affects multiple genes).
+        """
+        lines = []
         for variant_effect in self.variant_effects():
             transcript_effect_count = 0
-            print
-            print variant_effect.variant
+            lines.append("\n%s" % variant_effect.variant)
             transcript_effect_lists = variant_effect.gene_transcript_effects
             for gene, transcript_effects in transcript_effect_lists.iteritems():
-                print "  Gene:", gene
-                for transcript_effect in transcript_effects:
+                lines.append("  Gene: %s" % gene)
+                # print transcript effects with more significant impact
+                # on top (e.g. FrameShift should go before NoncodingTranscript)
+                for transcript_effect in sorted(
+                        transcript_effects,
+                        key=effect_priority,
+                        reverse=True):
                     transcript_effect_count += 1
-                    print "  --", transcript_effect
+                    lines.append("  -- %s" % transcript_effect)
+            # if we only printed one effect for this gene then
+            # it's redundant to print it again as the highest priority effect
             if transcript_effect_count > 1:
                 best = variant_effect.highest_priority_effect
-                print "  Highest Priority Effect:", best
+                lines.append("  Highest Priority Effect: %s" % best)
+        return "\n".join(lines)
+
+    def print_effects(self):
+        """
+        Print all variants and their transcript effects (grouped by gene).
+        """
+        print(self.effects_to_string())

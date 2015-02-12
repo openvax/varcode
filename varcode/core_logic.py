@@ -30,6 +30,7 @@ from .transcript_mutation_effects import (
     Insertion,
     Deletion,
     Substitution,
+    ComplexSubstitution,
     PrematureStop,
     StartLoss,
     FrameShift,
@@ -300,8 +301,20 @@ def infer_coding_effect(
             variant, transcript,
             aa_pos=aa_pos,
             aa_alt=inserted)
-    else:
+
+    # simple substitution e.g. p.V600E
+    elif len(aa_ref) == 1 and len(aa_alt) == 1:
         return Substitution(
+            variant,
+            transcript,
+            aa_pos=aa_pos,
+            aa_ref=aa_ref,
+            aa_alt=aa_alt)
+
+    # substitution which involes multiple amino acids
+    # Example: p.V600EEQ, p.IL49AQY
+    else:
+        return ComplexSubstitution(
             variant,
             transcript,
             aa_pos=aa_pos,
@@ -359,8 +372,8 @@ def infer_transcript_effect(variant, transcript):
             "Expected %s : %s to have type Transcript" % (
                 transcript, type(transcript)))
 
-    # check for non-coding transcripts before whether it's complete since
-    # everyone non-coding transcript is "incomplete".
+    # check for non-coding transcripts first, since
+    # every non-coding transcript is "incomplete".
     if not is_coding_biotype(transcript.biotype):
         return NoncodingTranscript(variant, transcript)
 

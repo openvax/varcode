@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
-from transcript_mutation_effects import top_priority_transcript_effect
+
+from .effect_ordering import top_priority_transcript_effect
 
 from pyensembl.biotypes import is_coding_biotype
 
