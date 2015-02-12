@@ -359,11 +359,13 @@ def infer_transcript_effect(variant, transcript):
             "Expected %s : %s to have type Transcript" % (
                 transcript, type(transcript)))
 
-    if not transcript.complete:
-        return IncompleteTranscript(variant, transcript)
-
+    # check for non-coding transcripts before whether it's complete since
+    # everyone non-coding transcript is "incomplete".
     if not is_coding_biotype(transcript.biotype):
         return NoncodingTranscript(variant, transcript)
+
+    if not transcript.complete:
+        return IncompleteTranscript(variant, transcript)
 
     if not overlaps_any_exon(variant, transcript):
         return Intronic(variant, transcript)
