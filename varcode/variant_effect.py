@@ -1,3 +1,5 @@
+from __future__ import print_function, division, absolute_import
+
 from pyensembl.biotypes import is_coding_biotype
 
 class VariantEffect(object):
@@ -33,7 +35,7 @@ class VariantEffect(object):
 
         # dictionary mapping from transcript IDs to transcript mutation effects
         self.transcript_effects = {}
-        for (_, transcript_effects) in self.gene_transcript_effects.iteritems():
+        for (_, transcript_effects) in self.gene_transcript_effects.items():
             for effect in transcript_effects:
                 self.transcript_effects[effect.transcript.id] = effect
 

@@ -1,3 +1,4 @@
+from __future__ import print_function, division, absolute_import
 
 # include all pseudonucleotides encoding repeats and uncertain bases
 VALID_NUCLEOTIDES = {'A', 'C', 'T', 'G'}
@@ -39,7 +40,7 @@ def normalize_nucleotide_string(nucleotides, allow_extended_nucleotides=False):
     elif nucleotides == '.':
         return ""
 
-    if not isinstance(nucleotides, (str, unicode)):
+    if not isinstance(nucleotides, str):
         raise TypeError(
                 "Expected nucleotide string, got %s : %s" % (
                     nucleotides, type(nucleotides)))
