@@ -1,5 +1,4 @@
-from __future__ import (
-    print_function, division, absolute_import, unicode_literals)
+from __future__ import print_function, division, absolute_import
 
 # include all pseudonucleotides encoding repeats and uncertain bases
 VALID_NUCLEOTIDES = {'A', 'C', 'T', 'G'}

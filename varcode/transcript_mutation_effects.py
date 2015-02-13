@@ -1,5 +1,4 @@
-from __future__ import (
-    print_function, division, absolute_import, unicode_literals)
+from __future__ import print_function, division, absolute_import
 
 import Bio.Seq
 from memoized_property import memoized_property
