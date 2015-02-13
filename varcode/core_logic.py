@@ -30,6 +30,7 @@ from .transcript_mutation_effects import (
     Insertion,
     Deletion,
     Substitution,
+    ComplexSubstitution,
     PrematureStop,
     StartLoss,
     FrameShift,
@@ -75,16 +76,6 @@ def overlaps_any_exon(variant, transcript):
             start=variant.pos,
             end=variant.end_pos)
         for exon in transcript.exons)
-
-def group_by(records, field_name):
-    groups = {}
-    for record in records:
-        value = getattr(record, field_name)
-        if value in groups:
-            groups[value].append(record)
-        else:
-            groups[value] = [record]
-    return groups
 
 def first_transcript_offset(start_pos, end_pos, transcript):
     """
@@ -310,8 +301,20 @@ def infer_coding_effect(
             variant, transcript,
             aa_pos=aa_pos,
             aa_alt=inserted)
-    else:
+
+    # simple substitution e.g. p.V600E
+    elif len(aa_ref) == 1 and len(aa_alt) == 1:
         return Substitution(
+            variant,
+            transcript,
+            aa_pos=aa_pos,
+            aa_ref=aa_ref,
+            aa_alt=aa_alt)
+
+    # substitution which involes multiple amino acids
+    # Example: p.V600EEQ, p.IL49AQY
+    else:
+        return ComplexSubstitution(
             variant,
             transcript,
             aa_pos=aa_pos,
@@ -369,63 +372,15 @@ def infer_transcript_effect(variant, transcript):
             "Expected %s : %s to have type Transcript" % (
                 transcript, type(transcript)))
 
-    if not transcript.complete:
-        return IncompleteTranscript(variant, transcript)
-
+    # check for non-coding transcripts first, since
+    # every non-coding transcript is "incomplete".
     if not is_coding_biotype(transcript.biotype):
         return NoncodingTranscript(variant, transcript)
+
+    if not transcript.complete:
+        return IncompleteTranscript(variant, transcript)
 
     if not overlaps_any_exon(variant, transcript):
         return Intronic(variant, transcript)
 
     return infer_exonic_effect(variant, transcript)
-
-
-
-
-def infer_effects(ensembl, variant):
-    """
-    Determine the effects of a variant on any transcripts it overlaps,
-    return the list of overlapping Gene objects, and a dictionary
-    mapping gene IDs to a list of transcript mutation effects (e.g. FrameShift).
-
-    Parameters
-    ----------
-
-    ensembl : Ensembl
-        Ensembl release which lets us query which genes/transcripts are at a
-        particular locus.
-
-    variant : Variant
-    """
-
-    contig = variant.contig
-    pos = variant.pos
-    end_pos = variant.end_pos
-    ref = variant.ref
-    alt = variant.alt
-
-    overlapping_genes = ensembl.genes_at_locus(contig, pos, end_pos)
-
-    if len(overlapping_genes) == 0:
-        return [], {}
-    else:
-        overlapping_transcripts = ensembl.transcripts_at_locus(
-                contig, pos, end_pos)
-
-        assert len(overlapping_transcripts) > 0, \
-            "No transcripts found for mutation %s:%d %s>%s" % (
-                contig, pos, ref, alt)
-
-    # group transcripts by their gene ID
-    overlapping_transcript_groups = group_by(
-        overlapping_transcripts, field_name='gene_id')
-
-    variant_effect_groups = {}
-    for gene_id, transcripts in overlapping_transcript_groups.items():
-        effects = []
-        for transcript in transcripts:
-            effect = infer_transcript_effect(variant, transcript)
-            effects.append(effect)
-        variant_effect_groups[gene_id] = effects
-    return overlapping_genes, variant_effect_groups

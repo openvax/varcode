@@ -14,7 +14,9 @@ class TranscriptMutationEffect(object):
 
     def __str__(self):
         return "%s(variant=%s, transcript=%s)" % (
-            self.__class__.__name__, self.variant, self.transcript)
+            self.__class__.__name__,
+            self.variant.short_description(),
+            self.transcript.name)
 
     def short_description():
         raise ValueError(
@@ -81,7 +83,7 @@ class Exonic(TranscriptMutationEffect):
     pass
 
 
-class CodingSequenceMutation(Exonic):
+class CodingMutation(Exonic):
     """
     Base class for all mutations which result in a modified coding sequence.
     """
@@ -107,14 +109,14 @@ class CodingSequenceMutation(Exonic):
     def __str__(self):
         return "%s(variant=%s, transcript=%s, effect_description=%s)" % (
             self.__class__.__name__,
-            self.variant,
-            self.transcript,
+            self.variant.short_description(),
+            self.transcript.name,
             self.short_description())
 
     is_coding = True
 
 
-class Silent(CodingSequenceMutation):
+class Silent(CodingMutation):
     """
     Mutation to an exon of a coding region which doesn't change the
     amino acid sequence.
@@ -123,7 +125,7 @@ class Silent(CodingSequenceMutation):
         return "silent"
 
 
-class Substitution(CodingSequenceMutation):
+class BaseSubstitution(CodingMutation):
     """
     Coding mutation which replaces some amino acids into others.
     The total number of amino acids changed must be greater than one on
@@ -137,7 +139,7 @@ class Substitution(CodingSequenceMutation):
             aa_ref,
             aa_alt):
 
-        CodingSequenceMutation.__init__(
+        CodingMutation.__init__(
             self,
             variant=variant,
             transcript=transcript,
@@ -166,12 +168,63 @@ class Substitution(CodingSequenceMutation):
         suffix = original[self.aa_pos + len(self.aa_ref):]
         return prefix + self.aa_alt + suffix
 
-class Insertion(Substitution):
+class Substitution(BaseSubstitution):
+    """
+    Single amino acid subsitution, e.g. BRAF-001 V600E
+    """
+    def __init__(
+            self,
+            variant,
+            transcript,
+            aa_pos,
+            aa_ref,
+            aa_alt):
+        if len(aa_ref) != 1:
+            raise ValueError(
+                "Simple subsitution can't have aa_ref='%s'" % (aa_ref,))
+        if len(aa_alt) != 1:
+            raise ValueError(
+                "Simple subsitution can't have aa_alt='%s'" % (aa_alt,))
+        BaseSubstitution.__init__(
+            self,
+            variant=variant,
+            transcript=transcript,
+            aa_pos=aa_pos,
+            aa_ref=aa_ref,
+            aa_alt=aa_alt)
+
+class ComplexSubstitution(BaseSubstitution):
+    """
+    In-frame substitution of multiple amino acids, e.g. TP53-002 p.391FY>QQQ
+    Can change the length of the protein sequence but since it has
+    non-empty ref and alt strings, is more complicated than an insertion or
+    deletion alone.
+    """
+    def __init__(
+            self,
+            variant,
+            transcript,
+            aa_pos,
+            aa_ref,
+            aa_alt):
+        if len(aa_ref) == 1 and len(aa_alt) == 1:
+            raise ValueError(
+                "ComplexSubstitution can't have aa_ref='%s' and aa_alt='%s'" % (
+                    aa_ref, aa_alt))
+        BaseSubstitution.__init__(
+            self,
+            variant=variant,
+            transcript=transcript,
+            aa_pos=aa_pos,
+            aa_ref=aa_ref,
+            aa_alt=aa_alt)
+
+class Insertion(BaseSubstitution):
     """
     In-frame insertion of one or more amino acids.
     """
     def __init__(self, variant, transcript, aa_pos, aa_alt):
-        Substitution.__init__(
+        BaseSubstitution.__init__(
             self,
             variant=variant,
             transcript=transcript,
@@ -179,13 +232,13 @@ class Insertion(Substitution):
             aa_ref="",
             aa_alt=aa_alt)
 
-class Deletion(Substitution):
+class Deletion(BaseSubstitution):
     """
     In-frame deletion of one or more amino acids.
     """
 
     def __init__(self, variant, transcript, aa_pos, aa_ref):
-        Substitution.__init__(
+        BaseSubstitution.__init__(
             self,
             variant=variant,
             transcript=transcript,
@@ -193,14 +246,16 @@ class Deletion(Substitution):
             aa_ref=aa_ref,
             aa_alt="")
 
-class PrematureStop(Substitution):
+
+
+class PrematureStop(BaseSubstitution):
     def __init__(
             self,
             variant,
             transcript,
             aa_pos,
             aa_ref):
-        Substitution.__init__(
+        BaseSubstitution.__init__(
             self,
             variant,
             transcript,
@@ -218,7 +273,7 @@ class PrematureStop(Substitution):
         return self.original_protein_sequence[:self.aa_pos]
 
 
-class UnpredictableSubstitution(Substitution):
+class UnpredictableCodingMutation(BaseSubstitution):
     """
     Variants for which we can't confidently determine a protein sequence.
 
@@ -233,19 +288,18 @@ class UnpredictableSubstitution(Substitution):
     def mutant_protein_sequence(self):
         raise ValueError("Can't determine the protein sequence of %s" % self)
 
-class StopLoss(UnpredictableSubstitution):
+class StopLoss(UnpredictableCodingMutation):
     def short_description(self):
         return "*%d%s (stop-loss)" % (self.aa_pos, self.aa_alt)
 
-
-class StartLoss(UnpredictableSubstitution):
+class StartLoss(UnpredictableCodingMutation):
     def __init__(
             self,
             variant,
             transcript,
             aa_pos,
             aa_alt):
-        UnpredictableSubstitution.__init__(
+        UnpredictableCodingMutation.__init__(
             self,
             variant,
             transcript,
@@ -256,7 +310,7 @@ class StartLoss(UnpredictableSubstitution):
     def short_description(self):
         return "p.? (start-loss)" % (self.aa_pos, self.aa_)
 
-class FrameShift(CodingSequenceMutation):
+class FrameShift(CodingMutation):
     def __init__(
             self,
             variant,
@@ -268,7 +322,7 @@ class FrameShift(CodingSequenceMutation):
         Unlike an insertion, which we denote with aa_ref as the chracter before
         the variant sequence, a frameshift starts at aa_ref
         """
-        CodingSequenceMutation.__init__(
+        CodingMutation.__init__(
             self,
             variant=variant,
             transcript=transcript,
@@ -299,60 +353,3 @@ class FrameShiftTruncation(PrematureStop, FrameShift):
 
     def short_description(self):
         return "p.%s%dfs*" % (self.aa_ref, self.aa_pos + 1)
-
-class _MultipleSubstitution(object):
-    """
-    We're ordering mutations by their class names,
-    need to create this dummy class to capture the
-    difference between simple subsitutions (e.g. V600E)
-    and compound subsitutions (e.g. QF34YY)
-    """
-    pass
-
-def get_class(effect):
-    if isinstance(effect, Substitution):
-        if len(effect.aa_ref) > 1 or len(effect.aa_alt) > 1:
-            return _MultipleSubstitution
-    return effect.__class__
-
-variant_effect_priority_list = [
-    IncompleteTranscript,
-    NoncodingTranscript,
-    # TODO: Add SpliceDonor and SpliceReceptor mutations and #
-    # place them at higher priority positions in this list
-    Intronic,
-    ThreePrimeUTR,
-    # mutations to the upstream 5' UTR may change the ORF (reading frame),
-    # so give 5' UTR mutations higher prioriry
-    FivePrimeUTR,
-    Silent,
-    Substitution,
-    Insertion,
-    Deletion,
-    _MultipleSubstitution,
-    StopLoss,
-    PrematureStop,
-    # frame-shift which creates immediate stop codon, same as PrematureStop
-    FrameShiftTruncation,
-    StartLoss,
-    FrameShift
-]
-
-variant_effect_priority_dict = {
-    variant_effect_class : priority
-    for (priority, variant_effect_class)
-    in enumerate(variant_effect_priority_list)
-}
-
-def top_priority_variant_effect(variant_effects):
-    """
-    Given a collection of variant effects, return the top priority object.
-    """
-    best_effect = None
-    best_priority = -1
-    for variant_effect in variant_effects:
-        priority = variant_effect_priority_dict[get_class(variant_effect)]
-        if priority > best_priority:
-            best_effect = variant_effect
-            best_priority = priority
-    return best_effect

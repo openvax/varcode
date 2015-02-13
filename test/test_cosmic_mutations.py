@@ -175,3 +175,13 @@ def test_COSM87531_SYNE1_E4738fs():
         "6", 152651608, "C", "GT", "ENST00000265368",
         aa_pos=4738,
         aa_ref="E")
+
+def test_COSM27279_CTNNB1_Q4H():
+    """
+    test_COSM27279_CTNNB1_Q4H : Apply Cosmic mutation COSM27279
+    transcript = 'ENST00000405570'
+    pos: 41265571,
+    ref : A, alt : T
+    amino acids = Q -> H  @ pos 4 (mutation = Q4H)
+    """
+    _substitution("3", 41265571, "A", "T", "ENST00000405570", "Q", "H")

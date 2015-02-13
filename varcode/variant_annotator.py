@@ -1,71 +1,53 @@
 from __future__ import print_function, division, absolute_import
 
+from .common import group_by
+from .core_logic import infer_transcript_effect
 from .variant import Variant
 from .variant_effect import VariantEffect
-from .infer_effect import infer_effects
-from .transcript_mutation_effects import top_priority_variant_effect
 
 import pyensembl
-from pyensembl.biotypes import is_coding_biotype
-
 
 class VariantAnnotator(object):
     def __init__(self, ensembl_release):
         self.ensembl = pyensembl.EnsemblRelease(ensembl_release)
 
-
-    def variant_gene_ids(self, contig, pos, number_modified_bases=1):
-        """
-        Parameters
-        ----------
-
-        contig : str
-            Chromosome or contig name
-
-        pos : int
-            Position in the chromosome
-
-        number_modified_bases : int
-            How many reference bases were changed or deleted?
-        """
-        return self.ensembl.gene_ids_at_locus(
-            contig, pos, pos + number_modified_bases)
-
-
-    def variant_transcript_ids(self, contig, pos, number_modified_bases=1):
-        """
-        Parameters
-        ----------
-
-        contig : str
-            Chromosome or contig name
-
-        pos : int
-            Position in the chromosome
-
-        number_modified_bases : int
-            How many reference bases were changed or deleted?
-        """
-        return self.ensembl.transcript_ids_at_locus(
-            contig, pos, pos + number_modified_bases)
-
     def describe_variant(self, variant):
-        overlapping_genes, transcript_effects_groups = infer_effects(
-            self.ensembl, variant)
+        """
+        Determine the effects of a variant on any transcripts it overlaps.
+        Returns a VariantEffect object.
+        """
+        contig = variant.contig
+        pos = variant.pos
+        end_pos = variant.end_pos
+        ref = variant.ref
+        alt = variant.alt
 
-        # if our variant overlaps any genes, then choose the highest
-        # priority transcript variant, otherwise call the variant "Intergenic"
+        overlapping_genes = self.ensembl.genes_at_locus(contig, pos, end_pos)
+
         if len(overlapping_genes) == 0:
-            variant_type = "Intergenic"
+            return [], {}
         else:
-            all_variant_effects = []
-            for _, variant_effects in transcript_effects_groups.items():
-                all_variant_effects.extend(variant_effects)
-            summary_effect = top_priority_variant_effect(all_variant_effects)
-            variant_type = summary_effect.__class__.__name__
+            overlapping_transcripts = self.ensembl.transcripts_at_locus(
+                    contig, pos, end_pos)
+
+            assert len(overlapping_transcripts) > 0, \
+                "No transcripts found for mutation %s:%d %s>%s" % (
+                    contig, pos, ref, alt)
+
+        # group transcripts by their gene ID
+        overlapping_transcript_groups = group_by(
+            overlapping_transcripts, field_name='gene_id')
+
+        # dictionary from gene ID to list of transcript effects
+        gene_transcript_effects_groups = {}
+        for gene_id, transcripts in overlapping_transcript_groups.iteritems():
+            effects = []
+            for transcript in transcripts:
+                effect = infer_transcript_effect(variant, transcript)
+                effects.append(effect)
+            gene_transcript_effects_groups[gene_id] = effects
 
         return VariantEffect(
             variant=variant,
-            variant_type=variant_type,
             genes=overlapping_genes,
-            gene_transcript_effects=transcript_effects_groups)
+            gene_transcript_effects=gene_transcript_effects_groups)

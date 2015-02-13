@@ -1,5 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
+from .effect_ordering import top_priority_transcript_effect
+
 from pyensembl.biotypes import is_coding_biotype
 
 class VariantEffect(object):
@@ -12,14 +14,10 @@ class VariantEffect(object):
     def __init__(
             self,
             variant,
-            variant_type,
             genes,
             gene_transcript_effects):
         """
         variant : Variant
-
-        variant_type : str
-            Summary of variant effect across all transcripts
 
         genes : list
             List of Gene objects
@@ -28,8 +26,6 @@ class VariantEffect(object):
             Dictionary from gene ID to list of transcript variant effects
         """
         self.variant = variant
-        # add "highest priority" this name
-        self.variant_type = variant_type
         self.genes = genes
         self.gene_transcript_effects = gene_transcript_effects
 
@@ -38,6 +34,17 @@ class VariantEffect(object):
         for (_, transcript_effects) in self.gene_transcript_effects.items():
             for effect in transcript_effects:
                 self.transcript_effects[effect.transcript.id] = effect
+
+        # if our variant overlaps any genes, then choose the highest
+        # priority transcript variant, otherwise call the variant "Intergenic"
+        if len(self.transcript_effects) > 0:
+            self.highest_priority_effect = top_priority_transcript_effect(
+                self.transcript_effects.values())
+            highest_priority_class = self.highest_priority_effect.__class__
+            self.variant_summary = highest_priority_class.__name__
+        else:
+            self.highest_priority_effect = _
+            self.variant_summary = "Intergenic"
 
     @property
     def coding_genes(self):
@@ -54,9 +61,8 @@ class VariantEffect(object):
 
     def __str__(self):
         fields = [
-            ("variant", self.variant),
+            ("variant", self.variant.short_description()),
             ("genes", [gene.name for gene in self.genes]),
-            ("n_coding_genes", len(self.coding_genes)),
             ("transcript_effects", self.transcript_effects)
         ]
         return "VariantEffect(%s)" % (
