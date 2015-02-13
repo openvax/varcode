@@ -2,7 +2,6 @@ from __future__ import print_function, division, absolute_import
 
 from .common import group_by
 from .core_logic import infer_transcript_effect
-from .transcript_mutation_effects import top_priority_variant_effect
 from .variant import Variant
 from .variant_effect import VariantEffect
 

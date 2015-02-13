@@ -1,4 +1,4 @@
-from transcript_mutation_effects import *
+from .transcript_mutation_effects import *
 
 transcript_effect_priority_list = [
     IncompleteTranscript,
