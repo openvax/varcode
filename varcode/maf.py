@@ -14,6 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import (
+    print_function, division, absolute_import, unicode_literals)
+
 import logging
 
 import pandas
@@ -61,7 +64,7 @@ def load_maf_dataframe(filename, nrows=None, verbose=False):
         filename,
         skiprows=lines_to_skip,
         sep="\t",
-        usecols=list(range(len(MAF_COLUMN_NAMES))),
+        usecols=range(len(MAF_COLUMN_NAMES)),
         low_memory=False,
         names=MAF_COLUMN_NAMES)
 

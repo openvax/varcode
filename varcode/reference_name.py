@@ -1,4 +1,5 @@
-
+from __future__ import (
+    print_function, division, absolute_import, unicode_literals)
 
 def infer_reference_name(path):
     # NCBI builds and hg releases aren't identical

@@ -1,3 +1,6 @@
+from __future__ import (
+    print_function, division, absolute_import, unicode_literals)
+
 from .nucleotides import normalize_nucleotide_string
 
 from memoized_property import memoized_property

@@ -1,3 +1,6 @@
+from __future__ import (
+    print_function, division, absolute_import, unicode_literals)
+
 from .variant import Variant
 from .variant_effect import VariantEffect
 from .infer_effect import infer_effects

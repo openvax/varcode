@@ -1,3 +1,6 @@
+from __future__ import (
+    print_function, division, absolute_import, unicode_literals)
+
 from pyensembl.biotypes import is_coding_biotype
 
 class VariantEffect(object):

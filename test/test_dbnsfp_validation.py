@@ -65,5 +65,5 @@ def test_dbnsfp_validation_set():
 if __name__ == '__main__':
     for test_tuple in test_dbnsfp_validation_set():
         f = test_tuple[0]
-    args = test_tuple[1:]
-    f(*args)
+        args = test_tuple[1:]
+        f(*args)

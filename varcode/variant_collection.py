@@ -1,3 +1,6 @@
+from __future__ import (
+    print_function, division, absolute_import, unicode_literals)
+
 from .reference_name import (
     infer_reference_name,
     ensembl_release_number_for_reference_name
