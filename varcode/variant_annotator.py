@@ -1,7 +1,7 @@
-from variant import Variant
-from variant_effect import VariantEffect
-from infer_effect import infer_effects
-from transcript_mutation_effects import top_priority_variant_effect
+from .variant import Variant
+from .variant_effect import VariantEffect
+from .infer_effect import infer_effects
+from .transcript_mutation_effects import top_priority_variant_effect
 
 import pyensembl
 from pyensembl.biotypes import is_coding_biotype
@@ -57,7 +57,7 @@ class VariantAnnotator(object):
             variant_type = "Intergenic"
         else:
             all_variant_effects = []
-            for _, variant_effects in transcript_effects_groups.iteritems():
+            for _, variant_effects in transcript_effects_groups.items():
                 all_variant_effects.extend(variant_effects)
             summary_effect = top_priority_variant_effect(all_variant_effects)
             variant_type = summary_effect.__class__.__name__

@@ -61,7 +61,7 @@ def load_maf_dataframe(filename, nrows=None, verbose=False):
         filename,
         skiprows=lines_to_skip,
         sep="\t",
-        usecols=range(len(MAF_COLUMN_NAMES)),
+        usecols=list(range(len(MAF_COLUMN_NAMES))),
         low_memory=False,
         names=MAF_COLUMN_NAMES)
 

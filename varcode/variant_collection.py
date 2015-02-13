@@ -1,10 +1,10 @@
-from reference_name import (
+from .reference_name import (
     infer_reference_name,
     ensembl_release_number_for_reference_name
 )
-from variant import Variant
-from variant_annotator import VariantAnnotator
-import maf
+from .variant import Variant
+from .variant_annotator import VariantAnnotator
+from . import maf
 
 import vcf
 
@@ -16,7 +16,7 @@ def flatten_info_dictionary(info):
     simpler k->v mapping by extracting the first element of each list.
     """
     result = {}
-    for (k,v) in info.iteritems():
+    for (k,v) in info.items():
         assert len(v) == 1, \
             "Expected INFO values to have length 1, got %s with %d elements" % (
                 v, len(v))
@@ -86,7 +86,7 @@ def _load_maf(filename):
 class VariantCollection(object):
 
     def __init__(self, filename, drop_duplicates=True):
-        assert isinstance(filename, (str,unicode)), \
+        assert isinstance(filename, str), \
             "Expected filename to be str, got %s : %s" % (
                 filename, type(filename))
 

@@ -16,9 +16,9 @@ import logging
 import math
 from collections import namedtuple
 
-from common import reverse_complement, trim_shared_flanking_strings
-from variant import Variant
-from transcript_mutation_effects import (
+from .common import reverse_complement, trim_shared_flanking_strings
+from .variant import Variant
+from .transcript_mutation_effects import (
     NoncodingTranscript,
     IncompleteTranscript,
     FivePrimeUTR,
@@ -177,7 +177,7 @@ def infer_coding_effect(
     # In case sequence isn't a multiple of 3, then truncate it
     # TODO: if we get a frameshift by the end of a CDS (e.g. in the stop codon)
     # then we should use some of the 3' UTR to finish translation.
-    truncated_variant_cds_seq = variant_cds_seq[:len(variant_cds_seq) / 3 * 3]
+    truncated_variant_cds_seq = variant_cds_seq[:int(len(variant_cds_seq) / 3) * 3]
 
     # Can't be sure that the variant is a complete CDS, so passing cds=False
     # in the case of a frameshift, the transcript might not actually contain
@@ -223,7 +223,7 @@ def infer_coding_effect(
         last_aa_ref_pos = aa_pos
         aa_ref = ""
     else:
-        last_aa_ref_pos = (cds_offset + n_cdna_ref - 1) / 3
+        last_aa_ref_pos = int((cds_offset + n_cdna_ref - 1) / 3)
         aa_ref = original_protein[aa_pos:last_aa_ref_pos+1]
         assert len(aa_ref) > 0, \
             "len(aa_ref) = 0 for variant %s on transcript %s (aa_pos=%d:%d)" % (
@@ -266,7 +266,7 @@ def infer_coding_effect(
         last_aa_alt_pos = aa_pos
         aa_alt = ""
     else:
-        last_aa_alt_pos = (cds_offset + n_cdna_alt - 1) / 3
+        last_aa_alt_pos = int((cds_offset + n_cdna_alt - 1) / 3)
         aa_alt = variant_protein[aa_pos:last_aa_alt_pos+1]
         assert len(aa_alt) > 0, \
             "len(aa_alt) = 0 for variant %s on transcript %s (aa_pos=%d:%d)" % (
@@ -420,7 +420,7 @@ def infer_effects(ensembl, variant):
         overlapping_transcripts, field_name='gene_id')
 
     variant_effect_groups = {}
-    for gene_id, transcripts in overlapping_transcript_groups.iteritems():
+    for gene_id, transcripts in overlapping_transcript_groups.items():
         effects = []
         for transcript in transcripts:
             effect = infer_transcript_effect(variant, transcript)

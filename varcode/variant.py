@@ -1,4 +1,4 @@
-from nucleotides import normalize_nucleotide_string
+from .nucleotides import normalize_nucleotide_string
 
 from memoized_property import memoized_property
 from pyensembl.locus import normalize_chromosome

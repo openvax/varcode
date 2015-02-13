@@ -1,9 +1,9 @@
 import argparse
 from collections import namedtuple
 
-import maf
-from variant_annotator import VariantAnnotator
-from variant_collection import VariantCollection
+from . import maf
+from .variant_annotator import VariantAnnotator
+from .variant_collection import VariantCollection
 
 import numpy as np
 import pyensembl
@@ -31,8 +31,8 @@ if __name__ == "__main__":
     for record in VariantCollection(args.input):
         chrom, pos = record.contig, record.pos
         ref, alt = record.ref, record.alt
-        print chrom, pos, ref, alt
-        print "--", annot.describe_variant(chrom, pos, ref, alt)
+        print(chrom, pos, ref, alt)
+        print("--", annot.describe_variant(chrom, pos, ref, alt))
         """
         genes_to_transcripts = {}
         for transcript_name in transcript_names:
