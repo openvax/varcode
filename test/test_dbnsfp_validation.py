@@ -47,7 +47,7 @@ def test_dbnsfp_validation_set():
     # - ensembl_transcript : transcript ID
     # - dna_position : base-1 position within chromosome
     # - dna_ref : reference DNA nucleotide
-    validation_set = pd.read_csv('dbnsfp_validation_set.csv')
+    validation_set = pd.read_csv('data/dbnsfp_validation_set.csv')
     for _, row in validation_set.iterrows():
         args = (
 	    row['ensembl_transcript'],
