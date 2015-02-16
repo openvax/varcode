@@ -40,7 +40,7 @@ class VariantAnnotator(object):
 
         # dictionary from gene ID to list of transcript effects
         gene_transcript_effects_groups = {}
-        for gene_id, transcripts in overlapping_transcript_groups.iteritems():
+        for (gene_id, transcripts) in overlapping_transcript_groups.items():
             effects = []
             for transcript in transcripts:
                 effect = infer_transcript_effect(variant, transcript)
