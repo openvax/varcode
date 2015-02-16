@@ -19,9 +19,9 @@ def test_vcf_number_entries():
 
 def _check_effect_gene_name(effect):
     variant = effect.variant
-    expected_gene_name = variant.info['GE']
+    expected_gene_names = variant.info['GE']
     gene_names = [gene.name for gene in effect.genes]
-    assert expected_gene_name in gene_names, \
+    assert expected_gene_names == gene_names, \
         "Expected gene name %s for variant %s, got %s" % (
             expected_gene_name, variant, gene_names)
 
