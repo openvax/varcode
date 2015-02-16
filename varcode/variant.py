@@ -18,8 +18,8 @@ class Variant(object):
         return self.pos + len(self.ref) - 1
 
     def __str__(self):
-        return "Variant(contig=%s, pos=%d, ref=%s, alt=%s, info=%s)" % (
-            self.contig, self.pos, self.ref, self.alt, self.info)
+        return "Variant(contig=%s, pos=%d, ref=%s, alt=%s)" % (
+            self.contig, self.pos, self.ref, self.alt)
 
     def __repr__(self):
         return str(self)

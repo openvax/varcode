@@ -11,21 +11,6 @@ from .variant_annotator import VariantAnnotator
 
 import vcf
 
-def flatten_info_dictionary(info):
-    """
-    The INFO field of a VCF file is represented as a mapping between a key
-    and a list of values for each sample. Since we're only concerned
-    with the single-sample case, we flatten this k->list mapping into a
-    simpler k->v mapping by extracting the first element of each list.
-    """
-    result = {}
-    for (k,v) in info.items():
-        assert len(v) == 1, \
-            "Expected INFO values to have length 1, got %s with %d elements" % (
-                v, len(v))
-        result[k] = v[0]
-    return result
-
 
 def _load_vcf(filename):
     """
@@ -40,7 +25,7 @@ def _load_vcf(filename):
         Variant(
             x.CHROM, x.POS,
             x.REF, x.ALT[0].sequence,
-            flatten_info_dictionary(x.INFO))
+            x.INFO)
         for x in vcf_reader
         if x.FILTER is None or x.FILTER == "PASS"
     ]
