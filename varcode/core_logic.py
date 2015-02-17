@@ -37,7 +37,7 @@ from .transcript_mutation_effects import (
     FrameShiftTruncation
 )
 
-from Bio.Seq import Seq
+from Bio.Seq import Seq, CodonTable
 from pyensembl.transcript import Transcript
 from pyensembl.biotypes import is_coding_biotype
 
@@ -83,6 +83,31 @@ def first_transcript_offset(start_pos, end_pos, transcript):
     return the start/end offsets of the variant relative to the
     chromosomal positions of the transcript.
     """
+    # ensure that start_pos:end_pos overlap with transcript positions
+    assert start_pos <= end_pos, \
+        "start_pos %d shouldn't be greater than end_pos %d" % (
+            start_pos, end_pos)
+    assert start_pos <= transcript.end, \
+        "Range %d:%d starts after transcript %s (%d:%d)" % (
+            start_pos,
+            end_pos,
+            transcript,
+            transcript.start,
+            transcript.end)
+    assert end_pos >= transcript.start, \
+        "Range %d:%d ends before transcript %s (%d:%d)" % (
+            start_pos,
+            end_pos,
+            transcript,
+            transcript.start,
+            transcript.end)
+    # trim the start position to the beginning of the transcript
+    if start_pos < transcript.start:
+        start_pos = transcript.start
+    # trim the end position to the end of the transcript
+    if end_pos > transcript.end:
+        end_pos = transcript.end
+
     # offsets into the spliced transcript
     offsets = [
         transcript.spliced_offset(start_pos),
@@ -157,7 +182,15 @@ def infer_coding_effect(
     # to amino acids. For the original CDS make sure that it starts with
     # a start codon and ends with a stop codon. Don't include the stop codon
     # in the translated sequence.
-    original_protein = str(Seq(cds_seq).translate(cds=True, to_stop=True))
+    try:
+        original_protein = str(Seq(cds_seq).translate(cds=True, to_stop=True))
+    except CodonTable.TranslationError as error:
+        # coding sequence may contain premature stop codon or may have
+        # an incorrectly annotated frame
+        logging.warning(
+            "Translation error in coding sequence for %s" % transcript)
+        logging.warning(error)
+        return IncompleteTranscript(variant, transcript)
 
     assert len(original_protein) > 0, \
         "Translated protein sequence of %s is empty" % (transcript,)

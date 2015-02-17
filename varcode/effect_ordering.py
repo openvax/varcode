@@ -52,10 +52,18 @@ def top_priority_transcript_effect(effects):
         elif priority == best_priority:
             best_effects.append(effect)
 
-    def effect_cds_len(effect):
-        """
-        Returns length of coding sequence of transcript associated with effect
-        """
-        return len(effect.transcript.coding_sequence)
-
-    return max(best_effects, key=effect_cds_len)
+    if any(effect.transcript.complete for effect in best_effects):
+        # if any transcripts have complete coding sequence annotations,
+        # filter the effects down to those that are complete and sort
+        # them by length of the coding sequence
+        best_effects = [
+            effect
+            for effect in best_effects
+            if effect.transcript.complete
+        ]
+        key_fn = lambda effect: len(effect.transcript.coding_sequence)
+    else:
+        # if effects are over incomplete transcripts, sort them by the
+        # their total transcript length
+        key_fn = lambda effect: len(effect.transcript)
+    return max(best_effects, key=key_fn)

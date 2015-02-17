@@ -15,7 +15,8 @@ class VariantEffect(object):
             self,
             variant,
             genes,
-            gene_transcript_effects):
+            gene_transcript_effects,
+            errors={}):
         """
         variant : Variant
 
@@ -24,6 +25,10 @@ class VariantEffect(object):
 
         gene_transcript_effects : dict
             Dictionary from gene ID to list of transcript variant effects
+
+        errors : dict, optional
+            Mapping from transcript objects to strings explaining error which
+            was encountered while trying to annotate them.
         """
         self.variant = variant
         self.genes = genes
@@ -43,8 +48,10 @@ class VariantEffect(object):
             highest_priority_class = self.highest_priority_effect.__class__
             self.variant_summary = highest_priority_class.__name__
         else:
-            self.highest_priority_effect = _
+            self.highest_priority_effect = None
             self.variant_summary = "Intergenic"
+
+        self.errors = errors
 
     @property
     def coding_genes(self):
@@ -65,6 +72,8 @@ class VariantEffect(object):
             ("genes", [gene.name for gene in self.genes]),
             ("transcript_effects", self.transcript_effects)
         ]
+        if self.errors:
+            fields.append( ("errors", self.errors) )
         return "VariantEffect(%s)" % (
             ", ".join(["%s=%s" % (k,v) for (k,v) in fields]))
 
