@@ -187,9 +187,9 @@ def infer_coding_effect(
     except CodonTable.TranslationError as error:
         # coding sequence may contain premature stop codon or may have
         # an incorrectly annotated frame
-        logging.warning(error)
         logging.warning(
             "Translation error in coding sequence for %s" % transcript)
+        logging.warning(error)
         return IncompleteTranscript(variant, transcript)
 
     assert len(original_protein) > 0, \
