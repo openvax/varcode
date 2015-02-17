@@ -82,7 +82,7 @@ class VariantCollection(object):
         elif filename.endswith(".maf"):
             self.raw_reference_name, self.records = _load_maf(filename)
         else:
-            raise ValueErrr("Unrecognized file type: %s" % (filename,))
+            raise ValueError("Unrecognized file type: %s" % (filename,))
 
 
         self.filename = filename
@@ -117,13 +117,21 @@ class VariantCollection(object):
     def __repr__(self):
         return str(self)
 
-    def variant_effects(self):
+    def variant_effects(self, raise_on_error=True):
         """
         Determine the impact of each variant, return a list of
         VariantEffect objects.
+
+        Parameters
+        ----------
+
+        raise_on_error : bool, optional.
+            Raise exception if error is encountered while annotating
+            transcripts, otherwise track errors in VariantEffect.errors
+            dictionary (default=True).
         """
         return [
-            self.annot.describe_variant(variant)
+            self.annot.describe_variant(variant, raise_on_error=raise_on_error)
             for variant
             in self.records
         ]
