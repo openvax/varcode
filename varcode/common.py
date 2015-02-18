@@ -73,6 +73,10 @@ def trim_shared_flanking_strings(ref, alt):
     return ref, alt, prefix, suffix
 
 def group_by(records, field_name):
+    """
+    Given a list of objects, group them into a dictionary by
+    the unique values of a given field name.
+    """
     # create an empty list for every new key
     groups = defaultdict(list)
     for record in records:
