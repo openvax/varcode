@@ -27,7 +27,7 @@ def _load_vcf(filename):
             x.REF, x.ALT[0].sequence,
             x.INFO)
         for x in vcf_reader
-        if x.FILTER is None or x.FILTER == "PASS"
+        if not x.FILTER or x.FILTER == "PASS"
     ]
     return raw_reference_name, records
 
@@ -125,29 +125,33 @@ class VariantCollection(object):
         Parameters
         ----------
 
-        raise_on_error : bool, optional.
+        raise_on_error : bool, optional
             Raise exception if error is encountered while annotating
             transcripts, otherwise track errors in VariantEffect.errors
             dictionary (default=True).
+
         """
         return [
-            self.annot.describe_variant(variant, raise_on_error=raise_on_error)
+            self.annot.effect(
+                variant=variant,
+                raise_on_error=raise_on_error)
             for variant
             in self.records
         ]
 
-    def effects_to_string(self):
+    def effects_to_string(self, *args, **kwargs):
         """
         Create a long string with all transcript effects for each mutation,
         grouped by gene (if a mutation affects multiple genes).
         """
         lines = []
-        for variant_effect in self.variant_effects():
+        for variant_effect in self.variant_effects(*args, **kwargs):
             transcript_effect_count = 0
             lines.append("\n%s" % variant_effect.variant)
             transcript_effect_lists = variant_effect.gene_transcript_effects
             for gene, transcript_effects in transcript_effect_lists.iteritems():
-                lines.append("  Gene: %s" % gene)
+                gene_name = self.annot.ensembl.gene_name_of_gene_id(gene)
+                lines.append("  Gene: %s (%s)" % (gene_name, gene))
                 # print transcript effects with more significant impact
                 # on top (e.g. FrameShift should go before NoncodingTranscript)
                 for transcript_effect in sorted(
@@ -163,8 +167,8 @@ class VariantCollection(object):
                 lines.append("  Highest Priority Effect: %s" % best)
         return "\n".join(lines)
 
-    def print_effects(self):
+    def print_effects(self, *args, **kwargs):
         """
         Print all variants and their transcript effects (grouped by gene).
         """
-        print(self.effects_to_string())
+        print(self.effects_to_string(*args, **kwargs))

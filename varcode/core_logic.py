@@ -69,6 +69,8 @@ def mutate(sequence, position, variant_ref, variant_alt):
     suffix = sequence[position+n_variant_ref:]
     return prefix + variant_alt + suffix
 
+
+
 def overlaps_any_exon(variant, transcript):
     return any(
         exon.overlaps(
@@ -381,6 +383,78 @@ def infer_exonic_effect(variant, transcript):
         variant,
         transcript)
 
+def find_nearest_exon(start, end, exons):
+    """
+    Finds nearest exon to an intronic variant, returns the
+    distance to that exon, along with the Exon object itself.
+    """
+    best_distance = float("inf")
+    best_exon = None
+    for exon in exons:
+        if exon.start > end:
+            # distance from end of variant to start of exon
+            # (when variant starts before the exon)
+            distance = exon.start - end
+        elif exon.end < start:
+            distance = start - exon.end
+        else:
+            assert exon.start <= end and exon.end >= start, \
+                "Expected interval %d:%d to overlap with exon %s" % (
+                    start, end, exon)
+            return 0, exon
+
+        if best_distance > distance:
+            best_distance = distance
+            best_exon = exon
+
+    return best_exon, best_exon
+
+
+def infer_intronic_effect(variant, transcript, nearest_exon, distance_to_exon):
+    """
+    Infer effect of variant which does not overlap any exon of
+    the given transcript.
+    """
+    assert distance_to_exon > 0, \
+        "Expected intronic effect to have distance_to_exon > 0, got %d" % (
+            distance_to_exon,)
+    before_forward_exon = (
+        transcript.strand == "+" and
+        variant.pos < nearest_exon.start)
+    before_backward_exon = (
+        transcript.strand == "-" and
+        variant.end_pos > nearest_exon.end)
+    before_exon = before_forward_exon or before_backward_exon
+
+    if distance_to_exon <= 2:
+        if before_exon:
+            # 2 last nucleotides of intron before exon are the splice acceptor
+            # site
+            effect_class = SpliceAcceptor
+        else:
+            # 2 first nucleotides of intron after exon are the splice donor
+            # site
+            effect_class = SpliceDonor
+    elif not before_exon and distance_to_exon <= 6:
+        # variants in nucleotides 3-6 at start of intron aren't as certain
+        # to cause problems as nucleotides 1-2 but still implicated in
+        # alternative splicing
+        effect_class = IntronicSpliceSite
+    elif before_exon and distance_to_exon <= 4:
+        # nucleotides -4 and -3 before exon are part of the 3' splicing motif
+        # but allow for more degeneracy than the -2, -1 nucleotides
+        effect_class = IntronicSpliceSite
+    else:
+        assert distance_to_exon > 6, \
+            "Looks like we didn't cover all possible splice site mutations"
+        # intronic mutation unrelated to splicing
+        effect_class = Intronic
+    return effect_class(
+            variant=variant,
+            transcript=transcript,
+            nearest_exon=nearest_exon,
+            distance_to_exon=distance_to_exon)
+
 def infer_transcript_effect(variant, transcript):
     """
     Generate a transcript effect (such as FrameShift) by applying a genomic
@@ -413,7 +487,17 @@ def infer_transcript_effect(variant, transcript):
     if not transcript.complete:
         return IncompleteTranscript(variant, transcript)
 
-    if not overlaps_any_exon(variant, transcript):
-        return Intronic(variant, transcript)
+    distance_to_exon, nearest_exon = find_nearest_exon(
+        start=variant.pos,
+        end=variant.end_pos,
+        exons=transcript.exons)
 
+    if distance_to_exon > 0:
+        return infer_intronic_effect(
+            variant=variant,
+            transcript=transcript,
+            nearest_exon=nearest_exon,
+            distance_to_exon=distance_to_exon)
+
+    # TODO: exonic splice site mutations
     return infer_exonic_effect(variant, transcript)

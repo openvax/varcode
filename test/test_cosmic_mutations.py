@@ -13,7 +13,7 @@ annot = VariantAnnotator(75)
 
 def _get_effect(chrom, pos, dna_ref, dna_alt, transcript_id):
     variant = Variant(chrom, pos, dna_ref, dna_alt)
-    result = annot.describe_variant(variant)
+    result = annot.effect(variant)
     assert transcript_id in result.transcript_effects, \
         "Expected transcript ID %s for variant %s not found in %s" % (
             transcript_id, variant, result)
