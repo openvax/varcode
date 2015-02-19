@@ -63,7 +63,7 @@ def load_maf_dataframe(filename, nrows=None, verbose=False):
     return pandas.read_csv(
         filename,
         skiprows=lines_to_skip,
-        sep="\t",
+        sep="\s+",
         usecols=range(len(MAF_COLUMN_NAMES)),
         low_memory=False,
         names=MAF_COLUMN_NAMES)
@@ -85,14 +85,19 @@ def load_maf(filename):
         raise ValueError(
             "Multiple NCBI builds (%s) for MAF file %s" % (ncbi_builds, filename))
 
-    reference_name = ncbi_builds[0]
-    variants = []
+    ncbi_build = ncbi_builds[0]
 
+    if isinstance(ncbi_build, int):
+        reference_name = "B%d" % ncbi_build
+    else:
+        reference_name = str(ncbi_build)
+
+    variants = []
     for _, x in maf_df.iterrows():
+        contig = x.Chromosome
         start_pos = x.Start_Position
         end_pos = x.End_Position
-        contig = x.Chromosome
-        ref = normalize_nucleotide_string(x.Reference_Allele)
+        ref = x.Reference_Allele
 
         if x.Tumor_Seq_Allele1 != ref:
             alt = x.Tumor_Seq_Allele1
@@ -101,7 +106,10 @@ def load_maf(filename):
                 "Both tumor alleles agree with reference: %s" % (x,)
             alt = x.Tumor_Seq_Allele2
 
-        alt = normalize_nucleotide_string(alt)
+        assert end_pos == start_pos + len(ref) - 1, \
+            "Expected variant %s:%s %s>%s to end at %d but got end_pos=%d" % (
+                contig, start_pos, ref, alt,
+                start_pos + len(ref) - 1, end_pos)
 
         variants.append(Variant(contig, start_pos, ref, alt))
 

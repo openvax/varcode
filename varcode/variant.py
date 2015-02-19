@@ -28,7 +28,9 @@ class Variant(object):
         return hash((self.contig, self.pos, self.ref, self.alt))
 
     def __eq__(self, other):
-        return (self.contig == other.contig and
+        return (
+            isinstance(other, Variant) and
+            self.contig == other.contig and
             self.pos == other.pos and
             self.ref == other.ref and
             self.alt == other.alt)
