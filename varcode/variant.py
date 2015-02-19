@@ -24,6 +24,15 @@ class Variant(object):
     def __repr__(self):
         return str(self)
 
+    def __hash__(self):
+        return hash((self.contig, self.pos, self.ref, self.alt))
+
+    def __eq__(self, other):
+        return (self.contig == other.contig and
+            self.pos == other.pos and
+            self.ref == other.ref and
+            self.alt == other.alt)
+
     def short_description(self):
         chrom, pos, ref, alt = self.contig, self.pos, self.ref, self.alt
         if ref == alt:
