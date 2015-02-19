@@ -143,6 +143,8 @@ class VariantCollection(object):
         """
         Create a long string with all transcript effects for each mutation,
         grouped by gene (if a mutation affects multiple genes).
+
+        Arguments are passed on to variant_effects(*args, **kwargs).
         """
         lines = []
         for variant_effect in self.variant_effects(*args, **kwargs):
@@ -170,5 +172,7 @@ class VariantCollection(object):
     def print_effects(self, *args, **kwargs):
         """
         Print all variants and their transcript effects (grouped by gene).
+
+        Arguments are passed on to effects_to_string(*args, **kwargs).
         """
         print(self.effects_to_string(*args, **kwargs))
