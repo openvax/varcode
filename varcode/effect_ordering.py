@@ -3,8 +3,6 @@ from .transcript_mutation_effects import *
 transcript_effect_priority_list = [
     IncompleteTranscript,
     NoncodingTranscript,
-    # TODO: Add SpliceDonor and SpliceReceptor mutations and #
-    # place them at higher priority positions in this list
     Intronic,
     ThreePrimeUTR,
     # mutations to the upstream 5' UTR may change the ORF (reading frame),
@@ -15,11 +13,25 @@ transcript_effect_priority_list = [
     Insertion,
     Deletion,
     ComplexSubstitution,
+     # intronic variants near the splice boundaries but which aren't
+    # the two nucleotides closest to the exon
+    IntronicSpliceSite,
+    # exonic variants near a splice boundary
+    ExonicSpliceSite,
+    # modification or deletion of stop codon
     StopLoss,
+    # mutation in the two nucleotides immediately following an exon/intron
+    # boundary
+    SpliceDonor,
+    # mutation in the two nucleotides immediately preceding an intron/exon
+    # boundary
+    SpliceAcceptor,
     PrematureStop,
     # frame-shift which creates immediate stop codon, same as PrematureStop
     FrameShiftTruncation,
+    # modification or deletion of a start codon
     StartLoss,
+    # out-of-frame insertion or deletion
     FrameShift
 ]
 
@@ -30,6 +42,14 @@ transcript_effect_priority_dict = {
 }
 
 def effect_priority(effect):
+    """
+    Returns the integer priority for a given transcript effect
+    """
+    # since intergenic variants may have a None value for their
+    # highest_priority effect it simplifies other code to handle None
+    # here
+    if effect is None:
+        return -1
     return transcript_effect_priority_dict[effect.__class__]
 
 def top_priority_transcript_effect(effects):

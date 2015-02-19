@@ -76,12 +76,62 @@ class Intronic(TranscriptMutationEffect):
     """
     Mutation in an intronic region of a coding transcript
     """
+    def __init__(self, variant, transcript, nearest_exon, distance_to_exon):
+        TranscriptMutationEffect.__init__(self, variant, transcript)
+        self.nearest_exon = nearest_exon
+        self.distance_to_exon = distance_to_exon
+
     def short_description(self):
         return "intronic"
 
-class Exonic(TranscriptMutationEffect):
+class SpliceSite(object):
+    """
+    Parent class for all splice site mutations.
+    """
     pass
 
+class IntronicSpliceSite(Intronic, SpliceSite):
+    """
+    Mutations near exon boundaries, excluding the first two and last two
+    nucleotides in an intron, since those are  known to more confidently
+    affect splicing and are given their own effect classes below.
+    """
+    def __init__(self, *args, **kwargs):
+        Intronic.__init__(self, *self, **kwargs)
+
+    def short_description(self):
+        return "intronic-splice-site"
+
+class SpliceDonor(IntronicSpliceSite):
+    """
+    Mutation in the first two intron residues.
+    """
+    def __init__(self, *args, **kwargs):
+        Intronic.__init__(self, *self, **kwargs)
+
+    def short_description(self):
+        return "splice-donor"
+
+class SpliceAcceptor(IntronicSpliceSite):
+    """
+    Mutation in the last two intron residues.
+    """
+    def short_description(self):
+        return "splice-acceptor"
+
+class Exonic(TranscriptMutationEffect):
+    """
+    Any mutation which affects the contents of an exon (coding region or UTRs)
+    """
+    pass
+
+class ExonicSpliceSite(Exonic, SpliceSite):
+    """
+    Mutation in the last three nucleotides before an intron
+    or in the first nucleotide after an intron.
+    """
+    def short_description(self):
+        return "exonic-splice-site"
 
 class CodingMutation(Exonic):
     """

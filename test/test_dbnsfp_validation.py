@@ -22,7 +22,7 @@ def validate_transcript_mutation(
         chrom, dna_position,
         dna_ref, dna_alt,
         aa_pos, aa_alt):
-    result = annot.describe_variant(
+    result = annot.effect(
         Variant(chrom, dna_position, dna_ref, dna_alt))
     assert ensembl_transcript in result.transcript_effects, \
         "%s not found in %s" % (ensembl_transcript, result)

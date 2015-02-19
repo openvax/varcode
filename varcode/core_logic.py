@@ -18,7 +18,10 @@ import logging
 import math
 from collections import namedtuple
 
-from .common import reverse_complement, trim_shared_flanking_strings
+from .common import (
+    reverse_complement,
+    trim_shared_flanking_strings,
+)
 from .variant import Variant
 from .transcript_mutation_effects import (
     NoncodingTranscript,
@@ -38,7 +41,7 @@ from .transcript_mutation_effects import (
 )
 
 from Bio.Seq import Seq, CodonTable
-from pyensembl.transcript import Transcript
+from pyensembl import (Transcript, find_nearest_locus)
 from pyensembl.biotypes import is_coding_biotype
 
 def mutate(sequence, position, variant_ref, variant_alt):
@@ -68,14 +71,6 @@ def mutate(sequence, position, variant_ref, variant_alt):
     prefix = sequence[:position]
     suffix = sequence[position+n_variant_ref:]
     return prefix + variant_alt + suffix
-
-def overlaps_any_exon(variant, transcript):
-    return any(
-        exon.overlaps(
-            contig=variant.contig,
-            start=variant.pos,
-            end=variant.end_pos)
-        for exon in transcript.exons)
 
 def first_transcript_offset(start_pos, end_pos, transcript):
     """
@@ -381,6 +376,53 @@ def infer_exonic_effect(variant, transcript):
         variant,
         transcript)
 
+def infer_intronic_effect(variant, transcript, nearest_exon):
+    """
+    Infer effect of variant which does not overlap any exon of
+    the given transcript.
+    """
+    distance_to_exon = nearest_exon.distance_to_interval(
+        variant.pos, variant.end_pos)
+    assert distance_to_exon > 0, \
+        "Expected intronic effect to have distance_to_exon > 0, got %d" % (
+            distance_to_exon,)
+    before_forward_exon = (
+        transcript.strand == "+" and
+        variant.pos < nearest_exon.start)
+    before_backward_exon = (
+        transcript.strand == "-" and
+        variant.end_pos > nearest_exon.end)
+    before_exon = before_forward_exon or before_backward_exon
+
+    if distance_to_exon <= 2:
+        if before_exon:
+            # 2 last nucleotides of intron before exon are the splice acceptor
+            # site, typically "AG"
+            effect_class = SpliceAcceptor
+        else:
+            # 2 first nucleotides of intron after exon are the splice donor
+            # site, typically "GT"
+            effect_class = SpliceDonor
+    elif not before_exon and distance_to_exon <= 6:
+        # variants in nucleotides 3-6 at start of intron aren't as certain
+        # to cause problems as nucleotides 1-2 but still implicated in
+        # alternative splicing
+        effect_class = IntronicSpliceSite
+    elif before_exon and distance_to_exon <= 4:
+        # nucleotides -4 and -3 before exon are part of the 3' splicing motif
+        # but allow for more degeneracy than the -2, -1 nucleotides
+        effect_class = IntronicSpliceSite
+    else:
+        assert distance_to_exon > 6, \
+            "Looks like we didn't cover all possible splice site mutations"
+        # intronic mutation unrelated to splicing
+        effect_class = Intronic
+    return effect_class(
+            variant=variant,
+            transcript=transcript,
+            nearest_exon=nearest_exon,
+            distance_to_exon=distance_to_exon)
+
 def infer_transcript_effect(variant, transcript):
     """
     Generate a transcript effect (such as FrameShift) by applying a genomic
@@ -413,7 +455,16 @@ def infer_transcript_effect(variant, transcript):
     if not transcript.complete:
         return IncompleteTranscript(variant, transcript)
 
-    if not overlaps_any_exon(variant, transcript):
-        return Intronic(variant, transcript)
+    distance_to_exon, nearest_exon = find_nearest_locus(
+        start=variant.pos,
+        end=variant.end_pos,
+        loci=transcript.exons)
 
+    if distance_to_exon > 0:
+        return infer_intronic_effect(
+            variant=variant,
+            transcript=transcript,
+            nearest_exon=nearest_exon)
+
+    # TODO: exonic splice site mutations
     return infer_exonic_effect(variant, transcript)

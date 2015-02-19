@@ -12,7 +12,7 @@ class VariantAnnotator(object):
     def __init__(self, ensembl_release):
         self.ensembl = pyensembl.EnsemblRelease(ensembl_release)
 
-    def describe_variant(self, variant, raise_on_error=True):
+    def effect(self, variant, raise_on_error=True):
         """
         Determine the effects of a variant on any transcripts it overlaps.
         Returns a VariantEffect object.
