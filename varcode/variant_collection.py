@@ -85,8 +85,17 @@ class VariantCollection(object):
         return iter(self.variants)
 
     def __str__(self):
-        s = "VariantCollection(filename=%s, reference=%s)" % (
-            self.filename, self.reference_name)
+        fields = [
+            ("n_variants", len(self.variants)),
+            ("reference", self.reference_name)
+        ]
+
+        if self.original_filename:
+            fields.append(("filename", self.original_filename))
+
+        s = "VariantCollection(%s)" % (
+            ", ".join(
+                "%s=%s" % (k,v) for (k,v) in fields))
         for variant in self.variants:
             s += "\n\t%s" % variant
         return s
