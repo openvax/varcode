@@ -1,121 +1,119 @@
+# Copyright (c) 2014. Mount Sinai School of Medicine
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from __future__ import print_function, division, absolute_import
 
-from . import maf
 from .effect_ordering import effect_priority
 from .reference_name import (
     infer_reference_name,
     ensembl_release_number_for_reference_name
 )
-from .variant import Variant
 from .variant_annotator import VariantAnnotator
-
-import vcf
-
-
-def _load_vcf(filename):
-    """
-    Load reference name and Variant objects from the given VCF filename.
-
-    Drop any entries whose FILTER field is not one of "." or "PASS".
-    """
-    vcf_reader = vcf.Reader(filename=filename)
-    raw_reference_name = vcf_reader.metadata['reference']
-
-    records = [
-        Variant(
-            x.CHROM, x.POS,
-            x.REF, x.ALT[0].sequence,
-            x.INFO)
-        for x in vcf_reader
-        if not x.FILTER or x.FILTER == "PASS"
-    ]
-    return raw_reference_name, records
-
-def _load_maf(filename):
-    """
-    Load reference name and Variant objects from MAF filename.
-    """
-    maf_df = maf.load_maf_dataframe(filename)
-
-    if len(maf_df) == 0:
-        raise ValueError("Empty MAF file %s" % filename)
-
-    ncbi_builds = maf_df.NCBI_Build.unique()
-
-    if len(ncbi_builds) == 0:
-        raise ValueError("No NCBI builds for MAF file %s" % filename)
-    elif len(ncbi_builds) > 1:
-        raise ValueError(
-            "Multiple NCBI builds (%s) for MAF file %s" % (ncbi_builds, filename))
-
-    raw_reference_name = ncbi_builds[0]
-    records = []
-
-    for _, x in maf_df.iterrows():
-        start_pos = x.Start_Position
-        end_pos = x.End_Position
-        contig = x.Chromosome
-        ref = normalize_nucleotide_string(x.Reference_Allele)
-
-        if x.Tumor_Seq_Allele1 != ref:
-            alt = x.Tumor_Seq_Allele1
-        else:
-            assert x.Tumor_Seq_Allele2 != ref, \
-                "Both tumor alleles agree with reference: %s" % (x,)
-            alt = x.Tumor_Seq_Allele2
-
-        alt = normalize_nucleotide_string(alt)
-
-        records.append(Variant(contig, start_pos, ref, alt))
-
-    return raw_reference_name, records
 
 class VariantCollection(object):
 
-    def __init__(self, filename, drop_duplicates=True):
-        assert isinstance(filename, str), \
-            "Expected filename to be str, got %s : %s" % (
-                filename, type(filename))
+    def __init__(
+            self,
+            variants,
+            reference_path=None,
+            reference_name=None,
+            ensembl_release=None,
+            original_filename=None):
+        """
+        Construct a VariantCollection from a list of Variant records and
+        the name of a reference genome.
 
-        if filename.endswith(".vcf"):
-            self.raw_reference_name, self.records = _load_vcf(filename)
-        elif filename.endswith(".maf"):
-            self.raw_reference_name, self.records = _load_maf(filename)
+        Parameters
+        ----------
+
+        variants : list
+            Variant objects contained in this VariantCollection
+
+        original_filename : str, optional
+            File from which we loaded variants, though the current
+            VariantCollection may only contain a subset of them.
+
+        reference_path : str, optional
+            Path to reference FASTA file.
+
+        reference_name : str, optional
+            Name of reference genome (e.g. "GRCh37", "hg18"). If not given
+            infer from reference path or from ensembl_release.
+
+        ensembl_release : int, optional
+            If not specified, infer Ensembl release from reference_name
+        """
+        self.variants = variants
+        self.reference_path = reference_path
+        if reference_name:
+            # convert from e.g. "hg19" to "GRCh37"
+            #
+            # TODO: actually handle the differences between these references
+            # instead of just treating them as interchangeable
+            self.reference_name = infer_reference_name(reference_name)
         else:
-            raise ValueError("Unrecognized file type: %s" % (filename,))
+            if reference_path:
+                self.reference_name = infer_reference_name(reference_path)
+            else:
+                raise ValueError(
+                    "Must specify one of reference_path or reference_name")
 
+        if ensembl_release:
+            self.ensembl_release = ensembl_release
+        else:
+            self.ensembl_release = ensembl_release_number_for_reference_name(
+                self.reference_name)
 
-        self.filename = filename
-        self.reference_name = infer_reference_name(self.raw_reference_name)
-        self.ensembl_release = ensembl_release_number_for_reference_name(
-            self.reference_name)
         self.annot = VariantAnnotator(ensembl_release=self.ensembl_release)
-
-        if drop_duplicates:
-            filtered_records = []
-            seen = set()
-            for record in self.records:
-                key = record.short_description()
-                if key not in seen:
-                    seen.add(key)
-                    filtered_records.append(record)
-            self.records = filtered_records
+        self.original_filename = original_filename
 
     def __len__(self):
-        return len(self.records)
+        return len(self.variants)
 
     def __iter__(self):
-        return iter(self.records)
+        return iter(self.variants)
 
     def __str__(self):
         s = "VariantCollection(filename=%s, reference=%s)" % (
             self.filename, self.reference_name)
-        for record in self.records:
-            s += "\n\t%s" % record
+        for variant in self.variants:
+            s += "\n\t%s" % variant
         return s
 
     def __repr__(self):
         return str(self)
+
+    def clone(self, new_variants=None):
+        """
+        Create copy of VariantCollection with same metadata but possibly
+        different Variant entries. If no variants provided, then just make a
+        copy of self.variants.
+        """
+        if new_variants is None:
+            new_variants = self.variants
+        return VariantCollection(
+            variants=list(new_variants),
+            original_filename=self.original_filename,
+            reference_path=self.reference_path,
+            reference_name=self.reference_name,
+            ensembl_release=self.ensembl_release)
+
+    def drop_duplicates(self):
+        """
+        Create a new VariantCollection without any duplicate variants.
+        """
+        return self.clone(set(self.variants))
 
     def variant_effects(self, raise_on_error=True):
         """
@@ -136,7 +134,7 @@ class VariantCollection(object):
                 variant=variant,
                 raise_on_error=raise_on_error)
             for variant
-            in self.records
+            in self.variants
         ]
 
     def effects_to_string(self, *args, **kwargs):

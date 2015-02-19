@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 # Copyright (c) 2014. Mount Sinai School of Medicine
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,8 +13,11 @@
 # limitations under the License.
 
 from __future__ import print_function, division, absolute_import
-
 import logging
+
+from .nucleotides import normalize_nucleotide_string
+from .variant import Variant
+from .variant_collection import VariantCollection
 
 import pandas
 
@@ -67,4 +68,44 @@ def load_maf_dataframe(filename, nrows=None, verbose=False):
         low_memory=False,
         names=MAF_COLUMN_NAMES)
 
+def load_maf(filename):
+    """
+    Load reference name and Variant objects from MAF filename.
+    """
+    maf_df = load_maf_dataframe(filename)
 
+    if len(maf_df) == 0:
+        raise ValueError("Empty MAF file %s" % filename)
+
+    ncbi_builds = maf_df.NCBI_Build.unique()
+
+    if len(ncbi_builds) == 0:
+        raise ValueError("No NCBI builds for MAF file %s" % filename)
+    elif len(ncbi_builds) > 1:
+        raise ValueError(
+            "Multiple NCBI builds (%s) for MAF file %s" % (ncbi_builds, filename))
+
+    reference_name = ncbi_builds[0]
+    variants = []
+
+    for _, x in maf_df.iterrows():
+        start_pos = x.Start_Position
+        end_pos = x.End_Position
+        contig = x.Chromosome
+        ref = normalize_nucleotide_string(x.Reference_Allele)
+
+        if x.Tumor_Seq_Allele1 != ref:
+            alt = x.Tumor_Seq_Allele1
+        else:
+            assert x.Tumor_Seq_Allele2 != ref, \
+                "Both tumor alleles agree with reference: %s" % (x,)
+            alt = x.Tumor_Seq_Allele2
+
+        alt = normalize_nucleotide_string(alt)
+
+        variants.append(Variant(contig, start_pos, ref, alt))
+
+    return VariantCollection(
+        variants=variants,
+        original_filename=filename,
+        reference_name=reference_name)
