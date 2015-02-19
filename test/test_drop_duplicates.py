@@ -12,10 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .core_logic import infer_transcript_effect
-from .effect_ordering import effect_priority, top_priority_transcript_effect
-from .load_variants import load_variants
-from .transcript_mutation_effects import *
-from .variant import Variant
-from .variant_annotator import VariantAnnotator
-from .variant_collection import VariantCollection
+from varcode import Variant, VariantCollection
+
+def test_drop_duplicates():
+    v1 = Variant("1", 3000, "A", "G")
+    v1_copy = Variant("1", 3000, "A", "G")
+    v2 = Variant("2", 10, "G", "T")
+    collection_with_duplicates = VariantCollection(
+        variants=[v1, v1, v1_copy, v2],
+        reference_name="hg19")
+    assert len(collection_with_duplicates) == 4
+    collection_without_duplicates = collection_with_duplicates.drop_duplicates()
+    assert len(collection_without_duplicates) == 2

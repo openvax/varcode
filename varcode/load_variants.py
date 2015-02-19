@@ -12,10 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .core_logic import infer_transcript_effect
-from .effect_ordering import effect_priority, top_priority_transcript_effect
-from .load_variants import load_variants
-from .transcript_mutation_effects import *
-from .variant import Variant
-from .variant_annotator import VariantAnnotator
-from .variant_collection import VariantCollection
+from .maf import load_maf
+from .vcf import load_vcf
+
+def load_variants(filename):
+    """
+    Creates VariantCollection from name of either VCF or MAF file
+    """
+    assert isinstance(filename, str), \
+        "Expected filename to be str, got %s : %s" % (
+            filename, type(filename))
+
+    if filename.endswith(".vcf"):
+        return load_vcf(filename)
+    elif filename.endswith(".maf"):
+        return load_maf(filename)
+    else:
+        raise ValueError("Unrecognized file type: %s" % (filename,))
