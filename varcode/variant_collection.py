@@ -89,7 +89,7 @@ class VariantCollection(object):
 
     def variant_effects(
             self,
-            min_effect_class=None,
+            high_impact=False,
             only_coding_transcripts=False,
             raise_on_error=True):
         """
@@ -98,9 +98,10 @@ class VariantCollection(object):
 
         Parameters
         ----------
-        min_effect_class : TranscriptMutationEffect, optional
-            Only return EffectCollections for variants whose highest priority
-            effect is at least as significant as this effect class.
+        high_impact : bool, optional
+            Only show effects which make changes to coding transcripts that
+            are predicted to be deleterious (amino acid sequence changes,
+            changes to essential splice sites, frameshifts, &c)
 
         only_coding_transcripts : bool, optional
             Only annotate variant effects on coding transcripts.
@@ -113,8 +114,8 @@ class VariantCollection(object):
         """
         results = []
 
-        if min_effect_class:
-            min_priority = transcript_effect_priority_dict[min_effect_class]
+        if high_impact:
+            min_priority = transcript_effect_priority_dict[Substitution]
         else:
             min_priority = -1
 
