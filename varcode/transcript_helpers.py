@@ -16,8 +16,8 @@ from __future__ import print_function, division, absolute_import
 
 def interval_offset_on_transcript(start, end, transcript):
     """
-    Given a variant and a particular transcript,
-    return the start/end offsets of the variant relative to the
+    Given an interval [start:end] and a particular transcript,
+    return the start offset of the interval relative to the
     chromosomal positions of the transcript.
     """
     # ensure that start_pos:end_pos overlap with transcript positions
@@ -48,16 +48,5 @@ def interval_offset_on_transcript(start, end, transcript):
     if end > transcript.end:
         end = transcript.end
 
-    # offsets into the spliced transcript
-    offsets = [
-        transcript.spliced_offset(start),
-        transcript.spliced_offset(end)
-    ]
-
-    start_offset_with_utr5 = min(offsets)
-
-    assert start_offset_with_utr5 >= 0, \
-        "Position %d is before start of transcript %s" % (
-            start_offset_with_utr5, transcript)
-
-    return start_offset_with_utr5
+    # return earliest offset into the spliced transcript
+    return min(transcript.spliced_offset(start), transcript.spliced_offset(end))

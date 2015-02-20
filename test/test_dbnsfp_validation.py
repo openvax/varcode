@@ -24,11 +24,11 @@ def validate_transcript_mutation(
         dna_ref, dna_alt,
         aa_pos, aa_alt):
     variant = Variant(chrom, dna_position, dna_ref, dna_alt, ensembl)
-    result = variant.annotate()
+    result = variant.effects()
 
-    assert ensembl_transcript in result.transcript_effects, \
+    assert ensembl_transcript in result.transcript_effect_dict, \
         "%s not found in %s" % (ensembl_transcript, result)
-    effect = result.transcript_effects[ensembl_transcript]
+    effect = result.transcript_effect_dict[ensembl_transcript]
     assert (
         isinstance(effect, Substitution) and
         effect.aa_pos + 1 == aa_pos and

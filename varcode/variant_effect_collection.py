@@ -18,26 +18,22 @@ from .effect_ordering import top_priority_transcript_effect
 
 from pyensembl.biotypes import is_coding_biotype
 
-class Annotation(object):
+class VariantEffectCollection(object):
     """
-    An Annotation object is a container for all the TranscriptEffects of
-    a particular mutation, as well as some properties that attempt to
-    summarize the impact of the mutation across all genes/transcripts.
+    Collection of all the TranscriptEffect objects associated with
+    each transcript overlapping a given variant, as well as some properties
+    that attempt to summarize the impact of the mutation across all
+    genes/transcripts.
     """
-
     def __init__(
             self,
             variant,
-            genes,
-            gene_transcript_effects,
+            gene_effect_groups,
             errors={}):
         """
         variant : Variant
 
-        genes : list
-            List of Gene objects
-
-        gene_transcript_effects : dict
+        gene_effect_groups : dict
             Dictionary from gene ID to list of transcript variant effects
 
         errors : dict, optional
@@ -45,20 +41,19 @@ class Annotation(object):
             was encountered while trying to annotate them.
         """
         self.variant = variant
-        self.genes = genes
-        self.gene_transcript_effects = gene_transcript_effects
+        self.gene_effect_groups = gene_effect_groups
 
         # dictionary mapping from transcript IDs to transcript mutation effects
-        self.transcript_effects = {}
-        for (_, transcript_effects) in self.gene_transcript_effects.items():
-            for effect in transcript_effects:
-                self.transcript_effects[effect.transcript.id] = effect
+        self.transcript_effect_dict = {}
+        for (_, effect_list) in self.gene_effect_groups.items():
+            for effect in effect_list:
+                self.transcript_effect_dict[effect.transcript.id] = effect
 
         # if our variant overlaps any genes, then choose the highest
         # priority transcript variant, otherwise call the variant "Intergenic"
-        if len(self.transcript_effects) > 0:
+        if len(self.transcript_effect_dict) > 0:
             self.highest_priority_effect = top_priority_transcript_effect(
-                self.transcript_effects.values())
+                self.transcript_effect_dict.values())
             highest_priority_class = self.highest_priority_effect.__class__
             self.variant_summary = highest_priority_class.__name__
         else:
@@ -70,8 +65,8 @@ class Annotation(object):
     def __str__(self):
         fields = [
             ("variant", self.variant.short_description()),
-            ("genes", [gene.name for gene in self.genes]),
-            ("transcript_effects", self.transcript_effects)
+            ("genes", self.gene_names()),
+            ("effects", self.effects())
         ]
         if self.errors:
             fields.append( ("errors", self.errors) )
@@ -80,3 +75,47 @@ class Annotation(object):
 
     def __repr__(self):
         return str(self)
+
+    def __len__(self):
+        """
+        Length of a VariantEffectCollection is the number of effect objects
+        it contains.
+        """
+        return len(self.transcript_effect_dict)
+
+    def effects(self):
+        """
+        Returns all TranscriptMutationEffect objects contained in this
+        collection.
+        """
+        return self.transcript_effect_dict.values()
+
+    def transcripts(self):
+        """
+        Returns list of Transcript objects for all transcripts which are
+        annotated with effects in this collection.
+        """
+        return [effect.transcript for effect in self.effects()]
+
+    def genes(self):
+        """
+        Construct Gene objects for all the genes which contain the
+        transcripts in this effect collection.
+        """
+        return [
+            self.variant.ensembl.gene_by_id(gene_id)
+            for gene_id
+            in self.gene_effect_groups
+        ]
+
+    def gene_names(self):
+        """
+        Fetch names of all the genes which contain the
+        transcripts in this effect collection. This is significantly
+        cheaper than constructing a Gene object and fetching its name.
+        """
+        return [
+            self.variant.ensembl.gene_name_of_gene_id(gene_id)
+            for gene_id
+            in self.gene_effect_groups
+        ]

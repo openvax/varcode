@@ -14,22 +14,19 @@
 
 from __future__ import print_function, division, absolute_import
 
-from .annotation import Annotation
 from .coding_effect import infer_coding_effect
-from .common import (
-    group_by,
-    reverse_complement,
-    trim_shared_flanking_strings,
-)
+from .common import group_by
 from .nucleotides import normalize_nucleotide_string
+from .string_helpers import reverse_complement, trim_shared_flanking_strings
 from .transcript_helpers import interval_offset_on_transcript
-from .transcript_mutation_effects import (
+from .effects import (
     NoncodingTranscript,
     IncompleteTranscript,
     FivePrimeUTR,
     ThreePrimeUTR,
     Intronic,
 )
+from .variant_effect_collection import VariantEffectCollection
 
 from pyensembl import Transcript, find_nearest_locus, EnsemblRelease
 from pyensembl.locus import normalize_chromosome
@@ -54,9 +51,8 @@ class Variant(object):
         alt : str
             Alternate nucleotide(s)
 
-        ensembl : EnsemblRelease, optional
-            If not given, then methods such as genes() and annotate()
-            won't work.
+        ensembl : EnsemblRelease
+            Ensembl object used for determining gene/transcript annotations
         """
         self.contig = normalize_chromosome(contig)
         self.ref = normalize_nucleotide_string(ref)
@@ -129,7 +125,19 @@ class Variant(object):
         ]
 
     def genes(self):
+        """
+        Return Gene object for all genes which overlap this variant.
+        """
         return self.ensembl.genes_at_locus(
+            self.contig, self.pos, self.end)
+
+    def gene_names(self):
+        """
+        Return names of all genes which overlap this variant. Calling
+        this method is significantly cheaper than calling `Variant.genes()`,
+        which has to issue many more queries to construct each Gene object.
+        """
+        return self.ensembl.gene_names_at_locus(
             self.contig, self.pos, self.end)
 
     def coding_genes(self):
@@ -141,17 +149,26 @@ class Variant(object):
             if is_coding_biotype(gene.biotype)
         ]
 
-    def annotate(self, raise_on_error=True):
+    def effects(self, only_coding_transcripts=False, raise_on_error=True):
         """
         Determine the effects of a variant on any transcripts it overlaps.
-        Returns a Annotation object.
+        Returns a VariantEffectCollection object.
         """
 
         overlapping_transcripts = self.transcripts()
 
+        if only_coding_transcripts:
+            # remove non-coding transcripts
+            overlapping_transcripts = [
+                transcript
+                for transcript
+                in overlapping_transcripts
+                if is_coding_biotype(transcript.biotype)
+            ]
+
         if len(overlapping_transcripts) == 0:
             # intergenic variant
-            return Annotation(
+            return VariantEffectCollection(
                 variant=self,
                 genes=[],
                 gene_transcript_effects={},
@@ -185,30 +202,21 @@ class Variant(object):
                     errors[transcript] = error
             gene_transcript_effects_groups[gene_id] = effects
 
-        # construct Gene objects for all the genes containing
-        # all the transcripts this variant overlaps
-        overlapping_genes = [
-            self.ensembl.gene_by_id(gene_id)
-            for gene_id
-            in overlapping_transcript_groups.keys()
-        ]
-
-        return Annotation(
+        return VariantEffectCollection(
             variant=self,
-            genes=overlapping_genes,
-            gene_transcript_effects=gene_transcript_effects_groups,
+            gene_effect_groups=gene_transcript_effects_groups,
             errors=errors)
 
     def transcript_effect(self, transcript):
         """
-        Generate a transcript effect (such as FrameShift) by applying a
-        genomic variant to a particular transcript.
+        Return the transcript effect (such as FrameShift) that results from
+        applying this genomic variant to a particular transcript.
 
         Parameters
         ----------
 
         transcript :  Transcript
-            Transcript we're going to mutate
+            Transcript we're going to apply mutation to.
         """
 
         if not isinstance(transcript, Transcript):
@@ -230,15 +238,15 @@ class Variant(object):
             loci=transcript.exons)
 
         if distance_to_exon > 0:
-            return self.intronic_transcript_effect(
+            return self._intronic_transcript_effect(
                 transcript=transcript,
                 nearest_exon=nearest_exon)
 
         # TODO: exonic splice site mutations
-        return self.exonic_transcript_effect(transcript)
+        return self._exonic_transcript_effect(transcript)
 
 
-    def intronic_transcript_effect(self, transcript, nearest_exon):
+    def _intronic_transcript_effect(self, transcript, nearest_exon):
         """
         Infer effect of variant which does not overlap any exon of
         the given transcript.
@@ -291,21 +299,21 @@ class Variant(object):
                 distance_to_exon=distance_to_exon)
 
 
-    def offset_on_transcript(self, transcript):
+    def _offset_on_transcript(self, transcript):
         """
-        Given a Variant (with fields `ref`, `alt`, `pos`, and `end`),
-        compute the offset the variant position relative
-        to the position and direction of the given transcript.
-        Also reverse the nucleotide strings if the transcript is on the
-        backwards strand and trim any shared substrings from the beginning
-        or end of `ref` and `alt`.
+        Given a Variant (with fields ref, alt, pos, and end), compute the offset
+        of the variant position relative to the position and direction of the
+        transcript.
 
-        Example:
-        If Variant(ref="ATGGC", alt="TCGC", pos=3000, end=3005) is normalized
-        relative to Transcript(start=2000, end=4000) then the result of this
-        function will be:
-            (1002, "G", "C")
-        where the elements of this tuple are (offset, ref, alt).
+        Returns a tuple (offset, ref, alt), where ref and alt are this variant's
+        ref and alt nucleotide strings with shared prefixes and suffixes removed
+        and the bases reversed if the transcript is on the backward strand.
+
+        For example,
+
+        >> variant = Variant(ref="ATGGC", alt="TCGC", pos=3000, end=3005)
+        >> variant.offset_on_transcript(Transcript(start=2000, end=4000))
+        (1002, "G", "C")
         """
         if transcript.on_backward_strand:
             ref = reverse_complement(self.ref)
@@ -323,15 +331,19 @@ class Variant(object):
         offset =  start_offset_with_utr5 + n_same
         return offset, ref, alt
 
-    def exonic_transcript_effect(self, transcript):
-        start_offset_with_utr5, ref, alt = self.offset_on_transcript(transcript)
+    def _exonic_transcript_effect(self, transcript):
+        """
+        Effect of this variant on a Transcript, assuming we already know
+        that this variant overlaps some exon of the transcript.
+        """
+        offset_with_utr5, ref, alt = self._offset_on_transcript(transcript)
 
         utr5_length = min(transcript.start_codon_spliced_offsets)
 
-        if utr5_length > start_offset_with_utr5:
+        if utr5_length > offset_with_utr5:
             # TODO: what do we do if the variant spans the beginning of
             # the coding sequence?
-            if utr5_length < start_offset_with_utr5 + len(ref):
+            if utr5_length < offset_with_utr5 + len(ref):
                 raise ValueError(
                     "Variant which span 5' UTR and CDS not supported: %s" % (
                         self,))
@@ -339,10 +351,10 @@ class Variant(object):
 
         utr3_offset = max(transcript.stop_codon_spliced_offsets) + 1
 
-        if start_offset_with_utr5 >= utr3_offset:
+        if offset_with_utr5 >= utr3_offset:
             return ThreePrimeUTR(self, transcript)
 
-        cds_offset = start_offset_with_utr5 - utr5_length
+        cds_offset = offset_with_utr5 - utr5_length
 
         return infer_coding_effect(
             ref,

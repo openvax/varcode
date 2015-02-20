@@ -14,7 +14,8 @@
 
 from __future__ import print_function, division, absolute_import
 
-from .effect_ordering import effect_priority
+from .effects import Substitution
+from .effect_ordering import effect_priority, transcript_effect_priority_dict
 
 class VariantCollection(object):
 
@@ -86,73 +87,84 @@ class VariantCollection(object):
         """
         return self.clone_metadata(set(self.variants))
 
-    def annotations(self, raise_on_error=True):
+    def variant_effects(
+            self,
+            min_effect_class=None,
+            only_coding_transcripts=False,
+            raise_on_error=True):
         """
-        Determine the impact of each variant, return a list of
-        Annotation objects.
+        Returns a list containing one VariantEffectCollection object for each
+        variant in this VariantCollection.
 
         Parameters
         ----------
+        min_effect_class : TranscriptMutationEffect, optional
+            Only return EffectCollections for variants whose highest priority
+            effect is at least as significant as this effect class.
+
+        only_coding_transcripts : bool, optional
+            Only annotate variant effects on coding transcripts.
 
         raise_on_error : bool, optional
-            Raise exception if error is encountered while annotating
-            transcripts, otherwise track errors in Annotation.errors
-            dictionary (default=True).
-
+            If exception is raised while determining effect of variant on a
+            transcript, should it be raised? This default is True, meaning
+            errors result in raised exceptions. If raise_on_error=False then
+            exceptions are logged in VariantEffectCollection.errors.
         """
-        return [
-           variant.annotate(
+        results = []
+
+        if min_effect_class:
+            min_priority = transcript_effect_priority_dict[min_effect_class]
+        else:
+            min_priority = -1
+
+        for variant in self.variants:
+            variant_effect_collection = variant.effects(
+                only_coding_transcripts=only_coding_transcripts,
                 raise_on_error=raise_on_error)
-            for variant
-            in self.variants
-        ]
 
-    def high_impact_variants(self, *args, **kwargs):
-        """
-        Returns a list of VariantEffect objects for variants predicted
-        to have a significant impact on some transcript's function.
+            if only_coding_transcripts and len(variant_effect_collection) == 0:
+                # if we only want coding transcripts, then skip all
+                # intergenic and non-coding gene variants
+                continue
 
-        All arguments are passed on to variant_effects(*args, **kwargs).
-        """
-        effects = self.variant_effects(*args, **kwargs)
+            best_effect = variant_effect_collection.highest_priority_effect
+            # either this variant is intergenic and there's no minimum
+            # threshold for effect priority or the highest impact effect
+            # is higher priority than the min_priority
+            if ((best_effect is None and min_priority < 0) or
+                    (effect_priority(best_effect) > min_priority)):
+                results.append(variant_effect_collection)
+        return results
 
-    def effects_to_string(self, *args, **kwargs):
+    def effect_summary(self, *args, **kwargs):
         """
         Create a long string with all transcript effects for each mutation,
         grouped by gene (if a mutation affects multiple genes).
 
-        Arguments are passed on to variant_effects(*args, **kwargs).
+        Arguments are passed on to self.variant_effects(*args, **kwargs).
         """
         lines = []
-        for annotation in self.annotations(*args, **kwargs):
-            transcript_effect_count = 0
-            lines.append("\n%s" % annotation.variant)
-            transcript_effect_lists = annotation.gene_transcript_effects
-            for gene, transcript_effects in transcript_effect_lists.iteritems():
-                gene_name = self.annot.ensembl.gene_name_of_gene_id(gene)
-                lines.append("  Gene: %s (%s)" % (gene_name, gene))
-                # print transcript effects with more significant impact
+        for effect_collection in self.variant_effects(*args, **kwargs):
+            variant = effect_collection.variant
+            lines.append("\n%s" % variant)
+            transcript_effect_lists = effect_collection.gene_transcript_effects
+            for gene_id, effects in transcript_effect_lists.iteritems():
+                gene_name = variant.ensembl.gene_name_of_gene_id(gene)
+                lines.append("  Gene: %s (%s)" % (gene_name, gene_id))
+                # place transcript effects with more significant impact
                 # on top (e.g. FrameShift should go before NoncodingTranscript)
-                for transcript_effect in sorted(
-                        transcript_effects,
+                for effect in sorted(
+                        effects,
                         key=effect_priority,
                         reverse=True):
-                    transcript_effect_count += 1
-                    lines.append("  -- %s" % transcript_effect)
+                    lines.append("  -- %s" % effect)
             # if we only printed one effect for this gene then
             # it's redundant to print it again as the highest priority effect
-            if transcript_effect_count > 1:
-                best = annotation.highest_priority_effect
+            if len(effect_collection.transcript_effects) > 1:
+                best = effect_collection.highest_priority_effect
                 lines.append("  Highest Priority Effect: %s" % best)
         return "\n".join(lines)
-
-    def print_effects(self, *args, **kwargs):
-        """
-        Print all variants and their transcript effects (grouped by gene).
-
-        Arguments are passed on to effects_to_string(*args, **kwargs).
-        """
-        print(self.effects_to_string(*args, **kwargs))
 
     def reference_names(self):
         """

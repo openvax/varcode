@@ -1,6 +1,6 @@
 from nose.tools import eq_
 
-from varcode.common import trim_shared_flanking_strings
+from varcode.string_helpers import trim_shared_flanking_strings
 
 def test_trim_shared_string_endings():
     # empty strings

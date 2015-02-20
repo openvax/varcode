@@ -15,14 +15,8 @@
 from __future__ import print_function, division, absolute_import
 
 import logging
-import math
-from collections import namedtuple
 
-from .common import (
-    reverse_complement,
-    trim_shared_flanking_strings,
-)
-from .transcript_mutation_effects import (
+from .effects import (
     Silent,
     Insertion,
     Deletion,
@@ -33,9 +27,9 @@ from .transcript_mutation_effects import (
     FrameShift,
     FrameShiftTruncation
 )
+from .string_helpers import trim_shared_flanking_strings
 
 from Bio.Seq import Seq, CodonTable
-from pyensembl.biotypes import is_coding_biotype
 
 def mutate(sequence, position, variant_ref, variant_alt):
     """
@@ -69,8 +63,25 @@ def infer_coding_effect(
         ref,
         alt,
         cds_offset,
-        variant,
-        transcript):
+        transcript,
+        variant):
+    """
+    Given a minimal ref/alt nucleotide string pair and an offset into a given
+    transcript, determine the coding effect of this nucleotide substitution
+    onto the translated protein.
+
+    Parameters
+    ----------
+    ref : str
+
+    alt : str
+
+    cds_offset : int
+
+    transcript : Transcript
+
+    variant : Variant
+    """
     # Don't need a pyfaidx.Sequence object here, just convert it to the an str
     cds_seq = str(transcript.coding_sequence)
 

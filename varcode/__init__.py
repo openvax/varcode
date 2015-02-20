@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from .effects import *
 from .effect_ordering import effect_priority, top_priority_transcript_effect
 from .maf import load_maf, load_maf_dataframe
-from .transcript_mutation_effects import *
 from .variant import Variant
 from .variant_collection import VariantCollection
 from .vcf import load_vcf

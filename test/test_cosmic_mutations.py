@@ -14,11 +14,11 @@ ensembl = EnsemblRelease(75)
 
 def _get_effect(chrom, pos, dna_ref, dna_alt, transcript_id):
     variant = Variant(chrom, pos, dna_ref, dna_alt, ensembl=ensembl)
-    result = variant.annotate()
-    assert transcript_id in result.transcript_effects, \
+    effect_collection = variant.effects()
+    assert transcript_id in effect_collection.transcript_effect_dict, \
         "Expected transcript ID %s for variant %s not found in %s" % (
             transcript_id, variant, result)
-    return result.transcript_effects[transcript_id]
+    return effect_collection.transcript_effect_dict[transcript_id]
 
 def _substitution(chrom, pos, dna_ref, dna_alt, transcript_id, aa_ref, aa_alt):
     effect = _get_effect(chrom, pos, dna_ref, dna_alt, transcript_id)
