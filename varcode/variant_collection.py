@@ -13,9 +13,11 @@
 # limitations under the License.
 
 from __future__ import print_function, division, absolute_import
+from collections import Counter
 
 from .effects import Substitution
 from .effect_ordering import effect_priority, transcript_effect_priority_dict
+
 
 class VariantCollection(object):
 
@@ -136,7 +138,7 @@ class VariantCollection(object):
             # threshold for effect priority or the highest impact effect
             # is higher priority than the min_priority
             if ((best_effect is None and min_priority < 0) or
-                    (effect_priority(best_effect) > min_priority)):
+                    (effect_priority(best_effect) >= min_priority)):
                 results.append(variant_effect_collection)
         return results
 
@@ -175,3 +177,13 @@ class VariantCollection(object):
         collection.
         """
         return { variant.reference_name for variant in self.variants }
+
+    def gene_counts(self, only_coding=False):
+        """
+        Count how many variants overlap each gene name.
+        """
+        counter = Counter()
+        for variant in self.variants:
+            for gene_name in variant.gene_names():
+                counter[gene_name] += 1
+        return counter
