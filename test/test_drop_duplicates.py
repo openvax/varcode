@@ -12,15 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from pyensembl import EnsemblRelease
 from varcode import Variant, VariantCollection
 
 def test_drop_duplicates():
-    v1 = Variant("1", 3000, "A", "G")
-    v1_copy = Variant("1", 3000, "A", "G")
-    v2 = Variant("2", 10, "G", "T")
+    ensembl = EnsemblRelease(78)
+    v1 = Variant("1", 3000, "A", "G", ensembl=ensembl)
+    v1_copy = Variant("1", 3000, "A", "G", ensembl=ensembl)
+    v2 = Variant("2", 10, "G", "T", ensembl=ensembl)
     collection_with_duplicates = VariantCollection(
-        variants=[v1, v1, v1_copy, v2],
-        reference_name="hg19")
+        variants=[v1, v1, v1_copy, v2])
     assert len(collection_with_duplicates) == 4
     collection_without_duplicates = collection_with_duplicates.drop_duplicates()
     assert len(collection_without_duplicates) == 2

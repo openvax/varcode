@@ -1,6 +1,7 @@
+from pyensembl import EnsemblRelease
 from varcode import (
-    VariantAnnotator,
     Variant,
+    # transcript effects
     Substitution,
     Deletion,
     Insertion,
@@ -9,11 +10,11 @@ from varcode import (
     FrameShiftTruncation,
 )
 
-annot = VariantAnnotator(75)
+ensembl = EnsemblRelease(75)
 
 def _get_effect(chrom, pos, dna_ref, dna_alt, transcript_id):
-    variant = Variant(chrom, pos, dna_ref, dna_alt)
-    result = annot.effect(variant)
+    variant = Variant(chrom, pos, dna_ref, dna_alt, ensembl=ensembl)
+    result = variant.annotate()
     assert transcript_id in result.transcript_effects, \
         "Expected transcript ID %s for variant %s not found in %s" % (
             transcript_id, variant, result)

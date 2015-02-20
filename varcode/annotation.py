@@ -1,12 +1,26 @@
+# Copyright (c) 2014. Mount Sinai School of Medicine
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from __future__ import print_function, division, absolute_import
 
 from .effect_ordering import top_priority_transcript_effect
 
 from pyensembl.biotypes import is_coding_biotype
 
-class VariantEffect(object):
+class Annotation(object):
     """
-    A VariantEffect object is a container for all the TranscriptEffects of
+    An Annotation object is a container for all the TranscriptEffects of
     a particular mutation, as well as some properties that attempt to
     summarize the impact of the mutation across all genes/transcripts.
     """
@@ -52,19 +66,6 @@ class VariantEffect(object):
             self.variant_summary = "Intergenic"
 
         self.errors = errors
-
-    @property
-    def coding_genes(self):
-        """
-        The `genes` property includes all sorts of esoteric entities
-        like anti-sense annotations and pseudogenes.
-
-        This property gives you just protein coding genes and functional RNAs
-        """
-        return [
-            gene for gene in self.genes
-            if is_coding_biotype(gene.biotype)
-        ]
 
     def __str__(self):
         fields = [

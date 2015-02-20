@@ -1,7 +1,8 @@
 from varcode import (
-    VariantAnnotator,
     Variant,
-    infer_transcript_effect,
+    #
+    # transcript effects
+    #
     NoncodingTranscript,
     IncompleteTranscript,
     FivePrimeUTR,
@@ -17,8 +18,9 @@ from varcode import (
     FrameShift,
     # TODO: SpliceDonor, SpliceReceptor
 )
+from pyensembl import EnsemblRelease
 
-annot = VariantAnnotator(ensembl_release=77)
+ensembl = EnsemblRelease(release=78)
 
 def test_incomplete():
     # transcript EGFR-009 (ENST00000450046 in Ensembl 77)
@@ -27,10 +29,10 @@ def test_incomplete():
     # first exon begins: ATCATTCCTTTGGGCCTAGGA
 
     # change the first nucleotide of the 5' UTR A>T
-    variant = Variant("7", 55109723, "A", "T")
+    variant = Variant("7", 55109723, "A", "T", ensembl=ensembl)
 
-    transcript = annot.ensembl.transcript_by_id("ENST00000450046")
-    effect = infer_transcript_effect(variant, transcript)
+    transcript = ensembl.transcript_by_id("ENST00000450046")
+    effect = variant.transcript_effect(transcript)
     assert isinstance(effect, IncompleteTranscript), \
         "Expected %s on %s to be IncompleteTranscript, got %s" % (
             variant, transcript, effect)
@@ -43,9 +45,9 @@ def test_start_loss():
     # which is 55,019,034 + 244 of chr7 = 55019278
     # change the first nucleotide of the 5' UTR A>T
     # making what used to be a start codon into TTG (Leucine)
-    variant = Variant("7", 55019278, "A", "T")
-    transcript = annot.ensembl.transcript_by_id("ENST00000420316")
-    effect = infer_transcript_effect(variant, transcript)
+    variant = Variant("7", 55019278, "A", "T", ensembl=ensembl)
+    transcript = ensembl.transcript_by_id("ENST00000420316")
+    effect = variant.transcript_effect(transcript)
     assert isinstance(effect, StartLoss), \
         "Expected StartLoss, got %s for %s on %s" % (
             effect, variant, transcript, )

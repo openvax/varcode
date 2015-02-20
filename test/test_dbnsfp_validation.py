@@ -13,17 +13,19 @@
 # limitations under the License.
 
 import pandas as pd
-from varcode import VariantAnnotator, Substitution, Variant
+from pyensembl import EnsemblRelease
+from varcode import Substitution, Variant
 
-annot = VariantAnnotator(75)
+ensembl = EnsemblRelease(75)
 
 def validate_transcript_mutation(
 	ensembl_transcript,
         chrom, dna_position,
         dna_ref, dna_alt,
         aa_pos, aa_alt):
-    result = annot.effect(
-        Variant(chrom, dna_position, dna_ref, dna_alt))
+    variant = Variant(chrom, dna_position, dna_ref, dna_alt, ensembl)
+    result = variant.annotate()
+
     assert ensembl_transcript in result.transcript_effects, \
         "%s not found in %s" % (ensembl_transcript, result)
     effect = result.transcript_effects[ensembl_transcript]

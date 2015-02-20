@@ -16,10 +16,15 @@ from __future__ import print_function, division, absolute_import
 import logging
 
 from .nucleotides import normalize_nucleotide_string
+from .reference_name import (
+    infer_reference_name,
+    ensembl_release_number_for_reference_name
+)
 from .variant import Variant
 from .variant_collection import VariantCollection
 
 import pandas
+from pyensembl import EnsemblRelease
 
 TCGA_PATIENT_ID_LENGTH = 12
 
@@ -50,7 +55,11 @@ def load_maf_dataframe(filename, nrows=None, verbose=False):
     """
     Load the guaranteed columns of a TCGA MAF file into a DataFrame
     """
-    logging.info("Opening %s" % filename)
+
+    if not isinstance(filename, str):
+        raise ValueError(
+            "Expected filename to be str, got %s : %s" % (
+                filename, type(filename)))
 
     # skip comments and optional header
     with open(filename) as f:
@@ -77,27 +86,31 @@ def load_maf(filename):
     if len(maf_df) == 0:
         raise ValueError("Empty MAF file %s" % filename)
 
-    ncbi_builds = maf_df.NCBI_Build.unique()
-
-    if len(ncbi_builds) == 0:
-        raise ValueError("No NCBI builds for MAF file %s" % filename)
-    elif len(ncbi_builds) > 1:
-        raise ValueError(
-            "Multiple NCBI builds (%s) for MAF file %s" % (ncbi_builds, filename))
-
-    ncbi_build = ncbi_builds[0]
-
-    if isinstance(ncbi_build, int):
-        reference_name = "B%d" % ncbi_build
-    else:
-        reference_name = str(ncbi_build)
-
+    ensembl_objects = {}
     variants = []
     for _, x in maf_df.iterrows():
         contig = x.Chromosome
         start_pos = x.Start_Position
         end_pos = x.End_Position
         ref = x.Reference_Allele
+
+        # it's possible in a MAF file to have multiple Ensembl releases
+        # mixed in a single MAF file (the genome assembly is
+        # specified by the NCBI_Build column)
+        ncbi_build = x.NCBI_Build
+        if ncbi_build in ensembl_objects:
+            ensembl = ensembl_objects[ncbi_build]
+        else:
+            if isinstance(ncbi_build, int):
+                reference_name = "B%d" % ncbi_build
+            else:
+                reference_name = str(ncbi_build)
+
+            reference_name = infer_reference_name(reference_name)
+            ensembl_release = ensembl_release_number_for_reference_name(
+                reference_name)
+            ensembl = EnsemblRelease(release=ensembl_release)
+            ensembl_objects[ncbi_build] = ensembl
 
         if x.Tumor_Seq_Allele1 != ref:
             alt = x.Tumor_Seq_Allele1
@@ -110,10 +123,9 @@ def load_maf(filename):
             "Expected variant %s:%s %s>%s to end at %d but got end_pos=%d" % (
                 contig, start_pos, ref, alt,
                 start_pos + len(ref) - 1, end_pos)
-
-        variants.append(Variant(contig, start_pos, ref, alt))
+        variant = Variant(contig, start_pos, ref, alt, ensembl=ensembl)
+        variants.append(variant)
 
     return VariantCollection(
         variants=variants,
-        original_filename=filename,
-        reference_name=reference_name)
+        original_filename=filename)
