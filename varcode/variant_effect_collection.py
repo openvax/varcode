@@ -70,7 +70,7 @@ class VariantEffectCollection(object):
         ]
         if self.errors:
             fields.append( ("errors", self.errors) )
-        return "VariantEffect(%s)" % (
+        return "VariantEffectCollection(%s)" % (
             ", ".join(["%s=%s" % (k,v) for (k,v) in fields]))
 
     def __repr__(self):

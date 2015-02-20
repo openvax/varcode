@@ -97,7 +97,7 @@ class IntronicSpliceSite(Intronic, SpliceSite):
     affect splicing and are given their own effect classes below.
     """
     def __init__(self, *args, **kwargs):
-        Intronic.__init__(self, *self, **kwargs)
+        Intronic.__init__(self, *args, **kwargs)
 
     def short_description(self):
         return "intronic-splice-site"
@@ -107,7 +107,7 @@ class SpliceDonor(IntronicSpliceSite):
     Mutation in the first two intron residues.
     """
     def __init__(self, *args, **kwargs):
-        Intronic.__init__(self, *self, **kwargs)
+        Intronic.__init__(self, *args, **kwargs)
 
     def short_description(self):
         return "splice-donor"

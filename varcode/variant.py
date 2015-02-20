@@ -25,6 +25,9 @@ from .effects import (
     FivePrimeUTR,
     ThreePrimeUTR,
     Intronic,
+    IntronicSpliceSite,
+    SpliceAcceptor,
+    SpliceDonor,
 )
 from .variant_effect_collection import VariantEffectCollection
 
@@ -170,8 +173,7 @@ class Variant(object):
             # intergenic variant
             return VariantEffectCollection(
                 variant=self,
-                genes=[],
-                gene_transcript_effects={},
+                gene_effect_groups={},
                 errors={})
 
         # group transcripts by their gene ID

@@ -52,7 +52,7 @@ class VariantCollection(object):
     def __str__(self):
         fields = [
             ("n_variants", len(self.variants)),
-            ("reference", self.reference_name)
+            ("reference", ", ".join(self.reference_names()))
         ]
 
         if self.original_filename:
@@ -68,24 +68,26 @@ class VariantCollection(object):
     def __repr__(self):
         return str(self)
 
-    def clone_metadata(self, new_variants):
+    def reference_names(self):
+        """
+        All unique reference names associated with variants in this collection.
+        """
+        return {variant.reference_name for variant in self.variants}
+
+    def _clone_metadata(self, new_variants):
         """
         Create copy of VariantCollection with same metadata but possibly
         different Variant entries.
         """
-
         return VariantCollection(
             variants=new_variants,
             original_filename=self.original_filename)
-
-    def clone(self):
-        return self.clone_metadata(list(self.variants))
 
     def drop_duplicates(self):
         """
         Create a new VariantCollection without any duplicate variants.
         """
-        return self.clone_metadata(set(self.variants))
+        return self._clone_metadata(set(self.variants))
 
     def variant_effects(
             self,
@@ -149,9 +151,9 @@ class VariantCollection(object):
         for effect_collection in self.variant_effects(*args, **kwargs):
             variant = effect_collection.variant
             lines.append("\n%s" % variant)
-            transcript_effect_lists = effect_collection.gene_transcript_effects
+            transcript_effect_lists = effect_collection.gene_effect_groups
             for gene_id, effects in transcript_effect_lists.iteritems():
-                gene_name = variant.ensembl.gene_name_of_gene_id(gene)
+                gene_name = variant.ensembl.gene_name_of_gene_id(gene_id)
                 lines.append("  Gene: %s (%s)" % (gene_name, gene_id))
                 # place transcript effects with more significant impact
                 # on top (e.g. FrameShift should go before NoncodingTranscript)
@@ -162,7 +164,7 @@ class VariantCollection(object):
                     lines.append("  -- %s" % effect)
             # if we only printed one effect for this gene then
             # it's redundant to print it again as the highest priority effect
-            if len(effect_collection.transcript_effects) > 1:
+            if len(effect_collection) > 1:
                 best = effect_collection.highest_priority_effect
                 lines.append("  Highest Priority Effect: %s" % best)
         return "\n".join(lines)
