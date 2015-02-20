@@ -112,18 +112,41 @@ def load_maf(filename):
             ensembl = EnsemblRelease(release=ensembl_release)
             ensembl_objects[ncbi_build] = ensembl
 
+        # have to try both Tumor_Seq_Allele1 and Tumor_Seq_Allele2
+        # to figure out which is different from the reference allele
         if x.Tumor_Seq_Allele1 != ref:
             alt = x.Tumor_Seq_Allele1
         else:
-            assert x.Tumor_Seq_Allele2 != ref, \
-                "Both tumor alleles agree with reference: %s" % (x,)
+            if x.Tumor_Seq_Allele2 == ref:
+                raise ValueError(
+                    "Both tumor alleles agree with reference %s: %s" % (
+                        ref, x,))
             alt = x.Tumor_Seq_Allele2
 
-        assert end_pos == start_pos + len(ref) - 1, \
-            "Expected variant %s:%s %s>%s to end at %d but got end_pos=%d" % (
+        if end_pos != start_pos + len(ref) - 1:
+            raise ValueError(
+                "Expected variant %s:%s %s>%s to end at %d but got end=%d" % (
                 contig, start_pos, ref, alt,
-                start_pos + len(ref) - 1, end_pos)
-        variant = Variant(contig, start_pos, ref, alt, ensembl=ensembl)
+                start_pos + len(ref) - 1, end_pos))
+
+        # keep metadata about the variant and its TCGA annotation
+        info = {
+            'Hugo_Symbol' : x.Hugo_Symbol,
+            'Center' : x.Center,
+            'Strand' : x.Strand,
+            'Variant_Classification' : x.Variant_Classification,
+            'Variant_Type' : x.Variant_Type,
+            'dbSNP_RS' : x.dbSNP_RS,
+            'dbSNP_Val_Status' : x.dbSNP_Val_Status,
+            'Tumor_Sample_Barcode' : x.Tumor_Sample_Barcode,
+            'Matched_Norm_Sample_Barcode' : x.Matched_Norm_Sample_Barcode,
+        }
+
+        variant = Variant(
+            contig, start_pos, ref, alt,
+            ensembl=ensembl,
+            info=info)
+
         variants.append(variant)
 
     return VariantCollection(
