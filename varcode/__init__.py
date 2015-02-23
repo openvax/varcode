@@ -12,10 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .core_logic import infer_transcript_effect
+from .effects import *
 from .effect_ordering import effect_priority, top_priority_transcript_effect
-from .load_variants import load_variants
-from .transcript_mutation_effects import *
+from .maf import load_maf, load_maf_dataframe
 from .variant import Variant
-from .variant_annotator import VariantAnnotator
 from .variant_collection import VariantCollection
+from .vcf import load_vcf

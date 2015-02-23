@@ -15,20 +15,8 @@
 from __future__ import print_function, division, absolute_import
 
 import logging
-import math
-from collections import namedtuple
 
-from .common import (
-    reverse_complement,
-    trim_shared_flanking_strings,
-)
-from .variant import Variant
-from .transcript_mutation_effects import (
-    NoncodingTranscript,
-    IncompleteTranscript,
-    FivePrimeUTR,
-    ThreePrimeUTR,
-    Intronic,
+from .effects import (
     Silent,
     Insertion,
     Deletion,
@@ -39,10 +27,9 @@ from .transcript_mutation_effects import (
     FrameShift,
     FrameShiftTruncation
 )
+from .string_helpers import trim_shared_flanking_strings
 
 from Bio.Seq import Seq, CodonTable
-from pyensembl import (Transcript, find_nearest_locus)
-from pyensembl.biotypes import is_coding_biotype
 
 def mutate(sequence, position, variant_ref, variant_alt):
     """
@@ -72,90 +59,29 @@ def mutate(sequence, position, variant_ref, variant_alt):
     suffix = sequence[position+n_variant_ref:]
     return prefix + variant_alt + suffix
 
-def first_transcript_offset(start_pos, end_pos, transcript):
-    """
-    Given a variant and a particular transcript,
-    return the start/end offsets of the variant relative to the
-    chromosomal positions of the transcript.
-    """
-    # ensure that start_pos:end_pos overlap with transcript positions
-    assert start_pos <= end_pos, \
-        "start_pos %d shouldn't be greater than end_pos %d" % (
-            start_pos, end_pos)
-    assert start_pos <= transcript.end, \
-        "Range %d:%d starts after transcript %s (%d:%d)" % (
-            start_pos,
-            end_pos,
-            transcript,
-            transcript.start,
-            transcript.end)
-    assert end_pos >= transcript.start, \
-        "Range %d:%d ends before transcript %s (%d:%d)" % (
-            start_pos,
-            end_pos,
-            transcript,
-            transcript.start,
-            transcript.end)
-    # trim the start position to the beginning of the transcript
-    if start_pos < transcript.start:
-        start_pos = transcript.start
-    # trim the end position to the end of the transcript
-    if end_pos > transcript.end:
-        end_pos = transcript.end
-
-    # offsets into the spliced transcript
-    offsets = [
-        transcript.spliced_offset(start_pos),
-        transcript.spliced_offset(end_pos)
-    ]
-
-    start_offset_with_utr5 = min(offsets)
-
-    assert start_offset_with_utr5 >= 0, \
-        "Position %d is before start of transcript %s" % (
-            start_offset_with_utr5, transcript)
-
-    return start_offset_with_utr5
-
-def normalize_variant_fields(variant, transcript):
-    """
-    Given a Variant (with fields `ref`, `alt`, `pos` and `end_pos`),
-    compute the offset the variant position relative
-    to the position and direction of the given transcript.
-    Also reverse the nucleotide strings if the transcript is on the
-    backwards strand and trim any shared substrings from the beginning
-    or end of `ref` and `alt`.
-
-    Example:
-    If Variant(ref="ATGGC", alt="TCGC", pos=3000, end_pos=3005) is normalized
-    relative to Transcript(start=2000, end=4000) then the result of this
-    function will be:
-        ("G", "C", 1002)
-    where the elements of this tuple are (ref, alt, offset).
-    """
-    if transcript.on_backward_strand:
-        ref = reverse_complement(variant.ref)
-        alt = reverse_complement(variant.alt)
-    else:
-        ref = variant.ref
-        alt = variant.alt
-
-    start_offset_with_utr5 = first_transcript_offset(
-        variant.pos, variant.end_pos, transcript)
-
-    # in case nucleotide strings share prefix (e.g. ref="C", alt="CC")
-    # bump the offsets and make the strings disjoint (ref="", alt="C")
-    ref, alt, prefix, _ = trim_shared_flanking_strings(ref, alt)
-    n_same = len(prefix)
-    start_offset_with_utr5 += n_same
-    return ref, alt, start_offset_with_utr5
-
 def infer_coding_effect(
         ref,
         alt,
         cds_offset,
-        variant,
-        transcript):
+        transcript,
+        variant):
+    """
+    Given a minimal ref/alt nucleotide string pair and an offset into a given
+    transcript, determine the coding effect of this nucleotide substitution
+    onto the translated protein.
+
+    Parameters
+    ----------
+    ref : str
+
+    alt : str
+
+    cds_offset : int
+
+    transcript : Transcript
+
+    variant : Variant
+    """
     # Don't need a pyfaidx.Sequence object here, just convert it to the an str
     cds_seq = str(transcript.coding_sequence)
 
@@ -348,123 +274,3 @@ def infer_coding_effect(
             aa_pos=aa_pos,
             aa_ref=aa_ref,
             aa_alt=aa_alt)
-
-def infer_exonic_effect(variant, transcript):
-    ref, alt, start_offset_with_utr5 = normalize_variant_fields(
-        variant, transcript)
-
-    utr5_length = min(transcript.start_codon_spliced_offsets)
-
-    if utr5_length > start_offset_with_utr5:
-        # TODO: what do we do if the variant spans the beginning of
-        # the coding sequence?
-        assert utr5_length > start_offset_with_utr5 + len(ref), \
-            "Variant which span the 5' UTR and CDS not yet supported: %s" % (
-                variant)
-        return FivePrimeUTR(variant, transcript)
-
-    utr3_offset = max(transcript.stop_codon_spliced_offsets) + 1
-
-    if start_offset_with_utr5 >= utr3_offset:
-        return ThreePrimeUTR(variant, transcript)
-
-    cds_offset = start_offset_with_utr5 - utr5_length
-    return infer_coding_effect(
-        ref,
-        alt,
-        cds_offset,
-        variant,
-        transcript)
-
-def infer_intronic_effect(variant, transcript, nearest_exon):
-    """
-    Infer effect of variant which does not overlap any exon of
-    the given transcript.
-    """
-    distance_to_exon = nearest_exon.distance_to_interval(
-        variant.pos, variant.end_pos)
-    assert distance_to_exon > 0, \
-        "Expected intronic effect to have distance_to_exon > 0, got %d" % (
-            distance_to_exon,)
-    before_forward_exon = (
-        transcript.strand == "+" and
-        variant.pos < nearest_exon.start)
-    before_backward_exon = (
-        transcript.strand == "-" and
-        variant.end_pos > nearest_exon.end)
-    before_exon = before_forward_exon or before_backward_exon
-
-    if distance_to_exon <= 2:
-        if before_exon:
-            # 2 last nucleotides of intron before exon are the splice acceptor
-            # site, typically "AG"
-            effect_class = SpliceAcceptor
-        else:
-            # 2 first nucleotides of intron after exon are the splice donor
-            # site, typically "GT"
-            effect_class = SpliceDonor
-    elif not before_exon and distance_to_exon <= 6:
-        # variants in nucleotides 3-6 at start of intron aren't as certain
-        # to cause problems as nucleotides 1-2 but still implicated in
-        # alternative splicing
-        effect_class = IntronicSpliceSite
-    elif before_exon and distance_to_exon <= 4:
-        # nucleotides -4 and -3 before exon are part of the 3' splicing motif
-        # but allow for more degeneracy than the -2, -1 nucleotides
-        effect_class = IntronicSpliceSite
-    else:
-        assert distance_to_exon > 6, \
-            "Looks like we didn't cover all possible splice site mutations"
-        # intronic mutation unrelated to splicing
-        effect_class = Intronic
-    return effect_class(
-            variant=variant,
-            transcript=transcript,
-            nearest_exon=nearest_exon,
-            distance_to_exon=distance_to_exon)
-
-def infer_transcript_effect(variant, transcript):
-    """
-    Generate a transcript effect (such as FrameShift) by applying a genomic
-    variant to a particular transcript.
-
-    Parameters
-    ----------
-    variant : Variant
-        Genomic variant
-
-    transcript :  Transcript
-        Transcript we're going to mutate
-    """
-
-    if not isinstance(variant, Variant):
-        raise TypeError(
-            "Expected %s : %s to have type Variant" % (
-                variant, type(variant)))
-
-    if not isinstance(transcript, Transcript):
-        raise TypeError(
-            "Expected %s : %s to have type Transcript" % (
-                transcript, type(transcript)))
-
-    # check for non-coding transcripts first, since
-    # every non-coding transcript is "incomplete".
-    if not is_coding_biotype(transcript.biotype):
-        return NoncodingTranscript(variant, transcript)
-
-    if not transcript.complete:
-        return IncompleteTranscript(variant, transcript)
-
-    distance_to_exon, nearest_exon = find_nearest_locus(
-        start=variant.pos,
-        end=variant.end_pos,
-        loci=transcript.exons)
-
-    if distance_to_exon > 0:
-        return infer_intronic_effect(
-            variant=variant,
-            transcript=transcript,
-            nearest_exon=nearest_exon)
-
-    # TODO: exonic splice site mutations
-    return infer_exonic_effect(variant, transcript)

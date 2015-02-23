@@ -13,23 +13,15 @@
 # limitations under the License.
 
 from __future__ import print_function, division, absolute_import
+from collections import Counter
 
-from .effect_ordering import effect_priority
-from .reference_name import (
-    infer_reference_name,
-    ensembl_release_number_for_reference_name
-)
-from .variant_annotator import VariantAnnotator
+from .effects import Substitution
+from .effect_ordering import effect_priority, transcript_effect_priority_dict
+
 
 class VariantCollection(object):
 
-    def __init__(
-            self,
-            variants,
-            reference_path=None,
-            reference_name=None,
-            ensembl_release=None,
-            original_filename=None):
+    def __init__(self, variants, original_filename=None):
         """
         Construct a VariantCollection from a list of Variant records and
         the name of a reference genome.
@@ -43,39 +35,8 @@ class VariantCollection(object):
         original_filename : str, optional
             File from which we loaded variants, though the current
             VariantCollection may only contain a subset of them.
-
-        reference_path : str, optional
-            Path to reference FASTA file.
-
-        reference_name : str, optional
-            Name of reference genome (e.g. "GRCh37", "hg18"). If not given
-            infer from reference path or from ensembl_release.
-
-        ensembl_release : int, optional
-            If not specified, infer Ensembl release from reference_name
         """
         self.variants = variants
-        self.reference_path = reference_path
-        if reference_name:
-            # convert from e.g. "hg19" to "GRCh37"
-            #
-            # TODO: actually handle the differences between these references
-            # instead of just treating them as interchangeable
-            self.reference_name = infer_reference_name(reference_name)
-        else:
-            if reference_path:
-                self.reference_name = infer_reference_name(reference_path)
-            else:
-                raise ValueError(
-                    "Must specify one of reference_path or reference_name")
-
-        if ensembl_release:
-            self.ensembl_release = ensembl_release
-        else:
-            self.ensembl_release = ensembl_release_number_for_reference_name(
-                self.reference_name)
-
-        self.annot = VariantAnnotator(ensembl_release=self.ensembl_release)
         self.original_filename = original_filename
 
     def __len__(self):
@@ -87,14 +48,13 @@ class VariantCollection(object):
     def __eq__(self, other):
         return (
             isinstance(other, VariantCollection) and
-            self.reference_name == other.reference_name and
             len(self.variants) == len(other.variants) and
             all(v1 == v2 for (v1, v2) in zip(self.variants, other.variants)))
 
     def __str__(self):
         fields = [
             ("n_variants", len(self.variants)),
-            ("reference", self.reference_name)
+            ("reference", ", ".join(self.reference_names()))
         ]
 
         if self.original_filename:
@@ -110,83 +70,120 @@ class VariantCollection(object):
     def __repr__(self):
         return str(self)
 
-    def clone(self, new_variants=None):
+    def reference_names(self):
+        """
+        All unique reference names associated with variants in this collection.
+        """
+        return {variant.reference_name for variant in self.variants}
+
+    def _clone_metadata(self, new_variants):
         """
         Create copy of VariantCollection with same metadata but possibly
-        different Variant entries. If no variants provided, then just make a
-        copy of self.variants.
+        different Variant entries.
         """
-        if new_variants is None:
-            new_variants = self.variants
         return VariantCollection(
-            variants=list(new_variants),
-            original_filename=self.original_filename,
-            reference_path=self.reference_path,
-            reference_name=self.reference_name,
-            ensembl_release=self.ensembl_release)
+            variants=new_variants,
+            original_filename=self.original_filename)
 
     def drop_duplicates(self):
         """
         Create a new VariantCollection without any duplicate variants.
         """
-        return self.clone(set(self.variants))
+        return self._clone_metadata(set(self.variants))
 
-    def variant_effects(self, raise_on_error=True):
+    def variant_effects(
+            self,
+            high_impact=False,
+            only_coding_transcripts=False,
+            raise_on_error=True):
         """
-        Determine the impact of each variant, return a list of
-        VariantEffect objects.
+        Returns a list containing one VariantEffectCollection object for each
+        variant in this VariantCollection.
 
         Parameters
         ----------
+        high_impact : bool, optional
+            Only show effects which make changes to coding transcripts that
+            are predicted to be deleterious (amino acid sequence changes,
+            changes to essential splice sites, frameshifts, &c)
+
+        only_coding_transcripts : bool, optional
+            Only annotate variant effects on coding transcripts.
 
         raise_on_error : bool, optional
-            Raise exception if error is encountered while annotating
-            transcripts, otherwise track errors in VariantEffect.errors
-            dictionary (default=True).
-
+            If exception is raised while determining effect of variant on a
+            transcript, should it be raised? This default is True, meaning
+            errors result in raised exceptions. If raise_on_error=False then
+            exceptions are logged in VariantEffectCollection.errors.
         """
-        return [
-            self.annot.effect(
-                variant=variant,
-                raise_on_error=raise_on_error)
-            for variant
-            in self.variants
-        ]
+        results = []
 
-    def effects_to_string(self, *args, **kwargs):
+        if high_impact:
+            min_priority = transcript_effect_priority_dict[Substitution]
+        else:
+            min_priority = -1
+
+        for variant in self.variants:
+            variant_effect_collection = variant.effects(
+                only_coding_transcripts=only_coding_transcripts,
+                raise_on_error=raise_on_error)
+
+            if only_coding_transcripts and len(variant_effect_collection) == 0:
+                # if we only want coding transcripts, then skip all
+                # intergenic and non-coding gene variants
+                continue
+
+            best_effect = variant_effect_collection.highest_priority_effect
+            # either this variant is intergenic and there's no minimum
+            # threshold for effect priority or the highest impact effect
+            # is higher priority than the min_priority
+            if ((best_effect is None and min_priority < 0) or
+                    (effect_priority(best_effect) >= min_priority)):
+                results.append(variant_effect_collection)
+        return results
+
+    def effect_summary(self, *args, **kwargs):
         """
         Create a long string with all transcript effects for each mutation,
         grouped by gene (if a mutation affects multiple genes).
 
-        Arguments are passed on to variant_effects(*args, **kwargs).
+        Arguments are passed on to self.variant_effects(*args, **kwargs).
         """
         lines = []
-        for variant_effect in self.variant_effects(*args, **kwargs):
-            transcript_effect_count = 0
-            lines.append("\n%s" % variant_effect.variant)
-            transcript_effect_lists = variant_effect.gene_transcript_effects
-            for gene, transcript_effects in transcript_effect_lists.iteritems():
-                gene_name = self.annot.ensembl.gene_name_of_gene_id(gene)
-                lines.append("  Gene: %s (%s)" % (gene_name, gene))
-                # print transcript effects with more significant impact
+        for effect_collection in self.variant_effects(*args, **kwargs):
+            variant = effect_collection.variant
+            lines.append("\n%s" % variant)
+            transcript_effect_lists = effect_collection.gene_effect_groups
+            for gene_id, effects in transcript_effect_lists.iteritems():
+                gene_name = variant.ensembl.gene_name_of_gene_id(gene_id)
+                lines.append("  Gene: %s (%s)" % (gene_name, gene_id))
+                # place transcript effects with more significant impact
                 # on top (e.g. FrameShift should go before NoncodingTranscript)
-                for transcript_effect in sorted(
-                        transcript_effects,
+                for effect in sorted(
+                        effects,
                         key=effect_priority,
                         reverse=True):
-                    transcript_effect_count += 1
-                    lines.append("  -- %s" % transcript_effect)
+                    lines.append("  -- %s" % effect)
             # if we only printed one effect for this gene then
             # it's redundant to print it again as the highest priority effect
-            if transcript_effect_count > 1:
-                best = variant_effect.highest_priority_effect
+            if len(effect_collection) > 1:
+                best = effect_collection.highest_priority_effect
                 lines.append("  Highest Priority Effect: %s" % best)
         return "\n".join(lines)
 
-    def print_effects(self, *args, **kwargs):
+    def reference_names(self):
         """
-        Print all variants and their transcript effects (grouped by gene).
+        All distinct reference names used by Variants in this
+        collection.
+        """
+        return { variant.reference_name for variant in self.variants }
 
-        Arguments are passed on to effects_to_string(*args, **kwargs).
+    def gene_counts(self, only_coding=False):
         """
-        print(self.effects_to_string(*args, **kwargs))
+        Count how many variants overlap each gene name.
+        """
+        counter = Counter()
+        for variant in self.variants:
+            for gene_name in variant.gene_names():
+                counter[gene_name] += 1
+        return counter
