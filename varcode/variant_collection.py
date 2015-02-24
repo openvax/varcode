@@ -14,12 +14,12 @@
 
 from __future__ import print_function, division, absolute_import
 from collections import Counter
+from memoized_property import memoized_property
 
 from .effects import Substitution
 from .effect_ordering import effect_priority, transcript_effect_priority_dict
 from .variant import Variant
 from . import type_checks
-
 
 class VariantCollection(object):
 
@@ -31,16 +31,15 @@ class VariantCollection(object):
         Parameters
         ----------
 
-        variants : list
+        variants : iterable
             Variant objects contained in this VariantCollection
 
         original_filename : str, optional
             File from which we loaded variants, though the current
             VariantCollection may only contain a subset of them.
         """
-        type_checks.require_instance(variants, list, "variants")
         type_checks.require_iterable_of(variants, Variant, "variants")
-        self.variants = variants
+        self.variants = set(variants)
         self.original_filename = original_filename
 
     def __len__(self):
@@ -52,10 +51,12 @@ class VariantCollection(object):
     def __eq__(self, other):
         return (
             isinstance(other, VariantCollection) and
-            len(self.variants) == len(other.variants) and
-            all(v1 == v2 for (v1, v2) in zip(self.variants, other.variants)))
+            self.variants == other.variants)
 
-    def __str__(self):
+    def variant_summary(self):
+        """
+        Returns a string indicating each variant in the collection.
+        """
         fields = [
             ("n_variants", len(self.variants)),
             ("reference", ", ".join(self.reference_names()))
@@ -70,6 +71,13 @@ class VariantCollection(object):
         for variant in self.variants:
             s += "\n\t%s" % variant
         return s
+
+    def __str__(self):
+        suffix = ""
+        if self.original_filename:
+            suffix = ' from "%s"' % self.original_filename
+        return ("<VariantCollection of %d variants%s>" %
+            (len(self.variants), suffix))
 
     def __repr__(self):
         return str(self)
@@ -175,6 +183,7 @@ class VariantCollection(object):
                 lines.append("  Highest Priority Effect: %s" % best)
         return "\n".join(lines)
 
+    @memoized_property
     def reference_names(self):
         """
         All distinct reference names used by Variants in this
@@ -182,6 +191,7 @@ class VariantCollection(object):
         """
         return { variant.reference_name for variant in self.variants }
 
+    @memoized_property
     def gene_counts(self, only_coding=False):
         """
         Count how many variants overlap each gene name.
