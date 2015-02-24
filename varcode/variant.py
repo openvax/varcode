@@ -57,6 +57,9 @@ class Variant(object):
 
         ensembl : EnsemblRelease
             Ensembl object used for determining gene/transcript annotations
+
+        info : dict, optional
+            Extra metadata about this variant
         """
         self.contig = normalize_chromosome(contig)
         self.ref = normalize_nucleotide_string(ref)
@@ -64,9 +67,7 @@ class Variant(object):
         self.pos = int(pos)
         self.end = self.pos + len(self.ref) - 1
 
-        if not isinstance(ensembl, EnsemblRelease):
-            raise TypeError("Expected EnsemblRelease, got %s : %s" % (
-                ensembl, type(ensembl)))
+        type_checks.require_instance(ensembl, EnsemblRelease, "ensembl")
         self.ensembl = ensembl
 
         self.info = {} if info is None else info

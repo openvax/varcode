@@ -59,7 +59,7 @@ class VariantCollection(object):
         """
         fields = [
             ("n_variants", len(self.variants)),
-            ("reference", ", ".join(self.reference_names()))
+            ("reference", ", ".join(self.reference_names))
         ]
 
         if self.original_filename:
