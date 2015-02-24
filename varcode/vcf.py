@@ -22,14 +22,15 @@ from .reference_name import (
 )
 from .variant import Variant
 from .variant_collection import VariantCollection
-
+from . import type_checks
 from pyensembl import EnsemblRelease
-# PyVCF
-import vcf
+
+import vcf # PyVCF
 
 def load_vcf(
         filename,
         reference_path_field='reference',
+        only_passing=True,
         ensembl_release=None):
     """
     Load reference name and Variant objects from the given VCF filename.
@@ -44,15 +45,15 @@ def load_vcf(
         Name of metadata field which contains path to reference FASTA
         file (default = 'reference')
 
+    only_passing : boolean, optional
+        If true, any entries whose FILTER field is not one of "." or "PASS" is dropped.
+
     ensembl_release : int, optional
         Which release of Ensembl to use for annotation, by default inferred
         from the reference path.
     """
 
-    if not isinstance(filename, str):
-        raise ValueError(
-            "Expected filename to be str, got %s : %s" % (
-                filename, type(filename)))
+    type_checks.require_string(filename, "filename")    
 
     vcf_reader = vcf.Reader(filename=filename)
 
@@ -63,7 +64,8 @@ def load_vcf(
                 reference_name)
 
     ensembl = EnsemblRelease(release=ensembl_release)
-
+    
+    # We ignore "no-call" variants, i.e. those where X.ALT = [None].
     variants = [
         Variant(
             contig=x.CHROM,
@@ -73,7 +75,7 @@ def load_vcf(
             info=x.INFO,
             ensembl=ensembl)
         for x in vcf_reader
-        if not x.FILTER or x.FILTER == "PASS"
+        if x.ALT[0] and (not only_passing or not x.FILTER or x.FILTER == "PASS")
     ]
 
     return VariantCollection(

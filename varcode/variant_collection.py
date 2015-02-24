@@ -17,6 +17,8 @@ from collections import Counter
 
 from .effects import Substitution
 from .effect_ordering import effect_priority, transcript_effect_priority_dict
+from .variant import Variant
+from . import type_checks
 
 
 class VariantCollection(object):
@@ -36,6 +38,8 @@ class VariantCollection(object):
             File from which we loaded variants, though the current
             VariantCollection may only contain a subset of them.
         """
+        type_checks.require_instance(variants, list, "variants")
+        type_checks.require_iterable_of(variants, Variant, "variants")
         self.variants = variants
         self.original_filename = original_filename
 
@@ -154,7 +158,7 @@ class VariantCollection(object):
             variant = effect_collection.variant
             lines.append("\n%s" % variant)
             transcript_effect_lists = effect_collection.gene_effect_groups
-            for gene_id, effects in transcript_effect_lists.iteritems():
+            for (gene_id, effects) in transcript_effect_lists.items():
                 gene_name = variant.ensembl.gene_name_of_gene_id(gene_id)
                 lines.append("  Gene: %s (%s)" % (gene_name, gene_id))
                 # place transcript effects with more significant impact
