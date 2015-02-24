@@ -14,6 +14,7 @@
 
 from __future__ import print_function, division, absolute_import
 
+from . import type_checks
 from .coding_effect import infer_coding_effect
 from .common import group_by
 from .nucleotides import normalize_nucleotide_string
@@ -83,6 +84,15 @@ class Variant(object):
 
     def __hash__(self):
         return hash(self.fields())
+
+    def __lt__(self, other):
+        '''
+        Variants are ordered by locus.
+        '''
+        type_checks.require_instance(other, Variant, name="variant")
+        if self.contig == other.contig:
+            return self.pos < other.pos
+        return self.contig < other.contig
 
     def fields(self):
         """

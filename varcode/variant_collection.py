@@ -97,12 +97,6 @@ class VariantCollection(object):
             variants=new_variants,
             original_filename=self.original_filename)
 
-    def drop_duplicates(self):
-        """
-        Create a new VariantCollection without any duplicate variants.
-        """
-        return self._clone_metadata(set(self.variants))
-
     def variant_effects(
             self,
             high_impact=False,
