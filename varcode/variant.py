@@ -37,7 +37,14 @@ from pyensembl.locus import normalize_chromosome
 from pyensembl.biotypes import is_coding_biotype
 
 class Variant(object):
-    def __init__(self, contig, pos, ref, alt, ensembl, info=None):
+    def __init__(self,
+            contig,
+            pos,
+            ref,
+            alt,
+            ensembl,
+            info=None,
+            allow_extended_nucleotides=False):
         """
         Construct a Variant object.
 
@@ -62,8 +69,10 @@ class Variant(object):
             Extra metadata about this variant
         """
         self.contig = normalize_chromosome(contig)
-        self.ref = normalize_nucleotide_string(ref)
-        self.alt = normalize_nucleotide_string(alt)
+        self.ref = normalize_nucleotide_string(ref,
+            allow_extended_nucleotides=allow_extended_nucleotides)
+        self.alt = normalize_nucleotide_string(alt,
+            allow_extended_nucleotides=allow_extended_nucleotides)
         self.pos = int(pos)
         self.end = self.pos + len(self.ref) - 1
 
