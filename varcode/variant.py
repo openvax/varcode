@@ -14,6 +14,7 @@
 
 from __future__ import print_function, division, absolute_import
 
+from . import type_checks
 from .coding_effect import infer_coding_effect
 from .common import group_by
 from .nucleotides import normalize_nucleotide_string
@@ -36,7 +37,14 @@ from pyensembl.locus import normalize_chromosome
 from pyensembl.biotypes import is_coding_biotype
 
 class Variant(object):
-    def __init__(self, contig, pos, ref, alt, ensembl, info=None):
+    def __init__(self,
+            contig,
+            pos,
+            ref,
+            alt,
+            ensembl,
+            info=None,
+            allow_extended_nucleotides=False):
         """
         Construct a Variant object.
 
@@ -56,16 +64,19 @@ class Variant(object):
 
         ensembl : EnsemblRelease
             Ensembl object used for determining gene/transcript annotations
+
+        info : dict, optional
+            Extra metadata about this variant
         """
         self.contig = normalize_chromosome(contig)
-        self.ref = normalize_nucleotide_string(ref)
-        self.alt = normalize_nucleotide_string(alt)
+        self.ref = normalize_nucleotide_string(ref,
+            allow_extended_nucleotides=allow_extended_nucleotides)
+        self.alt = normalize_nucleotide_string(alt,
+            allow_extended_nucleotides=allow_extended_nucleotides)
         self.pos = int(pos)
         self.end = self.pos + len(self.ref) - 1
 
-        if not isinstance(ensembl, EnsemblRelease):
-            raise TypeError("Expected EnsemblRelease, got %s : %s" % (
-                ensembl, type(ensembl)))
+        type_checks.require_instance(ensembl, EnsemblRelease, "ensembl")
         self.ensembl = ensembl
 
         self.info = {} if info is None else info
@@ -83,6 +94,15 @@ class Variant(object):
 
     def __hash__(self):
         return hash(self.fields())
+
+    def __lt__(self, other):
+        '''
+        Variants are ordered by locus.
+        '''
+        type_checks.require_instance(other, Variant, name="variant")
+        if self.contig == other.contig:
+            return self.pos < other.pos
+        return self.contig < other.contig
 
     def fields(self):
         """

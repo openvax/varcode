@@ -7,8 +7,8 @@ def test_maf():
     variant_collection_from_maf = load_maf("data/tcga_ov.head.maf")
     expected_variants = [
         Variant(1, 1650797, "A", "G", ensembl),
-        Variant(1, 231401797, "A", "C", ensembl),
         Variant(1, 23836447, "C", "A", ensembl),
+        Variant(1, 231401797, "A", "C", ensembl),
         Variant(11,124617502, "C", "G", ensembl),
     ]
     eq_(len(variant_collection_from_maf), len(expected_variants))
