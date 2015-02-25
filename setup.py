@@ -47,7 +47,6 @@ if __name__ == '__main__':
             'pyensembl>=0.5.4',
             'biopython',
 	        'pyvcf',
-            'pyfaidx',
             'memoized_property'
         ],
     )

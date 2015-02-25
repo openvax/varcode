@@ -14,20 +14,7 @@
 
 from __future__ import print_function, division, absolute_import
 
-import pyfaidx
-
-def reverse_complement(x):
-    """
-    Reverse complement of a nucleotide string.
-
-    Parameters
-    ----------
-
-    x : str
-        Original nucleotide string
-    """
-    return pyfaidx.Sequence(seq=x).reverse.complement.seq
-
+from Bio.Seq import reverse_complement
 
 def trim_shared_prefix(ref, alt):
     """
