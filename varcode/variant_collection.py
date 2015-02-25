@@ -46,7 +46,7 @@ class VariantCollection(object):
         return len(self.variants)
 
     def __iter__(self):
-        return iter(self.variants)
+        return iter(sorted(self.variants))
 
     def __eq__(self, other):
         return (

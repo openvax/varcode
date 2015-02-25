@@ -12,7 +12,7 @@ def test_maf():
         Variant(11,124617502, "C", "G", ensembl),
     ]
     eq_(len(variant_collection_from_maf), len(expected_variants))
-    for v_expect, v_maf in zip(expected_variants, sorted(variant_collection_from_maf)):
+    for v_expect, v_maf in zip(expected_variants, variant_collection_from_maf):
         eq_(v_expect, v_maf)
         gene_name = v_maf.info['Hugo_Symbol']
         assert any(gene.name == gene_name for gene in v_maf.genes()), \
