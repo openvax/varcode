@@ -7,7 +7,6 @@ from varcode import (
     Insertion,
     FrameShift,
     Silent,
-    FrameShiftTruncation,
 )
 
 ensembl = EnsemblRelease(75)
@@ -17,7 +16,7 @@ def _get_effect(chrom, pos, dna_ref, dna_alt, transcript_id):
     effect_collection = variant.effects()
     assert transcript_id in effect_collection.transcript_effect_dict, \
         "Expected transcript ID %s for variant %s not found in %s" % (
-            transcript_id, variant, result)
+            transcript_id, variant, effect_collection)
     return effect_collection.transcript_effect_dict[transcript_id]
 
 def _substitution(chrom, pos, dna_ref, dna_alt, transcript_id, aa_ref, aa_alt):

@@ -13,8 +13,13 @@
 # limitations under the License.
 
 from __future__ import print_function, division, absolute_import
+import logging
 
-from . import type_checks
+from pyensembl import Transcript, find_nearest_locus, EnsemblRelease
+from pyensembl.locus import normalize_chromosome
+from pyensembl.biotypes import is_coding_biotype
+from typechecks import require_instance
+
 from .coding_effect import infer_coding_effect
 from .common import group_by
 from .nucleotides import normalize_nucleotide_string
@@ -32,9 +37,6 @@ from .effects import (
 )
 from .variant_effect_collection import VariantEffectCollection
 
-from pyensembl import Transcript, find_nearest_locus, EnsemblRelease
-from pyensembl.locus import normalize_chromosome
-from pyensembl.biotypes import is_coding_biotype
 
 class Variant(object):
     def __init__(self,
@@ -76,7 +78,7 @@ class Variant(object):
         self.pos = int(pos)
         self.end = self.pos + len(self.ref) - 1
 
-        type_checks.require_instance(ensembl, EnsemblRelease, "ensembl")
+        require_instance(ensembl, EnsemblRelease, "ensembl")
         self.ensembl = ensembl
 
         self.info = {} if info is None else info
@@ -99,7 +101,7 @@ class Variant(object):
         '''
         Variants are ordered by locus.
         '''
-        type_checks.require_instance(other, Variant, name="variant")
+        require_instance(other, Variant, name="variant")
         if self.contig == other.contig:
             return self.pos < other.pos
         return self.contig < other.contig
@@ -127,7 +129,7 @@ class Variant(object):
         if ref == alt:
             return "chr%s g.%d %s=%s" % (chrom, pos, ref, alt)
         elif len(ref) == 0 or alt.startswith(ref):
-            return "chr%s g.%d ins%s" % (chrom, pos + len(ref),  alt[len(ref):])
+            return "chr%s g.%d ins%s" % (chrom, pos + len(ref), alt[len(ref):])
         elif len(alt) == 0 or ref.startswith(alt):
             return "chr%s g.%d_%d del%s" % (
                 chrom, pos + len(alt), pos + len(ref), ref[len(alt):])
@@ -267,7 +269,6 @@ class Variant(object):
         # TODO: exonic splice site mutations
         return self._exonic_transcript_effect(transcript)
 
-
     def _intronic_transcript_effect(self, transcript, nearest_exon):
         """
         Infer effect of variant which does not overlap any exon of
@@ -320,7 +321,6 @@ class Variant(object):
                 nearest_exon=nearest_exon,
                 distance_to_exon=distance_to_exon)
 
-
     def _offset_on_transcript(self, transcript):
         """
         Given a Variant (with fields ref, alt, pos, and end), compute the offset
@@ -350,7 +350,7 @@ class Variant(object):
         n_same = len(prefix)
         start_offset_with_utr5 = interval_offset_on_transcript(
             self.pos, self.end, transcript)
-        offset =  start_offset_with_utr5 + n_same
+        offset = start_offset_with_utr5 + n_same
         return offset, ref, alt
 
     def _exonic_transcript_effect(self, transcript):
@@ -384,4 +384,3 @@ class Variant(object):
             cds_offset,
             variant=self,
             transcript=transcript)
-

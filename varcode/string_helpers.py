@@ -14,8 +14,6 @@
 
 from __future__ import print_function, division, absolute_import
 
-from Bio.Seq import reverse_complement
-
 def trim_shared_prefix(ref, alt):
     """
     Sometimes mutations are given with a shared prefix between the reference

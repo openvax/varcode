@@ -14,23 +14,25 @@
 
 from __future__ import print_function, division, absolute_import
 
+import numpy as np
+
 # include all pseudonucleotides encoding repeats and uncertain bases
 VALID_NUCLEOTIDES = {'A', 'C', 'T', 'G'}
 
 EXTENDED_NUCLEOTIDES = {
     'A', 'C', 'T', 'G',
-    'Y', # Pyrimidine (C or T)
-    'R', # Purine (A or G)
-    'W', # weak (A or T)
-    'S', # strong (G or C)
-    'K', # keto (T or G)
-    'M', # amino (C or A)
-    'D', # A, G, T (not C)
-    'V', # A, C, G (not T)
-    'H', # A, C, T (not G)
-    'B', # C, G, T (not A)
-    'X', # any base
-    'N', # any base
+    'Y',  # Pyrimidine (C or T)
+    'R',  # Purine (A or G)
+    'W',  # weak (A or T)
+    'S',  # strong (G or C)
+    'K',  # keto (T or G)
+    'M',  # amino (C or A)
+    'D',  # A, G, T (not C)
+    'V',  # A, C, G (not T)
+    'H',  # A, C, T (not G)
+    'B',  # C, G, T (not A)
+    'X',  # any base
+    'N',  # any base
 }
 
 def normalize_nucleotide_string(nucleotides, allow_extended_nucleotides=False):

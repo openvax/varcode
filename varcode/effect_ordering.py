@@ -13,7 +13,7 @@ transcript_effect_priority_list = [
     Insertion,
     Deletion,
     ComplexSubstitution,
-     # intronic variants near the splice boundaries but which aren't
+    # intronic variants near the splice boundaries but which aren't
     # the two nucleotides closest to the exon
     IntronicSpliceSite,
     # exonic variants near a splice boundary
@@ -36,7 +36,7 @@ transcript_effect_priority_list = [
 ]
 
 transcript_effect_priority_dict = {
-    transcript_effect_class : priority
+    transcript_effect_class: priority
     for (priority, transcript_effect_class)
     in enumerate(transcript_effect_priority_list)
 }
@@ -81,9 +81,11 @@ def top_priority_transcript_effect(effects):
             for effect in best_effects
             if effect.transcript.complete
         ]
-        key_fn = lambda effect: len(effect.transcript.coding_sequence)
+        def key_fn(effect):
+            return len(effect.transcript.coding_sequence)
     else:
         # if effects are over incomplete transcripts, sort them by the
         # their total transcript length
-        key_fn = lambda effect: len(effect.transcript)
+        def key_fn(effect):
+            return len(effect.transcript)
     return max(best_effects, key=key_fn)

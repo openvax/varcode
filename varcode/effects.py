@@ -18,7 +18,7 @@ class TranscriptMutationEffect(object):
             self.variant.short_description(),
             self.transcript.name)
 
-    def short_description():
+    def short_description(self):
         raise ValueError(
             "Method short_description() not implemented for %s" % self)
 
@@ -295,7 +295,6 @@ class Deletion(BaseSubstitution):
             aa_pos=aa_pos,
             aa_ref=aa_ref,
             aa_alt="")
-
 
 
 class PrematureStop(BaseSubstitution):

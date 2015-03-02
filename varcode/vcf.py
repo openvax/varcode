@@ -25,7 +25,7 @@ from .variant_collection import VariantCollection
 from . import type_checks
 from pyensembl import EnsemblRelease
 
-import vcf # PyVCF
+import vcf  # PyVCF
 
 def load_vcf(
         filename,
@@ -53,7 +53,7 @@ def load_vcf(
         from the reference path.
     """
 
-    type_checks.require_string(filename, "filename")    
+    type_checks.require_string(filename, "filename")
 
     vcf_reader = vcf.Reader(filename=filename)
 
@@ -64,7 +64,7 @@ def load_vcf(
                 reference_name)
 
     ensembl = EnsemblRelease(release=ensembl_release)
-    
+
     # We ignore "no-call" variants, i.e. those where X.ALT = [None].
     variants = [
         Variant(

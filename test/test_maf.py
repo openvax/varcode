@@ -1,6 +1,6 @@
 from nose.tools import eq_
 from pyensembl import EnsemblRelease
-from varcode import load_maf, VariantCollection, Variant
+from varcode import load_maf, Variant
 
 def test_maf():
     ensembl = EnsemblRelease(75)
@@ -9,7 +9,7 @@ def test_maf():
         Variant(1, 1650797, "A", "G", ensembl),
         Variant(1, 23836447, "C", "A", ensembl),
         Variant(1, 231401797, "A", "C", ensembl),
-        Variant(11,124617502, "C", "G", ensembl),
+        Variant(11, 124617502, "C", "G", ensembl),
     ]
     eq_(len(variant_collection_from_maf), len(expected_variants))
     for v_expect, v_maf in zip(expected_variants, variant_collection_from_maf):

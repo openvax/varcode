@@ -14,12 +14,13 @@
 
 from __future__ import print_function, division, absolute_import
 from collections import Counter
+
 from memoized_property import memoized_property
+from typechecks import require_iterable_of
 
 from .effects import Substitution
 from .effect_ordering import effect_priority, transcript_effect_priority_dict
 from .variant import Variant
-from . import type_checks
 
 class VariantCollection(object):
 
@@ -38,7 +39,7 @@ class VariantCollection(object):
             File from which we loaded variants, though the current
             VariantCollection may only contain a subset of them.
         """
-        type_checks.require_iterable_of(variants, Variant, "variants")
+        require_iterable_of(variants, Variant, "variants")
         self.variants = set(variants)
         self.original_filename = original_filename
 
@@ -67,7 +68,7 @@ class VariantCollection(object):
 
         s = "VariantCollection(%s)" % (
             ", ".join(
-                "%s=%s" % (k,v) for (k,v) in fields))
+                "%s=%s" % (k, v) for (k, v) in fields))
         for variant in self.variants:
             s += "\n\t%s" % variant
         return s
@@ -81,12 +82,6 @@ class VariantCollection(object):
 
     def __repr__(self):
         return str(self)
-
-    def reference_names(self):
-        """
-        All unique reference names associated with variants in this collection.
-        """
-        return {variant.reference_name for variant in self.variants}
 
     def _clone_metadata(self, new_variants):
         """
@@ -183,7 +178,7 @@ class VariantCollection(object):
         All distinct reference names used by Variants in this
         collection.
         """
-        return { variant.reference_name for variant in self.variants }
+        return {variant.reference_name for variant in self.variants}
 
     @memoized_property
     def gene_counts(self, only_coding=False):

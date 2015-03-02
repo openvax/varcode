@@ -16,7 +16,6 @@ from __future__ import print_function, division, absolute_import
 
 from .effect_ordering import top_priority_transcript_effect
 
-from pyensembl.biotypes import is_coding_biotype
 
 class VariantEffectCollection(object):
     """
@@ -69,9 +68,9 @@ class VariantEffectCollection(object):
             ("effects", self.effects())
         ]
         if self.errors:
-            fields.append( ("errors", self.errors) )
+            fields.append(("errors", self.errors))
         return "VariantEffectCollection(%s)" % (
-            ", ".join(["%s=%s" % (k,v) for (k,v) in fields]))
+            ", ".join(["%s=%s" % (k, v) for (k, v) in fields]))
 
     def __repr__(self):
         return str(self)
