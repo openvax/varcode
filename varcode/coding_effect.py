@@ -1,4 +1,4 @@
-# Copyright (c) 2014. Mount Sinai School of Medicine
+# Copyright (c) 2015. Mount Sinai School of Medicine
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -25,7 +25,8 @@ from .effects import (
     PrematureStop,
     StartLoss,
     FrameShift,
-    FrameShiftTruncation
+    FrameShiftTruncation,
+    IncompleteTranscript,
 )
 from .string_helpers import trim_shared_flanking_strings
 
@@ -51,12 +52,12 @@ def mutate(sequence, position, variant_ref, variant_alt):
         Alternate sequence to insert
     """
     n_variant_ref = len(variant_ref)
-    sequence_ref = sequence[position:position+n_variant_ref]
+    sequence_ref = sequence[position:position + n_variant_ref]
     assert str(sequence_ref) == str(variant_ref), \
         "Reference %s at position %d != expected reference %s" % \
         (sequence_ref, position, variant_ref)
     prefix = sequence[:position]
-    suffix = sequence[position+n_variant_ref:]
+    suffix = sequence[position + n_variant_ref:]
     return prefix + variant_alt + suffix
 
 def infer_coding_effect(
@@ -86,7 +87,7 @@ def infer_coding_effect(
     cds_seq = str(transcript.coding_sequence)
 
     # past this point we know that we're somewhere in the coding sequence
-    cds_ref = cds_seq[cds_offset:cds_offset+len(ref)]
+    cds_ref = cds_seq[cds_offset:cds_offset + len(ref)]
 
     # Make sure that the reference sequence agrees with what we expected
     # from the VCF
@@ -136,7 +137,8 @@ def infer_coding_effect(
         "Protein sequence empty for variant %s on transcript %s" % (
             variant, transcript)
 
-    aa_pos = int(cds_offset / 3) # genomic position to codon position
+    # genomic position to codon position
+    aa_pos = int(cds_offset / 3)
 
     if variant_protein[0] != "M":
         assert aa_pos == 0, \
@@ -171,7 +173,7 @@ def infer_coding_effect(
         aa_ref = ""
     else:
         last_aa_ref_pos = int((cds_offset + n_cdna_ref - 1) / 3)
-        aa_ref = original_protein[aa_pos:last_aa_ref_pos+1]
+        aa_ref = original_protein[aa_pos:last_aa_ref_pos + 1]
         assert len(aa_ref) > 0, \
             "len(aa_ref) = 0 for variant %s on transcript %s (aa_pos=%d:%d)" % (
                 variant, transcript, aa_pos, last_aa_ref_pos)
@@ -190,7 +192,7 @@ def infer_coding_effect(
         # frameshift may still preserve some of the same codons
         # so trim any shared amino acids
         for i, aa_mutant in enumerate(shifted_sequence):
-            if original_protein[aa_pos+i] != aa_mutant:
+            if original_protein[aa_pos + i] != aa_mutant:
                 break
             aa_pos += 1
         shifted_sequence = shifted_sequence[i:]
@@ -214,7 +216,7 @@ def infer_coding_effect(
         aa_alt = ""
     else:
         last_aa_alt_pos = int((cds_offset + n_cdna_alt - 1) / 3)
-        aa_alt = variant_protein[aa_pos:last_aa_alt_pos+1]
+        aa_alt = variant_protein[aa_pos:last_aa_alt_pos + 1]
         assert len(aa_alt) > 0, \
             "len(aa_alt) = 0 for variant %s on transcript %s (aa_pos=%d:%d)" % (
                 variant, transcript, aa_pos, last_aa_ref_pos)
@@ -222,7 +224,6 @@ def infer_coding_effect(
     assert aa_alt != aa_ref, \
         "Unexpected silent mutation for variant %s on transcript %s (aa=%s)" % (
             variant, transcript, aa_ref)
-
 
     # in case of simple insertion like FY>FYGL or deletions FYGL > FY,
     # get rid of the shared prefixes/suffixes

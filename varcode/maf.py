@@ -1,4 +1,4 @@
-# Copyright (c) 2014. Mount Sinai School of Medicine
+# Copyright (c) 2015. Mount Sinai School of Medicine
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,9 +13,7 @@
 # limitations under the License.
 
 from __future__ import print_function, division, absolute_import
-import logging
 
-from .nucleotides import normalize_nucleotide_string
 from .reference_name import (
     infer_reference_name,
     ensembl_release_number_for_reference_name
@@ -126,20 +124,20 @@ def load_maf(filename):
         if end_pos != start_pos + len(ref) - 1:
             raise ValueError(
                 "Expected variant %s:%s %s>%s to end at %d but got end=%d" % (
-                contig, start_pos, ref, alt,
-                start_pos + len(ref) - 1, end_pos))
+                    contig, start_pos, ref, alt,
+                    start_pos + len(ref) - 1, end_pos))
 
         # keep metadata about the variant and its TCGA annotation
         info = {
-            'Hugo_Symbol' : x.Hugo_Symbol,
-            'Center' : x.Center,
-            'Strand' : x.Strand,
-            'Variant_Classification' : x.Variant_Classification,
-            'Variant_Type' : x.Variant_Type,
-            'dbSNP_RS' : x.dbSNP_RS,
-            'dbSNP_Val_Status' : x.dbSNP_Val_Status,
-            'Tumor_Sample_Barcode' : x.Tumor_Sample_Barcode,
-            'Matched_Norm_Sample_Barcode' : x.Matched_Norm_Sample_Barcode,
+            'Hugo_Symbol': x.Hugo_Symbol,
+            'Center': x.Center,
+            'Strand': x.Strand,
+            'Variant_Classification': x.Variant_Classification,
+            'Variant_Type': x.Variant_Type,
+            'dbSNP_RS': x.dbSNP_RS,
+            'dbSNP_Val_Status': x.dbSNP_Val_Status,
+            'Tumor_Sample_Barcode': x.Tumor_Sample_Barcode,
+            'Matched_Norm_Sample_Barcode': x.Matched_Norm_Sample_Barcode,
         }
 
         variant = Variant(

@@ -1,4 +1,4 @@
-# Copyright (c) 2014. Mount Sinai School of Medicine
+# Copyright (c) 2015. Mount Sinai School of Medicine
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ from varcode import Substitution, Variant
 ensembl = EnsemblRelease(75)
 
 def validate_transcript_mutation(
-	ensembl_transcript,
+        ensembl_transcript,
         chrom, dna_position,
         dna_ref, dna_alt,
         aa_pos, aa_alt):
@@ -52,7 +52,7 @@ def test_dbnsfp_validation_set():
     validation_set = pd.read_csv('data/dbnsfp_validation_set.csv')
     for _, row in validation_set.iterrows():
         args = (
-	    row['ensembl_transcript'],
+            row['ensembl_transcript'],
             row['chrom'],
             row['dna_position'],
             row['dna_ref'],

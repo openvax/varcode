@@ -1,4 +1,4 @@
-# Copyright (c) 2014. Mount Sinai School of Medicine
+# Copyright (c) 2015. Mount Sinai School of Medicine
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,8 +13,6 @@
 # limitations under the License.
 
 from __future__ import print_function, division, absolute_import
-
-from Bio.Seq import reverse_complement
 
 def trim_shared_prefix(ref, alt):
     """
