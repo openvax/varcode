@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from varcode import load_vcf
+from nose.tools import eq_
+from varcode import load_vcf, Variant
 
 VCF_FILENAME = "data/somatic_hg19_14muts.vcf"
 
@@ -37,3 +38,14 @@ def test_vcf_gene_names():
     variants = load_vcf(VCF_FILENAME)
     for variant in variants:
         yield (_check_variant_gene_name, variant)
+
+def test_multiple_alleles_per_line():
+    variants = load_vcf("data/multiallelic.vcf")
+    assert len(variants) == 2, "Expected 2 variants but got %s" % variants
+    variant_list = list(variants)
+    ensembl = variant_list[0].ensembl
+    expected_variants = [
+        Variant(1, 1431105, "A", "C", ensembl=ensembl),
+        Variant(1, 1431105, "A", "G", ensembl=ensembl),
+    ]
+    eq_(variant_list, expected_variants)

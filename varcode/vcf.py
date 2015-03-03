@@ -65,19 +65,21 @@ def load_vcf(
 
     ensembl = EnsemblRelease(release=ensembl_release)
 
-    # We ignore "no-call" variants, i.e. those where X.ALT = [None].
-    variants = [
-        Variant(
-            contig=x.CHROM,
-            pos=x.POS,
-            ref=x.REF,
-            alt=x.ALT[0].sequence,
-            info=x.INFO,
-            ensembl=ensembl)
-        for x in vcf_reader
-        if x.ALT[0] and (not only_passing or not x.FILTER or x.FILTER == "PASS")
-    ]
-
+    variants = []
+    for record in vcf_reader:
+        if not only_passing or not record.FILTER or record.FILTER == "PASS":
+            for alt in record.ALT:
+                # We ignore "no-call" variants, i.e. those where X.ALT = [None]
+                if not alt:
+                    continue
+                variant = Variant(
+                    contig=record.CHROM,
+                    pos=record.POS,
+                    ref=record.REF,
+                    alt=alt.sequence,
+                    info=record.INFO,
+                    ensembl=ensembl)
+                variants.append(variant)
     return VariantCollection(
         variants=variants,
         original_filename=filename)
