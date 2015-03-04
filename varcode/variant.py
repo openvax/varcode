@@ -15,6 +15,7 @@
 from __future__ import print_function, division, absolute_import
 import logging
 
+from Bio.Seq import reverse_complement
 from pyensembl import Transcript, find_nearest_locus, EnsemblRelease
 from pyensembl.locus import normalize_chromosome
 from pyensembl.biotypes import is_coding_biotype
@@ -23,7 +24,7 @@ from typechecks import require_instance
 from .coding_effect import infer_coding_effect
 from .common import group_by
 from .nucleotides import normalize_nucleotide_string
-from .string_helpers import reverse_complement, trim_shared_flanking_strings
+from .string_helpers import trim_shared_flanking_strings
 from .transcript_helpers import interval_offset_on_transcript
 from .effects import (
     NoncodingTranscript,
