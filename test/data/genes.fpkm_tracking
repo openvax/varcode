@@ -1,0 +1,13 @@
+tracking_id class_code  nearest_ref_id  gene_id gene_short_name tss_id  locus   length  coverage    FPKM    FPKM_conf_lo    FPKM_conf_hi    FPKM_status
+ENSG00000240361 -   -   ENSG00000240361 OR4G11P -   chr1:62947-63887    -   -   0   0   0   OK
+ENSG00000268020 -   -   ENSG00000268020 AL627309.1  -   chr1:53048-54936    -   -   0   0   0   OK
+ENSG00000186092 -   -   ENSG00000186092 OR4F5   -   chr1:69090-70008    -   -   0   0   0   OK
+CUFF.1  -   -   CUFF.1  FAM138A -   chr1:34553-36081    -   -   0.0222016   0   0.0614304   OK
+CUFF.2  -   -   CUFF.2  DDX11L1 -   chr1:11868-14412    -   -   0   0   0.0497629   OK
+CUFF.3  -   -   CUFF.3  MIR1302-10  -   chr1:29553-31109    -   -   0   0   0.154007    OK
+CUFF.4  -   -   CUFF.4  WASH7P  -   chr1:14362-29806    -   -   10.3844 9.63011 11.2268 OK
+ENSG00000269308 -   -   ENSG00000269308 AL645608.2  -   chr1:818042-819983  -   -   0   0   0   OK
+CUFF.5  -   -   CUFF.5  -   -   chr1:841474-842801  -   -   0.172295    0.113069    0.231522    OK
+CUFF.6  -   -   CUFF.6  -   -   chr1:1-20  -   -   0.172295    0.113069    0.231522    FAIL
+CUFF.7  -   -   CUFF.7  -   -   chr2:1-20  -   -   0.172295    0.113069    0.231522    LOWDATA
+CUFF.8  -   -   CUFF.8  -   -   chr3:1-20  -   -   0.172295    0.113069    0.231522    HIDATA
