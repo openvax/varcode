@@ -12,41 +12,56 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import print_function
 import os
 
-import pypandoc
 from setuptools import setup
 
-if __name__ == '__main__':
-    readme_filename = os.path.join(os.path.dirname(__file__), 'README.md')
-    with open(readme_filename, 'r') as f:
-        readme = f.read()
-    readme = pypandoc.convert(readme, to='rst', format='md')
+readme_filename = "README.md"
+current_directory = os.path.dirname(__file__)
+readme_path = os.path.join(current_directory, readme_filename)
 
+readme = ""
+try:
+    with open(readme_path, 'r') as f:
+        readme = f.read()
+except Exception as e:
+    print(e)
+    print("Failed to open %s" % readme_path)
+
+try:
+    import pypandoc
+    readme = pypandoc.convert(readme, to='rst', format='md')
+except Exception as e:
+    print(e)
+    print("Failed to convert %s from Markdown to reStructuredText" % readme_filename)
+
+
+if __name__ == '__main__':
     setup(
         name='varcode',
         packages=['varcode'],
-        version="0.0.1",
+        version="0.0.2",
         description="Variant annotation in Python",
         long_description=readme,
         url="https://github.com/hammerlab/varcode",
-	author="Alex Rubinsteyn",
+        author="Alex Rubinsteyn",
         license="http://www.apache.org/licenses/LICENSE-2.0.html",
         classifiers=[
             'Development Status :: 3 - Alpha',
             'Environment :: Console',
             'Operating System :: OS Independent',
             'Intended Audience :: Science/Research',
-	    'License :: OSI Approved :: Apache Software License',
+            'License :: OSI Approved :: Apache Software License',
             'Programming Language :: Python',
             'Topic :: Scientific/Engineering :: Bio-Informatics',
         ],
         install_requires=[
             'numpy>=1.7',
             'pandas>=0.13.1',
-            'pyensembl>=0.5.4',
+            'pyensembl>=0.5.11',
             'biopython',
-	        'pyvcf',
+            'pyvcf',
             'memoized_property'
         ],
     )
