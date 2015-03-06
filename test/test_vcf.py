@@ -21,7 +21,7 @@ VCF_FILENAME = data_path("somatic_hg19_14muts.vcf")
 def test_vcf_reference_name():
     variants = load_vcf(VCF_FILENAME)
     # after normalization, hg19 should be remapped to GRCh37
-    assert variants.reference_names == {"GRCh37"}
+    assert variants.reference_names() == {"GRCh37"}
 
 def test_vcf_number_entries():
     # there are 14 mutations listed in the VCF, make sure they are all parsed

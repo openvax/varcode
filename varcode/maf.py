@@ -14,6 +14,7 @@
 
 from __future__ import print_function, division, absolute_import
 
+from .nucleotides import normalize_nucleotide_string
 from .reference_name import (
     infer_reference_name,
     ensembl_release_number_for_reference_name
@@ -59,21 +60,33 @@ def load_maf_dataframe(filename, nrows=None, verbose=False):
             "Expected filename to be str, got %s : %s" % (
                 filename, type(filename)))
 
-    # skip comments and optional header
-    with open(filename) as f:
-        lines_to_skip = 0
-        for line in f:
-            if line.startswith("#") or line.startswith("Hugo_Symbol"):
-                lines_to_skip += 1
-            else:
-                break
-    return pandas.read_csv(
+    n_basic_columns = len(MAF_COLUMN_NAMES)
+
+    df = pandas.read_csv(
         filename,
-        skiprows=lines_to_skip,
-        sep="\s+",
-        usecols=range(len(MAF_COLUMN_NAMES)),
-        low_memory=False,
-        names=MAF_COLUMN_NAMES)
+        comment="#",
+        sep="\t",
+        low_memory=False)
+
+    if len(df.columns) < n_basic_columns:
+        raise ValueError("Too few columns in MAF file %s" % filename)
+
+    # check each pair of expected/actual column names to make sure they match
+    for expected, actual in zip(MAF_COLUMN_NAMES, df.columns):
+        print(expected, actual)
+        if expected != actual:
+            # MAFs in the wild have capitalization differences in their
+            # column names, normalize them to always use the names above
+            if expected.lower() == actual.lower():
+                # using DataFrame.rename in Python 2.7.x doesn't seem to
+                # work for some files, possibly because Pandas treats
+                # unicode vs. str columns as different?
+                df[expected] = df[actual]
+                del df[actual]
+            else:
+                raise ValueError("Expected column %s but got %s" % (
+                    expected, actual))
+    return df
 
 def load_maf(filename):
     """
@@ -87,6 +100,7 @@ def load_maf(filename):
     ensembl_objects = {}
     variants = []
     for _, x in maf_df.iterrows():
+        print(x)
         contig = x.Chromosome
         start_pos = x.Start_Position
         end_pos = x.End_Position
@@ -121,11 +135,29 @@ def load_maf(filename):
                         ref, x,))
             alt = x.Tumor_Seq_Allele2
 
-        if end_pos != start_pos + len(ref) - 1:
+        # nucleotide sequences get normalized in the Variant constructor
+        # but also doing it here so we can check the lengths correctly
+        ref = normalize_nucleotide_string(ref)
+        alt = normalize_nucleotide_string(alt)
+        if len(ref) == 0:
+            # Since insertions happen *between* reference coordinates
+            # it's not clear what their start/end should be. So,
+            # by convention, MAF files make the start the reference position
+            # before the inserted nucleotides and the end position comes after
+            # the inserted nucleotides
+            end_offset = 1
+        else:
+            end_offset = len(ref) - 1
+        expected_end_pos = start_pos + end_offset
+        if end_pos != expected_end_pos:
             raise ValueError(
-                "Expected variant %s:%s %s>%s to end at %d but got end=%d" % (
-                    contig, start_pos, ref, alt,
-                    start_pos + len(ref) - 1, end_pos))
+                "Expected variant %s:%s '%s' > '%s' to end at %d but got %d" % (
+                    contig,
+                    start_pos,
+                    ref,
+                    alt,
+                    expected_end_pos,
+                    end_pos))
 
         # keep metadata about the variant and its TCGA annotation
         info = {

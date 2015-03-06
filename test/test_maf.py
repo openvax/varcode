@@ -33,3 +33,27 @@ def test_maf():
         gene_name = v_maf.info['Hugo_Symbol']
         assert any(gene.name == gene_name for gene in v_maf.genes()), \
             "Expected gene name %s but got %s" % (gene_name, v_maf.genes())
+
+def test_maf_aa_changes():
+    """test_maf_aa_changes : Parse a MAF file and make sure we're
+    annotating the protein amino acid changes in the same way.
+
+    The data file used also contains spaces, which is good to test the parser
+    on.
+    """
+    variants = load_maf("data/ov.wustle.subset.maf")
+    assert len(variants) == 8
+
+    expected_changes = [
+        "p.E773K",
+        "p.A378V",
+        "p.F275",
+        "p.G1194",
+        "p.L448R",
+        "p.E132Q",
+        "p.S1674T",
+        "p.E290V",
+    ]
+    for variant in variants:
+        effects = variant.effects()
+        print effects
