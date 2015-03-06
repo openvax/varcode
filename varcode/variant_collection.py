@@ -15,7 +15,6 @@
 from __future__ import print_function, division, absolute_import
 from collections import Counter
 
-from memoized_property import memoized_property
 from typechecks import require_iterable_of
 
 from .effects import Substitution
@@ -42,6 +41,7 @@ class VariantCollection(object):
         require_iterable_of(variants, Variant, "variants")
         self.variants = set(variants)
         self.original_filename = original_filename
+        self._cached_values = {}
 
     def __len__(self):
         return len(self.variants)
@@ -117,31 +117,35 @@ class VariantCollection(object):
             errors result in raised exceptions. If raise_on_error=False then
             exceptions are logged in VariantEffectCollection.errors.
         """
-        results = []
+        key = ("variant_effects", high_impact, only_coding_transcripts)
+        if key not in self._cached_values[key]:
 
-        if high_impact:
-            min_priority = transcript_effect_priority_dict[Substitution]
-        else:
-            min_priority = -1
+            results = []
 
-        for variant in self.variants:
-            variant_effect_collection = variant.effects(
-                only_coding_transcripts=only_coding_transcripts,
-                raise_on_error=raise_on_error)
+            if high_impact:
+                min_priority = transcript_effect_priority_dict[Substitution]
+            else:
+                min_priority = -1
 
-            if only_coding_transcripts and len(variant_effect_collection) == 0:
-                # if we only want coding transcripts, then skip all
-                # intergenic and non-coding gene variants
-                continue
+            for variant in self.variants:
+                variant_effect_collection = variant.effects(
+                    only_coding_transcripts=only_coding_transcripts,
+                    raise_on_error=raise_on_error)
 
-            best_effect = variant_effect_collection.highest_priority_effect
-            # either this variant is intergenic and there's no minimum
-            # threshold for effect priority or the highest impact effect
-            # is higher priority than the min_priority
-            if ((best_effect is None and min_priority < 0) or
-                    (effect_priority(best_effect) >= min_priority)):
-                results.append(variant_effect_collection)
-        return results
+                if only_coding_transcripts and len(variant_effect_collection) == 0:
+                    # if we only want coding transcripts, then skip all
+                    # intergenic and non-coding gene variants
+                    continue
+
+                best_effect = variant_effect_collection.highest_priority_effect
+                # either this variant is intergenic and there's no minimum
+                # threshold for effect priority or the highest impact effect
+                # is higher priority than the min_priority
+                if ((best_effect is None and min_priority < 0) or
+                        (effect_priority(best_effect) >= min_priority)):
+                    results.append(variant_effect_collection)
+            self._cached_values[key] = results
+        return self._cached_values[key]
 
     def effect_summary(self, *args, **kwargs):
         """
@@ -172,21 +176,28 @@ class VariantCollection(object):
                 lines.append("  Highest Priority Effect: %s" % best)
         return "\n".join(lines)
 
-    @memoized_property
     def reference_names(self):
         """
         All distinct reference names used by Variants in this
         collection.
         """
-        return {variant.reference_name for variant in self.variants}
+        if "reference_names" not in self._cached_values:
+            self._cached_values["reference_names"] = {
+                variant.reference_name
+                for variant in self.variants
+            }
+        return self._cached_values["reference_names"]
 
-    @memoized_property
     def gene_counts(self, only_coding=False):
         """
         Count how many variants overlap each gene name.
         """
-        counter = Counter()
-        for variant in self.variants:
-            for gene_name in variant.gene_names():
-                counter[gene_name] += 1
-        return counter
+        key = 'gene_counts_' + ("coding" if only_coding else "all")
+
+        if key not in self._cached_values:
+            counter = Counter()
+            for variant in self.variants:
+                for gene_name in variant.gene_names():
+                    counter[gene_name] += 1
+            self._cached_values[key] = counter
+        return self._cached_values[key]
