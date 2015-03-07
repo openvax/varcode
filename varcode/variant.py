@@ -22,11 +22,9 @@ from pyensembl.biotypes import is_coding_biotype
 from typechecks import require_instance
 
 from .coding_effect import infer_coding_effect
-from .common import group_by, memoize
-from .nucleotides import normalize_nucleotide_string
-from .string_helpers import trim_shared_flanking_strings
-from .transcript_helpers import interval_offset_on_transcript
+from .common import groupby_field, memoize
 from .effects import (
+    TranscriptMutationEffect,
     Intergenic,
     Intragenic,
     NoncodingTranscript,
@@ -38,6 +36,10 @@ from .effects import (
     SpliceAcceptor,
     SpliceDonor,
 )
+from .effect_ordering import top_priority_transcript_effect
+from .nucleotides import normalize_nucleotide_string
+from .string_helpers import trim_shared_flanking_strings
+from .transcript_helpers import interval_offset_on_transcript
 
 
 class Variant(object):
@@ -111,7 +113,6 @@ class Variant(object):
             return self.pos < other.pos
         return self.contig < other.contig
 
-    @memoize
     def fields(self):
         """
         All identifying fields of a variant (contig, pos, ref, alt, genome)
@@ -197,13 +198,13 @@ class Variant(object):
         ]
 
     @memoize
-    def effects(self, raise_on_effect_error=True):
+    def effects(self, raise_on_error=True):
         """Determine the effects of a variant on any transcripts it overlaps.
         Returns a VariantEffectCollection object.
 
         Parameters
         ----------
-        raise_on_effect_error : bool
+        raise_on_error : bool
             Raise an exception if we encounter an error while trying to
             determine the effect of this variant on a transcript, or simply
             log the error and continue.
@@ -219,43 +220,63 @@ class Variant(object):
 
         overlapping_transcripts = self.transcripts()
         # group transcripts by their gene ID
-        gene_effect_groups = group_by(
-            overlapping_transcripts, field_name='gene_id')
+        transcripts_grouped_by_gene = groupby_field(
+            overlapping_transcripts, 'gene_id')
 
         # list of all MutationEffects for all genes & transcripts
         effects = []
 
         # want effects in the list grouped by the gene they come from
         for gene_id in sorted(gene_ids):
-            # if gene ID also has transcripts overlapped by this variant
-            if gene_id in gene_effect_groups:
-                for transcripts in gene_effect_groups.values():
-                    for transcript in transcripts:
-                        try:
-                            effects.append(self.transcript_effect(transcript))
-                        except (AssertionError, ValueError) as error:
-                            if raise_on_effect_error:
-                                raise
-                            else:
-                                logging.warn(
-                                    "Encountered error annotating %s for %s: %s",
-                                    self,
-                                    transcript,
-                                    error)
-            else:
+            if gene_id not in transcripts_grouped_by_gene:
                 # intragenic variant overlaps a gene but not any transcripts
-                effects.append(Intragenic(self, gene_id))
+                gene = self.ensembl.gene_by_id(gene_id)
+                effects.append(Intragenic(self, gene))
+            else:
+                # gene ID  has transcripts overlapped by this variant
+                for transcript in transcripts_grouped_by_gene[gene_id]:
+                    try:
+                        effect = self.effect_on_transcript(transcript)
+                        effects.append(effect)
+                    except (AssertionError, ValueError) as error:
+                        if raise_on_error:
+                            raise
+                        else:
+                            logging.warn(
+                                "Encountered error annotating %s for %s: %s",
+                                self,
+                                transcript,
+                                error)
         return effects
 
     @memoize
-    def transcript_effect(self, transcript):
+    def transcript_effect_dict(self, *args, **kwargs):
+        """Dictionary mapping transcript IDs to their associated
+        TranscriptMutationEffect objects.
+
+        Arguments are passed on to Variant.effects(*args, **kwargs).
         """
-        Return the transcript effect (such as FrameShift) that results from
+        return {
+            effect.transcript.id: effect.transcript
+            for effect in self.effects(*args, **kwargs)
+            if isinstance(effect, TranscriptMutationEffect)
+        }
+
+    @memoize
+    def summary_effect(self, *args, **kwargs):
+        """Highest priority MutationEffect of all genes/transcripts overlapped
+        by this variant. If this variant doesn't overlap anything, then this
+        this method will return an Intergenic effect.
+        """
+        return top_priority_transcript_effect(self.effects(*args, **kwargs))
+
+    @memoize
+    def effect_on_transcript(self, transcript):
+        """Return the transcript effect (such as FrameShift) that results from
         applying this genomic variant to a particular transcript.
 
         Parameters
         ----------
-
         transcript :  Transcript
             Transcript we're going to apply mutation to.
         """
