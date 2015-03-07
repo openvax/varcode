@@ -14,12 +14,12 @@
 
 from __future__ import print_function, division, absolute_import
 
+from .effects import Intergenic, Intragenic, TranscriptMutationEffect
 from .effect_ordering import top_priority_transcript_effect
 
 
-class VariantEffectCollection(object):
-    """
-    Collection of all the TranscriptEffect objects associated with
+class VariantEffects(object):
+    """Collection of all the MutationEffect objects associated with
     each transcript overlapping a given variant, as well as some properties
     that attempt to summarize the impact of the mutation across all
     genes/transcripts.
@@ -43,21 +43,27 @@ class VariantEffectCollection(object):
         self.gene_effect_groups = gene_effect_groups
 
         # dictionary mapping from transcript IDs to transcript mutation effects
+        # may only contain a subset of all effects due to those falling outside
+        # of known transcripts
         self.transcript_effect_dict = {}
         for (_, effect_list) in self.gene_effect_groups.items():
             for effect in effect_list:
-                self.transcript_effect_dict[effect.transcript.id] = effect
+                if isinstance(effect, TranscriptMutationEffect):
+                    self.transcript_effect_dict[effect.transcript.id] = effect
 
         # if our variant overlaps any genes, then choose the highest
         # priority transcript variant, otherwise call the variant "Intergenic"
         if len(self.transcript_effect_dict) > 0:
-            self.highest_priority_effect = top_priority_transcript_effect(
+            self.summary_effect = top_priority_transcript_effect(
                 self.transcript_effect_dict.values())
-            highest_priority_class = self.highest_priority_effect.__class__
-            self.variant_summary = highest_priority_class.__name__
+        # intragenic variant overlaps a gene but not any transcripts
+        elif len(variant.gene_names()) > 0:
+            self.summary_effect = Intragenic(variant)
         else:
-            self.highest_priority_effect = None
-            self.variant_summary = "Intergenic"
+            # variant does not fall within any known genes
+            # TODO: annotate Upstream and Downstream variant
+            # effects, since those might have functional significance
+            self.summary_effect = Intergenic(variant)
 
         self.errors = errors
 
@@ -69,7 +75,7 @@ class VariantEffectCollection(object):
         ]
         if self.errors:
             fields.append(("errors", self.errors))
-        return "VariantEffectCollection(%s)" % (
+        return "VariantEffects(%s)" % (
             ", ".join(["%s=%s" % (k, v) for (k, v) in fields]))
 
     def __repr__(self):
@@ -81,40 +87,3 @@ class VariantEffectCollection(object):
         it contains.
         """
         return len(self.transcript_effect_dict)
-
-    def effects(self):
-        """
-        Returns all TranscriptMutationEffect objects contained in this
-        collection.
-        """
-        return self.transcript_effect_dict.values()
-
-    def transcripts(self):
-        """
-        Returns list of Transcript objects for all transcripts which are
-        annotated with effects in this collection.
-        """
-        return [effect.transcript for effect in self.effects()]
-
-    def genes(self):
-        """
-        Construct Gene objects for all the genes which contain the
-        transcripts in this effect collection.
-        """
-        return [
-            self.variant.ensembl.gene_by_id(gene_id)
-            for gene_id
-            in self.gene_effect_groups
-        ]
-
-    def gene_names(self):
-        """
-        Fetch names of all the genes which contain the
-        transcripts in this effect collection. This is significantly
-        cheaper than constructing a Gene object and fetching its name.
-        """
-        return [
-            self.variant.ensembl.gene_name_of_gene_id(gene_id)
-            for gene_id
-            in self.gene_effect_groups
-        ]

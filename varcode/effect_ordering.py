@@ -15,6 +15,8 @@
 from .effects import *
 
 transcript_effect_priority_list = [
+    Intergenic,
+    Intragenic,
     IncompleteTranscript,
     NoncodingTranscript,
     Intronic,
