@@ -257,7 +257,7 @@ class Variant(object):
         Arguments are passed on to Variant.effects(*args, **kwargs).
         """
         return {
-            effect.transcript.id: effect.transcript
+            effect.transcript.id: effect
             for effect in self.effects(*args, **kwargs)
             if isinstance(effect, TranscriptMutationEffect)
         }
