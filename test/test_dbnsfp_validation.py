@@ -14,22 +14,30 @@
 
 import pandas as pd
 from pyensembl import EnsemblRelease
-from varcode import Substitution, Variant
+from varcode import Substitution, Variant, TranscriptMutationEffect
+
 from . import data_path
 
 ensembl = EnsemblRelease(75)
 
 def validate_transcript_mutation(
-        ensembl_transcript,
-        chrom, dna_position,
-        dna_ref, dna_alt,
-        aa_pos, aa_alt):
+        ensembl_transcript_id,
+        chrom,
+        dna_position,
+        dna_ref,
+        dna_alt,
+        aa_pos,
+        aa_alt):
     variant = Variant(chrom, dna_position, dna_ref, dna_alt, ensembl)
-    result = variant.effects()
-
-    assert ensembl_transcript in result.transcript_effect_dict, \
-        "%s not found in %s" % (ensembl_transcript, result)
-    effect = result.transcript_effect_dict[ensembl_transcript]
+    effects = variant.effects()
+    transcript_id_dict = {
+        effect.transcript.id: effect
+        for effect in effects
+        if isinstance(effect, TranscriptMutationEffect)
+    }
+    assert ensembl_transcript_id in transcript_id_dict, \
+        "%s not found in %s" % (ensembl_transcript_id, transcript_id_dict)
+    effect = transcript_id_dict[ensembl_transcript_id]
     assert (
         isinstance(effect, Substitution) and
         effect.aa_pos + 1 == aa_pos and

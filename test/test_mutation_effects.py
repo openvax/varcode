@@ -39,7 +39,7 @@ ensembl78 = EnsemblRelease(78)
 
 def expect_effect(variant, transcript_id, effect_class):
     transcript = variant.ensembl.transcript_by_id(transcript_id)
-    effect = variant.transcript_effect(transcript)
+    effect = variant.effect_on_transcript(transcript)
     assert isinstance(effect, effect_class), \
         "Expected %s on %s to be %s, got %s" % (
             variant, transcript, effect_class.__name__, effect)

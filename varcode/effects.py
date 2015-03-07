@@ -34,6 +34,12 @@ class MutationEffect(object):
         raise ValueError(
             "Method short_description() not implemented for %s" % self)
 
+    def gene_name(self):
+        return None
+
+    def gene_id(self):
+        return None
+
     @property
     def original_nucleotide_sequence(self):
         """This property is for the nucleotide sequence of a transcript,
@@ -68,7 +74,16 @@ class Intragenic(MutationEffect):
     apparently does happen sometimes, maybe some genes have two distinct sets
     of exons which are never simultaneously expressed?
     """
-    pass
+
+    def __init__(self, variant, gene):
+        MutationEffect.__init__(self, variant)
+        self.gene = gene
+
+    def gene_name(self):
+        return self.gene.name
+
+    def gene_id(self):
+        return self.gene.id
 
 class TranscriptMutationEffect(MutationEffect):
     def __init__(self, variant, transcript):
@@ -81,10 +96,12 @@ class TranscriptMutationEffect(MutationEffect):
             self.variant.short_description(),
             self.transcript.name)
 
+    @property
     def original_nucleotide_sequence(self):
         """cDNA sequence of the transcript before the variant occurs"""
         return self.transcript.sequence
 
+    @property
     def original_nucleotide_coding_sequence(self):
         """cDNA sequence of the coding region of the transcript before the
         variant occurs
@@ -94,6 +111,7 @@ class TranscriptMutationEffect(MutationEffect):
         else:
             return None
 
+    @memoized_property
     def original_protein_sequence(self):
         """Amino acid sequence of a coding transcript before the variant occurs
         """
@@ -105,6 +123,12 @@ class TranscriptMutationEffect(MutationEffect):
                 cds=True)
         else:
             return None
+
+    def gene_name(self):
+        return self.transcript.gene_name
+
+    def gene_id(self):
+        return self.transcript.gene_id
 
 
 class NoncodingTranscript(TranscriptMutationEffect):
