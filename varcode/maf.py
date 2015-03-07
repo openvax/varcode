@@ -73,7 +73,6 @@ def load_maf_dataframe(filename, nrows=None, verbose=False):
 
     # check each pair of expected/actual column names to make sure they match
     for expected, actual in zip(MAF_COLUMN_NAMES, df.columns):
-        print(expected, actual)
         if expected != actual:
             # MAFs in the wild have capitalization differences in their
             # column names, normalize them to always use the names above
@@ -100,7 +99,6 @@ def load_maf(filename):
     ensembl_objects = {}
     variants = []
     for _, x in maf_df.iterrows():
-        print(x)
         contig = x.Chromosome
         start_pos = x.Start_Position
         end_pos = x.End_Position

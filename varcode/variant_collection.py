@@ -118,7 +118,7 @@ class VariantCollection(object):
             exceptions are logged in VariantEffectCollection.errors.
         """
         key = ("variant_effects", high_impact, only_coding_transcripts)
-        if key not in self._cached_values[key]:
+        if key not in self._cached_values:
 
             results = []
 

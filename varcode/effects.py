@@ -17,14 +17,63 @@ from __future__ import print_function, division, absolute_import
 import Bio.Seq
 from memoized_property import memoized_property
 
-class TranscriptMutationEffect(object):
+class MutationEffect(object):
+    """Base class for mutation effects which don't overlap a transcript"""
 
-    def __init__(self, variant, transcript):
+    def __init__(self, variant):
         self.variant = variant
-        self.transcript = transcript
+
+    def __str__(self):
+        raise ValueError(
+            "No __str__ method implemented for base class MutationEffect")
 
     def __repr__(self):
         return str(self)
+
+    def short_description(self):
+        raise ValueError(
+            "Method short_description() not implemented for %s" % self)
+
+    @property
+    def original_nucleotide_sequence(self):
+        """This property is for the nucleotide sequence of a transcript,
+        which we can't have in the absence of a transcript
+        """
+        return None
+
+    @property
+    def original_protein_sequence(self):
+        return None
+
+    @property
+    def mutant_protein_sequence(self):
+        return None
+
+    @property
+    def modifies_coding_sequence(self):
+        """It's convenient to have a property which tells us:
+            1) is this a variant effect overlapping a transcript?
+            2) does that transcript have a coding sequence?
+            3) does the variant affect the coding sequence?
+        """
+        return False
+
+class Intergenic(MutationEffect):
+    """Variant has unknown effect if it occurs between genes"""
+    pass
+
+class Intragenic(MutationEffect):
+    """Variant within boundaries of a gene but does not overlap
+    introns or exons of any transcript. This seems very peculiar but
+    apparently does happen sometimes, maybe some genes have two distinct sets
+    of exons which are never simultaneously expressed?
+    """
+    pass
+
+class TranscriptMutationEffect(MutationEffect):
+    def __init__(self, variant, transcript):
+        MutationEffect.__init__(self, variant)
+        self.transcript = transcript
 
     def __str__(self):
         return "%s(variant=%s, transcript=%s)" % (
@@ -32,28 +81,31 @@ class TranscriptMutationEffect(object):
             self.variant.short_description(),
             self.transcript.name)
 
-    def short_description(self):
-        raise ValueError(
-            "Method short_description() not implemented for %s" % self)
-
-    is_coding = False
-
-    @memoized_property
     def original_nucleotide_sequence(self):
-        return self.transcript.coding_sequence
+        """cDNA sequence of the transcript before the variant occurs"""
+        return self.transcript.sequence
 
-    @memoized_property
+    def original_nucleotide_coding_sequence(self):
+        """cDNA sequence of the coding region of the transcript before the
+        variant occurs
+        """
+        if self.is_coding:
+            return self.transcript.coding_sequence
+        else:
+            return None
+
     def original_protein_sequence(self):
-        return Bio.Seq.translate(
-            str(self.original_nucleotide_sequence),
-            to_stop=True,
-            cds=True)
+        """Amino acid sequence of a coding transcript before the variant occurs
+        """
+        coding_sequence = self.original_nucleotide_coding_sequence
+        if coding_sequence:
+            return Bio.Seq.translate(
+                str(coding_sequence),
+                to_stop=True,
+                cds=True)
+        else:
+            return None
 
-    @memoized_property
-    def mutant_protein_sequence(self):
-        raise ValueError(
-            "mutant_protein_sequence not implemented for %s" % (
-                self.__class__.__name__,))
 
 class NoncodingTranscript(TranscriptMutationEffect):
     """
