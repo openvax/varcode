@@ -13,9 +13,11 @@
 # limitations under the License.
 from __future__ import absolute_import
 
+import pandas as pd
 from nose.tools import eq_
 from pyensembl import EnsemblRelease
 from varcode import load_maf, Variant
+
 from . import data_path
 
 def test_maf():
@@ -34,27 +36,40 @@ def test_maf():
         assert any(gene.name == gene_name for gene in v_maf.genes()), \
             "Expected gene name %s but got %s" % (gene_name, v_maf.genes())
 
+def check_same_aa_change(variant, expected_aa_change):
+    effect = variant.summary_effect()
+    change = effect.short_description()
+    eq_(
+        change,
+        expected_aa_change,
+        "MAF file had annotation %s but Varcode gave %s" % (
+            expected_aa_change, change))
+
 def test_maf_aa_changes():
-    """test_maf_aa_changes : Parse a MAF file and make sure we're
-    annotating the protein amino acid changes in the same way.
+    # Parse a MAF file and make sure we're annotating the protein amino acid
+    # changes in the same way.
+    #
+    # The data file used also contains spaces, which is good to test the parser
+    # on.
+    variants = load_maf(data_path("ov.wustle.subset5.maf"))
+    assert len(variants) == 5
 
-    The data file used also contains spaces, which is good to test the parser
-    on.
-    """
-    variants = load_maf("data/ov.wustle.subset.maf")
-    assert len(variants) == 8
+    expected_changes = {}
+    maf_fields = pd.read_csv(
+        "data/ov.wustle.subset5.maf",
+        sep="\t",
+        comment="#")
+    for _, row in maf_fields.iterrows():
+        key = (str(row.Chromosome), row.Start_position)
+        change = row.amino_acid_change
+        # silent mutations just specificy which amino acid they affect via
+        # e.g. "p.G384"
+        if change[-1].isdigit():
+            expected_changes[key] = "silent"
+        else:
+            expected_changes[key] = change
 
-    expected_changes = [
-        "p.E773K",
-        "p.A378V",
-        "p.F275",
-        "p.G1194",
-        "p.L448R",
-        "p.E132Q",
-        "p.S1674T",
-        "p.E290V",
-    ]
-    for (variant, expected_change) in zip(variants, expected_changes):
-        effect = variant.summary_effect()
-        print variant, effect, variant.effects()
-        eq_(effect.short_description(), expected_change)
+    for variant in variants:
+        key = (variant.contig, variant.pos)
+        expected = expected_changes[key]
+        yield (check_same_aa_change, variant, expected)
