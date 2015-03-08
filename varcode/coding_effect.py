@@ -24,6 +24,7 @@ from .effects import (
     ComplexSubstitution,
     PrematureStop,
     StartLoss,
+    StopLoss,
     FrameShift,
     FrameShiftTruncation,
     IncompleteTranscript,
@@ -74,10 +75,13 @@ def infer_coding_effect(
     Parameters
     ----------
     ref : str
+        Reference nucleotides we expect to find in the transcript's CDS
 
     alt : str
+        Alternate nucleotides we're replacing the reference with
 
     cds_offset : int
+        Offset into the coding sequence of the ref->alt substitution
 
     transcript : Transcript
 
@@ -159,11 +163,11 @@ def infer_coding_effect(
             aa_pos=aa_pos,
             aa_ref=variant_protein[aa_pos])
 
-    stop_codon_index = variant_protein.find("*")
+    variant_stop_codon_index = variant_protein.find("*")
 
     # if contained stop codon, truncate sequence before it
-    if stop_codon_index > -1:
-        variant_protein = variant_protein[:stop_codon_index]
+    if variant_stop_codon_index > -1:
+        variant_protein = variant_protein[:variant_stop_codon_index]
 
     n_cdna_ref = len(ref)
     n_cdna_alt = len(alt)
@@ -171,6 +175,21 @@ def infer_coding_effect(
     if n_cdna_ref == 0:
         last_aa_ref_pos = aa_pos
         aa_ref = ""
+    # if mutation begins at the stop codon of this protein and isn't silent
+    elif aa_pos == len(original_protein):
+        # TODO: use the full transcript.sequence instead of just
+        # transcript.coding_sequence to get more than just one amino acid
+        # of the new protein sequence
+        assert len(variant_protein) > len(original_protein), \
+            ("Expect non-silent stop-loss variant to cause longer variant "
+             "protein but got len(original) = %d, len(variant) = %d" % (
+                len(original_protein), len(variant_protein)))
+        aa_alt = variant_protein[aa_pos:]
+        return StopLoss(
+            variant,
+            transcript,
+            aa_pos=aa_pos,
+            aa_alt=aa_alt)
     else:
         last_aa_ref_pos = int((cds_offset + n_cdna_ref - 1) / 3)
         aa_ref = original_protein[aa_pos:last_aa_ref_pos + 1]
@@ -179,14 +198,14 @@ def infer_coding_effect(
                 variant, transcript, aa_pos, last_aa_ref_pos)
 
     # is this a premature stop codon?
-    if stop_codon_index == aa_pos:
+    if variant_stop_codon_index == aa_pos:
         return PrematureStop(
             variant,
             transcript,
             cds_offset,
             aa_ref)
-
-    if abs(n_cdna_ref - n_cdna_alt) % 3 != 0:
+    # does the mutation shift the open reading frame?
+    elif abs(n_cdna_ref - n_cdna_alt) % 3 != 0:
         shifted_sequence = variant_protein[aa_pos:]
 
         # frameshift may still preserve some of the same codons
@@ -196,7 +215,8 @@ def infer_coding_effect(
                 break
             aa_pos += 1
         shifted_sequence = shifted_sequence[i:]
-
+        # if a frameshift doesn't create any new amino acids, then
+        # it must immediately have hit a stop codon
         if len(shifted_sequence) == 0:
             return FrameShiftTruncation(
                 variant=variant,
@@ -210,10 +230,15 @@ def infer_coding_effect(
                 aa_pos=aa_pos,
                 aa_ref=aa_ref,
                 shifted_sequence=shifted_sequence)
-
-    if n_cdna_alt == 0:
+    # the position of deleted amino acids on the variant protein
+    # will be from aa_pos:aa_pos, where aa_pos is the last position before
+    # the deleted residues
+    elif n_cdna_alt == 0:
         last_aa_alt_pos = aa_pos
         aa_alt = ""
+    # if not a frameshift, or deletion, or premature stop,
+    # then pull out the new or modified amino acids into `aa_alt`
+    # and determine the type of mutation later
     else:
         last_aa_alt_pos = int((cds_offset + n_cdna_alt - 1) / 3)
         aa_alt = variant_protein[aa_pos:last_aa_alt_pos + 1]
