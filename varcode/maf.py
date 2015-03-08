@@ -70,8 +70,8 @@ def load_maf_dataframe(filename, nrows=None, verbose=False):
 
     if len(df.columns) < n_basic_columns:
         raise ValueError(
-            "Too few columns in MAF file %s, expected %d but got only %d" % (
-                filename, n_basic_columns, len(df.columns)))
+            "Too few columns in MAF file %s, expected %d but got  %d : %s" % (
+                filename, n_basic_columns, len(df.columns), df.columns))
 
     # check each pair of expected/actual column names to make sure they match
     for expected, actual in zip(MAF_COLUMN_NAMES, df.columns):
