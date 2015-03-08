@@ -412,6 +412,24 @@ class PrematureStop(BaseSubstitution):
         return self.original_protein_sequence[:self.aa_pos]
 
 
+class StopLoss(BaseSubstitution):
+    def __init__(
+            self,
+            variant,
+            transcript,
+            aa_pos,
+            aa_alt):
+        BaseSubstitution.__init__(
+            self,
+            variant,
+            transcript,
+            aa_pos=aa_pos,
+            aa_ref="*",
+            aa_alt=aa_alt)
+
+    def short_description(self):
+        return "p.*%d%s (stop-loss)" % (self.aa_pos, self.aa_alt)
+
 class UnpredictableCodingMutation(BaseSubstitution):
     """
     Variants for which we can't confidently determine a protein sequence.
@@ -427,9 +445,6 @@ class UnpredictableCodingMutation(BaseSubstitution):
     def mutant_protein_sequence(self):
         raise ValueError("Can't determine the protein sequence of %s" % self)
 
-class StopLoss(UnpredictableCodingMutation):
-    def short_description(self):
-        return "*%d%s (stop-loss)" % (self.aa_pos, self.aa_alt)
 
 class StartLoss(UnpredictableCodingMutation):
     def __init__(
