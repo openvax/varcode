@@ -54,6 +54,7 @@ def test_maf_aa_changes():
         "p.S1674T",
         "p.E290V",
     ]
-    for variant in variants:
-        effects = variant.effects()
-        print effects
+    for (variant, expected_change) in zip(variants, expected_changes):
+        effect = variant.summary_effect()
+        print variant, effect, variant.effects()
+        eq_(effect.short_description(), expected_change)
