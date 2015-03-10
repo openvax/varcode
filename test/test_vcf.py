@@ -14,8 +14,9 @@
 
 from nose.tools import eq_
 from varcode import load_vcf, Variant
+from . import data_path
 
-VCF_FILENAME = "data/somatic_hg19_14muts.vcf"
+VCF_FILENAME = data_path("somatic_hg19_14muts.vcf")
 
 def test_vcf_reference_name():
     variants = load_vcf(VCF_FILENAME)
@@ -40,7 +41,7 @@ def test_vcf_gene_names():
         yield (_check_variant_gene_name, variant)
 
 def test_multiple_alleles_per_line():
-    variants = load_vcf("data/multiallelic.vcf")
+    variants = load_vcf(data_path("multiallelic.vcf"))
     assert len(variants) == 2, "Expected 2 variants but got %s" % variants
     variant_list = list(variants)
     ensembl = variant_list[0].ensembl
@@ -48,4 +49,4 @@ def test_multiple_alleles_per_line():
         Variant(1, 1431105, "A", "C", ensembl=ensembl),
         Variant(1, 1431105, "A", "G", ensembl=ensembl),
     ]
-    eq_(variant_list, expected_variants)
+    eq_(set(variant_list), set(expected_variants))
