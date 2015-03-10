@@ -15,6 +15,7 @@
 # required so that 'import vcf' gets the global PyVCF package,
 # rather than our local vcf module
 from __future__ import absolute_import
+import typechecks
 
 from .reference_name import (
     infer_reference_name,
@@ -22,7 +23,6 @@ from .reference_name import (
 )
 from .variant import Variant
 from .variant_collection import VariantCollection
-from . import type_checks
 from pyensembl import EnsemblRelease
 
 import vcf  # PyVCF
@@ -53,7 +53,7 @@ def load_vcf(
         from the reference path.
     """
 
-    type_checks.require_string(filename, "filename")
+    typechecks.require_string(filename, "filename")
 
     vcf_reader = vcf.Reader(filename=filename)
 

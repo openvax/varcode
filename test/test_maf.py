@@ -11,14 +11,16 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from __future__ import absolute_import
 
 from nose.tools import eq_
 from pyensembl import EnsemblRelease
 from varcode import load_maf, Variant
+from . import data_path
 
 def test_maf():
     ensembl = EnsemblRelease(75)
-    variant_collection_from_maf = load_maf("data/tcga_ov.head.maf")
+    variant_collection_from_maf = load_maf(data_path("tcga_ov.head.maf"))
     expected_variants = [
         Variant(1, 1650797, "A", "G", ensembl),
         Variant(1, 23836447, "C", "A", ensembl),
