@@ -24,9 +24,11 @@ from .effects import (
     ComplexSubstitution,
     PrematureStop,
     StartLoss,
+    StopLoss,
     FrameShift,
     FrameShiftTruncation,
     IncompleteTranscript,
+    ThreePrimeUTR,
 )
 from .string_helpers import trim_shared_flanking_strings
 
@@ -74,10 +76,13 @@ def infer_coding_effect(
     Parameters
     ----------
     ref : str
+        Reference nucleotides we expect to find in the transcript's CDS
 
     alt : str
+        Alternate nucleotides we're replacing the reference with
 
     cds_offset : int
+        Offset into the coding sequence of the ref->alt substitution
 
     transcript : Transcript
 
@@ -86,26 +91,40 @@ def infer_coding_effect(
     # Don't need a pyfaidx.Sequence object here, just convert it to the an str
     cds_seq = str(transcript.coding_sequence)
 
+    assert cds_offset < len(cds_seq), \
+        "Expected CDS offset (%d) < |CDS| (%d) for %s on %s" % (
+            cds_offset, len(cds_seq), variant, transcript)
+
     # past this point we know that we're somewhere in the coding sequence
     cds_ref = cds_seq[cds_offset:cds_offset + len(ref)]
-
     # Make sure that the reference sequence agrees with what we expected
     # from the VCF
     # TODO: check that the ref allele is correct for UTR by looking
     # at transcript.sequence instead of transcript.coding_sequence
     assert cds_ref == ref, \
-        "Expected ref '%s', got '%s' in %s (offset %d)" % (
-            ref,
-            cds_ref,
+        "%s: expected ref '%s' at offset %d of %s, CDS has '%s'" % (
             variant,
-            cds_offset)
+            ref,
+            cds_offset,
+            transcript,
+            cds_ref)
 
+    if len(cds_seq) < 3:
+        raise ValueError("Coding sequence for %s is too short: '%s'" % (
+            transcript, cds_seq))
+    elif cds_seq[:3] != "ATG":
+        # TODO: figure out when these should be made into methionines
+        # and when left as whatever amino acid they normally code for
+        logging.info("Non-standard start codon for %s: %s" % (
+            transcript, cds_seq[:3]))
     # turn cDNA sequence into a BioPython sequence, translate
-    # to amino acids. For the original CDS make sure that it starts with
-    # a start codon and ends with a stop codon. Don't include the stop codon
+    # to amino acids. Don't include the stop codon
     # in the translated sequence.
     try:
-        original_protein = str(Seq(cds_seq).translate(cds=True, to_stop=True))
+        # passing cds=False so that BioPython doesn't turn alternative
+        # Leucine start codons into Methionines
+        # See: DOI: 10.1371/journal.pbio.0020397
+        original_protein = str(Seq(cds_seq).translate(to_stop=True, cds=False))
     except CodonTable.TranslationError as error:
         # coding sequence may contain premature stop codon or may have
         # an incorrectly annotated frame
@@ -114,24 +133,23 @@ def infer_coding_effect(
         logging.warning(error)
         return IncompleteTranscript(variant, transcript)
 
-    assert len(original_protein) > 0, \
-        "Translated protein sequence of %s is empty" % (transcript,)
-    assert original_protein[0] == "M", \
-        "Expected coding sequence of %s to start with M, instead got '%s'" % (
-            transcript, original_protein[0])
+    if len(original_protein) == 0:
+        raise ValueError(
+            "Translated protein sequence of %s is empty" % (transcript,))
 
     variant_cds_seq = mutate(cds_seq, cds_offset, ref, alt)
 
     # In case sequence isn't a multiple of 3, then truncate it
     # TODO: if we get a frameshift by the end of a CDS (e.g. in the stop codon)
     # then we should use some of the 3' UTR to finish translation.
-    truncated_variant_cds_seq = variant_cds_seq[:int(len(variant_cds_seq) / 3) * 3]
+    truncated_variant_cds_len = int(len(variant_cds_seq) / 3) * 3
+    truncated_variant_cds_seq = variant_cds_seq[:truncated_variant_cds_len]
 
     # Can't be sure that the variant is a complete CDS, so passing cds=False
     # in the case of a frameshift, the transcript might not actually contain
     # a stop codon. So, we're for it manually (by passing to_stop=False).
     variant_protein = str(Seq(truncated_variant_cds_seq).translate(
-        cds=False, to_stop=False))
+        to_stop=False, cds=False))
 
     assert len(variant_protein) > 0, \
         "Protein sequence empty for variant %s on transcript %s" % (
@@ -140,30 +158,74 @@ def infer_coding_effect(
     # genomic position to codon position
     aa_pos = int(cds_offset / 3)
 
-    if variant_protein[0] != "M":
+    # if mutation begins at the stop codon of this protein and isn't silent
+    if aa_pos == len(original_protein):
+        # TODO: use the full transcript.sequence instead of just
+        # transcript.coding_sequence to get more than just one amino acid
+        # of the new protein sequence
+        assert len(variant_protein) > len(original_protein), \
+            ("Expect non-silent stop-loss variant to cause longer variant "
+             "protein but got len(original) = %d, len(variant) = %d" % (
+                len(original_protein), len(variant_protein)))
+        aa_alt = variant_protein[aa_pos:]
+        return StopLoss(
+            variant,
+            transcript,
+            aa_pos=aa_pos,
+            aa_alt=aa_alt)
+
+    if aa_pos >= len(original_protein):
+        # we hit an early stop codon which, in some individuals,
+        # is mutated into an amino acid codon
+        if transcript.biotype == "polymorphic_pseudogene":
+            return ThreePrimeUTR(variant, transcript)
+        # Selenocysteine hijack the TGA stop codon
+        # See: http://en.wikipedia.org/wiki/Selenocysteine
+        elif cds_seq[:len(original_protein) * 3 + 3].endswith("TGA"):
+            logging.info(
+                "Possible selenocysteine codon (TGA) at position %d of %s" % (
+                    aa_pos * 3,
+                    transcript))
+            return ThreePrimeUTR(variant, transcript)
+        else:
+            raise ValueError(
+                ("Expected aa_pos (%d) < |protein| (%d)"
+                 " for %s on %s (CDS offset = %d/%d)" % (
+                    aa_pos,
+                    len(original_protein),
+                    variant,
+                    transcript,
+                    cds_offset,
+                    len(cds_seq))))
+
+    if variant_protein[0] != original_protein[0]:
         assert aa_pos == 0, \
-            "Unexpected change to start codon (M>%s) when aa_pos=%s" % (
-                variant_protein[0], aa_pos)
+            ("Unexpected start codon (%s>%s)"
+             " when aa_pos=%s for %s on %s" % (
+                original_protein[0],
+                variant_protein[0],
+                aa_pos, variant,
+                transcript))
         return StartLoss(
             variant,
             transcript,
             aa_pos=aa_pos,
             aa_alt=variant_protein[0])
 
+    variant_stop_codon_index = variant_protein.find("*")
+
+    # if contained stop codon, truncate sequence before it
+    if variant_stop_codon_index > -1:
+        variant_protein = variant_protein[:variant_stop_codon_index]
+
     # variant_protein sequence includes stop codon, whereas original_protein
     # doesn't
-    if variant_protein[-1] == "*" and original_protein == variant_protein[:-1]:
+    if original_protein == variant_protein:
         return Silent(
             variant,
             transcript,
             aa_pos=aa_pos,
             aa_ref=variant_protein[aa_pos])
-
-    stop_codon_index = variant_protein.find("*")
-
-    # if contained stop codon, truncate sequence before it
-    if stop_codon_index > -1:
-        variant_protein = variant_protein[:stop_codon_index]
 
     n_cdna_ref = len(ref)
     n_cdna_alt = len(alt)
@@ -179,14 +241,14 @@ def infer_coding_effect(
                 variant, transcript, aa_pos, last_aa_ref_pos)
 
     # is this a premature stop codon?
-    if stop_codon_index == aa_pos:
+    if variant_stop_codon_index == aa_pos:
         return PrematureStop(
             variant,
             transcript,
             cds_offset,
             aa_ref)
-
-    if abs(n_cdna_ref - n_cdna_alt) % 3 != 0:
+    # does the mutation shift the open reading frame?
+    elif abs(n_cdna_ref - n_cdna_alt) % 3 != 0:
         shifted_sequence = variant_protein[aa_pos:]
 
         # frameshift may still preserve some of the same codons
@@ -196,7 +258,8 @@ def infer_coding_effect(
                 break
             aa_pos += 1
         shifted_sequence = shifted_sequence[i:]
-
+        # if a frameshift doesn't create any new amino acids, then
+        # it must immediately have hit a stop codon
         if len(shifted_sequence) == 0:
             return FrameShiftTruncation(
                 variant=variant,
@@ -210,10 +273,15 @@ def infer_coding_effect(
                 aa_pos=aa_pos,
                 aa_ref=aa_ref,
                 shifted_sequence=shifted_sequence)
-
-    if n_cdna_alt == 0:
+    # the position of deleted amino acids on the variant protein
+    # will be from aa_pos:aa_pos, where aa_pos is the last position before
+    # the deleted residues
+    elif n_cdna_alt == 0:
         last_aa_alt_pos = aa_pos
         aa_alt = ""
+    # if not a frameshift, or deletion, or premature stop,
+    # then pull out the new or modified amino acids into `aa_alt`
+    # and determine the type of mutation later
     else:
         last_aa_alt_pos = int((cds_offset + n_cdna_alt - 1) / 3)
         aa_alt = variant_protein[aa_pos:last_aa_alt_pos + 1]
@@ -221,9 +289,11 @@ def infer_coding_effect(
             "len(aa_alt) = 0 for variant %s on transcript %s (aa_pos=%d:%d)" % (
                 variant, transcript, aa_pos, last_aa_ref_pos)
 
-    assert aa_alt != aa_ref, \
-        "Unexpected silent mutation for variant %s on transcript %s (aa=%s)" % (
-            variant, transcript, aa_ref)
+    if aa_alt == aa_ref:
+        raise ValueError(
+            ("Unexpected silent mutation for variant %s "
+             " on transcript %s (aa=%s)" % (
+                 variant, transcript, aa_ref)))
 
     # in case of simple insertion like FY>FYGL or deletions FYGL > FY,
     # get rid of the shared prefixes/suffixes

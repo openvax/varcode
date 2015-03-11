@@ -16,11 +16,12 @@ from __future__ import print_function, division, absolute_import
 
 from collections import defaultdict
 
-def group_by(records, field_name):
+def groupby_field(records, field_name):
     """
     Given a list of objects, group them into a dictionary by
     the unique values of a given field name.
     """
+
     # create an empty list for every new key
     groups = defaultdict(list)
     for record in records:
@@ -28,3 +29,19 @@ def group_by(records, field_name):
         if value is not None:
             groups[value].append(record)
     return dict(groups)
+
+
+def memoize(fn):
+    """Simple memoization decorator for functions and methods,
+    assumes that all arguments to the function can be hashed and
+    compared.
+    """
+    memoized_values = {}
+
+    def wrapped_fn(*args, **kwargs):
+        key = (args, tuple(sorted(kwargs.items())))
+        if key not in memoized_values:
+            memoized_values[key] = fn(*args, **kwargs)
+        return memoized_values[key]
+
+    return wrapped_fn

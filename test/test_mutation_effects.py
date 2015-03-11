@@ -17,8 +17,8 @@ from varcode import (
     #
     # transcript effects
     #
-    NoncodingTranscript,
     IncompleteTranscript,
+    NoncodingTranscript,
     FivePrimeUTR,
     ThreePrimeUTR,
     Intronic,
@@ -34,22 +34,25 @@ from varcode import (
 )
 from pyensembl import EnsemblRelease
 
-ensembl = EnsemblRelease(release=78)
+ensembl75 = EnsemblRelease(75)
+ensembl78 = EnsemblRelease(78)
+
+def expect_effect(variant, transcript_id, effect_class):
+    transcript = variant.ensembl.transcript_by_id(transcript_id)
+    effect = variant.effect_on_transcript(transcript)
+    assert isinstance(effect, effect_class), \
+        "Expected %s on %s to be %s, got %s" % (
+            variant, transcript, effect_class.__name__, effect)
 
 def test_incomplete():
-    # transcript EGFR-009 (ENST00000450046 in Ensembl 77)
+    # transcript EGFR-009 (ENST00000450046 in Ensembl 78)
     # has an incomplete 3' end
     # chrom. 7 starting at 55,109,723
     # first exon begins: ATCATTCCTTTGGGCCTAGGA
 
     # change the first nucleotide of the 5' UTR A>T
-    variant = Variant("7", 55109723, "A", "T", ensembl=ensembl)
-
-    transcript = ensembl.transcript_by_id("ENST00000450046")
-    effect = variant.transcript_effect(transcript)
-    assert isinstance(effect, IncompleteTranscript), \
-        "Expected %s on %s to be IncompleteTranscript, got %s" % (
-            variant, transcript, effect)
+    variant = Variant("7", 55109723, "A", "T", ensembl=ensembl78)
+    expect_effect(variant, "ENST00000450046", IncompleteTranscript)
 
 def test_start_loss():
     # transcript EGFR-005 (ENST00000420316 in Ensembl 77)
@@ -59,9 +62,22 @@ def test_start_loss():
     # which is 55,019,034 + 244 of chr7 = 55019278
     # change the first nucleotide of the 5' UTR A>T
     # making what used to be a start codon into TTG (Leucine)
-    variant = Variant("7", 55019278, "A", "T", ensembl=ensembl)
-    transcript = ensembl.transcript_by_id("ENST00000420316")
-    effect = variant.transcript_effect(transcript)
-    assert isinstance(effect, StartLoss), \
-        "Expected StartLoss, got %s for %s on %s" % (
-            effect, variant, transcript, )
+    variant = Variant("7", 55019278, "A", "T", ensembl=ensembl78)
+    expect_effect(variant, "ENST00000420316", StartLoss)
+
+
+def test_stop_loss():
+    # transcript MAST2-001 (ENST00000361297 in Ensembl 75)
+    # location: chrom 1 @ 46,501,738 forward strand
+
+    # change G>C in stop codon, should result in stop-loss mutation
+    # causing an elongated protein
+    variant = Variant("1", 46501738, "G", "C", ensembl=ensembl75)
+    expect_effect(variant, "ENST00000361297", StopLoss)
+
+"""
+def test_non_overlapping_transcript():
+    # the stop-loss mutation in MAST2-001 (1:46501738 G>C) does not
+    # overlap EGFR (which is on chr7). If we try to get a mutation
+    # effect of this variant on an EGFR transcript then we should get an error
+"""

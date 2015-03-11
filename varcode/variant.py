@@ -22,11 +22,11 @@ from pyensembl.biotypes import is_coding_biotype
 from typechecks import require_instance
 
 from .coding_effect import infer_coding_effect
-from .common import group_by
-from .nucleotides import normalize_nucleotide_string
-from .string_helpers import trim_shared_flanking_strings
-from .transcript_helpers import interval_offset_on_transcript
+from .common import groupby_field, memoize
 from .effects import (
+    TranscriptMutationEffect,
+    Intergenic,
+    Intragenic,
     NoncodingTranscript,
     IncompleteTranscript,
     FivePrimeUTR,
@@ -36,7 +36,10 @@ from .effects import (
     SpliceAcceptor,
     SpliceDonor,
 )
-from .variant_effect_collection import VariantEffectCollection
+from .effect_ordering import top_priority_transcript_effect
+from .nucleotides import normalize_nucleotide_string
+from .string_helpers import trim_shared_flanking_strings
+from .transcript_helpers import interval_offset_on_transcript
 
 
 class Variant(object):
@@ -84,6 +87,9 @@ class Variant(object):
 
         self.info = {} if info is None else info
 
+        # instead of making things
+        self._cached_values = {}
+
     @property
     def reference_name(self):
         return self.ensembl.reference.reference_name
@@ -125,6 +131,7 @@ class Variant(object):
             isinstance(other, Variant) and
             self.fields() == other.fields())
 
+    @memoize
     def short_description(self):
         chrom, pos, ref, alt = self.contig, self.pos, self.ref, self.alt
         if ref == alt:
@@ -137,10 +144,12 @@ class Variant(object):
         else:
             return "chr%s g.%d %s>%s" % (chrom, pos, ref, alt)
 
+    @memoize
     def transcripts(self):
         return self.ensembl.transcripts_at_locus(
             self.contig, self.pos, self.end)
 
+    @memoize
     def coding_transcripts(self):
         """
         Protein coding transcripts
@@ -150,6 +159,7 @@ class Variant(object):
             if is_coding_biotype(transcript.biotype)
         ]
 
+    @memoize
     def genes(self):
         """
         Return Gene object for all genes which overlap this variant.
@@ -157,6 +167,17 @@ class Variant(object):
         return self.ensembl.genes_at_locus(
             self.contig, self.pos, self.end)
 
+    @memoize
+    def gene_ids(self):
+        """
+        Return IDs of all genes which overlap this variant. Calling
+        this method is significantly cheaper than calling `Variant.genes()`,
+        which has to issue many more queries to construct each Gene object.
+        """
+        return self.ensembl.gene_ids_at_locus(
+            self.contig, self.pos, self.end)
+
+    @memoize
     def gene_names(self):
         """
         Return names of all genes which overlap this variant. Calling
@@ -166,6 +187,7 @@ class Variant(object):
         return self.ensembl.gene_names_at_locus(
             self.contig, self.pos, self.end)
 
+    @memoize
     def coding_genes(self):
         """
         Protein coding transcripts
@@ -175,71 +197,86 @@ class Variant(object):
             if is_coding_biotype(gene.biotype)
         ]
 
-    def effects(self, only_coding_transcripts=False, raise_on_error=True):
-        """
-        Determine the effects of a variant on any transcripts it overlaps.
+    @memoize
+    def effects(self, raise_on_error=True):
+        """Determine the effects of a variant on any transcripts it overlaps.
         Returns a VariantEffectCollection object.
+
+        Parameters
+        ----------
+        raise_on_error : bool
+            Raise an exception if we encounter an error while trying to
+            determine the effect of this variant on a transcript, or simply
+            log the error and continue.
         """
+        gene_ids = self.gene_ids()
+
+        # if this variant isn't overlapping any genes, return a
+        # Intergenic effect
+        # TODO: look for nearby genes and mark those as Upstream and Downstream
+        # effects
+        if len(gene_ids) == 0:
+            return [Intergenic(self)]
 
         overlapping_transcripts = self.transcripts()
-
-        if only_coding_transcripts:
-            # remove non-coding transcripts
-            overlapping_transcripts = [
-                transcript
-                for transcript
-                in overlapping_transcripts
-                if is_coding_biotype(transcript.biotype)
-            ]
-
-        if len(overlapping_transcripts) == 0:
-            # intergenic variant
-            return VariantEffectCollection(
-                variant=self,
-                gene_effect_groups={},
-                errors={})
-
         # group transcripts by their gene ID
-        overlapping_transcript_groups = group_by(
-            overlapping_transcripts, field_name='gene_id')
+        transcripts_grouped_by_gene = groupby_field(
+            overlapping_transcripts, 'gene_id')
 
-        # dictionary from gene ID to list of transcript effects
-        gene_transcript_effects_groups = {}
+        # list of all MutationEffects for all genes & transcripts
+        effects = []
 
-        # mapping from Transcript objects to errors encountered
-        # while trying to annotated them
-        errors = {}
+        # want effects in the list grouped by the gene they come from
+        for gene_id in sorted(gene_ids):
+            if gene_id not in transcripts_grouped_by_gene:
+                # intragenic variant overlaps a gene but not any transcripts
+                gene = self.ensembl.gene_by_id(gene_id)
+                effects.append(Intragenic(self, gene))
+            else:
+                # gene ID  has transcripts overlapped by this variant
+                for transcript in transcripts_grouped_by_gene[gene_id]:
+                    try:
+                        effect = self.effect_on_transcript(transcript)
+                        effects.append(effect)
+                    except (AssertionError, ValueError) as error:
+                        if raise_on_error:
+                            raise
+                        else:
+                            logging.warn(
+                                "Encountered error annotating %s for %s: %s",
+                                self,
+                                transcript,
+                                error)
+        return effects
 
-        for (gene_id, transcripts) in overlapping_transcript_groups.items():
-            effects = []
-            for transcript in transcripts:
-                try:
-                    effects.append(self.transcript_effect(transcript))
-                except (AssertionError, ValueError) as error:
-                    if raise_on_error:
-                        raise
-                    else:
-                        logging.warn(
-                            "Encountered error annotating %s for %s: %s",
-                            self,
-                            transcript,
-                            error)
-                    errors[transcript] = error
-            gene_transcript_effects_groups[gene_id] = effects
+    @memoize
+    def transcript_effect_dict(self, *args, **kwargs):
+        """Dictionary mapping transcript IDs to their associated
+        TranscriptMutationEffect objects.
 
-        return VariantEffectCollection(
-            variant=self,
-            gene_effect_groups=gene_transcript_effects_groups,
-            errors=errors)
-
-    def transcript_effect(self, transcript):
+        Arguments are passed on to Variant.effects(*args, **kwargs).
         """
-        Return the transcript effect (such as FrameShift) that results from
+        return {
+            effect.transcript.id: effect
+            for effect in self.effects(*args, **kwargs)
+            if isinstance(effect, TranscriptMutationEffect)
+        }
+
+    @memoize
+    def top_effect(self, *args, **kwargs):
+        """Highest priority MutationEffect of all genes/transcripts overlapped
+        by this variant. If this variant doesn't overlap anything, then this
+        this method will return an Intergenic effect.
+        """
+        return top_priority_transcript_effect(self.effects(*args, **kwargs))
+
+    @memoize
+    def effect_on_transcript(self, transcript):
+        """Return the transcript effect (such as FrameShift) that results from
         applying this genomic variant to a particular transcript.
 
         Parameters
         ----------
-
         transcript :  Transcript
             Transcript we're going to apply mutation to.
         """
@@ -311,8 +348,6 @@ class Variant(object):
             # but allow for more degeneracy than the -2, -1 nucleotides
             effect_class = IntronicSpliceSite
         else:
-            assert distance_to_exon > 6, \
-                "Looks like we didn't cover all possible splice site mutations"
             # intronic mutation unrelated to splicing
             effect_class = Intronic
 
