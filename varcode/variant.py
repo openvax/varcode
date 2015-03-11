@@ -263,7 +263,7 @@ class Variant(object):
         }
 
     @memoize
-    def summary_effect(self, *args, **kwargs):
+    def top_effect(self, *args, **kwargs):
         """Highest priority MutationEffect of all genes/transcripts overlapped
         by this variant. If this variant doesn't overlap anything, then this
         this method will return an Intergenic effect.

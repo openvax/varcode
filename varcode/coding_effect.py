@@ -113,6 +113,8 @@ def infer_coding_effect(
         raise ValueError("Coding sequence for %s is too short: '%s'" % (
             transcript, cds_seq))
     elif cds_seq[:3] != "ATG":
+        # TODO: figure out when these should be made into methionines
+        # and when left as whatever amino acid they normally code for
         logging.info("Non-standard start codon for %s: %s" % (
             transcript, cds_seq[:3]))
     # turn cDNA sequence into a BioPython sequence, translate

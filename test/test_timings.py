@@ -19,7 +19,7 @@ from varcode import VariantCollection
 from varcode.util import random_variants
 
 def test_effect_timing():
-    n_variants = 30000
+    n_variants = 100
     variants = random_variants(n_variants)
     variant_collection = VariantCollection(variants)
     start_t = time.time()
@@ -28,6 +28,8 @@ def test_effect_timing():
     end_t = time.time()
     elapsed_t = end_t - start_t
     print("Elapsed: %0.4f for %d variants" % (elapsed_t, n_variants))
+    assert elapsed_t / n_variants < 1.0, \
+        "Should be faster than 1 sec / variant!"
 
 if __name__ == "__main__":
     test_effect_timing()
