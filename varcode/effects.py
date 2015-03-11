@@ -462,7 +462,7 @@ class StartLoss(UnpredictableCodingMutation):
             aa_alt=aa_alt)
 
     def short_description(self):
-        return "p.? (start-loss)" % (self.aa_pos, self.aa_)
+        return "p.%d? (start-loss)" % (self.aa_pos,)
 
 class FrameShift(CodingMutation):
     def __init__(

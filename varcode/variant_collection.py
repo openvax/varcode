@@ -41,7 +41,7 @@ class VariantCollection(object):
             VariantCollection may only contain a subset of them.
         """
         require_iterable_of(variants, Variant, "variants")
-        self.variants = set(variants)
+        self.variants = list(sorted(set(variants)))
         self.original_filename = original_filename
         self._cached_values = {}
 
@@ -49,7 +49,7 @@ class VariantCollection(object):
         return len(self.variants)
 
     def __iter__(self):
-        return iter(sorted(self.variants))
+        return iter(self.variants)
 
     def __eq__(self, other):
         return (
@@ -114,7 +114,6 @@ class VariantCollection(object):
     @memoize
     def variant_effects(
             self,
-            only_coding_transcripts=False,
             raise_on_error=True):
         """
         Returns an OrderedDict mapping each variant to list of its
@@ -122,9 +121,6 @@ class VariantCollection(object):
 
         Parameters
         ----------
-        only_coding_transcripts : bool, optional
-            Only annotate variant effects on coding transcripts.
-
         raise_on_error : bool, optional
             If exception is raised while determining effect of variant on a
             transcript, should it be raised? This default is True, meaning
@@ -133,12 +129,7 @@ class VariantCollection(object):
         results = OrderedDict()
         for variant in self.variants:
             effects = variant.effects(
-                only_coding_transcripts=only_coding_transcripts,
                 raise_on_error=raise_on_error)
-            if only_coding_transcripts and len(effects) == 0:
-                # if we only want coding transcripts, then skip all
-                # intergenic and non-coding gene variants
-                continue
             results[variant] = effects
         return results
 
@@ -188,7 +179,7 @@ class VariantCollection(object):
         }
 
     @memoize
-    def gene_counts(self, only_coding=False):
+    def gene_counts(self):
         """
         Count how many variants overlap each gene name.
         """

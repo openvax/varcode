@@ -348,8 +348,6 @@ class Variant(object):
             # but allow for more degeneracy than the -2, -1 nucleotides
             effect_class = IntronicSpliceSite
         else:
-            assert distance_to_exon > 6, \
-                "Looks like we didn't cover all possible splice site mutations"
             # intronic mutation unrelated to splicing
             effect_class = Intronic
 
