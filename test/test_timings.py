@@ -19,7 +19,7 @@ from varcode import VariantCollection
 from varcode.util import random_variants
 
 def test_effect_timing():
-    n_variants = 1000
+    n_variants = 30000
     variants = random_variants(n_variants)
     variant_collection = VariantCollection(variants)
     start_t = time.time()

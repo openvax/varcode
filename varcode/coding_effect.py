@@ -28,6 +28,7 @@ from .effects import (
     FrameShift,
     FrameShiftTruncation,
     IncompleteTranscript,
+    ThreePrimeUTR,
 )
 from .string_helpers import trim_shared_flanking_strings
 
@@ -90,6 +91,10 @@ def infer_coding_effect(
     # Don't need a pyfaidx.Sequence object here, just convert it to the an str
     cds_seq = str(transcript.coding_sequence)
 
+    assert cds_offset < len(cds_seq), \
+        "Expected CDS offset (%d) < |CDS| (%d) for %s on %s" % (
+            cds_offset, len(cds_seq), variant, transcript)
+
     # past this point we know that we're somewhere in the coding sequence
     cds_ref = cds_seq[cds_offset:cds_offset + len(ref)]
     # Make sure that the reference sequence agrees with what we expected
@@ -151,6 +156,46 @@ def infer_coding_effect(
     # genomic position to codon position
     aa_pos = int(cds_offset / 3)
 
+    # if mutation begins at the stop codon of this protein and isn't silent
+    if aa_pos == len(original_protein):
+        # TODO: use the full transcript.sequence instead of just
+        # transcript.coding_sequence to get more than just one amino acid
+        # of the new protein sequence
+        assert len(variant_protein) > len(original_protein), \
+            ("Expect non-silent stop-loss variant to cause longer variant "
+             "protein but got len(original) = %d, len(variant) = %d" % (
+                len(original_protein), len(variant_protein)))
+        aa_alt = variant_protein[aa_pos:]
+        return StopLoss(
+            variant,
+            transcript,
+            aa_pos=aa_pos,
+            aa_alt=aa_alt)
+
+    if aa_pos >= len(original_protein):
+        # we hit an early stop codon which, in some individuals,
+        # is mutated into an amino acid codon
+        if transcript.biotype == "polymorphic_pseudogene":
+            return ThreePrimeUTR(variant, transcript)
+        # Selenocysteine hijack the TGA stop codon
+        # See: http://en.wikipedia.org/wiki/Selenocysteine
+        elif cds_seq[:len(original_protein) * 3 + 3].endswith("TGA"):
+            logging.info(
+                "Possible selenocysteine codon (TGA) at position %d of %s" % (
+                    aa_pos * 3,
+                    transcript))
+            return ThreePrimeUTR(variant, transcript)
+        else:
+            raise ValueError(
+                ("Expected aa_pos (%d) < |protein| (%d)"
+                 " for %s on %s (CDS offset = %d/%d)" % (
+                    aa_pos,
+                    len(original_protein),
+                    variant,
+                    transcript,
+                    cds_offset,
+                    len(cds_seq))))
+
     if variant_protein[0] != original_protein[0]:
         assert aa_pos == 0, \
             ("Unexpected start codon (%s>%s)"
@@ -165,20 +210,20 @@ def infer_coding_effect(
             aa_pos=aa_pos,
             aa_alt=variant_protein[0])
 
-    # variant_protein sequence includes stop codon, whereas original_protein
-    # doesn't
-    if variant_protein[-1] == "*" and original_protein == variant_protein[:-1]:
-        return Silent(
-            variant,
-            transcript,
-            aa_pos=aa_pos,
-            aa_ref=variant_protein[aa_pos])
-
     variant_stop_codon_index = variant_protein.find("*")
 
     # if contained stop codon, truncate sequence before it
     if variant_stop_codon_index > -1:
         variant_protein = variant_protein[:variant_stop_codon_index]
+
+    # variant_protein sequence includes stop codon, whereas original_protein
+    # doesn't
+    if original_protein == variant_protein:
+        return Silent(
+            variant,
+            transcript,
+            aa_pos=aa_pos,
+            aa_ref=variant_protein[aa_pos])
 
     n_cdna_ref = len(ref)
     n_cdna_alt = len(alt)
@@ -186,21 +231,6 @@ def infer_coding_effect(
     if n_cdna_ref == 0:
         last_aa_ref_pos = aa_pos
         aa_ref = ""
-    # if mutation begins at the stop codon of this protein and isn't silent
-    elif aa_pos == len(original_protein):
-        # TODO: use the full transcript.sequence instead of just
-        # transcript.coding_sequence to get more than just one amino acid
-        # of the new protein sequence
-        assert len(variant_protein) > len(original_protein), \
-            ("Expect non-silent stop-loss variant to cause longer variant "
-             "protein but got len(original) = %d, len(variant) = %d" % (
-                len(original_protein), len(variant_protein)))
-        aa_alt = variant_protein[aa_pos:]
-        return StopLoss(
-            variant,
-            transcript,
-            aa_pos=aa_pos,
-            aa_alt=aa_alt)
     else:
         last_aa_ref_pos = int((cds_offset + n_cdna_ref - 1) / 3)
         aa_ref = original_protein[aa_pos:last_aa_ref_pos + 1]
@@ -257,9 +287,11 @@ def infer_coding_effect(
             "len(aa_alt) = 0 for variant %s on transcript %s (aa_pos=%d:%d)" % (
                 variant, transcript, aa_pos, last_aa_ref_pos)
 
-    assert aa_alt != aa_ref, \
-        "Unexpected silent mutation for variant %s on transcript %s (aa=%s)" % (
-            variant, transcript, aa_ref)
+    if aa_alt == aa_ref:
+        raise ValueError(
+            ("Unexpected silent mutation for variant %s "
+             " on transcript %s (aa=%s)" % (
+                 variant, transcript, aa_ref)))
 
     # in case of simple insertion like FY>FYGL or deletions FYGL > FY,
     # get rid of the shared prefixes/suffixes
