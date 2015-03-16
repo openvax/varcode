@@ -13,7 +13,6 @@
 # limitations under the License.
 
 from __future__ import print_function, division, absolute_import
-
 import logging
 
 from .effects import (
@@ -30,37 +29,10 @@ from .effects import (
     IncompleteTranscript,
     ThreePrimeUTR,
 )
+from .mutate import mutate
 from .string_helpers import trim_shared_flanking_strings
 
 from Bio.Seq import Seq, CodonTable
-
-def mutate(sequence, position, variant_ref, variant_alt):
-    """
-    Mutate a sequence by substituting given `alt` at instead of `ref` at the
-    given `position`.
-
-    Parameters
-    ----------
-    sequence : sequence
-        String of amino acids or DNA bases
-
-    position : int
-        Position in the sequence, starts from 0
-
-    variant_ref : sequence or str
-        What do we expect to find at the position?
-
-    variant_alt : sequence or str
-        Alternate sequence to insert
-    """
-    n_variant_ref = len(variant_ref)
-    sequence_ref = sequence[position:position + n_variant_ref]
-    assert str(sequence_ref) == str(variant_ref), \
-        "Reference %s at position %d != expected reference %s" % \
-        (sequence_ref, position, variant_ref)
-    prefix = sequence[:position]
-    suffix = sequence[position + n_variant_ref:]
-    return prefix + variant_alt + suffix
 
 def infer_coding_effect(
         ref,
@@ -88,8 +60,16 @@ def infer_coding_effect(
 
     variant : Variant
     """
+    if not transcript.complete:
+        raise ValueError(
+            ("Can't annotate coding effect for %s"
+             " on incomplete transcript %s" % (variant, transcript)))
+    sequence = transcript.sequence
+    cds_start_offset = min(transcript.start_codon_spliced_offsets)
+    cds_stop_offset = max(transcript.stop_codon_spliced_offsets)
+
     # Don't need a pyfaidx.Sequence object here, just convert it to the an str
-    cds_seq = str(transcript.coding_sequence)
+    cds_seq = str(sequence[cds_start_offset:cds_stop_offset + 1])
 
     assert cds_offset < len(cds_seq), \
         "Expected CDS offset (%d) < |CDS| (%d) for %s on %s" % (
@@ -137,7 +117,11 @@ def infer_coding_effect(
         raise ValueError(
             "Translated protein sequence of %s is empty" % (transcript,))
 
-    variant_cds_seq = mutate(cds_seq, cds_offset, ref, alt)
+    variant_cds_seq = mutate(
+        str(sequence[cds_start_offset:]),
+        cds_offset,
+        ref,
+        alt)
 
     # In case sequence isn't a multiple of 3, then truncate it
     # TODO: if we get a frameshift by the end of a CDS (e.g. in the stop codon)
@@ -163,10 +147,14 @@ def infer_coding_effect(
         # TODO: use the full transcript.sequence instead of just
         # transcript.coding_sequence to get more than just one amino acid
         # of the new protein sequence
-        assert len(variant_protein) > len(original_protein), \
-            ("Expect non-silent stop-loss variant to cause longer variant "
-             "protein but got len(original) = %d, len(variant) = %d" % (
-                len(original_protein), len(variant_protein)))
+        if len(variant_protein) <= len(original_protein):
+            logging.info(
+                "Expect non-silent stop-loss variant to cause longer variant "
+                "protein but got len(original) = %d, len(variant) = %d, "
+                "transcript %s probably lacks 3' UTR" % (
+                    len(original_protein),
+                    len(variant_protein),
+                    transcript))
         aa_alt = variant_protein[aa_pos:]
         return StopLoss(
             variant,
