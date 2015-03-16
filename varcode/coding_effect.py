@@ -147,7 +147,7 @@ def infer_coding_effect(
         # TODO: use the full transcript.sequence instead of just
         # transcript.coding_sequence to get more than just one amino acid
         # of the new protein sequence
-        if len(variant_protein) <= len(original_protein):
+        if len(variant_protein) == len(original_protein):
             logging.info(
                 "Expect non-silent stop-loss variant to cause longer variant "
                 "protein but got len(original) = %d, len(variant) = %d, "

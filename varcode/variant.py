@@ -35,6 +35,7 @@ from .effects import (
     IntronicSpliceSite,
     SpliceAcceptor,
     SpliceDonor,
+    StartLoss,
 )
 from .effect_ordering import top_priority_transcript_effect
 from .nucleotides import normalize_nucleotide_string
@@ -398,14 +399,15 @@ class Variant(object):
 
         utr5_length = min(transcript.start_codon_spliced_offsets)
 
+        # does the variant start inside the 5' UTR?
         if utr5_length > offset_with_utr5:
-            # TODO: what do we do if the variant spans the beginning of
-            # the coding sequence?
+
+            # does the variant end after the 5' UTR, within the coding region?
             if utr5_length < offset_with_utr5 + len(ref):
-                raise ValueError(
-                    "Variant which span 5' UTR and CDS not supported: %s" % (
-                        self,))
-            return FivePrimeUTR(self, transcript)
+                return StartLoss(self, transcript)
+            else:
+                # if variant contained within 5' UTR
+                return FivePrimeUTR(self, transcript)
 
         utr3_offset = max(transcript.stop_codon_spliced_offsets) + 1
 

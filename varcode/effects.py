@@ -451,13 +451,12 @@ class StartLoss(UnpredictableCodingMutation):
             self,
             variant,
             transcript,
-            aa_pos,
-            aa_alt):
+            aa_alt="?"):
         UnpredictableCodingMutation.__init__(
             self,
             variant,
             transcript,
-            aa_pos=aa_pos,
+            aa_pos=0,
             aa_ref="M",
             aa_alt=aa_alt)
 
