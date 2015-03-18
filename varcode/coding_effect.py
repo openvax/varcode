@@ -60,6 +60,7 @@ def infer_coding_effect(
 
     variant : Variant
     """
+
     if not transcript.complete:
         raise ValueError(
             ("Can't annotate coding effect for %s"
@@ -195,9 +196,8 @@ def infer_coding_effect(
                 aa_pos, variant,
                 transcript))
         return StartLoss(
-            variant,
-            transcript,
-            aa_pos=aa_pos,
+            variant=variant,
+            transcript=transcript,
             aa_alt=variant_protein[0])
 
     variant_stop_codon_index = variant_protein.find("*")
@@ -309,7 +309,6 @@ def infer_coding_effect(
             "Can't have empty ref and alt for variant %s on transcript %s" % (
                 variant, transcript)
         inserted = aa_alt[len(aa_ref):]
-
         return Insertion(
             variant, transcript,
             aa_pos=aa_pos,

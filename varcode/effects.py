@@ -215,6 +215,23 @@ class Exonic(TranscriptMutationEffect):
     """
     pass
 
+class ExonLoss(Exonic):
+    """
+    Deletion of one or more exons in a transcript.
+    """
+    def __init__(self, variant, transcript, exons):
+        Exonic.__init__(self, variant, transcript)
+        self.exons = exons
+
+    def __str__(self):
+        return "ExonLoss(%s, %s, %s)" % (
+            self.variant,
+            self.transcript,
+            "+".join(self.exons))
+
+    def short_description(self):
+        return "exon-loss"
+
 class ExonicSpliceSite(Exonic, SpliceSite):
     """
     Mutation in the last three nucleotides before an intron
@@ -440,6 +457,9 @@ class UnpredictableCodingMutation(BaseSubstitution):
     an alternative Kozak consensus sequence (either before or after the
     original) from which an alternative start codon can be inferred.
     """
+    def __init__(self, variant, transcript, aa_pos, aa_ref, aa_alt):
+        BaseSubstitution.__init__(
+            self, variant, transcript, aa_pos, aa_ref, aa_alt)
 
     @property
     def mutant_protein_sequence(self):
@@ -454,8 +474,8 @@ class StartLoss(UnpredictableCodingMutation):
             aa_alt="?"):
         UnpredictableCodingMutation.__init__(
             self,
-            variant,
-            transcript,
+            variant=variant,
+            transcript=transcript,
             aa_pos=0,
             aa_ref="M",
             aa_alt=aa_alt)

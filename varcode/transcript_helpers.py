@@ -47,6 +47,5 @@ def interval_offset_on_transcript(start, end, transcript):
     # trim the end position to the end of the transcript
     if end > transcript.end:
         end = transcript.end
-
     # return earliest offset into the spliced transcript
     return min(transcript.spliced_offset(start), transcript.spliced_offset(end))

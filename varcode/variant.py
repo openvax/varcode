@@ -16,7 +16,7 @@ from __future__ import print_function, division, absolute_import
 import logging
 
 from Bio.Seq import reverse_complement
-from pyensembl import Transcript, find_nearest_locus, EnsemblRelease
+from pyensembl import Transcript, EnsemblRelease
 from pyensembl.locus import normalize_chromosome
 from pyensembl.biotypes import is_coding_biotype
 from typechecks import require_instance
@@ -36,6 +36,8 @@ from .effects import (
     SpliceAcceptor,
     SpliceDonor,
     StartLoss,
+    ExonLoss,
+    ExonicSpliceSite,
 )
 from .effect_ordering import top_priority_transcript_effect
 from .nucleotides import normalize_nucleotide_string
@@ -295,38 +297,90 @@ class Variant(object):
         if not transcript.complete:
             return IncompleteTranscript(self, transcript)
 
-        distance_to_exon, nearest_exon = find_nearest_locus(
-            start=self.pos,
-            end=self.end,
-            loci=transcript.exons)
+        # normalize the variant by trimming any shared prefix or suffix
+        # between ref and alt nucleotide sequences and then
+        # offset the variant position in a strand-dependent manner
+        ref, alt, prefix, suffix = trim_shared_flanking_strings(
+            self.ref, self.alt)
 
-        if distance_to_exon > 0:
-            return self._intronic_transcript_effect(
+        start = self.pos + len(prefix)
+
+        if len(ref) == 0:
+            end = start
+        else:
+            end = start + len(ref) - 1
+
+        # determine if any exons are deleted, and if not,
+        # what is the closest exon and how far is this variant
+        # from that exon (overlapping the exon = 0 distance)
+        lost_exons = []
+        overlapping_exons = set([])
+        distance_to_nearest_exon = float("inf")
+        start_in_exon = False
+        end_in_exon = False
+        nearest_exon = None
+        for exon in transcript.exons:
+            if start <= exon.start and end >= exon.end:
+                lost_exons.append(exon)
+
+            distance = exon.distance_to_interval(start, end)
+            if distance == 0:
+                overlapping_exons.add(exon)
+                # start is contained in current exon
+                if exon.start <= start <= exon.end:
+                    start_in_exon = True
+                # end is contained in current exon
+                if exon.end >= end >= exon.start:
+                    end_in_exon = True
+            elif distance < distance_to_nearest_exon:
+                    distance_to_nearest_exon = distance
+                    nearest_exon = exon
+
+        if len(lost_exons) > 0:
+            return ExonLoss(self, transcript, lost_exons)
+        elif len(overlapping_exons) == 0:
+            intronic_effect_class = self._choose_intronic_effect_class(
+                start, end, nearest_exon, distance_to_nearest_exon)
+            return intronic_effect_class(
+                variant=self,
                 transcript=transcript,
-                nearest_exon=nearest_exon)
+                nearest_exon=nearest_exon,
+                distance_to_exon=distance_to_nearest_exon)
 
-        # TODO: exonic splice site mutations
-        return self._exonic_transcript_effect(transcript)
+        # simple case: both start and end are in the same
+        elif len(overlapping_exons) == 1 and start_in_exon and end_in_exon:
+            return self._exonic_transcript_effect(
+                transcript,
+                start,
+                end,
+                ref,
+                alt)
+        # if spanning multiple exons, or only part of the variant is inside
+        # an exon, then consider than an exonic splice site mutation
+        else:
+            return ExonicSpliceSite(self, transcript)
 
-    def _intronic_transcript_effect(self, transcript, nearest_exon):
+    def _choose_intronic_effect_class(
+            self,
+            start,
+            end,
+            nearest_exon,
+            distance_to_exon):
         """
         Infer effect of variant which does not overlap any exon of
         the given transcript.
         """
-        distance_to_exon = nearest_exon.distance_to_interval(
-            self.pos, self.end)
-
         assert distance_to_exon > 0, \
             "Expected intronic effect to have distance_to_exon > 0, got %d" % (
                 distance_to_exon,)
 
         before_forward_exon = (
-            transcript.strand == "+" and
-            self.pos < nearest_exon.start)
+            nearest_exon.strand == "+" and
+            start < nearest_exon.start)
 
         before_backward_exon = (
-            transcript.strand == "-" and
-            self.end > nearest_exon.end)
+            nearest_exon.strand == "-" and
+            end > nearest_exon.end)
 
         before_exon = before_forward_exon or before_backward_exon
 
@@ -334,29 +388,23 @@ class Variant(object):
             if before_exon:
                 # 2 last nucleotides of intron before exon are the splice acceptor
                 # site, typically "AG"
-                effect_class = SpliceAcceptor
+                return SpliceAcceptor
             else:
                 # 2 first nucleotides of intron after exon are the splice donor
                 # site, typically "GT"
-                effect_class = SpliceDonor
+                return SpliceDonor
         elif not before_exon and distance_to_exon <= 6:
             # variants in nucleotides 3-6 at start of intron aren't as certain
             # to cause problems as nucleotides 1-2 but still implicated in
             # alternative splicing
-            effect_class = IntronicSpliceSite
+            return IntronicSpliceSite
         elif before_exon and distance_to_exon <= 4:
             # nucleotides -4 and -3 before exon are part of the 3' splicing motif
             # but allow for more degeneracy than the -2, -1 nucleotides
-            effect_class = IntronicSpliceSite
+            return IntronicSpliceSite
         else:
             # intronic mutation unrelated to splicing
-            effect_class = Intronic
-
-        return effect_class(
-                variant=self,
-                transcript=transcript,
-                nearest_exon=nearest_exon,
-                distance_to_exon=distance_to_exon)
+            return Intronic
 
     def _offset_on_transcript(self, transcript):
         """
@@ -390,12 +438,20 @@ class Variant(object):
         offset = start_offset_with_utr5 + n_same
         return offset, ref, alt
 
-    def _exonic_transcript_effect(self, transcript):
+    def _exonic_transcript_effect(
+            self,
+            transcript,
+            start,
+            end,
+            ref,
+            alt):
         """
         Effect of this variant on a Transcript, assuming we already know
         that this variant overlaps some exon of the transcript.
         """
-        offset_with_utr5, ref, alt = self._offset_on_transcript(transcript)
+
+        offset_with_utr5 = interval_offset_on_transcript(
+            start, end, transcript)
 
         utr5_length = min(transcript.start_codon_spliced_offsets)
 
@@ -416,9 +472,16 @@ class Variant(object):
 
         cds_offset = offset_with_utr5 - utr5_length
 
+        if transcript.on_backward_strand:
+            strand_ref = reverse_complement(ref)
+            strand_alt = reverse_complement(alt)
+        else:
+            strand_ref = ref
+            strand_alt = alt
+
         return infer_coding_effect(
-            ref,
-            alt,
+            strand_ref,
+            strand_alt,
             cds_offset,
             variant=self,
             transcript=transcript)
