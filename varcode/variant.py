@@ -95,7 +95,7 @@ class Variant(object):
             allow_extended_nucleotides=allow_extended_nucleotides)
         self.original_alt = normalize_nucleotide_string(alt,
             allow_extended_nucleotides=allow_extended_nucleotides)
-        self.original_pos = int(pos)
+        self.original_start = int(pos)
 
         # normalize the variant by trimming any shared prefix or suffix
         # between ref and alt nucleotide sequences and then
@@ -109,12 +109,12 @@ class Variant(object):
         # position for an insertion is
         #   "insert the alt nucleotides after this position"
         if len(trimmed_ref) == 0:
-            self.start = self.original_pos + max(0, len(prefix) - 1)
+            self.start = self.original_start + max(0, len(prefix) - 1)
             self.end = self.start
         else:
             # for substitutions and deletions the [start:end] interval is
             # an inclusive selection of reference nucleotides
-            self.start = self.original_pos + len(prefix)
+            self.start = self.original_start + len(prefix)
             self.end = self.start + len(trimmed_ref) - 1
 
         require_instance(ensembl, EnsemblRelease, "ensembl")
@@ -219,7 +219,7 @@ class Variant(object):
             self.contig, self.start, self.end)
 
     @memoize
-    def gene_names(self, only_coding=False):
+    def gene_names(self):
         """
         Return names of all genes which overlap this variant. Calling
         this method is significantly cheaper than calling `Variant.genes()`,

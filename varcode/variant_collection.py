@@ -183,12 +183,12 @@ class VariantCollection(object):
         }
 
     @memoize
-    def gene_counts(self, only_coding=False):
+    def gene_counts(self):
         """
         Count how many variants overlap each gene name.
         """
         counter = Counter()
         for variant in self.variants:
-            for gene_name in variant.gene_names(only_coding=only_coding):
+            for gene_name in variant.gene_names():
                 counter[gene_name] += 1
         return counter
