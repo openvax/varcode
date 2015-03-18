@@ -23,7 +23,7 @@ def test_effect_timing():
     variants = random_variants(n_variants)
     variant_collection = VariantCollection(variants)
     start_t = time.time()
-    effects = variant_collection.variant_effects()
+    effects = variant_collection.effects()
     assert len(effects) == len(variants)
     end_t = time.time()
     elapsed_t = end_t - start_t

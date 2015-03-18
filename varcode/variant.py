@@ -39,7 +39,7 @@ from .effects import (
     ExonLoss,
     ExonicSpliceSite,
 )
-from .effect_ordering import top_priority_transcript_effect
+from .effect_ordering import top_priority_effect
 from .nucleotides import normalize_nucleotide_string
 from .string_helpers import trim_shared_flanking_strings
 from .transcript_helpers import interval_offset_on_transcript
@@ -127,8 +127,8 @@ class Variant(object):
         return self.ensembl.reference.reference_name
 
     def __str__(self):
-        fields = self.fields()
-        return "Variant(contig=%s, pos=%d, ref=%s, alt=%s, genome=%s)" % fields
+        return "Variant(contig=%s, start=%d, ref=%s, alt=%s, genome=%s)" % (
+            self.fields())
 
     def __repr__(self):
         return str(self)
@@ -167,13 +167,22 @@ class Variant(object):
     def short_description(self):
         chrom, pos, ref, alt = self.contig, self.start, self.ref, self.alt
         if ref == alt:
+            # no change
             return "chr%s g.%d %s=%s" % (chrom, pos, ref, alt)
         elif len(ref) == 0 or alt.startswith(ref):
-            return "chr%s g.%d ins%s" % (chrom, pos + len(ref), alt[len(ref):])
+            # insertions
+            insert_after_pos = pos + len(ref)
+            return "chr%s g.%d_%d ins%s" % (
+                chrom,
+                insert_after_pos,
+                insert_after_pos + 1,
+                alt[len(ref):])
         elif len(alt) == 0 or ref.startswith(alt):
+            # deletion
             return "chr%s g.%d_%d del%s" % (
                 chrom, pos + len(alt), pos + len(ref), ref[len(alt):])
         else:
+            # substitution
             return "chr%s g.%d %s>%s" % (chrom, pos, ref, alt)
 
     @memoize
@@ -210,7 +219,7 @@ class Variant(object):
             self.contig, self.start, self.end)
 
     @memoize
-    def gene_names(self):
+    def gene_names(self, only_coding=False):
         """
         Return names of all genes which overlap this variant. Calling
         this method is significantly cheaper than calling `Variant.genes()`,
@@ -300,7 +309,7 @@ class Variant(object):
         by this variant. If this variant doesn't overlap anything, then this
         this method will return an Intergenic effect.
         """
-        return top_priority_transcript_effect(self.effects(*args, **kwargs))
+        return top_priority_effect(self.effects(*args, **kwargs))
 
     @memoize
     def effect_on_transcript(self, transcript):
