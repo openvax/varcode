@@ -60,7 +60,6 @@ def infer_coding_effect(
 
     variant : Variant
     """
-
     if not transcript.complete:
         raise ValueError(
             ("Can't annotate coding effect for %s"
@@ -304,11 +303,17 @@ def infer_coding_effect(
             aa_ref=deleted)
 
     # Insertion, e.g. p.37insA
-    elif aa_alt.startswith(aa_ref):
-        assert len(aa_alt) > 0, \
+    elif len(aa_ref) == 0:
+        assert len(aa_alt) > 1, \
             "Can't have empty ref and alt for variant %s on transcript %s" % (
                 variant, transcript)
-        inserted = aa_alt[len(aa_ref):]
+        # the meaning of positions for insertions is different, the inserted
+        # amino acids get put *after* aa_pos, so the first element of the
+        # aa_alt string is actually the ref nucleotide before the insertion
+        #
+        # TODO: what happens if we're inserting at the very beginning of
+        # a protein?
+        inserted = aa_alt[1:]
         return Insertion(
             variant, transcript,
             aa_pos=aa_pos,

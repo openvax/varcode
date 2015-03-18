@@ -70,6 +70,6 @@ def test_maf_aa_changes():
             expected_changes[key] = change
 
     for variant in variants:
-        key = (variant.contig, variant.pos)
+        key = (variant.contig, variant.start)
         expected = expected_changes[key]
         yield (check_same_aa_change, variant, expected)

@@ -78,20 +78,49 @@ class Variant(object):
             Extra metadata about this variant
         """
         self.contig = normalize_chromosome(contig)
-        self.ref = normalize_nucleotide_string(ref,
+
+        # we want to preserve the ref/alt/pos both as they appeared in the
+        # original VCF or MAF file but also normalize variants to get rid
+        # of shared prefixes/suffixes between the ref and alt nucleotide
+        # strings e.g. g.10 CTT>T can be normalized into g.10delCT
+        #
+        # The normalized variant properties go into fields
+        #    Variant.{original_ref, original_alt, original_pos}
+        # whereas the trimmed fields are:
+        #    Variant.{ref, alt, start, end}
+
+        # the original entries must preserve the number of nucleotides in
+        # ref and alt but we still want to normalize e.g. '-' and '.' into ''
+        self.original_ref = normalize_nucleotide_string(ref,
             allow_extended_nucleotides=allow_extended_nucleotides)
-        self.alt = normalize_nucleotide_string(alt,
+        self.original_alt = normalize_nucleotide_string(alt,
             allow_extended_nucleotides=allow_extended_nucleotides)
-        self.pos = int(pos)
-        self.end = self.pos + len(self.ref) - 1
+        self.original_pos = int(pos)
+
+        # normalize the variant by trimming any shared prefix or suffix
+        # between ref and alt nucleotide sequences and then
+        # offset the variant position in a strand-dependent manner
+        trimmed_ref, trimmed_alt, prefix, suffix = trim_shared_flanking_strings(
+            self.original_ref, self.original_alt)
+
+        self.ref = trimmed_ref
+        self.alt = trimmed_alt
+        # insertions must be treated differently since the meaning of a
+        # position for an insertion is
+        #   "insert the alt nucleotides after this position"
+        if len(trimmed_ref) == 0:
+            self.start = self.original_pos + max(0, len(prefix) - 1)
+            self.end = self.start
+        else:
+            # for substitutions and deletions the [start:end] interval is
+            # an inclusive selection of reference nucleotides
+            self.start = self.original_pos + len(prefix)
+            self.end = self.start + len(trimmed_ref) - 1
 
         require_instance(ensembl, EnsemblRelease, "ensembl")
         self.ensembl = ensembl
 
         self.info = {} if info is None else info
-
-        # instead of making things
-        self._cached_values = {}
 
     @property
     def reference_name(self):
@@ -113,7 +142,7 @@ class Variant(object):
         '''
         require_instance(other, Variant, name="variant")
         if self.contig == other.contig:
-            return self.pos < other.pos
+            return self.start < other.start
         return self.contig < other.contig
 
     def fields(self):
@@ -124,7 +153,7 @@ class Variant(object):
         """
         return (
             self.contig,
-            self.pos,
+            self.start,
             self.ref,
             self.alt,
             self.reference_name)
@@ -136,7 +165,7 @@ class Variant(object):
 
     @memoize
     def short_description(self):
-        chrom, pos, ref, alt = self.contig, self.pos, self.ref, self.alt
+        chrom, pos, ref, alt = self.contig, self.start, self.ref, self.alt
         if ref == alt:
             return "chr%s g.%d %s=%s" % (chrom, pos, ref, alt)
         elif len(ref) == 0 or alt.startswith(ref):
@@ -150,7 +179,7 @@ class Variant(object):
     @memoize
     def transcripts(self):
         return self.ensembl.transcripts_at_locus(
-            self.contig, self.pos, self.end)
+            self.contig, self.start, self.end)
 
     @memoize
     def coding_transcripts(self):
@@ -168,7 +197,7 @@ class Variant(object):
         Return Gene object for all genes which overlap this variant.
         """
         return self.ensembl.genes_at_locus(
-            self.contig, self.pos, self.end)
+            self.contig, self.start, self.end)
 
     @memoize
     def gene_ids(self):
@@ -178,7 +207,7 @@ class Variant(object):
         which has to issue many more queries to construct each Gene object.
         """
         return self.ensembl.gene_ids_at_locus(
-            self.contig, self.pos, self.end)
+            self.contig, self.start, self.end)
 
     @memoize
     def gene_names(self):
@@ -188,7 +217,7 @@ class Variant(object):
         which has to issue many more queries to construct each Gene object.
         """
         return self.ensembl.gene_names_at_locus(
-            self.contig, self.pos, self.end)
+            self.contig, self.start, self.end)
 
     @memoize
     def coding_genes(self):
@@ -297,19 +326,6 @@ class Variant(object):
         if not transcript.complete:
             return IncompleteTranscript(self, transcript)
 
-        # normalize the variant by trimming any shared prefix or suffix
-        # between ref and alt nucleotide sequences and then
-        # offset the variant position in a strand-dependent manner
-        ref, alt, prefix, suffix = trim_shared_flanking_strings(
-            self.ref, self.alt)
-
-        start = self.pos + len(prefix)
-
-        if len(ref) == 0:
-            end = start
-        else:
-            end = start + len(ref) - 1
-
         # determine if any exons are deleted, and if not,
         # what is the closest exon and how far is this variant
         # from that exon (overlapping the exon = 0 distance)
@@ -320,17 +336,17 @@ class Variant(object):
         end_in_exon = False
         nearest_exon = None
         for exon in transcript.exons:
-            if start <= exon.start and end >= exon.end:
+            if self.start <= exon.start and self.end >= exon.end:
                 lost_exons.append(exon)
 
-            distance = exon.distance_to_interval(start, end)
+            distance = exon.distance_to_interval(self.start, self.end)
             if distance == 0:
                 overlapping_exons.add(exon)
                 # start is contained in current exon
-                if exon.start <= start <= exon.end:
+                if exon.start <= self.start <= exon.end:
                     start_in_exon = True
                 # end is contained in current exon
-                if exon.end >= end >= exon.start:
+                if exon.end >= self.end >= exon.start:
                     end_in_exon = True
             elif distance < distance_to_nearest_exon:
                     distance_to_nearest_exon = distance
@@ -340,7 +356,7 @@ class Variant(object):
             return ExonLoss(self, transcript, lost_exons)
         elif len(overlapping_exons) == 0:
             intronic_effect_class = self._choose_intronic_effect_class(
-                start, end, nearest_exon, distance_to_nearest_exon)
+                nearest_exon, distance_to_nearest_exon)
             return intronic_effect_class(
                 variant=self,
                 transcript=transcript,
@@ -349,12 +365,7 @@ class Variant(object):
 
         # simple case: both start and end are in the same
         elif len(overlapping_exons) == 1 and start_in_exon and end_in_exon:
-            return self._exonic_transcript_effect(
-                transcript,
-                start,
-                end,
-                ref,
-                alt)
+            return self._exonic_transcript_effect(transcript)
         # if spanning multiple exons, or only part of the variant is inside
         # an exon, then consider than an exonic splice site mutation
         else:
@@ -362,8 +373,6 @@ class Variant(object):
 
     def _choose_intronic_effect_class(
             self,
-            start,
-            end,
             nearest_exon,
             distance_to_exon):
         """
@@ -376,11 +385,11 @@ class Variant(object):
 
         before_forward_exon = (
             nearest_exon.strand == "+" and
-            start < nearest_exon.start)
+            self.start < nearest_exon.start)
 
         before_backward_exon = (
             nearest_exon.strand == "-" and
-            end > nearest_exon.end)
+            self.end > nearest_exon.end)
 
         before_exon = before_forward_exon or before_backward_exon
 
@@ -406,52 +415,20 @@ class Variant(object):
             # intronic mutation unrelated to splicing
             return Intronic
 
-    def _offset_on_transcript(self, transcript):
-        """
-        Given a Variant (with fields ref, alt, pos, and end), compute the offset
-        of the variant position relative to the position and direction of the
-        transcript.
-
-        Returns a tuple (offset, ref, alt), where ref and alt are this variant's
-        ref and alt nucleotide strings with shared prefixes and suffixes removed
-        and the bases reversed if the transcript is on the backward strand.
-
-        For example,
-
-        >> variant = Variant(ref="ATGGC", alt="TCGC", pos=3000, end=3005)
-        >> variant.offset_on_transcript(Transcript(start=2000, end=4000))
-        (1002, "G", "C")
-        """
-        if transcript.on_backward_strand:
-            ref = reverse_complement(self.ref)
-            alt = reverse_complement(self.alt)
-        else:
-            ref = self.ref
-            alt = self.alt
-
-        # in case nucleotide strings share prefix (e.g. ref="C", alt="CC")
-        # bump the offsets and make the strings disjoint (ref="", alt="C")
-        ref, alt, prefix, _ = trim_shared_flanking_strings(ref, alt)
-        n_same = len(prefix)
-        start_offset_with_utr5 = interval_offset_on_transcript(
-            self.pos, self.end, transcript)
-        offset = start_offset_with_utr5 + n_same
-        return offset, ref, alt
-
-    def _exonic_transcript_effect(
-            self,
-            transcript,
-            start,
-            end,
-            ref,
-            alt):
+    def _exonic_transcript_effect(self, transcript):
         """
         Effect of this variant on a Transcript, assuming we already know
         that this variant overlaps some exon of the transcript.
         """
+        if transcript.on_backward_strand:
+            strand_ref = reverse_complement(self.ref)
+            strand_alt = reverse_complement(self.alt)
+        else:
+            strand_ref = self.ref
+            strand_alt = self.alt
 
         offset_with_utr5 = interval_offset_on_transcript(
-            start, end, transcript)
+            self.start, self.end, transcript)
 
         utr5_length = min(transcript.start_codon_spliced_offsets)
 
@@ -459,7 +436,7 @@ class Variant(object):
         if utr5_length > offset_with_utr5:
 
             # does the variant end after the 5' UTR, within the coding region?
-            if utr5_length < offset_with_utr5 + len(ref):
+            if utr5_length < offset_with_utr5 + len(self.ref):
                 return StartLoss(self, transcript)
             else:
                 # if variant contained within 5' UTR
@@ -471,13 +448,6 @@ class Variant(object):
             return ThreePrimeUTR(self, transcript)
 
         cds_offset = offset_with_utr5 - utr5_length
-
-        if transcript.on_backward_strand:
-            strand_ref = reverse_complement(ref)
-            strand_alt = reverse_complement(alt)
-        else:
-            strand_ref = ref
-            strand_alt = alt
 
         return infer_coding_effect(
             strand_ref,
