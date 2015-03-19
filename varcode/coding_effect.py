@@ -88,10 +88,9 @@ def infer_coding_effect(
 
     # past this point we know that we're somewhere in the coding sequence
     cds_ref = cds_seq[cds_offset:cds_offset + len(ref)]
+
     # Make sure that the reference sequence agrees with what we expected
     # from the VCF
-    # TODO: check that the ref allele is correct for UTR by looking
-    # at transcript.sequence instead of transcript.coding_sequence
     assert cds_ref == ref, \
         "%s: expected ref '%s' at offset %d of %s, CDS has '%s'" % (
             variant,
@@ -148,10 +147,9 @@ def infer_coding_effect(
     #       CCC|ATGCTC_TTA_TAG|TTT
     # (insert the "ATT" *before* the "T" at position 10)
     #
-    # Above the set the CDS offset for insertions on the reverse strand to
-    # have an offset one less than they otherwise would, which lets us
-    # insert_after to insert into the correct location.
-    #
+    # Further up, we set the CDS offset for insertions on the reverse strand to
+    # have an offset one less than they otherwise would, which makes the
+    # insertion go to the correct location.
     if len(ref) == 0:
         variant_cds_seq = insert_after(
             transcript_after_start_codon, cds_offset, alt)
@@ -249,51 +247,46 @@ def infer_coding_effect(
             aa_pos=aa_pos,
             aa_ref=variant_protein[aa_pos])
 
-    n_cdna_ref = len(ref)
-    n_cdna_alt = len(alt)
-
-    last_aa_ref_pos = int((cds_offset + max(0, n_cdna_ref - 1)) / 3)
-    aa_ref = original_protein[aa_pos:last_aa_ref_pos + 1]
-    assert len(aa_ref) > 0, \
-        "len(aa_ref) = 0 for variant %s on transcript %s (aa_pos=%d:%d)" % (
-            variant, transcript, aa_pos, last_aa_ref_pos)
-
     # is this a premature stop codon?
     if variant_stop_codon_index == aa_pos:
         return PrematureStop(
             variant,
             transcript,
             cds_offset,
-            aa_ref)
+            aa_ref=original_protein[aa_pos])
 
     frameshift = False
 
     # does the mutation shift the open reading frame?
-    if abs(n_cdna_ref - n_cdna_alt) % 3 != 0:
+    if abs(len(ref) - len(alt)) % 3 != 0:
         frameshift = True
         aa_alt = variant_protein[aa_pos:]
 
     # the position of deleted amino acids on the variant protein
     # will be from aa_pos:aa_pos, where aa_pos is the last position before
     # the deleted residues
-    elif n_cdna_alt == 0:
-        last_aa_alt_pos = aa_pos
+    elif len(alt) == 0:
         aa_alt = ""
-    # if not a frameshift, or deletion, or premature stop,
+    # insertions happen after cds_offset, so we need slightly different logic
+    # for them than a substitution, whose variant nucleotides start
+    #  *at* cds_offset
+    elif len(ref) == 0:
+        last_aa_alt_pos = int((cds_offset + len(alt)) / 3)
+        aa_alt = variant_protein[aa_pos:last_aa_alt_pos + 1]
+    # if not a frameshift, insertion, deletion, or premature stop,
     # then pull out the new or modified amino acids into `aa_alt`
     # and determine the type of mutation later
     else:
-        last_aa_alt_pos = int((cds_offset + n_cdna_alt - 1) / 3)
+        last_aa_alt_pos = int((cds_offset + len(alt) - 1) / 3)
         aa_alt = variant_protein[aa_pos:last_aa_alt_pos + 1]
-        assert len(aa_alt) > 0, \
-            "len(aa_alt) = 0 for variant %s on transcript %s (aa_pos=%d:%d)" % (
-                variant, transcript, aa_pos, last_aa_ref_pos)
-
-    if len(original_protein) == len(variant_protein) and aa_alt == aa_ref:
-        raise ValueError(
-            ("Unexpected silent mutation for variant %s "
-             " on transcript %s (aa='%s', aa_pos=%d)" % (
-                 variant, transcript, aa_ref, aa_pos)))
+    assert len(alt) == 0 or len(aa_alt) > 0, \
+            "len(aa_alt) = 0 for variant %s on transcript %s (aa_pos=%d)" % (
+                variant, transcript, aa_pos)
+    last_aa_ref_pos = int((cds_offset + max(0, len(ref) - 1)) / 3)
+    aa_ref = original_protein[aa_pos:last_aa_ref_pos + 1]
+    assert len(aa_ref) > 0, \
+        "len(aa_ref) = 0 for variant %s on transcript %s (aa_pos=%d:%d)" % (
+            variant, transcript, aa_pos, last_aa_ref_pos)
 
     # in case of simple insertion like FY>FYGL or deletions FYGL > FY,
     # get rid of the shared prefixes/suffixes
@@ -323,8 +316,8 @@ def infer_coding_effect(
     # Deletion e.g. p.389delQQ
     if len(aa_alt) == 0:
         assert len(aa_ref) > 0, \
-            ("Can't have empty ref and alt for variant %s on transcript %s,"
-             " shared prefix = '%s', shared suffix = '%s'") % (
+            ("Can't have empty aa_ref and aa_alt for variant %s on"
+             " transcript %s, shared prefix = '%s', shared suffix = '%s'") % (
              variant, transcript, prefix, suffix)
         return Deletion(
             variant,
