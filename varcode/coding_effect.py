@@ -82,7 +82,6 @@ def infer_coding_effect(
     else:
         cds_offset = transcript_offset - cds_start_offset
 
-    logging.info("%s offset = %d, cds offset = %d, strand = %s", variant, transcript_offset, cds_offset, transcript.strand)
     assert cds_offset < len(cds_seq), \
         "Expected CDS offset (%d) < |CDS| (%d) for %s on %s" % (
             cds_offset, len(cds_seq), variant, transcript)

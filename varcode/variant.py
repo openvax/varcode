@@ -25,6 +25,7 @@ from .coding_effect import infer_coding_effect
 from .common import groupby_field, memoize
 from .effects import (
     TranscriptMutationEffect,
+    Failure,
     Intergenic,
     Intragenic,
     NoncodingTranscript,
@@ -289,6 +290,7 @@ class Variant(object):
                         if raise_on_error:
                             raise
                         else:
+                            effects.append(Failure(self, transcript))
                             logging.warn(
                                 "Encountered error annotating %s for %s: %s",
                                 self,

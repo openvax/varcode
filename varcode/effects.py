@@ -131,6 +131,11 @@ class TranscriptMutationEffect(MutationEffect):
         return self.transcript.gene_id
 
 
+class Failure(TranscriptMutationEffect):
+    """Special placeholder effect for when we want to suppress errors but still
+    need to create a non-empty list of effects for each variant.
+    """
+
 class NoncodingTranscript(TranscriptMutationEffect):
     """
     Any mutation to a transcript with a non-coding biotype
