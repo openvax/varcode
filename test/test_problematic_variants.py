@@ -45,6 +45,30 @@ should_not_crash_variants = [
         ref="",
         alt="CCT",
         ensembl=ensembl75),
+    Variant(
+        contig=11,
+        start=47640416,
+        ref="",
+        alt="TCTTT",
+        ensembl=ensembl75),
+    Variant(
+        contig=12,
+        start=98880902,
+        ref="A",
+        alt="",
+        ensembl=ensembl75),
+    Variant(
+        contig=19,
+        start=52803670,
+        ref="TG",
+        alt="",
+        ensembl=ensembl75),
+    Variant(
+        contig=1,
+        start=109792735,
+        ref="",
+        alt="CGC",
+        ensembl=ensembl75)
 ]
 
 def try_effect_annotation(variant):

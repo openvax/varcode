@@ -289,11 +289,11 @@ def infer_coding_effect(
             "len(aa_alt) = 0 for variant %s on transcript %s (aa_pos=%d:%d)" % (
                 variant, transcript, aa_pos, last_aa_ref_pos)
 
-    if aa_alt == aa_ref:
+    if len(original_protein) == len(variant_protein) and aa_alt == aa_ref:
         raise ValueError(
             ("Unexpected silent mutation for variant %s "
-             " on transcript %s (aa=%s)" % (
-                 variant, transcript, aa_ref)))
+             " on transcript %s (aa='%s', aa_pos=%d)" % (
+                 variant, transcript, aa_ref, aa_pos)))
 
     # in case of simple insertion like FY>FYGL or deletions FYGL > FY,
     # get rid of the shared prefixes/suffixes
@@ -303,10 +303,7 @@ def infer_coding_effect(
     aa_pos += len(prefix)
 
     if frameshift:
-        if len(aa_ref) == 0:
-            assert len(prefix) > 0
-            aa_ref = prefix[-1]
-
+        aa_ref = original_protein[aa_pos]
         # if a frameshift doesn't create any new amino acids, then
         # it must immediately have hit a stop codon
         if len(aa_alt) == 0:

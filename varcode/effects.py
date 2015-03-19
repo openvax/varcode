@@ -522,8 +522,18 @@ class FrameShiftTruncation(PrematureStop, FrameShift):
     """
     A frame-shift mutation which immediately introduces a stop codon.
     """
-    def __init__(self, *args, **kwargs):
-        super(PrematureStop, self).__init__(*args, **kwargs)
+    def __init__(
+            self,
+            variant,
+            transcript,
+            aa_pos,
+            aa_ref):
+        PrematureStop.__init__(
+            self,
+            variant=variant,
+            transcript=transcript,
+            aa_pos=aa_pos,
+            aa_ref=aa_ref)
 
     @memoized_property
     def mutant_protein_sequence(self):
