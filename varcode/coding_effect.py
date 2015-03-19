@@ -65,7 +65,22 @@ def infer_coding_effect(
             ("Can't annotate coding effect for %s"
              " on incomplete transcript %s" % (variant, transcript)))
 
-    sequence = transcript.sequence
+    sequence = str(transcript.sequence)
+
+    # reference nucleotides found on the transcript, if these don't match
+    # what we were told to expect from the variant then raise an exception
+    transcript_ref = sequence[transcript_offset:transcript_offset + len(ref)]
+
+    # Make sure that the reference sequence agrees with what we expected
+    # from the VCF
+    assert transcript_ref == ref, \
+        "%s: expected ref '%s' at offset %d of %s, transcript has '%s'" % (
+            variant,
+            ref,
+            transcript_offset,
+            transcript,
+            transcript_ref)
+
     cds_start_offset = min(transcript.start_codon_spliced_offsets)
     cds_stop_offset = max(transcript.stop_codon_spliced_offsets)
 
@@ -85,19 +100,6 @@ def infer_coding_effect(
     assert cds_offset < len(cds_seq), \
         "Expected CDS offset (%d) < |CDS| (%d) for %s on %s" % (
             cds_offset, len(cds_seq), variant, transcript)
-
-    # past this point we know that we're somewhere in the coding sequence
-    cds_ref = cds_seq[cds_offset:cds_offset + len(ref)]
-
-    # Make sure that the reference sequence agrees with what we expected
-    # from the VCF
-    assert cds_ref == ref, \
-        "%s: expected ref '%s' at offset %d of %s, CDS has '%s'" % (
-            variant,
-            ref,
-            cds_offset,
-            transcript,
-            cds_ref)
 
     if len(cds_seq) < 3:
         raise ValueError("Coding sequence for %s is too short: '%s'" % (
@@ -187,7 +189,6 @@ def infer_coding_effect(
                 "Expected non-silent stop-loss variant to cause longer "
                 "protein but got len(original) = len(variant) = %d for "
                 "%s, transcript probably lacks 3' UTR" % (
-                    len(original_protein),
                     len(variant_protein),
                     transcript))
         aa_alt = variant_protein[aa_pos:]

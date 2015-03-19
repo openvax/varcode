@@ -68,7 +68,15 @@ should_not_crash_variants = [
         start=109792735,
         ref="",
         alt="CGC",
-        ensembl=ensembl75)
+        ensembl=ensembl75),
+    # error message:
+    # "expected ref 'GATGTCGG' at offset 1412 of ENST00000297524...CDS has 'G'"
+    Variant(
+        contig=8,
+        start=87226635,
+        ref="CCGACATC",
+        alt="",
+        ensembl=ensembl75),
 ]
 
 def try_effect_annotation(variant):
