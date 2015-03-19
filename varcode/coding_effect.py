@@ -184,9 +184,9 @@ def infer_coding_effect(
         # of the new protein sequence
         if len(variant_protein) == len(original_protein):
             logging.info(
-                "Expect non-silent stop-loss variant to cause longer variant "
-                "protein but got len(original) = %d, len(variant) = %d, "
-                "transcript %s probably lacks 3' UTR" % (
+                "Expected non-silent stop-loss variant to cause longer "
+                "protein but got len(original) = len(variant) = %d for "
+                "%s, transcript probably lacks 3' UTR" % (
                     len(original_protein),
                     len(variant_protein),
                     transcript))
