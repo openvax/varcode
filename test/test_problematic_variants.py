@@ -44,7 +44,7 @@ should_not_crash_variants = [
         start=1684347,
         ref="",
         alt="CCT",
-        genome=ensembl75),
+        ensembl=ensembl75),
 ]
 
 def try_effect_annotation(variant):

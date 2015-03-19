@@ -69,9 +69,6 @@ def infer_coding_effect(
     cds_start_offset = min(transcript.start_codon_spliced_offsets)
     cds_stop_offset = max(transcript.stop_codon_spliced_offsets)
 
-    logging.info("%s %s %s %d", variant, variant.original_ref, variant.original_alt, variant.original_start)
-    logging.info("%s %s %s %d", variant, variant.ref, variant.alt, variant.start)
-
     # Don't need a pyfaidx.Sequence object here, just convert it to the an str
     cds_seq = str(sequence[cds_start_offset:cds_stop_offset + 1])
 
@@ -85,7 +82,7 @@ def infer_coding_effect(
     else:
         cds_offset = transcript_offset - cds_start_offset
 
-    logging.info("%s %d %d", variant, transcript_offset, cds_offset)
+    logging.info("%s offset = %d, cds offset = %d, strand = %s", variant, transcript_offset, cds_offset, transcript.strand)
     assert cds_offset < len(cds_seq), \
         "Expected CDS offset (%d) < |CDS| (%d) for %s on %s" % (
             cds_offset, len(cds_seq), variant, transcript)
@@ -256,15 +253,11 @@ def infer_coding_effect(
     n_cdna_ref = len(ref)
     n_cdna_alt = len(alt)
 
-    if n_cdna_ref == 0:
-        last_aa_ref_pos = aa_pos
-        aa_ref = ""
-    else:
-        last_aa_ref_pos = int((cds_offset + n_cdna_ref - 1) / 3)
-        aa_ref = original_protein[aa_pos:last_aa_ref_pos + 1]
-        assert len(aa_ref) > 0, \
-            "len(aa_ref) = 0 for variant %s on transcript %s (aa_pos=%d:%d)" % (
-                variant, transcript, aa_pos, last_aa_ref_pos)
+    last_aa_ref_pos = int((cds_offset + max(0, n_cdna_ref - 1)) / 3)
+    aa_ref = original_protein[aa_pos:last_aa_ref_pos + 1]
+    assert len(aa_ref) > 0, \
+        "len(aa_ref) = 0 for variant %s on transcript %s (aa_pos=%d:%d)" % (
+            variant, transcript, aa_pos, last_aa_ref_pos)
 
     # is this a premature stop codon?
     if variant_stop_codon_index == aa_pos:
@@ -307,6 +300,7 @@ def infer_coding_effect(
     # get rid of the shared prefixes/suffixes
     aa_ref, aa_alt, prefix, suffix = trim_shared_flanking_strings(
         aa_ref, aa_alt)
+
     aa_pos += len(prefix)
 
     if frameshift:
@@ -344,15 +338,7 @@ def infer_coding_effect(
 
     # Insertion, e.g. p.37insA
     elif len(aa_ref) == 0:
-        if aa_pos == 0:
-            # insertion at beginning of amino acid chain is a special case
-            # where aa_alt is allowed to have length 1 and isn't expected
-            # to contain a reference residue
-            return Insertion(
-                variant, transcript,
-                aa_pos=0,
-                aa_alt=aa_alt)
-        assert len(aa_alt) > 1, \
+        assert len(aa_alt) > 0, \
             ("Can't have ref = '' and alt = '%s' at aa_pos = %d, cds_pos = %d"
              " for variant %s on transcript %s with shared prefix ='%s',"
              " shared suffix = '%s'") % (
@@ -363,18 +349,6 @@ def infer_coding_effect(
                 transcript,
                 prefix,
                 suffix)
-        logging.info(
-            "ref = '%s', alt = '%s', cds_offset = '%s'",
-            ref, alt, cds_offset)
-        logging.info("aa_ref = '%s', aa_alt = '%s', aa_pos = %d",
-            aa_ref, aa_alt, aa_pos)
-        logging.info(cds_seq)
-        logging.info(truncated_variant_cds_seq)
-        logging.info(original_protein)
-        logging.info(variant_protein)
-        # since insertion is described in terms of which residue it comes
-        # after, need to drop first residue of aa_alt
-        aa_alt = aa_alt[1:]
         return Insertion(
             variant, transcript,
             aa_pos=aa_pos,
