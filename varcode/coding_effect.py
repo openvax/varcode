@@ -176,14 +176,51 @@ def infer_coding_effect(
         "Protein sequence empty for variant %s on transcript %s" % (
             variant, transcript)
 
+    variant_stop_codon_index = variant_protein.find("*")
+
     # genomic position to codon position
     aa_pos = int(cds_offset / 3)
 
-    # if mutation begins at the stop codon of this protein and isn't silent
-    if aa_pos == len(original_protein):
-        # TODO: use the full transcript.sequence instead of just
-        # transcript.coding_sequence to get more than just one amino acid
-        # of the new protein sequence
+    # if contained stop codon, truncate sequence before it
+    if variant_stop_codon_index > -1:
+        variant_protein = variant_protein[:variant_stop_codon_index]
+
+    if original_protein == variant_protein:
+        if aa_pos < len(original_protein):
+            aa_ref = original_protein[aa_pos]
+        elif aa_pos == len(original_protein):
+            aa_ref = "*"
+        elif aa_pos > len(original_protein):
+            logging.warn("How did we get aa_pos = %d when len(protein) = %d?",
+                aa_pos, len(original_protein))
+            aa_ref = "?"
+        return Silent(
+            variant,
+            transcript,
+            aa_pos=aa_pos,
+            aa_ref=aa_ref)
+
+    if variant_protein[0] != original_protein[0]:
+        assert aa_pos == 0, \
+            ("Unexpected start codon (%s>%s)"
+             " when aa_pos=%s for %s on %s" % (
+                original_protein[0],
+                variant_protein[0],
+                aa_pos, variant,
+                transcript))
+        return StartLoss(
+            variant=variant,
+            transcript=transcript,
+            aa_alt=variant_protein[0])
+    elif variant_stop_codon_index == aa_pos:
+        # is this a premature stop codon?
+        return PrematureStop(
+            variant,
+            transcript,
+            cds_offset,
+            aa_ref=original_protein[aa_pos])
+    elif aa_pos == len(original_protein):
+        # if mutation begins at the stop codon of this protein and isn't silent
         if len(variant_protein) == len(original_protein):
             logging.info(
                 "Expected non-silent stop-loss variant to cause longer "
@@ -198,7 +235,7 @@ def infer_coding_effect(
             aa_pos=aa_pos,
             aa_alt=aa_alt)
 
-    if aa_pos >= len(original_protein):
+    elif aa_pos >= len(original_protein):
         # we hit an early stop codon which, in some individuals,
         # is mutated into an amino acid codon
         if transcript.biotype == "polymorphic_pseudogene":
@@ -221,40 +258,6 @@ def infer_coding_effect(
                     transcript,
                     cds_offset,
                     len(cds_seq))))
-
-    if variant_protein[0] != original_protein[0]:
-        assert aa_pos == 0, \
-            ("Unexpected start codon (%s>%s)"
-             " when aa_pos=%s for %s on %s" % (
-                original_protein[0],
-                variant_protein[0],
-                aa_pos, variant,
-                transcript))
-        return StartLoss(
-            variant=variant,
-            transcript=transcript,
-            aa_alt=variant_protein[0])
-
-    variant_stop_codon_index = variant_protein.find("*")
-
-    # if contained stop codon, truncate sequence before it
-    if variant_stop_codon_index > -1:
-        variant_protein = variant_protein[:variant_stop_codon_index]
-
-    if original_protein == variant_protein:
-        return Silent(
-            variant,
-            transcript,
-            aa_pos=aa_pos,
-            aa_ref=variant_protein[aa_pos])
-
-    # is this a premature stop codon?
-    if variant_stop_codon_index == aa_pos:
-        return PrematureStop(
-            variant,
-            transcript,
-            cds_offset,
-            aa_ref=original_protein[aa_pos])
 
     frameshift = False
 
