@@ -29,7 +29,7 @@ from .effects import (
     IncompleteTranscript,
     ThreePrimeUTR,
 )
-from .mutate import mutate
+from .mutate import substitute, insert_after
 from .string_helpers import trim_shared_flanking_strings
 
 from Bio.Seq import Seq, CodonTable
@@ -37,7 +37,7 @@ from Bio.Seq import Seq, CodonTable
 def infer_coding_effect(
         ref,
         alt,
-        cds_offset,
+        transcript_offset,
         transcript,
         variant):
     """
@@ -53,8 +53,8 @@ def infer_coding_effect(
     alt : str
         Alternate nucleotides we're replacing the reference with
 
-    cds_offset : int
-        Offset into the coding sequence of the ref->alt substitution
+    transcript_offset : int
+        Offset into the full transcript sequence of the ref->alt substitution
 
     transcript : Transcript
 
@@ -64,13 +64,28 @@ def infer_coding_effect(
         raise ValueError(
             ("Can't annotate coding effect for %s"
              " on incomplete transcript %s" % (variant, transcript)))
+
     sequence = transcript.sequence
     cds_start_offset = min(transcript.start_codon_spliced_offsets)
     cds_stop_offset = max(transcript.stop_codon_spliced_offsets)
 
+    logging.info("%s %s %s %d", variant, variant.original_ref, variant.original_alt, variant.original_start)
+    logging.info("%s %s %s %d", variant, variant.ref, variant.alt, variant.start)
+
     # Don't need a pyfaidx.Sequence object here, just convert it to the an str
     cds_seq = str(sequence[cds_start_offset:cds_stop_offset + 1])
 
+    if len(ref) == 0 and transcript.strand == "-":
+        # for insertions the CDS offset is supposed to point to the
+        # nucleotide immediately before the insertion, but on the reverse
+        # strand this is actually the nucleotide immediately after the
+        # insertion
+        # Need to adjust this by moving the CDS offset back one
+        cds_offset = transcript_offset - cds_start_offset - 1
+    else:
+        cds_offset = transcript_offset - cds_start_offset
+
+    logging.info("%s %d %d", variant, transcript_offset, cds_offset)
     assert cds_offset < len(cds_seq), \
         "Expected CDS offset (%d) < |CDS| (%d) for %s on %s" % (
             cds_offset, len(cds_seq), variant, transcript)
@@ -117,15 +132,41 @@ def infer_coding_effect(
         raise ValueError(
             "Translated protein sequence of %s is empty" % (transcript,))
 
-    variant_cds_seq = mutate(
-        str(sequence[cds_start_offset:]),
-        cds_offset,
-        ref,
-        alt)
+    transcript_after_start_codon = str(sequence[cds_start_offset:])
+
+    # By convention, genomic insertions happen *after* their base 1 position on
+    # a chromosome. On the reverse strand, however, an insertion has to go
+    # before the nucleotide at some transcript offset.
+    # Example:
+    #    chromosome sequence:
+    #        TTT|GATCTCGTA|CCC
+    #    transcript on reverse strand:
+    #        CCC|ATGCTCTAG|TTT
+    #    where the CDS is emphasized:
+    #            ATGCTCTAG
+    # If we have a genomic insertion g.6insATT
+    # the genomic sequence becomes:
+    #       TTT|GAT_ATT_CTCGTA|CCC
+    # (insert the "ATT" after the "T" at position 6)
+    # On the reverse strand this becomes:
+    #       CCC|ATGCTC_TTA_TAG|TTT
+    # (insert the "ATT" *before* the "T" at position 10)
+    #
+    # Above the set the CDS offset for insertions on the reverse strand to
+    # have an offset one less than they otherwise would, which lets us
+    # insert_after to insert into the correct location.
+    #
+    if len(ref) == 0:
+        variant_cds_seq = insert_after(
+            transcript_after_start_codon, cds_offset, alt)
+    else:
+        variant_cds_seq = substitute(
+            transcript_after_start_codon,
+            cds_offset,
+            ref,
+            alt)
 
     # In case sequence isn't a multiple of 3, then truncate it
-    # TODO: if we get a frameshift by the end of a CDS (e.g. in the stop codon)
-    # then we should use some of the 3' UTR to finish translation.
     truncated_variant_cds_len = int(len(variant_cds_seq) / 3) * 3
     truncated_variant_cds_seq = variant_cds_seq[:truncated_variant_cds_len]
 
@@ -205,8 +246,6 @@ def infer_coding_effect(
     if variant_stop_codon_index > -1:
         variant_protein = variant_protein[:variant_stop_codon_index]
 
-    # variant_protein sequence includes stop codon, whereas original_protein
-    # doesn't
     if original_protein == variant_protein:
         return Silent(
             variant,
@@ -234,32 +273,14 @@ def infer_coding_effect(
             transcript,
             cds_offset,
             aa_ref)
-    # does the mutation shift the open reading frame?
-    elif abs(n_cdna_ref - n_cdna_alt) % 3 != 0:
-        shifted_sequence = variant_protein[aa_pos:]
 
-        # frameshift may still preserve some of the same codons
-        # so trim any shared amino acids
-        for i, aa_mutant in enumerate(shifted_sequence):
-            if original_protein[aa_pos + i] != aa_mutant:
-                break
-            aa_pos += 1
-        shifted_sequence = shifted_sequence[i:]
-        # if a frameshift doesn't create any new amino acids, then
-        # it must immediately have hit a stop codon
-        if len(shifted_sequence) == 0:
-            return FrameShiftTruncation(
-                variant=variant,
-                transcript=transcript,
-                aa_pos=aa_pos,
-                aa_ref=aa_ref)
-        else:
-            return FrameShift(
-                variant=variant,
-                transcript=transcript,
-                aa_pos=aa_pos,
-                aa_ref=aa_ref,
-                shifted_sequence=shifted_sequence)
+    frameshift = False
+
+    # does the mutation shift the open reading frame?
+    if abs(n_cdna_ref - n_cdna_alt) % 3 != 0:
+        frameshift = True
+        aa_alt = variant_protein[aa_pos:]
+
     # the position of deleted amino acids on the variant protein
     # will be from aa_pos:aa_pos, where aa_pos is the last position before
     # the deleted residues
@@ -284,40 +305,80 @@ def infer_coding_effect(
 
     # in case of simple insertion like FY>FYGL or deletions FYGL > FY,
     # get rid of the shared prefixes/suffixes
-    aa_ref, aa_alt, prefix, _ = trim_shared_flanking_strings(aa_ref, aa_alt)
+    aa_ref, aa_alt, prefix, suffix = trim_shared_flanking_strings(
+        aa_ref, aa_alt)
     aa_pos += len(prefix)
+
+    if frameshift:
+        if len(aa_ref) == 0:
+            assert len(prefix) > 0
+            aa_ref = prefix[-1]
+
+        # if a frameshift doesn't create any new amino acids, then
+        # it must immediately have hit a stop codon
+        if len(aa_alt) == 0:
+            return FrameShiftTruncation(
+                variant=variant,
+                transcript=transcript,
+                aa_pos=aa_pos,
+                aa_ref=aa_ref)
+        else:
+            return FrameShift(
+                variant=variant,
+                transcript=transcript,
+                aa_pos=aa_pos,
+                aa_ref=aa_ref,
+                shifted_sequence=aa_alt)
 
     # Deletion e.g. p.389delQQ
     if len(aa_alt) == 0:
         assert len(aa_ref) > 0, \
-            "Can't have empty ref and alt for variant %s on transcript %s" % (
-                variant, transcript)
-        n_kept = len(aa_alt)
-        # if aa_ref = FYPQ and aa_alt = F, then deleted = YPQ
-        deleted = aa_ref[n_kept:]
-
+            ("Can't have empty ref and alt for variant %s on transcript %s,"
+             " shared prefix = '%s', shared suffix = '%s'") % (
+             variant, transcript, prefix, suffix)
         return Deletion(
             variant,
             transcript,
-            aa_pos=aa_pos + n_kept,
-            aa_ref=deleted)
+            aa_pos=aa_pos,
+            aa_ref=aa_ref)
 
     # Insertion, e.g. p.37insA
     elif len(aa_ref) == 0:
+        if aa_pos == 0:
+            # insertion at beginning of amino acid chain is a special case
+            # where aa_alt is allowed to have length 1 and isn't expected
+            # to contain a reference residue
+            return Insertion(
+                variant, transcript,
+                aa_pos=0,
+                aa_alt=aa_alt)
         assert len(aa_alt) > 1, \
-            "Can't have empty ref and alt for variant %s on transcript %s" % (
-                variant, transcript)
-        # the meaning of positions for insertions is different, the inserted
-        # amino acids get put *after* aa_pos, so the first element of the
-        # aa_alt string is actually the ref nucleotide before the insertion
-        #
-        # TODO: what happens if we're inserting at the very beginning of
-        # a protein?
-        inserted = aa_alt[1:]
+            ("Can't have ref = '' and alt = '%s' at aa_pos = %d, cds_pos = %d"
+             " for variant %s on transcript %s with shared prefix ='%s',"
+             " shared suffix = '%s'") % (
+                aa_alt,
+                aa_pos,
+                cds_offset,
+                variant,
+                transcript,
+                prefix,
+                suffix)
+        logging.info(
+            "ref = '%s', alt = '%s', cds_offset = '%s'",
+            ref, alt, cds_offset)
+        logging.info("aa_ref = '%s', aa_alt = '%s', aa_pos = %d",
+            aa_ref, aa_alt, aa_pos)
+        logging.info(cds_seq)
+        logging.info(truncated_variant_cds_seq)
+        logging.info(original_protein)
+        logging.info(variant_protein)
+        # since insertion is described in terms of which residue it comes
+        # after, need to drop first residue of aa_alt
+        aa_alt = aa_alt[1:]
         return Insertion(
             variant, transcript,
             aa_pos=aa_pos,
-            aa_alt=inserted)
+            aa_alt=aa_alt)
 
     # simple substitution e.g. p.V600E
     elif len(aa_ref) == 1 and len(aa_alt) == 1:

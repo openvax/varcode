@@ -64,8 +64,13 @@ def _insertion(chrom, pos, dna_ref, dna_alt, transcript_id, inserted):
     assert isinstance(effect, Insertion), \
         "Expected insertion, got %s" % (effect,)
     assert effect.aa_alt == inserted, \
-        "Expected insertion of '%s' but got '%s' for %s:%d%s>%s" % (
-            inserted, effect.aa_alt, chrom, pos, dna_ref, dna_alt)
+        "Expected insertion of '%s' but got %s for %s:%d%s>%s" % (
+            inserted,
+            effect.short_description(),
+            chrom,
+            pos,
+            dna_ref,
+            dna_alt)
 
 def _frameshift(
         chrom, pos, dna_ref, dna_alt, transcript_id,

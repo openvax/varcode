@@ -14,6 +14,7 @@
 
 from __future__ import print_function, division, absolute_import
 
+
 def interval_offset_on_transcript(start, end, transcript):
     """
     Given an interval [start:end] and a particular transcript,
@@ -48,4 +49,6 @@ def interval_offset_on_transcript(start, end, transcript):
     if end > transcript.end:
         end = transcript.end
     # return earliest offset into the spliced transcript
-    return min(transcript.spliced_offset(start), transcript.spliced_offset(end))
+    return min(
+        transcript.spliced_offset(start),
+        transcript.spliced_offset(end))

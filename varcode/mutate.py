@@ -15,9 +15,52 @@
 from __future__ import print_function, division, absolute_import
 
 
-def mutate(sequence, position, variant_ref, variant_alt):
+def insert_before(sequence, offset, new_residues):
+    """Mutate the given sequence by inserting the string `new_residues` before
+    `offset`.
+
+    Parameters
+    ----------
+    sequence : sequence
+        String of amino acids or DNA bases
+
+    offset : int
+        Base 0 offset from start of sequence, after which we should insert
+        `new_residues`.
+
+    new_residues : sequence
     """
-    Mutate a sequence by substituting given `alt` at instead of `ref` at the
+    assert 0 < offset <= len(sequence), \
+        "Invalid position %d for sequence of length %d" % (
+            offset, len(sequence))
+    prefix = sequence[:offset]
+    suffix = sequence[offset:]
+    return prefix + new_residues + suffix
+
+def insert_after(sequence, offset, new_residues):
+    """Mutate the given sequence by inserting the string `new_residues` after
+    `offset`.
+
+    Parameters
+    ----------
+    sequence : sequence
+        String of amino acids or DNA bases
+
+    offset : int
+        Base 0 offset from start of sequence, after which we should insert
+        `new_residues`.
+
+    new_residues : sequence
+    """
+    assert 0 <= offset < len(sequence), \
+        "Invalid position %d for sequence of length %d" % (
+            offset, len(sequence))
+    prefix = sequence[:offset + 1]
+    suffix = sequence[offset + 1:]
+    return prefix + new_residues + suffix
+
+def substitute(sequence, offset, ref, alt):
+    """Mutate a sequence by substituting given `alt` at instead of `ref` at the
     given `position`.
 
     Parameters
@@ -25,20 +68,20 @@ def mutate(sequence, position, variant_ref, variant_alt):
     sequence : sequence
         String of amino acids or DNA bases
 
-    position : int
-        Position in the sequence, starts from 0
+    offset : int
+        Base 0 offset from start of `sequence`
 
-    variant_ref : sequence or str
+    ref : sequence or str
         What do we expect to find at the position?
 
-    variant_alt : sequence or str
+    alt : sequence or str
         Alternate sequence to insert
     """
-    n_variant_ref = len(variant_ref)
-    sequence_ref = sequence[position:position + n_variant_ref]
-    assert str(sequence_ref) == str(variant_ref), \
-        "Reference %s at position %d != expected reference %s" % \
-        (sequence_ref, position, variant_ref)
-    prefix = sequence[:position]
-    suffix = sequence[position + n_variant_ref:]
-    return prefix + variant_alt + suffix
+    n_ref = len(ref)
+    sequence_ref = sequence[offset:offset + n_ref]
+    assert str(sequence_ref) == str(ref), \
+        "Reference %s at offset %d != expected reference %s" % \
+        (sequence_ref, offset, ref)
+    prefix = sequence[:offset]
+    suffix = sequence[offset + n_ref:]
+    return prefix + alt + suffix

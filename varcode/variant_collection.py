@@ -100,7 +100,7 @@ class VariantCollection(object):
             original_filename=self.original_filename)
 
     @memoize
-    def high_impact_effects(self, *args, **kwargs):
+    def high_priority_effects(self, *args, **kwargs):
         """Like VariantCollection.effects() but only returns effects whose
         priority is at least as high as a missense mutation
         (e.g. frameshifts, splice site mutations, &c).

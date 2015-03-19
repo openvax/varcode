@@ -44,14 +44,15 @@ from .nucleotides import normalize_nucleotide_string
 from .string_helpers import trim_shared_flanking_strings
 from .transcript_helpers import interval_offset_on_transcript
 
+DEFAULT_ENSEMBL_RELEASE = EnsemblRelease()
 
 class Variant(object):
     def __init__(self,
             contig,
-            pos,
+            start,
             ref,
             alt,
-            ensembl,
+            ensembl=DEFAULT_ENSEMBL_RELEASE,
             info=None,
             allow_extended_nucleotides=False):
         """
@@ -62,7 +63,7 @@ class Variant(object):
         contig : str
             Chromosome that this variant is on
 
-        pos : int
+        start : int
             1-based position on the chromosome of first reference nucleotide
 
         ref : str
@@ -95,7 +96,7 @@ class Variant(object):
             allow_extended_nucleotides=allow_extended_nucleotides)
         self.original_alt = normalize_nucleotide_string(alt,
             allow_extended_nucleotides=allow_extended_nucleotides)
-        self.original_start = int(pos)
+        self.original_start = int(start)
 
         # normalize the variant by trimming any shared prefix or suffix
         # between ref and alt nucleotide sequences and then
@@ -105,6 +106,7 @@ class Variant(object):
 
         self.ref = trimmed_ref
         self.alt = trimmed_alt
+
         # insertions must be treated differently since the meaning of a
         # position for an insertion is
         #   "insert the alt nucleotides after this position"
@@ -128,7 +130,11 @@ class Variant(object):
 
     def __str__(self):
         return "Variant(contig=%s, start=%d, ref=%s, alt=%s, genome=%s)" % (
-            self.fields())
+            self.contig,
+            self.start,
+            self.ref if self.ref else ".",
+            self.alt if self.alt else ".",
+            self.reference_name,)
 
     def __repr__(self):
         return str(self)
@@ -165,25 +171,25 @@ class Variant(object):
 
     @memoize
     def short_description(self):
-        chrom, pos, ref, alt = self.contig, self.start, self.ref, self.alt
-        if ref == alt:
+        if self.ref == self.alt:
             # no change
-            return "chr%s g.%d %s=%s" % (chrom, pos, ref, alt)
-        elif len(ref) == 0 or alt.startswith(ref):
+            return "chr%s g.%d%s" % (
+                self.contig, self.start, self.ref)
+        elif len(self.ref) == 0:
             # insertions
-            insert_after_pos = pos + len(ref)
-            return "chr%s g.%d_%d ins%s" % (
-                chrom,
-                insert_after_pos,
-                insert_after_pos + 1,
-                alt[len(ref):])
-        elif len(alt) == 0 or ref.startswith(alt):
+            return "chr%s g.%d_%dins%s" % (
+                self.contig,
+                self.start,
+                self.start + 1,
+                self.alt)
+        elif len(self.alt) == 0:
             # deletion
-            return "chr%s g.%d_%d del%s" % (
-                chrom, pos + len(alt), pos + len(ref), ref[len(alt):])
+            return "chr%s g.%d_%ddel%s" % (
+                self.contig, self.start, self.end, self.ref)
         else:
             # substitution
-            return "chr%s g.%d %s>%s" % (chrom, pos, ref, alt)
+            return "chr%s g.%d%s>%s" % (
+                self.contig, self.start, self.ref, self.alt)
 
     @memoize
     def transcripts(self):
@@ -456,11 +462,9 @@ class Variant(object):
         if offset_with_utr5 >= utr3_offset:
             return ThreePrimeUTR(self, transcript)
 
-        cds_offset = offset_with_utr5 - utr5_length
-
         return infer_coding_effect(
             strand_ref,
             strand_alt,
-            cds_offset,
+            offset_with_utr5,
             variant=self,
             transcript=transcript)

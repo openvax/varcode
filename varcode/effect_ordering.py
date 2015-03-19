@@ -88,22 +88,23 @@ def top_priority_effect(effects):
         elif priority == best_priority:
             best_effects.append(effect)
 
-    if any(hasattr(effect, 'transcript') and
-           effect.transcript.complete for effect in best_effects):
-        # if any of the effects are trancript effects which have complete
-        # coding sequence annotations, filter the effects down to those that
-        # are complete and sort them by length of the coding sequence
-        best_effects = [
-            effect
-            for effect in best_effects
-            if effect.transcript.complete
-        ]
-
-        def key_fn(effect):
-            return len(effect.transcript.coding_sequence)
-    else:
-        # if effects are over incomplete transcripts, sort them by the
-        # their total transcript length
-        def key_fn(effect):
-            return len(effect.transcript)
+    def key_fn(effect):
+        """Returns key tuple with the following fields that should be sorted
+        lexicographically:
+            - what is the CDS length?
+                This value will be 0 if the effect has no associated transcript
+                or if the transcript is noncoding or incomplete
+            - what is the total length of the transcript?
+                This value will be 0 intra/intergenic variants effects without
+                an associated transcript.
+        """
+        # by default, we'll return (0, 0) for effects without an associated
+        # transcript
+        transcript_length = 0
+        cds_length = 0
+        if hasattr(effect, 'transcript'):
+            transcript_length = len(effect.transcript)
+            if effect.transcript.complete:
+                cds_length = len(effect.transcript.coding_sequence)
+        return (cds_length, transcript_length)
     return max(best_effects, key=key_fn)

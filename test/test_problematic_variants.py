@@ -16,7 +16,7 @@ should_not_crash_variants = [
     # "Couldn't find position 92979124 on any exon of ENST00000540033"
     Variant(
         contig=1,
-        pos=92979092,
+        start=92979092,
         ref="ATATATATATATATATATATATATATATATATG",
         alt="A",
         ensembl=ensembl75),
@@ -25,7 +25,7 @@ should_not_crash_variants = [
     # "" but got len(original) = 653, len(variant) = 653"
     Variant(
         contig=1,
-        pos=167385324,
+        start=167385324,
         ref="TAA",
         alt="T",
         ensembl=ensembl75),
@@ -33,10 +33,18 @@ should_not_crash_variants = [
     # "Variant which span 5' UTR and CDS not supported"
     Variant(
         contig=19,
-        pos=44351166,
+        start=44351166,
         ref="GGGAGAT",
         alt="G",
-        ensembl=ensembl75)
+        ensembl=ensembl75),
+    # error message:
+    # "Can't have ref = '' and alt = 'E' at aa_pos = 445, cds_pos = 1335"
+    Variant(
+        contig=1,
+        start=1684347,
+        ref="",
+        alt="CCT",
+        genome=ensembl75),
 ]
 
 def try_effect_annotation(variant):
