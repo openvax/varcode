@@ -13,8 +13,8 @@
 # limitations under the License.
 
 from __future__ import print_function, division, absolute_import
-
 from collections import defaultdict
+from functools import wraps
 
 def groupby_field(records, field_name):
     """
@@ -38,6 +38,7 @@ def memoize(fn):
     """
     memoized_values = {}
 
+    @wraps(fn)
     def wrapped_fn(*args, **kwargs):
         key = (args, tuple(sorted(kwargs.items())))
         if key not in memoized_values:

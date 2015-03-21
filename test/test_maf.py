@@ -56,7 +56,7 @@ def test_maf_aa_changes():
 
     expected_changes = {}
     maf_fields = pd.read_csv(
-        "data/ov.wustle.subset5.maf",
+        data_path("ov.wustle.subset5.maf"),
         sep="\t",
         comment="#")
     for _, row in maf_fields.iterrows():
@@ -70,6 +70,6 @@ def test_maf_aa_changes():
             expected_changes[key] = change
 
     for variant in variants:
-        key = (variant.contig, variant.pos)
+        key = (variant.contig, variant.start)
         expected = expected_changes[key]
         yield (check_same_aa_change, variant, expected)

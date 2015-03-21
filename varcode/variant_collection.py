@@ -56,13 +56,13 @@ class VariantCollection(object):
             isinstance(other, VariantCollection) and
             self.variants == other.variants)
 
-    def variant_summary(self):
+    def summary_string(self):
         """
         Returns a string indicating each variant in the collection.
         """
         fields = [
             ("n_variants", len(self.variants)),
-            ("reference", ", ".join(self.reference_names))
+            ("reference", ", ".join(self.reference_names()))
         ]
 
         if self.original_filename:
@@ -72,7 +72,12 @@ class VariantCollection(object):
             ", ".join(
                 "%s=%s" % (k, v) for (k, v) in fields))
         for variant in self.variants:
-            s += "\n\t%s" % variant
+            gene_names = variant.gene_names()
+            if len(gene_names):
+                gene_names_string = " : %s" % ", ".join(gene_names)
+            else:
+                gene_names_string = ""
+            s += "\n\t%s%s" % (variant, gene_names_string)
         return s
 
     def __str__(self):
@@ -95,24 +100,24 @@ class VariantCollection(object):
             original_filename=self.original_filename)
 
     @memoize
-    def high_impact_effects(self, *args, **kwargs):
-        """Like variant_effects() but only returns effects whose priority is
-        at least as high as a missense mutation (e.g. frameshifts, splice
-        site mutations, &c).
+    def high_priority_effects(self, *args, **kwargs):
+        """Like VariantCollection.effects() but only returns effects whose
+        priority is at least as high as a missense mutation
+        (e.g. frameshifts, splice site mutations, &c).
 
-        All arguments are passed on to Variant.summary_effect(*args, **kwargs).
+        All arguments are passed on to Variant.top_effect(*args, **kwargs).
         """
         min_priority = transcript_effect_priority_dict[Substitution]
         results = OrderedDict()
         for variant in self.variants:
-            effect = variant.summary_effect(*args, **kwargs)
+            effect = variant.top_effect(*args, **kwargs)
             priority = effect_priority(effect)
             if priority > min_priority:
                 results[variant] = effect
         return results
 
     @memoize
-    def variant_effects(
+    def effects(
             self,
             raise_on_error=True):
         """
@@ -126,12 +131,11 @@ class VariantCollection(object):
             transcript, should it be raised? This default is True, meaning
             errors result in raised exceptions, otherwise they are only logged.
         """
-        results = OrderedDict()
+        all_effects = OrderedDict()
         for variant in self.variants:
-            effects = variant.effects(
+            all_effects[variant] = variant.effects(
                 raise_on_error=raise_on_error)
-            results[variant] = effects
-        return results
+        return all_effects
 
     def full_effect_string(self, *args, **kwargs):
         """

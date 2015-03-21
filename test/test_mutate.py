@@ -12,9 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .effects import *
-from .effect_ordering import effect_priority, top_priority_effect
-from .maf import load_maf, load_maf_dataframe
-from .variant import Variant
-from .variant_collection import VariantCollection
-from .vcf import load_vcf
+from varcode import mutate
+from nose.tools import eq_
+
+def test_snp_mutation():
+    seq = "AACCTT"
+    mutated = mutate.substitute(seq, 1, "A", "G")
+    eq_(mutated, "AGCCTT")
+
+def test_deletion_mutation():
+    seq = "AACT"
+    mutated = mutate.substitute(seq, 1, "ACT", "T")
+    eq_(mutated, "AT")
+
+def test_insert_before():
+    mutated = mutate.insert_before("AACT", 1, "GG")
+    eq_(mutated, "AGGACT")
+
+def test_insert_after():
+    mutated = mutate.insert_after("AACT", 1, "GG")
+    eq_(mutated, "AAGGCT")

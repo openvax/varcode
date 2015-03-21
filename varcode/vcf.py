@@ -15,7 +15,9 @@
 # required so that 'import vcf' gets the global PyVCF package,
 # rather than our local vcf module
 from __future__ import absolute_import
+
 import typechecks
+from pyensembl import EnsemblRelease
 
 from .reference_name import (
     infer_reference_name,
@@ -23,7 +25,6 @@ from .reference_name import (
 )
 from .variant import Variant
 from .variant_collection import VariantCollection
-from pyensembl import EnsemblRelease
 
 import vcf  # PyVCF
 
@@ -74,7 +75,7 @@ def load_vcf(
                     continue
                 variant = Variant(
                     contig=record.CHROM,
-                    pos=record.POS,
+                    start=record.POS,
                     ref=record.REF,
                     alt=alt.sequence,
                     info=record.INFO,

@@ -22,6 +22,7 @@ from pyensembl.release_info import MAX_ENSEMBL_RELEASE
 
 from .nucleotides import VALID_NUCLEOTIDES
 from .variant import Variant
+from .variant_collection import VariantCollection
 
 # cache lists of all transcript IDs for difference Ensembl releases
 _transcript_ids_cache = {}
@@ -67,4 +68,4 @@ def random_variants(count, ensembl_release=MAX_ENSEMBL_RELEASE):
             alt=alt,
             ensembl=ensembl)
         variants.append(variant)
-    return variants
+    return VariantCollection(variants)
