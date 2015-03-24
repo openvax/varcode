@@ -279,13 +279,17 @@ class CodingMutation(Exonic):
 
 
 class Silent(CodingMutation):
-    """
-    Mutation to an exon of a coding region which doesn't change the
+    """Mutation to an exon of a coding region which doesn't change the
     amino acid sequence.
     """
     def short_description(self):
         return "silent"
 
+class AlternateStartCodon(Silent):
+    """Change of start codon e.g. ATG > TTG, may act as a silent mutation
+    but also risks the possibility of a start loss."""
+    def short_description(self):
+        return "alternate-start-codon"
 
 class BaseSubstitution(CodingMutation):
     """

@@ -28,6 +28,7 @@ from varcode import (
     Substitution,
     StopLoss,
     StartLoss,
+    AlternateStartCodon,
     PrematureStop,
     FrameShift,
     # TODO: SpliceDonor, SpliceReceptor
@@ -54,16 +55,30 @@ def test_incomplete():
     variant = Variant("7", 55109723, "A", "T", ensembl=ensembl78)
     expect_effect(variant, "ENST00000450046", IncompleteTranscript)
 
+
 def test_start_loss():
     # transcript EGFR-005 (ENST00000420316 in Ensembl 77)
     # location: chrom 7 @ 55,019,034-55,156,951 forward strand
 
     # CDS starts at position 244 of the first exon,
     # which is 55,019,034 + 244 of chr7 = 55019278
-    # change the first nucleotide of the 5' UTR A>T
-    # making what used to be a start codon into TTG (Leucine)
-    variant = Variant("7", 55019278, "A", "T", ensembl=ensembl78)
+    # change the first two nucleotides of the 5' UTR AT>GG
+    # making what used to be a start codon into GGG (Glycine)
+    variant = Variant("7", 55019278, "AT", "GG", ensembl=ensembl78)
     expect_effect(variant, "ENST00000420316", StartLoss)
+
+def test_alternate_start_codon():
+    # transcript EGFR-005 (ENST00000420316 in Ensembl 77)
+    # location: chrom 7 @ 55,019,034-55,156,951 forward strand
+
+    # CDS starts at position 244 of the first exon,
+    # which is 55,019,034 + 244 of chr7 = 55019278
+    # change the first nucleotide of the 5' UTR A>T
+    # making what used to be the standard start codon ATG into TTG,
+    # which normally codes for Leucine but can be used as an alternate
+    # start codon
+    variant = Variant("7", 55019278, "A", "T", ensembl=ensembl78)
+    expect_effect(variant, "ENST00000420316", AlternateStartCodon)
 
 
 def test_stop_loss():
