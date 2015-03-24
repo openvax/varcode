@@ -191,8 +191,13 @@ def infer_coding_effect(
         elif aa_pos == len(original_protein):
             aa_ref = "*"
         elif aa_pos > len(original_protein):
-            logging.warn("How did we get aa_pos = %d when len(protein) = %d?",
-                aa_pos, len(original_protein))
+            logging.warn(
+                ("Unexpected aa_pos = %d  for len(protein) = %d"
+                 " in 3' UTR of %s for %s"),
+                aa_pos,
+                len(original_protein),
+                transcript,
+                variant)
             aa_ref = "?"
         return Silent(
             variant,
