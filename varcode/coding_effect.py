@@ -39,7 +39,12 @@ START_CODONS = set(CodonTable.standard_dna_table.start_codons)
 STOP_CODONS = set(CodonTable.standard_dna_table.stop_codons)
 
 def translate(cds_seq):
-    """
+    """Translates cDNA coding sequence into amino acid protein sequence.
+
+    Should typically start with a start codon but allowing non-methionine
+    first residues since the CDS we're translating might have been affected
+    by a start loss mutation.
+
     Parameters
     ----------
     cds_seq : str or BioPython Seq
