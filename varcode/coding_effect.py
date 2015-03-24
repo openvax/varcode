@@ -22,17 +22,59 @@ from .effects import (
     Substitution,
     ComplexSubstitution,
     PrematureStop,
+    AlternateStartCodon,
     StartLoss,
     StopLoss,
     FrameShift,
     FrameShiftTruncation,
-    IncompleteTranscript,
     ThreePrimeUTR,
 )
 from .mutate import substitute, insert_after
 from .string_helpers import trim_shared_flanking_strings
 
-from Bio.Seq import Seq, CodonTable
+from Bio.Seq import Seq
+from Bio.Data import CodonTable
+
+START_CODONS = set(CodonTable.standard_dna_table.start_codons)
+STOP_CODONS = set(CodonTable.standard_dna_table.stop_codons)
+
+def translate(cds_seq):
+    """Translates cDNA coding sequence into amino acid protein sequence.
+
+    Should typically start with a start codon but allowing non-methionine
+    first residues since the CDS we're translating might have been affected
+    by a start loss mutation.
+
+    The sequence may include the 3' UTR but will stop translation at the first
+    encountered stop codon.
+
+    Parameters
+    ----------
+    cds_seq : str or BioPython Seq
+        cDNA coding sequence
+
+    Returns BioPython Seq of amino acids
+    """
+    cds_seq = Seq(cds_seq)
+
+    # In case sequence isn't a multiple of 3, then truncate it
+    truncated_cds_len = int(len(cds_seq) / 3) * 3
+    truncated_cds_seq = cds_seq[:truncated_cds_len]
+
+    # turn cDNA sequence into a BioPython sequence, translate
+    # to amino acids.
+    # passing cds=False since we may want to deal with premature
+    # stop codons
+    protein = truncated_cds_seq.translate(to_stop=True, cds=False)
+
+    if protein[0] != "M" and cds_seq[:3] in START_CODONS:
+        # TODO: figure out when these should be made into methionines
+        # and when left as whatever amino acid they normally code for
+        # e.g. Leucine start codons
+        # See: DOI: 10.1371/journal.pbio.0020397
+        return "M" + protein[1:]
+    return protein
+
 
 def infer_coding_effect(
         ref,
@@ -84,8 +126,7 @@ def infer_coding_effect(
     cds_start_offset = min(transcript.start_codon_spliced_offsets)
     cds_stop_offset = max(transcript.stop_codon_spliced_offsets)
 
-    # Don't need a pyfaidx.Sequence object here, just convert it to the an str
-    cds_seq = str(sequence[cds_start_offset:cds_stop_offset + 1])
+    cds_seq = sequence[cds_start_offset:cds_stop_offset + 1]
 
     if len(ref) == 0 and transcript.strand == "-":
         # for insertions the CDS offset is supposed to point to the
@@ -104,30 +145,13 @@ def infer_coding_effect(
     if len(cds_seq) < 3:
         raise ValueError("Coding sequence for %s is too short: '%s'" % (
             transcript, cds_seq))
-    elif cds_seq[:3] != "ATG":
-        # TODO: figure out when these should be made into methionines
-        # and when left as whatever amino acid they normally code for
-        logging.info("Non-standard start codon for %s: %s" % (
-            transcript, cds_seq[:3]))
-    # turn cDNA sequence into a BioPython sequence, translate
-    # to amino acids. Don't include the stop codon
-    # in the translated sequence.
-    try:
-        # passing cds=False so that BioPython doesn't turn alternative
-        # Leucine start codons into Methionines
-        # See: DOI: 10.1371/journal.pbio.0020397
-        original_protein = str(Seq(cds_seq).translate(to_stop=True, cds=False))
-    except CodonTable.TranslationError as error:
-        # coding sequence may contain premature stop codon or may have
-        # an incorrectly annotated frame
-        logging.warning(
-            "Translation error in coding sequence for %s" % transcript)
-        logging.warning(error)
-        return IncompleteTranscript(variant, transcript)
+
+    original_protein = translate(cds_seq)
 
     if len(original_protein) == 0:
         raise ValueError(
-            "Translated protein sequence of %s is empty" % (transcript,))
+            "Translated original protein sequence of %s is empty" % (
+                transcript,))
 
     transcript_after_start_codon = str(sequence[cds_start_offset:])
 
@@ -162,37 +186,57 @@ def infer_coding_effect(
             ref,
             alt)
 
-    # In case sequence isn't a multiple of 3, then truncate it
-    truncated_variant_cds_len = int(len(variant_cds_seq) / 3) * 3
-    truncated_variant_cds_seq = variant_cds_seq[:truncated_variant_cds_len]
+    variant_protein = translate(variant_cds_seq)
 
-    # Can't be sure that the variant is a complete CDS, so passing cds=False
-    # in the case of a frameshift, the transcript might not actually contain
-    # a stop codon. So, we're for it manually (by passing to_stop=False).
-    variant_protein = str(Seq(truncated_variant_cds_seq).translate(
-        to_stop=False, cds=False))
+    if len(variant_protein) == 0:
+        raise ValueError(
+            "Translated mutant protein sequence of %s is empty" % (transcript,))
 
     assert len(variant_protein) > 0, \
         "Protein sequence empty for variant %s on transcript %s" % (
             variant, transcript)
 
-    variant_stop_codon_index = variant_protein.find("*")
-
     # genomic position to codon position
     aa_pos = int(cds_offset / 3)
 
-    # if contained stop codon, truncate sequence before it
-    if variant_stop_codon_index > -1:
-        variant_protein = variant_protein[:variant_stop_codon_index]
-
     if original_protein == variant_protein:
-        if aa_pos < len(original_protein):
+        original_start_codon = cds_seq[:3]
+        variant_start_codon = variant_cds_seq[:3]
+        if original_start_codon != variant_start_codon:
+            # mutation is silent on the amino acid sequence but
+            # uses a different start codon, which may cause the transcript
+            # to not be translated or translated in unexpected ways
+            return AlternateStartCodon(
+                variant,
+                transcript,
+                original_start_codon,
+                variant_start_codon)
+        elif aa_pos < len(original_protein):
             aa_ref = original_protein[aa_pos]
         elif aa_pos == len(original_protein):
             aa_ref = "*"
         elif aa_pos > len(original_protein):
-            logging.warn("How did we get aa_pos = %d when len(protein) = %d?",
-                aa_pos, len(original_protein))
+            # We got into this function because the mutation was expected
+            # to start in the coding sequence
+            # If the first affected amino acid is after the end of the original
+            # protein then it's most likely that the stop codon used to
+            # terminate translation was actually a selenocysteine.
+            # TODO: look up selenocysteine annotations and pass them
+            # to translate.
+            if cds_seq[:len(original_protein) * 3 + 3].endswith("TGA"):
+                logging.info(
+                    ("Possible selenocysteine codon (TGA)"
+                     " at position %d of %s") % (
+                        aa_pos * 3,
+                        transcript))
+                return ThreePrimeUTR(variant, transcript)
+            logging.warn(
+                ("Unexpected aa_pos = %d  for len(protein) = %d"
+                 " in 3' UTR of %s for %s"),
+                aa_pos,
+                len(original_protein),
+                transcript,
+                variant)
             aa_ref = "?"
         return Silent(
             variant,
@@ -200,20 +244,29 @@ def infer_coding_effect(
             aa_pos=aa_pos,
             aa_ref=aa_ref)
 
-    if variant_protein[0] != original_protein[0]:
-        assert aa_pos == 0, \
-            ("Unexpected start codon (%s>%s)"
-             " when aa_pos=%s for %s on %s" % (
-                original_protein[0],
-                variant_protein[0],
-                aa_pos, variant,
-                transcript))
+    if aa_pos == 0 and (
+            variant_protein[0] != original_protein[0] or
+            len(original_protein) > len(variant_protein)):
+        # if change is in first codon of the protein and it either
+        # changes the amino acid or truncates the protein, consider that
+        # a start loss
         return StartLoss(
             variant=variant,
             transcript=transcript,
             aa_alt=variant_protein[0])
-    elif variant_stop_codon_index == aa_pos:
+    elif aa_pos == len(variant_protein):
         # is this a premature stop codon?
+        last_codon = variant_cds_seq[aa_pos * 3:aa_pos * 3 + 3]
+        if last_codon not in STOP_CODONS:
+            # if protein ends at the mutation point but there wasn't a stop
+            # codon there?
+            logging.warn(
+                ("Truncated protein doesn't end with stop codon for %s"
+                " on %s, original len = %d, mutant len = %d") % (
+                    variant,
+                    transcript,
+                    len(original_protein),
+                    len(variant_protein)))
         return PrematureStop(
             variant,
             transcript,

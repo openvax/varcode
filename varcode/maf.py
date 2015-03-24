@@ -149,7 +149,9 @@ def load_maf(filename):
         else:
             end_offset = len(ref) - 1
         expected_end_pos = start_pos + end_offset
-        if end_pos != expected_end_pos:
+        if len(ref) > 0 and end_pos != expected_end_pos:
+            # only check for correct ending since the meaning of start/end
+            # for insertions is different thn for substitutions
             raise ValueError(
                 "Expected variant %s:%s '%s' > '%s' to end at %d but got %d" % (
                     contig,

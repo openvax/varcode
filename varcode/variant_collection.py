@@ -51,10 +51,14 @@ class VariantCollection(object):
     def __iter__(self):
         return iter(self.variants)
 
+    def __hash__(self):
+        return hash(len(self.variants))
+
     def __eq__(self, other):
         return (
             isinstance(other, VariantCollection) and
-            self.variants == other.variants)
+            len(self.variants) == len(other.variants) and
+            all(v1 == v2 for (v1, v2) in zip(self.variants, other.variants)))
 
     def summary_string(self):
         """

@@ -30,6 +30,8 @@ transcript_effect_priority_list = [
     Insertion,
     Deletion,
     ComplexSubstitution,
+    # silent mutation which changes the start codon from e.g. ATG > TTG
+    AlternateStartCodon,
     # intronic variants near the splice boundaries but which aren't
     # the two nucleotides closest to the exon
     IntronicSpliceSite,
