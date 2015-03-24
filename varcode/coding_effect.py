@@ -216,6 +216,13 @@ def infer_coding_effect(
         elif aa_pos == len(original_protein):
             aa_ref = "*"
         elif aa_pos > len(original_protein):
+            # We got into this function because the mutation was expected
+            # to start in the coding sequence
+            # If the first affected amino acid is after the end of the original
+            # protein then it's most likely that the stop codon used to
+            # terminate translation was actually a selenocysteine.
+            # TODO: look up selenocysteine annotations and pass them
+            # to translate.
             if cds_seq[:len(original_protein) * 3 + 3].endswith("TGA"):
                 logging.info(
                     ("Possible selenocysteine codon (TGA)"
