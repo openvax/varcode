@@ -53,9 +53,6 @@ def translate(cds_seq):
     cds_seq : str or BioPython Seq
         cDNA coding sequence
 
-    transcript : PyEnsembl.transcript
-        Transcript from which we got cds_seq, used for error messages.
-
     Returns BioPython Seq of amino acids
     """
     cds_seq = Seq(cds_seq)
