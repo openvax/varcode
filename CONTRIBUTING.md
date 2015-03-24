@@ -11,7 +11,7 @@ If you find any bugs or problems while using Varcode or have any feature request
 
 To report any bugs, issues, or feature requests, please [open an issue](https://github.com/hammerlab/varcode/issues)
 Please check the [current open issues](https://github.com/hammerlab/varcode/issues) to see if the request already exists
-If you are filing a bug report, please describe the version of Varcode, PyEnsembl,and Python being used. If your problem involves a particular genomic variant, please include that variant and its corresponding reference genome (e.g. "GRCh37 1:384747 AAC>T").
+If you are filing a bug report, please describe the version of Varcode, PyEnsembl, and Python being used. If your problem involves a particular genomic variant, please include that variant and its corresponding reference genome (e.g. "GRCh37 1:384747 AAC>T").
 
 Coding Guidelines
 -----------------
