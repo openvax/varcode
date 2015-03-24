@@ -45,6 +45,9 @@ def translate(cds_seq):
     first residues since the CDS we're translating might have been affected
     by a start loss mutation.
 
+    The sequence may include the 3' UTR but will stop translation at the first
+    encountered stop codon.
+
     Parameters
     ----------
     cds_seq : str or BioPython Seq
