@@ -24,7 +24,7 @@ Effect Types
   - SpliceDonor
   - SpliceAcceptor
   - PrematureStop
-  - FrameShiftTruncation,
+  - FrameShiftTruncation
   - StartLoss
   - FrameShift
   - ExonLoss
