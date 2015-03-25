@@ -127,7 +127,7 @@ class Variant(object):
 
     @property
     def reference_name(self):
-        return self.ensembl.reference.reference_name
+        return self.ensembl.reference_name
 
     def __str__(self):
         return "Variant(contig=%s, start=%d, ref=%s, alt=%s, genome=%s)" % (

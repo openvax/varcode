@@ -51,7 +51,8 @@ transcript_effect_priority_list = [
     # modification or deletion of a start codon
     StartLoss,
     # out-of-frame insertion or deletion
-    FrameShift
+    FrameShift,
+    ExonLoss,
 ]
 
 transcript_effect_priority_dict = {

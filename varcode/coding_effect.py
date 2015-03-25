@@ -32,7 +32,7 @@ from .effects import (
 from .mutate import substitute, insert_after
 from .string_helpers import trim_shared_flanking_strings
 
-from Bio.Seq import Seq
+# from Bio.Seq import Seq
 from Bio.Data import CodonTable
 
 START_CODONS = set(CodonTable.standard_dna_table.start_codons)
@@ -50,13 +50,11 @@ def translate(cds_seq):
 
     Parameters
     ----------
-    cds_seq : str or BioPython Seq
+    cds_seq : BioPython Seq
         cDNA coding sequence
 
     Returns BioPython Seq of amino acids
     """
-    cds_seq = Seq(cds_seq)
-
     # In case sequence isn't a multiple of 3, then truncate it
     truncated_cds_len = int(len(cds_seq) / 3) * 3
     truncated_cds_seq = cds_seq[:truncated_cds_len]
@@ -107,7 +105,7 @@ def infer_coding_effect(
             ("Can't annotate coding effect for %s"
              " on incomplete transcript %s" % (variant, transcript)))
 
-    sequence = str(transcript.sequence)
+    sequence = transcript.sequence
 
     # reference nucleotides found on the transcript, if these don't match
     # what we were told to expect from the variant then raise an exception
@@ -146,14 +144,20 @@ def infer_coding_effect(
         raise ValueError("Coding sequence for %s is too short: '%s'" % (
             transcript, cds_seq))
 
-    original_protein = translate(cds_seq)
-
-    if len(original_protein) == 0:
+    original_protein = transcript.protein_sequence
+    # subtract 3 for the stop codon and divide by 3 since
+    # 3 nucleotides = 1 codon = 1 amino acid
+    expected_protein_length = int((len(cds_seq) - 3) / 3)
+    if len(original_protein) != expected_protein_length:
         raise ValueError(
-            "Translated original protein sequence of %s is empty" % (
-                transcript,))
+            "Expected protein sequence of %s to be %d amino acids"
+            "but got %d : %s" % (
+                transcript,
+                expected_protein_length,
+                len(original_protein),
+                original_protein))
 
-    transcript_after_start_codon = str(sequence[cds_start_offset:])
+    transcript_after_start_codon = sequence[cds_start_offset:]
 
     # By convention, genomic insertions happen *after* their base 1 position on
     # a chromosome. On the reverse strand, however, an insertion has to go
@@ -191,10 +195,6 @@ def infer_coding_effect(
     if len(variant_protein) == 0:
         raise ValueError(
             "Translated mutant protein sequence of %s is empty" % (transcript,))
-
-    assert len(variant_protein) > 0, \
-        "Protein sequence empty for variant %s on transcript %s" % (
-            variant, transcript)
 
     # genomic position to codon position
     aa_pos = int(cds_offset / 3)
