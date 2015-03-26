@@ -59,7 +59,7 @@ if __name__ == '__main__':
         install_requires=[
             'numpy>=1.7',
             'pandas>=0.13.1',
-            'pyensembl>=0.6.1,<0.7.0',
+            'pyensembl>=0.6.2,<0.7.0',
             'biopython',
             'pyvcf',
             'memoized_property'
