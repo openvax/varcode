@@ -457,13 +457,9 @@ def coding_effect(
     # get rid of the shared prefixes/suffixes
     aa_ref, aa_alt, prefix, suffix = trim_shared_flanking_strings(
         aa_ref, aa_alt)
-    print("ref '%s'" % aa_ref, "alt '%s'" % aa_alt, "prefix '%s'" % prefix, "suffix '%s'" % suffix)
     aa_pos += len(prefix)
 
     if frameshift:
-        # is aa_ref still inside the original protein?
-        print(aa_pos, len(original_protein))
-        print(original_protein)
         aa_ref = original_protein[aa_pos]
         # if a frameshift doesn't create any new amino acids, then
         # it must immediately have hit a stop codon
