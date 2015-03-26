@@ -21,7 +21,7 @@ from pyensembl.locus import normalize_chromosome
 from pyensembl.biotypes import is_coding_biotype
 from typechecks import require_instance
 
-from .coding_effect import infer_coding_effect
+from .coding_effect import coding_effect
 from .common import groupby_field, memoize
 from .effects import (
     TranscriptMutationEffect,
@@ -464,7 +464,7 @@ class Variant(object):
         if offset_with_utr5 >= utr3_offset:
             return ThreePrimeUTR(self, transcript)
 
-        return infer_coding_effect(
+        return coding_effect(
             strand_ref,
             strand_alt,
             offset_with_utr5,
