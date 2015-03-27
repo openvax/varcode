@@ -8,6 +8,7 @@ from pyensembl import EnsemblRelease
 from varcode import Variant
 
 ensembl75 = EnsemblRelease(75)
+ensembl78 = EnsemblRelease(78)
 
 # variants which have previously resulted in raised exceptions
 # during effect annotation
@@ -77,6 +78,22 @@ should_not_crash_variants = [
         ref="CCGACATC",
         alt="",
         ensembl=ensembl75),
+    # error message:
+    # "Can't have empty aa_ref and aa_alt"
+    Variant(
+        contig=8,
+        start=141488566,
+        ref="T",
+        alt="C",
+        ensembl=ensembl78),
+    # error message:
+    # "len(aa_alt) = 0"
+    Variant(
+        contig=11,
+        start=57741870,
+        ref="G",
+        alt="C",
+        ensembl=ensembl78),
 ]
 
 def try_effect_annotation(variant):

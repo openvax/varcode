@@ -15,6 +15,9 @@
 from __future__ import print_function, division, absolute_import
 import logging
 
+# from Bio.Seq import Seq
+from Bio.Data import CodonTable
+
 from .effects import (
     Silent,
     Insertion,
@@ -32,11 +35,27 @@ from .effects import (
 from .mutate import substitute, insert_after
 from .string_helpers import trim_shared_flanking_strings
 
-from Bio.Seq import Seq
-from Bio.Data import CodonTable
-
+DNA_CODON_TABLE = CodonTable.standard_dna_table.forward_table
 START_CODONS = set(CodonTable.standard_dna_table.start_codons)
 STOP_CODONS = set(CodonTable.standard_dna_table.stop_codons)
+
+def translate_codon(codon, aa_pos):
+    """Translate a single codon into a single amino acid or stop '*'
+
+    Parameters
+    ----------
+    codon : str
+        Expected to be of length 3
+    aa_pos : int
+        Codon/amino acid offset into the protein (starting from 0)
+    """
+    # not handling rare Leucine or Valine starts!
+    if aa_pos == 0 and codon in START_CODONS:
+        return "M"
+    elif codon in STOP_CODONS:
+        return "*"
+    else:
+        return DNA_CODON_TABLE[codon]
 
 def translate(cds_seq):
     """Translates cDNA coding sequence into amino acid protein sequence.
@@ -50,13 +69,11 @@ def translate(cds_seq):
 
     Parameters
     ----------
-    cds_seq : str or BioPython Seq
+    cds_seq : BioPython Seq
         cDNA coding sequence
 
     Returns BioPython Seq of amino acids
     """
-    cds_seq = Seq(cds_seq)
-
     # In case sequence isn't a multiple of 3, then truncate it
     truncated_cds_len = int(len(cds_seq) / 3) * 3
     truncated_cds_seq = cds_seq[:truncated_cds_len]
@@ -75,8 +92,77 @@ def translate(cds_seq):
         return "M" + protein[1:]
     return protein
 
+def snv_coding_effect(
+        ref,
+        alt,
+        cds_seq,
+        cds_offset,
+        transcript,
+        variant):
+    """Coding effect of a single nucleotide substitution"""
+    aa_pos = int(cds_offset / 3)
+    assert aa_pos <= len(transcript.protein_sequence)
 
-def infer_coding_effect(
+    # codon in the reference sequence
+    ref_codon = str(cds_seq[aa_pos * 3:aa_pos * 3 + 3])
+    # which nucleotide of the codon got changed?
+    codon_offset = cds_offset % 3
+    mutant_codon = (
+        ref_codon[:codon_offset] + alt + ref_codon[codon_offset + 1:])
+    assert len(mutant_codon) == 3, \
+        "Expected codon to have length 3, got %s (length = %d)" % (
+            mutant_codon, len(mutant_codon))
+    if aa_pos == 0:
+        if mutant_codon in START_CODONS:
+            # if we changed the starting codon treat then
+            # this is technically a Silent mutation but may cause
+            # alternate starts or other effects
+            return AlternateStartCodon(
+                variant,
+                transcript,
+                ref_codon,
+                mutant_codon)
+        else:
+            # if we changed a start codon to something else then
+            # we no longer know where the protein begins (or even in
+            # what frame).
+            # TODO: use the Kozak consensus sequence or a predictive model
+            # to identify the most likely start site
+            return StartLoss(
+                variant=variant,
+                transcript=transcript,
+                aa_alt=translate_codon(mutant_codon, 0))
+
+    original_amino_acid = translate_codon(ref_codon, aa_pos)
+    mutant_amino_acid = translate_codon(mutant_codon, aa_pos)
+
+    if original_amino_acid == mutant_amino_acid:
+        return Silent(
+            variant,
+            transcript,
+            aa_pos=aa_pos,
+            aa_ref=original_amino_acid)
+    elif aa_pos == len(transcript.protein_sequence):
+        # if non-silent mutation is at the end of the protein then
+        # should be a stop-loss
+        assert original_amino_acid == "*"
+        # if mutatin is at the end of the protein and both
+        assert mutant_amino_acid != "*"
+        return StopLoss(
+            variant,
+            transcript,
+            aa_pos=aa_pos,
+            aa_alt=mutant_amino_acid)
+    else:
+        # simple substitution e.g. p.V600E
+        return Substitution(
+            variant,
+            transcript,
+            aa_pos=aa_pos,
+            aa_ref=original_amino_acid,
+            aa_alt=mutant_amino_acid)
+
+def coding_effect(
         ref,
         alt,
         transcript_offset,
@@ -107,7 +193,7 @@ def infer_coding_effect(
             ("Can't annotate coding effect for %s"
              " on incomplete transcript %s" % (variant, transcript)))
 
-    sequence = str(transcript.sequence)
+    sequence = transcript.sequence
 
     # reference nucleotides found on the transcript, if these don't match
     # what we were told to expect from the variant then raise an exception
@@ -146,14 +232,42 @@ def infer_coding_effect(
         raise ValueError("Coding sequence for %s is too short: '%s'" % (
             transcript, cds_seq))
 
-    original_protein = translate(cds_seq)
+    original_protein = transcript.protein_sequence
 
-    if len(original_protein) == 0:
+    if not original_protein:
+        # Ensembl should have given us a protein sequence for every
+        # transcript but it's possible that we're trying to annotate a
+        # transcript whose biotype isn't included in the protein sequence FASTA
+        logging.warn("No protein sequence for %s in Ensembl", transcript)
+        original_protein = translate(cds_seq)
+
+    # subtract 3 for the stop codon and divide by 3 since
+    # 3 nucleotides = 1 codon = 1 amino acid
+    expected_protein_length = int((len(cds_seq) - 3) / 3)
+    if len(original_protein) != expected_protein_length:
         raise ValueError(
-            "Translated original protein sequence of %s is empty" % (
-                transcript,))
+            "Expected protein sequence of %s to be %d amino acids"
+            "but got %d : %s" % (
+                transcript,
+                expected_protein_length,
+                len(original_protein),
+                original_protein))
 
-    transcript_after_start_codon = str(sequence[cds_start_offset:])
+    # genomic position to codon position
+    aa_pos = int(cds_offset / 3)
+
+    # special case simplified logic for an SNV
+    # TODO: generalize for all in-frame substitutions
+    if len(ref) == len(alt) == 1:
+        return snv_coding_effect(
+            ref,
+            alt,
+            cds_seq,
+            cds_offset,
+            transcript,
+            variant)
+
+    transcript_after_start_codon = sequence[cds_start_offset:]
 
     # By convention, genomic insertions happen *after* their base 1 position on
     # a chromosome. On the reverse strand, however, an insertion has to go
@@ -191,13 +305,6 @@ def infer_coding_effect(
     if len(variant_protein) == 0:
         raise ValueError(
             "Translated mutant protein sequence of %s is empty" % (transcript,))
-
-    assert len(variant_protein) > 0, \
-        "Protein sequence empty for variant %s on transcript %s" % (
-            variant, transcript)
-
-    # genomic position to codon position
-    aa_pos = int(cds_offset / 3)
 
     if original_protein == variant_protein:
         original_start_codon = cds_seq[:3]
@@ -336,6 +443,7 @@ def infer_coding_effect(
     else:
         last_aa_alt_pos = int((cds_offset + len(alt) - 1) / 3)
         aa_alt = variant_protein[aa_pos:last_aa_alt_pos + 1]
+
     assert len(alt) == 0 or len(aa_alt) > 0, \
             "len(aa_alt) = 0 for variant %s on transcript %s (aa_pos=%d)" % (
                 variant, transcript, aa_pos)
@@ -349,7 +457,6 @@ def infer_coding_effect(
     # get rid of the shared prefixes/suffixes
     aa_ref, aa_alt, prefix, suffix = trim_shared_flanking_strings(
         aa_ref, aa_alt)
-
     aa_pos += len(prefix)
 
     if frameshift:
@@ -399,16 +506,13 @@ def infer_coding_effect(
             variant, transcript,
             aa_pos=aa_pos,
             aa_alt=aa_alt)
-
-    # simple substitution e.g. p.V600E
-    elif len(aa_ref) == 1 and len(aa_alt) == 1:
+    elif len(aa_ref) == len(aa_alt) == 1:
         return Substitution(
             variant,
             transcript,
             aa_pos=aa_pos,
             aa_ref=aa_ref,
             aa_alt=aa_alt)
-
     # substitution which involes multiple amino acids
     # Example: p.V600EEQ, p.IL49AQY
     else:

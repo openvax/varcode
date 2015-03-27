@@ -28,7 +28,11 @@ from .variant_collection import VariantCollection
 _transcript_ids_cache = {}
 
 
-def random_variants(count, ensembl_release=MAX_ENSEMBL_RELEASE):
+def random_variants(
+        count,
+        ensembl_release=MAX_ENSEMBL_RELEASE,
+        deletions=True,
+        insertions=True):
     """
     Generate a VariantCollection with random variants that overlap
     at least one complete coding transcript.
@@ -60,6 +64,15 @@ def random_variants(count, ensembl_release=MAX_ENSEMBL_RELEASE):
         if transcript.on_backward_strand:
             ref = reverse_complement(ref)
         alt_nucleotides = [x for x in VALID_NUCLEOTIDES if x != ref]
+        if insertions:
+            nucleotide_pairs = [
+                x + y
+                for x in alt_nucleotides
+                for y in VALID_NUCLEOTIDES
+            ]
+            alt_nucleotides.extend(nucleotide_pairs)
+        if deletions:
+            alt_nucleotides.append("")
         alt = random.choice(alt_nucleotides)
         variant = Variant(
             transcript.contig,
