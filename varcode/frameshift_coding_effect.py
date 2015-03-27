@@ -18,49 +18,49 @@ reading frame.
 """
 
 from .effects import FrameShift, FrameShiftTruncation
+from .mutate import substitute
 from .translate import translate
 
 def _frameshift_inside_cds(
-        codon_index_before_mutation,
-        coding_sequence_after_mutation,
+        mutated_codon_index,
+        sequence_from_mutated_codon,
         variant,
         transcript):
     """
-    Determine frameshift effect when mutation applies after start
-    codon and before stop codon.
+    Determine frameshift effect within a coding sequence (possibly affecting
+    either the start or stop codons, or anythign in between)
 
     Parameters
     ----------
-    codon_index_before_mutation : int
-    coding_sequence_after_mutation: Bio.Seq
+    mutated_codon_index : int
+        Codon offset (starting from 0 = start codon) of first non-reference
+        amino acid in the variant protein
+
+    sequence_from_mutated_codon: Bio.Seq
+        Sequence of mutated cDNA, starting from first mutated codon, until
+        the end of the transcript
+
     variant : Variant
+
     transcript : transcript
     """
+
     assert transcript.protein_sequence is not None, \
         "Expect transcript %s to have protein sequence" % transcript
 
-    # codon offset (starting from 0 = start codon) of first non-reference
-    # amino acid in the variant protein
-    mutation_codon_offset = codon_index_before_mutation + 1
-
-    assert mutation_codon_offset > 0, \
-        "Expected mutation %s to be after start codon of %s (offset = %d)" % (
-            variant, transcript, mutation_codon_offset)
-
-    stop_codon_offset = len(transcript.protein_sequence)
-    assert mutation_codon_offset < stop_codon_offset, \
-        ("Expected mutation %s to be before"
-         " stop codon of %s (offset = %d, stop codon at %d)") % (
-         variant,
-         transcript,
-         mutation_codon_offset,
-         stop_codon_offset)
+    original_protein_sequence = transcript.protein_sequence
+    if mutated_codon_index == 0:
+        # frameshift begins in first/start codon
+        pass
+    elif mutated_codon_index == len(original_protein_sequence):
+        # frameshift begins in last/stop codon
+        pass
 
     protein_before_mutation = \
-        transcript.protein_sequence[:mutation_codon_offset]
+        transcript.protein_sequence[:mutated_codon_index]
 
     protein_after_insertion = translate(
-        nucleotide_sequence=coding_sequence_after_mutation,
+        nucleotide_sequence=sequence_from_mutated_codon,
         first_codon_is_start=False,
         to_stop=True)
 
@@ -70,12 +70,12 @@ def _frameshift_inside_cds(
         return FrameShiftTruncation(
             variant=variant,
             transcript=transcript,
-            aa_pos=mutation_codon_offset,
+            aa_pos=mutated_codon_index,
             aa_ref=protein_before_mutation[-1])
     return FrameShift(
         variant=variant,
         transcript=transcript,
-        aa_pos=mutation_codon_offset,
+        aa_pos=mutated_codon_index,
         aa_ref=protein_before_mutation[-1],
         shifted_sequence=protein_after_insertion)
 
@@ -119,10 +119,8 @@ def frameshift_coding_insertion_effect(
     coding_sequence_after_insertion = \
         inserted_nucleotides + original_coding_sequence_after_insertion
 
-    mutation_codon_offset = codon_index_before_insertion + 1
-    protein_before_mutation = original_protein_sequence[:mutation_codon_offset]
     return _frameshift_inside_cds(
-        protein_before_mutation=protein_before_mutation,
+        codon_index_before_mutation=codon_index_before_insertion,
         coding_sequence_after_mutation=coding_sequence_after_insertion,
         variant=variant,
         transcript=transcript)
@@ -147,16 +145,25 @@ def frameshift_coding_effect(
          "Expected len(alt) > 0 in frameshift_coding_effect for %s on %s" % (
             variant, transcript)
 
-
-    original_protein_sequence = transcript.protein_sequence
-
     mutated_codon_index = int(cds_offset / 3)
 
-    protein_before_mutation = original_protein_sequence[:mutated_codon_index]
-    sequence_after_mutation = sequence_from_start_codon[cds_offset:]
+    # get the sequence starting from the first modified codon until the end
+    # of the transcript.
+    sequence_after_mutated_codon = \
+        sequence_from_start_codon[mutated_codon_index * 3:]
 
-    variant_sequence = substitute(
-        sequence_after_mutation,
-        ref,
-        alt)
+    # the variant's ref nucleotides should start either 0, 1, or 2 nucleotides
+    # into `sequence_after_mutated_codon`
+    offset_into_mutated_codon = cds_offset % 3
 
+    sequence_from_mutated_codon = substitute(
+        sequence=sequence_after_mutated_codon,
+        offset=offset_into_mutated_codon,
+        ref=ref,
+        alt=alt)
+
+    return _frameshift_inside_cds(
+        mutated_codon_index=mutated_codon_index,
+        sequence_from_mutated_codon=sequence_from_mutated_codon,
+        variant=variant,
+        transcript=transcript)
