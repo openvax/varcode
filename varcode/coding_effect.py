@@ -67,12 +67,6 @@ def coding_effect(
             ("Can't annotate coding effect for %s"
              " on incomplete transcript %s" % (variant, transcript)))
 
-    if transcript.protein_sequence is None:
-        # relying on Ensembl to have a protein sequence for each transcript
-        # if the protein sequence is missing let's also consider the
-        # transcript incomplete
-        return IncompleteTranscript(variant, transcript)
-
     sequence = transcript.sequence
 
     # reference nucleotides found on the transcript, if these don't match
@@ -129,8 +123,6 @@ def coding_effect(
     assert cds_offset < cds_len, \
         "Expected CDS offset (%d) < |CDS| (%d) for %s on %s" % (
             cds_offset, cds_len, variant, transcript)
-
-
 
     sequence_from_start_codon = sequence[cds_start_offset:]
 
