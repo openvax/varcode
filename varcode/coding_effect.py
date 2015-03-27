@@ -57,7 +57,10 @@ def translate_codon(codon, aa_pos):
     else:
         return DNA_CODON_TABLE[codon]
 
-def translate(cds_seq):
+def translate(
+        nucleotide_sequence,
+        first_codon_is_start=True,
+        to_stop=True):
     """Translates cDNA coding sequence into amino acid protein sequence.
 
     Should typically start with a start codon but allowing non-methionine
@@ -69,42 +72,222 @@ def translate(cds_seq):
 
     Parameters
     ----------
-    cds_seq : BioPython Seq
-        cDNA coding sequence
+    nucleotide_sequence : BioPython Seq
+        cDNA sequence
+
+    first_codon_is_start : bool
+        Treat the beginning of nucleotide_sequence (translates methionin)
 
     Returns BioPython Seq of amino acids
     """
-    # In case sequence isn't a multiple of 3, then truncate it
-    truncated_cds_len = int(len(cds_seq) / 3) * 3
-    truncated_cds_seq = cds_seq[:truncated_cds_len]
+    if len(nucleotide_sequence) < 3:
+        raise ValueError("Sequence '%s' is too short to translate" % (
+            nucleotide_sequence))
 
-    # turn cDNA sequence into a BioPython sequence, translate
-    # to amino acids.
-    # passing cds=False since we may want to deal with premature
+    # if sequence isn't a multiple of 3, truncate it so BioPython
+    # doesn't complain
+    truncated_cds_len = int(len(nucleotide_sequence) / 3) * 3
+    truncated_cds_seq = nucleotide_sequence[:truncated_cds_len]
+
+    # passing cds=False to translate since we may want to deal with premature
     # stop codons
-    protein = truncated_cds_seq.translate(to_stop=True, cds=False)
+    protein_sequence = truncated_cds_seq.translate(to_stop=to_stop, cds=False)
 
-    if protein[0] != "M" and cds_seq[:3] in START_CODONS:
-        # TODO: figure out when these should be made into methionines
-        # and when left as whatever amino acid they normally code for
-        # e.g. Leucine start codons
-        # See: DOI: 10.1371/journal.pbio.0020397
-        return "M" + protein[1:]
-    return protein
+    if first_codon_is_start and (
+            len(protein_sequence) == 0 or protein_sequence[0] != "M"):
+        if nucleotide_sequence[:3] in START_CODONS:
+            # TODO: figure out when these should be made into methionines
+            # and when left as whatever amino acid they normally code for
+            # e.g. Leucine start codons
+            # See: DOI: 10.1371/journal.pbio.0020397
+            return "M" + protein_sequence[1:]
+        else:
+            raise ValueError(
+                ("Expected first codon of %s to be start codon"
+                 " (one of %s) but got %s") % (
+                 protein_sequence[:10],
+                 START_CODONS,
+                 truncated_cds_seq))
 
-def snv_coding_effect(
-        ref,
-        alt,
-        cds_seq,
-        cds_offset,
+    return protein_sequence
+
+def transcript_protein_sequence(transcript):
+    cds_start_offset = transcript.first_start_codon_spliced_offset
+    cds_stop_offset = transcript.last_stop_codon_spliced_offset
+    cds_len = cds_stop_offset - cds_start_offset + 1
+
+    original_protein = transcript.protein_sequence
+
+    if not original_protein:
+        # Ensembl should have given us a protein sequence for every
+        # transcript but it's possible that we're trying to annotate a
+        # transcript whose biotype isn't included in the protein sequence FASTA
+        logging.warn("No protein sequence for %s in Ensembl", transcript)
+
+        original_protein = translate(
+            transcript.sequence[cds_start_offset:cds_stop_offset + 1])
+
+    # subtract 3 for the stop codon and divide by 3 since
+    # 3 nucleotides = 1 codon = 1 amino acid
+    expected_protein_length = int((cds_len - 3) / 3)
+    if len(original_protein) != expected_protein_length:
+        raise ValueError(
+            "Expected protein sequence of %s to be %d amino acids"
+            "but got %d : %s" % (
+                transcript,
+                expected_protein_length,
+                len(original_protein),
+                original_protein))
+    return original_protein
+
+def frameshift_insertion_effect(
+        cds_offset_before_insertion,
+        inserted_nucleotides,
+        sequence_from_start_codon,
+        variant,
+        transcript):
+    """
+    Assumption:
+        The insertion is happening after the start codon and before the stop
+        codon of this coding sequence.
+    """
+    # TODO:
+    # get the protein sequence until the first modified codon
+    # translate the insert + cds_after_insertion
+    # concatenate
+
+    if cds_offset_before_insertion % 3 == 2:
+        # if insertion happens after last nucleotide in a codons
+        codon_index_before_insertion = int(cds_offset_before_insertion / 3)
+    else:
+        # if insertion happens after the 1st or 2nd nucleotide in a codon,
+        # then it disrupts that codon
+        codon_index_before_insertion = int(cds_offset_before_insertion / 3) - 1
+
+    assert codon_index_before_insertion >= 0, \
+        "Expected frameshift_insertion to be after start codon for %s on %s" % (
+            variant, transcript)
+    assert codon_index_before_insertion < len(original_protein_sequence) - 1, \
+        "Expected frameshift_insertion to be before stop codon for %s on %s" % (
+            variant, transcript)
+
+    original_protein_sequence = transcript.protein_sequence
+
+    if codon_index_before_insertion == len(original_protein_sequence) - 1
+        # if insertion is into the stop codon then this is a stop-loss
+    protein_before_insertion = \
+        transcript.protein_sequence[:codon_index_before_insertion + 1]
+
+
+    cds_offset_after_insertion = (codon_index_before_insertion + 1) * 3
+    original_coding_sequence_after_insertion = \
+        sequence_from_start_codon[cds_offset_after_insertion:]
+    coding_sequence_after_insertion = \
+        inserted_nucleotides + original_coding_sequence_after_insertion
+    protein_after_insertion = translate(
+        nucleotide_sequence=coding_sequence_after_insertion,
+        first_codon_is_start=(codon_index_before_insertion == -1),
+        to_stop=True)
+
+    if len(protein_after_insertion) == 0:
+        return FrameShiftTruncation()
+    else:
+        return FrameShift()
+
+def in_frame_insertion_effect(
+        cds_offset_before_insertion,
+        inserted_nucleotides,
+        sequence_from_start_codon,
+        variant,
+        transcript):
+    pass
+
+
+def insertion_effect(
+        inserted_nucleotides,
+        transcript_offset,
         transcript,
         variant):
-    """Coding effect of a single nucleotide substitution"""
-    aa_pos = int(cds_offset / 3)
-    assert aa_pos <= len(transcript.protein_sequence)
+    assert len(inserted_nucleotides) > 0, \
+        "Expected len(inserted_nucleotides) > 0 for %s on %s" % (
+            transcript, variant)
+
+    assert cds_offset_before_insertion < cds_len, \
+        "Expected CDS offset (%d) < |CDS| (%d) for %s on %s" % (
+            cds_offset, cds_len, variant, transcript)
+
+    if
+    # IF insertion into start codon, StartLoss
+
+    # IF insertion into stop codon, StopLoss (scan forward to next stop?)
+
+    if len(inserted_nucleotides) % 3 != 0:
+        return frameshift_insertion_effect()
+    else:
+        return in_frame_insertion_effect()
+
+def in_frame_coding_effect(
+        ref,
+        alt,
+        cds_offset,
+        sequence_from_start_codon,
+        transcript,
+        variant):
+    """Coding effect of an in-frame nucleotide change
+
+    Parameters
+    ----------
+    ref : str
+        Reference nucleotides
+
+    alt : str
+        Nucleotides to insert in place of the reference nucleotides
+
+    cds_offset : int
+        Index of first ref nucleotide, starting from 0 = beginning of coding
+        sequence. If variant is a pure insertion (no ref nucleotides) then this
+        argument indicates the offset *after* which to insert the `alt`
+        nucleotides.
+
+    sequence_from_start_codon : Bio.Seq
+        Transcript sequence from the CDS start codon (including the 3' UTR).
+        This sequence includes the 3' UTR since a mutation may delete the stop
+        codon and we'll have to translate past the normal end of the CDS to
+        determine the new protein sequence.
+
+    transcript : Transcript
+
+    variant : Variant
+    """
+
+    if len(ref) == 0:
+        return in_frame_insertion_effect()
+
+    n_ref_nucleotides = len(ref)
+    n_alt_nucleotides = len(alt)
+
+    original_protein_sequence = transcript.protein_sequence
+    first_ref_amino_acid_index = int(cds_offset / 3)
+    assert first_ref_amino_acid_index <= len(original_protein_sequence), \
+        ("Unexpected mutation at offset %d (5' UTR starts at %d"
+         " while annotating %s on %s") % (
+         first_ref_amino_acid_index,
+         len(transcript.protein_sequence))
+
+    last_ref_amino_acid_index = int((cds_offset + n_ref_nucleotides - 1) / 3)
+
+    assert last_ref_amino_acid_index >= first_ref_amino_acid_index, \
+        ("Expected first_ref_amino_acid_index (%d) <="
+         "last_ref_amino_acid_index (%d) while annotating %s on %s") % (
+         first_ref_amino_acid_index,
+         last_ref_amino_acid_index,
+         variant,
+         transcript)
+
 
     # codon in the reference sequence
-    ref_codon = str(cds_seq[aa_pos * 3:aa_pos * 3 + 3])
+    ref_codons = str(cds_seq_with_utr3[
+        first_ref_amino_acid_index * 3:last_ref_amino_acid_index * 3 + 3])
     # which nucleotide of the codon got changed?
     codon_offset = cds_offset % 3
     mutant_codon = (
@@ -162,6 +345,8 @@ def snv_coding_effect(
             aa_ref=original_amino_acid,
             aa_alt=mutant_amino_acid)
 
+
+
 def coding_effect(
         ref,
         alt,
@@ -197,118 +382,119 @@ def coding_effect(
 
     # reference nucleotides found on the transcript, if these don't match
     # what we were told to expect from the variant then raise an exception
-    transcript_ref = sequence[transcript_offset:transcript_offset + len(ref)]
+    ref_nucleotides_from_transcript = \
+        sequence[transcript_offset:transcript_offset + len(ref)]
 
     # Make sure that the reference sequence agrees with what we expected
     # from the VCF
-    assert transcript_ref == ref, \
+    assert ref_nucleotides_from_transcript == ref, \
         "%s: expected ref '%s' at offset %d of %s, transcript has '%s'" % (
             variant,
             ref,
             transcript_offset,
             transcript,
-            transcript_ref)
+            ref_nucleotides_from_transcript)
 
-    cds_start_offset = min(transcript.start_codon_spliced_offsets)
-    cds_stop_offset = max(transcript.stop_codon_spliced_offsets)
+    cds_start_offset = transcript.first_start_codon_spliced_offset
+    cds_stop_offset = transcript.last_stop_codon_spliced_offset
 
-    cds_seq = sequence[cds_start_offset:cds_stop_offset + 1]
+    cds_len = cds_start_offset - cds_stop_offset + 1
+
+    if cds_len < 3:
+        raise ValueError(
+            "Coding sequence for %s is too short: '%s'" % (
+                transcript,
+                transcript.sequence[cds_start_offset:cds_stop_offset + 1]))
 
     if len(ref) == 0 and transcript.strand == "-":
-        # for insertions the CDS offset is supposed to point to the
-        # nucleotide immediately before the insertion, but on the reverse
-        # strand this is actually the nucleotide immediately after the
-        # insertion
-        # Need to adjust this by moving the CDS offset back one
+        # By convention, genomic insertions happen *after* their base 1 position on
+        # a chromosome. On the reverse strand, however, an insertion has to go
+        # before the nucleotide at some transcript offset.
+        # Example:
+        #    chromosome sequence:
+        #        TTT|GATCTCGTA|CCC
+        #    transcript on reverse strand:
+        #        CCC|ATGCTCTAG|TTT
+        #    where the CDS is emphasized:
+        #            ATGCTCTAG
+        # If we have a genomic insertion g.6insATT
+        # the genomic sequence becomes:
+        #       TTT|GAT_ATT_CTCGTA|CCC
+        # (insert the "ATT" after the "T" at position 6)
+        # On the reverse strand this becomes:
+        #       CCC|ATGCTC_TTA_TAG|TTT
+        # (insert the "ATT" *before* the "T" at position 10)
+        #
+        # To preserve the interpretation of the start offset as the base
+        # before the insertion, need to subtract one
         cds_offset = transcript_offset - cds_start_offset - 1
     else:
         cds_offset = transcript_offset - cds_start_offset
 
-    assert cds_offset < len(cds_seq), \
+    assert cds_offset < cds_len, \
         "Expected CDS offset (%d) < |CDS| (%d) for %s on %s" % (
-            cds_offset, len(cds_seq), variant, transcript)
+            cds_offset, cds_len, variant, transcript)
 
-    if len(cds_seq) < 3:
-        raise ValueError("Coding sequence for %s is too short: '%s'" % (
-            transcript, cds_seq))
+    # did the mutation disrupt the start codon?
 
-    original_protein = transcript.protein_sequence
+    # did the mutation disrupt the stop codon?
 
-    if not original_protein:
-        # Ensembl should have given us a protein sequence for every
-        # transcript but it's possible that we're trying to annotate a
-        # transcript whose biotype isn't included in the protein sequence FASTA
-        logging.warn("No protein sequence for %s in Ensembl", transcript)
-        original_protein = translate(cds_seq)
+    # since insertions create lots of special cases for "base counting"
+    # inclusive indexing, let's handle all insertion logic in its own
+    # function
+    if len(ref) == 0:
+        return insertion_effect(
+            inserted_nucleotides=alt,
+            cds_offset_before_insertion=cds_offset,
+            transcript=transcript,
+            variant=variant)
 
-    # subtract 3 for the stop codon and divide by 3 since
-    # 3 nucleotides = 1 codon = 1 amino acid
-    expected_protein_length = int((len(cds_seq) - 3) / 3)
-    if len(original_protein) != expected_protein_length:
-        raise ValueError(
-            "Expected protein sequence of %s to be %d amino acids"
-            "but got %d : %s" % (
-                transcript,
-                expected_protein_length,
-                len(original_protein),
-                original_protein))
+    # past this point, we know the mutation is not a start-loss, a stop-loss
+    # or a pure insertion
 
-    # genomic position to codon position
-    aa_pos = int(cds_offset / 3)
+    sequence_after_start_codon = sequence[cds_start_offset:]
 
-    # special case simplified logic for an SNV
-    # TODO: generalize for all in-frame substitutions
-    if len(ref) == len(alt) == 1:
-        return snv_coding_effect(
+    # is this an in-frame mutations?
+    if (len(ref) - len(alt)) % 3 == 0:
+        return in_frame_coding_effect(
             ref,
             alt,
-            cds_seq,
             cds_offset,
+            sequence_after_start_codon,
             transcript,
             variant)
+    else:
 
-    transcript_after_start_codon = sequence[cds_start_offset:]
 
-    # By convention, genomic insertions happen *after* their base 1 position on
-    # a chromosome. On the reverse strand, however, an insertion has to go
-    # before the nucleotide at some transcript offset.
-    # Example:
-    #    chromosome sequence:
-    #        TTT|GATCTCGTA|CCC
-    #    transcript on reverse strand:
-    #        CCC|ATGCTCTAG|TTT
-    #    where the CDS is emphasized:
-    #            ATGCTCTAG
-    # If we have a genomic insertion g.6insATT
-    # the genomic sequence becomes:
-    #       TTT|GAT_ATT_CTCGTA|CCC
-    # (insert the "ATT" after the "T" at position 6)
-    # On the reverse strand this becomes:
-    #       CCC|ATGCTC_TTA_TAG|TTT
-    # (insert the "ATT" *before* the "T" at position 10)
+
     #
     # Further up, we set the CDS offset for insertions on the reverse strand to
     # have an offset one less than they otherwise would, which makes the
     # insertion go to the correct location.
     if len(ref) == 0:
-        variant_cds_seq = insert_after(
-            transcript_after_start_codon, cds_offset, alt)
+        variant_sequence = insert_after(
+            sequence_after_start_codon,
+            cds_offset,
+            alt)
     else:
-        variant_cds_seq = substitute(
-            transcript_after_start_codon,
+        variant_sequence = substitute(
+            sequence_after_start_codon,
             cds_offset,
             ref,
             alt)
 
-    variant_protein = translate(variant_cds_seq)
+    variant_protein = translate(variant_sequence)
 
     if len(variant_protein) == 0:
         raise ValueError(
             "Translated mutant protein sequence of %s is empty" % (transcript,))
 
+    # genomic position to codon position
+    aa_pos = int(cds_offset / 3)
+
     if original_protein == variant_protein:
-        original_start_codon = cds_seq[:3]
-        variant_start_codon = variant_cds_seq[:3]
+        original_start_codon = sequence_after_start_codon[:3]
+        variant_start_codon = variant_sequence[:3]
         if original_start_codon != variant_start_codon:
             # mutation is silent on the amino acid sequence but
             # uses a different start codon, which may cause the transcript

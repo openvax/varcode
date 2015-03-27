@@ -14,7 +14,6 @@
 
 from __future__ import print_function, division, absolute_import
 
-import Bio.Seq
 from memoized_property import memoized_property
 
 class MutationEffect(object):
@@ -113,12 +112,13 @@ class TranscriptMutationEffect(MutationEffect):
 
     @memoized_property
     def original_protein_sequence(self):
-        """Amino acid sequence of a coding transcript before the variant occurs
+        """Amino acid sequence of a coding transcript (without the nucleotide
+        variant/mutation)
         """
-        coding_sequence = self.original_nucleotide_coding_sequence
-        if coding_sequence:
-            return Bio.Seq.translate(
-                str(coding_sequence),
+        if self.transcript.protein_sequence:
+            return self.transcript.protein_sequence
+        elif self.original_nucleotide_coding_sequence:
+            return self.original_nucleotide_coding_sequence.translate(
                 to_stop=True,
                 cds=True)
         else:
@@ -418,13 +418,14 @@ class PrematureStop(BaseSubstitution):
             self,
             variant,
             transcript,
-            aa_pos,
+            stop_codon_offset,
             aa_ref):
+        self.stop_codon_offset = stop_codon_offset
         BaseSubstitution.__init__(
             self,
             variant,
             transcript,
-            aa_pos=aa_pos,
+            aa_pos=stop_codon_offset,
             aa_ref=aa_ref,
             aa_alt="*")
 
@@ -530,13 +531,13 @@ class FrameShiftTruncation(PrematureStop, FrameShift):
             self,
             variant,
             transcript,
-            aa_pos,
+            stop_codon_offset,
             aa_ref):
         PrematureStop.__init__(
             self,
             variant=variant,
             transcript=transcript,
-            aa_pos=aa_pos,
+            stop_codon_offset=stop_codon_offset,
             aa_ref=aa_ref)
 
     @memoized_property
