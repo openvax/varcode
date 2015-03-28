@@ -13,25 +13,7 @@
 # limitations under the License.
 
 from __future__ import print_function, division, absolute_import
-import logging
 
-from .effects import (
-    IncompleteTranscript,
-    Silent,
-    Insertion,
-    Deletion,
-    Substitution,
-    ComplexSubstitution,
-    PrematureStop,
-    AlternateStartCodon,
-    StartLoss,
-    StopLoss,
-    FrameShift,
-    FrameShiftTruncation,
-    ThreePrimeUTR,
-)
-from .mutate import substitute, insert_after
-from .string_helpers import trim_shared_flanking_strings
 from .frameshift_coding_effect import frameshift_coding_effect
 from .in_frame_coding_effect import in_frame_coding_effect
 
@@ -40,8 +22,8 @@ def coding_effect(
         ref,
         alt,
         transcript_offset,
-        transcript,
-        variant):
+        variant,
+        transcript):
     """
     Given a minimal ref/alt nucleotide string pair and an offset into a given
     transcript, determine the coding effect of this nucleotide substitution
@@ -87,7 +69,7 @@ def coding_effect(
     cds_start_offset = transcript.first_start_codon_spliced_offset
     cds_stop_offset = transcript.last_stop_codon_spliced_offset
 
-    cds_len = cds_start_offset - cds_stop_offset + 1
+    cds_len = cds_stop_offset + cds_start_offset + 1
 
     if cds_len < 3:
         raise ValueError(
@@ -136,10 +118,15 @@ def coding_effect(
             variant=variant,
             transcript=transcript)
     else:
-        return frameshift_effect(
-            )
+        return frameshift_coding_effect(
+            ref=ref,
+            alt=alt,
+            cds_offset=cds_offset,
+            sequence_from_start_codon=sequence_from_start_codon,
+            variant=variant,
+            transcript=transcript)
 
-
+    """
 
 
 
@@ -151,11 +138,6 @@ def coding_effect(
     # did the mutation disrupt the stop codon?
 
 
-    variant_sequence = substitute(
-        sequence_after_start_codon,
-        cds_offset,
-        ref,
-        alt)
 
     variant_protein = translate(variant_sequence)
 
@@ -335,3 +317,4 @@ def coding_effect(
             aa_pos=aa_pos,
             aa_ref=aa_ref,
             aa_alt=aa_alt)
+    """

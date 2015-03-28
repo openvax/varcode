@@ -465,8 +465,8 @@ class Variant(object):
             return ThreePrimeUTR(self, transcript)
 
         return coding_effect(
-            strand_ref,
-            strand_alt,
-            offset_with_utr5,
+            ref=strand_ref,
+            alt=strand_alt,
+            transcript_offset=offset_with_utr5,
             variant=self,
             transcript=transcript)

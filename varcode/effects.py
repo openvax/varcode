@@ -501,9 +501,10 @@ class FrameShift(CodingMutation):
             aa_pos,
             aa_ref,
             shifted_sequence):
-        """
-        Unlike an insertion, which we denote with aa_ref as the chracter before
-        the variant sequence, a frameshift starts at aa_ref
+        """Frameshift mutation preserves all the amino acids up to aa_pos
+        and then replaces the rest of the protein with new (frameshifted)
+        sequence. Unlike an insertion, where we denote with aa_ref as the
+        chracter before the variant sequence, a frameshift starts at aa_ref.
         """
         CodingMutation.__init__(
             self,

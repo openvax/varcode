@@ -21,7 +21,7 @@ from .effects import FrameShift, FrameShiftTruncation
 from .mutate import substitute
 from .translate import translate
 
-def _frameshift_inside_cds(
+def _frameshift(
         mutated_codon_index,
         sequence_from_mutated_codon,
         variant,
@@ -49,6 +49,7 @@ def _frameshift_inside_cds(
         "Expect transcript %s to have protein sequence" % transcript
 
     original_protein_sequence = transcript.protein_sequence
+
     if mutated_codon_index == 0:
         # frameshift begins in first/start codon
         pass
@@ -56,28 +57,42 @@ def _frameshift_inside_cds(
         # frameshift begins in last/stop codon
         pass
 
-    protein_before_mutation = \
-        transcript.protein_sequence[:mutated_codon_index]
-
-    protein_after_insertion = translate(
+    protein_suffix = translate(
         nucleotide_sequence=sequence_from_mutated_codon,
         first_codon_is_start=False,
         to_stop=True)
 
-    if len(protein_after_insertion) == 0:
+    # the frameshifted sequence may contain some amino acids which are
+    # the same as the original protein!
+    n_skip = 0
+
+    for i, new_amino_acid in enumerate(protein_suffix):
+        codon_index = mutated_codon_index + i
+        if codon_index >= len(original_protein_sequence):
+            break
+        elif original_protein_sequence[codon_index] != new_amino_acid:
+            break
+        n_skip += 1
+    protein_suffix = protein_suffix[n_skip:]
+    aa_pos = mutated_codon_index + n_skip
+    # TODO: what if all the shifted amino acids were the same and the protein
+    # ended up the same length?
+    # Add a Silent case
+    if len(protein_suffix) == 0:
+
         # if a frameshift doesn't create any new amino acids, then
         # it must immediately have hit a stop codon
         return FrameShiftTruncation(
             variant=variant,
             transcript=transcript,
-            aa_pos=mutated_codon_index,
-            aa_ref=protein_before_mutation[-1])
+            stop_codon_offset=aa_pos,
+            aa_ref=original_protein_sequence[aa_pos])
     return FrameShift(
         variant=variant,
         transcript=transcript,
-        aa_pos=mutated_codon_index,
-        aa_ref=protein_before_mutation[-1],
-        shifted_sequence=protein_after_insertion)
+        aa_pos=aa_pos,
+        aa_ref=original_protein_sequence[aa_pos],
+        shifted_sequence=protein_suffix)
 
 def frameshift_coding_insertion_effect(
         cds_offset_before_insertion,
@@ -119,9 +134,9 @@ def frameshift_coding_insertion_effect(
     coding_sequence_after_insertion = \
         inserted_nucleotides + original_coding_sequence_after_insertion
 
-    return _frameshift_inside_cds(
-        codon_index_before_mutation=codon_index_before_insertion,
-        coding_sequence_after_mutation=coding_sequence_after_insertion,
+    return _frameshift(
+        mutated_codon_index=codon_index_before_insertion,
+        sequence_from_mutated_codon=coding_sequence_after_insertion,
         variant=variant,
         transcript=transcript)
 
@@ -141,10 +156,6 @@ def frameshift_coding_effect(
             variant=variant,
             transcript=transcript)
 
-    assert len(alt) > 0, \
-         "Expected len(alt) > 0 in frameshift_coding_effect for %s on %s" % (
-            variant, transcript)
-
     mutated_codon_index = int(cds_offset / 3)
 
     # get the sequence starting from the first modified codon until the end
@@ -162,7 +173,7 @@ def frameshift_coding_effect(
         ref=ref,
         alt=alt)
 
-    return _frameshift_inside_cds(
+    return _frameshift(
         mutated_codon_index=mutated_codon_index,
         sequence_from_mutated_codon=sequence_from_mutated_codon,
         variant=variant,
