@@ -286,10 +286,30 @@ class Silent(CodingMutation):
         return "silent"
 
 class AlternateStartCodon(Silent):
+    """Change to the start codon (e.g. ATG>CTG) but without changing the
+    starting amino acid from methionine.
+    """
+    def __init__(
+            self,
+            variant,
+            transcript,
+            aa_ref,
+            ref_codon,
+            alt_codon):
+        Silent.__init__(
+            self,
+            variant=variant,
+            transcript=transcript,
+            aa_pos=0,
+            aa_ref=aa_ref)
+        self.ref_codon = ref_codon
+        self.alt_codon = alt_codon
+
     """Change of start codon e.g. ATG > TTG, may act as a silent mutation
     but also risks the possibility of a start loss."""
     def short_description(self):
-        return "alternate-start-codon"
+        return "alternate-start-codon (%s>%s)" % (
+            self.ref_codon, self.alt_codon)
 
 class BaseSubstitution(CodingMutation):
     """

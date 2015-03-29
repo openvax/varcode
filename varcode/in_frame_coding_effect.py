@@ -17,10 +17,7 @@ Effect annotation for variants which modify the coding sequence without
 changing the reading frame.
 """
 
-import logging
-
 from .effects import (
-    IncompleteTranscript,
     Silent,
     Insertion,
     Deletion,
@@ -30,12 +27,9 @@ from .effects import (
     AlternateStartCodon,
     StartLoss,
     StopLoss,
-    FrameShift,
-    FrameShiftTruncation,
-    ThreePrimeUTR,
 )
 from .string_helpers import trim_shared_flanking_strings
-from .translate import transcript_protein_sequence, START_CODONS, translate
+from .translate import START_CODONS, translate
 
 def _choose_annotation(
         aa_pos,
@@ -138,17 +132,15 @@ def in_frame_coding_effect(
 
     n_ref_nucleotides = len(ref)
 
-    if n_ref_nucleotides == 0:
-        # since insertions interact with the "base counting, one start"
-        # coordinates used by VCF & Ensembl to create lots of special cases
-        # let's handle all logic for in-frame insertions separately
-        return in_frame_insertion_effect(
-            inserted_nucleotides=alt,
-            cds_offset_before_insertion=cds_offset,
-            transcript=transcript,
-            variant=variant)
-
-    original_protein_sequence = transcript_protein_sequence(transcript)
+    """
+    TODO: what if insertion is going
+        1) immediately before the start codon, disrupting the Kozak
+            sequence?
+        2) into the start codon
+        3) into the stop codon
+        4) into a selenocysteine
+    """
+    original_protein_sequence = transcript.protein_sequence
 
     first_ref_codon_index = int(cds_offset / 3)
 
@@ -158,11 +150,14 @@ def in_frame_coding_effect(
          first_ref_codon_index,
          len(transcript.protein_sequence))
 
-    last_ref_codon_index = int((cds_offset + n_ref_nucleotides - 1) / 3)
+    if n_ref_nucleotides > 0:
+        last_ref_codon_index = int((cds_offset + n_ref_nucleotides - 1) / 3)
+    else:
+        last_ref_codon_index = first_ref_codon_index
 
     assert last_ref_codon_index >= first_ref_codon_index, \
-        ("Expected first_ref_amino_acid_index (%d) <="
-         "last_ref_amino_acid_index (%d) while annotating %s on %s") % (
+        ("Expected first_ref_codon_index (%d) <= "
+         "last_ref_codon_index (%d) while annotating %s on %s") % (
          first_ref_codon_index,
          last_ref_codon_index,
          variant,
@@ -208,14 +203,16 @@ def in_frame_coding_effect(
         if len(mutant_codons) == 3 and mutant_codons in START_CODONS:
             assert len(original_protein_subsequence) == 1
             assert len(mutant_protein_subsequence) == 1
+            assert original_protein_subsequence == mutant_protein_subsequence
             # if we changed the starting codon treat then
             # this is technically a Silent mutation but may cause
             # alternate starts or other effects
             return AlternateStartCodon(
-                variant,
-                transcript,
+                variant=variant,
+                transcript=transcript,
                 aa_ref=original_protein_subsequence,
-                aa_alt=mutant_protein_subsequence)
+                ref_codon=transcript.sequence[:3],
+                alt_codon=mutant_codons)
         elif mutant_codons[:3] not in START_CODONS:
             # if we changed a start codon to something else then
             # we no longer know where the protein begins (or even in
@@ -234,29 +231,3 @@ def in_frame_coding_effect(
         variant=variant,
         transcript=transcript)
 
-
-def in_frame_insertion_effect(
-        inserted_nucleotides,
-        cds_offset_before_insertion,
-        transcript,
-        variant):
-
-    assert len(inserted_nucleotides) > 0, \
-        "Expected len(inserted_nucleotides) > 0 for %s on %s" % (
-            transcript, variant)
-    assert False
-    """
-    assert cds_offset_before_insertion < cds_len, \
-        "Expected CDS offset (%d) < |CDS| (%d) for %s on %s" % (
-            cds_offset, cds_len, variant, transcript)
-
-    if start_codon:
-        # IF insertion into start codon, StartLoss
-        pass
-
-    if stop_codon:
-        # IF insertion into stop codon, StopLoss (scan forward to next stop?)
-        pass
-
-    pass
-    """

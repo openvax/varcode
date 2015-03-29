@@ -60,7 +60,8 @@ def _frameshift(
     protein_suffix = translate(
         nucleotide_sequence=sequence_from_mutated_codon,
         first_codon_is_start=False,
-        to_stop=True)
+        to_stop=True,
+        truncate=True)
 
     # the frameshifted sequence may contain some amino acids which are
     # the same as the original protein!

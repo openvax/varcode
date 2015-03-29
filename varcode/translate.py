@@ -46,7 +46,8 @@ def translate_codon(codon, aa_pos):
 def translate(
         nucleotide_sequence,
         first_codon_is_start=True,
-        to_stop=True):
+        to_stop=True,
+        truncate=False):
     """Translates cDNA coding sequence into amino acid protein sequence.
 
     Should typically start with a start codon but allowing non-methionine
@@ -64,20 +65,28 @@ def translate(
     first_codon_is_start : bool
         Treat the beginning of nucleotide_sequence (translates methionin)
 
+    truncate : bool
+        Truncate sequence if it's not a multiple of 3 (default = False)
     Returns BioPython Seq of amino acids
     """
-    if len(nucleotide_sequence) < 3:
-        raise ValueError("Sequence '%s' is too short to translate" % (
-            nucleotide_sequence))
 
-    # if sequence isn't a multiple of 3, truncate it so BioPython
-    # doesn't complain
-    truncated_cds_len = int(len(nucleotide_sequence) / 3) * 3
-    truncated_cds_seq = nucleotide_sequence[:truncated_cds_len]
+    if truncate:
+        # if sequence isn't a multiple of 3, truncate it so BioPython
+        # doesn't complain
+        n_nucleotides = int(len(nucleotide_sequence) / 3) * 3
+        nucleotide_sequence = nucleotide_sequence[:n_nucleotides]
+    else:
+        n_nucleotides = len(nucleotide_sequence)
+
+    assert n_nucleotides % 3 == 0, \
+        ("Expected nucleotide sequence to be multiple of 3"
+         " but got %s of length %d") % (
+            nucleotide_sequence,
+            n_nucleotides)
 
     # passing cds=False to translate since we may want to deal with premature
     # stop codons
-    protein_sequence = truncated_cds_seq.translate(to_stop=to_stop, cds=False)
+    protein_sequence = nucleotide_sequence.translate(to_stop=to_stop, cds=False)
 
     if first_codon_is_start and (
             len(protein_sequence) == 0 or protein_sequence[0] != "M"):
@@ -93,11 +102,15 @@ def translate(
                  " (one of %s) but got %s") % (
                  protein_sequence[:10],
                  START_CODONS,
-                 truncated_cds_seq))
+                 nucleotide_sequence))
 
     return protein_sequence
 
 def transcript_protein_sequence(transcript):
+    """Get protein sequence for a transcript, translate it from the
+    coding sequence if for some reason Ensembl didn't include this transcript
+    in its FASTA of protein sequences.
+    """
     cds_start_offset = transcript.first_start_codon_spliced_offset
     cds_stop_offset = transcript.last_stop_codon_spliced_offset
     cds_len = cds_stop_offset - cds_start_offset + 1
