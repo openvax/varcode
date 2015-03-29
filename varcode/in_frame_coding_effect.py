@@ -16,6 +16,7 @@
 Effect annotation for variants which modify the coding sequence without
 changing the reading frame.
 """
+
 import logging
 
 from .effects import (
@@ -35,6 +36,71 @@ from .effects import (
 )
 from .string_helpers import trim_shared_flanking_strings
 from .translate import transcript_protein_sequence, START_CODONS, translate
+
+def _choose_annotation(
+        aa_pos,
+        aa_ref,
+        aa_alt,
+        transcript,
+        variant):
+    """Assumption: mutations which modify the start are not handled here."""
+
+    assert len(aa_ref) > 0 or len(aa_alt) > 0
+
+    aa_ref, aa_alt, shared_prefix, shared_suffix = \
+        trim_shared_flanking_strings(
+            aa_ref,
+            aa_alt)
+
+    if len(aa_ref) == len(aa_alt) == 0:
+        shared_amino_acids = shared_prefix + shared_suffix
+        return Silent(
+            variant=variant,
+            transcript=transcript,
+            aa_pos=aa_pos,
+            aa_ref=shared_amino_acids)
+
+    # index of first amino acid which is different from the reference
+    aa_pos += len(shared_prefix)
+
+    if aa_pos == len(transcript.protein_sequence):
+        # if non-silent mutation is at the end of the protein then
+        # should be a stop-loss
+        assert aa_ref == "", \
+            "Expected end of coding sequence for %s, got '%s'" % (
+                aa_ref)
+        return StopLoss(
+            variant,
+            transcript,
+            aa_pos=aa_pos,
+            aa_alt=aa_alt)
+    elif len(aa_alt) == 0:
+        return Deletion(
+            variant,
+            transcript,
+            aa_pos=aa_pos,
+            aa_ref=aa_ref)
+    elif len(aa_ref) == 0:
+        return Insertion(
+            variant,
+            transcript,
+            aa_pos=aa_pos,
+            aa_alt=aa_alt)
+    elif len(aa_alt) == len(aa_ref) == 1:
+        # simple substitution e.g. p.V600E
+        return Substitution(
+            variant,
+            transcript,
+            aa_pos=aa_pos,
+            aa_ref=aa_ref,
+            aa_alt=aa_alt)
+    else:
+        return ComplexSubstitution(
+            variant,
+            transcript,
+            aa_pos=aa_pos,
+            aa_ref=aa_ref,
+            aa_alt=aa_alt)
 
 def in_frame_coding_effect(
         ref,
@@ -83,36 +149,47 @@ def in_frame_coding_effect(
             variant=variant)
 
     original_protein_sequence = transcript_protein_sequence(transcript)
-    first_ref_amino_acid_index = int(cds_offset / 3)
 
-    assert first_ref_amino_acid_index <= len(original_protein_sequence), \
+    first_ref_codon_index = int(cds_offset / 3)
+
+    assert first_ref_codon_index <= len(original_protein_sequence), \
         ("Unexpected mutation at offset %d (5' UTR starts at %d"
          " while annotating %s on %s") % (
-         first_ref_amino_acid_index,
+         first_ref_codon_index,
          len(transcript.protein_sequence))
 
-    last_ref_amino_acid_index = int((cds_offset + n_ref_nucleotides - 1) / 3)
+    last_ref_codon_index = int((cds_offset + n_ref_nucleotides - 1) / 3)
 
-    assert last_ref_amino_acid_index >= first_ref_amino_acid_index, \
+    assert last_ref_codon_index >= first_ref_codon_index, \
         ("Expected first_ref_amino_acid_index (%d) <="
          "last_ref_amino_acid_index (%d) while annotating %s on %s") % (
-         first_ref_amino_acid_index,
-         last_ref_amino_acid_index,
+         first_ref_codon_index,
+         last_ref_codon_index,
          variant,
          transcript)
 
     # codons in the reference sequence
     ref_codons = sequence_from_start_codon[
-        first_ref_amino_acid_index * 3:last_ref_amino_acid_index * 3 + 3]
+        first_ref_codon_index * 3:last_ref_codon_index * 3 + 3]
+
+    # We construct the new codons by taking the unmodified prefix
+    # of the first ref codon, the unmodified suffix of the last ref codon
+    # and sticking the alt nucleotides in between.
+    # Since this is supposed to be an in-frame mutation, the concatenated
+    # nucleotide string is expected to have a length that is a multiple of
+    # three.
 
     # which nucleotide of the codon got changed?
-    first_ref_codon_offset = cds_offset % 3
-    last_ref_codon_offset = (cds_offset + len(ref)) % 3
-    prefix = ref_codons[:first_ref_codon_offset]
-    if last_ref_codon_offset == 0:
-        suffix = ""
+    offset_in_first_ref_codon = cds_offset % 3
+    prefix = ref_codons[:offset_in_first_ref_codon]
+
+    offset_in_last_ref_codon = (cds_offset + len(ref) - 1) % 3
+    if offset_in_last_ref_codon == 0:
+        suffix = ref_codons[-2:]
+    elif offset_in_last_ref_codon == 1:
+        suffix = ref_codons[-1:]
     else:
-        suffix = ref_codons[last_ref_codon_offset - 3:]
+        suffix = ""
 
     mutant_codons = prefix + alt + suffix
 
@@ -120,36 +197,25 @@ def in_frame_coding_effect(
         "Expected in-frame mutation but got %s (length = %d)" % (
             mutant_codons, len(mutant_codons))
 
-    original_amino_acids = transcript.protein_sequence[
-        first_ref_amino_acid_index:last_ref_amino_acid_index + 1]
+    original_protein_subsequence = transcript.protein_sequence[
+        first_ref_codon_index:last_ref_codon_index + 1]
 
-    mutant_amino_acids = translate(mutant_codons)
+    mutant_protein_subsequence = translate(
+        mutant_codons,
+        first_codon_is_start=(first_ref_codon_index == 0))
 
-    aa_ref, aa_alt, shared_prefix, _ = \
-        trim_shared_flanking_strings(original_amino_acids, mutant_amino_acids)
-
-    if first_ref_amino_acid_index > 0 and len(aa_ref) == len(aa_alt) == 0:
-        return Silent(
-            variant=variant,
-            transcript=transcript,
-            aa_pos=first_ref_amino_acid_index,
-            aa_ref=original_amino_acids[0])
-
-    # index of first amino acid which is different from the reference
-    aa_pos = first_ref_amino_acid_index + len(shared_prefix)
-
-    if first_ref_amino_acid_index == 0:
+    if first_ref_codon_index == 0:
         if len(mutant_codons) == 3 and mutant_codons in START_CODONS:
-            assert len(original_amino_acids) == 1
-            assert len(mutant_amino_acids) == 1
+            assert len(original_protein_subsequence) == 1
+            assert len(mutant_protein_subsequence) == 1
             # if we changed the starting codon treat then
             # this is technically a Silent mutation but may cause
             # alternate starts or other effects
             return AlternateStartCodon(
                 variant,
                 transcript,
-                aa_ref=aa_ref,
-                aa_alt=aa_alt)
+                aa_ref=original_protein_subsequence,
+                aa_alt=mutant_protein_subsequence)
         elif mutant_codons[:3] not in START_CODONS:
             # if we changed a start codon to something else then
             # we no longer know where the protein begins (or even in
@@ -159,38 +225,27 @@ def in_frame_coding_effect(
             return StartLoss(
                 variant=variant,
                 transcript=transcript,
-                aa_alt=aa_alt)
+                aa_alt=mutant_protein_subsequence)
 
-    if aa_pos == len(transcript.protein_sequence):
-        # if non-silent mutation is at the end of the protein then
-        # should be a stop-loss
-        assert original_amino_acids == "*"
-        # if mutatin is at the end of the protein and both
-        assert mutant_amino_acids != "*"
-        return StopLoss(
-            variant,
-            transcript,
-            aa_pos=aa_pos,
-            aa_alt=mutant_amino_acids)
-    else:
-        # simple substitution e.g. p.V600E
-        return Substitution(
-            variant,
-            transcript,
-            aa_pos=aa_pos,
-            aa_ref=original_amino_acids,
-            aa_alt=mutant_amino_acids)
+    return _choose_annotation(
+        aa_pos=first_ref_codon_index,
+        aa_ref=original_protein_subsequence,
+        aa_alt=mutant_protein_subsequence,
+        variant=variant,
+        transcript=transcript)
 
 
 def in_frame_insertion_effect(
         inserted_nucleotides,
-        transcript_offset,
+        cds_offset_before_insertion,
         transcript,
         variant):
+
     assert len(inserted_nucleotides) > 0, \
         "Expected len(inserted_nucleotides) > 0 for %s on %s" % (
             transcript, variant)
-
+    assert False
+    """
     assert cds_offset_before_insertion < cds_len, \
         "Expected CDS offset (%d) < |CDS| (%d) for %s on %s" % (
             cds_offset, cds_len, variant, transcript)
@@ -204,3 +259,4 @@ def in_frame_insertion_effect(
         pass
 
     pass
+    """

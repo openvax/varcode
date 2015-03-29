@@ -111,9 +111,9 @@ def coding_effect(
     # is this an in-frame mutations?
     if (len(ref) - len(alt)) % 3 == 0:
         return in_frame_coding_effect(
-            ref,
-            alt,
-            cds_offset,
+            ref=ref,
+            alt=alt,
+            cds_offset=cds_offset,
             sequence_from_start_codon=sequence_from_start_codon,
             variant=variant,
             transcript=transcript)

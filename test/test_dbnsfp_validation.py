@@ -38,14 +38,20 @@ def validate_transcript_mutation(
     assert ensembl_transcript_id in transcript_id_dict, \
         "%s not found in %s" % (ensembl_transcript_id, transcript_id_dict)
     effect = transcript_id_dict[ensembl_transcript_id]
+    assert isinstance(effect, Substitution), \
+        "Expected substitution (aa_pos=%d, aa_alt=%s) but got %s" % (
+            aa_pos, aa_alt, effect)
     assert (
-        isinstance(effect, Substitution) and
         effect.aa_pos + 1 == aa_pos and
-        effect.mutant_protein_sequence[effect.aa_pos] == aa_alt
-    ), "Mutation p.%d%s not found for mutation chr%s:%s %s>%s : %s" % (
-        aa_pos, aa_alt,
-        chrom, dna_position,
-        dna_ref, dna_alt, effect)
+        effect.mutant_protein_sequence[effect.aa_pos] == aa_alt), \
+            "Mutant amino acid %s not found at %d for chr%s:%s %s>%s : %s" % (
+                aa_alt,
+                aa_pos,
+                chrom,
+                dna_position,
+                dna_ref,
+                dna_alt,
+                effect)
 
 def test_dbnsfp_validation_set():
     # check that amino acid substitution gives
