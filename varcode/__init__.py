@@ -18,3 +18,4 @@ from .maf import load_maf, load_maf_dataframe
 from .variant import Variant
 from .variant_collection import VariantCollection
 from .vcf import load_vcf
+from .locus import Locus

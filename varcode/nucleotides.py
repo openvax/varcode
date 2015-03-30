@@ -17,7 +17,7 @@ from __future__ import print_function, division, absolute_import
 import numpy as np
 
 # include all pseudonucleotides encoding repeats and uncertain bases
-VALID_NUCLEOTIDES = {'A', 'C', 'T', 'G'}
+STANDARD_NUCLEOTIDES = {'A', 'C', 'T', 'G'}
 
 EXTENDED_NUCLEOTIDES = {
     'A', 'C', 'T', 'G',
@@ -34,6 +34,9 @@ EXTENDED_NUCLEOTIDES = {
     'X',  # any base
     'N',  # any base
 }
+
+def all_standard_nucleotides(nucleotides):
+    return all(base in STANDARD_NUCLEOTIDES for base in nucleotides)
 
 def normalize_nucleotide_string(nucleotides, allow_extended_nucleotides=False):
     """
@@ -66,11 +69,11 @@ def normalize_nucleotide_string(nucleotides, allow_extended_nucleotides=False):
 
     nucleotides = nucleotides.upper()
 
+    if allow_extended_nucleotides:
+        valid_nucleotides = EXTENDED_NUCLEOTIDES
+    else:
+        valid_nucleotides = STANDARD_NUCLEOTIDES
     for letter in set(nucleotides):
-        if allow_extended_nucleotides:
-            valid_nucleotides = EXTENDED_NUCLEOTIDES
-        else:
-            valid_nucleotides = VALID_NUCLEOTIDES
         if letter not in valid_nucleotides:
             raise ValueError(
                 "Invalid character in nucleotide string: %s" % letter)

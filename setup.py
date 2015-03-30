@@ -62,6 +62,7 @@ if __name__ == '__main__':
             'pyensembl>=0.6.2,<0.7.0',
             'biopython',
             'pyvcf',
-            'memoized_property'
+            'memoized_property',
+            'pysam',
         ],
     )
