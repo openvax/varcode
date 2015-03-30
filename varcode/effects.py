@@ -356,7 +356,7 @@ class BaseSubstitution(CodingMutation):
 
 class Substitution(BaseSubstitution):
     """
-    Single amino acid subsitution, e.g. BRAF-001 V600E
+    Single amino acid substitution, e.g. BRAF-001 V600E
     """
     def __init__(
             self,
@@ -367,10 +367,10 @@ class Substitution(BaseSubstitution):
             aa_alt):
         if len(aa_ref) != 1:
             raise ValueError(
-                "Simple subsitution can't have aa_ref='%s'" % (aa_ref,))
+                "Simple substitution can't have aa_ref='%s'" % (aa_ref,))
         if len(aa_alt) != 1:
             raise ValueError(
-                "Simple subsitution can't have aa_alt='%s'" % (aa_alt,))
+                "Simple substitution can't have aa_alt='%s'" % (aa_alt,))
         BaseSubstitution.__init__(
             self,
             variant=variant,
@@ -434,25 +434,40 @@ class Deletion(BaseSubstitution):
 
 
 class PrematureStop(BaseSubstitution):
-    """In-frame insertion of codons ending with a stop codon."""
+    """In-frame insertion of codons ending with a stop codon. May also involve
+    insertion/deletion/substitution of other amino acids preceding the stop."""
     def __init__(
             self,
             variant,
             transcript,
-            stop_codon_offset,
-            aa_ref,
-            aa_alt="*"):
-        self.stop_codon_offset = stop_codon_offset
+            aa_pos,
+            aa_ref="",
+            aa_alt=""):
+        assert "*" not in aa_ref, \
+            ("Unexpected aa_ref = '%s', should only include amino acids "
+             "before the new stop codon.") % aa_ref
+        assert "*" not in aa_alt, \
+            ("Unexpected aa_ref = '%s', should only include amino acids "
+             "before the new stop codon.") % aa_alt
         BaseSubstitution.__init__(
             self,
             variant,
             transcript,
-            aa_pos=stop_codon_offset,
+            aa_pos=aa_pos,
             aa_ref=aa_ref,
             aa_alt=aa_alt)
 
+        self.stop_codon_offset = aa_pos + len(aa_ref)
+
+        assert self.stop_codon_offset < len(transcript.protein_sequence), \
+            ("Premature stop codon cannot be at position %d"
+             "since the original protein of %s has length %d") % (
+                self.stop_codon_offset,
+                transcript,
+                len(transcript.protein_sequence))
+
     def short_description(self):
-        return "p.%s%d%s" % (
+        return "p.%s%d%s%s" % (
             self.aa_ref,
             self.aa_pos + 1,
             self.aa_alt)
@@ -555,12 +570,12 @@ class FrameShiftTruncation(PrematureStop, FrameShift):
             variant,
             transcript,
             stop_codon_offset,
-            aa_ref):
+            aa_ref=""):
         PrematureStop.__init__(
             self,
             variant=variant,
             transcript=transcript,
-            stop_codon_offset=stop_codon_offset,
+            aa_pos=stop_codon_offset,
             aa_ref=aa_ref)
 
     @memoized_property
