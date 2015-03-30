@@ -11,17 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-'''
-This module provides functionality for collecting and filtering aligned
-sequencing reads from a BAM file, determining the alleles they suggest at
-a locus, and assesing the evidence for particular variants.
-
-In this module, the records stored in the BAM file are referred to as
-"alignments," whereas the term "read" may be more familiar. We use the term
-"alignment" for consistency with the SAM specification, and since an
-individual read from the sequencer may generate any number of alignments in
-the case of chimeric alignments and secondary alignments.
-'''
 
 from __future__ import absolute_import
 
@@ -34,254 +23,10 @@ import pandas
 import pysam
 import pyensembl
 
-from . import Locus
+from .. import Locus
+from . import Pileup, PileupElement, alignment_key, read_key
 
 MatchingEvidence = namedtuple("MatchingEvidence", "ref alt other")
-
-class PileupElement(object):
-    '''
-    A PileupElement represents the segment of an alignment that aligns to a
-    particular base in the reference.
-
-    Attributes
-    ----------
-    locus : Varcode.Locus
-        The reference locus. Must be length 1, i.e. a single base.
-
-    offset_start : int
-        0-based start offset into the alignment sequence, inclusive
-
-    offset_end : int
-        0-based end offset into the alignment sequence, exclusive
-
-    alignment : pysam.AlignedSegment
-        pysam alignment instance
-
-    alignment_key : tuple
-        value computed from the alignment instance that uniquely specifies its
-        properties. Used for comparisons since pysam.AlignedSegment instances
-        do not support a useful notion of equality (they compare using object
-        identity).
-    '''
-    def __init__(self, locus, offset_start, offset_end, alignment):
-        '''
-        Construct a PileupElement object.
-        '''
-        self.locus = locus
-        self.offset_start = offset_start
-        self.offset_end = offset_end
-        self.alignment = alignment
-        self.alignment_key = alignment_key(self.alignment)
-
-    def fields(self):
-        '''
-        Fields that should be considered for our notion of object equality.
-        '''
-        return (
-            self.locus, self.offset_start, self.offset_end, self.alignment_key)
-
-    def __eq__(self, other):
-        return hasattr(other, "fields") and self.fields() == other.fields()
-
-    def __hash__(self):
-        return hash(self.fields())
-
-    @property
-    def bases(self):
-        '''
-        The sequenced bases in the alignment that align to this locus in the
-        genome, as a string.
-
-        Empty string in the case of a deletion. String of length > 1 if there
-        is an insertion here.
-        '''
-        return self.alignment.query_alignment_sequence[
-            self.offset_start:self.offset_end]
-
-    @property
-    def base_qualities(self):
-        '''
-        The phred-scaled base quality scores corresponding to `self.bases`, as
-        a list.
-        '''
-        return self.alignment.query_alignment_qualities[
-            self.offset_start:self.offset_end]
-
-    @property
-    def min_base_quality(self):
-        '''
-        The minimum of the base qualities. In the case of a deletion, in which
-        case there are no bases in this PileupElement, the minimum is taken
-        over the sequenced bases immediately before and after the deletion.
-        '''
-        try:
-            return min(self.base_qualities)
-        except ValueError:
-            # We are mid-deletion. We return the minimum of the adjacent bases.
-            assert self.offset_start == self.offset_end
-            adjacent_qualities = [
-                self.alignment.query_alignment_qualities[offset]
-                for offset in [self.offset_start - 1, self.offset_start]
-                if 0 <= offset < len(self.alignment.query_alignment_qualities)
-            ]
-            return min(adjacent_qualities)
-
-    @staticmethod
-    def from_pysam_alignment(locus, pileup_read):
-        '''
-        Factory function to create a new PileupElement from a pysam
-        `PileupRead`.
-
-        Parameters
-        ----------
-        locus : varcode.Locus
-            Reference locus for which to construct a PileupElement. Must
-            include exactly one base.
-
-        pileup_read : pysam.calignmentfile.PileupRead
-            pysam PileupRead instance. Its alignment must overlap the locus.
-
-        Returns
-        ----------
-        PileupElement
-
-        '''
-        assert not pileup_read.is_refskip, (
-            "Can't create a PileupElement in a refskip (typically an intronic "
-            "gap in an RNA alignment)")
-
-        # Pysam has an `aligned_pairs` method that gives a list of
-        # (offset, locus) pairs indicating the correspondence between bases in
-        # the alignment and reference loci. Here we use that to compute
-        # offset_start and offset_end.
-        #
-        # This is slightly tricky in the case of insertions and deletions.
-        # Here are examples of the desired logic.
-        #
-        # Target locus = 1000
-        #
-        # (1) Simple case: matching bases.
-        #
-        # OFFSET           LOCUS
-        # 0                999
-        # 1                1000
-        # 2                1001
-        #
-        # DESIRED RESULT: offset_start=1, offset_end=2.
-        #
-        #
-        # (2) A 1 base insertion at offset 2.
-        #
-        # OFFSET           LOCUS
-        # 0                999
-        # 1                1000
-        # 2                None
-        # 3                1001
-        #
-        # DESIRED RESULT: offset_start = 1, offset_end=3.
-        #
-        #
-        # (3) A 2 base deletion at loci 1000 and 1001.
-        #
-        # OFFSET           LOCUS
-        # 0                999
-        # None             1000
-        # None             1001
-        # 1                1002
-        #
-        # DESIRED RESULT: offset_start = 1, offset_end=1.
-        #
-        offset_start = None
-        offset_end = len(pileup_read.alignment.query_alignment_sequence)
-        # TODO: doing this with get_blocks() may be faster.
-        for (offset, position) in pileup_read.alignment.aligned_pairs:
-            if offset is not None and position is not None:
-                if position == locus.position:
-                    offset_start = offset
-                elif position > locus.position:
-                    offset_end = offset
-                    break
-        if offset_start is None:
-            offset_start = offset_end
-
-        result = PileupElement(
-            locus, offset_start, offset_end, pileup_read.alignment)
-        assert pileup_read.is_del == (len(result.bases) == 0), \
-            "Deletion=%s but len(offsets)=%d in %s: \n%s" % (
-                pileup_read.is_del,
-                len(result.offsets),
-                result,
-                pileup_read.alignment.aligned_pairs)
-        return result   
-
-class Pileup(object):
-    '''
-    A Pileup is a collection of PileupElement instances at a particular locus.
-
-    Attributes
-    ----------
-    locus : Varcode.Locus
-        The reference locus. Must be length 1, i.e. a single base.
-
-    elements : OrderedDict of PileupElement instances
-        This is logically and ordered set, which we implement as an OrderedDict
-        with all values mapping to None.
-    '''
-    def __init__(self, locus, elements):
-        '''
-        Construct a new Pileup.
-
-        Parameters
-        ----------
-        locus : Varcode.Locus
-            The reference locus. Must be length 1, i.e. a single base.
-
-        elements : iterable of PileupElement
-            The pileup elements. The locus field of these instances must 
-            match the locus parameter.
-        '''
-        self.locus = locus
-        self.elements = OrderedDict((e, None) for e in elements)
-        assert all(e.locus == self.locus for e in self.elements)
-
-    def __iter__(self):
-        return iter(self.elements)
-
-    def __len__(self):
-        return len(self.elements)
-
-    def append(self, element):
-        '''
-        Append a PileupElement to this Pileup. If an identical PileupElement is
-        already part of this Pileup, do nothing.
-        '''
-        assert element.locus == self.locus, (
-            "Element locus (%s) != Pileup locus (%s)"
-            % (element.locus, self.locus))
-        self.elements[element] = None
-
-    def update(self, other):
-        '''
-        Add all pileup elements from other into self.
-        '''
-        assert self.locus == other.locus
-        self.elements.update(other.elements)
-
-    def filter(self, filters):
-        '''
-        Apply filters to the pileup elements, and return a new Pileup with the
-        filtered elements removed.
-
-        Parameters
-        ----------
-        filters : list of PileupElement -> bool callables
-            A PileupUp element is retained if all filters return True when
-            called on it.
-        '''
-        new_elements = [
-            e for e in self.elements
-            if all(function(e) for function in filters)]
-        return Pileup(self.locus, new_elements)
 
 class PileupCollection(object):
     '''
@@ -571,10 +316,12 @@ class PileupCollection(object):
         if None in split:
             del split[None]
 
-        return OrderedDict(
-            sorted(
-                split.items(),
-                key=lambda pair: (-1 * pair[1].num_reads(), pair[0])))
+        # Sort by number of reads (descending). Break ties with the
+        # lexicographic ordering of the allele string.
+        def sorter(pair):
+            (allele, pileup_collection) = pair
+            return (-1 * pileup_collection.num_reads(), allele)
+        return OrderedDict(sorted(split.items(), key=sorter))
 
     def allele_summary(self, locus, score=lambda x: x.num_reads()):
         '''
@@ -852,30 +599,4 @@ class PileupCollection(object):
         finally:
             if close_on_completion:
                 pysam_samfile.close()
-
-
-def alignment_key(pysam_alignment_record):
-    '''
-    Return the identifying attributes of a `pysam.AlignedSegment` instance.
-    This is necessary since these objects do not support a useful notion of
-    equality (they compare on identify by default).
-    '''
-    return (
-        read_key(pysam_alignment_record),
-        pysam_alignment_record.query_alignment_start,
-        pysam_alignment_record.query_alignment_end,
-    )
-
-def read_key(pysam_alignment_record):
-    '''
-    Given a `pysam.AlignedSegment` instance, return the attributes identifying
-    the *read* it comes from (not the alignment). There may be more than one
-    alignment for a read, e.g. chimeric and secondary alignments.
-    '''
-    return (
-        pysam_alignment_record.query_name,
-        pysam_alignment_record.is_duplicate,
-        pysam_alignment_record.is_read1,
-        pysam_alignment_record.is_read2,
-    )
 

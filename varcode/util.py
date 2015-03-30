@@ -20,13 +20,12 @@ from Bio.Seq import reverse_complement
 from pyensembl import EnsemblRelease
 from pyensembl.release_info import MAX_ENSEMBL_RELEASE
 
-from .nucleotides import VALID_NUCLEOTIDES
+from .nucleotides import STANDARD_NUCLEOTIDES
 from .variant import Variant
 from .variant_collection import VariantCollection
 
 # cache lists of all transcript IDs for difference Ensembl releases
 _transcript_ids_cache = {}
-
 
 def random_variants(
         count,
@@ -63,12 +62,12 @@ def random_variants(
         ref = str(seq[transcript_offset])
         if transcript.on_backward_strand:
             ref = reverse_complement(ref)
-        alt_nucleotides = [x for x in VALID_NUCLEOTIDES if x != ref]
+        alt_nucleotides = [x for x in STANDARD_NUCLEOTIDES if x != ref]
         if insertions:
             nucleotide_pairs = [
                 x + y
                 for x in alt_nucleotides
-                for y in VALID_NUCLEOTIDES
+                for y in STANDARD_NUCLEOTIDES
             ]
             alt_nucleotides.extend(nucleotide_pairs)
         if deletions:
