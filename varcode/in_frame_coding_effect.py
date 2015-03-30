@@ -210,11 +210,6 @@ def in_frame_coding_effect(
     original_protein_subsequence = transcript.protein_sequence[
         first_ref_codon_index:last_ref_codon_index + 1]
 
-    mutant_protein_subsequence = translate(
-        mutant_codons,
-        first_codon_is_start=(first_ref_codon_index == 0))
-    print(ref, alt, mutant_codons, original_protein_subsequence, mutant_protein_subsequence)
-
     if first_ref_codon_index == 0:
         if mutant_codons[:3] not in START_CODONS:
             # if we changed a start codon to something else then
@@ -224,24 +219,26 @@ def in_frame_coding_effect(
             # to identify the most likely start site
             return StartLoss(
                 variant=variant,
-                transcript=transcript,
-                aa_alt=mutant_protein_subsequence)
+                transcript=transcript)
         elif len(mutant_codons) == 3 and len(ref) == len(alt):
             # If the change is simple substitution which preserve a
             # start codon at the beginning
-            assert len(mutant_protein_subsequence) == 1, \
-                 "A start codon '%s' should make one amino acid, got '%s'" % (
-                    mutant_codons, mutant_protein_subsequence)
-            assert original_protein_subsequence == mutant_protein_subsequence
             return AlternateStartCodon(
                 variant=variant,
                 transcript=transcript,
                 aa_ref=original_protein_subsequence,
                 ref_codon=transcript.sequence[:3],
                 alt_codon=mutant_codons)
-        # if the mutation changes the start codon usage but also has
-        # other affects then fall through to the
-        # substitution/insertion/deletion logic further down
+
+        else:
+            # if the mutation changes the start codon usage but also has
+            # other affects then fall through to the
+            # substitution/insertion/deletion logic further down
+            pass
+
+    mutant_protein_subsequence = translate(
+        mutant_codons,
+        first_codon_is_start=(first_ref_codon_index == 0))
 
     if mutant_codons[-3:] in STOP_CODONS:
         # if the new coding sequence contains a stop codon, then this is a

@@ -50,11 +50,6 @@ def _frameshift(
 
     original_protein_sequence = transcript.protein_sequence
 
-    # TODO: scan through sequence_from_mutated_codon for
-    # Kozak sequence + start codon to choose the new start
-    if mutated_codon_index == 0:
-        return StartLoss(variant=variant, transcript=transcript)
-
     protein_suffix = translate(
         nucleotide_sequence=sequence_from_mutated_codon,
         first_codon_is_start=False,
@@ -157,15 +152,24 @@ def frameshift_coding_effect(
         variant,
         transcript):
 
+    mutated_codon_index = int(cds_offset / 3)
+
+    # TODO: scan through sequence_from_mutated_codon for
+    # Kozak sequence + start codon to choose the new start
+    if mutated_codon_index == 0:
+        return StartLoss(variant=variant, transcript=transcript)
+
     if len(ref) == 0:
+        # treat insertions as a special case since our base-inclusive
+        # indexing means something different for insertions:
+        #   start = base before insertion
+        #   end = base after insertion
         return frameshift_coding_insertion_effect(
             cds_offset_before_insertion=cds_offset,
             inserted_nucleotides=alt,
             sequence_from_start_codon=sequence_from_start_codon,
             variant=variant,
             transcript=transcript)
-
-    mutated_codon_index = int(cds_offset / 3)
 
     # get the sequence starting from the first modified codon until the end
     # of the transcript.

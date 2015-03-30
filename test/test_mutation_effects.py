@@ -101,7 +101,7 @@ def test_stop_gain():
     # the phase is 0.
     variant = Variant(
         "17",
-        43082575 - 6 + 1,
+        43082575 - 6,
         ref="",
         alt="CTA",
         ensembl=ensembl_grch38)
