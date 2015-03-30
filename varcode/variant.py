@@ -120,6 +120,9 @@ class Variant(object):
             self.start = self.original_start + len(prefix)
             self.end = self.start + len(trimmed_ref) - 1
 
+        # user might supply Ensembl release as an integer
+        if isinstance(ensembl, int):
+            ensembl = EnsemblRelease(release=ensembl)
         require_instance(ensembl, EnsemblRelease, "ensembl")
         self.ensembl = ensembl
 

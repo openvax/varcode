@@ -23,15 +23,15 @@ class MutationEffect(object):
         self.variant = variant
 
     def __str__(self):
-        raise ValueError(
-            "No __str__ method implemented for base class MutationEffect")
+        return "%s(%s)" % (self.__class__.__name__, self.variant)
 
     def __repr__(self):
         return str(self)
 
     def short_description(self):
         raise ValueError(
-            "Method short_description() not implemented for %s" % self)
+            "Method short_description() not implemented for %s" % (
+                self.__class__.__name__,))
 
     def gene_name(self):
         return None
@@ -434,12 +434,14 @@ class Deletion(BaseSubstitution):
 
 
 class PrematureStop(BaseSubstitution):
+    """In-frame insertion of codons ending with a stop codon."""
     def __init__(
             self,
             variant,
             transcript,
             stop_codon_offset,
-            aa_ref):
+            aa_ref,
+            aa_alt="*"):
         self.stop_codon_offset = stop_codon_offset
         BaseSubstitution.__init__(
             self,
@@ -447,12 +449,13 @@ class PrematureStop(BaseSubstitution):
             transcript,
             aa_pos=stop_codon_offset,
             aa_ref=aa_ref,
-            aa_alt="*")
+            aa_alt=aa_alt)
 
     def short_description(self):
-        return "p.%s%d*" % (
+        return "p.%s%d%s" % (
             self.aa_ref,
-            self.aa_pos + 1)
+            self.aa_pos + 1,
+            self.aa_alt)
 
     @memoized_property
     def mutant_protein_sequence(self):
@@ -464,15 +467,14 @@ class StopLoss(BaseSubstitution):
             self,
             variant,
             transcript,
-            aa_pos,
-            aa_alt):
+            extended_protein_sequence):
         BaseSubstitution.__init__(
             self,
             variant,
             transcript,
-            aa_pos=aa_pos,
+            aa_pos=len(transcript.protein_sequence),
             aa_ref="*",
-            aa_alt=aa_alt)
+            aa_alt=extended_protein_sequence)
 
     def short_description(self):
         return "p.*%d%s (stop-loss)" % (self.aa_pos, self.aa_alt)

@@ -29,7 +29,7 @@ from .effects import (
     StopLoss,
 )
 from .string_helpers import trim_shared_flanking_strings
-from .translate import START_CODONS, translate
+from .translate import START_CODONS, STOP_CODONS, translate
 
 def _choose_annotation(
         aa_pos,
@@ -37,7 +37,17 @@ def _choose_annotation(
         aa_alt,
         transcript,
         variant):
-    """Assumption: mutations which modify the start are not handled here."""
+    """Choose a coding effect annotation for in-frame mutations which do
+    not affect the start codon and do not introduce a premature stop codon.
+
+    Parameters
+    ----------
+    aa_pos : int
+    aa_ref : Bio.Seq
+    aa_alt : Bio.Seq
+    transcript : Transcript
+    variant : Variant
+    """
 
     assert len(aa_ref) > 0 or len(aa_alt) > 0
 
@@ -66,8 +76,7 @@ def _choose_annotation(
         return StopLoss(
             variant,
             transcript,
-            aa_pos=aa_pos,
-            aa_alt=aa_alt)
+            extended_protein_sequence=aa_alt)
     elif len(aa_alt) == 0:
         return Deletion(
             variant,
@@ -163,9 +172,18 @@ def in_frame_coding_effect(
          variant,
          transcript)
 
-    # codons in the reference sequence
-    ref_codons = sequence_from_start_codon[
-        first_ref_codon_index * 3:last_ref_codon_index * 3 + 3]
+    # which nucleotide of the codon got changed?
+    offset_in_first_ref_codon = cds_offset % 3
+
+    if n_ref_nucleotides == 0 and offset_in_first_ref_codon == 2:
+        # if insertion is happening after last nucleotide in the previous codon
+        # then make ref_codons be the empty string
+        ref_codons = sequence_from_start_codon[
+            first_ref_codon_index * 3:first_ref_codon_index * 3]
+    else:
+        # codons in the reference sequence
+        ref_codons = sequence_from_start_codon[
+            first_ref_codon_index * 3:last_ref_codon_index * 3 + 3]
 
     # We construct the new codons by taking the unmodified prefix
     # of the first ref codon, the unmodified suffix of the last ref codon
@@ -173,9 +191,6 @@ def in_frame_coding_effect(
     # Since this is supposed to be an in-frame mutation, the concatenated
     # nucleotide string is expected to have a length that is a multiple of
     # three.
-
-    # which nucleotide of the codon got changed?
-    offset_in_first_ref_codon = cds_offset % 3
     prefix = ref_codons[:offset_in_first_ref_codon]
 
     offset_in_last_ref_codon = (cds_offset + len(ref) - 1) % 3
@@ -198,22 +213,10 @@ def in_frame_coding_effect(
     mutant_protein_subsequence = translate(
         mutant_codons,
         first_codon_is_start=(first_ref_codon_index == 0))
+    print(ref, alt, mutant_codons, original_protein_subsequence, mutant_protein_subsequence)
 
     if first_ref_codon_index == 0:
-        if len(mutant_codons) == 3 and mutant_codons in START_CODONS:
-            assert len(original_protein_subsequence) == 1
-            assert len(mutant_protein_subsequence) == 1
-            assert original_protein_subsequence == mutant_protein_subsequence
-            # if we changed the starting codon treat then
-            # this is technically a Silent mutation but may cause
-            # alternate starts or other effects
-            return AlternateStartCodon(
-                variant=variant,
-                transcript=transcript,
-                aa_ref=original_protein_subsequence,
-                ref_codon=transcript.sequence[:3],
-                alt_codon=mutant_codons)
-        elif mutant_codons[:3] not in START_CODONS:
+        if mutant_codons[:3] not in START_CODONS:
             # if we changed a start codon to something else then
             # we no longer know where the protein begins (or even in
             # what frame).
@@ -223,6 +226,43 @@ def in_frame_coding_effect(
                 variant=variant,
                 transcript=transcript,
                 aa_alt=mutant_protein_subsequence)
+        elif len(mutant_codons) == 3 and len(ref) == len(alt):
+            # If the change is simple substitution which preserve a
+            # start codon at the beginning
+            assert len(mutant_protein_subsequence) == 1, \
+                 "A start codon '%s' should make one amino acid, got '%s'" % (
+                    mutant_codons, mutant_protein_subsequence)
+            assert original_protein_subsequence == mutant_protein_subsequence
+            return AlternateStartCodon(
+                variant=variant,
+                transcript=transcript,
+                aa_ref=original_protein_subsequence,
+                ref_codon=transcript.sequence[:3],
+                alt_codon=mutant_codons)
+        # if the mutation changes the start codon usage but also has
+        # other affects then fall through to the
+        # substitution/insertion/deletion logic further down
+
+    if mutant_codons[-3:] in STOP_CODONS:
+        # if the new coding sequence contains a stop codon, then this is a
+        # PrematureStop mutation
+
+        # The mutation may do more than just insert a stop codon, so trim any
+        # shared prefix between the old and new amino sequence leading up to the
+        # stop codon
+        n_shared_amino_acids = 0
+        for i, x in enumerate(original_protein_subsequence):
+            if len(mutant_protein_subsequence) < i + 1:
+                break
+            if mutant_protein_subsequence[i] != x:
+                break
+            n_shared_amino_acids += 1
+        return PrematureStop(
+            variant=variant,
+            transcript=transcript,
+            aa_pos=first_ref_codon_index + n_shared_amino_acids,
+            aa_ref=original_protein_subsequence[n_shared_amino_acids:],
+            aa_alt=mutant_protein_subsequence[n_shared_amino_acids:])
 
     return _choose_annotation(
         aa_pos=first_ref_codon_index,
@@ -230,4 +270,3 @@ def in_frame_coding_effect(
         aa_alt=mutant_protein_subsequence,
         variant=variant,
         transcript=transcript)
-

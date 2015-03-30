@@ -17,7 +17,7 @@ Effect annotation for variants which modify the coding sequence and change
 reading frame.
 """
 
-from .effects import FrameShift, FrameShiftTruncation
+from .effects import FrameShift, FrameShiftTruncation, StartLoss, StopLoss
 from .mutate import substitute
 from .translate import translate
 
@@ -50,18 +50,22 @@ def _frameshift(
 
     original_protein_sequence = transcript.protein_sequence
 
+    # TODO: scan through sequence_from_mutated_codon for
+    # Kozak sequence + start codon to choose the new start
     if mutated_codon_index == 0:
-        # frameshift begins in first/start codon
-        pass
-    elif mutated_codon_index == len(original_protein_sequence):
-        # frameshift begins in last/stop codon
-        pass
+        return StartLoss(variant=variant, transcript=transcript)
 
     protein_suffix = translate(
         nucleotide_sequence=sequence_from_mutated_codon,
         first_codon_is_start=False,
         to_stop=True,
         truncate=True)
+
+    if mutated_codon_index == len(original_protein_sequence):
+        return StopLoss(
+            variant=variant,
+            transcript=transcript,
+            extended_protein_sequence=protein_suffix)
 
     # the frameshifted sequence may contain some amino acids which are
     # the same as the original protein!
@@ -74,25 +78,29 @@ def _frameshift(
         elif original_protein_sequence[codon_index] != new_amino_acid:
             break
         n_skip += 1
+
     protein_suffix = protein_suffix[n_skip:]
     aa_pos = mutated_codon_index + n_skip
+
+    # original amino acid at the mutated codon before the frameshift occurred
+    aa_ref = original_protein_sequence[aa_pos]
+
     # TODO: what if all the shifted amino acids were the same and the protein
     # ended up the same length?
     # Add a Silent case
     if len(protein_suffix) == 0:
-
         # if a frameshift doesn't create any new amino acids, then
         # it must immediately have hit a stop codon
         return FrameShiftTruncation(
             variant=variant,
             transcript=transcript,
             stop_codon_offset=aa_pos,
-            aa_ref=original_protein_sequence[aa_pos])
+            aa_ref=aa_ref)
     return FrameShift(
         variant=variant,
         transcript=transcript,
         aa_pos=aa_pos,
-        aa_ref=original_protein_sequence[aa_pos],
+        aa_ref=aa_ref,
         shifted_sequence=protein_suffix)
 
 def frameshift_coding_insertion_effect(

@@ -35,8 +35,8 @@ from varcode import (
 )
 from pyensembl import EnsemblRelease
 
-ensembl75 = EnsemblRelease(75)
-ensembl78 = EnsemblRelease(78)
+ensembl_grch37 = EnsemblRelease(75)
+ensembl_grch38 = EnsemblRelease(79)
 
 def expect_effect(variant, transcript_id, effect_class):
     transcript = variant.ensembl.transcript_by_id(transcript_id)
@@ -52,7 +52,7 @@ def test_incomplete():
     # first exon begins: ATCATTCCTTTGGGCCTAGGA
 
     # change the first nucleotide of the 5' UTR A>T
-    variant = Variant("7", 55109723, "A", "T", ensembl=ensembl78)
+    variant = Variant("7", 55109723, "A", "T", ensembl=ensembl_grch38)
     expect_effect(variant, "ENST00000450046", IncompleteTranscript)
 
 
@@ -64,7 +64,7 @@ def test_start_loss():
     # which is 55,019,034 + 244 of chr7 = 55019278
     # change the first two nucleotides of the 5' UTR AT>GG
     # making what used to be a start codon into GGG (Glycine)
-    variant = Variant("7", 55019278, "AT", "GG", ensembl=ensembl78)
+    variant = Variant("7", 55019278, "AT", "GG", ensembl=ensembl_grch38)
     expect_effect(variant, "ENST00000420316", StartLoss)
 
 def test_alternate_start_codon():
@@ -77,7 +77,7 @@ def test_alternate_start_codon():
     # making what used to be the standard start codon ATG into TTG,
     # which normally codes for Leucine but can be used as an alternate
     # start codon
-    variant = Variant("7", 55019278, "A", "T", ensembl=ensembl78)
+    variant = Variant("7", 55019278, "A", "T", ensembl=ensembl_grch38)
     expect_effect(variant, "ENST00000420316", AlternateStartCodon)
 
 
@@ -87,12 +87,39 @@ def test_stop_loss():
 
     # change G>C in stop codon, should result in stop-loss mutation
     # causing an elongated protein
-    variant = Variant("1", 46501738, "G", "C", ensembl=ensembl75)
+    variant = Variant("1", 46501738, "G", "C", ensembl=ensembl_grch37)
     expect_effect(variant, "ENST00000361297", StopLoss)
 
-"""
-def test_non_overlapping_transcript():
-    # the stop-loss mutation in MAST2-001 (1:46501738 G>C) does not
-    # overlap EGFR (which is on chr7). If we try to get a mutation
-    # effect of this variant on an EGFR transcript then we should get an error
-"""
+def test_stop_gain():
+    # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
+    # Chromosome 17: 43,044,295-43,125,370 reverse strand.
+    #
+    # Let's look at exon #12
+    # ENSE00003527960 43,082,575  43,082,404  start_phase = 0
+    #
+    # We can insert a reverse complement stop codon near the beginning since
+    # the phase is 0.
+    variant = Variant(
+        "17",
+        43082575 - 6 + 1,
+        ref="",
+        alt="CTA",
+        ensembl=ensembl_grch38)
+    expect_effect(variant, "ENST00000357654", PrematureStop)
+
+def test_stop_gain_with_extra_amino_acids():
+    # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
+    # Chromosome 17: 43,044,295-43,125,370 reverse strand.
+    #
+    # Let's look at exon #12
+    # ENSE00003527960 43,082,575  43,082,404  start_phase = 0
+    #
+    # We can insert a reverse complement AAA followed by a stop codon
+    # at near beginning since the phase is 0.
+    variant = Variant(
+        "17",
+        43082575 - 6,
+        ref="",
+        alt="CTAAAA",
+        ensembl=ensembl_grch38)
+    expect_effect(variant, "ENST00000357654", PrematureStop)
