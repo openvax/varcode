@@ -21,6 +21,7 @@ from varcode import (
     Insertion,
     FrameShift,
     Silent,
+    ExonicSpliceSite,
 )
 
 ensembl = EnsemblRelease(75)
@@ -31,7 +32,13 @@ def _get_effect(chrom, pos, dna_ref, dna_alt, transcript_id):
     assert transcript_id in effects, \
         "Expected transcript ID %s for variant %s not found in %s" % (
             transcript_id, variant, effects)
-    return effects[transcript_id]
+    effect = effects[transcript_id]
+
+    # COSMIC seems to ignore exonic splice sites
+    if isinstance(effect, ExonicSpliceSite):
+        return effect.alternate_effect
+    else:
+        return effect
 
 def _substitution(chrom, pos, dna_ref, dna_alt, transcript_id, aa_ref, aa_alt):
     effect = _get_effect(chrom, pos, dna_ref, dna_alt, transcript_id)

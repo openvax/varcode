@@ -41,7 +41,11 @@ from .effects import (
     ExonicSpliceSite,
 )
 from .effect_ordering import top_priority_effect
-from .nucleotides import normalize_nucleotide_string
+from .nucleotides import (
+    normalize_nucleotide_string,
+    PURINE_NUCLEOTIDES,
+    AMINO_NUCLEOTIDES
+)
 from .string_helpers import trim_shared_flanking_strings
 from .transcript_helpers import interval_offset_on_transcript
 
@@ -349,19 +353,24 @@ class Variant(object):
         # determine if any exons are deleted, and if not,
         # what is the closest exon and how far is this variant
         # from that exon (overlapping the exon = 0 distance)
-        lost_exons = []
-        overlapping_exons = set([])
+        completely_lost_exons = []
+
+        # list of which (exon #, Exon) pairs this mutation overlaps
+        overlapping_exon_numbers_and_exons = []
+
         distance_to_nearest_exon = float("inf")
+
         start_in_exon = False
         end_in_exon = False
+
         nearest_exon = None
-        for exon in transcript.exons:
+        for i, exon in enumerate(transcript.exons):
             if self.start <= exon.start and self.end >= exon.end:
-                lost_exons.append(exon)
+                completely_lost_exons.append(exon)
 
             distance = exon.distance_to_interval(self.start, self.end)
             if distance == 0:
-                overlapping_exons.add(exon)
+                overlapping_exon_numbers_and_exons.append((i + 1, exon))
                 # start is contained in current exon
                 if exon.start <= self.start <= exon.end:
                     start_in_exon = True
@@ -372,9 +381,7 @@ class Variant(object):
                     distance_to_nearest_exon = distance
                     nearest_exon = exon
 
-        if len(lost_exons) > 0:
-            return ExonLoss(self, transcript, lost_exons)
-        elif len(overlapping_exons) == 0:
+        if len(overlapping_exon_numbers_and_exons) == 0:
             intronic_effect_class = self._choose_intronic_effect_class(
                 nearest_exon, distance_to_nearest_exon)
             return intronic_effect_class(
@@ -382,14 +389,34 @@ class Variant(object):
                 transcript=transcript,
                 nearest_exon=nearest_exon,
                 distance_to_exon=distance_to_nearest_exon)
+        elif len(completely_lost_exons) > 0 or (
+                len(overlapping_exon_numbers_and_exons) > 1):
+            # if spanning multiple exons, or completely deleted an exon
+            # then consider that an ExonLoss mutation
+            exons = [exon for (_, exon) in overlapping_exon_numbers_and_exons]
+            return ExonLoss(self, transcript, exons)
+
+        assert len(overlapping_exon_numbers_and_exons) == 1
+
+        exon_number, exon = overlapping_exon_numbers_and_exons[0]
+
+        exonic_effect_annotation = self._exonic_transcript_effect(
+            exon, exon_number, transcript)
 
         # simple case: both start and end are in the same
-        elif len(overlapping_exons) == 1 and start_in_exon and end_in_exon:
-            return self._exonic_transcript_effect(transcript)
-        # if spanning multiple exons, or only part of the variant is inside
-        # an exon, then consider than an exonic splice site mutation
-        else:
-            return ExonicSpliceSite(self, transcript)
+        if start_in_exon and end_in_exon:
+            return exonic_effect_annotation
+        elif isinstance(exonic_effect_annotation, ExonicSpliceSite):
+            # if mutation bleeds over into intro but even just
+            # the exonic portion got annotated as an exonic splice site
+            # then return it
+            return exonic_effect_annotation
+
+        return ExonicSpliceSite(
+            variant=self,
+            transcript=transcript,
+            exon=exon,
+            alternate_effect=exonic_effect_annotation)
 
     def _choose_intronic_effect_class(
             self,
@@ -435,10 +462,20 @@ class Variant(object):
             # intronic mutation unrelated to splicing
             return Intronic
 
-    def _exonic_transcript_effect(self, transcript):
-        """
-        Effect of this variant on a Transcript, assuming we already know
+    def _exonic_transcript_effect(self, exon, exon_number, transcript):
+        """Effect of this variant on a Transcript, assuming we already know
         that this variant overlaps some exon of the transcript.
+
+        Parameters
+        ----------
+        exon : pyensembl.Exon
+            Exon which this variant overlaps
+
+        exon_number : int
+            Index (starting from 1) of the given exon in the transcript's
+            sequence of exons.
+
+        transcript : pyensembl.Transcript
         """
         if transcript.on_backward_strand:
             strand_ref = reverse_complement(self.ref)
@@ -447,8 +484,25 @@ class Variant(object):
             strand_ref = self.ref
             strand_alt = self.alt
 
+        # clip mutation to only affect the current exon
+        if self.start < exon.start:
+            n_skip_start = exon.start - self.start
+            strand_ref = strand_ref[n_skip_start:]
+            strand_alt = strand_alt[n_skip_start:]
+            start = exon.start
+        else:
+            start = self.start
+
+        if self.end > exon.end:
+            n_skip_end = self.end - exon.end
+            strand_ref = strand_ref[:-n_skip_end]
+            strand_alt = strand_alt[:-n_skip_end]
+            end = exon.end
+        else:
+            end = self.end
+
         offset_with_utr5 = interval_offset_on_transcript(
-            self.start, self.end, transcript)
+            start, end, transcript)
 
         utr5_length = min(transcript.start_codon_spliced_offsets)
 
@@ -456,7 +510,7 @@ class Variant(object):
         if utr5_length > offset_with_utr5:
 
             # does the variant end after the 5' UTR, within the coding region?
-            if utr5_length < offset_with_utr5 + len(self.ref):
+            if utr5_length < offset_with_utr5 + len(strand_ref):
                 return StartLoss(self, transcript)
             else:
                 # if variant contained within 5' UTR
@@ -467,9 +521,78 @@ class Variant(object):
         if offset_with_utr5 >= utr3_offset:
             return ThreePrimeUTR(self, transcript)
 
-        return coding_effect(
+        exon_start_offset = interval_offset_on_transcript(
+            exon.start, exon.end, transcript)
+        exon_end_offset = exon_start_offset + len(exon) - 1
+
+        # Further below we're going to try to predict exonic splice site
+        # modifications, which will take this effect_annotation as their
+        # alternative hypothesis for what happens if splicing doesn't change.
+        # If the mutation doesn't affect an exonic splice site, then
+        # we'll just return this effect.
+        coding_effect_annotation = coding_effect(
             ref=strand_ref,
             alt=strand_alt,
             transcript_offset=offset_with_utr5,
             variant=self,
             transcript=transcript)
+
+        # first we're going to make sure the variant doesn't disrupt the
+        # splicing sequences we got from Divina et. al's
+        #   Ab initio prediction of mutation-induced cryptic
+        #   splice-site activation and exon skipping
+        # (http://www.ncbi.nlm.nih.gov/pmc/articles/PMC2947103/)
+        #
+        # 5' splice site: MAG|GURAGU consensus
+        #   M is A or C; R is purine; | is the exon-intron boundary
+        #
+        # 3' splice site: YAG|R
+        #
+        if exon_number > 1 and offset_with_utr5 == exon_start_offset:
+            # if this is any exon past the first, check to see if it lost
+            # the purine on its left side
+            #
+            # the 3' splice site sequence has just a single purine on
+            # the exon side
+            if len(strand_ref) > 0 and strand_ref[0] in PURINE_NUCLEOTIDES:
+                if len(strand_alt) > 0:
+                    if strand_alt[0] not in PURINE_NUCLEOTIDES:
+                        return ExonicSpliceSite(
+                            variant=self,
+                            transcript=transcript,
+                            exon=exon,
+                            alternate_effect=coding_effect_annotation)
+                else:
+                    # if the mutation is a deletion, are there ref nucleotides
+                    # afterward?
+                    offset_after_deletion = offset_with_utr5 + len(strand_ref)
+                    if len(transcript.sequence) > offset_after_deletion:
+                        next_base = transcript.sequence[offset_after_deletion]
+                        if next_base not in PURINE_NUCLEOTIDES:
+                            return ExonicSpliceSite(
+                                variant=self,
+                                transcript=transcript,
+                                exon=exon,
+                                alternate_effect=coding_effect_annotation)
+
+        if exon_number < len(transcript.exons):
+            # if the mutation affects an exon whose right end gets spliced
+            # to a next exon, check if the variant alters the exon side of
+            # 5' consensus splicing sequence
+            #
+            # splicing sequence:
+            #   MAG|GURAGU
+            # M is A or C; R is purine; | is the exon-intron boundary
+            if exon_end_offset - 2 <= offset_with_utr5 <= exon_end_offset:
+                # if the last three nucleotides conform to the consensus
+                # sequence then treat any deviation as an ExonicSpliceSite
+                # mutation
+                a, b, c = transcript.sequence[
+                    exon_end_offset - 2:exon_end_offset + 1]
+                if a in AMINO_NUCLEOTIDES and b == "A" and c == "G":
+                    return ExonicSpliceSite(
+                        variant=self,
+                        transcript=transcript,
+                        exon=exon,
+                        alternate_effect=coding_effect_annotation)
+        return coding_effect_annotation

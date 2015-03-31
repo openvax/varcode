@@ -31,11 +31,13 @@ def random_variants(
         count,
         ensembl_release=MAX_ENSEMBL_RELEASE,
         deletions=True,
-        insertions=True):
+        insertions=True,
+        random_seed=None):
     """
     Generate a VariantCollection with random variants that overlap
     at least one complete coding transcript.
     """
+    rng = random.Random(random_seed)
     ensembl = EnsemblRelease(ensembl_release)
 
     if ensembl_release in _transcript_ids_cache:
@@ -47,14 +49,14 @@ def random_variants(
     variants = []
 
     while len(variants) < count:
-        transcript_id = random.choice(transcript_ids)
+        transcript_id = rng.choice(transcript_ids)
         transcript = ensembl.transcript_by_id(transcript_id)
 
         if not transcript.complete:
             continue
 
-        exon = random.choice(transcript.exons)
-        base1_genomic_position = random.randint(exon.start, exon.end)
+        exon = rng.choice(transcript.exons)
+        base1_genomic_position = rng.randint(exon.start, exon.end)
         transcript_offset = transcript.spliced_offset(base1_genomic_position)
 
         try:
@@ -79,7 +81,7 @@ def random_variants(
             alt_nucleotides.extend(nucleotide_pairs)
         if deletions:
             alt_nucleotides.append("")
-        alt = random.choice(alt_nucleotides)
+        alt = rng.choice(alt_nucleotides)
         variant = Variant(
             transcript.contig,
             base1_genomic_position,

@@ -242,8 +242,14 @@ class ExonicSpliceSite(Exonic, SpliceSite):
     Mutation in the last three nucleotides before an intron
     or in the first nucleotide after an intron.
     """
+    def __init__(self, variant, transcript, exon, alternate_effect):
+        Exonic.__init__(self, variant, transcript)
+        self.exon = exon
+        self.alternate_effect = alternate_effect
+
     def short_description(self):
-        return "exonic-splice-site"
+        return "exonic-splice-site (exon=%s, alternate=%s)" % (
+            self.exon, self.alternate_effect.short_description())
 
 class CodingMutation(Exonic):
     """
@@ -409,27 +415,35 @@ class Insertion(BaseSubstitution):
     """
     In-frame insertion of one or more amino acids.
     """
-    def __init__(self, variant, transcript, aa_pos, aa_alt):
+    def __init__(
+            self,
+            variant,
+            transcript,
+            position_before,
+            inserted_sequence):
+        self.position_before = position_before
+        self.inserted_sequence = inserted_sequence
         BaseSubstitution.__init__(
             self,
             variant=variant,
             transcript=transcript,
-            aa_pos=aa_pos,
+            aa_pos=position_before,
             aa_ref="",
-            aa_alt=aa_alt)
+            aa_alt=inserted_sequence)
 
 class Deletion(BaseSubstitution):
     """
     In-frame deletion of one or more amino acids.
     """
 
-    def __init__(self, variant, transcript, aa_pos, aa_ref):
+    def __init__(self, variant, transcript, aa_pos, deleted_sequence):
+        self.deleted_sequence = deleted_sequence
         BaseSubstitution.__init__(
             self,
             variant=variant,
             transcript=transcript,
             aa_pos=aa_pos,
-            aa_ref=aa_ref,
+            aa_ref=deleted_sequence,
             aa_alt="")
 
 

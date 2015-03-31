@@ -20,6 +20,7 @@ TODO: generalize this to work with the mitochondrial codon table.
 import logging
 
 from Bio.Data import CodonTable
+from Bio.Seq import Seq
 
 DNA_CODON_TABLE = CodonTable.standard_dna_table.forward_table
 START_CODONS = set(CodonTable.standard_dna_table.start_codons)
@@ -69,6 +70,8 @@ def translate(
         Truncate sequence if it's not a multiple of 3 (default = False)
     Returns BioPython Seq of amino acids
     """
+    if not isinstance(nucleotide_sequence, Seq):
+        nucleotide_sequence = Seq(nucleotide_sequence)
 
     if truncate:
         # if sequence isn't a multiple of 3, truncate it so BioPython

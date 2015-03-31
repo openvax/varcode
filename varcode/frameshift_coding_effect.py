@@ -124,13 +124,12 @@ def frameshift_coding_insertion_effect(
 
     original_protein_sequence = transcript.protein_sequence
 
-    assert codon_index_before_insertion < len(original_protein_sequence) - 1, \
-        "Expected frameshift_insertion to be before stop codon for %s on %s" % (
-            variant, transcript)
-
-    if codon_index_before_insertion == len(original_protein_sequence) - 1:
-        # if insertion is into the stop codon then this is a stop-loss
-        pass
+    assert codon_index_before_insertion <= len(original_protein_sequence) - 1, \
+        ("Expected frameshift_insertion to be before"
+         " stop codon for %s on %s, len(protein) = %d, aa_pos = %d") % (
+            variant, transcript,
+            len(original_protein_sequence),
+            codon_index_before_insertion)
 
     cds_offset_after_insertion = (codon_index_before_insertion + 1) * 3
     original_coding_sequence_after_insertion = \
@@ -151,12 +150,32 @@ def frameshift_coding_effect(
         sequence_from_start_codon,
         variant,
         transcript):
+    """
+    Coding effect of a frameshift mutation.
 
-    mutated_codon_index = int(cds_offset / 3)
+    Parameters
+    ----------
+    ref : nucleotide sequence
+        Reference nucleotides
 
-    # TODO: scan through sequence_from_mutated_codon for
-    # Kozak sequence + start codon to choose the new start
-    if mutated_codon_index == 0:
+    alt : nucleotide sequence
+        Alternate nucleotides introduced by mutation
+
+    cds_offset : int
+        Offset into the CDS of first ref nucleotide. For insertions, this
+        is the offset of the last ref nucleotide before the insertion.
+
+    sequence_from_start_codon : nucleotide sequence
+        Nucleotides of the coding sequence and 3' UTR
+
+    variant : Variant
+
+    transcript : Transcript
+    """
+
+    if cds_offset < 3:
+        # TODO: scan through sequence_from_mutated_codon for
+        # Kozak sequence + start codon to choose the new start
         return StartLoss(variant=variant, transcript=transcript)
 
     if len(ref) == 0:
@@ -171,6 +190,7 @@ def frameshift_coding_effect(
             variant=variant,
             transcript=transcript)
 
+    mutated_codon_index = int(cds_offset / 3)
     # get the sequence starting from the first modified codon until the end
     # of the transcript.
     sequence_after_mutated_codon = \

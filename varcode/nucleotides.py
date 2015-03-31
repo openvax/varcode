@@ -19,6 +19,18 @@ import numpy as np
 # include all pseudonucleotides encoding repeats and uncertain bases
 STANDARD_NUCLEOTIDES = {'A', 'C', 'T', 'G'}
 
+PURINE_NUCLEOTIDES = {'A', 'G'}
+
+PYRIMIDINE_NUCLEOTIDES = {'C', 'T'}
+
+AMINO_NUCLEOTIDES = {'A', 'C'}
+
+KETO_NUCLEOTIDES = {'T', 'G'}
+
+STRONG_NUCLEOTIDES = {'G', 'C'}
+
+WEAK_NUCLEOTIDES = {'A', 'T'}
+
 EXTENDED_NUCLEOTIDES = {
     'A', 'C', 'T', 'G',
     'Y',  # Pyrimidine (C or T)

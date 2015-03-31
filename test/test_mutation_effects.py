@@ -31,6 +31,8 @@ from varcode import (
     AlternateStartCodon,
     PrematureStop,
     FrameShift,
+    ExonLoss,
+    ExonicSpliceSite,
     # TODO: SpliceDonor, SpliceReceptor
 )
 from pyensembl import EnsemblRelease
@@ -123,3 +125,68 @@ def test_stop_gain_with_extra_amino_acids():
         alt="CTAAAA",
         ensembl=ensembl_grch38)
     expect_effect(variant, "ENST00000357654", PrematureStop)
+
+def test_exon_loss():
+    # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
+    # Chromosome 17: 43,044,295-43,125,370 reverse strand.
+    #
+    # Deleting exon #12
+    # ENSE00003527960 43,082,575  43,082,404  start_phase = 0
+    #
+    variant = Variant(
+        "17",
+        43082404,
+        ref="".join([
+          "CTTTTTCTGATGTGCTTTGTTCTGGATTTCGCAGGTCCTCAAGGGCAGAAGAGTCACTTATGATG",
+          "GAAGGGTAGCTGTTAGAAGGCTGGCTCCCATGCTGTTCTAACACAGCTTCAGTAATTAGATTAGT",
+          "TAAAGTGATGTGGTGTTTTCTGGCAAACTTGTACACGAGCAT"
+        ]),
+        alt="",
+        ensembl=ensembl_grch38)
+    expect_effect(variant, "ENST00000357654", ExonLoss)
+
+
+def test_exonic_splice_site():
+    # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
+    # Chromosome 17: 43,044,295-43,125,370 reverse strand.
+    #
+    # Deleting last nucleotide of exon #12
+    # ENSE00003527960 43,082,575  43,082,404  start_phase = 0
+    #
+    variant = Variant(
+        "17",
+        43082404,
+        ref="C",
+        alt="",
+        ensembl=ensembl_grch38)
+    expect_effect(variant, "ENST00000357654", ExonicSpliceSite)
+
+def test_deletion():
+    # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
+    # Chromosome 17: 43,044,295-43,125,370 reverse strand.
+    #
+    # Deleting second to last codon of exon #12
+    # ENSE00003527960 43,082,575  43,082,404  start_phase = 0
+    #
+    variant = Variant(
+        "17",
+        43082404 + 3,
+        ref="TTT",
+        alt="",
+        ensembl=ensembl_grch38)
+    expect_effect(variant, "ENST00000357654", Deletion)
+
+def test_insertion():
+    # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
+    # Chromosome 17: 43,044,295-43,125,370 reverse strand.
+    #
+    # Insert codon before last codon of exon #12
+    # ENSE00003527960 43,082,575  43,082,404  start_phase = 0
+    #
+    variant = Variant(
+        "17",
+        43082404 + 2,
+        ref="",
+        alt="AAA",
+        ensembl=ensembl_grch38)
+    expect_effect(variant, "ENST00000357654", Insertion)
