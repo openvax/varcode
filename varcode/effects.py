@@ -247,8 +247,13 @@ class ExonicSpliceSite(Exonic, SpliceSite):
         self.exon = exon
         self.alternate_effect = alternate_effect
 
+    def __str__(self):
+        return "ExonicSpliceSite(exon=%s, alternate_effect=%s)" % (
+            self.exon,
+            self.alternate_effect)
+
     def short_description(self):
-        return "exonic-splice-site (exon=%s, alternate=%s)" % (
+        return "exonic-splice-site" % (
             self.exon, self.alternate_effect.short_description())
 
 class CodingMutation(Exonic):
@@ -481,7 +486,7 @@ class PrematureStop(BaseSubstitution):
                 len(transcript.protein_sequence))
 
     def short_description(self):
-        return "p.%s%d%s%s" % (
+        return "p.%s%d%s*" % (
             self.aa_ref,
             self.aa_pos + 1,
             self.aa_alt)

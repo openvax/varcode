@@ -180,12 +180,12 @@ def test_insertion():
     # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
     # Chromosome 17: 43,044,295-43,125,370 reverse strand.
     #
-    # Insert codon before last codon of exon #12
+    # Insert codon after first codon of exon #12
     # ENSE00003527960 43,082,575  43,082,404  start_phase = 0
     #
     variant = Variant(
         "17",
-        43082404 + 2,
+        43082575 - 6,
         ref="",
         alt="AAA",
         ensembl=ensembl_grch38)
