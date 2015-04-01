@@ -12,6 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""
+The different effects get tested in an ad-hoc manner throughout the
+unit test but the goal of this test module is to make sure that there is
+at least one test for each effect class
+"""
+
 from varcode import (
     Variant,
     #
@@ -180,7 +186,7 @@ def test_insertion():
     # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
     # Chromosome 17: 43,044,295-43,125,370 reverse strand.
     #
-    # Insert codon after first codon of exon #12
+    # Insert codon after first two codons of exon #12
     # ENSE00003527960 43,082,575  43,082,404  start_phase = 0
     #
     variant = Variant(
@@ -190,3 +196,81 @@ def test_insertion():
         alt="AAA",
         ensembl=ensembl_grch38)
     expect_effect(variant, "ENST00000357654", Insertion)
+
+def test_frameshift():
+    # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
+    # Chromosome 17: 43,044,295-43,125,370 reverse strand.
+    #
+    # Out of frame insertion after first two codons of exon #12
+    # ENSE00003527960 43,082,575  43,082,404  start_phase = 0
+    #
+    variant = Variant(
+        "17",
+        43082575 - 6,
+        ref="",
+        alt="A",
+        ensembl=ensembl_grch38)
+    expect_effect(variant, "ENST00000357654", FrameShift)
+
+def test_substitution():
+    # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
+    # Chromosome 17: 43,044,295-43,125,370 reverse strand.
+    #
+    # Substitute second codon of exon #12 AGG > GGG (amino acid R>G)
+    # ENSE00003527960 43,082,575  43,082,404  start_phase = 0
+    #
+    variant = Variant(
+        "17",
+        43082575 - 3,
+        ref="CCT",
+        alt="CCC",
+        ensembl=ensembl_grch38)
+    expect_effect(variant, "ENST00000357654", Substitution)
+
+def test_substitution_silent():
+    # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
+    # Chromosome 17: 43,044,295-43,125,370 reverse strand.
+    #
+    # Substitute second codon of exon #12 AGG > AGA (amino acid R>R silent)
+    # ENSE00003527960 43,082,575  43,082,404  start_phase = 0
+    #
+    variant = Variant(
+        "17",
+        43082575 - 3,
+        ref="CCT",
+        alt="CCC",
+        ensembl=ensembl_grch38)
+    expect_effect(variant, "ENST00000357654", Substitution)
+
+def test_five_prime_utr():
+    # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
+    # Chromosome 17: 43,044,295-43,125,370 reverse strand.
+    #
+    # Exon #1 is the beginning of the 5' UTR
+    # 1 ENSE00001871077 43,125,370  43,125,271  -   -   length=100
+    # Sequence:
+    # GAGCTCGCTGAGACTTCCTGGACGGGGGACAGGCTGTGGGGTTTCTCAGATAACTGGGCC
+    # CCTGCGCTCAGGAGGCCTTCACCCTCTGCTCTGGGTAAAG
+    variant = Variant(
+        "17",
+        43125370,
+        ref="CTT",
+        alt="",
+        ensembl=ensembl_grch38)
+    expect_effect(variant, "ENST00000357654", FivePrimeUTR)
+
+def test_three_prime_utr():
+    # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
+    # Chromosome 17: 43,044,295-43,125,370 reverse strand.
+    #
+    # Exon #23 contains the 3' UTR
+    # 23  ENSE00001814242 43,045,802  43,044,295  1   -   length=1,508
+    # Sequence end with:
+    # ...CACTTCCA
+    variant = Variant(
+        "17",
+        43044295 - 2,
+        ref="TGG",
+        alt="",
+        ensembl=ensembl_grch38)
+    expect_effect(variant, "ENST00000357654", ThreePrimeUTR)
