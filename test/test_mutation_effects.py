@@ -46,12 +46,16 @@ from pyensembl import EnsemblRelease
 ensembl_grch37 = EnsemblRelease(75)
 ensembl_grch38 = EnsemblRelease(79)
 
-def expect_effect(variant, transcript_id, effect_class):
+def expect_effect(
+        variant,
+        transcript_id,
+        effect_class):
     transcript = variant.ensembl.transcript_by_id(transcript_id)
     effect = variant.effect_on_transcript(transcript)
     assert isinstance(effect, effect_class), \
         "Expected %s on %s to be %s, got %s" % (
             variant, transcript, effect_class.__name__, effect)
+
 
 def test_incomplete():
     # transcript EGFR-009 (ENST00000450046 in Ensembl 78)
@@ -61,7 +65,10 @@ def test_incomplete():
 
     # change the first nucleotide of the 5' UTR A>T
     variant = Variant("7", 55109723, "A", "T", ensembl=ensembl_grch38)
-    expect_effect(variant, "ENST00000450046", IncompleteTranscript)
+    expect_effect(
+        variant,
+        transcript_id="ENST00000450046",
+        effect_class=IncompleteTranscript)
 
 
 def test_start_loss():
@@ -73,7 +80,10 @@ def test_start_loss():
     # change the first two nucleotides of the 5' UTR AT>GG
     # making what used to be a start codon into GGG (Glycine)
     variant = Variant("7", 55019278, "AT", "GG", ensembl=ensembl_grch38)
-    expect_effect(variant, "ENST00000420316", StartLoss)
+    expect_effect(
+        variant,
+        transcript_id="ENST00000420316",
+        effect_class=StartLoss)
 
 def test_alternate_start_codon():
     # transcript EGFR-005 (ENST00000420316 in Ensembl 77)
@@ -86,7 +96,10 @@ def test_alternate_start_codon():
     # which normally codes for Leucine but can be used as an alternate
     # start codon
     variant = Variant("7", 55019278, "A", "T", ensembl=ensembl_grch38)
-    expect_effect(variant, "ENST00000420316", AlternateStartCodon)
+    expect_effect(
+        variant,
+        transcript_id="ENST00000420316",
+        effect_class=AlternateStartCodon)
 
 
 def test_stop_loss():
@@ -96,7 +109,10 @@ def test_stop_loss():
     # change G>C in stop codon, should result in stop-loss mutation
     # causing an elongated protein
     variant = Variant("1", 46501738, "G", "C", ensembl=ensembl_grch37)
-    expect_effect(variant, "ENST00000361297", StopLoss)
+    expect_effect(
+        variant,
+        transcript_id="ENST00000361297",
+        effect_class=StopLoss)
 
 def test_stop_gain():
     # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
@@ -113,7 +129,10 @@ def test_stop_gain():
         ref="",
         alt="CTA",
         ensembl=ensembl_grch38)
-    expect_effect(variant, "ENST00000357654", PrematureStop)
+    expect_effect(
+        variant,
+        transcript_id="ENST00000357654",
+        effect_class=PrematureStop)
 
 def test_stop_gain_with_extra_amino_acids():
     # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
@@ -130,7 +149,10 @@ def test_stop_gain_with_extra_amino_acids():
         ref="",
         alt="CTAAAA",
         ensembl=ensembl_grch38)
-    expect_effect(variant, "ENST00000357654", PrematureStop)
+    expect_effect(
+        variant,
+        transcript_id="ENST00000357654",
+        effect_class=PrematureStop)
 
 def test_exon_loss():
     # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
@@ -149,7 +171,10 @@ def test_exon_loss():
         ]),
         alt="",
         ensembl=ensembl_grch38)
-    expect_effect(variant, "ENST00000357654", ExonLoss)
+    expect_effect(
+        variant,
+        transcript_id="ENST00000357654",
+        effect_class=ExonLoss)
 
 
 def test_exonic_splice_site():
@@ -165,7 +190,10 @@ def test_exonic_splice_site():
         ref="C",
         alt="",
         ensembl=ensembl_grch38)
-    expect_effect(variant, "ENST00000357654", ExonicSpliceSite)
+    expect_effect(
+        variant,
+        transcript_id="ENST00000357654",
+        effect_class=ExonicSpliceSite)
 
 def test_deletion():
     # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
@@ -180,7 +208,10 @@ def test_deletion():
         ref="TTT",
         alt="",
         ensembl=ensembl_grch38)
-    expect_effect(variant, "ENST00000357654", Deletion)
+    expect_effect(
+        variant,
+        transcript_id="ENST00000357654",
+        effect_class=Deletion)
 
 def test_insertion():
     # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
@@ -195,7 +226,10 @@ def test_insertion():
         ref="",
         alt="AAA",
         ensembl=ensembl_grch38)
-    expect_effect(variant, "ENST00000357654", Insertion)
+    expect_effect(
+        variant,
+        transcript_id="ENST00000357654",
+        effect_class=Insertion)
 
 def test_frameshift():
     # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
@@ -210,7 +244,10 @@ def test_frameshift():
         ref="",
         alt="A",
         ensembl=ensembl_grch38)
-    expect_effect(variant, "ENST00000357654", FrameShift)
+    expect_effect(
+        variant,
+        transcript_id="ENST00000357654",
+        effect_class=FrameShift)
 
 def test_substitution():
     # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
@@ -225,7 +262,10 @@ def test_substitution():
         ref="CCT",
         alt="CCC",
         ensembl=ensembl_grch38)
-    expect_effect(variant, "ENST00000357654", Substitution)
+    expect_effect(
+        variant,
+        transcript_id="ENST00000357654",
+        effect_class=Substitution)
 
 def test_substitution_silent():
     # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
@@ -240,7 +280,10 @@ def test_substitution_silent():
         ref="CCT",
         alt="CCC",
         ensembl=ensembl_grch38)
-    expect_effect(variant, "ENST00000357654", Substitution)
+    expect_effect(
+        variant,
+        transcript_id="ENST00000357654",
+        effect_class=Silent)
 
 def test_five_prime_utr():
     # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
@@ -253,11 +296,14 @@ def test_five_prime_utr():
     # CCTGCGCTCAGGAGGCCTTCACCCTCTGCTCTGGGTAAAG
     variant = Variant(
         "17",
-        43125370,
-        ref="CTT",
+        43125370 - 3,
+        ref="CAC",
         alt="",
         ensembl=ensembl_grch38)
-    expect_effect(variant, "ENST00000357654", FivePrimeUTR)
+    expect_effect(
+        variant,
+        transcript_id="ENST00000357654",
+        effect_class=FivePrimeUTR)
 
 def test_three_prime_utr():
     # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
@@ -269,8 +315,13 @@ def test_three_prime_utr():
     # ...CACTTCCA
     variant = Variant(
         "17",
-        43044295 - 2,
+        43044295 + 3,
         ref="TGG",
         alt="",
         ensembl=ensembl_grch38)
-    expect_effect(variant, "ENST00000357654", ThreePrimeUTR)
+    expect_effect(
+        variant,
+        transcript_id="ENST00000357654",
+        effect_class=ThreePrimeUTR)
+
+

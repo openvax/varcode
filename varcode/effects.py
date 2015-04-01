@@ -256,6 +256,16 @@ class ExonicSpliceSite(Exonic, SpliceSite):
         return "exonic-splice-site" % (
             self.exon, self.alternate_effect.short_description())
 
+    @memoized_property
+    def mutant_protein_sequence(self):
+        """
+        TODO: determine when exonic splice variants cause exon skipping
+        vs. translation of the underlying modified coding sequence.
+
+        For now just pretending like there is no effect on splicing.
+        """
+        return self.alternate_effect.mutant_protein_sequence
+
 class CodingMutation(Exonic):
     """
     Base class for all mutations which result in a modified coding sequence.

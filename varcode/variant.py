@@ -477,40 +477,65 @@ class Variant(object):
 
         transcript : pyensembl.Transcript
         """
-        if transcript.on_backward_strand:
-            strand_ref = reverse_complement(self.ref)
-            strand_alt = reverse_complement(self.alt)
-        else:
-            strand_ref = self.ref
-            strand_alt = self.alt
 
-        # clip mutation to only affect the current exon
+        genome_ref = self.ref
+        genome_alt = self.alt
+
+        # clip mutation to only affect the current exon\
         if self.start < exon.start:
+            # if mutation starts before current exon then only look
+            # at nucleotides which overlap the exon
+            assert len(genome_ref) > 0, "Unexpected insertion into intron"
             n_skip_start = exon.start - self.start
-            strand_ref = strand_ref[n_skip_start:]
-            strand_alt = strand_alt[n_skip_start:]
-            start = exon.start
+            genome_ref = genome_ref[n_skip_start:]
+            genome_alt = genome_alt[n_skip_start:]
+            genome_start = exon.start
         else:
-            start = self.start
+            genome_start = self.start
 
         if self.end > exon.end:
+            # if mutation goes past exon end then only look at nucleotides
+            # which overlap the exon
             n_skip_end = self.end - exon.end
-            strand_ref = strand_ref[:-n_skip_end]
-            strand_alt = strand_alt[:-n_skip_end]
-            end = exon.end
+            genome_ref = genome_ref[:-n_skip_end]
+            genome_alt = genome_alt[:len(genome_ref)]
+            genome_end = exon.end
         else:
-            end = self.end
+            genome_end = self.end
 
-        offset_with_utr5 = interval_offset_on_transcript(
-            start, end, transcript)
+        transcript_offset = interval_offset_on_transcript(
+            genome_start, genome_end, transcript)
+
+        if transcript.on_backward_strand:
+            strand_ref = reverse_complement(genome_ref)
+            strand_alt = reverse_complement(genome_alt)
+        else:
+            strand_ref = genome_ref
+            strand_alt = genome_alt
+
+        expected_ref = transcript.sequence[
+            transcript_offset:transcript_offset + len(strand_ref)]
+
+        if strand_ref != expected_ref:
+            raise ValueError(
+                ("Found ref nucleotides '%s' in sequence"
+                 " of %s at offset %d (chromosome positions %d:%d)"
+                 " but variant %s has '%s'") % (
+                     expected_ref,
+                     transcript,
+                     transcript_offset,
+                     genome_start,
+                     genome_end,
+                     self,
+                     strand_ref))
 
         utr5_length = min(transcript.start_codon_spliced_offsets)
 
         # does the variant start inside the 5' UTR?
-        if utr5_length > offset_with_utr5:
+        if utr5_length > transcript_offset:
 
             # does the variant end after the 5' UTR, within the coding region?
-            if utr5_length < offset_with_utr5 + len(strand_ref):
+            if utr5_length < transcript_offset + len(strand_ref):
                 return StartLoss(self, transcript)
             else:
                 # if variant contained within 5' UTR
@@ -518,7 +543,7 @@ class Variant(object):
 
         utr3_offset = max(transcript.stop_codon_spliced_offsets) + 1
 
-        if offset_with_utr5 >= utr3_offset:
+        if transcript_offset >= utr3_offset:
             return ThreePrimeUTR(self, transcript)
 
         exon_start_offset = interval_offset_on_transcript(
@@ -533,7 +558,7 @@ class Variant(object):
         coding_effect_annotation = coding_effect(
             ref=strand_ref,
             alt=strand_alt,
-            transcript_offset=offset_with_utr5,
+            transcript_offset=transcript_offset,
             variant=self,
             transcript=transcript)
 
@@ -548,7 +573,7 @@ class Variant(object):
         #
         # 3' splice site: YAG|R
         #
-        if exon_number > 1 and offset_with_utr5 == exon_start_offset:
+        if exon_number > 1 and transcript_offset == exon_start_offset:
             # if this is any exon past the first, check to see if it lost
             # the purine on its left side
             #
@@ -565,7 +590,7 @@ class Variant(object):
                 else:
                     # if the mutation is a deletion, are there ref nucleotides
                     # afterward?
-                    offset_after_deletion = offset_with_utr5 + len(strand_ref)
+                    offset_after_deletion = transcript_offset + len(strand_ref)
                     if len(transcript.sequence) > offset_after_deletion:
                         next_base = transcript.sequence[offset_after_deletion]
                         if next_base not in PURINE_NUCLEOTIDES:
@@ -583,13 +608,18 @@ class Variant(object):
             # splicing sequence:
             #   MAG|GURAGU
             # M is A or C; R is purine; | is the exon-intron boundary
-            if exon_end_offset - 2 <= offset_with_utr5 <= exon_end_offset:
+            #
+            # TODO: check for overlap of two intervals instead of just
+            # seeing if the mutation starts inside the exonic splice site
+            if exon_end_offset - 2 <= transcript_offset <= exon_end_offset:
                 # if the last three nucleotides conform to the consensus
                 # sequence then treat any deviation as an ExonicSpliceSite
                 # mutation
                 a, b, c = transcript.sequence[
                     exon_end_offset - 2:exon_end_offset + 1]
                 if a in AMINO_NUCLEOTIDES and b == "A" and c == "G":
+                    # end of exon matches splicing signal, check if it still
+                    # does after the mutation
                     return ExonicSpliceSite(
                         variant=self,
                         transcript=transcript,
