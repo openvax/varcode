@@ -533,7 +533,6 @@ class Variant(object):
 
         # does the variant start inside the 5' UTR?
         if utr5_length > transcript_offset:
-
             # does the variant end after the 5' UTR, within the coding region?
             if utr5_length < transcript_offset + len(strand_ref):
                 return StartLoss(self, transcript)
