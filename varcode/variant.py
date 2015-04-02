@@ -40,12 +40,9 @@ from .effects import (
     ExonLoss,
     ExonicSpliceSite,
 )
+from .effect_helpers import changes_exonic_splice_site
 from .effect_ordering import top_priority_effect
-from .nucleotides import (
-    normalize_nucleotide_string,
-    PURINE_NUCLEOTIDES,
-    AMINO_NUCLEOTIDES
-)
+from .nucleotides import normalize_nucleotide_string
 from .string_helpers import trim_shared_flanking_strings
 from .transcript_helpers import interval_offset_on_transcript
 
@@ -561,67 +558,17 @@ class Variant(object):
             variant=self,
             transcript=transcript)
 
-        # first we're going to make sure the variant doesn't disrupt the
-        # splicing sequences we got from Divina et. al's
-        #   Ab initio prediction of mutation-induced cryptic
-        #   splice-site activation and exon skipping
-        # (http://www.ncbi.nlm.nih.gov/pmc/articles/PMC2947103/)
-        #
-        # 5' splice site: MAG|GURAGU consensus
-        #   M is A or C; R is purine; | is the exon-intron boundary
-        #
-        # 3' splice site: YAG|R
-        #
-        if exon_number > 1 and transcript_offset == exon_start_offset:
-            # if this is any exon past the first, check to see if it lost
-            # the purine on its left side
-            #
-            # the 3' splice site sequence has just a single purine on
-            # the exon side
-            if len(strand_ref) > 0 and strand_ref[0] in PURINE_NUCLEOTIDES:
-                if len(strand_alt) > 0:
-                    if strand_alt[0] not in PURINE_NUCLEOTIDES:
-                        return ExonicSpliceSite(
-                            variant=self,
-                            transcript=transcript,
-                            exon=exon,
-                            alternate_effect=coding_effect_annotation)
-                else:
-                    # if the mutation is a deletion, are there ref nucleotides
-                    # afterward?
-                    offset_after_deletion = transcript_offset + len(strand_ref)
-                    if len(transcript.sequence) > offset_after_deletion:
-                        next_base = transcript.sequence[offset_after_deletion]
-                        if next_base not in PURINE_NUCLEOTIDES:
-                            return ExonicSpliceSite(
-                                variant=self,
-                                transcript=transcript,
-                                exon=exon,
-                                alternate_effect=coding_effect_annotation)
-
-        if exon_number < len(transcript.exons):
-            # if the mutation affects an exon whose right end gets spliced
-            # to a next exon, check if the variant alters the exon side of
-            # 5' consensus splicing sequence
-            #
-            # splicing sequence:
-            #   MAG|GURAGU
-            # M is A or C; R is purine; | is the exon-intron boundary
-            #
-            # TODO: check for overlap of two intervals instead of just
-            # seeing if the mutation starts inside the exonic splice site
-            if exon_end_offset - 2 <= transcript_offset <= exon_end_offset:
-                # if the last three nucleotides conform to the consensus
-                # sequence then treat any deviation as an ExonicSpliceSite
-                # mutation
-                a, b, c = transcript.sequence[
-                    exon_end_offset - 2:exon_end_offset + 1]
-                if a in AMINO_NUCLEOTIDES and b == "A" and c == "G":
-                    # end of exon matches splicing signal, check if it still
-                    # does after the mutation
-                    return ExonicSpliceSite(
-                        variant=self,
-                        transcript=transcript,
-                        exon=exon,
-                        alternate_effect=coding_effect_annotation)
+        if changes_exonic_splice_site(
+                transcript=transcript,
+                transcript_ref=strand_ref,
+                transcript_alt=strand_alt,
+                transcript_offset=transcript_offset,
+                exon_start_offset=exon_start_offset,
+                exon_end_offset=exon_end_offset,
+                exon_number=exon_number):
+            return ExonicSpliceSite(
+                variant=self,
+                transcript=transcript,
+                exon=exon,
+                alternate_effect=coding_effect_annotation)
         return coding_effect_annotation
