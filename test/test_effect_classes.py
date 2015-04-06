@@ -204,8 +204,8 @@ def test_deletion():
     #
     variant = Variant(
         "17",
-        43082404 + 3,
-        ref="TTT",
+        43082404 + 4,
+        ref="TTC",
         alt="",
         ensembl=ensembl_grch38)
     expect_effect(

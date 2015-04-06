@@ -58,6 +58,16 @@ def variant_overlaps_interval(
     # and the interval ends after this variant starts
     return interval_start <= variant_end and interval_end >= variant_start
 
+
+def matches_exon_end_pattern(seq):
+    """
+    The canonical splice signal at the 3' end of an exon is MAG
+    where M = amino base
+    """
+    if len(seq) < 3:
+        return False
+    return seq[-3] in AMINO_NUCLEOTIDES and seq[-2] == "A" and seq[-1] == "G"
+
 def changes_exonic_splice_site(
         transcript_offset,
         transcript,
@@ -138,12 +148,15 @@ def changes_exonic_splice_site(
                 n_ref_bases=len(transcript_ref),
                 interval_start=exon_end_offset - 2,
                 interval_end=exon_end_offset):
-            # if the last three nucleotides conform to the consensus
-            # sequence then treat any deviation as an ExonicSpliceSite
-            # mutation
-            a, b, c = transcript.sequence[
+            end_of_reference_exon = transcript.sequence[
                 exon_end_offset - 2:exon_end_offset + 1]
-            if a in AMINO_NUCLEOTIDES and b == "A" and c == "G":
-                # end of exon matches splicing signal, check if it still
-                # does after the mutation
-                return True
+
+            if matches_exon_end_pattern(end_of_reference_exon):
+                # if the last three nucleotides conform to the consensus
+                # sequence then treat any deviation as an ExonicSpliceSite
+                # mutation
+                end_of_variant_exon = end_of_reference_exon
+                if matches_exon_end_pattern(end_of_variant_exon):
+                    # end of exon matches splicing signal, check if it still
+                    # does after the mutation
+                    return True
