@@ -254,8 +254,7 @@ class ExonicSpliceSite(Exonic, SpliceSite):
             self.alternate_effect)
 
     def short_description(self):
-        return "exonic-splice-site" % (
-            self.exon, self.alternate_effect.short_description())
+        return "exonic-splice-site"
 
     @memoized_property
     def mutant_protein_sequence(self):
