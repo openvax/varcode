@@ -60,9 +60,8 @@ def variant_overlaps_interval(
 
 
 def matches_exon_end_pattern(seq):
-    """
-    The canonical splice signal at the 3' end of an exon is MAG
-    where M = amino base
+    """Does the end of the nucleotide string `seq` match the canonical splice
+    signal for the 3' end of an exon: "MAG", where M is either amino base.
     """
     if len(seq) < 3:
         return False
