@@ -16,6 +16,7 @@ from __future__ import print_function, division, absolute_import
 
 from memoized_property import memoized_property
 
+
 class MutationEffect(object):
     """Base class for mutation effects which don't overlap a transcript"""
 
