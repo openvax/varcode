@@ -21,6 +21,7 @@ from varcode import (
     Insertion,
     FrameShift,
     Silent,
+    ExonicSpliceSite,
 )
 
 ensembl = EnsemblRelease(75)
@@ -31,7 +32,13 @@ def _get_effect(chrom, pos, dna_ref, dna_alt, transcript_id):
     assert transcript_id in effects, \
         "Expected transcript ID %s for variant %s not found in %s" % (
             transcript_id, variant, effects)
-    return effects[transcript_id]
+    effect = effects[transcript_id]
+
+    # COSMIC seems to ignore exonic splice sites
+    if isinstance(effect, ExonicSpliceSite):
+        return effect.alternate_effect
+    else:
+        return effect
 
 def _substitution(chrom, pos, dna_ref, dna_alt, transcript_id, aa_ref, aa_alt):
     effect = _get_effect(chrom, pos, dna_ref, dna_alt, transcript_id)
@@ -73,15 +80,19 @@ def _insertion(chrom, pos, dna_ref, dna_alt, transcript_id, inserted):
             dna_alt)
 
 def _frameshift(
-        chrom, pos, dna_ref, dna_alt, transcript_id,
+        chrom,
+        pos,
+        dna_ref,
+        dna_alt,
+        transcript_id,
         aa_pos,
         aa_ref):
     effect = _get_effect(chrom, pos, dna_ref, dna_alt, transcript_id)
     assert isinstance(effect, FrameShift), \
         "Expected frameshift, got %s" % (effect,)
     assert effect.aa_ref == aa_ref and effect.aa_pos + 1 == aa_pos, \
-        "Expected frameshift to replace p.%d%s but instead got p.%d%s" % (
-            aa_pos, aa_ref, effect.aa_pos + 1, effect.aa_ref)
+        ("Expected frameshift to replace p.%d%s but instead got %s" % (
+            aa_pos, aa_ref, effect))
 
 def test_COSM3939556_silent():
     # 22  19222059    COSM3939556 G>T

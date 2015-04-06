@@ -14,8 +14,8 @@
 
 from __future__ import print_function, division, absolute_import
 
-import Bio.Seq
 from memoized_property import memoized_property
+
 
 class MutationEffect(object):
     """Base class for mutation effects which don't overlap a transcript"""
@@ -24,15 +24,15 @@ class MutationEffect(object):
         self.variant = variant
 
     def __str__(self):
-        raise ValueError(
-            "No __str__ method implemented for base class MutationEffect")
+        return "%s(%s)" % (self.__class__.__name__, self.variant)
 
     def __repr__(self):
         return str(self)
 
     def short_description(self):
         raise ValueError(
-            "Method short_description() not implemented for %s" % self)
+            "Method short_description() not implemented for %s" % (
+                self.__class__.__name__,))
 
     def gene_name(self):
         return None
@@ -113,12 +113,13 @@ class TranscriptMutationEffect(MutationEffect):
 
     @memoized_property
     def original_protein_sequence(self):
-        """Amino acid sequence of a coding transcript before the variant occurs
+        """Amino acid sequence of a coding transcript (without the nucleotide
+        variant/mutation)
         """
-        coding_sequence = self.original_nucleotide_coding_sequence
-        if coding_sequence:
-            return Bio.Seq.translate(
-                str(coding_sequence),
+        if self.transcript.protein_sequence:
+            return self.transcript.protein_sequence
+        elif self.original_nucleotide_coding_sequence:
+            return self.original_nucleotide_coding_sequence.translate(
                 to_stop=True,
                 cds=True)
         else:
@@ -242,8 +243,28 @@ class ExonicSpliceSite(Exonic, SpliceSite):
     Mutation in the last three nucleotides before an intron
     or in the first nucleotide after an intron.
     """
+    def __init__(self, variant, transcript, exon, alternate_effect):
+        Exonic.__init__(self, variant, transcript)
+        self.exon = exon
+        self.alternate_effect = alternate_effect
+
+    def __str__(self):
+        return "ExonicSpliceSite(exon=%s, alternate_effect=%s)" % (
+            self.exon,
+            self.alternate_effect)
+
     def short_description(self):
         return "exonic-splice-site"
+
+    @memoized_property
+    def mutant_protein_sequence(self):
+        """
+        TODO: determine when exonic splice variants cause exon skipping
+        vs. translation of the underlying modified coding sequence.
+
+        For now just pretending like there is no effect on splicing.
+        """
+        return self.alternate_effect.mutant_protein_sequence
 
 class CodingMutation(Exonic):
     """
@@ -286,10 +307,30 @@ class Silent(CodingMutation):
         return "silent"
 
 class AlternateStartCodon(Silent):
+    """Change to the start codon (e.g. ATG>CTG) but without changing the
+    starting amino acid from methionine.
+    """
+    def __init__(
+            self,
+            variant,
+            transcript,
+            aa_ref,
+            ref_codon,
+            alt_codon):
+        Silent.__init__(
+            self,
+            variant=variant,
+            transcript=transcript,
+            aa_pos=0,
+            aa_ref=aa_ref)
+        self.ref_codon = ref_codon
+        self.alt_codon = alt_codon
+
     """Change of start codon e.g. ATG > TTG, may act as a silent mutation
     but also risks the possibility of a start loss."""
     def short_description(self):
-        return "alternate-start-codon"
+        return "alternate-start-codon (%s>%s)" % (
+            self.ref_codon, self.alt_codon)
 
 class BaseSubstitution(CodingMutation):
     """
@@ -336,7 +377,7 @@ class BaseSubstitution(CodingMutation):
 
 class Substitution(BaseSubstitution):
     """
-    Single amino acid subsitution, e.g. BRAF-001 V600E
+    Single amino acid substitution, e.g. BRAF-001 V600E
     """
     def __init__(
             self,
@@ -347,10 +388,10 @@ class Substitution(BaseSubstitution):
             aa_alt):
         if len(aa_ref) != 1:
             raise ValueError(
-                "Simple subsitution can't have aa_ref='%s'" % (aa_ref,))
+                "Simple substitution can't have aa_ref='%s'" % (aa_ref,))
         if len(aa_alt) != 1:
             raise ValueError(
-                "Simple subsitution can't have aa_alt='%s'" % (aa_alt,))
+                "Simple substitution can't have aa_alt='%s'" % (aa_alt,))
         BaseSubstitution.__init__(
             self,
             variant=variant,
@@ -389,49 +430,76 @@ class Insertion(BaseSubstitution):
     """
     In-frame insertion of one or more amino acids.
     """
-    def __init__(self, variant, transcript, aa_pos, aa_alt):
+    def __init__(
+            self,
+            variant,
+            transcript,
+            position_before,
+            inserted_sequence):
+        self.position_before = position_before
+        self.inserted_sequence = inserted_sequence
         BaseSubstitution.__init__(
             self,
             variant=variant,
             transcript=transcript,
-            aa_pos=aa_pos,
+            aa_pos=position_before,
             aa_ref="",
-            aa_alt=aa_alt)
+            aa_alt=inserted_sequence)
 
 class Deletion(BaseSubstitution):
     """
     In-frame deletion of one or more amino acids.
     """
 
-    def __init__(self, variant, transcript, aa_pos, aa_ref):
+    def __init__(self, variant, transcript, aa_pos, deleted_sequence):
+        self.deleted_sequence = deleted_sequence
         BaseSubstitution.__init__(
             self,
             variant=variant,
             transcript=transcript,
             aa_pos=aa_pos,
-            aa_ref=aa_ref,
+            aa_ref=deleted_sequence,
             aa_alt="")
 
 
 class PrematureStop(BaseSubstitution):
+    """In-frame insertion of codons ending with a stop codon. May also involve
+    insertion/deletion/substitution of other amino acids preceding the stop."""
     def __init__(
             self,
             variant,
             transcript,
             aa_pos,
-            aa_ref):
+            aa_ref="",
+            aa_alt=""):
+        assert "*" not in aa_ref, \
+            ("Unexpected aa_ref = '%s', should only include amino acids "
+             "before the new stop codon.") % aa_ref
+        assert "*" not in aa_alt, \
+            ("Unexpected aa_ref = '%s', should only include amino acids "
+             "before the new stop codon.") % aa_alt
         BaseSubstitution.__init__(
             self,
             variant,
             transcript,
             aa_pos=aa_pos,
             aa_ref=aa_ref,
-            aa_alt="*")
+            aa_alt=aa_alt)
+
+        self.stop_codon_offset = aa_pos + len(aa_ref)
+
+        assert self.stop_codon_offset < len(transcript.protein_sequence), \
+            ("Premature stop codon cannot be at position %d"
+             "since the original protein of %s has length %d") % (
+                self.stop_codon_offset,
+                transcript,
+                len(transcript.protein_sequence))
 
     def short_description(self):
-        return "p.%s%d*" % (
+        return "p.%s%d%s*" % (
             self.aa_ref,
-            self.aa_pos + 1)
+            self.aa_pos + 1,
+            self.aa_alt)
 
     @memoized_property
     def mutant_protein_sequence(self):
@@ -443,15 +511,14 @@ class StopLoss(BaseSubstitution):
             self,
             variant,
             transcript,
-            aa_pos,
-            aa_alt):
+            extended_protein_sequence):
         BaseSubstitution.__init__(
             self,
             variant,
             transcript,
-            aa_pos=aa_pos,
+            aa_pos=len(transcript.protein_sequence),
             aa_ref="*",
-            aa_alt=aa_alt)
+            aa_alt=extended_protein_sequence)
 
     def short_description(self):
         return "p.*%d%s (stop-loss)" % (self.aa_pos, self.aa_alt)
@@ -500,9 +567,10 @@ class FrameShift(CodingMutation):
             aa_pos,
             aa_ref,
             shifted_sequence):
-        """
-        Unlike an insertion, which we denote with aa_ref as the chracter before
-        the variant sequence, a frameshift starts at aa_ref
+        """Frameshift mutation preserves all the amino acids up to aa_pos
+        and then replaces the rest of the protein with new (frameshifted)
+        sequence. Unlike an insertion, where we denote with aa_ref as the
+        chracter before the variant sequence, a frameshift starts at aa_ref.
         """
         CodingMutation.__init__(
             self,
@@ -530,13 +598,13 @@ class FrameShiftTruncation(PrematureStop, FrameShift):
             self,
             variant,
             transcript,
-            aa_pos,
-            aa_ref):
+            stop_codon_offset,
+            aa_ref=""):
         PrematureStop.__init__(
             self,
             variant=variant,
             transcript=transcript,
-            aa_pos=aa_pos,
+            aa_pos=stop_codon_offset,
             aa_ref=aa_ref)
 
     @memoized_property

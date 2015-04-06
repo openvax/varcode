@@ -31,26 +31,32 @@ def random_variants(
         count,
         ensembl_release=MAX_ENSEMBL_RELEASE,
         deletions=True,
-        insertions=True):
+        insertions=True,
+        random_seed=None):
     """
     Generate a VariantCollection with random variants that overlap
     at least one complete coding transcript.
     """
+    rng = random.Random(random_seed)
     ensembl = EnsemblRelease(ensembl_release)
+
     if ensembl_release in _transcript_ids_cache:
         transcript_ids = _transcript_ids_cache[ensembl_release]
     else:
         transcript_ids = ensembl.transcript_ids()
         _transcript_ids_cache[ensembl_release] = transcript_ids
+
     variants = []
+
     while len(variants) < count:
-        transcript_id = random.choice(transcript_ids)
+        transcript_id = rng.choice(transcript_ids)
         transcript = ensembl.transcript_by_id(transcript_id)
+
         if not transcript.complete:
             continue
 
-        exon = random.choice(transcript.exons)
-        base1_genomic_position = random.randint(exon.start, exon.end)
+        exon = rng.choice(transcript.exons)
+        base1_genomic_position = rng.randint(exon.start, exon.end)
         transcript_offset = transcript.spliced_offset(base1_genomic_position)
 
         try:
@@ -59,20 +65,23 @@ def random_variants(
             logging.warn(e)
             # can't get sequence for non-coding transcripts
             continue
+
         ref = str(seq[transcript_offset])
         if transcript.on_backward_strand:
             ref = reverse_complement(ref)
+
         alt_nucleotides = [x for x in STANDARD_NUCLEOTIDES if x != ref]
+
         if insertions:
             nucleotide_pairs = [
                 x + y
-                for x in alt_nucleotides
+                for x in STANDARD_NUCLEOTIDES
                 for y in STANDARD_NUCLEOTIDES
             ]
             alt_nucleotides.extend(nucleotide_pairs)
         if deletions:
             alt_nucleotides.append("")
-        alt = random.choice(alt_nucleotides)
+        alt = rng.choice(alt_nucleotides)
         variant = Variant(
             transcript.contig,
             base1_genomic_position,
