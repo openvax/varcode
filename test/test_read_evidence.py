@@ -13,7 +13,9 @@
 # limitations under the License.
 from __future__ import absolute_import
 
+import time
 import collections
+import cProfile
 from nose.tools import eq_, assert_raises
 import pysam
 from varcode.read_evidence import PileupCollection
@@ -212,3 +214,22 @@ def test_read_evidence_variant_matching_gatk_mini_bundle_extract_warning():
     evidence = PileupCollection.from_bam(filename, loci)
     eq_(evidence.match_summary(Variant(loci[0], "A", "")),
         [('A', 0), ('', 0), ('AT', 3)])
+
+def test_timing(n_loci=500, profile=False):
+    loci = [
+        Locus.from_inclusive_coordinates("17", i)
+        for i in range(41244936 - n_loci, 41244936 + n_loci, 2)
+    ]
+    elapsed = -time.time()
+    data = data_path("reads/rna_chr17_41244936.bam")
+    if profile:
+        cProfile.runctx(
+            "PileupCollection.from_bam(data, loci)", globals(), locals())
+    else:
+        PileupCollection.from_bam(data, loci)
+    elapsed += time.time()
+    loci_per_sec = n_loci / elapsed
+    print("Time to test %d loci: %f sec = %f loci / sec." % (
+        n_loci, elapsed, loci_per_sec))
+    assert loci_per_sec > 50, "PileupCollection construction too slow."
+
