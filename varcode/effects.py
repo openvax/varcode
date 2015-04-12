@@ -18,7 +18,9 @@ from memoized_property import memoized_property
 
 
 class MutationEffect(object):
-    """Base class for mutation effects which don't overlap a transcript"""
+    """
+    Base class for mutation effects.
+    """
 
     def __init__(self, variant):
         self.variant = variant

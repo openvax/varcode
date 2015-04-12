@@ -21,7 +21,9 @@ import re
 
 import pandas
 import pysam
+import typechecks
 import pyensembl
+import typechecks
 
 from .. import Locus
 from . import Pileup, PileupElement, alignment_key, read_key
@@ -547,7 +549,7 @@ class PileupCollection(object):
         '''
 
         close_on_completion = False
-        if isinstance(pysam_samfile, str):
+        if typechecks.is_string(pysam_samfile):
             pysam_samfile = pysam.Samfile(pysam_samfile)
             close_on_completion = True        
 
