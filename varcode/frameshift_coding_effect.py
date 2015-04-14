@@ -17,7 +17,13 @@ Effect annotation for variants which modify the coding sequence and change
 reading frame.
 """
 
-from .effects import FrameShift, FrameShiftTruncation, StartLoss, StopLoss
+from .effects import (
+    FrameShift,
+    FrameShiftTruncation,
+    StartLoss,
+    StopLoss,
+    Silent
+)
 from .mutate import substitute
 from .translate import translate
 
@@ -75,8 +81,24 @@ def _frameshift(
         n_skip += 1
 
     protein_suffix = protein_suffix[n_skip:]
-    aa_pos = mutated_codon_index + n_skip
 
+    if mutated_codon_index + n_skip == len(original_protein_sequence):
+        # frameshift is either extending the protein or leaving it unchanged
+        if len(protein_suffix) == 0:
+            # miraculously, this frameshift left the protein unchanged,
+            # most likely by turning one stop codon into another stop codon
+            return Silent(
+                variant=variant,
+                transcript=transcript,
+                aa_pos=mutated_codon_index,
+                aa_ref=original_protein_sequence[mutated_codon_index])
+        else:
+            return StopLoss(
+                variant=variant,
+                transcript=transcript,
+                extended_protein_sequence=protein_suffix)
+
+    aa_pos = mutated_codon_index + n_skip
     # original amino acid at the mutated codon before the frameshift occurred
     aa_ref = original_protein_sequence[aa_pos]
 

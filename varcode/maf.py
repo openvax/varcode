@@ -66,7 +66,9 @@ def load_maf_dataframe(filename, nrows=None, verbose=False):
         filename,
         comment="#",
         sep="\t",
-        low_memory=False)
+        low_memory=False,
+        skip_blank_lines=True,
+        header=0)
 
     if len(df.columns) < n_basic_columns:
         raise ValueError(

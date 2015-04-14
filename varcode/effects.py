@@ -490,7 +490,7 @@ class PrematureStop(BaseSubstitution):
 
         assert self.stop_codon_offset < len(transcript.protein_sequence), \
             ("Premature stop codon cannot be at position %d"
-             "since the original protein of %s has length %d") % (
+             " since the original protein of %s has length %d") % (
                 self.stop_codon_offset,
                 transcript,
                 len(transcript.protein_sequence))

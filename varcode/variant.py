@@ -113,6 +113,7 @@ class Variant(object):
         # position for an insertion is
         #   "insert the alt nucleotides after this position"
         if len(trimmed_ref) == 0:
+            # start and end both are nucleotide before insertion
             self.start = self.original_start + max(0, len(prefix) - 1)
             self.end = self.start
         else:
