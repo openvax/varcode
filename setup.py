@@ -41,7 +41,7 @@ if __name__ == '__main__':
     setup(
         name='varcode',
         packages=['varcode'],
-        version="0.1.0",
+        version="0.1.1",
         description="Variant annotation in Python",
         long_description=readme,
         url="https://github.com/hammerlab/varcode",

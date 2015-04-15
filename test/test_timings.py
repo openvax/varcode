@@ -26,8 +26,18 @@ def _time_variant_annotation(variant_collection):
     return elapsed_t
 
 
-def test_effect_timing(n_variants=100):
-    variant_collection = random_variants(n_variants, random_seed=0)
+def test_effect_timing(
+        n_variants=100,
+        random_seed=0,
+        n_warmup_variants=20):
+    warmup_collection = random_variants(
+        n_warmup_variants,
+        random_seed=None)
+    warmup_collection.effects()
+
+    variant_collection = random_variants(
+        n_variants,
+        random_seed=random_seed)
     elapsed_t = _time_variant_annotation(variant_collection)
     print("Elapsed: %0.4f for %d variants" % (elapsed_t, n_variants))
     assert elapsed_t / n_variants < 0.1, \

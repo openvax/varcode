@@ -17,8 +17,15 @@ Effect annotation for variants which modify the coding sequence and change
 reading frame.
 """
 
-from .effects import FrameShift, FrameShiftTruncation, StartLoss, StopLoss
+from .effects import (
+    FrameShift,
+    FrameShiftTruncation,
+    StartLoss,
+    StopLoss,
+    Silent
+)
 from .mutate import substitute
+from .string_helpers import trim_shared_prefix
 from .translate import translate
 
 def _frameshift(
@@ -49,54 +56,70 @@ def _frameshift(
         "Expect transcript %s to have protein sequence" % transcript
 
     original_protein_sequence = transcript.protein_sequence
+    original_protein_length = len(original_protein_sequence)
 
-    protein_suffix = translate(
+    mutant_protein_suffix = translate(
         nucleotide_sequence=sequence_from_mutated_codon,
         first_codon_is_start=False,
         to_stop=True,
         truncate=True)
 
-    if mutated_codon_index == len(original_protein_sequence):
+    if mutated_codon_index == original_protein_length:
         return StopLoss(
             variant=variant,
             transcript=transcript,
-            extended_protein_sequence=protein_suffix)
+            extended_protein_sequence=mutant_protein_suffix)
 
     # the frameshifted sequence may contain some amino acids which are
     # the same as the original protein!
-    n_skip = 0
+    if mutated_codon_index == original_protein_length:
+        n_unchanged_amino_acids = 0
+    else:
+        _, mutant_protein_suffix, unchanged_amino_acids = trim_shared_prefix(
+            ref=original_protein_sequence[mutated_codon_index:],
+            alt=mutant_protein_suffix)
+        n_unchanged_amino_acids = len(unchanged_amino_acids)
 
-    for i, new_amino_acid in enumerate(protein_suffix):
-        codon_index = mutated_codon_index + i
-        if codon_index >= len(original_protein_sequence):
-            break
-        elif original_protein_sequence[codon_index] != new_amino_acid:
-            break
-        n_skip += 1
-
-    protein_suffix = protein_suffix[n_skip:]
-    aa_pos = mutated_codon_index + n_skip
+    mutation_start_position = mutated_codon_index + n_unchanged_amino_acids
+    if mutation_start_position == original_protein_length:
+        # frameshift is either extending the protein or leaving it unchanged
+        if len(mutant_protein_suffix) == 0:
+            # miraculously, this frameshift left the protein unchanged,
+            # most likely by turning one stop codon into another stop codon
+            return Silent(
+                variant=variant,
+                transcript=transcript,
+                aa_pos=mutated_codon_index,
+                aa_ref=original_protein_sequence[mutated_codon_index])
+        else:
+            # When all the amino acids are the same as the original, we either
+            # have the original protein or we've extended it.
+            # If we've extended it, it means we must have lost our stop codon.
+            return StopLoss(
+                variant=variant,
+                transcript=transcript,
+                extended_protein_sequence=mutant_protein_suffix)
 
     # original amino acid at the mutated codon before the frameshift occurred
-    aa_ref = original_protein_sequence[aa_pos]
+    aa_ref = original_protein_sequence[mutation_start_position]
 
     # TODO: what if all the shifted amino acids were the same and the protein
     # ended up the same length?
     # Add a Silent case
-    if len(protein_suffix) == 0:
+    if len(mutant_protein_suffix) == 0:
         # if a frameshift doesn't create any new amino acids, then
         # it must immediately have hit a stop codon
         return FrameShiftTruncation(
             variant=variant,
             transcript=transcript,
-            stop_codon_offset=aa_pos,
+            stop_codon_offset=mutation_start_position,
             aa_ref=aa_ref)
     return FrameShift(
         variant=variant,
         transcript=transcript,
-        aa_pos=aa_pos,
+        aa_pos=mutation_start_position,
         aa_ref=aa_ref,
-        shifted_sequence=protein_suffix)
+        shifted_sequence=mutant_protein_suffix)
 
 def frameshift_coding_insertion_effect(
         cds_offset_before_insertion,

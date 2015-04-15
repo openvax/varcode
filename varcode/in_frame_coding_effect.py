@@ -285,12 +285,20 @@ def in_frame_coding_effect(
             if mutant_protein_subsequence[i] != x:
                 break
             n_shared_amino_acids += 1
-        return PrematureStop(
-            variant=variant,
-            transcript=transcript,
-            aa_pos=first_ref_codon_index + n_shared_amino_acids,
-            aa_ref=original_protein_subsequence[n_shared_amino_acids:],
-            aa_alt=mutant_protein_subsequence[n_shared_amino_acids:])
+        mutation_aa_pos = first_ref_codon_index + n_shared_amino_acids
+        original_protein_subsequence = \
+            original_protein_subsequence[n_shared_amino_acids:]
+        mutant_protein_subsequence = \
+            mutant_protein_subsequence[n_shared_amino_acids:]
+        if mutation_aa_pos < len(original_protein_sequence) - 1:
+            # only call this mutation a premature stop if it decreases
+            # the length of the protein
+            return PrematureStop(
+                variant=variant,
+                transcript=transcript,
+                aa_pos=mutation_aa_pos,
+                aa_ref=original_protein_subsequence,
+                aa_alt=mutant_protein_subsequence)
 
     return _choose_annotation(
         aa_pos=first_ref_codon_index,
