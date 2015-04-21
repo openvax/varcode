@@ -116,7 +116,7 @@ class VariantCollection(object):
         for variant in self.variants:
             effect = variant.top_effect(*args, **kwargs)
             priority = effect_priority(effect)
-            if priority > min_priority:
+            if priority >= min_priority:
                 results[variant] = effect
         return results
 
