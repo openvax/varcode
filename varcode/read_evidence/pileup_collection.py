@@ -548,7 +548,7 @@ class PileupCollection(object):
         '''
 
         close_on_completion = False
-	if typechecks.is_string(pysam_samfile):
+        if typechecks.is_string(pysam_samfile):
             pysam_samfile = pysam.Samfile(pysam_samfile)
             close_on_completion = True        
 

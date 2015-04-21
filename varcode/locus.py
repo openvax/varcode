@@ -48,11 +48,11 @@ class Locus(namedtuple("Locus", "contig start end")):
         and end, return a Locus instance. Locus instances are always 0-based
         "interbase" coordinates.
         '''
-	typechecks.require_string(contig)
-	typechecks.require_integer(start)
+        typechecks.require_string(contig)
+        typechecks.require_integer(start)
         if end is None:
             end = start
-	typechecks.require_integer(end)
+        typechecks.require_integer(end)
         return Locus(contig, start - 1, end)
 
     @staticmethod
@@ -61,9 +61,9 @@ class Locus(namedtuple("Locus", "contig start end")):
         Given coordinates in 0-based interbase coordinates, return a Locus
         instance.
         '''
-	typechecks.require_string(contig)
-	typechecks.require_integer(start)
+        typechecks.require_string(contig)
+        typechecks.require_integer(start)
         if end is None:
             end = start + 1
-	typechecks.require_integer(end)
+        typechecks.require_integer(end)
         return Locus(contig, start, end)
