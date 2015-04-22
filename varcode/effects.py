@@ -34,10 +34,12 @@ class MutationEffect(object):
             "Method short_description() not implemented for %s" % (
                 self.__class__.__name__,))
 
-    def gene_name(self):
+    @property
+    def transcript(self):
         return None
 
-    def gene_id(self):
+    @property
+    def gene(self):
         return None
 
     @property
@@ -78,12 +80,6 @@ class Intragenic(MutationEffect):
     def __init__(self, variant, gene):
         MutationEffect.__init__(self, variant)
         self.gene = gene
-
-    def gene_name(self):
-        return self.gene.name
-
-    def gene_id(self):
-        return self.gene.id
 
 class TranscriptMutationEffect(MutationEffect):
     def __init__(self, variant, transcript):

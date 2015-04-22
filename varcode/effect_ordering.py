@@ -72,6 +72,27 @@ def effect_priority(effect):
         return -1
     return transcript_effect_priority_dict[effect.__class__]
 
+def effect_sort_key(effect):
+    """Returns key tuple with the following fields that should be sorted
+    lexicographically:
+        - what is the CDS length?
+            This value will be 0 if the effect has no associated transcript
+            or if the transcript is noncoding or incomplete
+        - what is the total length of the transcript?
+            This value will be 0 intra/intergenic variants effects without
+            an associated transcript.
+    """
+    # by default, we'll return (0, 0) for effects without an associated
+    # transcript
+    transcript_length = 0
+    cds_length = 0
+    if hasattr(effect, 'transcript') and effect.transcript is not None:
+        transcript_length = len(effect.transcript)
+        if effect.transcript.complete:
+            cds_length = len(effect.transcript.coding_sequence)
+    effect_class_priority = effect_priority(effect)
+    return (effect_class_priority, cds_length, transcript_length)
+
 def top_priority_effect(effects):
     """
     Given a collection of variant transcript effects,
@@ -81,34 +102,4 @@ def top_priority_effect(effects):
     """
     if len(effects) == 0:
         raise ValueError("List of effects cannot be empty")
-
-    best_effects = []
-    best_priority = -1
-    for effect in effects:
-        priority = effect_priority(effect)
-        if priority > best_priority:
-            best_effects = [effect]
-            best_priority = priority
-        elif priority == best_priority:
-            best_effects.append(effect)
-
-    def key_fn(effect):
-        """Returns key tuple with the following fields that should be sorted
-        lexicographically:
-            - what is the CDS length?
-                This value will be 0 if the effect has no associated transcript
-                or if the transcript is noncoding or incomplete
-            - what is the total length of the transcript?
-                This value will be 0 intra/intergenic variants effects without
-                an associated transcript.
-        """
-        # by default, we'll return (0, 0) for effects without an associated
-        # transcript
-        transcript_length = 0
-        cds_length = 0
-        if hasattr(effect, 'transcript'):
-            transcript_length = len(effect.transcript)
-            if effect.transcript.complete:
-                cds_length = len(effect.transcript.coding_sequence)
-        return (cds_length, transcript_length)
-    return max(best_effects, key=key_fn)
+    return max(best_effects, key=effect_sort_key)

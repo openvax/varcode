@@ -13,17 +13,14 @@
 # limitations under the License.
 
 from __future__ import print_function, division, absolute_import
-from collections import Counter, OrderedDict
-from itertools import groupby
 
 from typechecks import require_iterable_of
 
+from .base_collection import BaseCollection
 from .common import memoize
-from .effects import Substitution
-from .effect_ordering import effect_priority, transcript_effect_priority_dict
 from .variant import Variant
 
-class VariantCollection(object):
+class VariantCollection(BaseCollection):
 
     def __init__(self, variants, original_filename=None):
         """
@@ -43,7 +40,6 @@ class VariantCollection(object):
         require_iterable_of(variants, Variant, "variants")
         self.variants = list(sorted(set(variants)))
         self.original_filename = original_filename
-        self._cached_values = {}
 
     def __len__(self):
         return len(self.variants)
@@ -104,29 +100,9 @@ class VariantCollection(object):
             original_filename=self.original_filename)
 
     @memoize
-    def high_priority_effects(self, *args, **kwargs):
-        """Like VariantCollection.effects() but only returns effects whose
-        priority is at least as high as a missense mutation
-        (e.g. frameshifts, splice site mutations, &c).
-
-        All arguments are passed on to Variant.top_effect(*args, **kwargs).
+    def effects(self, raise_on_error=True):
         """
-        min_priority = transcript_effect_priority_dict[Substitution]
-        results = OrderedDict()
-        for variant in self.variants:
-            effect = variant.top_effect(*args, **kwargs)
-            priority = effect_priority(effect)
-            if priority > min_priority:
-                results[variant] = effect
-        return results
-
-    @memoize
-    def effects(
-            self,
-            raise_on_error=True):
-        """
-        Returns an OrderedDict mapping each variant to list of its
-        MutationEffect annotation objects.
+        Generator of effects from all variants.
 
         Parameters
         ----------
@@ -134,65 +110,24 @@ class VariantCollection(object):
             If exception is raised while determining effect of variant on a
             transcript, should it be raised? This default is True, meaning
             errors result in raised exceptions, otherwise they are only logged.
+
+        min_priority_effect_class : type, optional
+            Only return variants with priority at least as great the given type.
+            Typical value  for coding effects is `effects.Substitution`
+
+        only_gene_ids : set, optional
+            If given, then only return effects for gene IDs present in this set
+
+        only_transcript_ids : set, optional
+            If given, then only return effects for transcript IDs present
+            in this set.
         """
-        all_effects = OrderedDict()
+        # importing EffectCollection locally since Python won't
+        # let us express a mutual dependency between two modules
+        import EffectCollection
+
+        effect_list = []
         for variant in self.variants:
-            all_effects[variant] = variant.effects(
-                raise_on_error=raise_on_error)
-        return all_effects
-
-    def full_effect_string(self, *args, **kwargs):
-        """
-        Create a long string with all transcript effects for each mutation,
-        grouped by gene (if a mutation affects multiple genes).
-
-        Arguments are passed on to self.variant_effects(*args, **kwargs).
-        """
-        lines = []
-        effect_dict = self.variant_effects(*args, **kwargs)
-        for variant, effects in effect_dict.items():
-            lines.append("\n%s" % variant)
-
-            gene_effects_groups = groupby(effects, lambda e: e.gene_id())
-            for (gene_id, gene_effects) in gene_effects_groups:
-                if gene_id:
-                    gene_name = variant.ensembl.gene_name_of_gene_id(gene_id)
-                    lines.append("  Gene: %s (%s)" % (gene_name, gene_id))
-                # place transcript effects with more significant impact
-                # on top (e.g. FrameShift should go before NoncodingTranscript)
-                for effect in sorted(
-                        gene_effects,
-                        key=effect_priority,
-                        reverse=True):
-                    lines.append("  -- %s" % effect)
-            # if we only printed one effect for this gene then
-            # it's redundant to print it again as the highest priority effect
-            if len(effects) > 1:
-                # since summary effect also calls into Variant.effects,
-                # give it the same arguments
-                # (this is the downside of not having a VariantEffectCollection)
-                best = effect.summary_effect(*args, **kwargs)
-                lines.append("  Highest Priority Effect: %s" % best)
-        return "\n".join(lines)
-
-    @memoize
-    def reference_names(self):
-        """
-        All distinct reference names used by Variants in this
-        collection.
-        """
-        return {
-            variant.reference_name
-            for variant in self.variants
-        }
-
-    @memoize
-    def gene_counts(self):
-        """
-        Count how many variants overlap each gene name.
-        """
-        counter = Counter()
-        for variant in self.variants:
-            for gene_name in variant.gene_names():
-                counter[gene_name] += 1
-        return counter
+            for effect in variant.effects(raise_on_error=raise_on_error):
+                effect_list.append(effect)
+        return EffectCollection(effect_list)
