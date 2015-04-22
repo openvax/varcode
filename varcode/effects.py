@@ -34,37 +34,61 @@ class MutationEffect(object):
             "Method short_description() not implemented for %s" % (
                 self.__class__.__name__,))
 
-    @property
-    def transcript(self):
-        return None
+    transcript = None
+    gene = None
 
-    @property
-    def gene(self):
-        return None
-
-    @property
-    def original_nucleotide_sequence(self):
-        """This property is for the nucleotide sequence of a transcript,
-        which we can't have in the absence of a transcript
-        """
-        return None
-
-    @property
+    @memoized_property
     def original_protein_sequence(self):
-        return None
-
-    @property
-    def mutant_protein_sequence(self):
-        return None
-
-    @property
-    def modifies_coding_sequence(self):
-        """It's convenient to have a property which tells us:
-            1) is this a variant effect overlapping a transcript?
-            2) does that transcript have a coding sequence?
-            3) does the variant affect the coding sequence?
+        """Amino acid sequence of a coding transcript (without the nucleotide
+        variant/mutation)
         """
-        return False
+        if self.transcript:
+            return self.transcript.protein_sequence
+        else:
+            return None
+
+    def gene_name(self):
+        if self.gene:
+            return self.gene.name
+        else:
+            return None
+
+    def gene_id(self):
+        if self.gene:
+            return self.gene.id
+        else:
+            return None
+
+    def transcript_name(self):
+        if self.transcript:
+            return self.transcript.name
+        else:
+            return None
+
+    def transcript_id(self):
+        if self.transcript:
+            return self.transcript.id
+        else:
+            return None
+
+    # It's convenient to have a property which tells us:
+    # 1) is this a variant effect overlapping a transcript?
+    # 2) does that transcript have a coding sequence?
+    # 3) does the variant affect the coding sequence?
+    modifies_coding_sequence = False
+
+    # Additionally:
+    # 4) Does the change to the coding sequence result in a change to the
+    # protein sequence?
+    modifies_protein_sequence = False
+
+    mutant_protein_sequence = None
+
+    # which residues in the mutant protein sequence are different from
+    # the original?
+    aa_mutation_start_offset = None
+    aa_mutation_end_offset = None
+
 
 class Intergenic(MutationEffect):
     """Variant has unknown effect if it occurs between genes"""
@@ -81,9 +105,9 @@ class Intragenic(MutationEffect):
         MutationEffect.__init__(self, variant)
         self.gene = gene
 
-class TranscriptMutationEffect(MutationEffect):
+class TranscriptMutationEffect(Intragenic):
     def __init__(self, variant, transcript):
-        MutationEffect.__init__(self, variant)
+        Intragenic.__init__(self, variant, gene=transcript.gene)
         self.transcript = transcript
 
     def __str__(self):
@@ -91,41 +115,6 @@ class TranscriptMutationEffect(MutationEffect):
             self.__class__.__name__,
             self.variant.short_description(),
             self.transcript.name)
-
-    @property
-    def original_nucleotide_sequence(self):
-        """cDNA sequence of the transcript before the variant occurs"""
-        return self.transcript.sequence
-
-    @property
-    def original_nucleotide_coding_sequence(self):
-        """cDNA sequence of the coding region of the transcript before the
-        variant occurs
-        """
-        if self.is_coding:
-            return self.transcript.coding_sequence
-        else:
-            return None
-
-    @memoized_property
-    def original_protein_sequence(self):
-        """Amino acid sequence of a coding transcript (without the nucleotide
-        variant/mutation)
-        """
-        if self.transcript.protein_sequence:
-            return self.transcript.protein_sequence
-        elif self.original_nucleotide_coding_sequence:
-            return self.original_nucleotide_coding_sequence.translate(
-                to_stop=True,
-                cds=True)
-        else:
-            return None
-
-    def gene_name(self):
-        return self.transcript.gene_name
-
-    def gene_id(self):
-        return self.transcript.gene_id
 
 
 class Failure(TranscriptMutationEffect):
@@ -266,7 +255,16 @@ class CodingMutation(Exonic):
     """
     Base class for all mutations which result in a modified coding sequence.
     """
-    def __init__(self, variant, transcript, aa_pos, aa_ref):
+
+    modifies_coding_sequence = True
+
+    def __init__(
+            self,
+            variant,
+            transcript,
+            aa_mutation_start_offset,
+            aa_mutation_end_offset,
+            aa_ref):
         """
         Parameters
         ----------
@@ -274,15 +272,19 @@ class CodingMutation(Exonic):
 
         transcript : pyensembl.Transcript
 
-        aa_pos : int
-            Position of first modified amino aicd (starting from 0)
+        aa_mutation_start_offset : int
+            Offset of first modified amino acid in protein (starting from 0)
+
+        aa_mutation_end_offset : int
+            Offset after last mutated amino acid (half-open coordinates)
 
         aa_ref : str
-            Amino acid string of what used to be at aa_pos in the
-            wildtype (unmutated) protein.
+            Amino acid string of what used to be at mutated_protein_start_offset
+            in the wildtype (unmutated) protein.
         """
         Exonic.__init__(self, variant, transcript)
-        self.aa_pos = aa_pos
+        self.aa_mutation_start_offset = aa_mutation_start_offset
+        self.aa_mutation_end_offset = aa_mutation_end_offset
         self.aa_ref = aa_ref
 
     def __str__(self):
@@ -291,8 +293,6 @@ class CodingMutation(Exonic):
             self.variant.short_description(),
             self.transcript.name,
             self.short_description())
-
-    is_coding = True
 
 
 class Silent(CodingMutation):
@@ -317,7 +317,8 @@ class AlternateStartCodon(Silent):
             self,
             variant=variant,
             transcript=transcript,
-            aa_pos=0,
+            aa_mutation_start_offset=0,
+            aa_mutation_end_offset=1,
             aa_ref=aa_ref)
         self.ref_codon = ref_codon
         self.alt_codon = alt_codon
@@ -328,7 +329,13 @@ class AlternateStartCodon(Silent):
         return "alternate-start-codon (%s>%s)" % (
             self.ref_codon, self.alt_codon)
 
-class BaseSubstitution(CodingMutation):
+class NonsilentCodingMutation(CodingMutation):
+    """
+    All coding mutations other than silent codon substitutions
+    """
+    modifies_protein_sequence = True
+
+class BaseSubstitution(NonsilentCodingMutation):
     """
     Coding mutation which replaces some amino acids into others.
     The total number of amino acids changed must be greater than one on
@@ -338,37 +345,38 @@ class BaseSubstitution(CodingMutation):
             self,
             variant,
             transcript,
-            aa_pos,
+            mutation_offset,
             aa_ref,
             aa_alt):
-
         CodingMutation.__init__(
             self,
             variant=variant,
             transcript=transcript,
-            aa_pos=aa_pos,
+            aa_mutation_start_offset=mutation_offset,
+            aa_mutation_end_offset=mutation_offset + len(aa_alt),
             aa_ref=aa_ref)
-
         self.aa_alt = aa_alt
-        self.mutation_start = aa_pos
-        self.mutation_end = aa_pos + len(aa_alt)
 
     def short_description(self):
         if len(self.aa_ref) == 0:
-            return "p.%dins%s" % (self.aa_pos, self.aa_alt)
+            return "p.%dins%s" % (
+                self.aa_mutation_start_offset,
+                self.aa_alt)
         elif len(self.aa_alt) == 0:
-            return "p.%s%ddel" % (self.aa_ref, self.aa_pos)
+            return "p.%s%ddel" % (
+                self.aa_ref,
+                self.aa_mutation_start_offset)
         else:
             return "p.%s%d%s" % (
                     self.aa_ref,
-                    self.aa_pos + 1,
+                    self.aa_mutation_start_offset + 1,
                     self.aa_alt)
 
     @memoized_property
     def mutant_protein_sequence(self):
         original = self.original_protein_sequence
-        prefix = original[:self.aa_pos]
-        suffix = original[self.aa_pos + len(self.aa_ref):]
+        prefix = original[:self.aa_mutation_start_offset]
+        suffix = original[self.aa_mutation_start_offset + len(self.aa_ref):]
         return prefix + self.aa_alt + suffix
 
 class Substitution(BaseSubstitution):
@@ -465,7 +473,7 @@ class PrematureStop(BaseSubstitution):
             self,
             variant,
             transcript,
-            aa_pos,
+            aa_mutation_start_offset,
             aa_ref="",
             aa_alt=""):
         assert "*" not in aa_ref, \
@@ -478,11 +486,12 @@ class PrematureStop(BaseSubstitution):
             self,
             variant,
             transcript,
-            aa_pos=aa_pos,
+            aa_mutation_start_offset=aa_mutation_start_offset,
+            aa_mutation_end_offset=aa_mutation_start_offset,
             aa_ref=aa_ref,
             aa_alt=aa_alt)
 
-        self.stop_codon_offset = aa_pos + len(aa_ref)
+        self.stop_codon_offset = aa_mutation_start_offset + len(aa_ref)
 
         assert self.stop_codon_offset < len(transcript.protein_sequence), \
             ("Premature stop codon cannot be at position %d"
@@ -494,7 +503,7 @@ class PrematureStop(BaseSubstitution):
     def short_description(self):
         return "p.%s%d%s*" % (
             self.aa_ref,
-            self.aa_pos + 1,
+            self.aa_mutation_start_offset + 1,
             self.aa_alt)
 
     @memoized_property
@@ -508,59 +517,59 @@ class StopLoss(BaseSubstitution):
             variant,
             transcript,
             extended_protein_sequence):
+        aa_mutation_start_offset = len(transcript.protein_sequence)
+        n_aa = len(extended_protein_sequence)
+        aa_mutation_end_offset = aa_mutation_start_offset + n_aa
+        self.extended_protein_sequence = extended_protein_sequence
         BaseSubstitution.__init__(
             self,
             variant,
             transcript,
-            aa_pos=len(transcript.protein_sequence),
+            aa_mutation_start_offset=aa_mutation_start_offset,
+            aa_mutation_end_offset=aa_mutation_end_offset,
             aa_ref="*",
             aa_alt=extended_protein_sequence)
 
     def short_description(self):
-        return "p.*%d%s (stop-loss)" % (self.aa_pos, self.aa_alt)
+        return "p.*%d%s (stop-loss)" % (
+            self.aa_mutation_start_offset + 1,
+            self.extended_protein_sequence)
 
-class UnpredictableCodingMutation(BaseSubstitution):
+class StartLoss(BaseSubstitution):
     """
-    Variants for which we can't confidently determine a protein sequence.
-
-    Splice site mutations are unpredictable since they require a model of
-    alternative splicing that goes beyond this library. Similarly,
-    when a start codon is lost it's difficult to determine if there is
+    When a start codon is lost it's difficult to determine if there is
     an alternative Kozak consensus sequence (either before or after the
     original) from which an alternative start codon can be inferred.
     """
-    def __init__(self, variant, transcript, aa_pos, aa_ref, aa_alt):
-        BaseSubstitution.__init__(
-            self, variant, transcript, aa_pos, aa_ref, aa_alt)
-
-    @property
-    def mutant_protein_sequence(self):
-        raise ValueError("Can't determine the protein sequence of %s" % self)
-
-
-class StartLoss(UnpredictableCodingMutation):
     def __init__(
             self,
             variant,
             transcript,
             aa_alt="?"):
-        UnpredictableCodingMutation.__init__(
+        BaseSubstitution.__init__(
             self,
             variant=variant,
             transcript=transcript,
-            aa_pos=0,
+            aa_mutation_start_offset=0,
+            # TODO: what do put as the end of the mutation when
+            # we don't know how to predict the sequence?
+            aa_mutation_end_offset=0,
             aa_ref="M",
             aa_alt=aa_alt)
+
+    @property
+    def mutant_protein_sequence(self):
+        return None
 
     def short_description(self):
         return "p.%d? (start-loss)" % (self.aa_pos,)
 
-class FrameShift(CodingMutation):
+class FrameShift(NonsilentCodingMutation):
     def __init__(
             self,
             variant,
             transcript,
-            aa_pos,
+            aa_mutation_start_offset,
             aa_ref,
             shifted_sequence):
         """Frameshift mutation preserves all the amino acids up to aa_pos
@@ -568,23 +577,26 @@ class FrameShift(CodingMutation):
         sequence. Unlike an insertion, where we denote with aa_ref as the
         chracter before the variant sequence, a frameshift starts at aa_ref.
         """
+        n_new_amino_acids = len(shifted_sequence)
         CodingMutation.__init__(
             self,
             variant=variant,
             transcript=transcript,
-            aa_pos=aa_pos,
+            aa_mutation_start_offset=aa_mutation_start_offset,
+            aa_mutation_end_offset=aa_mutation_start_offset + n_new_amino_acids,
             aa_ref=aa_ref)
         self.shifted_sequence = shifted_sequence
-        self.mutation_start = self.aa_pos
-        self.mutation_end = self.aa_pos + len(shifted_sequence)
 
     @memoized_property
     def mutant_protein_sequence(self):
-        original_aa_sequence = self.original_protein_sequence[:self.aa_pos]
-        return original_aa_sequence + self.shifted_sequence
+        original_aa_sequence = self.original_protein_sequence
+        prefix = original_aa_sequence[:self.mutated_protein_start_offset]
+        return prefix + self.shifted_sequence
 
     def short_description(self):
-        return "p.%s%dfs" % (self.aa_ref, self.aa_pos + 1)
+        return "p.%s%dfs" % (
+            self.aa_ref,
+            self.aa_mutation_start_offset + 1)
 
 class FrameShiftTruncation(PrematureStop, FrameShift):
     """
@@ -600,7 +612,7 @@ class FrameShiftTruncation(PrematureStop, FrameShift):
             self,
             variant=variant,
             transcript=transcript,
-            aa_pos=stop_codon_offset,
+            aa_mutation_start_offset=stop_codon_offset,
             aa_ref=aa_ref)
 
     @memoized_property

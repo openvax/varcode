@@ -117,7 +117,7 @@ def _frameshift(
     return FrameShift(
         variant=variant,
         transcript=transcript,
-        aa_pos=mutation_start_position,
+        aa_mutation_start_offset=mutation_start_position,
         aa_ref=aa_ref,
         shifted_sequence=mutant_protein_suffix)
 

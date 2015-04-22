@@ -149,9 +149,9 @@ class Variant(object):
         return hash(self.fields())
 
     def __lt__(self, other):
-        '''
+        """
         Variants are ordered by locus.
-        '''
+        """
         require_instance(other, Variant, name="variant")
         if self.contig == other.contig:
             return self.start < other.start
@@ -313,16 +313,8 @@ class Variant(object):
         return {
             effect.transcript.id: effect
             for effect in self.effects(*args, **kwargs)
-            if isinstance(effect, TranscriptMutationEffect)
+            if hasattr(effect, 'transcript') and effect.transcript is not None
         }
-
-    @memoize
-    def top_effect(self, *args, **kwargs):
-        """Highest priority MutationEffect of all genes/transcripts overlapped
-        by this variant. If this variant doesn't overlap anything, then this
-        this method will return an Intergenic effect.
-        """
-        return top_priority_effect(self.effects(*args, **kwargs))
 
     @memoize
     def effect_on_transcript(self, transcript):

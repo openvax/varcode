@@ -13,6 +13,8 @@
 # limitations under the License.
 
 from __future__ import print_function, division, absolute_import
+# used for local import of EffectCollection
+import importlib
 
 from typechecks import require_iterable_of
 
@@ -21,7 +23,6 @@ from .common import memoize
 from .variant import Variant
 
 class VariantCollection(BaseCollection):
-
     def __init__(self, variants, original_filename=None):
         """
         Construct a VariantCollection from a list of Variant records and
@@ -124,10 +125,10 @@ class VariantCollection(BaseCollection):
         """
         # importing EffectCollection locally since Python won't
         # let us express a mutual dependency between two modules
-        import EffectCollection
+        effect_collection = importlib.import_module(".effect_collection")
 
         effect_list = []
         for variant in self.variants:
             for effect in variant.effects(raise_on_error=raise_on_error):
                 effect_list.append(effect)
-        return EffectCollection(effect_list)
+        return effect_collection.EffectCollection(effect_list)

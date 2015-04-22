@@ -4,11 +4,9 @@ to crash or return an incorrect annotation should be added to this
 test module.
 """
 
-from pyensembl import EnsemblRelease
+from pyensembl import ensembl_grch37, ensembl_grch38
 from varcode import Variant
 
-ensembl_grch37 = EnsemblRelease(75)
-ensembl_grch38 = EnsemblRelease(79)
 
 # variants which have previously resulted in raised exceptions
 # during effect annotation
@@ -101,7 +99,7 @@ should_not_crash_variants = [
 ]
 
 def try_effect_annotation(variant):
-    effect = variant.top_effect()
+    effect = variant.effects().top_priority_effect()
     assert effect is not None
 
 def test_crashing_variants():
