@@ -28,11 +28,12 @@ ensembl = EnsemblRelease(75)
 
 def _get_effect(chrom, pos, dna_ref, dna_alt, transcript_id):
     variant = Variant(chrom, pos, dna_ref, dna_alt, ensembl=ensembl)
-    effect_groups = variant.effects().groupby_transcript_id()
-    assert transcript_id in effect_groups, \
+    effects = variant.effects()
+    transcript_dict = effects.top_priority_effect_per_transcript_id()
+    assert transcript_id in transcript_dict, \
         "Expected transcript ID %s for variant %s not found in %s" % (
-            transcript_id, variant, effect_groups)
-    effect = effect_groups[transcript_id][0]
+            transcript_id, variant, transcript_dict)
+    effect = transcript_dict[transcript_id]
 
     # COSMIC seems to ignore exonic splice sites
     if isinstance(effect, ExonicSpliceSite):

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from collections import Counter
+from collections import Counter, OrderedDict
 
 from .collection import Collection
 from .common import memoize
@@ -97,6 +97,32 @@ class EffectCollection(Collection):
         """
         return top_priority_effect(self._elements)
 
+    # TODO: find a way to express these kinds of methods without
+    # duplicating every single groupby_* method
+    @memoize
+    def top_priority_effect_per_variant(self):
+        """Highest priority effect for each unique variant"""
+        return OrderedDict(
+            (variant, top_priority_effect(variant_effects))
+            for (variant, variant_effects)
+            in self.groupby_variant().items())
+
+    @memoize
+    def top_priority_effect_per_transcript_id(self):
+        """Highest priority effect for each unique transcript ID"""
+        return OrderedDict(
+            (transcript_id, top_priority_effect(variant_effects))
+            for (transcript_id, variant_effects)
+            in self.groupby_transcript_id().items())
+
+    @memoize
+    def top_priority_effect_per_gene_id(self):
+        """Highest priority effect for each unique gene ID"""
+        return OrderedDict(
+            (gene_id, top_priority_effect(variant_effects))
+            for (gene_id, variant_effects)
+            in self.groupby_gene_id().items())
+
     def effect_expression(self, expression_levels):
         """
         Parameters
@@ -109,11 +135,10 @@ class EffectCollection(Collection):
         quantity. Effects that don't have an associated transcript
         (e.g. Intergenic) will not be included.
         """
-        return {
-            effect: expression_levels.get(effect.transcript.id, 0.0)
+        return OrderedDict(
+            (effect, expression_levels.get(effect.transcript.id, 0.0))
             for effect in self
-            if effect.transcript is not None
-        }
+            if effect.transcript is not None)
 
     def top_expression_effect(self, expression_levels):
         """

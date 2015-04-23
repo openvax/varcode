@@ -15,8 +15,6 @@
 from __future__ import print_function, division, absolute_import
 from collections import Counter
 
-import pandas as pd
-
 from .collection import Collection
 from .effect_collection import EffectCollection
 from .common import memoize
@@ -74,20 +72,15 @@ class VariantCollection(Collection):
         in this collection.
         """
         columns = [
+            "reference_name"
             "contig",
             "start",
             "end",
             "ref",
-            "alt"
+            "alt",
+            "gene_names",
         ]
-        data = {
-            column: []
-            for column in columns
-        }
-        for variant in self:
-            for column in columns:
-                data[column].append(getattr(variant, column))
-        return pd.DataFrame(data, columns=columns)
+        self._dataframe_from_columns(columns)
 
     @memoize
     def effects(self, raise_on_error=True):
