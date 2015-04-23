@@ -169,7 +169,7 @@ class Variant(object):
 
     def __eq__(self, other):
         return (
-            other.__class__ == Variant and
+            other.__class__ is Variant and
             self.fields() == other.fields())
 
     @memoize
@@ -312,7 +312,7 @@ class Variant(object):
             Transcript we're going to apply mutation to.
         """
 
-        if not isinstance(transcript, Transcript):
+        if transcript.__class__ is not Transcript:
             raise TypeError(
                 "Expected %s : %s to have type Transcript" % (
                     transcript, type(transcript)))

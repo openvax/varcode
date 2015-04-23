@@ -13,8 +13,9 @@
 # limitations under the License.
 
 from __future__ import print_function, division, absolute_import
-
 from collections import Counter
+
+import pandas as pd
 
 from .collection import Collection
 from .effect_collection import EffectCollection
@@ -41,6 +42,7 @@ class VariantCollection(Collection):
             filename=filename,
             distinct=True)
 
+    @memoize
     def summary_string(self):
         """
         Returns a string indicating each variant in the collection.
@@ -64,6 +66,28 @@ class VariantCollection(Collection):
                 gene_names_string = ""
             s += "\n\t%s%s" % (variant, gene_names_string)
         return s
+
+    @memoize
+    def dataframe(self):
+        """
+        Construct a dataframe of the core Variant fields for all variants
+        in this collection.
+        """
+        columns = [
+            "contig",
+            "start",
+            "end",
+            "ref",
+            "alt"
+        ]
+        data = {
+            column: []
+            for column in columns
+        }
+        for variant in self:
+            for column in columns:
+                data[column].append(getattr(variant, column))
+        return pd.DataFrame(data, columns=columns)
 
     @memoize
     def effects(self, raise_on_error=True):

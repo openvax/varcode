@@ -127,7 +127,7 @@ class EffectCollection(Collection):
             return None
         return max(
             effect_expression_dict.items(),
-            key=lambda (effect, fpkm): (fpkm, effect_sort_key(effect)))
+            key=lambda effect, fpkm: (fpkm, effect_sort_key(effect)))
 
     @memoize
     def gene_counts(self):
