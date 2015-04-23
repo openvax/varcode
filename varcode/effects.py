@@ -299,6 +299,20 @@ class Silent(CodingMutation):
     """Mutation to an exon of a coding region which doesn't change the
     amino acid sequence.
     """
+    def __init__(
+            self,
+            variant,
+            transcript,
+            aa_mutation_start_offset,
+            aa_ref):
+        CodingMutation.__init__(
+            self,
+            variant=variant,
+            transcript=transcript,
+            aa_mutation_start_offset=aa_mutation_start_offset,
+            aa_mutation_end_offset=aa_mutation_start_offset,
+            aa_ref=aa_ref)
+
     def short_description(self):
         return "silent"
 
@@ -345,15 +359,15 @@ class BaseSubstitution(NonsilentCodingMutation):
             self,
             variant,
             transcript,
-            mutation_offset,
+            aa_mutation_start_offset,
             aa_ref,
             aa_alt):
         CodingMutation.__init__(
             self,
             variant=variant,
             transcript=transcript,
-            aa_mutation_start_offset=mutation_offset,
-            aa_mutation_end_offset=mutation_offset + len(aa_alt),
+            aa_mutation_start_offset=aa_mutation_start_offset,
+            aa_mutation_end_offset=aa_mutation_start_offset + len(aa_alt),
             aa_ref=aa_ref)
         self.aa_alt = aa_alt
 
@@ -387,7 +401,7 @@ class Substitution(BaseSubstitution):
             self,
             variant,
             transcript,
-            aa_pos,
+            aa_mutation_start_offset,
             aa_ref,
             aa_alt):
         if len(aa_ref) != 1:
@@ -400,7 +414,7 @@ class Substitution(BaseSubstitution):
             self,
             variant=variant,
             transcript=transcript,
-            aa_pos=aa_pos,
+            aa_mutation_start_offset=aa_mutation_start_offset,
             aa_ref=aa_ref,
             aa_alt=aa_alt)
 
@@ -415,7 +429,7 @@ class ComplexSubstitution(BaseSubstitution):
             self,
             variant,
             transcript,
-            aa_pos,
+            aa_mutation_start_offset,
             aa_ref,
             aa_alt):
         if len(aa_ref) == 1 and len(aa_alt) == 1:
@@ -426,7 +440,7 @@ class ComplexSubstitution(BaseSubstitution):
             self,
             variant=variant,
             transcript=transcript,
-            aa_pos=aa_pos,
+            aa_mutation_start_offset=aa_mutation_start_offset,
             aa_ref=aa_ref,
             aa_alt=aa_alt)
 
@@ -438,31 +452,33 @@ class Insertion(BaseSubstitution):
             self,
             variant,
             transcript,
-            position_before,
-            inserted_sequence):
-        self.position_before = position_before
-        self.inserted_sequence = inserted_sequence
+            aa_mutation_start_offset,
+            aa_alt):
         BaseSubstitution.__init__(
             self,
             variant=variant,
             transcript=transcript,
-            aa_pos=position_before,
+            aa_mutation_start_offset=aa_mutation_start_offset,
             aa_ref="",
-            aa_alt=inserted_sequence)
+            aa_alt=aa_alt)
 
 class Deletion(BaseSubstitution):
     """
     In-frame deletion of one or more amino acids.
     """
 
-    def __init__(self, variant, transcript, aa_pos, deleted_sequence):
-        self.deleted_sequence = deleted_sequence
+    def __init__(
+            self,
+            variant,
+            transcript,
+            aa_mutation_start_offset,
+            aa_ref):
         BaseSubstitution.__init__(
             self,
             variant=variant,
             transcript=transcript,
-            aa_pos=aa_pos,
-            aa_ref=deleted_sequence,
+            aa_mutation_start_offset=aa_mutation_start_offset,
+            aa_ref=aa_ref,
             aa_alt="")
 
 
@@ -476,6 +492,10 @@ class PrematureStop(BaseSubstitution):
             aa_mutation_start_offset,
             aa_ref="",
             aa_alt=""):
+        """
+        Insertion of premature stop codon, possibly preceded by a substitution
+        of `aa_ref` amino acids for `aa_alt` alternative residues.
+        """
         assert "*" not in aa_ref, \
             ("Unexpected aa_ref = '%s', should only include amino acids "
              "before the new stop codon.") % aa_ref
@@ -487,11 +507,9 @@ class PrematureStop(BaseSubstitution):
             variant,
             transcript,
             aa_mutation_start_offset=aa_mutation_start_offset,
-            aa_mutation_end_offset=aa_mutation_start_offset,
             aa_ref=aa_ref,
             aa_alt=aa_alt)
-
-        self.stop_codon_offset = aa_mutation_start_offset + len(aa_ref)
+        self.stop_codon_offset = aa_mutation_start_offset + len(aa_alt)
 
         assert self.stop_codon_offset < len(transcript.protein_sequence), \
             ("Premature stop codon cannot be at position %d"
@@ -508,7 +526,8 @@ class PrematureStop(BaseSubstitution):
 
     @memoized_property
     def mutant_protein_sequence(self):
-        return self.original_protein_sequence[:self.aa_pos]
+        prefix = self.original_protein_sequence[:self.aa_mutation_start_offset]
+        return prefix + self.aa_alt
 
 
 class StopLoss(BaseSubstitution):
@@ -518,15 +537,12 @@ class StopLoss(BaseSubstitution):
             transcript,
             extended_protein_sequence):
         aa_mutation_start_offset = len(transcript.protein_sequence)
-        n_aa = len(extended_protein_sequence)
-        aa_mutation_end_offset = aa_mutation_start_offset + n_aa
         self.extended_protein_sequence = extended_protein_sequence
         BaseSubstitution.__init__(
             self,
             variant,
             transcript,
             aa_mutation_start_offset=aa_mutation_start_offset,
-            aa_mutation_end_offset=aa_mutation_end_offset,
             aa_ref="*",
             aa_alt=extended_protein_sequence)
 
@@ -551,9 +567,6 @@ class StartLoss(BaseSubstitution):
             variant=variant,
             transcript=transcript,
             aa_mutation_start_offset=0,
-            # TODO: what do put as the end of the mutation when
-            # we don't know how to predict the sequence?
-            aa_mutation_end_offset=0,
             aa_ref="M",
             aa_alt=aa_alt)
 
@@ -562,7 +575,7 @@ class StartLoss(BaseSubstitution):
         return None
 
     def short_description(self):
-        return "p.%d? (start-loss)" % (self.aa_pos,)
+        return "p.%d? (start-loss)" % (self.aa_mutation_start_offset,)
 
 class FrameShift(NonsilentCodingMutation):
     def __init__(
@@ -572,10 +585,11 @@ class FrameShift(NonsilentCodingMutation):
             aa_mutation_start_offset,
             aa_ref,
             shifted_sequence):
-        """Frameshift mutation preserves all the amino acids up to aa_pos
-        and then replaces the rest of the protein with new (frameshifted)
-        sequence. Unlike an insertion, where we denote with aa_ref as the
-        chracter before the variant sequence, a frameshift starts at aa_ref.
+        """Frameshift mutation preserves all the amino acids up to
+        aa_mutation_start_offset and then replaces the rest of the protein with
+        new (frameshifted) sequence. Unlike an insertion, where we denote with
+        aa_ref as the chracter before the variant sequence, a frameshift starts
+        at aa_ref.
         """
         n_new_amino_acids = len(shifted_sequence)
         CodingMutation.__init__(
@@ -598,7 +612,7 @@ class FrameShift(NonsilentCodingMutation):
             self.aa_ref,
             self.aa_mutation_start_offset + 1)
 
-class FrameShiftTruncation(PrematureStop, FrameShift):
+class FrameShiftTruncation(PrematureStop):
     """
     A frame-shift mutation which immediately introduces a stop codon.
     """
@@ -614,10 +628,6 @@ class FrameShiftTruncation(PrematureStop, FrameShift):
             transcript=transcript,
             aa_mutation_start_offset=stop_codon_offset,
             aa_ref=aa_ref)
-
-    @memoized_property
-    def mutant_protein_sequence(self):
-        return self.original_protein_sequence[:self.aa_pos]
 
     def short_description(self):
         return "p.%s%dfs*" % (self.aa_ref, self.aa_pos + 1)

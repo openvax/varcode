@@ -20,7 +20,6 @@ class BaseCollection(object):
     """
     Methods shared by EffectCollection and VariantCollection
     """
-
     def groupby(self, key_fn):
         """
         Parameters
@@ -29,13 +28,21 @@ class BaseCollection(object):
             Takes an effect or variant, returns a grouping key.
         """
         result_dict = OrderedDict()
+
         for x in self:
             key = key_fn(x)
             if key in result_dict:
                 result_dict[key].append(x)
             else:
                 result_dict[key] = [x]
-        return result_dict
+
+        my_class = self.__class__
+
+        # convert result lists into same Collection type as this one
+        return OrderedDict(
+            (k, my_class(elements))
+            for (k, elements)
+            in result_dict.items())
 
     @memoize
     def reference_names(self):

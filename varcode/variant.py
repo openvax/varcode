@@ -23,8 +23,9 @@ from typechecks import require_instance
 
 from .coding_effect import coding_effect
 from .common import groupby_field, memoize
+from .effect_helpers import changes_exonic_splice_site
+from .effect_collection import EffectCollection
 from .effects import (
-    TranscriptMutationEffect,
     Failure,
     Intergenic,
     Intragenic,
@@ -40,8 +41,6 @@ from .effects import (
     ExonLoss,
     ExonicSpliceSite,
 )
-from .effect_helpers import changes_exonic_splice_site
-from .effect_ordering import top_priority_effect
 from .nucleotides import normalize_nucleotide_string
 from .string_helpers import trim_shared_flanking_strings
 from .transcript_helpers import interval_offset_on_transcript
@@ -253,7 +252,7 @@ class Variant(object):
     @memoize
     def effects(self, raise_on_error=True):
         """Determine the effects of a variant on any transcripts it overlaps.
-        Returns a VariantEffectCollection object.
+        Returns an EffectCollection object.
 
         Parameters
         ----------
@@ -272,6 +271,7 @@ class Variant(object):
             return [Intergenic(self)]
 
         overlapping_transcripts = self.transcripts()
+
         # group transcripts by their gene ID
         transcripts_grouped_by_gene = groupby_field(
             overlapping_transcripts, 'gene_id')
@@ -301,20 +301,7 @@ class Variant(object):
                                 self,
                                 transcript,
                                 error)
-        return effects
-
-    @memoize
-    def transcript_effect_dict(self, *args, **kwargs):
-        """Dictionary mapping transcript IDs to their associated
-        TranscriptMutationEffect objects.
-
-        Arguments are passed on to Variant.effects(*args, **kwargs).
-        """
-        return {
-            effect.transcript.id: effect
-            for effect in self.effects(*args, **kwargs)
-            if hasattr(effect, 'transcript') and effect.transcript is not None
-        }
+        return EffectCollection(effects)
 
     @memoize
     def effect_on_transcript(self, transcript):

@@ -102,4 +102,4 @@ def top_priority_effect(effects):
     """
     if len(effects) == 0:
         raise ValueError("List of effects cannot be empty")
-    return max(best_effects, key=effect_sort_key)
+    return max(effects, key=effect_sort_key)

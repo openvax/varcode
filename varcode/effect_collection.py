@@ -12,11 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# used to locally import variant_collection, required to break circular
-# dependency
-import importlib
-
-from memoized_property import memoized_property
+from collections import Counter
 
 from .base_collection import BaseCollection
 from .common import memoize
@@ -55,38 +51,23 @@ class EffectCollection(BaseCollection):
     def groupby_variant(self):
         return self.groupby(key_fn=lambda effect: effect.variant)
 
+    def groupby_gene(self):
+        return self.groupby(key_fn=lambda effect: effect.gene)
+
     def groupby_gene_name(self):
-        def get_gene_name(effect):
-            if effect.gene:
-                return effect.gene.name
-            else:
-                return None
-        return self.groupby(
-            key_fn=lambda effect: effect.gene.name if effect.gene else None)
+        return self.groupby(key_fn=lambda effect: effect.gene_name)
 
     def groupby_gene_id(self):
-        def get_gene_id(effect):
-            if effect.gene:
-                return effect.gene.id
-            else:
-                return None
-        return self.groupby(get_gene_id)
+        return self.groupby(key_fn=lambda effect: effect.gene_id)
+
+    def groupby_transcript(self):
+        return self.groupby(key_fn=lambda effect: effect.transcript)
 
     def groupby_transcript_name(self):
-        def get_transcript_name(effect):
-            if effect.transcript:
-                return effect.transcript.name
-            else:
-                return None
-        return self.groupby(get_transcript_name)
+        return self.groupby(key_fn=lambda effect: effect.transcript_name)
 
     def groupby_transcript_id(self):
-        def get_transcript_id(effect):
-            if effect.transcript:
-                return effect.transcript.id
-            else:
-                return None
-        return self.groupby(key_fn=get_transcript_id)
+        return self.groupby(key_fn=lambda effect: effect.transcript_id)
 
     def summary_string(self):
         """
@@ -121,7 +102,7 @@ class EffectCollection(BaseCollection):
         return "\n".join(lines)
 
     @memoize
-    def highest_priority_effect(self):
+    def top_priority_effect(self):
         """Highest priority MutationEffect of all genes/transcripts overlapped
         by this variant. If this variant doesn't overlap anything, then this
         this method will return an Intergenic effect.
@@ -149,7 +130,7 @@ class EffectCollection(BaseCollection):
             if effect.transcript is not None
         }
 
-    def highest_expression_effect(self, expression_levels):
+    def top_expression_effect(self, expression_levels):
         """
         Return effect whose transcript has the highest expression level.
         If none of the effects are expressed or have associated transcripts,
@@ -163,14 +144,9 @@ class EffectCollection(BaseCollection):
             effect_expression_dict.items(),
             key=lambda (effect, fpkm): (fpkm, effect_sort_key(effect)))
 
-    @memoized_property
-    def variants(self):
-        """
-        Return all unique variants associated with effects in this
-        EffectCollection
-        """
-        variant_set = set(effect.variant for effect in self.effects)
-        # import VariantCollection locally since Python won't let us
-        # express a mutual dependency between two modules
-        variant_collection = importlib.import_module(".variant_collection")
-        return variant_collection.VariantCollection(variant_set)
+    @memoize
+    def gene_counts(self):
+        counter = Counter()
+        for effect in self:
+            counter[effect.gene_name] += 1
+        return counter

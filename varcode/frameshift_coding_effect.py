@@ -89,7 +89,7 @@ def _frameshift(
             return Silent(
                 variant=variant,
                 transcript=transcript,
-                aa_pos=mutated_codon_index,
+                aa_mutation_start_offset=mutated_codon_index,
                 aa_ref=original_protein_sequence[mutated_codon_index])
         else:
             # When all the amino acids are the same as the original, we either

@@ -55,9 +55,11 @@ def validate_transcript_mutation(
     assert isinstance(effect, Substitution), \
         "Expected substitution (aa_pos=%d, aa_alt=%s) but got %s" % (
             aa_pos, aa_alt, effect)
+    effect_aa_pos = effect.aa_mutation_start_offset
+    effect_aa_alt = effect.mutant_protein_sequence[effect_aa_pos]
     assert (
-        effect.aa_pos + 1 == aa_pos and
-        effect.mutant_protein_sequence[effect.aa_pos] == aa_alt), \
+        effect_aa_pos + 1 == aa_pos and
+        effect_aa_alt == aa_alt), \
             "Mutant amino acid %s not found at %d for chr%s:%s %s>%s : %s" % (
                 aa_alt,
                 aa_pos,

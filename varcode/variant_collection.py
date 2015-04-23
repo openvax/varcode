@@ -13,14 +13,12 @@
 # limitations under the License.
 
 from __future__ import print_function, division, absolute_import
-# used for local import of EffectCollection
-import importlib
 
-from typechecks import require_iterable_of
+from collections import Counter
 
 from .base_collection import BaseCollection
+from .effect_collection import EffectCollection
 from .common import memoize
-from .variant import Variant
 
 class VariantCollection(BaseCollection):
     def __init__(self, variants, original_filename=None):
@@ -30,7 +28,6 @@ class VariantCollection(BaseCollection):
 
         Parameters
         ----------
-
         variants : iterable
             Variant objects contained in this VariantCollection
 
@@ -38,7 +35,6 @@ class VariantCollection(BaseCollection):
             File from which we loaded variants, though the current
             VariantCollection may only contain a subset of them.
         """
-        require_iterable_of(variants, Variant, "variants")
         self.variants = list(sorted(set(variants)))
         self.original_filename = original_filename
 
@@ -123,12 +119,19 @@ class VariantCollection(BaseCollection):
             If given, then only return effects for transcript IDs present
             in this set.
         """
-        # importing EffectCollection locally since Python won't
-        # let us express a mutual dependency between two modules
-        effect_collection = importlib.import_module(".effect_collection")
-
         effect_list = []
         for variant in self.variants:
             for effect in variant.effects(raise_on_error=raise_on_error):
                 effect_list.append(effect)
-        return effect_collection.EffectCollection(effect_list)
+        return EffectCollection(effect_list)
+
+    @memoize
+    def gene_counts(self):
+        """
+        Count how many variants overlap each gene name.
+        """
+        counter = Counter()
+        for variant in self.variants:
+            for gene_name in variant.gene_names():
+                counter[gene_name] += 1
+        return counter

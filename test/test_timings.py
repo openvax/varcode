@@ -20,8 +20,9 @@ from varcode.util import random_variants
 def _time_variant_annotation(variant_collection):
     start_t = time.time()
     effects = variant_collection.effects()
-    assert len(effects) == len(variant_collection)
     end_t = time.time()
+    assert len(effects.groupby_variant()) == len(variant_collection)
+
     elapsed_t = end_t - start_t
     return elapsed_t
 
