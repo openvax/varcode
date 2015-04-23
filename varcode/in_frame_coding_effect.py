@@ -176,8 +176,8 @@ def in_frame_coding_effect(
             return Insertion(
                 variant=variant,
                 transcript=transcript,
-                position_before=first_ref_codon_index,
-                inserted_sequence=inserted_amino_acids)
+                aa_mutation_start_offset=first_ref_codon_index,
+                aa_alt=inserted_amino_acids)
         else:
             # inserting inside a reference codon
             ref_codon = sequence_from_start_codon[

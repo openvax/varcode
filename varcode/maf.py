@@ -177,7 +177,10 @@ def load_maf(filename):
         }
 
         variant = Variant(
-            contig, start_pos, ref, alt,
+            contig,
+            start_pos,
+            ref,
+            alt,
             ensembl=ensembl,
             info=info)
 
@@ -185,4 +188,4 @@ def load_maf(filename):
 
     return VariantCollection(
         variants=variants,
-        original_filename=filename)
+        filename=filename)

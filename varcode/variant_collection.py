@@ -16,12 +16,12 @@ from __future__ import print_function, division, absolute_import
 
 from collections import Counter
 
-from .base_collection import BaseCollection
+from .collection import Collection
 from .effect_collection import EffectCollection
 from .common import memoize
 
-class VariantCollection(BaseCollection):
-    def __init__(self, variants, original_filename=None):
+class VariantCollection(Collection):
+    def __init__(self, variants, filename=None):
         """
         Construct a VariantCollection from a list of Variant records and
         the name of a reference genome.
@@ -31,44 +31,32 @@ class VariantCollection(BaseCollection):
         variants : iterable
             Variant objects contained in this VariantCollection
 
-        original_filename : str, optional
+        filename : str, optional
             File from which we loaded variants, though the current
             VariantCollection may only contain a subset of them.
         """
-        self.variants = list(sorted(set(variants)))
-        self.original_filename = original_filename
-
-    def __len__(self):
-        return len(self.variants)
-
-    def __iter__(self):
-        return iter(self.variants)
-
-    def __hash__(self):
-        return hash(len(self.variants))
-
-    def __eq__(self, other):
-        return (
-            isinstance(other, VariantCollection) and
-            len(self.variants) == len(other.variants) and
-            all(v1 == v2 for (v1, v2) in zip(self.variants, other.variants)))
+        Collection.__init__(
+            self,
+            elements=variants,
+            filename=filename,
+            distinct=True)
 
     def summary_string(self):
         """
         Returns a string indicating each variant in the collection.
         """
         fields = [
-            ("n_variants", len(self.variants)),
+            ("n_variants", len(self)),
             ("reference", ", ".join(self.reference_names()))
         ]
 
-        if self.original_filename:
-            fields.append(("filename", self.original_filename))
+        if self.filename:
+            fields.append(("filename", self.filename))
 
         s = "VariantCollection(%s)" % (
             ", ".join(
                 "%s=%s" % (k, v) for (k, v) in fields))
-        for variant in self.variants:
+        for variant in self:
             gene_names = variant.gene_names()
             if len(gene_names):
                 gene_names_string = " : %s" % ", ".join(gene_names)
@@ -76,25 +64,6 @@ class VariantCollection(BaseCollection):
                 gene_names_string = ""
             s += "\n\t%s%s" % (variant, gene_names_string)
         return s
-
-    def __str__(self):
-        suffix = ""
-        if self.original_filename:
-            suffix = ' from "%s"' % self.original_filename
-        return ("<VariantCollection of %d variants%s>" %
-            (len(self.variants), suffix))
-
-    def __repr__(self):
-        return str(self)
-
-    def _clone_metadata(self, new_variants):
-        """
-        Create copy of VariantCollection with same metadata but possibly
-        different Variant entries.
-        """
-        return VariantCollection(
-            variants=new_variants,
-            original_filename=self.original_filename)
 
     @memoize
     def effects(self, raise_on_error=True):
@@ -120,7 +89,7 @@ class VariantCollection(BaseCollection):
             in this set.
         """
         effect_list = []
-        for variant in self.variants:
+        for variant in self:
             for effect in variant.effects(raise_on_error=raise_on_error):
                 effect_list.append(effect)
         return EffectCollection(effect_list)
@@ -131,7 +100,15 @@ class VariantCollection(BaseCollection):
         Count how many variants overlap each gene name.
         """
         counter = Counter()
-        for variant in self.variants:
+        for variant in self:
             for gene_name in variant.gene_names():
                 counter[gene_name] += 1
         return counter
+
+    @memoize
+    def reference_names(self):
+        """
+        All distinct reference names used by Variants in this
+        collection.
+        """
+        return set(variant.reference_name for variant in self)

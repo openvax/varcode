@@ -83,4 +83,4 @@ def load_vcf(
                 variants.append(variant)
     return VariantCollection(
         variants=variants,
-        original_filename=filename)
+        filename=filename)

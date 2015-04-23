@@ -29,6 +29,13 @@ class MutationEffect(object):
     def __repr__(self):
         return str(self)
 
+    def __lt__(self, other):
+        """
+        Effects are ordered by their associated variants, which have
+        comparison implement in terms of their chromosomal locations.
+        """
+        return self.variant < other.variant
+
     def short_description(self):
         raise ValueError(
             "Method short_description() not implemented for %s" % (
@@ -47,24 +54,28 @@ class MutationEffect(object):
         else:
             return None
 
+    @memoized_property
     def gene_name(self):
         if self.gene:
             return self.gene.name
         else:
             return None
 
+    @memoized_property
     def gene_id(self):
         if self.gene:
             return self.gene.id
         else:
             return None
 
+    @memoized_property
     def transcript_name(self):
         if self.transcript:
             return self.transcript.name
         else:
             return None
 
+    @memoized_property
     def transcript_id(self):
         if self.transcript:
             return self.transcript.id
@@ -332,7 +343,6 @@ class AlternateStartCodon(Silent):
             variant=variant,
             transcript=transcript,
             aa_mutation_start_offset=0,
-            aa_mutation_end_offset=1,
             aa_ref=aa_ref)
         self.ref_codon = ref_codon
         self.alt_codon = alt_codon
@@ -592,7 +602,7 @@ class FrameShift(NonsilentCodingMutation):
         at aa_ref.
         """
         n_new_amino_acids = len(shifted_sequence)
-        CodingMutation.__init__(
+        NonsilentCodingMutation.__init__(
             self,
             variant=variant,
             transcript=transcript,
@@ -612,7 +622,7 @@ class FrameShift(NonsilentCodingMutation):
             self.aa_ref,
             self.aa_mutation_start_offset + 1)
 
-class FrameShiftTruncation(PrematureStop):
+class FrameShiftTruncation(PrematureStop, FrameShift):
     """
     A frame-shift mutation which immediately introduces a stop codon.
     """
@@ -622,12 +632,17 @@ class FrameShiftTruncation(PrematureStop):
             transcript,
             stop_codon_offset,
             aa_ref=""):
-        PrematureStop.__init__(
+        self.stop_codon_offset = stop_codon_offset
+        self.shifted_sequence = ""
+        NonsilentCodingMutation.__init__(
             self,
             variant=variant,
             transcript=transcript,
             aa_mutation_start_offset=stop_codon_offset,
+            aa_mutation_end_offset=stop_codon_offset + 1,
             aa_ref=aa_ref)
 
     def short_description(self):
-        return "p.%s%dfs*" % (self.aa_ref, self.aa_pos + 1)
+        return "p.%s%dfs*" % (
+            self.aa_ref,
+            self.aa_mutation_start_offset + 1)

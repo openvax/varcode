@@ -14,7 +14,7 @@
 
 from collections import Counter
 
-from .base_collection import BaseCollection
+from .collection import Collection
 from .common import memoize
 from .effect_ordering import (
     effect_priority,
@@ -22,31 +22,16 @@ from .effect_ordering import (
     top_priority_effect
 )
 
-class EffectCollection(BaseCollection):
+class EffectCollection(Collection):
     """
     Collection of MutationEffect objects and helpers for grouping or filtering
     them.
     """
-    def __init__(self, effects):
-        self.effects = effects
-
-    def __str__(self):
-        return "<EffectCollection of %d effects>" % (len(self.effects),)
-
-    def __len__(self):
-        return len(self.effects)
-
-    def __iter__(self):
-        return iter(self.effects)
-
-    def __hash__(self):
-        return hash(len(self.effects))
-
-    def __eq__(self, other):
-        return (
-            isinstance(other, EffectCollection) and
-            len(self.effects) == len(other.effects) and
-            all(e1 == e2 for (e1, e2) in zip(self.effects, other.effects)))
+    def __init__(self, effects, filename=None):
+        Collection.__init__(
+            self,
+            elements=effects,
+            filename=filename)
 
     def groupby_variant(self):
         return self.groupby(key_fn=lambda effect: effect.variant)
@@ -110,7 +95,7 @@ class EffectCollection(BaseCollection):
         If multiple effects have the same priority, then return the one
         which is associated with the longest transcript.
         """
-        return top_priority_effect(self.effects)
+        return top_priority_effect(self._elements)
 
     def effect_expression(self, expression_levels):
         """
@@ -126,7 +111,7 @@ class EffectCollection(BaseCollection):
         """
         return {
             effect: expression_levels.get(effect.transcript.id, 0.0)
-            for effect in self.effects
+            for effect in self
             if effect.transcript is not None
         }
 

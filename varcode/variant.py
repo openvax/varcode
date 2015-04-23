@@ -16,7 +16,7 @@ from __future__ import print_function, division, absolute_import
 import logging
 
 from Bio.Seq import reverse_complement
-from pyensembl import Transcript, EnsemblRelease
+from pyensembl import Transcript, EnsemblRelease, ensembl_grch38
 from pyensembl.locus import normalize_chromosome
 from pyensembl.biotypes import is_coding_biotype
 from typechecks import require_instance
@@ -45,15 +45,13 @@ from .nucleotides import normalize_nucleotide_string
 from .string_helpers import trim_shared_flanking_strings
 from .transcript_helpers import interval_offset_on_transcript
 
-DEFAULT_ENSEMBL_RELEASE = EnsemblRelease()
-
 class Variant(object):
     def __init__(self,
             contig,
             start,
             ref,
             alt,
-            ensembl=DEFAULT_ENSEMBL_RELEASE,
+            ensembl=ensembl_grch38,
             info=None,
             allow_extended_nucleotides=False):
         """
@@ -171,7 +169,7 @@ class Variant(object):
 
     def __eq__(self, other):
         return (
-            isinstance(other, Variant) and
+            other.__class__ == Variant and
             self.fields() == other.fields())
 
     @memoize
