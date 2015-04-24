@@ -131,6 +131,16 @@ should_not_crash_variants = [
         ref="C",
         alt="T",
         ensembl=ensembl_grch37),
+    # Expected frameshift_insertion to be before stop codon
+    # for Variant(contig=1, start=109925189, ref=., alt=A, genome=GRCh38)
+    # on transcript_id=ENST00000329608
+    # len(protein) = 554, aa_pos = 554
+    Variant(
+        contig=1,
+        start=109925189,
+        ref="",
+        alt="A",
+        ensembl=ensembl_grch38),
 ]
 
 def try_effect_annotation(variant):
