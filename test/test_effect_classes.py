@@ -285,6 +285,30 @@ def test_silent():
         transcript_id="ENST00000357654",
         effect_class=Silent)
 
+def test_silent_stop_codons():
+    silent_stop_codon_variants = {
+        "ENST00000290524": Variant(
+            contig=1,
+            start=151314663,
+            ref="C",
+            alt="T",
+            ensembl=ensembl_grch37),
+        "ENST00000368725": Variant(
+            contig=1,
+            start=153409535,
+            ref="C",
+            alt="T",
+            ensembl=ensembl_grch37),
+        "ENST00000353479": Variant(
+            contig=10,
+            start=105791994,
+            ref="C",
+            alt="T",
+            ensembl=ensembl_grch37),
+    }
+    for transcript_id, variant in silent_stop_codon_variants.items():
+        yield (expect_effect, variant, transcript_id, Silent)
+
 def test_five_prime_utr():
     # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
     # Chromosome 17: 43,044,295-43,125,370 reverse strand.

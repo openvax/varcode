@@ -59,9 +59,6 @@ def _choose_annotation(
 
     variant : Variant
     """
-    assert len(aa_ref) > 0 or len(aa_alt) > 0, \
-        "aa_ref and aa_alt can't both be empty string"
-
     aa_ref, aa_alt, shared_prefix, shared_suffix = \
         trim_shared_flanking_strings(
             aa_ref,
@@ -210,7 +207,6 @@ def in_frame_coding_effect(
              last_ref_codon_index,
              variant,
              transcript)
-
         # codons in the reference sequence
         ref_codons = sequence_from_start_codon[
             first_ref_codon_index * 3:last_ref_codon_index * 3 + 3]
@@ -233,7 +229,6 @@ def in_frame_coding_effect(
             suffix = ""
 
         mutant_codons = prefix + alt + suffix
-
     assert len(mutant_codons) % 3 == 0, \
         "Expected in-frame mutation but got %s (length = %d)" % (
             mutant_codons, len(mutant_codons))
@@ -270,7 +265,6 @@ def in_frame_coding_effect(
     mutant_protein_subsequence = translate(
         mutant_codons,
         first_codon_is_start=(first_ref_codon_index == 0))
-
     if mutant_codons[-3:] in STOP_CODONS:
         # if the new coding sequence contains a stop codon, then this is a
         # PrematureStop mutation

@@ -95,7 +95,42 @@ should_not_crash_variants = [
         contig=11,
         start=63676705,
         ref="T", alt="",
-        ensembl=ensembl_grch37)
+        ensembl=ensembl_grch37),
+    # AssertionError: aa_ref and aa_alt can't both be empty string
+    Variant(
+        contig=1,
+        start=56962223,
+        ref='C',
+        alt='T',
+        ensembl=ensembl_grch37),
+    # AssertionError: aa_ref and aa_alt can't both be empty string
+    Variant(
+        contig=1,
+        start=56962223,
+        ref="C",
+        alt="T",
+        ensembl=ensembl_grch37),
+    # AssertionError: aa_ref and aa_alt can't both be empty string
+    Variant(
+        contig=1,
+        start=151314663,
+        ref="C",
+        alt="T",
+        ensembl=ensembl_grch37),
+    # AssertionError: aa_ref and aa_alt can't both be empty string
+    Variant(
+        contig=1,
+        start=153409535,
+        ref="C",
+        alt="T",
+        ensembl=ensembl_grch37),
+    # AssertionError: aa_ref and aa_alt can't both be empty string
+    Variant(
+        contig=10,
+        start=105791994,
+        ref="C",
+        alt="T",
+        ensembl=ensembl_grch37),
 ]
 
 def try_effect_annotation(variant):

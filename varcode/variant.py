@@ -325,6 +325,10 @@ class Variant(object):
         if not transcript.complete:
             return IncompleteTranscript(self, transcript)
 
+        # since we're using inclusive base-1 coordinates,
+        # checking for overlap requires special logic for insertions
+        insertion = len(self.ref) == 0
+
         # determine if any exons are deleted, and if not,
         # what is the closest exon and how far is this variant
         # from that exon (overlapping the exon = 0 distance)
@@ -343,7 +347,14 @@ class Variant(object):
             if self.start <= exon.start and self.end >= exon.end:
                 completely_lost_exons.append(exon)
 
-            distance = exon.distance_to_interval(self.start, self.end)
+            if insertion and exon.strand == "+" and self.end == exon.end:
+                # insertions after an exon don't overlap the exon
+                distance = 1
+            elif insertion and exon.strand == "-" and self.start == exon.start:
+                distance = 1
+            else:
+                distance = exon.distance_to_interval(self.start, self.end)
+
             if distance == 0:
                 overlapping_exon_numbers_and_exons.append((i + 1, exon))
                 # start is contained in current exon
@@ -407,11 +418,13 @@ class Variant(object):
 
         before_forward_exon = (
             nearest_exon.strand == "+" and
-            self.start < nearest_exon.start)
+            (self.start < nearest_exon.start or
+                (self.ref == "" and self.start == nearest_exon.start)))
 
         before_backward_exon = (
             nearest_exon.strand == "-" and
-            self.end > nearest_exon.end)
+            (self.end > nearest_exon.end or
+                (self.ref == "" and self.end == nearest_exon.end)))
 
         before_exon = before_forward_exon or before_backward_exon
 
@@ -456,7 +469,7 @@ class Variant(object):
         genome_ref = self.ref
         genome_alt = self.alt
 
-        # clip mutation to only affect the current exon\
+        # clip mutation to only affect the current exon
         if self.start < exon.start:
             # if mutation starts before current exon then only look
             # at nucleotides which overlap the exon

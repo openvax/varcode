@@ -45,12 +45,10 @@ def validate_transcript_mutation(
     effect = transcript_id_dict[ensembl_transcript_id]
 
     if isinstance(effect, ExonicSpliceSite):
-        print(effect)
         # exonic splice site mutations carry with them an alternate effect
         # which is what we check against dbNSFP (since that database seemed
         # to ignore exonic splicing mutations)
         effect = effect.alternate_effect
-        print(">", effect)
 
     assert isinstance(effect, Substitution), \
         "Expected substitution (aa_pos=%d, aa_alt=%s) but got %s" % (
