@@ -69,7 +69,7 @@ def _choose_annotation(
         return Silent(
             variant=variant,
             transcript=transcript,
-            aa_mutation_start_offset=aa_mutation_start_offset,
+            aa_pos=aa_mutation_start_offset,
             aa_ref=shared_amino_acids)
 
     # index of first amino acid which is different from the reference

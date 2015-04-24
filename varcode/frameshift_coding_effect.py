@@ -76,25 +76,22 @@ def _frameshift(
 
     # the frameshifted sequence may contain some amino acids which are
     # the same as the original protein!
-    if mutated_codon_index == original_protein_length:
-        n_unchanged_amino_acids = 0
-    else:
-        _, mutant_protein_suffix, unchanged_amino_acids = trim_shared_prefix(
-            ref=original_protein_sequence[mutated_codon_index:],
-            alt=mutant_protein_suffix)
-        n_unchanged_amino_acids = len(unchanged_amino_acids)
-
+    _, mutant_protein_suffix, unchanged_amino_acids = trim_shared_prefix(
+        ref=original_protein_sequence[mutated_codon_index:],
+        alt=mutant_protein_suffix)
+    n_unchanged_amino_acids = len(unchanged_amino_acids)
     mutation_start_position = mutated_codon_index + n_unchanged_amino_acids
-    if mutation_start_position == original_protein_length:
+    if mutation_start_position >= original_protein_length:
         # frameshift is either extending the protein or leaving it unchanged
         if len(mutant_protein_suffix) == 0:
             # miraculously, this frameshift left the protein unchanged,
             # most likely by turning one stop codon into another stop codon
+            aa_ref = original_protein_sequence[mutated_codon_index]
             return Silent(
                 variant=variant,
                 transcript=transcript,
-                aa_mutation_start_offset=mutated_codon_index,
-                aa_ref=original_protein_sequence[mutated_codon_index])
+                aa_pos=mutated_codon_index,
+                aa_ref=aa_ref)
         else:
             # When all the amino acids are the same as the original, we either
             # have the original protein or we've extended it.
@@ -103,7 +100,6 @@ def _frameshift(
                 variant=variant,
                 transcript=transcript,
                 extended_protein_sequence=mutant_protein_suffix)
-
     # original amino acid at the mutated codon before the frameshift occurred
     aa_ref = original_protein_sequence[mutation_start_position]
 

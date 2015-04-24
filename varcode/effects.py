@@ -266,44 +266,14 @@ class CodingMutation(Exonic):
     """
     Base class for all mutations which result in a modified coding sequence.
     """
-
-    modifies_coding_sequence = True
-
-    def __init__(
-            self,
-            variant,
-            transcript,
-            aa_mutation_start_offset,
-            aa_mutation_end_offset,
-            aa_ref):
-        """
-        Parameters
-        ----------
-        variant : varcode.Variant
-
-        transcript : pyensembl.Transcript
-
-        aa_mutation_start_offset : int
-            Offset of first modified amino acid in protein (starting from 0)
-
-        aa_mutation_end_offset : int
-            Offset after last mutated amino acid (half-open coordinates)
-
-        aa_ref : str
-            Amino acid string of what used to be at mutated_protein_start_offset
-            in the wildtype (unmutated) protein.
-        """
-        Exonic.__init__(self, variant, transcript)
-        self.aa_mutation_start_offset = aa_mutation_start_offset
-        self.aa_mutation_end_offset = aa_mutation_end_offset
-        self.aa_ref = aa_ref
-
     def __str__(self):
         return "%s(variant=%s, transcript=%s, effect_description=%s)" % (
             self.__class__.__name__,
             self.variant.short_description(),
             self.transcript.name,
             self.short_description())
+
+    modifies_coding_sequence = True
 
 
 class Silent(CodingMutation):
@@ -314,15 +284,27 @@ class Silent(CodingMutation):
             self,
             variant,
             transcript,
-            aa_mutation_start_offset,
+            aa_pos,
             aa_ref):
+        """
+        Parameters
+        ----------
+        variant : Variant
+
+        transcript : Transcript
+
+        aa_pos : int
+            Offset of first synonymous codon in protein sequence
+
+        aa_ref : str or Bio.Seq
+            Reference amino acid(s) at offset
+        """
         CodingMutation.__init__(
             self,
             variant=variant,
-            transcript=transcript,
-            aa_mutation_start_offset=aa_mutation_start_offset,
-            aa_mutation_end_offset=aa_mutation_start_offset,
-            aa_ref=aa_ref)
+            transcript=transcript)
+        self.aa_pos = aa_pos
+        self.aa_ref = aa_ref
 
     def short_description(self):
         return "silent"
@@ -342,13 +324,11 @@ class AlternateStartCodon(Silent):
             self,
             variant=variant,
             transcript=transcript,
-            aa_mutation_start_offset=0,
+            aa_pos=0,
             aa_ref=aa_ref)
         self.ref_codon = ref_codon
         self.alt_codon = alt_codon
 
-    """Change of start codon e.g. ATG > TTG, may act as a silent mutation
-    but also risks the possibility of a start loss."""
     def short_description(self):
         return "alternate-start-codon (%s>%s)" % (
             self.ref_codon, self.alt_codon)
@@ -357,6 +337,37 @@ class NonsilentCodingMutation(CodingMutation):
     """
     All coding mutations other than silent codon substitutions
     """
+
+    def __init__(
+            self,
+            variant,
+            transcript,
+            aa_mutation_start_offset,
+            aa_mutation_end_offset,
+            aa_ref):
+        """
+        variant : Variant
+
+        transcript : Transcript
+
+        aa_mutation_start_offset : int
+            Offset of first modified amino acid in protein (starting from 0)
+
+        aa_mutation_end_offset : int
+            Offset after last mutated amino acid (half-open coordinates)
+
+        aa_ref : str
+            Amino acid string of what used to be at mutated_protein_start_offset
+            in the wildtype (unmutated) protein.
+        """
+        CodingMutation.__init__(
+            self,
+            variant=variant,
+            transcript=transcript)
+        self.aa_mutation_start_offset = aa_mutation_start_offset
+        self.aa_mutation_end_offset = aa_mutation_end_offset
+        self.aa_ref = aa_ref
+
     modifies_protein_sequence = True
 
 class BaseSubstitution(NonsilentCodingMutation):
@@ -372,7 +383,7 @@ class BaseSubstitution(NonsilentCodingMutation):
             aa_mutation_start_offset,
             aa_ref,
             aa_alt):
-        CodingMutation.__init__(
+        NonsilentCodingMutation.__init__(
             self,
             variant=variant,
             transcript=transcript,
