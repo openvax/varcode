@@ -85,8 +85,6 @@ class VariantCollection(Collection):
     @memoize
     def effects(self, raise_on_error=True):
         """
-        Generator of effects from all variants.
-
         Parameters
         ----------
         raise_on_error : bool, optional
@@ -94,16 +92,6 @@ class VariantCollection(Collection):
             transcript, should it be raised? This default is True, meaning
             errors result in raised exceptions, otherwise they are only logged.
 
-        min_priority_effect_class : type, optional
-            Only return variants with priority at least as great the given type.
-            Typical value  for coding effects is `effects.Substitution`
-
-        only_gene_ids : set, optional
-            If given, then only return effects for gene IDs present in this set
-
-        only_transcript_ids : set, optional
-            If given, then only return effects for transcript IDs present
-            in this set.
         """
         return EffectCollection([
             effect
