@@ -37,7 +37,7 @@ def test_maf():
             "Expected gene name %s but got %s" % (gene_name, v_maf.genes())
 
 def check_same_aa_change(variant, expected_aa_change):
-    effect = variant.top_effect()
+    effect = variant.effects().top_priority_effect()
     change = effect.short_description()
     eq_(
         change,

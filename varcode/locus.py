@@ -50,7 +50,7 @@ class Locus(namedtuple("Locus", "contig start end")):
         if end is None:
             end = start
         return Locus(contig, start - 1, end)
-    
+
     @staticmethod
     def from_interbase_coordinates(contig, start, end=None):
         '''

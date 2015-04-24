@@ -32,7 +32,7 @@ from .string_helpers import trim_shared_flanking_strings
 from .translate import START_CODONS, STOP_CODONS, translate
 
 def _choose_annotation(
-        aa_pos,
+        aa_mutation_start_offset,
         aa_ref,
         aa_alt,
         transcript,
@@ -45,7 +45,7 @@ def _choose_annotation(
 
     Parameters
     ----------
-    aa_pos : int
+    aa_mutation_start_offset : int
         Inclusive (starting from 0) amino acid position of the first ref
         amino acid which is changed by the mutation.
 
@@ -59,9 +59,6 @@ def _choose_annotation(
 
     variant : Variant
     """
-    assert len(aa_ref) > 0 or len(aa_alt) > 0, \
-        "aa_ref and aa_alt can't both be empty string"
-
     aa_ref, aa_alt, shared_prefix, shared_suffix = \
         trim_shared_flanking_strings(
             aa_ref,
@@ -72,13 +69,13 @@ def _choose_annotation(
         return Silent(
             variant=variant,
             transcript=transcript,
-            aa_pos=aa_pos,
+            aa_pos=aa_mutation_start_offset,
             aa_ref=shared_amino_acids)
 
     # index of first amino acid which is different from the reference
-    aa_pos += len(shared_prefix)
+    aa_mutation_start_offset += len(shared_prefix)
 
-    if aa_pos == len(transcript.protein_sequence):
+    if aa_mutation_start_offset == len(transcript.protein_sequence):
         # if non-silent mutation is at the end of the protein then
         # should be a stop-loss
         assert aa_ref == "", \
@@ -92,27 +89,27 @@ def _choose_annotation(
         return Deletion(
             variant,
             transcript,
-            aa_pos=aa_pos,
-            deleted_sequence=aa_ref)
+            aa_mutation_start_offset=aa_mutation_start_offset,
+            aa_ref=aa_ref)
     elif len(aa_ref) == 0:
         return Insertion(
             variant,
             transcript,
-            position_before=aa_pos,
-            inserted_sequence=aa_alt)
+            aa_mutation_start_offset=aa_mutation_start_offset,
+            aa_alt=aa_alt)
     elif len(aa_alt) == len(aa_ref) == 1:
         # simple substitution e.g. p.V600E
         return Substitution(
             variant,
             transcript,
-            aa_pos=aa_pos,
+            aa_mutation_start_offset=aa_mutation_start_offset,
             aa_ref=aa_ref,
             aa_alt=aa_alt)
     else:
         return ComplexSubstitution(
             variant,
             transcript,
-            aa_pos=aa_pos,
+            aa_mutation_start_offset=aa_mutation_start_offset,
             aa_ref=aa_ref,
             aa_alt=aa_alt)
 
@@ -170,14 +167,14 @@ def in_frame_coding_effect(
                 return PrematureStop(
                     variant=variant,
                     transcript=transcript,
-                    aa_pos=first_ref_codon_index,
+                    aa_mutation_start_offset=first_ref_codon_index,
                     aa_ref="",
                     aa_alt=inserted_amino_acids)
             return Insertion(
                 variant=variant,
                 transcript=transcript,
-                position_before=first_ref_codon_index,
-                inserted_sequence=inserted_amino_acids)
+                aa_mutation_start_offset=first_ref_codon_index,
+                aa_alt=inserted_amino_acids)
         else:
             # inserting inside a reference codon
             ref_codon = sequence_from_start_codon[
@@ -210,7 +207,6 @@ def in_frame_coding_effect(
              last_ref_codon_index,
              variant,
              transcript)
-
         # codons in the reference sequence
         ref_codons = sequence_from_start_codon[
             first_ref_codon_index * 3:last_ref_codon_index * 3 + 3]
@@ -233,7 +229,6 @@ def in_frame_coding_effect(
             suffix = ""
 
         mutant_codons = prefix + alt + suffix
-
     assert len(mutant_codons) % 3 == 0, \
         "Expected in-frame mutation but got %s (length = %d)" % (
             mutant_codons, len(mutant_codons))
@@ -270,7 +265,6 @@ def in_frame_coding_effect(
     mutant_protein_subsequence = translate(
         mutant_codons,
         first_codon_is_start=(first_ref_codon_index == 0))
-
     if mutant_codons[-3:] in STOP_CODONS:
         # if the new coding sequence contains a stop codon, then this is a
         # PrematureStop mutation
@@ -296,12 +290,12 @@ def in_frame_coding_effect(
             return PrematureStop(
                 variant=variant,
                 transcript=transcript,
-                aa_pos=mutation_aa_pos,
+                aa_mutation_start_offset=mutation_aa_pos,
                 aa_ref=original_protein_subsequence,
                 aa_alt=mutant_protein_subsequence)
 
     return _choose_annotation(
-        aa_pos=first_ref_codon_index,
+        aa_mutation_start_offset=first_ref_codon_index,
         aa_ref=original_protein_subsequence,
         aa_alt=mutant_protein_subsequence,
         variant=variant,

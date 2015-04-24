@@ -28,11 +28,12 @@ ensembl = EnsemblRelease(75)
 
 def _get_effect(chrom, pos, dna_ref, dna_alt, transcript_id):
     variant = Variant(chrom, pos, dna_ref, dna_alt, ensembl=ensembl)
-    effects = variant.transcript_effect_dict()
-    assert transcript_id in effects, \
+    effects = variant.effects()
+    transcript_dict = effects.top_priority_effect_per_transcript_id()
+    assert transcript_id in transcript_dict, \
         "Expected transcript ID %s for variant %s not found in %s" % (
-            transcript_id, variant, effects)
-    effect = effects[transcript_id]
+            transcript_id, variant, transcript_dict)
+    effect = transcript_dict[transcript_id]
 
     # COSMIC seems to ignore exonic splice sites
     if isinstance(effect, ExonicSpliceSite):
@@ -90,7 +91,8 @@ def _frameshift(
     effect = _get_effect(chrom, pos, dna_ref, dna_alt, transcript_id)
     assert isinstance(effect, FrameShift), \
         "Expected frameshift, got %s" % (effect,)
-    assert effect.aa_ref == aa_ref and effect.aa_pos + 1 == aa_pos, \
+    effect_aa_pos = effect.aa_mutation_start_offset
+    assert effect.aa_ref == aa_ref and effect_aa_pos + 1 == aa_pos, \
         ("Expected frameshift to replace p.%d%s but instead got %s" % (
             aa_pos, aa_ref, effect))
 

@@ -16,15 +16,16 @@ from __future__ import print_function, division, absolute_import
 import logging
 
 from Bio.Seq import reverse_complement
-from pyensembl import Transcript, EnsemblRelease
+from pyensembl import Transcript, EnsemblRelease, ensembl_grch38
 from pyensembl.locus import normalize_chromosome
 from pyensembl.biotypes import is_coding_biotype
 from typechecks import require_instance
 
 from .coding_effect import coding_effect
 from .common import groupby_field, memoize
+from .effect_helpers import changes_exonic_splice_site
+from .effect_collection import EffectCollection
 from .effects import (
-    TranscriptMutationEffect,
     Failure,
     Intergenic,
     Intragenic,
@@ -40,13 +41,9 @@ from .effects import (
     ExonLoss,
     ExonicSpliceSite,
 )
-from .effect_helpers import changes_exonic_splice_site
-from .effect_ordering import top_priority_effect
 from .nucleotides import normalize_nucleotide_string
 from .string_helpers import trim_shared_flanking_strings
 from .transcript_helpers import interval_offset_on_transcript
-
-DEFAULT_ENSEMBL_RELEASE = EnsemblRelease()
 
 class Variant(object):
     def __init__(self,
@@ -54,7 +51,7 @@ class Variant(object):
             start,
             ref,
             alt,
-            ensembl=DEFAULT_ENSEMBL_RELEASE,
+            ensembl=ensembl_grch38,
             info=None,
             allow_extended_nucleotides=False):
         """
@@ -149,9 +146,9 @@ class Variant(object):
         return hash(self.fields())
 
     def __lt__(self, other):
-        '''
+        """
         Variants are ordered by locus.
-        '''
+        """
         require_instance(other, Variant, name="variant")
         if self.contig == other.contig:
             return self.start < other.start
@@ -172,7 +169,7 @@ class Variant(object):
 
     def __eq__(self, other):
         return (
-            isinstance(other, Variant) and
+            other.__class__ is Variant and
             self.fields() == other.fields())
 
     @memoize
@@ -253,7 +250,7 @@ class Variant(object):
     @memoize
     def effects(self, raise_on_error=True):
         """Determine the effects of a variant on any transcripts it overlaps.
-        Returns a VariantEffectCollection object.
+        Returns an EffectCollection object.
 
         Parameters
         ----------
@@ -272,6 +269,7 @@ class Variant(object):
             return [Intergenic(self)]
 
         overlapping_transcripts = self.transcripts()
+
         # group transcripts by their gene ID
         transcripts_grouped_by_gene = groupby_field(
             overlapping_transcripts, 'gene_id')
@@ -301,28 +299,7 @@ class Variant(object):
                                 self,
                                 transcript,
                                 error)
-        return effects
-
-    @memoize
-    def transcript_effect_dict(self, *args, **kwargs):
-        """Dictionary mapping transcript IDs to their associated
-        TranscriptMutationEffect objects.
-
-        Arguments are passed on to Variant.effects(*args, **kwargs).
-        """
-        return {
-            effect.transcript.id: effect
-            for effect in self.effects(*args, **kwargs)
-            if isinstance(effect, TranscriptMutationEffect)
-        }
-
-    @memoize
-    def top_effect(self, *args, **kwargs):
-        """Highest priority MutationEffect of all genes/transcripts overlapped
-        by this variant. If this variant doesn't overlap anything, then this
-        this method will return an Intergenic effect.
-        """
-        return top_priority_effect(self.effects(*args, **kwargs))
+        return EffectCollection(effects)
 
     @memoize
     def effect_on_transcript(self, transcript):
@@ -335,7 +312,7 @@ class Variant(object):
             Transcript we're going to apply mutation to.
         """
 
-        if not isinstance(transcript, Transcript):
+        if transcript.__class__ is not Transcript:
             raise TypeError(
                 "Expected %s : %s to have type Transcript" % (
                     transcript, type(transcript)))
@@ -347,6 +324,10 @@ class Variant(object):
 
         if not transcript.complete:
             return IncompleteTranscript(self, transcript)
+
+        # since we're using inclusive base-1 coordinates,
+        # checking for overlap requires special logic for insertions
+        insertion = len(self.ref) == 0
 
         # determine if any exons are deleted, and if not,
         # what is the closest exon and how far is this variant
@@ -366,7 +347,14 @@ class Variant(object):
             if self.start <= exon.start and self.end >= exon.end:
                 completely_lost_exons.append(exon)
 
-            distance = exon.distance_to_interval(self.start, self.end)
+            if insertion and exon.strand == "+" and self.end == exon.end:
+                # insertions after an exon don't overlap the exon
+                distance = 1
+            elif insertion and exon.strand == "-" and self.start == exon.start:
+                distance = 1
+            else:
+                distance = exon.distance_to_interval(self.start, self.end)
+
             if distance == 0:
                 overlapping_exon_numbers_and_exons.append((i + 1, exon))
                 # start is contained in current exon
@@ -430,11 +418,13 @@ class Variant(object):
 
         before_forward_exon = (
             nearest_exon.strand == "+" and
-            self.start < nearest_exon.start)
+            (self.start < nearest_exon.start or
+                (self.ref == "" and self.start == nearest_exon.start)))
 
         before_backward_exon = (
             nearest_exon.strand == "-" and
-            self.end > nearest_exon.end)
+            (self.end > nearest_exon.end or
+                (self.ref == "" and self.end == nearest_exon.end)))
 
         before_exon = before_forward_exon or before_backward_exon
 
@@ -479,7 +469,7 @@ class Variant(object):
         genome_ref = self.ref
         genome_alt = self.alt
 
-        # clip mutation to only affect the current exon\
+        # clip mutation to only affect the current exon
         if self.start < exon.start:
             # if mutation starts before current exon then only look
             # at nucleotides which overlap the exon

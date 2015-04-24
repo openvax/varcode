@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from .effects import *
+from .effect_collection import EffectCollection
 from .effect_ordering import effect_priority, top_priority_effect
 from .maf import load_maf, load_maf_dataframe
 from .variant import Variant

@@ -4,11 +4,9 @@ to crash or return an incorrect annotation should be added to this
 test module.
 """
 
-from pyensembl import EnsemblRelease
+from pyensembl import ensembl_grch37, ensembl_grch38
 from varcode import Variant
 
-ensembl_grch37 = EnsemblRelease(75)
-ensembl_grch38 = EnsemblRelease(79)
 
 # variants which have previously resulted in raised exceptions
 # during effect annotation
@@ -97,11 +95,56 @@ should_not_crash_variants = [
         contig=11,
         start=63676705,
         ref="T", alt="",
-        ensembl=ensembl_grch37)
+        ensembl=ensembl_grch37),
+    # AssertionError: aa_ref and aa_alt can't both be empty string
+    Variant(
+        contig=1,
+        start=56962223,
+        ref='C',
+        alt='T',
+        ensembl=ensembl_grch37),
+    # AssertionError: aa_ref and aa_alt can't both be empty string
+    Variant(
+        contig=1,
+        start=56962223,
+        ref="C",
+        alt="T",
+        ensembl=ensembl_grch37),
+    # AssertionError: aa_ref and aa_alt can't both be empty string
+    Variant(
+        contig=1,
+        start=151314663,
+        ref="C",
+        alt="T",
+        ensembl=ensembl_grch37),
+    # AssertionError: aa_ref and aa_alt can't both be empty string
+    Variant(
+        contig=1,
+        start=153409535,
+        ref="C",
+        alt="T",
+        ensembl=ensembl_grch37),
+    # AssertionError: aa_ref and aa_alt can't both be empty string
+    Variant(
+        contig=10,
+        start=105791994,
+        ref="C",
+        alt="T",
+        ensembl=ensembl_grch37),
+    # Expected frameshift_insertion to be before stop codon
+    # for Variant(contig=1, start=109925189, ref=., alt=A, genome=GRCh38)
+    # on transcript_id=ENST00000329608
+    # len(protein) = 554, aa_pos = 554
+    Variant(
+        contig=1,
+        start=109925189,
+        ref="",
+        alt="A",
+        ensembl=ensembl_grch38),
 ]
 
 def try_effect_annotation(variant):
-    effect = variant.top_effect()
+    effect = variant.effects().top_priority_effect()
     assert effect is not None
 
 def test_crashing_variants():
