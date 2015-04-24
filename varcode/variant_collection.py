@@ -105,11 +105,11 @@ class VariantCollection(Collection):
             If given, then only return effects for transcript IDs present
             in this set.
         """
-        effect_list = []
-        for variant in self:
-            for effect in variant.effects(raise_on_error=raise_on_error):
-                effect_list.append(effect)
-        return EffectCollection(effect_list)
+        return EffectCollection([
+            effect
+            for variant in self
+            for effect in variant.effects(raise_on_error=raise_on_error)
+        ])
 
     @memoize
     def gene_counts(self):
