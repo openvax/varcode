@@ -38,7 +38,7 @@ def test_maf():
 
 def check_same_aa_change(variant, expected_aa_change):
     effect = variant.effects().top_priority_effect()
-    change = effect.short_description()
+    change = effect.short_description
     eq_(
         change,
         expected_aa_change,
