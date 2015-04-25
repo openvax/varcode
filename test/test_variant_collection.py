@@ -25,9 +25,9 @@ def test_reference_names():
     variants = load_maf(data_path("ov.wustle.subset5.maf"))
     eq_(variants.reference_names(), {'GRCh37'})
 
-def test_summary_string():
+def test_to_string():
     variants = load_maf(data_path("ov.wustle.subset5.maf"))
-    summary_string = variants.summary_string()
+    summary_string = variants.to_string()
     # expect one of the gene names from the MAF to be in the summary string
     assert "UBE4B" in summary_string, \
         "Expected gene name UBE4B in summary_string():\n%s" % summary_string
