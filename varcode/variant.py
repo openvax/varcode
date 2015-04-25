@@ -16,6 +16,7 @@ from __future__ import print_function, division, absolute_import
 import logging
 
 from Bio.Seq import reverse_complement
+from memoized_property import memoized_property
 from pyensembl import Transcript, EnsemblRelease, ensembl_grch38
 from pyensembl.locus import normalize_chromosome
 from pyensembl.biotypes import is_coding_biotype
@@ -172,8 +173,12 @@ class Variant(object):
             other.__class__ is Variant and
             self.fields() == other.fields())
 
-    @memoize
-    def short_description(self):
+    @memoized_property
+    def compact_string(self):
+        """
+        HGVS nomenclature for genomic variants
+        More info: http://www.hgvs.org/mutnomen/
+        """
         if self.ref == self.alt:
             # no change
             return "chr%s g.%d%s" % (
