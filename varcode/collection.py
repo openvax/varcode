@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import print_function, division, absolute_import
 from collections import OrderedDict
 
 class Collection(object):
@@ -62,14 +63,20 @@ class Collection(object):
             len(self) == len(other) and
             all(x == y for (x, y) in zip(self._elements, other._elements)))
 
-    def _clone_metadata(self, new_elements):
+    def clone_with_new_elements(self, new_elements):
         """
         Create copy of VariantCollection with same metadata but possibly
         different Variant entries.
         """
         return self.__class__(
-            elements=new_elements,
+            new_elements,
             filename=self.filename)
+
+    def filter(self, filter_fn):
+        return self.clone_with_new_elements([
+            element
+            for element in self.element
+            if filter_fn(element)])
 
     def groupby(self, key_fn):
         """
@@ -87,10 +94,11 @@ class Collection(object):
             else:
                 result_dict[key] = [x]
 
-        my_class = self.__class__
-
         # convert result lists into same Collection type as this one
         return OrderedDict(
-            (k, my_class(elements))
+            (k, self.clone_with_new_elements(elements))
             for (k, elements)
             in result_dict.items())
+
+    def show(self):
+        print(self.to_string())

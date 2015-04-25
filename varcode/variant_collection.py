@@ -41,7 +41,7 @@ class VariantCollection(Collection):
             distinct=True)
 
     @memoize
-    def summary_string(self):
+    def to_string(self):
         """
         Returns a string indicating each variant in the collection.
         """

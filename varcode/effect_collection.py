@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import print_function, division, absolute_import
 from collections import Counter, OrderedDict
 
 from .collection import Collection
@@ -54,17 +55,88 @@ class EffectCollection(Collection):
     def groupby_transcript_id(self):
         return self.groupby(key_fn=lambda effect: effect.transcript_id)
 
-    def summary_string(self):
+    def _filter_expression(
+            self,
+            key_fn,
+            expression_dict,
+            min_expression_value,
+            default_value=0.0):
+        """
+        The code for filtering by gene or transcript expression was pretty
+        much identical aside from which identifier you pull off an effect.
+        So, factored out the common operations for filtering an effect
+        collection into this helper method.
+        """
+        def filter_fn(effect):
+            key = key_fn(effect)
+            if key is None:
+                return False
+            expression_level = expression_dict.get(key, default_value)
+            return expression_level > min_expression_value
+        return self.filter(filter_fn)
+
+    def filter_transcript_expression(
+            self,
+            transcript_expression_dict,
+            min_expression_value=0.0):
+        """
+        Filters effects to those which have an associated transcript whose
+        expression value in the transcript_expression_dict argument is greater
+        than min_expression_value.
+
+        Parameters
+        ----------
+        transcript_expression_dict : dict
+            Dictionary mapping Ensembl transcript IDs to expression estimates
+            (either FPKM or TPM)
+
+        min_expression_value : float
+            Threshold above which we'll keep an effect in the result collection
+        """
+        return self._filter_expression(
+            key_fn=lambda effect: effect.transcript_id,
+            expression_dict=transcript_expression_dict,
+            min_expression_value=min_expression_value,
+            default_value=0.0)
+
+    def filter_gene_expression(
+            self,
+            gene_expression_dict,
+            min_expression_value=0.0):
+        """
+        Filters effects to those which have an associated gene whose
+        expression value in the gene_expression_dict argument is greater
+        than min_expression_value.
+
+        Parameters
+        ----------
+        gene_expression_dict : dict
+            Dictionary mapping Ensembl gene IDs to expression estimates
+            (either FPKM or TPM)
+
+        min_expression_value : float
+            Threshold above which we'll keep an effect in the result collection
+        """
+        return self._filter_expression(
+            key_fn=lambda effect: effect.gene_id,
+            expression_dict=gene_expression_dict,
+            min_expression_value=min_expression_value,
+            default_value=0.0)
+
+    def to_string(self):
         """
         Create a long string with all transcript effects for each mutation,
         grouped by gene (if a mutation affects multiple genes).
         """
         lines = []
-        for variant, variant_effects in self.groupby_variant():
+        # TODO: annoying to always write `groupby_result.items()`,
+        # consider makings a GroupBy class which iterates over pairs
+        # and also common helper methods like `map_values`.
+        for variant, variant_effects in self.groupby_variant().items():
             lines.append("\n%s" % variant)
 
             gene_effects_groups = variant_effects.groupby_gene_id()
-            for (gene_id, gene_effects) in gene_effects_groups:
+            for (gene_id, gene_effects) in gene_effects_groups.items():
                 if gene_id:
                     gene_name = variant.ensembl.gene_name_of_gene_id(gene_id)
                     lines.append("  Gene: %s (%s)" % (gene_name, gene_id))
@@ -79,12 +151,16 @@ class EffectCollection(Collection):
             # if we only printed one effect for this gene then
             # it's redundant to print it again as the highest priority effect
             if len(variant_effects) > 1:
-                # since summary effect also calls into Variant.effects,
-                # give it the same arguments
-                # (this is the downside of not having a VariantEffectCollection)
-                best = effect.top_effect()
+                best = variant_effects.top_priority_effect()
                 lines.append("  Highest Priority Effect: %s" % best)
         return "\n".join(lines)
+
+    def show(self):
+        """
+        Print effects in this collection, grouped by mutation and
+        sub-grouped by gene
+        """
+        print(self.summary_string())
 
     @memoize
     def top_priority_effect(self):
