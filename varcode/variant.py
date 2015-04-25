@@ -174,7 +174,7 @@ class Variant(object):
             self.fields() == other.fields())
 
     @memoized_property
-    def compact_string(self):
+    def short_description(self):
         """
         HGVS nomenclature for genomic variants
         More info: http://www.hgvs.org/mutnomen/
