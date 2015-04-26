@@ -28,11 +28,31 @@ class EffectCollection(Collection):
     Collection of MutationEffect objects and helpers for grouping or filtering
     them.
     """
-    def __init__(self, effects, filename=None):
+
+    def __init__(
+            self,
+            effects,
+            path=None,
+            distinct=False):
+        """Construct an EffectCollection from a sequence of MutationEffects.
+
+        Parameters
+        ----------
+        effects : iterable
+            MutationEffect objects
+
+        path : str, optional
+            File path from which we loaded variants which gave rise to these
+            effects.
+
+        distinct : bool
+            Don't keep repeated effects
+        """
         Collection.__init__(
             self,
             elements=effects,
-            filename=filename)
+            path=path,
+            distinct=distinct)
 
     def groupby_variant(self):
         return self.groupby(key_fn=lambda effect: effect.variant)
@@ -123,7 +143,7 @@ class EffectCollection(Collection):
             min_expression_value=min_expression_value,
             default_value=0.0)
 
-    def to_string(self):
+    def detailed_string(self):
         """
         Create a long string with all transcript effects for each mutation,
         grouped by gene (if a mutation affects multiple genes).
@@ -154,13 +174,6 @@ class EffectCollection(Collection):
                 best = variant_effects.top_priority_effect()
                 lines.append("  Highest Priority Effect: %s" % best)
         return "\n".join(lines)
-
-    def show(self):
-        """
-        Print effects in this collection, grouped by mutation and
-        sub-grouped by gene
-        """
-        print(self.summary_string())
 
     @memoize
     def top_priority_effect(self):

@@ -125,7 +125,7 @@ class TranscriptMutationEffect(Intragenic):
     def __str__(self):
         return "%s(variant=%s, transcript=%s)" % (
             self.__class__.__name__,
-            self.variant.compact_string,
+            self.variant.short_description,
             self.transcript.name)
 
 
@@ -222,7 +222,7 @@ class ExonLoss(Exonic):
         return "ExonLoss(%s, %s, %s)" % (
             self.variant,
             self.transcript,
-            "+".join(self.exons))
+            "+".join(str(exon) for exon in self.exons))
 
     short_description = "exon-loss"
 
@@ -258,6 +258,10 @@ class CodingMutation(Exonic):
     Base class for all mutations which result in a modified coding sequence.
     """
     def __str__(self):
+        str(self.__class__.__name__)
+        str(self.variant.short_description)
+        str(self.transcript.name)
+        str(self.short_description)
         return "%s(variant=%s, transcript=%s, effect_description=%s)" % (
             self.__class__.__name__,
             self.variant.short_description,
@@ -531,6 +535,7 @@ class PrematureStop(BaseSubstitution):
                 transcript,
                 len(transcript.protein_sequence))
 
+    @memoized_property
     def short_description(self):
         return "p.%s%d%s*" % (
             self.aa_ref,

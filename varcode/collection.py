@@ -13,43 +13,72 @@
 # limitations under the License.
 
 from __future__ import print_function, division, absolute_import
-from collections import OrderedDict
+import os.path
 
 class Collection(object):
     """
     Methods shared by EffectCollection and VariantCollection.
     """
 
-    def __init__(self, elements, filename=None, distinct=False):
+    def __init__(
+            self,
+            elements,
+            path=None,
+            distinct=False):
+        self.distinct = distinct
         if distinct:
             elements = set(elements)
         self._elements = list(sorted(elements))
-        self.filename = filename
+        self.path = path
+        if path:
+            # get the filename without any directory prefix
+            self.filename = os.path.split(path)[1]
+        else:
+            self.filename = None
 
-    def __str__(self):
+    def short_string(self):
+        """
+        Compact string representation which doesn't print any of the
+        collection elements.
+        """
         file_str = ""
         if self.filename:
             file_str = " from '%s'" % self.filename
-        count = len(self)
-        contents = ""
-        if 1 <= count <= 2:
-            contents = ": %s" % ", ".join("%s" % x for x in self)
-        elif count > 2:
-            contents = ": %s, ..., %s" % (self[0], self[-1])
-        return "<%s%s with %d elements%s>" % (
+        return "<%s%s with %d elements>" % (
             self.__class__.__name__,
             file_str,
-            count,
-            contents)
+            len(self))
+
+    def to_string(self, limit=None):
+        """
+        Create a string representation of this collection, showing up to
+        `limit` items.
+        """
+        header = self.short_string()
+        if len(self) == 0:
+            return header
+        contents = ""
+        element_lines = [
+            "  -- %s" % (element,)
+            for element in self._elements[:limit]
+        ]
+        contents = "\n".join(element_lines)
+
+        if limit is not None and len(self._elements) > limit:
+            contents += "\n  ... and %d more" % (len(self) - limit)
+        return "%s\n%s" % (header, contents)
+
+    def __str__(self):
+        return self.to_string(limit=50)
+
+    def __repr__(self):
+        return str(self)
 
     def __len__(self):
         return len(self._elements)
 
     def __iter__(self):
         return iter(self._elements)
-
-    def __repr__(self):
-        return str(self)
 
     def __hash__(self):
         return hash(len(self))
@@ -65,17 +94,18 @@ class Collection(object):
 
     def clone_with_new_elements(self, new_elements):
         """
-        Create copy of VariantCollection with same metadata but possibly
-        different Variant entries.
+        Create another collection of the same class and  with same metadata
+        but possibly different Variant or Effect entries.
         """
         return self.__class__(
             new_elements,
-            filename=self.filename)
+            path=self.path,
+            distinct=self.distinct)
 
     def filter(self, filter_fn):
         return self.clone_with_new_elements([
             element
-            for element in self.element
+            for element in self._elements
             if filter_fn(element)])
 
     def groupby(self, key_fn):
@@ -85,7 +115,7 @@ class Collection(object):
         key_fn : function
             Takes an effect or variant, returns a grouping key.
         """
-        result_dict = OrderedDict()
+        result_dict = {}
 
         for x in self:
             key = key_fn(x)
@@ -95,10 +125,29 @@ class Collection(object):
                 result_dict[key] = [x]
 
         # convert result lists into same Collection type as this one
-        return OrderedDict(
-            (k, self.clone_with_new_elements(elements))
+        return {
+            k: self.clone_with_new_elements(elements)
             for (k, elements)
-            in result_dict.items())
+            in result_dict.items()
+        }
 
-    def show(self):
-        print(self.to_string())
+    def multi_groupby(self, key_fn):
+        """
+        Like a groupby but expect the key_fn to return multiple keys for
+        each element.
+        """
+        result_dict = {}
+
+        for x in self:
+            for key in key_fn(x):
+                if key in result_dict:
+                    result_dict[key].append(x)
+                else:
+                    result_dict[key] = [x]
+
+        # convert result lists into same Collection type as this one
+        return {
+            k: self.clone_with_new_elements(elements)
+            for (k, elements)
+            in result_dict.items()
+        }

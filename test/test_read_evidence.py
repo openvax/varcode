@@ -18,7 +18,7 @@ from nose.tools import eq_, assert_raises
 import pysam
 from varcode.read_evidence import PileupCollection
 from varcode import Locus
-from . import data_path
+from .data import data_path
 
 # This will be moved into mainline varcode soon. For now, however,
 # these tests use their own simple Variant class.

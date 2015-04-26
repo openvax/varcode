@@ -42,4 +42,3 @@ def test_trim_shared_string_endings():
         "ABG", "AG"), ("B", "", "A", "G"))
     eq_(trim_shared_flanking_strings(
         "AG", "ABG"), ("", "B", "A", "G"))
-

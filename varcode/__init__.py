@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from .collection import Collection
 from .effects import *
 from .effect_collection import EffectCollection
 from .effect_ordering import effect_priority, top_priority_effect
