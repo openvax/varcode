@@ -36,9 +36,10 @@ class MutationEffect(object):
         """
         return self.variant < other.variant
 
+    @property
     def short_description(self):
         raise ValueError(
-            "Method short_description() not implemented for %s" % (
+            "Property short_description not implemented for %s" % (
                 self.__class__.__name__,))
 
     transcript = None
@@ -124,7 +125,7 @@ class TranscriptMutationEffect(Intragenic):
     def __str__(self):
         return "%s(variant=%s, transcript=%s)" % (
             self.__class__.__name__,
-            self.variant.short_description(),
+            self.variant.short_description,
             self.transcript.name)
 
 
@@ -137,31 +138,27 @@ class NoncodingTranscript(TranscriptMutationEffect):
     """
     Any mutation to a transcript with a non-coding biotype
     """
-    def short_description(self):
-        return "non-coding-transcript"
+    short_description = "non-coding-transcript"
 
 class IncompleteTranscript(TranscriptMutationEffect):
     """
     Any mutation to an incompletely annotated transcript with a coding biotype
     """
-    def short_description(self):
-        return "incomplete"
+    short_description = "incomplete"
 
 class FivePrimeUTR(TranscriptMutationEffect):
     """
     Any mutation to the 5' untranslated region (before the start codon) of
     coding transcript.
     """
-    def short_description(self):
-        return "5' UTR"
+    short_description = "5' UTR"
 
 class ThreePrimeUTR(TranscriptMutationEffect):
     """
     Any mutation to the 3' untranslated region (after the stop codon) of
     coding transcript.
     """
-    def short_description(self):
-        return "3' UTR"
+    short_description = "3' UTR"
 
 
 class Intronic(TranscriptMutationEffect):
@@ -173,8 +170,7 @@ class Intronic(TranscriptMutationEffect):
         self.nearest_exon = nearest_exon
         self.distance_to_exon = distance_to_exon
 
-    def short_description(self):
-        return "intronic"
+    short_description = "intronic"
 
 class SpliceSite(object):
     """
@@ -191,8 +187,7 @@ class IntronicSpliceSite(Intronic, SpliceSite):
     def __init__(self, *args, **kwargs):
         Intronic.__init__(self, *args, **kwargs)
 
-    def short_description(self):
-        return "intronic-splice-site"
+    short_description = "intronic-splice-site"
 
 class SpliceDonor(IntronicSpliceSite):
     """
@@ -201,15 +196,13 @@ class SpliceDonor(IntronicSpliceSite):
     def __init__(self, *args, **kwargs):
         Intronic.__init__(self, *args, **kwargs)
 
-    def short_description(self):
-        return "splice-donor"
+    short_description = "splice-donor"
 
 class SpliceAcceptor(IntronicSpliceSite):
     """
     Mutation in the last two intron residues.
     """
-    def short_description(self):
-        return "splice-acceptor"
+    short_description = "splice-acceptor"
 
 class Exonic(TranscriptMutationEffect):
     """
@@ -229,10 +222,9 @@ class ExonLoss(Exonic):
         return "ExonLoss(%s, %s, %s)" % (
             self.variant,
             self.transcript,
-            "+".join(self.exons))
+            "+".join(str(exon) for exon in self.exons))
 
-    def short_description(self):
-        return "exon-loss"
+    short_description = "exon-loss"
 
 class ExonicSpliceSite(Exonic, SpliceSite):
     """
@@ -249,8 +241,7 @@ class ExonicSpliceSite(Exonic, SpliceSite):
             self.exon,
             self.alternate_effect)
 
-    def short_description(self):
-        return "exonic-splice-site"
+    short_description = "exonic-splice-site"
 
     @memoized_property
     def mutant_protein_sequence(self):
@@ -267,11 +258,15 @@ class CodingMutation(Exonic):
     Base class for all mutations which result in a modified coding sequence.
     """
     def __str__(self):
+        str(self.__class__.__name__)
+        str(self.variant.short_description)
+        str(self.transcript.name)
+        str(self.short_description)
         return "%s(variant=%s, transcript=%s, effect_description=%s)" % (
             self.__class__.__name__,
-            self.variant.short_description(),
+            self.variant.short_description,
             self.transcript.name,
-            self.short_description())
+            self.short_description)
 
     modifies_coding_sequence = True
 
@@ -306,8 +301,7 @@ class Silent(CodingMutation):
         self.aa_pos = aa_pos
         self.aa_ref = aa_ref
 
-    def short_description(self):
-        return "silent"
+    short_description = "silent"
 
 class AlternateStartCodon(Silent):
     """Change to the start codon (e.g. ATG>CTG) but without changing the
@@ -329,6 +323,7 @@ class AlternateStartCodon(Silent):
         self.ref_codon = ref_codon
         self.alt_codon = alt_codon
 
+    @memoized_property
     def short_description(self):
         return "alternate-start-codon (%s>%s)" % (
             self.ref_codon, self.alt_codon)
@@ -392,6 +387,7 @@ class BaseSubstitution(NonsilentCodingMutation):
             aa_ref=aa_ref)
         self.aa_alt = aa_alt
 
+    @memoized_property
     def short_description(self):
         if len(self.aa_ref) == 0:
             return "p.%dins%s" % (
@@ -539,6 +535,7 @@ class PrematureStop(BaseSubstitution):
                 transcript,
                 len(transcript.protein_sequence))
 
+    @memoized_property
     def short_description(self):
         return "p.%s%d%s*" % (
             self.aa_ref,
@@ -567,6 +564,7 @@ class StopLoss(BaseSubstitution):
             aa_ref="*",
             aa_alt=extended_protein_sequence)
 
+    @memoized_property
     def short_description(self):
         return "p.*%d%s (stop-loss)" % (
             self.aa_mutation_start_offset + 1,
@@ -595,6 +593,7 @@ class StartLoss(BaseSubstitution):
     def mutant_protein_sequence(self):
         return None
 
+    @memoized_property
     def short_description(self):
         return "p.%d? (start-loss)" % (self.aa_mutation_start_offset,)
 
@@ -628,6 +627,7 @@ class FrameShift(NonsilentCodingMutation):
         prefix = original_aa_sequence[:self.mutated_protein_start_offset]
         return prefix + self.shifted_sequence
 
+    @memoized_property
     def short_description(self):
         return "p.%s%dfs" % (
             self.aa_ref,
@@ -653,6 +653,7 @@ class FrameShiftTruncation(PrematureStop, FrameShift):
             aa_mutation_end_offset=stop_codon_offset + 1,
             aa_ref=aa_ref)
 
+    @memoized_property
     def short_description(self):
         return "p.%s%dfs*" % (
             self.aa_ref,

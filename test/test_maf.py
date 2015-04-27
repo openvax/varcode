@@ -15,22 +15,20 @@ from __future__ import absolute_import
 
 import pandas as pd
 from nose.tools import eq_
-from pyensembl import EnsemblRelease
-from varcode import load_maf, Variant
+from pyensembl import ensembl_grch37 as ensembl
+from varcode import Variant
 
-from . import data_path
+from .data import tcga_ov_variants, ov_wustle_variants
 
 def test_maf():
-    ensembl = EnsemblRelease(75)
-    variant_collection_from_maf = load_maf(data_path("tcga_ov.head.maf"))
-    expected_variants = [
+    expected_tcga_ov_variants = [
         Variant(1, 1650797, "A", "G", ensembl),
         Variant(1, 23836447, "C", "A", ensembl),
         Variant(1, 231401797, "A", "C", ensembl),
         Variant(11, 124617502, "C", "G", ensembl),
     ]
-    eq_(len(variant_collection_from_maf), len(expected_variants))
-    for v_expect, v_maf in zip(expected_variants, variant_collection_from_maf):
+    eq_(len(tcga_ov_variants), len(expected_tcga_ov_variants))
+    for v_expect, v_maf in zip(expected_tcga_ov_variants, tcga_ov_variants):
         eq_(v_expect, v_maf)
         gene_name = v_maf.info['Hugo_Symbol']
         assert any(gene.name == gene_name for gene in v_maf.genes()), \
@@ -38,7 +36,7 @@ def test_maf():
 
 def check_same_aa_change(variant, expected_aa_change):
     effect = variant.effects().top_priority_effect()
-    change = effect.short_description()
+    change = effect.short_description
     eq_(
         change,
         expected_aa_change,
@@ -51,12 +49,11 @@ def test_maf_aa_changes():
     #
     # The data file used also contains spaces, which is good to test the parser
     # on.
-    variants = load_maf(data_path("ov.wustle.subset5.maf"))
-    assert len(variants) == 5
+    assert len(ov_wustle_variants) == 5
 
     expected_changes = {}
     maf_fields = pd.read_csv(
-        data_path("ov.wustle.subset5.maf"),
+        ov_wustle_variants.path,
         sep="\t",
         comment="#")
     for _, row in maf_fields.iterrows():
@@ -69,7 +66,7 @@ def test_maf_aa_changes():
         else:
             expected_changes[key] = change
 
-    for variant in variants:
+    for variant in ov_wustle_variants:
         key = (variant.contig, variant.start)
         expected = expected_changes[key]
         yield (check_same_aa_change, variant, expected)

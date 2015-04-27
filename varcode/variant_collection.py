@@ -20,50 +20,26 @@ from .effect_collection import EffectCollection
 from .common import memoize
 
 class VariantCollection(Collection):
-    def __init__(self, variants, filename=None):
-        """
-        Construct a VariantCollection from a list of Variant records and
-        the name of a reference genome.
+    def __init__(self, variants, path=None, distinct=True):
+        """Construct a VariantCollection from a list of Variant records.
 
         Parameters
         ----------
         variants : iterable
             Variant objects contained in this VariantCollection
 
-        filename : str, optional
-            File from which we loaded variants, though the current
+        path : str, optional
+            File path from which we loaded variants, though the current
             VariantCollection may only contain a subset of them.
+
+        distinct : bool
+            Don't keep repeated variants
         """
         Collection.__init__(
             self,
             elements=variants,
-            filename=filename,
-            distinct=True)
-
-    @memoize
-    def summary_string(self):
-        """
-        Returns a string indicating each variant in the collection.
-        """
-        fields = [
-            ("n_variants", len(self)),
-            ("reference", ", ".join(self.reference_names()))
-        ]
-
-        if self.filename:
-            fields.append(("filename", self.filename))
-
-        s = "VariantCollection(%s)" % (
-            ", ".join(
-                "%s=%s" % (k, v) for (k, v) in fields))
-        for variant in self:
-            gene_names = variant.gene_names()
-            if len(gene_names):
-                gene_names_string = " : %s" % ", ".join(gene_names)
-            else:
-                gene_names_string = ""
-            s += "\n\t%s%s" % (variant, gene_names_string)
-        return s
+            path=path,
+            distinct=distinct)
 
     @memoize
     def dataframe(self):
@@ -117,3 +93,23 @@ class VariantCollection(Collection):
         collection.
         """
         return set(variant.reference_name for variant in self)
+
+    @memoize
+    def multi_groupby_gene_name(self):
+        """
+        Group variants by the gene names they overlap, which may put each
+        variant in multiple groups.
+        """
+        return self.multi_groupby(lambda x: x.gene_names())
+
+    @memoize
+    def detailed_string(self):
+        lines = []
+        gene_groups = self.multi_groupby_gene_name()
+        for gene_name in sorted(gene_groups.keys()):
+            lines.append("  %s:" % gene_name)
+            for variant in gene_groups[gene_name]:
+                lines.append("  -- %s" % variant)
+        header = self.short_string()
+        joined_lines = "\n".join(lines)
+        return "%s\n%s" % (header, joined_lines)

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from pyensembl import EnsemblRelease
+from pyensembl import ensembl_grch37 as ensembl
 from varcode import (
     Variant,
     # transcript effects
@@ -23,8 +23,6 @@ from varcode import (
     Silent,
     ExonicSpliceSite,
 )
-
-ensembl = EnsemblRelease(75)
 
 def _get_effect(chrom, pos, dna_ref, dna_alt, transcript_id):
     variant = Variant(chrom, pos, dna_ref, dna_alt, ensembl=ensembl)

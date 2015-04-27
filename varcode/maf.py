@@ -14,6 +14,11 @@
 
 from __future__ import print_function, division, absolute_import
 
+
+import pandas
+from pyensembl import EnsemblRelease
+from typechecks import require_string
+
 from .nucleotides import normalize_nucleotide_string
 from .reference_name import (
     infer_reference_name,
@@ -21,9 +26,6 @@ from .reference_name import (
 )
 from .variant import Variant
 from .variant_collection import VariantCollection
-
-import pandas
-from pyensembl import EnsemblRelease
 
 TCGA_PATIENT_ID_LENGTH = 12
 
@@ -50,20 +52,16 @@ MAF_COLUMN_NAMES = [
 ]
 
 
-def load_maf_dataframe(filename, nrows=None, verbose=False):
+def load_maf_dataframe(path, nrows=None, verbose=False):
     """
     Load the guaranteed columns of a TCGA MAF file into a DataFrame
     """
-
-    if not isinstance(filename, str):
-        raise ValueError(
-            "Expected filename to be str, got %s : %s" % (
-                filename, type(filename)))
+    require_string(path, "Path to MAF")
 
     n_basic_columns = len(MAF_COLUMN_NAMES)
 
     df = pandas.read_csv(
-        filename,
+        path,
         comment="#",
         sep="\t",
         low_memory=False,
@@ -73,7 +71,7 @@ def load_maf_dataframe(filename, nrows=None, verbose=False):
     if len(df.columns) < n_basic_columns:
         raise ValueError(
             "Too few columns in MAF file %s, expected %d but got  %d : %s" % (
-                filename, n_basic_columns, len(df.columns), df.columns))
+                path, n_basic_columns, len(df.columns), df.columns))
 
     # check each pair of expected/actual column names to make sure they match
     for expected, actual in zip(MAF_COLUMN_NAMES, df.columns):
@@ -91,14 +89,14 @@ def load_maf_dataframe(filename, nrows=None, verbose=False):
                     expected, actual))
     return df
 
-def load_maf(filename):
+def load_maf(path):
     """
     Load reference name and Variant objects from MAF filename.
     """
-    maf_df = load_maf_dataframe(filename)
+    maf_df = load_maf_dataframe(path)
 
     if len(maf_df) == 0:
-        raise ValueError("Empty MAF file %s" % filename)
+        raise ValueError("Empty MAF file %s" % path)
 
     ensembl_objects = {}
     variants = []
@@ -188,4 +186,4 @@ def load_maf(filename):
 
     return VariantCollection(
         variants=variants,
-        filename=filename)
+        path=path)

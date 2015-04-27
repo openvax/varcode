@@ -17,32 +17,34 @@ Test properties of VariantCollection objects other than effect annotations
 """
 from collections import Counter
 from nose.tools import eq_
-from varcode import load_maf
 
-from . import data_path
+from .data import ov_wustle_variants, tcga_ov_variants
 
 def test_reference_names():
-    variants = load_maf(data_path("ov.wustle.subset5.maf"))
-    eq_(variants.reference_names(), {'GRCh37'})
+    eq_(ov_wustle_variants.reference_names(), {"GRCh37"})
 
-def test_summary_string():
-    variants = load_maf(data_path("ov.wustle.subset5.maf"))
-    summary_string = variants.summary_string()
+def test_to_string():
+    string_repr = str(ov_wustle_variants)
+    assert "start=10238758, ref=G, alt=C" in string_repr, \
+        "Expected variant g.10238758 G>C in __str__:\n%s" % (
+            string_repr,)
+
+def test_detailed_string():
+    detailed_string = ov_wustle_variants.detailed_string()
     # expect one of the gene names from the MAF to be in the summary string
-    assert "UBE4B" in summary_string, \
-        "Expected gene name UBE4B in summary_string():\n%s" % summary_string
-    assert "start=10238758, ref=G, alt=C" in summary_string, \
-        "Expected variant g.10238758 G>C in summary_string():\n%s" % (
-            summary_string,)
+    assert "UBE4B" in detailed_string, \
+        "Expected gene name UBE4B in detailed_string():\n%s" % detailed_string
+    assert "start=10238758, ref=G, alt=C" in detailed_string, \
+        "Expected variant g.10238758 G>C in detailed_string():\n%s" % (
+            detailed_string,)
 
 def test_gene_counts():
-    variants = load_maf(data_path("tcga_ov.head.maf"))
     expected_coding_gene_counts = Counter()
     expected_coding_gene_counts["CDK11A"] = 1
     expected_coding_gene_counts["GNPAT"] = 1
     expected_coding_gene_counts["E2F2"] = 1
     expected_coding_gene_counts["VSIG2"] = 1
-    all_gene_counts = variants.gene_counts()
+    all_gene_counts = tcga_ov_variants.gene_counts()
     assert len(all_gene_counts) > len(expected_coding_gene_counts), \
         ("Gene counts for all genes must contain more elements than"
          " gene counts for only coding genes.")

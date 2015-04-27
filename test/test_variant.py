@@ -34,7 +34,7 @@ def test_insertion_shared_prefix():
     # inserting after, which in this case is the 11th position
     eq_(variant.start, 11)
     eq_(variant.end, 11)
-    eq_(variant.short_description(), "chr1 g.11_12insT")
+    eq_(variant.short_description, "chr1 g.11_12insT")
 
 def test_insertion_no_prefix():
     variant = Variant(1, start=11, ref="", alt="T")
@@ -46,7 +46,7 @@ def test_insertion_no_prefix():
     eq_(variant.alt, "T")
     eq_(variant.start, 11)
     eq_(variant.end, 11)
-    eq_(variant.short_description(), "chr1 g.11_12insT")
+    eq_(variant.short_description, "chr1 g.11_12insT")
 
 def test_substitution_no_prefix():
     variant = Variant(1, start=11, ref="A", alt="T")
@@ -58,7 +58,7 @@ def test_substitution_no_prefix():
     eq_(variant.alt, "T")
     eq_(variant.start, 11)
     eq_(variant.end, 11)
-    eq_(variant.short_description(), "chr1 g.11A>T")
+    eq_(variant.short_description, "chr1 g.11A>T")
 
 
 def test_substitution_shared_prefix():
@@ -71,7 +71,7 @@ def test_substitution_shared_prefix():
     eq_(variant.alt, "T")
     eq_(variant.start, 11)
     eq_(variant.end, 11)
-    eq_(variant.short_description(), "chr1 g.11A>T")
+    eq_(variant.short_description, "chr1 g.11A>T")
 
 
 def test_deletion_shared_suffix():
@@ -84,7 +84,7 @@ def test_deletion_shared_suffix():
     eq_(variant.alt, "")
     eq_(variant.start, 10)
     eq_(variant.end, 11)
-    eq_(variant.short_description(), "chr1 g.10_11delAA")
+    eq_(variant.short_description, "chr1 g.10_11delAA")
 
 
 def test_deletion_no_suffix():
@@ -97,4 +97,4 @@ def test_deletion_no_suffix():
     eq_(variant.alt, "")
     eq_(variant.start, 10)
     eq_(variant.end, 11)
-    eq_(variant.short_description(), "chr1 g.10_11delAA")
+    eq_(variant.short_description, "chr1 g.10_11delAA")

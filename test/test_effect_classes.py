@@ -55,7 +55,11 @@ def expect_effect(
     assert isinstance(effect, effect_class), \
         "Expected %s on %s to be %s, got %s" % (
             variant, transcript, effect_class.__name__, effect)
-
+    assert effect_class.__name__ in str(effect), \
+        "Expected string representation of %s to include effect name %s" % (
+            effect, effect_class.__name__)
+    assert effect.short_description is not None, \
+        "Expected effect %s to have a `short_description` property" % (effect,)
 
 def test_incomplete():
     # transcript EGFR-009 (ENST00000450046 in Ensembl 78)

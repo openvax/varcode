@@ -16,8 +16,9 @@
 # rather than our local vcf module
 from __future__ import absolute_import
 
-import typechecks
 from pyensembl import EnsemblRelease
+import typechecks
+import vcf  # PyVCF
 
 from .reference_name import (
     infer_reference_name,
@@ -26,10 +27,8 @@ from .reference_name import (
 from .variant import Variant
 from .variant_collection import VariantCollection
 
-import vcf  # PyVCF
-
 def load_vcf(
-        filename,
+        path,
         reference_path_field='reference',
         only_passing=True,
         ensembl_release=None):
@@ -40,7 +39,7 @@ def load_vcf(
     Parameters
     ----------
 
-    filename : str
+    path : str
 
     reference_path_field : str, optional
         Name of metadata field which contains path to reference FASTA
@@ -54,9 +53,9 @@ def load_vcf(
         from the reference path.
     """
 
-    typechecks.require_string(filename, "filename")
+    typechecks.require_string(path, "Path to VCF")
 
-    vcf_reader = vcf.Reader(filename=filename)
+    vcf_reader = vcf.Reader(filename=path)
 
     if not ensembl_release:
         reference_path = vcf_reader.metadata[reference_path_field]
@@ -83,4 +82,4 @@ def load_vcf(
                 variants.append(variant)
     return VariantCollection(
         variants=variants,
-        filename=filename)
+        path=path)
