@@ -352,7 +352,7 @@ class NonsilentCodingMutation(CodingMutation):
             Offset after last mutated amino acid (half-open coordinates)
 
         aa_ref : str
-            Amino acid string of what used to be at mutated_protein_start_offset
+            Amino acid string of what used to be at aa_mutation_start_offset
             in the wildtype (unmutated) protein.
         """
         CodingMutation.__init__(
@@ -624,7 +624,7 @@ class FrameShift(NonsilentCodingMutation):
     @memoized_property
     def mutant_protein_sequence(self):
         original_aa_sequence = self.original_protein_sequence
-        prefix = original_aa_sequence[:self.mutated_protein_start_offset]
+        prefix = original_aa_sequence[:self.aa_mutation_start_offset]
         return prefix + self.shifted_sequence
 
     @memoized_property

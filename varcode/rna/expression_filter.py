@@ -17,8 +17,8 @@ from __future__ import print_function, division, absolute_import
 from .cufflinks import (
     load_cufflinks_dataframe,
     load_cufflinks_fpkm_dict,
-    remap_novel_gene_expression_onto_ensembl_ids
 )
+from .remap_novel_genes import remap_novel_gene_expression_onto_ensembl_ids
 
 
 class ExpressionFilter(object):

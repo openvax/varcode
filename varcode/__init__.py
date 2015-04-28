@@ -22,6 +22,7 @@ from .vcf import load_vcf
 from .effect_ordering import effect_priority, top_priority_effect
 from .effects import (
     MutationEffect,
+    TranscriptMutationEffect,
     Failure,
     Intergenic,
     Intragenic,
@@ -62,6 +63,7 @@ __all__ = [
     "load_vcf",
     # effects
     "MutationEffect",
+    "TranscriptMutationEffect",
     "Failure",
     "IncompleteTranscript",
     "Intergenic",

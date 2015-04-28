@@ -14,10 +14,7 @@
 
 from __future__ import print_function, division, absolute_import
 
-def combine_gene_expression_levels(
-        gene_fpkm_df,
-        map_novel_genes_onto_ensembl=False,
-        ensembl=None):
+def remap_novel_gene_expression_onto_ensembl_ids(gene_fpkm_df, ensembl):
     """Create a dictionary mapping annotated Ensembl gene IDs to expression
     levels. Rolls up novel detected genes into annotated genes which fully
     contain them.

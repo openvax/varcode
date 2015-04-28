@@ -175,7 +175,7 @@ def load_cufflinks_dict(*args, **kwargs):
         in load_cufflinks_dataframe(*args, **kwargs).iteritems()
     }
 
-def load_fpkm_dict(*args, **kwargs):
+def load_cufflinks_fpkm_dict(*args, **kwargs):
     """
     Returns dictionary mapping feature identifier (either transcript or gene ID)
     to FPKM expression value.

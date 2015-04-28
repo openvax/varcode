@@ -109,7 +109,7 @@ class VariantCollection(Collection):
     @memoize
     def detailed_string(self):
         lines = []
-        gene_groups = self.multi_groupby_gene_name()
+        gene_groups = self.groupby_gene_name()
         for gene_name in sorted(gene_groups.keys()):
             lines.append("  %s:" % gene_name)
             for variant in gene_groups[gene_name]:
