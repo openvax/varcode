@@ -60,11 +60,11 @@ class EffectCollection(Collection):
         grouped by gene (if a mutation affects multiple genes).
         """
         lines = []
-        for variant, variant_effects in self.groupby_variant():
+        for variant, variant_effects in self.groupby_variant().items():
             lines.append("\n%s" % variant)
 
             gene_effects_groups = variant_effects.groupby_gene_id()
-            for (gene_id, gene_effects) in gene_effects_groups:
+            for (gene_id, gene_effects) in gene_effects_groups.items():
                 if gene_id:
                     gene_name = variant.ensembl.gene_name_of_gene_id(gene_id)
                     lines.append("  Gene: %s (%s)" % (gene_name, gene_id))
@@ -82,7 +82,7 @@ class EffectCollection(Collection):
                 # since summary effect also calls into Variant.effects,
                 # give it the same arguments
                 # (this is the downside of not having a VariantEffectCollection)
-                best = effect.top_effect()
+                best = variant_effects.top_priority_effect()
                 lines.append("  Highest Priority Effect: %s" % best)
         return "\n".join(lines)
 
