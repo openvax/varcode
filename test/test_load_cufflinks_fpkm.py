@@ -65,4 +65,3 @@ def test_load_cufflinks_isoforms_drop_novel():
         "ENST00000518655",
     }
     eq_(transcript_ids, expected_transcript_ids)
-
