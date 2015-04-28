@@ -199,6 +199,7 @@ class PileupElement(object):
                 offset_end - offset_start,
                 locus.position,
                 pileup_read.alignment.aligned_pairs)
+
         assert offset_end >= offset_start
         result = PileupElement(
             locus, offset_start, offset_end, pileup_read.alignment)

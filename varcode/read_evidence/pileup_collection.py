@@ -23,6 +23,7 @@ import pandas
 import pysam
 import typechecks
 import pyensembl
+import typechecks
 
 from .. import Locus
 from . import Pileup, PileupElement, alignment_key, read_key
@@ -590,7 +591,7 @@ class PileupCollection(object):
                 # Note that storing the pileups here is necessary, since the
                 # subsequent assertion will invalidate our column.
                 pileups = column.pileups
-                #assert list(columns) == []  # column is invalid after this.
+                assert list(columns) == []  # column is invalid after this.
                 for pileup_read in pileups:
                     if not pileup_read.is_refskip:
                         element = PileupElement.from_pysam_alignment(
