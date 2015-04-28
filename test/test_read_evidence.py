@@ -15,7 +15,6 @@ from __future__ import absolute_import
 
 import time
 import collections
-import cProfile
 from nose.tools import eq_, assert_raises
 import pysam
 from varcode.read_evidence import PileupCollection
