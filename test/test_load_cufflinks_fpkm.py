@@ -4,7 +4,7 @@ contain the estimated expression levels of genes and isoforms (computed from
 RNA-Seq reads).
 """
 
-from varcode.cufflinks import load_cufflinks_tracking_file
+from varcode.rna import load_cufflinks_tracking_file
 from nose.tools import eq_
 
 def test_load_cufflinks_genes():

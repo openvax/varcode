@@ -95,12 +95,16 @@ class VariantCollection(Collection):
         return set(variant.reference_name for variant in self)
 
     @memoize
-    def multi_groupby_gene_name(self):
+    def groupby_gene_name(self):
         """
         Group variants by the gene names they overlap, which may put each
         variant in multiple groups.
         """
         return self.multi_groupby(lambda x: x.gene_names())
+
+    @memoize
+    def groupby_gene_id(self):
+        return self.multi_groupby(lambda x: x.gene_ids())
 
     @memoize
     def detailed_string(self):

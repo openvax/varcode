@@ -14,6 +14,7 @@
 
 from __future__ import print_function, division, absolute_import
 import os.path
+from collections import defaultdict
 
 class Collection(object):
     """
@@ -115,14 +116,10 @@ class Collection(object):
         key_fn : function
             Takes an effect or variant, returns a grouping key.
         """
-        result_dict = {}
+        result_dict = defaultdict(list)
 
         for x in self:
-            key = key_fn(x)
-            if key in result_dict:
-                result_dict[key].append(x)
-            else:
-                result_dict[key] = [x]
+            result_dict[key_fn(x)].append(x)
 
         # convert result lists into same Collection type as this one
         return {
@@ -136,14 +133,11 @@ class Collection(object):
         Like a groupby but expect the key_fn to return multiple keys for
         each element.
         """
-        result_dict = {}
+        result_dict = defaultdict(list)
 
         for x in self:
             for key in key_fn(x):
-                if key in result_dict:
-                    result_dict[key].append(x)
-                else:
-                    result_dict[key] = [x]
+                result_dict[key].append(x)
 
         # convert result lists into same Collection type as this one
         return {

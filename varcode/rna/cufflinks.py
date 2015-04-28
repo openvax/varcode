@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import print_function
+from __future__ import print_function, division, absolute_import
+
 import logging
 
 import pandas as pd
@@ -26,7 +27,7 @@ FPKM_COLUMN = "FPKM"
 LOCUS_COLUMN = "locus"
 GENE_NAMES_COLUMN = "gene_short_name"
 
-def load_cufflinks_tracking_file(
+def load_cufflinks_dataframe(
         filename,
         id_column=ID_COLUMN,
         fpkm_column=FPKM_COLUMN,
@@ -155,3 +156,32 @@ def load_cufflinks_tracking_file(
         "end": ends,
         "gene_names": gene_names_lists
     })
+
+def load_cufflinks_dict(*args, **kwargs):
+    """
+    Returns dictionary mapping feature identifier (either transcript or gene ID)
+    to a DataFrame row with fields:
+        id : str
+        novel : bool
+        fpkm : float
+        chr : str
+        start : int
+        end : int
+        gene_names : str list
+    """
+    return {
+        row.id: row
+        for (_, row)
+        in load_cufflinks_dataframe(*args, **kwargs).iteritems()
+    }
+
+def load_fpkm_dict(*args, **kwargs):
+    """
+    Returns dictionary mapping feature identifier (either transcript or gene ID)
+    to FPKM expression value.
+    """
+    return {
+        key: record.fpkm
+        for (key, record)
+        in load_cufflinks_dict(*args, **kwargs)
+    }

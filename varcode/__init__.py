@@ -12,12 +12,79 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .collection import Collection
-from .effects import *
-from .effect_collection import EffectCollection
-from .effect_ordering import effect_priority, top_priority_effect
-from .maf import load_maf, load_maf_dataframe
-from .variant import Variant
-from .variant_collection import VariantCollection
-from .vcf import load_vcf
 from .locus import Locus
+from .variant import Variant
+from .collection import Collection
+from .effect_collection import EffectCollection
+from .variant_collection import VariantCollection
+from .maf import load_maf, load_maf_dataframe
+from .vcf import load_vcf
+from .effect_ordering import effect_priority, top_priority_effect
+from .effects import (
+    MutationEffect,
+    Failure,
+    Intergenic,
+    Intragenic,
+    IncompleteTranscript,
+    NoncodingTranscript,
+    Intronic,
+    ThreePrimeUTR,
+    FivePrimeUTR,
+    Silent,
+    Substitution,
+    Insertion,
+    Deletion,
+    ComplexSubstitution,
+    AlternateStartCodon,
+    IntronicSpliceSite,
+    ExonicSpliceSite,
+    StopLoss,
+    SpliceDonor,
+    SpliceAcceptor,
+    PrematureStop,
+    FrameShiftTruncation,
+    StartLoss,
+    FrameShift,
+    ExonLoss,
+)
+
+__all__ = [
+    "Locus",
+    "Variant",
+    "Collection",
+    "EffectCollection",
+    "VariantCollection",
+    "effect_priority",
+    "top_priority_effect",
+    # file loading
+    "load_maf",
+    "load_maf_dataframe",
+    "load_vcf",
+    # effects
+    "MutationEffect",
+    "Failure",
+    "IncompleteTranscript",
+    "Intergenic",
+    "Intragenic",
+    "IncompleteTranscript",
+    "NoncodingTranscript",
+    "ThreePrimeUTR",
+    "FivePrimeUTR",
+    "Intronic",
+    "Silent",
+    "Substitution",
+    "Insertion",
+    "Deletion",
+    "ComplexSubstitution",
+    "AlternateStartCodon",
+    "IntronicSpliceSite",
+    "ExonicSpliceSite",
+    "StopLoss",
+    "SpliceDonor",
+    "SpliceAcceptor",
+    "PrematureStop",
+    "FrameShiftTruncation",
+    "StartLoss",
+    "FrameShift",
+    "ExonLoss",
+]
