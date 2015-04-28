@@ -643,14 +643,12 @@ class FrameShiftTruncation(PrematureStop, FrameShift):
             transcript,
             stop_codon_offset,
             aa_ref=""):
-        self.stop_codon_offset = stop_codon_offset
         self.shifted_sequence = ""
-        NonsilentCodingMutation.__init__(
+        PrematureStop.__init__(
             self,
             variant=variant,
             transcript=transcript,
             aa_mutation_start_offset=stop_codon_offset,
-            aa_mutation_end_offset=stop_codon_offset + 1,
             aa_ref=aa_ref)
 
     @memoized_property
