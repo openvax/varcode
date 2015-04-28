@@ -13,7 +13,6 @@
 # limitations under the License.
 from __future__ import absolute_import
 
-import time
 import collections
 from nose.tools import eq_, assert_raises
 import pysam
