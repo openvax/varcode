@@ -212,3 +212,4 @@ def test_read_evidence_variant_matching_gatk_mini_bundle_extract_warning():
     evidence = PileupCollection.from_bam(filename, loci)
     eq_(evidence.match_summary(Variant(loci[0], "A", "")),
         [('A', 0), ('', 0), ('AT', 3)])
+
