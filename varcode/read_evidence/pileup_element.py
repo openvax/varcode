@@ -46,6 +46,8 @@ class PileupElement(object):
         '''
         Construct a PileupElement object.
         '''
+        assert offset_end >= offset_start, \
+            "offset_start=%d > offset_end=%d" % (offset_start, offset_end)
         self.locus = locus
         self.offset_start = offset_start
         self.offset_end = offset_end
@@ -74,8 +76,14 @@ class PileupElement(object):
         Empty string in the case of a deletion. String of length > 1 if there
         is an insertion here.
         '''
-        return self.alignment.query_alignment_sequence[
-            self.offset_start:self.offset_end]
+        sequence = self.alignment.query_sequence
+        assert self.offset_end <= len(sequence), \
+            "End offset=%d > sequence length=%d. CIGAR=%s. SEQUENCE=%s" % (
+                self.offset_end,
+                len(sequence),
+                self.alignment.cigarstring,
+                sequence)
+        return sequence[self.offset_start:self.offset_end]
 
     @property
     def base_qualities(self):
@@ -83,7 +91,7 @@ class PileupElement(object):
         The phred-scaled base quality scores corresponding to `self.bases`, as
         a list.
         '''
-        return self.alignment.query_alignment_qualities[
+        return self.alignment.query_qualities[
             self.offset_start:self.offset_end]
 
     @property
@@ -99,9 +107,9 @@ class PileupElement(object):
             # We are mid-deletion. We return the minimum of the adjacent bases.
             assert self.offset_start == self.offset_end
             adjacent_qualities = [
-                self.alignment.query_alignment_qualities[offset]
+                self.alignment.query_qualities[offset]
                 for offset in [self.offset_start - 1, self.offset_start]
-                if 0 <= offset < len(self.alignment.query_alignment_qualities)
+                if 0 <= offset < len(self.alignment.query_qualities)
             ]
             return min(adjacent_qualities)
 
@@ -171,7 +179,7 @@ class PileupElement(object):
         # DESIRED RESULT: offset_start = 1, offset_end=1.
         #
         offset_start = None
-        offset_end = len(pileup_read.alignment.query_alignment_sequence)
+        offset_end = len(pileup_read.alignment.query_sequence)
         # TODO: doing this with get_blocks() may be faster.
         for (offset, position) in pileup_read.alignment.aligned_pairs:
             if offset is not None and position is not None:
@@ -182,14 +190,18 @@ class PileupElement(object):
                     break
         if offset_start is None:
             offset_start = offset_end
+        
+        assert pileup_read.is_del == (offset_end - offset_start == 0), \
+            "Deletion=%s but | [%d,%d) |=%d for locus %d in: \n%s" % (
+                pileup_read.is_del,
+                offset_start,
+                offset_end,
+                offset_end - offset_start,
+                locus.position,
+                pileup_read.alignment.aligned_pairs)
 
+        assert offset_end >= offset_start
         result = PileupElement(
             locus, offset_start, offset_end, pileup_read.alignment)
-        assert pileup_read.is_del == (len(result.bases) == 0), \
-            "Deletion=%s but len(offsets)=%d in %s: \n%s" % (
-                pileup_read.is_del,
-                len(result.offsets),
-                result,
-                pileup_read.alignment.aligned_pairs)
         return result   
 
