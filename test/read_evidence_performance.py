@@ -16,6 +16,11 @@ import time
 import varcode
 import varcode.read_evidence
 from varcode.locus import Locus
+    
+PARSER = argparse.ArgumentParser(usage=__doc__)
+PARSER.add_argument("bam_path")
+PARSER.add_argument("regions", nargs="+")
+PARSER.add_argument("--num-loci-per-region", type=int, default=100)
 
 def parse_region(s):
     (contig, rest) = s.split(":")
@@ -24,11 +29,7 @@ def parse_region(s):
         contig, int(start), int(end))
 
 def go(argv):
-    parser = argparse.ArgumentParser(usage=__doc__)
-    parser.add_argument("bam_path")
-    parser.add_argument("regions", nargs="+")
-    parser.add_argument("--num-loci-per-region", type=int, default=100)
-    args = parser.parse_args(argv)
+    args = PARSER.parse_args(argv)
 
     loci_regions = [parse_region(s) for s in args.regions]
 
