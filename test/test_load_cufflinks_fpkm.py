@@ -8,8 +8,11 @@ from varcode.rna import load_cufflinks_dataframe
 
 from nose.tools import eq_
 
+from .data import data_path
+
 def test_load_cufflinks_genes():
-    genes_df = load_cufflinks_dataframe("data/genes.fpkm_tracking")
+    genes_df = load_cufflinks_dataframe(
+        data_path("genes.fpkm_tracking"))
     gene_ids = set(genes_df.id)
     expected_gene_ids = {
         "ENSG00000240361",
@@ -26,7 +29,7 @@ def test_load_cufflinks_genes():
 
 def test_load_cufflinks_genes_drop_novel():
     genes_df = load_cufflinks_dataframe(
-        "data/genes.fpkm_tracking",
+        data_path("genes.fpkm_tracking"),
         drop_novel=True)
     gene_ids = set(genes_df.id)
     expected_gene_ids = {
@@ -39,7 +42,8 @@ def test_load_cufflinks_genes_drop_novel():
 
 
 def test_load_cufflinks_isoforms():
-    transcripts_df = load_cufflinks_dataframe("data/isoforms.fpkm_tracking")
+    transcripts_df = load_cufflinks_dataframe(
+        data_path("isoforms.fpkm_tracking"))
     transcript_ids = set(transcripts_df.id)
     expected_transcript_ids = {
         "ENST00000492842",
@@ -54,7 +58,8 @@ def test_load_cufflinks_isoforms():
 
 def test_load_cufflinks_isoforms_drop_novel():
     transcripts_df = load_cufflinks_dataframe(
-        "data/isoforms.fpkm_tracking", drop_novel=True)
+        data_path("isoforms.fpkm_tracking"),
+        drop_novel=True)
     transcript_ids = set(transcripts_df.id)
     expected_transcript_ids = {
         "ENST00000492842",

@@ -31,8 +31,8 @@ def test_maf():
     for v_expect, v_maf in zip(expected_tcga_ov_variants, tcga_ov_variants):
         eq_(v_expect, v_maf)
         gene_name = v_maf.info['Hugo_Symbol']
-        assert any(gene.name == gene_name for gene in v_maf.genes()), \
-            "Expected gene name %s but got %s" % (gene_name, v_maf.genes())
+        assert any(gene.name == gene_name for gene in v_maf.genes), \
+            "Expected gene name %s but got %s" % (gene_name, v_maf.genes)
 
 def check_same_aa_change(variant, expected_aa_change):
     effect = variant.effects().top_priority_effect()

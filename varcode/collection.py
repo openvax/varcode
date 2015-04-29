@@ -145,3 +145,68 @@ class Collection(object):
             for (k, elements)
             in result_dict.items()
         }
+
+    def filter_above_threshold(
+            self,
+            key_fn,
+            value_dict,
+            threshold,
+            default_value=0.0):
+        """The code for filtering by gene or transcript expression was pretty
+        much identical aside from which identifier you pull off an effect.
+        So, factored out the common operations for filtering an effect
+        collection into this helper method.
+
+        Parameters
+        ----------
+        key_fn : callable
+            Given an element of this collection, returns a key into `value_dict`
+
+        value_dict : dict
+            Dict from keys returned by `extract_key_fn` to float values
+
+        threshold : float
+            Only keep elements whose value in `value_dict` is above this
+            threshold.
+
+        default_value : float
+            Value to use for elements whose key is not in `value_dict`
+        """
+        def filter_fn(x):
+            key = key_fn(x)
+            value = value_dict.get(key, default_value)
+            return value > threshold
+        return self.filter(filter_fn)
+
+    def filter_any_above_threshold(
+            self,
+            multi_key_fn,
+            value_dict,
+            threshold,
+            default_value=0.0):
+        """Like filter_above_threshold but `multi_key_fn` returns multiple
+        keys and the element is kept if any of them have a value above
+        the given threshold.
+
+        Parameters
+        ----------
+        multi_key_fn : callable
+            Given an element of this collection, returns multiple keys
+            into `value_dict`
+
+        value_dict : dict
+            Dict from keys returned by `extract_key_fn` to float values
+
+        threshold : float
+            Only keep elements whose value in `value_dict` is above this
+            threshold.
+
+        default_value : float
+            Value to use for elements whose key is not in `value_dict`
+        """
+        def filter_fn(x):
+            return any(
+                value_dict.get(key, default_value) > threshold
+                for key in multi_key_fn(x))
+        return self.filter(filter_fn)
+

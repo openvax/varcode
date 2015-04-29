@@ -123,10 +123,11 @@ class TranscriptMutationEffect(Intragenic):
         self.transcript = transcript
 
     def __str__(self):
-        return "%s(variant=%s, transcript=%s)" % (
+        return "%s(variant=%s, transcript_name=%s, transcript_id=%s)" % (
             self.__class__.__name__,
             self.variant.short_description,
-            self.transcript.name)
+            self.transcript.name,
+            self.transcript.id)
 
 
 class Failure(TranscriptMutationEffect):
@@ -258,15 +259,18 @@ class CodingMutation(Exonic):
     Base class for all mutations which result in a modified coding sequence.
     """
     def __str__(self):
-        str(self.__class__.__name__)
-        str(self.variant.short_description)
-        str(self.transcript.name)
-        str(self.short_description)
-        return "%s(variant=%s, transcript=%s, effect_description=%s)" % (
-            self.__class__.__name__,
-            self.variant.short_description,
-            self.transcript.name,
-            self.short_description)
+        fields = [
+            ("variant", self.variant.short_description),
+            ("transcript_name", self.transcript.name),
+            ("transcript_id", self.transcript.id),
+            ("effect_description", self.short_description)
+        ]
+        fields_str = ", ".join([
+            "%s=%s" % (field_name, field_value)
+            for (field_name, field_value)
+            in fields
+        ])
+        return "%s(%s)" % (self.__class__.__name__, fields_str)
 
     modifies_coding_sequence = True
 

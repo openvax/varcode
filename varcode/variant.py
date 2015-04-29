@@ -199,22 +199,30 @@ class Variant(object):
             return "chr%s g.%d%s>%s" % (
                 self.contig, self.start, self.ref, self.alt)
 
-    @memoize
+    @memoized_property
     def transcripts(self):
         return self.ensembl.transcripts_at_locus(
             self.contig, self.start, self.end)
 
-    @memoize
+    @memoized_property
     def coding_transcripts(self):
         """
         Protein coding transcripts
         """
         return [
-            transcript for transcript in self.transcripts()
+            transcript for transcript in self.transcripts
             if is_coding_biotype(transcript.biotype)
         ]
 
-    @memoize
+    @memoized_property
+    def transcript_ids(self):
+        return [transcript.id for transcript in self.transcripts]
+
+    @memoized_property
+    def transcript_names(self):
+        return [transcript.name for transcript in self.transcripts]
+
+    @memoized_property
     def genes(self):
         """
         Return Gene object for all genes which overlap this variant.
@@ -222,7 +230,7 @@ class Variant(object):
         return self.ensembl.genes_at_locus(
             self.contig, self.start, self.end)
 
-    @memoize
+    @memoized_property
     def gene_ids(self):
         """
         Return IDs of all genes which overlap this variant. Calling
@@ -232,7 +240,7 @@ class Variant(object):
         return self.ensembl.gene_ids_at_locus(
             self.contig, self.start, self.end)
 
-    @memoize
+    @memoized_property
     def gene_names(self):
         """
         Return names of all genes which overlap this variant. Calling
@@ -242,13 +250,13 @@ class Variant(object):
         return self.ensembl.gene_names_at_locus(
             self.contig, self.start, self.end)
 
-    @memoize
+    @memoized_property
     def coding_genes(self):
         """
         Protein coding transcripts
         """
         return [
-            gene for gene in self.genes()
+            gene for gene in self.genes
             if is_coding_biotype(gene.biotype)
         ]
 
@@ -264,7 +272,7 @@ class Variant(object):
             determine the effect of this variant on a transcript, or simply
             log the error and continue.
         """
-        gene_ids = self.gene_ids()
+        gene_ids = self.gene_ids
 
         # if this variant isn't overlapping any genes, return a
         # Intergenic effect
@@ -273,7 +281,7 @@ class Variant(object):
         if len(gene_ids) == 0:
             return [Intergenic(self)]
 
-        overlapping_transcripts = self.transcripts()
+        overlapping_transcripts = self.transcripts
 
         # group transcripts by their gene ID
         transcripts_grouped_by_gene = groupby_field(
