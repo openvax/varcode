@@ -41,25 +41,9 @@ from varcode import (
     ExonicSpliceSite,
     # TODO: SpliceDonor, SpliceReceptor
 )
-from pyensembl import EnsemblRelease
+from pyensembl import ensembl_grch37, ensembl_grch38
 
-ensembl_grch37 = EnsemblRelease(75)
-ensembl_grch38 = EnsemblRelease(79)
-
-def expect_effect(
-        variant,
-        transcript_id,
-        effect_class):
-    transcript = variant.ensembl.transcript_by_id(transcript_id)
-    effect = variant.effect_on_transcript(transcript)
-    assert isinstance(effect, effect_class), \
-        "Expected %s on %s to be %s, got %s" % (
-            variant, transcript, effect_class.__name__, effect)
-    assert effect_class.__name__ in str(effect), \
-        "Expected string representation of %s to include effect name %s" % (
-            effect, effect_class.__name__)
-    assert effect.short_description is not None, \
-        "Expected effect %s to have a `short_description` property" % (effect,)
+from .common import expect_effect
 
 def test_incomplete():
     # transcript EGFR-009 (ENST00000450046 in Ensembl 78)
