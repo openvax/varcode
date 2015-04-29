@@ -18,15 +18,17 @@ def infer_reference_name(path):
     # NCBI builds and hg releases aren't identical
     # but the differences are all on chrM and unplaced contigs
     candidates = {
-        'NCBI36': ['hg18', 'b36', 'B36', 'GRCh36', 'NCBI36'],
-        'GRCh37': ['hg19', 'b37', 'B37', 'GRCh37', 'NCBI37'],
-        'GRCh38': ['hg38', 'b38', 'B38', 'GRCh38', 'NCBI38'],
+        'NCBI36': ['hg18', 'B36', 'GRCh36', 'NCBI36'],
+        'GRCh37': ['hg19', 'B37', 'GRCh37', 'NCBI37'],
+        'GRCh38': ['hg38', 'B38', 'GRCh38', 'NCBI38'],
     }
 
     for name in sorted(candidates.keys(), reverse=True):
         aliases = candidates[name]
         for alias in aliases:
             if alias in path:
+                return name
+            if alias.lower() in path:
                 return name
 
     raise ValueError(

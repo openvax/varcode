@@ -23,6 +23,16 @@ def test_vcf_reference_name():
     # after normalization, hg19 should be remapped to GRCh37
     assert variants.reference_names() == {"GRCh37"}
 
+def test_reference_arg_to_load_vcf():
+    variants = load_vcf(VCF_FILENAME)
+    eq_(variants, load_vcf(VCF_FILENAME, ensembl_version=75))
+    eq_(variants, load_vcf(VCF_FILENAME, reference_name="grch37"))
+    eq_(variants, load_vcf(VCF_FILENAME, reference_name="GRCh37"))
+    eq_(variants, load_vcf(VCF_FILENAME, reference_name="b37"))
+    # TODO: actually make hg19 different from b37! They should use
+    # different MT sequences
+    eq_(variants, load_vcf(VCF_FILENAME, reference_name="hg19"))
+
 def test_vcf_number_entries():
     # there are 14 mutations listed in the VCF, make sure they are all parsed
     variants = load_vcf(VCF_FILENAME)

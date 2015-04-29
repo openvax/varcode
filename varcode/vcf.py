@@ -16,7 +16,7 @@
 # rather than our local vcf module
 from __future__ import absolute_import
 
-from pyensembl import EnsemblRelease
+from pyensembl import cached_release
 import typechecks
 import vcf  # PyVCF
 
@@ -29,9 +29,10 @@ from .variant_collection import VariantCollection
 
 def load_vcf(
         path,
-        reference_path_field='reference',
         only_passing=True,
-        ensembl_release=None):
+        ensembl_version=None,
+        reference_name=None,
+        reference_vcf_key="reference"):
     """
     Load reference name and Variant objects from the given VCF filename.
     Drop any entries whose FILTER field is not one of "." or "PASS".
@@ -41,29 +42,42 @@ def load_vcf(
 
     path : str
 
-    reference_path_field : str, optional
-        Name of metadata field which contains path to reference FASTA
-        file (default = 'reference')
-
     only_passing : boolean, optional
         If true, any entries whose FILTER field is not one of "." or "PASS" is dropped.
 
-    ensembl_release : int, optional
+    ensembl_version : int, optional
         Which release of Ensembl to use for annotation, by default inferred
-        from the reference path.
+        from the reference path. If specified, then `reference_name` and
+        `reference_vcf_key` are ignored.
+
+    reference_name : str, optional
+        Name of reference genome against which variants from VCF were aligned.
+        If specified, then `reference_vcf_key` is ignored.
+
+    reference_vcf_key : str, optional
+        Name of metadata field which contains path to reference FASTA
+        file (default = 'reference')
+
     """
 
     typechecks.require_string(path, "Path to VCF")
 
     vcf_reader = vcf.Reader(filename=path)
 
-    if not ensembl_release:
-        reference_path = vcf_reader.metadata[reference_path_field]
-        reference_name = infer_reference_name(reference_path)
-        ensembl_release = ensembl_release_number_for_reference_name(
-                reference_name)
+    if not ensembl_version:
+        if reference_name:
+            # normalize the reference name in case it's in a weird format
+            reference_name = infer_reference_name(reference_name)
+        elif reference_vcf_key not in vcf_reader.metadata:
+            raise ValueError("Unable to infer reference genome for %s" % (
+                path,))
+        else:
+            reference_path = vcf_reader.metadata[reference_vcf_key]
+            reference_name = infer_reference_name(reference_path)
+        ensembl_version = ensembl_release_number_for_reference_name(
+            reference_name)
 
-    ensembl = EnsemblRelease(release=ensembl_release)
+    ensembl = cached_release(ensembl_version)
 
     variants = []
     for record in vcf_reader:
