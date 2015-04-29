@@ -62,6 +62,6 @@ if __name__ == '__main__':
             'biopython',
             'pyvcf',
             'memoized_property',
-            'pysam >=0.8.2.1',
+            'pysam >=0.8.3',
         ],
     )
