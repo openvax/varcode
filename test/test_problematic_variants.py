@@ -7,6 +7,7 @@ test module.
 from pyensembl import ensembl_grch37, ensembl_grch38
 from varcode import Variant
 
+from .common import check_effect_properties
 
 # variants which have previously resulted in raised exceptions
 # during effect annotation
@@ -145,24 +146,7 @@ should_not_crash_variants = [
 
 def try_effect_annotation(variant):
     effect = variant.effects().top_priority_effect()
-    assert effect is not None
-    # try accessing all the properties to make sure none crash
-    attribute_names = [
-        'gene',
-        'gene_name',
-        'gene_id',
-        'transcript',
-        'transcript_name',
-        'transcript_id',
-        'modifies_coding_sequence',
-        'modifies_protein_sequence',
-        'aa_mutation_start_offset',
-        'aa_mutation_end_offset',
-        'mutant_protein_sequence'
-    ]
-    for attribute_name in attribute_names:
-        getattr(effect, attribute_name)
-    assert effect.short_description is not None
+    check_effect_properties(effect)
 
 def test_crashing_variants():
     for variant in should_not_crash_variants:
