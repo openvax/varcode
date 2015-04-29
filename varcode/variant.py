@@ -279,7 +279,7 @@ class Variant(object):
         # TODO: look for nearby genes and mark those as Upstream and Downstream
         # effects
         if len(gene_ids) == 0:
-            return [Intergenic(self)]
+            return EffectCollection([Intergenic(self)])
 
         overlapping_transcripts = self.transcripts
 
