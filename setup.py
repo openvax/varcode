@@ -36,12 +36,11 @@ except Exception as e:
     print(e)
     print("Failed to convert %s from Markdown to reStructuredText" % readme_filename)
 
-
 if __name__ == '__main__':
     setup(
         name='varcode',
         packages=['varcode'],
-        version="0.2.2",
+        version="0.3.0",
         description="Variant annotation in Python",
         long_description=readme,
         url="https://github.com/hammerlab/varcode",

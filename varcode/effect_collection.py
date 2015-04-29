@@ -17,10 +17,12 @@ from collections import Counter, OrderedDict
 
 from .collection import Collection
 from .common import memoize
+from .effects import NonsilentCodingMutation
 from .effect_ordering import (
     effect_priority,
     effect_sort_key,
-    top_priority_effect
+    top_priority_effect,
+    transcript_effect_priority_dict
 )
 
 class EffectCollection(Collection):
@@ -75,27 +77,7 @@ class EffectCollection(Collection):
     def groupby_transcript_id(self):
         return self.groupby(key_fn=lambda effect: effect.transcript_id)
 
-    def _filter_expression(
-            self,
-            key_fn,
-            expression_dict,
-            min_expression_value,
-            default_value=0.0):
-        """
-        The code for filtering by gene or transcript expression was pretty
-        much identical aside from which identifier you pull off an effect.
-        So, factored out the common operations for filtering an effect
-        collection into this helper method.
-        """
-        def filter_fn(effect):
-            key = key_fn(effect)
-            if key is None:
-                return False
-            expression_level = expression_dict.get(key, default_value)
-            return expression_level > min_expression_value
-        return self.filter(filter_fn)
-
-    def filter_transcript_expression(
+    def filter_by_transcript_expression(
             self,
             transcript_expression_dict,
             min_expression_value=0.0):
@@ -113,13 +95,12 @@ class EffectCollection(Collection):
         min_expression_value : float
             Threshold above which we'll keep an effect in the result collection
         """
-        return self._filter_expression(
+        return self.filter_above_threshold(
             key_fn=lambda effect: effect.transcript_id,
-            expression_dict=transcript_expression_dict,
-            min_expression_value=min_expression_value,
-            default_value=0.0)
+            value_dict=transcript_expression_dict,
+            threshold=min_expression_value)
 
-    def filter_gene_expression(
+    def filter_by_gene_expression(
             self,
             gene_expression_dict,
             min_expression_value=0.0):
@@ -137,11 +118,26 @@ class EffectCollection(Collection):
         min_expression_value : float
             Threshold above which we'll keep an effect in the result collection
         """
-        return self._filter_expression(
+        return self.filter_above_threshold(
             key_fn=lambda effect: effect.gene_id,
-            expression_dict=gene_expression_dict,
-            min_expression_value=min_expression_value,
-            default_value=0.0)
+            value_dict=gene_expression_dict,
+            threshold=min_expression_value)
+
+    def filter_by_effect_priority(self, min_priority_class):
+        """
+        Create a new EffectCollection containing only effects whose priority
+        falls below the given class.
+        """
+        min_priority = transcript_effect_priority_dict[min_priority_class]
+        return self.filter(
+            lambda effect: effect_priority(effect) >= min_priority)
+
+    def drop_silent_and_noncoding(self):
+        """
+        Create a new EffectCollection containing only non-silent coding effects
+        """
+        return self.filter(
+            lambda effect: isinstance(effect, NonsilentCodingMutation))
 
     def detailed_string(self):
         """

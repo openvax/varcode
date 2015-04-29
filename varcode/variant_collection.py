@@ -82,7 +82,7 @@ class VariantCollection(Collection):
         """
         counter = Counter()
         for variant in self:
-            for gene_name in variant.gene_names():
+            for gene_name in variant.gene_names:
                 counter[gene_name] += 1
         return counter
 
@@ -95,21 +95,78 @@ class VariantCollection(Collection):
         return set(variant.reference_name for variant in self)
 
     @memoize
-    def multi_groupby_gene_name(self):
+    def groupby_gene_name(self):
         """
         Group variants by the gene names they overlap, which may put each
         variant in multiple groups.
         """
-        return self.multi_groupby(lambda x: x.gene_names())
+        return self.multi_groupby(lambda x: x.gene_names)
+
+    @memoize
+    def groupby_gene_id(self):
+        return self.multi_groupby(lambda x: x.gene_ids)
 
     @memoize
     def detailed_string(self):
         lines = []
-        gene_groups = self.multi_groupby_gene_name()
-        for gene_name in sorted(gene_groups.keys()):
-            lines.append("  %s:" % gene_name)
-            for variant in gene_groups[gene_name]:
-                lines.append("  -- %s" % variant)
+        gene_groups = self.groupby_gene_id()
+        for gene_id, variant_group in sorted(gene_groups.items()):
+            # in case we are combining variants with different Ensembl releases
+            # use them all to gather gene names
+            gene_names = {
+                variant.ensembl.gene_name_of_gene_id(gene_id)
+                for variant in variant_group
+            }
+            gene_name_str = ", ".join(sorted(gene_names))
+            lines.append("  -- %s (%s):" % (gene_name_str, gene_id))
+            for variant in variant_group:
+                lines.append("  ---- %s" % variant)
         header = self.short_string()
         joined_lines = "\n".join(lines)
         return "%s\n%s" % (header, joined_lines)
+
+    def filter_by_transcript_expression(
+            self,
+            transcript_expression_dict,
+            min_expression_value=0.0):
+        """
+        Filters variants down to those which have overlap a transcript whose
+        expression value in the transcript_expression_dict argument is greater
+        than min_expression_value.
+
+        Parameters
+        ----------
+        transcript_expression_dict : dict
+            Dictionary mapping Ensembl transcript IDs to expression estimates
+            (either FPKM or TPM)
+
+        min_expression_value : float
+            Threshold above which we'll keep an effect in the result collection
+        """
+        return self.filter_any_above_threshold(
+            multi_key_fn=lambda variant: variant.transcript_ids,
+            value_dict=transcript_expression_dict,
+            threshold=min_expression_value)
+
+    def filter_by_gene_expression(
+            self,
+            gene_expression_dict,
+            min_expression_value=0.0):
+        """
+        Filters variants down to those which have overlap a gene whose
+        expression value in the transcript_expression_dict argument is greater
+        than min_expression_value.
+
+        Parameters
+        ----------
+        gene_expression_dict : dict
+            Dictionary mapping Ensembl gene IDs to expression estimates
+            (either FPKM or TPM)
+
+        min_expression_value : float
+            Threshold above which we'll keep an effect in the result collection
+        """
+        return self.filter_any_above_threshold(
+            multi_key_fn=lambda effect: effect.gene_ids,
+            value_dict=gene_expression_dict,
+            threshold=min_expression_value)

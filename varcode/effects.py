@@ -123,10 +123,11 @@ class TranscriptMutationEffect(Intragenic):
         self.transcript = transcript
 
     def __str__(self):
-        return "%s(variant=%s, transcript=%s)" % (
+        return "%s(variant=%s, transcript_name=%s, transcript_id=%s)" % (
             self.__class__.__name__,
             self.variant.short_description,
-            self.transcript.name)
+            self.transcript.name,
+            self.transcript.id)
 
 
 class Failure(TranscriptMutationEffect):
@@ -258,15 +259,18 @@ class CodingMutation(Exonic):
     Base class for all mutations which result in a modified coding sequence.
     """
     def __str__(self):
-        str(self.__class__.__name__)
-        str(self.variant.short_description)
-        str(self.transcript.name)
-        str(self.short_description)
-        return "%s(variant=%s, transcript=%s, effect_description=%s)" % (
-            self.__class__.__name__,
-            self.variant.short_description,
-            self.transcript.name,
-            self.short_description)
+        fields = [
+            ("variant", self.variant.short_description),
+            ("transcript_name", self.transcript.name),
+            ("transcript_id", self.transcript.id),
+            ("effect_description", self.short_description)
+        ]
+        fields_str = ", ".join([
+            "%s=%s" % (field_name, field_value)
+            for (field_name, field_value)
+            in fields
+        ])
+        return "%s(%s)" % (self.__class__.__name__, fields_str)
 
     modifies_coding_sequence = True
 
@@ -352,7 +356,7 @@ class NonsilentCodingMutation(CodingMutation):
             Offset after last mutated amino acid (half-open coordinates)
 
         aa_ref : str
-            Amino acid string of what used to be at mutated_protein_start_offset
+            Amino acid string of what used to be at aa_mutation_start_offset
             in the wildtype (unmutated) protein.
         """
         CodingMutation.__init__(
@@ -624,7 +628,7 @@ class FrameShift(NonsilentCodingMutation):
     @memoized_property
     def mutant_protein_sequence(self):
         original_aa_sequence = self.original_protein_sequence
-        prefix = original_aa_sequence[:self.mutated_protein_start_offset]
+        prefix = original_aa_sequence[:self.aa_mutation_start_offset]
         return prefix + self.shifted_sequence
 
     @memoized_property
@@ -643,14 +647,12 @@ class FrameShiftTruncation(PrematureStop, FrameShift):
             transcript,
             stop_codon_offset,
             aa_ref=""):
-        self.stop_codon_offset = stop_codon_offset
         self.shifted_sequence = ""
-        NonsilentCodingMutation.__init__(
+        PrematureStop.__init__(
             self,
             variant=variant,
             transcript=transcript,
             aa_mutation_start_offset=stop_codon_offset,
-            aa_mutation_end_offset=stop_codon_offset + 1,
             aa_ref=aa_ref)
 
     @memoized_property
