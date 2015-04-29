@@ -180,7 +180,7 @@ class EffectCollection(Collection):
         If multiple effects have the same priority, then return the one
         which is associated with the longest transcript.
         """
-        return top_priority_effect(self._elements)
+        return top_priority_effect(self.elements)
 
     # TODO: find a way to express these kinds of methods without
     # duplicating every single groupby_* method

@@ -25,11 +25,12 @@ class Collection(object):
             self,
             elements,
             path=None,
-            distinct=False):
+            distinct=False,
+            sort_key=None):
         self.distinct = distinct
         if distinct:
             elements = set(elements)
-        self._elements = list(sorted(elements))
+        self.elements = list(sorted(elements, key=sort_key))
         self.path = path
         if path:
             # get the filename without any directory prefix
@@ -61,11 +62,11 @@ class Collection(object):
         contents = ""
         element_lines = [
             "  -- %s" % (element,)
-            for element in self._elements[:limit]
+            for element in self.elements[:limit]
         ]
         contents = "\n".join(element_lines)
 
-        if limit is not None and len(self._elements) > limit:
+        if limit is not None and len(self.elements) > limit:
             contents += "\n  ... and %d more" % (len(self) - limit)
         return "%s\n%s" % (header, contents)
 
@@ -76,22 +77,22 @@ class Collection(object):
         return str(self)
 
     def __len__(self):
-        return len(self._elements)
+        return len(self.elements)
 
     def __iter__(self):
-        return iter(self._elements)
+        return iter(self.elements)
 
     def __hash__(self):
         return hash(len(self))
 
     def __getitem__(self, idx):
-        return self._elements[idx]
+        return self.elements[idx]
 
     def __eq__(self, other):
         return (
             self.__class__ == other.__class__ and
             len(self) == len(other) and
-            all(x == y for (x, y) in zip(self._elements, other._elements)))
+            all(x == y for (x, y) in zip(self.elements, other.elements)))
 
     def clone_with_new_elements(self, new_elements):
         """
@@ -106,7 +107,7 @@ class Collection(object):
     def filter(self, filter_fn):
         return self.clone_with_new_elements([
             element
-            for element in self._elements
+            for element in self.elements
             if filter_fn(element)])
 
     def groupby(self, key_fn):
