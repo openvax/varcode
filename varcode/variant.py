@@ -14,10 +14,18 @@
 
 from __future__ import print_function, division, absolute_import
 import logging
+import json
+
+from collections import namedtuple
 
 from Bio.Seq import reverse_complement
 from memoized_property import memoized_property
-from pyensembl import Transcript, EnsemblRelease, ensembl_grch38
+from pyensembl import (
+    Transcript,
+    EnsemblRelease,
+    ensembl_grch38,
+    cached_release,
+)
 from pyensembl.locus import normalize_chromosome
 from pyensembl.biotypes import is_coding_biotype
 from typechecks import require_instance
@@ -101,8 +109,8 @@ class Variant(object):
         # normalize the variant by trimming any shared prefix or suffix
         # between ref and alt nucleotide sequences and then
         # offset the variant position in a strand-dependent manner
-        trimmed_ref, trimmed_alt, prefix, suffix = trim_shared_flanking_strings(
-            self.original_ref, self.original_alt)
+        (trimmed_ref, trimmed_alt, prefix, suffix) = (
+            trim_shared_flanking_strings(self.original_ref, self.original_alt))
 
         self.ref = trimmed_ref
         self.alt = trimmed_alt
@@ -155,23 +163,72 @@ class Variant(object):
             return self.start < other.start
         return self.contig < other.contig
 
+    # The identifying fields of a variant
+    BasicFields = namedtuple(
+        "BasicFields",
+        "contig start ref alt release")
+    
     def fields(self):
         """
         All identifying fields of a variant (contig, pos, ref, alt, genome)
         in a single tuple. This makes for cleaner printing, hashing, and
         comparisons.
         """
-        return (
+        return Variant.BasicFields(
             self.contig,
             self.start,
             self.ref,
             self.alt,
-            self.reference_name)
+            self.ensembl.release)
 
     def __eq__(self, other):
         return (
             other.__class__ is Variant and
             self.fields() == other.fields())
+
+    def __getstate__(self, only_basic_fields=False):
+        fields = self.fields()
+        result = {
+            field: fields[i] for (i, field) in enumerate(fields._fields)
+        }
+        if not only_basic_fields:
+            result['info'] = self.info
+        return result
+
+    def __setstate__(self, fields):
+        # These fields require special logic.
+        self.ensembl = cached_release(fields.pop("release"))
+        self.info = fields.pop("info", {})
+
+        # Remaining fields are simple properties that just get set.
+        self.__dict__.update(fields)
+
+    def to_json(self, only_basic_fields=False):
+        """
+        Serialize to JSON.
+
+        Parameters
+        ----------
+        only_basic_fields : bool, optional
+            If true, then only the fields usesd for object equality are
+            included. In particular, the info fields is ignored.
+
+        Returns
+        ----------
+        String giving the Variant instance serialized in JSON format.
+
+        """
+        return json.dumps(
+            self.__getstate__(only_basic_fields=only_basic_fields))
+
+    @classmethod
+    def from_json(cls, serialized):
+        """
+        Unserialize a Variant encoded as a JSON string.
+        """
+        instance = cls.__new__(cls)
+        instance.__setstate__(json.loads(serialized))
+        return instance
 
     @memoized_property
     def short_description(self):

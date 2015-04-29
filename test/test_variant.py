@@ -16,7 +16,10 @@
 Test simple properties of Variant objects, such as their trimming
 of shared prefix/suffix strings from ref/alt fields.
 """
-
+try:
+    import cPickle as pickle
+except ImportError:
+    import pickle
 from varcode import Variant
 from nose.tools import eq_
 
@@ -98,3 +101,38 @@ def test_deletion_no_suffix():
     eq_(variant.start, 10)
     eq_(variant.end, 11)
     eq_(variant.short_description, "chr1 g.10_11delAA")
+
+def assert_variants_completely_equal(variant1, variant2):
+    eq_(variant1, variant2)
+    eq_(variant1.info, variant2.info)
+
+def test_serialization():
+    variants = [
+        Variant(
+            1, start=10, ref="AA", alt="AAT", ensembl=77, info={"foo": "bar"}),
+        Variant(10, start=15, ref="A", alt="G"),
+        Variant(20, start=150, ref="", alt="G", info={"bar": 2}),
+    ]
+    for original in variants:
+        # This causes the variant's ensembl object to make a SQL connection,
+        # which makes the ensembl object non-serializable. By calling this
+        # method, we are checking that we don't attempt to directly serialize
+        # the ensembl object.
+        original.effects()
+
+        # Test pickling.
+        serialized = pickle.dumps(original)
+        reconstituted = pickle.loads(serialized)
+        assert_variants_completely_equal(original, reconstituted)
+
+        # Test json, with all fields.
+        serialized = original.to_json()
+        reconstituted = Variant.from_json(serialized)
+        assert_variants_completely_equal(original, reconstituted)
+
+        # Test json, with only basic fields.
+        serialized = original.to_json(only_basic_fields=True)
+        reconstituted = Variant.from_json(serialized)
+        eq_(original, reconstituted)
+
+
