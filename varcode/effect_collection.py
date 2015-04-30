@@ -239,9 +239,20 @@ class EffectCollection(Collection):
         effect_expression_dict = self.effect_expression(expression_levels)
         if len(effect_expression_dict) == 0:
             return None
+
+        def key_fn(effect_fpkm_pair):
+            """
+            Sort effects primarily by their expression level
+            and secondarily by the priority logic used in
+            `top_priority_effect`.
+            """
+            (effect, fpkm) = effect_fpkm_pair
+            return (fpkm, effect_sort_key(effect))
+
         top_pair = max(
             effect_expression_dict.items(),
-            key=lambda (effect, fpkm): (fpkm, effect_sort_key(effect)))
+            key=key_fn)
+
         return top_pair[0]
 
     @memoize
