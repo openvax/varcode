@@ -206,8 +206,9 @@ class Collection(object):
             Value to use for elements whose key is not in `value_dict`
         """
         def filter_fn(x):
-            return any(
-                value_dict.get(key, default_value) > threshold
-                for key in multi_key_fn(x))
+            for key in multi_key_fn(x):
+                value = value_dict.get(key, default_value)
+                if value > threshold:
+                    return True
+            return False
         return self.filter(filter_fn)
-

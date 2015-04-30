@@ -91,14 +91,13 @@ def load_cufflinks_dataframe(
         gene_names : str list
     """
     df = pd.read_csv(filename, sep="\s+")
-    status = df[status_column]
 
     for flag, status_value in [
             (drop_failed, "FAIL"),
             (drop_lowdata, "LOWDATA"),
             (drop_hidata, "HIDATA")]:
         if flag:
-            mask = status == status_value
+            mask = df[status_column] == status_value
             n_dropped = mask.sum()
             if n_dropped > 0:
                 logging.info("Dropping %d/%d entries from %s with status=%s",
@@ -113,16 +112,17 @@ def load_cufflinks_dataframe(
             logging.info("Dropping %d/%d non-chromosomal loci from %s" % (
                 n_dropped, len(df), filename))
             df = df[chromosomal_loci]
-
     if len(df) == 0:
         raise ValueError("Empty FPKM tracking file: %s" % filename)
 
     ids = df[id_column]
     known = ids.str.startswith("ENS")
+
     if known.sum() == 0:
         raise ValueError("No Ensembl IDs found in %s" % filename)
 
     if drop_novel:
+
         n_dropped = (~known).sum()
         if n_dropped > 0:
             logging.info("Dropping %d/%d novel entries from %s",
@@ -131,6 +131,7 @@ def load_cufflinks_dataframe(
             known = np.ones(len(df), dtype='bool')
 
     loci = df[locus_column]
+
     # capture all characters after 'chr' but before ':'
     chromosomes = loci.str.extract("chr([^:]*):.*")
     # capture all characters after e.g. 'chr1:', which look like '132-394'

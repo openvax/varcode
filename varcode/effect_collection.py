@@ -239,9 +239,10 @@ class EffectCollection(Collection):
         effect_expression_dict = self.effect_expression(expression_levels)
         if len(effect_expression_dict) == 0:
             return None
-        return max(
+        top_pair = max(
             effect_expression_dict.items(),
-            key=lambda effect, fpkm: (fpkm, effect_sort_key(effect)))
+            key=lambda (effect, fpkm): (fpkm, effect_sort_key(effect)))
+        return top_pair[0]
 
     @memoize
     def gene_counts(self):
