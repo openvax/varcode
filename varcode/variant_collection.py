@@ -20,7 +20,12 @@ from .effect_collection import EffectCollection
 from .common import memoize
 
 class VariantCollection(Collection):
-    def __init__(self, variants, path=None, distinct=True):
+    def __init__(
+            self,
+            variants,
+            path=None,
+            distinct=True,
+            sort_key=None):
         """Construct a VariantCollection from a list of Variant records.
 
         Parameters
@@ -34,12 +39,15 @@ class VariantCollection(Collection):
 
         distinct : bool
             Don't keep repeated variants
+
+        sort_key : callable
         """
         Collection.__init__(
             self,
             elements=variants,
             path=path,
-            distinct=distinct)
+            distinct=distinct,
+            sort_key=sort_key)
 
     @memoize
     def dataframe(self):

@@ -35,7 +35,8 @@ class EffectCollection(Collection):
             self,
             effects,
             path=None,
-            distinct=False):
+            distinct=False,
+            sort_key=None):
         """Construct an EffectCollection from a sequence of MutationEffects.
 
         Parameters
@@ -49,12 +50,15 @@ class EffectCollection(Collection):
 
         distinct : bool
             Don't keep repeated effects
+
+        sort_key : callable
         """
         Collection.__init__(
             self,
             elements=effects,
             path=path,
-            distinct=distinct)
+            distinct=distinct,
+            sort_key=sort_key)
 
     def groupby_variant(self):
         return self.groupby(key_fn=lambda effect: effect.variant)
