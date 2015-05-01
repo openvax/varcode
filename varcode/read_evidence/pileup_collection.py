@@ -286,11 +286,13 @@ class PileupCollection(object):
 
         '''
         read_to_allele = None
+        loci = []
         if locus.positions:
             # Our locus includes at least one reference base.
             for position in locus.positions:
                 base_position = Locus.from_interbase_coordinates(
                     locus.contig, position)
+                loci.append(base_position)
                 new_read_to_allele = {}
                 for element in self.pileups[base_position]:
                     allele_prefix = ""
@@ -307,16 +309,22 @@ class PileupCollection(object):
             # Our locus is between reference bases.
             position_before = Locus.from_interbase_coordinates(
                 locus.contig, locus.start)
+            loci.append(position_before)
             read_to_allele = {}
             for element in self.pileups[position_before]:
                 allele = element.bases[1:]
                 read_to_allele[alignment_key(element.alignment)] = allele
 
-        split = self.group_by_pileup_element_mapper(
-            lambda e: read_to_allele.get(alignment_key(e.alignment)))
-
-        if None in split:
-            del split[None]
+        split = defaultdict(lambda: PileupCollection(pileups={}, parent=self))
+        for locus in loci:
+            pileup = self.pileups[locus]
+            for e in pileup.elements:
+                key = read_to_allele.get(alignment_key(e.alignment))
+                if key is not None:
+                    if locus in split[key].pileups:
+                        split[key].pileups[locus].append(e)
+                    else:
+                        split[key].pileups[locus] = Pileup(locus, [e])
 
         # Sort by number of reads (descending). Break ties with the
         # lexicographic ordering of the allele string.
@@ -501,31 +509,6 @@ class PileupCollection(object):
                 else:
                     new_pileups[locus] = Pileup(locus, pileup.elements)
         return PileupCollection(new_pileups, parent=self)
-
-    def group_by_pileup_element_mapper(self, function):
-        '''
-        Split this PileupCollection into multiple instances based on the
-        result of applying a function to each PileupElement.
-
-        Parameters
-        ----------
-        function : PileupElement -> hashable object
-
-        Returns
-        ----------
-        Dict where keys are the results returned by `function`, and each value
-        is a PileupCollection containing the PileupElement instances for which
-        `function(element)` returned `key`.
-
-        '''
-        result = defaultdict(lambda: PileupCollection(pileups={}, parent=self))
-        for (locus, pileup) in self.pileups.items():
-            for e in pileup.elements:
-                key = function(e)
-                if locus not in result[key].pileups:
-                    result[key].pileups[locus] = Pileup(locus, [])
-                result[key].pileups[locus].append(e)
-        return result
 
     @staticmethod
     def from_bam(pysam_samfile, loci):
