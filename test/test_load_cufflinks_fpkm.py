@@ -12,7 +12,11 @@ from .data import data_path
 
 def test_load_cufflinks_genes():
     genes_df = load_cufflinks_dataframe(
-        data_path("genes.fpkm_tracking"))
+        data_path("genes.fpkm_tracking"),
+        drop_lowdata=True,
+        drop_hidata=True,
+        drop_failed=True,
+        drop_novel=False)
     gene_ids = set(genes_df.id)
     expected_gene_ids = {
         "ENSG00000240361",
@@ -30,6 +34,9 @@ def test_load_cufflinks_genes():
 def test_load_cufflinks_genes_drop_novel():
     genes_df = load_cufflinks_dataframe(
         data_path("genes.fpkm_tracking"),
+        drop_lowdata=True,
+        drop_hidata=True,
+        drop_failed=True,
         drop_novel=True)
     gene_ids = set(genes_df.id)
     expected_gene_ids = {
@@ -43,7 +50,11 @@ def test_load_cufflinks_genes_drop_novel():
 
 def test_load_cufflinks_isoforms():
     transcripts_df = load_cufflinks_dataframe(
-        data_path("isoforms.fpkm_tracking"))
+        data_path("isoforms.fpkm_tracking"),
+        drop_lowdata=True,
+        drop_hidata=True,
+        drop_failed=True,
+        drop_novel=False)
     transcript_ids = set(transcripts_df.id)
     expected_transcript_ids = {
         "ENST00000492842",
@@ -59,6 +70,9 @@ def test_load_cufflinks_isoforms():
 def test_load_cufflinks_isoforms_drop_novel():
     transcripts_df = load_cufflinks_dataframe(
         data_path("isoforms.fpkm_tracking"),
+        drop_lowdata=True,
+        drop_hidata=True,
+        drop_failed=True,
         drop_novel=True)
     transcript_ids = set(transcripts_df.id)
     expected_transcript_ids = {

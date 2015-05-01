@@ -35,8 +35,9 @@ def load_cufflinks_dataframe(
         locus_column=LOCUS_COLUMN,
         gene_names_column=GENE_NAMES_COLUMN,
         drop_failed=True,
-        drop_lowdata=True,
+        drop_lowdata=False,
         drop_hidata=True,
+        replace_hidata_fpkm_value=None,
         drop_nonchromosomal_loci=True,
         drop_novel=False):
     """
@@ -66,13 +67,20 @@ def load_cufflinks_dataframe(
     gene_names_column : str, optional
 
     drop_failed : bool, optional
-        Drop rows whose FPKM status is "FAIL" (default = True)
+        Drop rows whose FPKM status is "FAIL" (default=True)
 
     drop_lowdata : bool, optional
-        Drop rows whose FPKM status is "LOWDATA" (default = True)
+        Drop rows whose FPKM status is "LOWDATA", meaning that Cufflinks thought
+        there were too few reads to accurately estimate the FPKM (default=False)
 
     drop_hidata : bool, optional
-        Drop rows whose FPKM status is "HIDATA" (default=True)
+        Drop rows whose FPKM status is "HIDATA", meaning that too many
+        fragments aligned to a feature for Cufflinks to process. Dropping
+        the most expressed genes seems like a stupid idea so: default=False
+
+    replace_hidata_fpkm_value : float, optional
+        If drop_hidata=False, the HIDATA entries will still have an FPKM=0.0,
+        this argument lets you replace the FPKM with some known constant.
 
     drop_nonchromosomal_loci : bool, optional
         Drop rows whose location isn't on a canonical chromosome
@@ -96,13 +104,21 @@ def load_cufflinks_dataframe(
             (drop_failed, "FAIL"),
             (drop_lowdata, "LOWDATA"),
             (drop_hidata, "HIDATA")]:
-        if flag:
-            mask = df[status_column] == status_value
-            n_dropped = mask.sum()
-            if n_dropped > 0:
-                logging.info("Dropping %d/%d entries from %s with status=%s",
-                    n_dropped, len(df), filename, status_value)
-                df = df[~mask]
+        mask = df[status_column] == status_value
+        mask_count = mask.sum()
+        total_count = len(df)
+        if flag and mask_count > 0:
+            verb_str = "Dropping"
+            df = df[~mask]
+        else:
+            verb_str = "Keeping"
+        logging.info(
+            "%s %d/%d entries from %s with status=%s",
+            verb_str,
+            mask_count,
+            total_count,
+            filename,
+            status_value)
 
     if drop_nonchromosomal_loci:
         loci = df[locus_column]
@@ -112,6 +128,17 @@ def load_cufflinks_dataframe(
             logging.info("Dropping %d/%d non-chromosomal loci from %s" % (
                 n_dropped, len(df), filename))
             df = df[chromosomal_loci]
+
+    if replace_hidata_fpkm_value:
+        hidata_mask = df[status_column] == "HIDATA"
+        n_hidata = hidata_mask.sum()
+        logging.info(
+            "Setting FPKM=%s for %d/%d entries with status=HIDATA",
+            replace_hidata_fpkm_value,
+            n_hidata,
+            len(df))
+        df[fpkm_column][hidata_mask] = replace_hidata_fpkm_value
+
     if len(df) == 0:
         raise ValueError("Empty FPKM tracking file: %s" % filename)
 
@@ -122,7 +149,6 @@ def load_cufflinks_dataframe(
         raise ValueError("No Ensembl IDs found in %s" % filename)
 
     if drop_novel:
-
         n_dropped = (~known).sum()
         if n_dropped > 0:
             logging.info("Dropping %d/%d novel entries from %s",
