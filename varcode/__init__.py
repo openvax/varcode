@@ -51,6 +51,7 @@ from .effects import (
 )
 
 __all__ = [
+    # basic classes
     "Locus",
     "Variant",
     "Collection",
