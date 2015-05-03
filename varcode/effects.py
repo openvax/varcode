@@ -106,7 +106,9 @@ class MutationEffect(object):
 
 class Intergenic(MutationEffect):
     """Variant has unknown effect if it occurs between genes"""
-    pass
+    
+    short_description = "intergenic"
+
 
 class Intragenic(MutationEffect):
     """Variant within boundaries of a gene but does not overlap
