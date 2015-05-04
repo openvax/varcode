@@ -15,7 +15,7 @@
 from __future__ import print_function
 import os
 
-from setuptools import setup
+from setuptools import setup, find_packages
 
 readme_filename = "README.md"
 current_directory = os.path.dirname(__file__)
@@ -39,8 +39,8 @@ except Exception as e:
 if __name__ == '__main__':
     setup(
         name='varcode',
-        packages=['varcode'],
-        version="0.3.7",
+        packages=find_packages("test"),
+        version="0.3.8",
         description="Variant annotation in Python",
         long_description=readme,
         url="https://github.com/hammerlab/varcode",
