@@ -167,7 +167,7 @@ class Variant(object):
     BasicFields = namedtuple(
         "BasicFields",
         "contig start ref alt release")
-    
+
     def fields(self):
         """
         All identifying fields of a variant (contig, pos, ref, alt, genome)
@@ -223,8 +223,12 @@ class Variant(object):
         self.ensembl = cached_release(fields.pop("release"))
         self.info = fields.pop("info", {})
 
-        # Remaining fields are simple properties that just get set.
+        # Remaining fields  are simple properties that just get set.
         self.__dict__.update(fields)
+
+        # TODO: switch to interbase coordinates so that 'end' becomes a
+        # mandatory rather than derived field
+        self.end = self.start + max(0, len(self.ref) - 1)
 
     def to_json(self):
         """
