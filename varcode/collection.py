@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from __future__ import print_function, division, absolute_import
+import json
 import os.path
 from collections import defaultdict
 
@@ -92,7 +93,7 @@ class Collection(object):
         return (
             self.__class__ == other.__class__ and
             len(self) == len(other) and
-            all(x == y for (x, y) in zip(self.elements, other.elements)))
+            all(x == y for (x, y) in zip(self, other)))
 
     def clone_with_new_elements(self, new_elements):
         """
@@ -212,3 +213,4 @@ class Collection(object):
                     return True
             return False
         return self.filter(filter_fn)
+

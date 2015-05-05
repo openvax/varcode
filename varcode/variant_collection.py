@@ -13,11 +13,15 @@
 # limitations under the License.
 
 from __future__ import print_function, division, absolute_import
+import json
 from collections import Counter
+
+from typechecks import require_iterable_of
 
 from .collection import Collection
 from .effect_collection import EffectCollection
 from .common import memoize
+from . import Variant
 
 class VariantCollection(Collection):
     def __init__(
@@ -42,6 +46,7 @@ class VariantCollection(Collection):
 
         sort_key : callable
         """
+        require_iterable_of(variants, Variant)
         Collection.__init__(
             self,
             elements=variants,
@@ -178,3 +183,50 @@ class VariantCollection(Collection):
             multi_key_fn=lambda effect: effect.gene_ids,
             value_dict=gene_expression_dict,
             threshold=min_expression_value)
+
+    def to_json(self):
+        """
+        Returns a string giving this variant collection serialized in JSON
+        format.
+        """
+        return json.dumps(self.__getstate__())
+
+    @classmethod
+    def from_dict(cls, state):
+        """
+        Unserialize a VariantCollection encoded as a Python dict.
+        """
+        instance = cls.__new__(cls)
+        instance.__setstate__(state)
+        return instance
+
+    @classmethod
+    def from_json(cls, serialized):
+        """
+        Unserialize a VariantCollection encoded as a JSON string.
+        """
+        return cls.from_dict(json.loads(serialized))
+
+    def __getstate__(self):
+        result = dict(self.__dict__)
+        result['elements'] = [e.__getstate__() for e in self]
+        return result
+
+    def __setstate__(self, state):
+        state['elements'] = [Variant.from_dict(e) for e in state['elements']]
+        self.__dict__.update(state)
+
+    def exactly_equal(self, other):
+        '''
+        Comparison between VariantCollection instances that takes into account
+        the info field of Variant instances.
+
+        Returns
+        ----------
+        True if the variants in this collection equal the variants in the other
+        collection. The Variant.info fields are included in the comparison.
+        '''
+        return (
+            self.__class__ == other.__class__ and
+            len(self) == len(other) and
+            all(x.exactly_equal(y) for (x, y) in zip(self, other)))

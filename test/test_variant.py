@@ -102,10 +102,6 @@ def test_deletion_no_suffix():
     eq_(variant.end, 11)
     eq_(variant.short_description, "chr1 g.10_11delAA")
 
-def assert_variants_completely_equal(variant1, variant2):
-    eq_(variant1, variant2)
-    eq_(variant1.info, variant2.info)
-
 def test_serialization():
     variants = [
         Variant(
@@ -123,16 +119,14 @@ def test_serialization():
         # Test pickling.
         serialized = pickle.dumps(original)
         reconstituted = pickle.loads(serialized)
-        assert_variants_completely_equal(original, reconstituted)
+        assert original.exactly_equal(reconstituted)
 
         # Test json, with all fields.
         serialized = original.to_json()
         reconstituted = Variant.from_json(serialized)
-        assert_variants_completely_equal(original, reconstituted)
+        assert original.exactly_equal(reconstituted)
 
-        # Test json, with only basic fields.
-        serialized = original.to_json(only_basic_fields=True)
+        # Test json, only basic fields.
+        serialized = original.with_only_basic_fields().to_json()
         reconstituted = Variant.from_json(serialized)
         eq_(original, reconstituted)
-
-

@@ -181,18 +181,41 @@ class Variant(object):
             self.alt,
             self.ensembl.release)
 
+    def with_only_basic_fields(self):
+        '''
+        Return a copy of this Variant instance with an empty info dict.
+        '''
+        return Variant(
+            self.contig,
+            self.start,
+            self.ref,
+            self.alt,
+            ensembl=self.ensembl,
+            info=None)
+
     def __eq__(self, other):
         return (
             other.__class__ is Variant and
             self.fields() == other.fields())
 
-    def __getstate__(self, only_basic_fields=False):
+    def exactly_equal(self, other):
+        '''
+        Comparison between Variant instances that takes into account the info
+        field.
+
+        Returns
+        ----------
+        True if this variant instance equals the other variant instance and,
+        additionally, the info fields are equal.
+        '''
+        return self == other and self.info == other.info
+
+    def __getstate__(self):
         fields = self.fields()
         result = {
             field: fields[i] for (i, field) in enumerate(fields._fields)
         }
-        if not only_basic_fields:
-            result['info'] = self.info
+        result['info'] = self.info
         return result
 
     def __setstate__(self, fields):
@@ -203,32 +226,32 @@ class Variant(object):
         # Remaining fields are simple properties that just get set.
         self.__dict__.update(fields)
 
-    def to_json(self, only_basic_fields=False):
+    def to_json(self):
         """
         Serialize to JSON.
-
-        Parameters
-        ----------
-        only_basic_fields : bool, optional
-            If true, then only the fields usesd for object equality are
-            included. In particular, the info fields is ignored.
 
         Returns
         ----------
         String giving the Variant instance serialized in JSON format.
 
         """
-        return json.dumps(
-            self.__getstate__(only_basic_fields=only_basic_fields))
+        return json.dumps(self.__getstate__())
+
+    @classmethod
+    def from_dict(cls, state):
+        """
+        Unserialize a Variant encoded as a Python dict.
+        """
+        instance = cls.__new__(cls)
+        instance.__setstate__(state)
+        return instance
 
     @classmethod
     def from_json(cls, serialized):
         """
-        Unserialize a Variant encoded as a JSON string.
+        Unserialize a Variant encoded as a string of JSON.
         """
-        instance = cls.__new__(cls)
-        instance.__setstate__(json.loads(serialized))
-        return instance
+        return Variant.from_dict(json.loads(serialized))
 
     @memoized_property
     def short_description(self):
