@@ -15,9 +15,11 @@
 from __future__ import print_function, division, absolute_import
 from collections import Counter, OrderedDict
 
+from typechecks import require_iterable_of
+
 from .collection import Collection
 from .common import memoize
-from .effects import NonsilentCodingMutation
+from .effects import MutationEffect, NonsilentCodingMutation
 from .effect_ordering import (
     effect_priority,
     effect_sort_key,
@@ -53,6 +55,7 @@ class EffectCollection(Collection):
 
         sort_key : callable
         """
+        require_iterable_of(effects, MutationEffect)
         Collection.__init__(
             self,
             elements=effects,

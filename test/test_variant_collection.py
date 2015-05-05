@@ -17,8 +17,14 @@ Test properties of VariantCollection objects other than effect annotations
 """
 from collections import Counter
 from nose.tools import eq_
+try:
+    import cPickle as pickle
+except ImportError:
+    import pickle
 
 from .data import ov_wustle_variants, tcga_ov_variants
+
+from varcode import VariantCollection, Variant
 
 def test_reference_names():
     eq_(ov_wustle_variants.reference_names(), {"GRCh37"})
@@ -57,3 +63,31 @@ def test_gene_counts():
     #
     # coding_gene_counts = variants.gene_counts(only_coding=True)
     # eq_(coding_gene_counts, expected_counts)
+
+def test_serialization():
+    original = VariantCollection([
+            Variant(
+                1, start=10, ref="AA", alt="AAT", ensembl=77, info={"a": "b"}),
+            Variant(10, start=15, ref="A", alt="G"),
+            Variant(20, start=150, ref="", alt="G", info={"bar": 2}),
+    ])
+    
+    # This causes the variants' ensembl objects to make a SQL connection,
+    # which makes the ensembl object non-serializable. By calling this
+    # method, we are checking that we don't attempt to directly serialize
+    # the ensembl object.
+    original.effects()
+
+    # Test pickling.
+    serialized = pickle.dumps(original)
+    reconstituted = pickle.loads(serialized)
+    eq_(original, reconstituted)
+    assert original.exactly_equal(reconstituted), (
+        "%s != %s" % (original, reconstituted))
+
+    # Test json.
+    serialized = original.to_json()
+    reconstituted = VariantCollection.from_json(serialized)
+    eq_(original, reconstituted)
+    assert original.exactly_equal(reconstituted), (
+        "%s != %s" % (original, reconstituted))
