@@ -191,7 +191,7 @@ class VariantCollection(Collection):
         """
         return json.dumps(self.__getstate__())
 
-    def to_json_file(self, filename):
+    def write_json_file(self, filename):
         """
         Serialize this VariantCollection to a JSON representation and write it
         out to a text file.
@@ -216,7 +216,7 @@ class VariantCollection(Collection):
         return cls.from_dict(json.loads(serialized))
 
     @classmethod
-    def from_json_file(cls, filename):
+    def read_json_file(cls, filename):
         """
         Construct a VariantCollection from a JSON file.
         """
