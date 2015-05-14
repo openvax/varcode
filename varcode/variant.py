@@ -53,16 +53,93 @@ from .effects import (
 from .nucleotides import normalize_nucleotide_string
 from .string_helpers import trim_shared_flanking_strings
 from .transcript_helpers import interval_offset_on_transcript
+from .locus import Locus
 
 class Variant(object):
-    def __init__(self,
-            contig,
-            start,
+    @classmethod
+    def make(
+        cls,
+        contig,
+        start,
+        ref,
+        alt,
+        ensembl=ensembl_grch38,
+        info=None,
+        allow_extended_nucleotides=False):
+        """
+        Construct a Variant object.
+        Parameters
+        ----------
+        contig : str
+            Chromosome that this variant is on
+        start : int
+            1-based position on the chromosome of first reference nucleotide
+        ref : str
+            Reference nucleotide(s)
+        alt : str
+            Alternate nucleotide(s)
+        ensembl : EnsemblRelease
+            Ensembl object used for determining gene/transcript annotations
+        info : dict, optional
+            Extra metadata about this variant
+        """
+        start = int(start)
+
+        # we want to preserve the ref/alt/pos both as they appeared in the
+        # original VCF or MAF file but also normalize variants to get rid
+        # of shared prefixes/suffixes between the ref and alt nucleotide
+        # strings e.g. g.10 CTT>T can be normalized into g.10delCT
+        #
+        # The normalized variant properties go into fields
+        #    Variant.{original_ref, original_alt, original_pos}
+        # whereas the trimmed fields are:
+        #    Variant.{ref, alt, start, end}
+
+        # the original entries must preserve the number of nucleotides in
+        # ref and alt but we still want to normalize e.g. '-' and '.' into ''
+        original_ref = normalize_nucleotide_string(ref,
+            allow_extended_nucleotides=allow_extended_nucleotides)
+        original_alt = normalize_nucleotide_string(alt,
+            allow_extended_nucleotides=allow_extended_nucleotides)
+
+        # normalize the variant by trimming any shared prefix or suffix
+        # between ref and alt nucleotide sequences and then
+        # offset the variant position in a strand-dependent manner
+        (trimmed_ref, trimmed_alt, prefix, suffix) = (
+            trim_shared_flanking_strings(original_ref, original_alt))
+
+        trimmed_start = start + len(prefix)
+        return cls(
+            Locus(
+                contig,
+                trimmed_start,
+                trimmed_start + len(trimmed_ref)),
             ref,
             alt,
-            ensembl=ensembl_grch38,
-            info=None,
-            allow_extended_nucleotides=False):
+            ensembl,
+            info)
+
+    @property
+    def contig(self):
+        return self.locus.contig
+    
+    @property
+    def base1_start(self):
+        return self.locus.base1_start
+
+    @property
+    def base1_end(self):
+        return self.locus.base1_end
+
+    @property
+    def Xbase0_start(self):
+        return self.locus.start
+
+    @property
+    def Xbase0_end(self):
+        return self.locus.end
+
+    def __init__(self, locus, ref, alt, ensembl=ensembl_grch38, info=None):
         """
         Construct a Variant object.
 
@@ -85,48 +162,15 @@ class Variant(object):
 
         info : dict, optional
             Extra metadata about this variant
+
+        the end of locus is ignored, and taken from length of ref.
         """
-        self.contig = normalize_chromosome(contig)
+        require_instance(locus, Locus, "locus")
+        assert len(locus) == len(ref)
 
-        # we want to preserve the ref/alt/pos both as they appeared in the
-        # original VCF or MAF file but also normalize variants to get rid
-        # of shared prefixes/suffixes between the ref and alt nucleotide
-        # strings e.g. g.10 CTT>T can be normalized into g.10delCT
-        #
-        # The normalized variant properties go into fields
-        #    Variant.{original_ref, original_alt, original_pos}
-        # whereas the trimmed fields are:
-        #    Variant.{ref, alt, start, end}
-
-        # the original entries must preserve the number of nucleotides in
-        # ref and alt but we still want to normalize e.g. '-' and '.' into ''
-        self.original_ref = normalize_nucleotide_string(ref,
-            allow_extended_nucleotides=allow_extended_nucleotides)
-        self.original_alt = normalize_nucleotide_string(alt,
-            allow_extended_nucleotides=allow_extended_nucleotides)
-        self.original_start = int(start)
-
-        # normalize the variant by trimming any shared prefix or suffix
-        # between ref and alt nucleotide sequences and then
-        # offset the variant position in a strand-dependent manner
-        (trimmed_ref, trimmed_alt, prefix, suffix) = (
-            trim_shared_flanking_strings(self.original_ref, self.original_alt))
-
-        self.ref = trimmed_ref
-        self.alt = trimmed_alt
-
-        # insertions must be treated differently since the meaning of a
-        # position for an insertion is
-        #   "insert the alt nucleotides after this position"
-        if len(trimmed_ref) == 0:
-            # start and end both are nucleotide before insertion
-            self.start = self.original_start + max(0, len(prefix) - 1)
-            self.end = self.start
-        else:
-            # for substitutions and deletions the [start:end] interval is
-            # an inclusive selection of reference nucleotides
-            self.start = self.original_start + len(prefix)
-            self.end = self.start + len(trimmed_ref) - 1
+        self.locus = locus
+        self.ref = ref
+        self.alt = alt
 
         # user might supply Ensembl release as an integer
         if isinstance(ensembl, int):
@@ -143,7 +187,7 @@ class Variant(object):
     def __str__(self):
         return "Variant(contig=%s, start=%d, ref=%s, alt=%s, genome=%s)" % (
             self.contig,
-            self.start,
+            self.base1_start,
             self.ref if self.ref else ".",
             self.alt if self.alt else ".",
             self.reference_name,)
@@ -158,15 +202,12 @@ class Variant(object):
         """
         Variants are ordered by locus.
         """
-        require_instance(other, Variant, name="variant")
-        if self.contig == other.contig:
-            return self.start < other.start
-        return self.contig < other.contig
+        return self.locus < other.locus
 
     # The identifying fields of a variant
     BasicFields = namedtuple(
         "BasicFields",
-        "contig start end ref alt release")
+        "locus ref alt release")
 
     def fields(self):
         """
@@ -175,9 +216,7 @@ class Variant(object):
         comparisons.
         """
         return Variant.BasicFields(
-            self.contig,
-            self.start,
-            self.end,
+            self.locus,
             self.ref,
             self.alt,
             self.ensembl.release)
@@ -187,8 +226,7 @@ class Variant(object):
         Return a copy of this Variant instance with an empty info dict.
         '''
         return Variant(
-            self.contig,
-            self.start,
+            self.locus,
             self.ref,
             self.alt,
             ensembl=self.ensembl,
@@ -253,7 +291,7 @@ class Variant(object):
         Unserialize a Variant encoded as a string of JSON.
         """
         return Variant.from_dict(json.loads(serialized))
-
+    
     @memoized_property
     def short_description(self):
         """
@@ -263,27 +301,27 @@ class Variant(object):
         if self.ref == self.alt:
             # no change
             return "chr%s g.%d%s" % (
-                self.contig, self.start, self.ref)
+                self.contig, self.base1_start, self.ref)
         elif len(self.ref) == 0:
             # insertions
             return "chr%s g.%d_%dins%s" % (
                 self.contig,
-                self.start,
-                self.start + 1,
+                self.base1_start,
+                self.base1_start + 1,
                 self.alt)
         elif len(self.alt) == 0:
             # deletion
             return "chr%s g.%d_%ddel%s" % (
-                self.contig, self.start, self.end, self.ref)
+                self.contig, self.base1_start, self.base1_end, self.ref)
         else:
             # substitution
             return "chr%s g.%d%s>%s" % (
-                self.contig, self.start, self.ref, self.alt)
+                self.contig, self.base1_start, self.ref, self.alt)
 
     @memoized_property
     def transcripts(self):
         return self.ensembl.transcripts_at_locus(
-            self.contig, self.start, self.end)
+            self.locus.contig, self.base1_start, self.base1_end)
 
     @memoized_property
     def coding_transcripts(self):
@@ -309,7 +347,7 @@ class Variant(object):
         Return Gene object for all genes which overlap this variant.
         """
         return self.ensembl.genes_at_locus(
-            self.contig, self.start, self.end)
+            self.contig, self.base1_start, self.base1_end)
 
     @memoized_property
     def gene_ids(self):
@@ -319,7 +357,7 @@ class Variant(object):
         which has to issue many more queries to construct each Gene object.
         """
         return self.ensembl.gene_ids_at_locus(
-            self.contig, self.start, self.end)
+            self.locus.contig, self.locus.base1_start, self.locus.base1_end)
 
     @memoized_property
     def gene_names(self):
@@ -329,7 +367,7 @@ class Variant(object):
         which has to issue many more queries to construct each Gene object.
         """
         return self.ensembl.gene_names_at_locus(
-            self.contig, self.start, self.end)
+            self.contig, self.base1_start, self.base1_end)
 
     @memoized_property
     def coding_genes(self):
@@ -437,25 +475,26 @@ class Variant(object):
         end_in_exon = False
 
         nearest_exon = None
-        for i, exon in enumerate(transcript.exons):
-            if self.start <= exon.start and self.end >= exon.end:
+        for (i, exon) in enumerate(transcript.exons):
+            if (self.base1_start <= exon.start and
+                self.base1_end >= exon.end):
                 completely_lost_exons.append(exon)
 
-            if insertion and exon.strand == "+" and self.end == exon.end:
+            if insertion and exon.strand == "+" and self.base1_end == exon.end:
                 # insertions after an exon don't overlap the exon
                 distance = 1
-            elif insertion and exon.strand == "-" and self.start == exon.start:
+            elif insertion and exon.strand == "-" and self.base1_start == exon.start:
                 distance = 1
             else:
-                distance = exon.distance_to_interval(self.start, self.end)
+                distance = exon.distance_to_interval(self.base1_start, self.base1_end)
 
             if distance == 0:
                 overlapping_exon_numbers_and_exons.append((i + 1, exon))
                 # start is contained in current exon
-                if exon.start <= self.start <= exon.end:
+                if exon.start <= self.base1_start <= exon.end:
                     start_in_exon = True
                 # end is contained in current exon
-                if exon.end >= self.end >= exon.start:
+                if exon.end >= self.base1_end >= exon.start:
                     end_in_exon = True
             elif distance < distance_to_nearest_exon:
                     distance_to_nearest_exon = distance
@@ -512,13 +551,13 @@ class Variant(object):
 
         before_forward_exon = (
             nearest_exon.strand == "+" and
-            (self.start < nearest_exon.start or
-                (self.ref == "" and self.start == nearest_exon.start)))
+            (self.base1_start < nearest_exon.start or
+                (self.ref == "" and self.base1_start == nearest_exon.start)))
 
         before_backward_exon = (
             nearest_exon.strand == "-" and
-            (self.end > nearest_exon.end or
-                (self.ref == "" and self.end == nearest_exon.end)))
+            (self.base1_end > nearest_exon.end or
+                (self.ref == "" and self.base1_end == nearest_exon.end)))
 
         before_exon = before_forward_exon or before_backward_exon
 
@@ -564,26 +603,26 @@ class Variant(object):
         genome_alt = self.alt
 
         # clip mutation to only affect the current exon
-        if self.start < exon.start:
+        if self.base1_start < exon.start:
             # if mutation starts before current exon then only look
             # at nucleotides which overlap the exon
             assert len(genome_ref) > 0, "Unexpected insertion into intron"
-            n_skip_start = exon.start - self.start
+            n_skip_start = exon.start - self.base1_start
             genome_ref = genome_ref[n_skip_start:]
             genome_alt = genome_alt[n_skip_start:]
             genome_start = exon.start
         else:
-            genome_start = self.start
+            genome_start = self.base1_start
 
-        if self.end > exon.end:
+        if self.base1_end > exon.end:
             # if mutation goes past exon end then only look at nucleotides
             # which overlap the exon
-            n_skip_end = self.end - exon.end
+            n_skip_end = self.base1_end - exon.end
             genome_ref = genome_ref[:-n_skip_end]
             genome_alt = genome_alt[:len(genome_ref)]
             genome_end = exon.end
         else:
-            genome_end = self.end
+            genome_end = self.base1_end
 
         transcript_offset = interval_offset_on_transcript(
             genome_start, genome_end, transcript)

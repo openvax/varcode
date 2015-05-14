@@ -33,7 +33,7 @@ def validate_transcript_mutation(
         dna_alt,
         aa_pos,
         aa_alt):
-    variant = Variant(chrom, dna_position, dna_ref, dna_alt, ensembl)
+    variant = Variant.make(chrom, dna_position, dna_ref, dna_alt, ensembl)
     effects = variant.effects()
     transcript_id_dict = {
         effect.transcript.id: effect
