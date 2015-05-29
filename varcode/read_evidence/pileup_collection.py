@@ -23,7 +23,6 @@ import pandas
 import pysam
 import typechecks
 import pyensembl
-import typechecks
 
 from .. import Locus
 from . import Pileup, PileupElement, alignment_key, read_key
@@ -59,6 +58,7 @@ class PileupCollection(object):
         Raises a KeyError if this PileupCollection does not have a Pileup at
         the specified locus.
         '''
+        locus = to_locus(locus)
         if len(locus.positions) != 1:
             raise ValueError("Not a single-base locus: %s" % locus)
         return self.pileups[locus]
@@ -68,6 +68,7 @@ class PileupCollection(object):
         Return a new PileupCollection instance including only pileups for 
         the specified loci.
         '''
+        loci = [to_locus(obj) for obj in loci]
         single_position_loci = []
         for locus in loci:
             for position in locus.positions:
@@ -285,6 +286,7 @@ class PileupCollection(object):
         PileupCollection instances of the alignments that support that allele.
 
         '''
+        locus = to_locus(locus)
         read_to_allele = None
         loci = []
         if locus.positions:
@@ -354,6 +356,7 @@ class PileupCollection(object):
         ----------
         List of (allele, score) pairs.
         '''
+        locus = to_locus(locus)
         return [
             (allele, score(x))
             for (allele, x) in self.group_by_allele(locus).items()
@@ -375,15 +378,16 @@ class PileupCollection(object):
         each of which is a string -> PileupCollection dict mapping alleles
         to the PileupCollection of evidence supporting them.
         '''
-        if len(variant.ref) != len(variant.locus.positions):
+        locus = to_locus(variant)
+        if len(variant.ref) != len(locus.positions):
             logging.warning(
                 "Ref is length %d but locus has %d bases in variant: %s" %
-                (len(variant.ref), len(variant.locus.positions), str(variant)))
+                (len(variant.ref), len(locus.positions), str(variant)))
 
-        alleles_dict = self.group_by_allele(variant.locus)
+        alleles_dict = self.group_by_allele(locus)
         single_base_loci = [
-            Locus.from_interbase_coordinates(variant.locus.contig, position)
-            for position in variant.locus.positions
+            Locus.from_interbase_coordinates(locus.contig, position)
+            for position in locus.positions
         ]
         empty_pileups = dict(
             (locus, Pileup(locus=locus, elements=[]))
@@ -531,6 +535,8 @@ class PileupCollection(object):
         need to be removed. 
         '''
 
+        loci = [to_locus(obj) for obj in loci]
+
         close_on_completion = False
         if typechecks.is_string(pysam_samfile):
             pysam_samfile = pysam.Samfile(pysam_samfile)
@@ -585,3 +591,22 @@ class PileupCollection(object):
             if close_on_completion:
                 pysam_samfile.close()
 
+def to_locus(variant_or_locus):
+    """
+    Return a Locus object for a Variant instance.
+
+    Since the read evidence module uses a different Variant class than the rest
+    of varcode, this is necessary. This should be removed once varcode switches
+    to interbase coordinates.
+    """
+    if isinstance(variant_or_locus, Locus):
+        return variant_or_locus
+    try:
+        return variant_or_locus.locus
+    except AttributeError:
+        # IMPORTANT: if varcode someday changes from inclusive to interbase
+        # coordinates, this will need to be updated.
+        return Locus.from_inclusive_coordinates(
+            variant_or_locus.contig,
+            variant_or_locus.start,
+            variant_or_locus.end)

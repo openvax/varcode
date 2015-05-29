@@ -16,6 +16,7 @@ from __future__ import absolute_import
 import collections
 from nose.tools import eq_, assert_raises
 import pysam
+from varcode import Variant as VarcodeVariant
 from varcode.read_evidence import PileupCollection
 from varcode import Locus
 from .data import data_path
@@ -202,6 +203,20 @@ def test_read_evidence_variant_matching_gatk_mini_bundle_extract():
             lambda e: e.read_attributes().mapping_quality.mean()),
         [('AC', 60.0), ('', 65.0)])
 
+def test_read_evidence_variant_matching_gatk_bundle_native_varcode_variant():
+    # Try native varcode Variant.
+    handle = pysam.Samfile(data_path("reads/gatk_mini_bundle_extract.bam"))
+    locus = Locus.from_inclusive_coordinates("20", 10008951)
+    variant = VarcodeVariant(
+        locus.contig,
+        locus.position + 1,  # inclusive not interbase
+        "A",
+        "C")
+    evidence = PileupCollection.from_bam(handle, [variant])
+    eq_(evidence.match_summary(variant),
+        [('A', 1), ('C', 4)])
+
+
 def test_read_evidence_variant_matching_gatk_mini_bundle_extract_warning():
     filename = data_path("reads/gatk_mini_bundle_extract.bam")
 
@@ -212,4 +227,5 @@ def test_read_evidence_variant_matching_gatk_mini_bundle_extract_warning():
     evidence = PileupCollection.from_bam(filename, loci)
     eq_(evidence.match_summary(Variant(loci[0], "A", "")),
         [('A', 0), ('', 0), ('AT', 3)])
+
 
