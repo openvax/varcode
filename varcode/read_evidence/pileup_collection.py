@@ -595,9 +595,20 @@ def to_locus(variant_or_locus):
     """
     Return a Locus object for a Variant instance.
 
-    Since the read evidence module uses a different Variant class than the rest
-    of varcode, this is necessary. This should be removed once varcode switches
-    to interbase coordinates.
+    This is necessary since the read evidence module expects Variant instances
+    to have a locus attribute st to a varcode.Locus instance of interbase
+    genomic coordinates.  The rest of varcode uses a different Variant class,
+    but will eventually be transitioned to interbase coordinates.
+
+    See test/test_read_evidence.py for a definition of the Variant class that
+    the read_evidence module is meant to work with.
+
+    This function can be passed a regular varcode.Variant instance (with fields
+    start, end, contig, etc.), a different kind of variant object that has a
+    'locus' field, or a varcode.Locus. It will return a varcode.Locus instance.
+
+    This should all get cleaned up once varcode switches to interbase
+    coordinates and we standardize on a Variant class.
     """
     if isinstance(variant_or_locus, Locus):
         return variant_or_locus
