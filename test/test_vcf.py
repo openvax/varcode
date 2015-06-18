@@ -12,16 +12,52 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 from nose.tools import eq_
 from varcode import load_vcf, Variant
 from . import data_path
 
+# Set to 1 to enable, 0 to disable.
+# TODO: consider running in an in-process HTTP server instead for these tests.
+RUN_TESTS_REQUIRING_INTERNET = bool(int(
+    os.environ.get("RUN_TESTS_REQUIRING_INTERNET", 0)))
+
 VCF_FILENAME = data_path("somatic_hg19_14muts.vcf")
+VCF_EXTERNAL_URL = (
+    "https://raw.githubusercontent.com/hammerlab/varcode/master/test/data/somatic_hg19_14muts.vcf")
+
+def test_load_vcf_local():
+    variants = load_vcf(VCF_FILENAME)
+    assert variants.reference_names() == {"GRCh37"}
+    assert len(variants) == 14
+    
+    variants = load_vcf(VCF_FILENAME + ".gz")
+    assert variants.reference_names() == {"GRCh37"}
+    assert len(variants) == 14
+    
+    variants = load_vcf("file://%s" % VCF_FILENAME)
+    assert variants.reference_names() == {"GRCh37"}
+    assert len(variants) == 14
+    
+    variants = load_vcf("file://%s.gz" % VCF_FILENAME)
+    assert variants.reference_names() == {"GRCh37"}
+    assert len(variants) == 14
+
+if RUN_TESTS_REQUIRING_INTERNET:
+    def test_load_vcf_external():
+        variants = load_vcf(VCF_EXTERNAL_URL)
+        assert variants.reference_names() == {"GRCh37"}
+        assert len(variants) == 14
+        
+        variants = load_vcf(VCF_EXTERNAL_URL + ".gz")
+        assert variants.reference_names() == {"GRCh37"}
+        assert len(variants) == 14
 
 def test_vcf_reference_name():
     variants = load_vcf(VCF_FILENAME)
     # after normalization, hg19 should be remapped to GRCh37
     assert variants.reference_names() == {"GRCh37"}
+
 
 def test_reference_arg_to_load_vcf():
     variants = load_vcf(VCF_FILENAME)
