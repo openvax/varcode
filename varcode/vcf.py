@@ -16,6 +16,21 @@
 # rather than our local vcf module
 from __future__ import absolute_import
 
+import sys
+import gzip
+import codecs
+
+try:
+    # Python 2
+    from urllib2 import urlopen
+    from urlparse import urlparse
+except ImportError:
+    # Python 3
+    from urllib.request import urlopen
+    from urllib.parse import urlparse
+
+from io import BytesIO
+
 from pyensembl import cached_release
 import typechecks
 import vcf  # PyVCF
@@ -41,9 +56,11 @@ def load_vcf(
     ----------
 
     path : str
+        Path or URL to VCF (*.vcf) or compressed VCF (*.vcf.gz).
 
     only_passing : boolean, optional
-        If true, any entries whose FILTER field is not one of "." or "PASS" is dropped.
+        If true, any entries whose FILTER field is not one of "." or "PASS" is
+        dropped.
 
     ensembl_version : int, optional
         Which release of Ensembl to use for annotation, by default inferred
@@ -60,40 +77,59 @@ def load_vcf(
 
     """
 
-    typechecks.require_string(path, "Path to VCF")
+    typechecks.require_string(path, "Path or URL to VCF")
 
-    vcf_reader = vcf.Reader(filename=path)
+    # If a plain path (no URL) is specified, we change it to a "file://" URL.
+    parsed_path = urlparse(path)
+    if not parsed_path.scheme:
+        path = parsed_path._replace(scheme="file").geturl()
 
-    if not ensembl_version:
-        if reference_name:
-            # normalize the reference name in case it's in a weird format
-            reference_name = infer_reference_name(reference_name)
-        elif reference_vcf_key not in vcf_reader.metadata:
-            raise ValueError("Unable to infer reference genome for %s" % (
-                path,))
-        else:
-            reference_path = vcf_reader.metadata[reference_vcf_key]
-            reference_name = infer_reference_name(reference_path)
-        ensembl_version = ensembl_release_number_for_reference_name(
-            reference_name)
+    fd = None
+    try:
+        fd = urlopen(path)
+        if path.endswith(".gz"):
+            fd = gzip.GzipFile(fileobj=BytesIO(fd.read()))
+        if sys.version > '3':
+            fd = codecs.getreader('ascii')(fd)
+        vcf_reader = vcf.Reader(fsock=fd, filename=path, compressed=False)
 
-    ensembl = cached_release(ensembl_version)
+        if not ensembl_version:
+            if reference_name:
+                # normalize the reference name in case it's in a weird format
+                reference_name = infer_reference_name(reference_name)
+            elif reference_vcf_key not in vcf_reader.metadata:
+                raise ValueError("Unable to infer reference genome for %s" % (
+                    path,))
+            else:
+                reference_path = vcf_reader.metadata[reference_vcf_key]
+                reference_name = infer_reference_name(reference_path)
+            ensembl_version = ensembl_release_number_for_reference_name(
+                reference_name)
 
-    variants = []
-    for record in vcf_reader:
-        if not only_passing or not record.FILTER or record.FILTER == "PASS":
-            for alt in record.ALT:
-                # We ignore "no-call" variants, i.e. those where X.ALT = [None]
-                if not alt:
-                    continue
-                variant = Variant(
-                    contig=record.CHROM,
-                    start=record.POS,
-                    ref=record.REF,
-                    alt=alt.sequence,
-                    info=record.INFO,
-                    ensembl=ensembl)
-                variants.append(variant)
-    return VariantCollection(
-        variants=variants,
-        path=path)
+        ensembl = cached_release(ensembl_version)
+
+        variants = []
+        for record in vcf_reader:
+            if (not only_passing or
+                    not record.FILTER or
+                    record.FILTER == "PASS"):
+                for alt in record.ALT:
+                    # We ignore "no-call" variants, i.e. those where
+                    # X.ALT = [None]
+                    if not alt:
+                        continue
+                    variant = Variant(
+                        contig=record.CHROM,
+                        start=record.POS,
+                        ref=record.REF,
+                        alt=alt.sequence,
+                        info=record.INFO,
+                        ensembl=ensembl)
+                    variants.append(variant)
+        return VariantCollection(
+            variants=variants,
+            path=path)
+
+    finally:
+        if fd is not None:
+            fd.close()
