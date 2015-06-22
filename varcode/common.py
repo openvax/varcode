@@ -41,8 +41,10 @@ def memoize(fn):
     @wraps(fn)
     def wrapped_fn(*args, **kwargs):
         key = (args, tuple(sorted(kwargs.items())))
-        if key not in memoized_values:
+        try:
+            return memoized_values[key]
+        except KeyError:
             memoized_values[key] = fn(*args, **kwargs)
-        return memoized_values[key]
+            return memoized_values[key]
 
     return wrapped_fn

@@ -50,18 +50,37 @@ from .effects import (
     ExonLoss,
     ExonicSpliceSite,
 )
-from .nucleotides import normalize_nucleotide_string
+from .nucleotides import normalize_nucleotide_string, STANDARD_NUCLEOTIDES
 from .string_helpers import trim_shared_flanking_strings
 from .transcript_helpers import interval_offset_on_transcript
 
 class Variant(object):
+    __slots__ = (
+        "contig",
+        "start",
+        "end",
+        "ref",
+        "alt",
+        "ensembl",
+        "original_ref",
+        "original_alt",
+        "original_start",
+        "_short_description",
+        "_transcripts",
+        "_transcript_ids",
+        "_transcript_names",
+        "_coding_transcripts",
+        "_genes",
+        "_gene_names",
+        "_gene_ids",
+        "_coding_genes",)
+
     def __init__(self,
             contig,
             start,
             ref,
             alt,
             ensembl=ensembl_grch38,
-            info=None,
             allow_extended_nucleotides=False):
         """
         Construct a Variant object.
@@ -87,6 +106,26 @@ class Variant(object):
             Extra metadata about this variant
         """
         self.contig = normalize_chromosome(contig)
+
+        # user might supply Ensembl release as an integer
+        if isinstance(ensembl, EnsemblRelease):
+            self.ensembl = ensembl
+        elif isinstance(ensembl, int):
+            self.ensembl = EnsemblRelease(release=ensembl)
+        else:
+            raise TypeError("Expected ensembl to be an int or an "
+                "EnsemblRelease instance, got: %s:%s" %
+                (type(ensembl), str(ensembl)))
+
+        if (ref in STANDARD_NUCLEOTIDES and
+                alt in STANDARD_NUCLEOTIDES and
+                ref != alt):
+
+            # Optimization for common case.
+            self.original_ref = self.ref = ref
+            self.original_alt = self.alt = alt
+            self.original_start = self.start = self.end = start
+            return
 
         # we want to preserve the ref/alt/pos both as they appeared in the
         # original VCF or MAF file but also normalize variants to get rid
@@ -128,14 +167,6 @@ class Variant(object):
             self.start = self.original_start + len(prefix)
             self.end = self.start + len(trimmed_ref) - 1
 
-        # user might supply Ensembl release as an integer
-        if isinstance(ensembl, int):
-            ensembl = EnsemblRelease(release=ensembl)
-        require_instance(ensembl, EnsemblRelease, "ensembl")
-        self.ensembl = ensembl
-
-        self.info = {} if info is None else info
-
     @property
     def reference_name(self):
         return self.ensembl.reference_name
@@ -152,7 +183,7 @@ class Variant(object):
         return str(self)
 
     def __hash__(self):
-        return hash(self.fields())
+        return self.start
 
     def __lt__(self, other):
         """
@@ -182,50 +213,28 @@ class Variant(object):
             self.alt,
             self.ensembl.release)
 
-    def with_only_basic_fields(self):
-        '''
-        Return a copy of this Variant instance with an empty info dict.
-        '''
-        return Variant(
-            self.contig,
-            self.start,
-            self.ref,
-            self.alt,
-            ensembl=self.ensembl,
-            info=None)
-
     def __eq__(self, other):
         return (
-            other.__class__ is Variant and
-            self.fields() == other.fields())
-
-    def exactly_equal(self, other):
-        '''
-        Comparison between Variant instances that takes into account the info
-        field.
-
-        Returns
-        ----------
-        True if this variant instance equals the other variant instance and,
-        additionally, the info fields are equal.
-        '''
-        return self == other and self.info == other.info
+            self.contig == other.contig and
+            self.start == other.start and
+            self.end == other.end and
+            self.ref == other.ref and
+            self.alt == other.alt and
+            self.ensembl.release == other.ensembl.release)
 
     def __getstate__(self):
         fields = self.fields()
-        result = {
+        return {
             field: fields[i] for (i, field) in enumerate(fields._fields)
         }
-        result['info'] = self.info
-        return result
 
     def __setstate__(self, fields):
-        # These fields require special logic.
+        # This field require special logic.
         self.ensembl = cached_release(fields.pop("release"))
-        self.info = fields.pop("info", {})
 
         # Remaining fields  are simple properties that just get set.
-        self.__dict__.update(fields)
+        for (key, value) in fields.items():
+            setattr(self, key, value)
 
     def to_json(self):
         """
@@ -524,8 +533,8 @@ class Variant(object):
 
         if distance_to_exon <= 2:
             if before_exon:
-                # 2 last nucleotides of intron before exon are the splice acceptor
-                # site, typically "AG"
+                # 2 last nucleotides of intron before exon are the splice
+                # acceptor site, typically "AG"
                 return SpliceAcceptor
             else:
                 # 2 first nucleotides of intron after exon are the splice donor
@@ -537,8 +546,8 @@ class Variant(object):
             # alternative splicing
             return IntronicSpliceSite
         elif before_exon and distance_to_exon <= 4:
-            # nucleotides -4 and -3 before exon are part of the 3' splicing motif
-            # but allow for more degeneracy than the -2, -1 nucleotides
+            # nucleotides -4 and -3 before exon are part of the 3' splicing
+            # motif but allow for more degeneracy than the -2, -1 nucleotides
             return IntronicSpliceSite
         else:
             # intronic mutation unrelated to splicing

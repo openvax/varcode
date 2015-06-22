@@ -51,10 +51,17 @@ def trim_shared_suffix(ref, alt):
     the shared suffix and both prefixes leading up to it:
         ('A', '', 'BC')
     """
-    reverse_ref = ref[::-1]
-    reverse_alt = alt[::-1]
-    results = trim_shared_prefix(reverse_ref, reverse_alt)
-    return tuple(s[::-1] for s in results)
+    n_ref = len(ref)
+    n_alt = len(alt)
+    n_min = min(n_ref, n_alt)
+    i = 0
+    while i < n_min and ref[-i - 1] == alt[-i - 1]:
+        i += 1
+
+    # i is length of shared suffix.
+    if i == 0:
+        return (ref, alt, '')
+    return (ref[:-i], alt[:-i], ref[-i:])
 
 def trim_shared_flanking_strings(ref, alt):
     """

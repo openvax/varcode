@@ -15,6 +15,7 @@
 import os
 from nose.tools import eq_
 from varcode import load_vcf, Variant
+from varcode.vcf import load_vcf_with_pyvcf
 from . import data_path
 
 # Set to 1 to enable, 0 to disable.
@@ -25,6 +26,11 @@ RUN_TESTS_REQUIRING_INTERNET = bool(int(
 VCF_FILENAME = data_path("somatic_hg19_14muts.vcf")
 VCF_EXTERNAL_URL = (
     "https://raw.githubusercontent.com/hammerlab/varcode/master/test/data/somatic_hg19_14muts.vcf")
+
+# To load from the branch that introduced these changs:
+#VCF_EXTERNAL_URL = (
+#    "https://raw.githubusercontent.com/hammerlab/varcode/load-vcfs-from-url/test/data/somatic_hg19_14muts.vcf")
+
 
 def test_load_vcf_local():
     variants = load_vcf(VCF_FILENAME)
@@ -59,6 +65,27 @@ def test_vcf_reference_name():
     assert variants.reference_names() == {"GRCh37"}
 
 
+def test_pandas_and_pyvcf_implementations_equivalent():
+    paths = [
+        data_path("somatic_hg19_14muts.vcf"),
+        data_path("somatic_hg19_14muts.vcf.gz"),
+        data_path("multiallelic.vcf"),
+    ]
+
+    def do_test(path):
+        vcf_pandas = load_vcf(path)
+        vcf_pyvcf = load_vcf_with_pyvcf(path)
+        eq_(vcf_pandas, vcf_pyvcf)
+        eq_(len(vcf_pandas), len(vcf_pyvcf))
+        eq_(vcf_pandas.elements, vcf_pyvcf.elements)
+        eq_(vcf_pandas.metadata, vcf_pyvcf.metadata)
+        eq_(vcf_pandas.elements[0], vcf_pyvcf.elements[0])
+        eq_(vcf_pandas.metadata[vcf_pandas.elements[0]],
+            vcf_pyvcf.metadata[vcf_pyvcf.elements[0]])
+    
+    for path in paths:
+        yield (do_test, path)
+        
 def test_reference_arg_to_load_vcf():
     variants = load_vcf(VCF_FILENAME)
     eq_(variants, load_vcf(VCF_FILENAME, ensembl_version=75))
@@ -75,8 +102,8 @@ def test_vcf_number_entries():
     assert len(variants) == 14, \
         "Expected 14 mutations, got %d" % (len(variants),)
 
-def _check_variant_gene_name(variant):
-    expected_gene_names = variant.info['GE']
+def _check_variant_gene_name(collection, variant):
+    expected_gene_names = collection.metadata[variant]['info']['GE']
     assert variant.gene_names == expected_gene_names, \
         "Expected gene name %s for variant %s, got %s" % (
             expected_gene_names, variant, variant.gene_names)
@@ -84,7 +111,7 @@ def _check_variant_gene_name(variant):
 def test_vcf_gene_names():
     variants = load_vcf(VCF_FILENAME)
     for variant in variants:
-        yield (_check_variant_gene_name, variant)
+        yield (_check_variant_gene_name, variants, variant)
 
 def test_multiple_alleles_per_line():
     variants = load_vcf(data_path("multiallelic.vcf"))

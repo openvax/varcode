@@ -13,7 +13,6 @@
 # limitations under the License.
 
 from __future__ import print_function, division, absolute_import
-import json
 import os.path
 from collections import defaultdict
 
@@ -31,7 +30,7 @@ class Collection(object):
         self.distinct = distinct
         if distinct:
             elements = set(elements)
-        self.elements = list(sorted(elements, key=sort_key))
+        self.elements = sorted(elements, key=sort_key)
         self.path = path
         if path:
             # get the filename without any directory prefix
