@@ -18,7 +18,7 @@ from .collection import Collection
 from .effect_collection import EffectCollection
 from .variant_collection import VariantCollection
 from .maf import load_maf, load_maf_dataframe
-from .vcf import load_vcf
+from .vcf import load_vcf, load_vcf_fast
 from .effect_ordering import effect_priority, top_priority_effect
 from .effects import (
     MutationEffect,
@@ -63,6 +63,7 @@ __all__ = [
     "load_maf",
     "load_maf_dataframe",
     "load_vcf",
+    "load_vcf_fast",
     # effects
     "MutationEffect",
     "TranscriptMutationEffect",

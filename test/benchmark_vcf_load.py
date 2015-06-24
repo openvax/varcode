@@ -2,7 +2,7 @@
 Time how long it takes to open a VCF.
 
 Run as:
-    python -m profile %(prog)s
+    python -m profile -s cumtime %(prog)s
 
 to get profiling output.
 
@@ -31,17 +31,18 @@ def run():
     start = time.time()
     
     if args.pyvcf:
-        result = varcode.vcf.load_vcf_with_pyvcf(
+        result = varcode.load_vcf(
             args.path,
             allow_extended_nucleotides=True)
     else:
-        result = varcode.vcf.load_vcf(
+        result = varcode.load_vcf_fast(
             args.path,
             allow_extended_nucleotides=True,
             **extra_args)
 
     print("Loaded %d variants in %0.3f sec. " % (
         len(result), time.time() - start))
+    print(result)
 
 if __name__ == '__main__':
     run()

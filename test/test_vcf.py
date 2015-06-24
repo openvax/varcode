@@ -14,8 +14,7 @@
 
 import os
 from nose.tools import eq_
-from varcode import load_vcf, Variant
-from varcode.vcf import load_vcf_with_pyvcf
+from varcode import load_vcf, load_vcf_fast, Variant
 from . import data_path
 
 # Set to 1 to enable, 0 to disable.
@@ -28,9 +27,9 @@ VCF_EXTERNAL_URL = (
     "https://raw.githubusercontent.com/hammerlab/varcode/master/test/data/somatic_hg19_14muts.vcf")
 
 # To load from the branch that introduced these changs:
-#VCF_EXTERNAL_URL = (
-#    "https://raw.githubusercontent.com/hammerlab/varcode/load-vcfs-from-url/test/data/somatic_hg19_14muts.vcf")
-
+# (needed before this gets merged to master, can be removed after)
+# VCF_EXTERNAL_URL = (
+#    "https://raw.githubusercontent.com/hammerlab/varcode/faster-vcf-parsing/test/data/somatic_hg19_14muts.vcf")
 
 def test_load_vcf_local():
     variants = load_vcf(VCF_FILENAME)
@@ -71,17 +70,17 @@ def test_pandas_and_pyvcf_implementations_equivalent():
         data_path("somatic_hg19_14muts.vcf.gz"),
         data_path("multiallelic.vcf"),
     ]
+    if RUN_TESTS_REQUIRING_INTERNET:
+        paths.append(VCF_EXTERNAL_URL)
+        paths.append(VCF_EXTERNAL_URL + ".gz")
 
     def do_test(path):
-        vcf_pandas = load_vcf(path)
-        vcf_pyvcf = load_vcf_with_pyvcf(path)
+        vcf_pandas = load_vcf_fast(path)
+        vcf_pyvcf = load_vcf(path)
         eq_(vcf_pandas, vcf_pyvcf)
         eq_(len(vcf_pandas), len(vcf_pyvcf))
         eq_(vcf_pandas.elements, vcf_pyvcf.elements)
         eq_(vcf_pandas.metadata, vcf_pyvcf.metadata)
-        eq_(vcf_pandas.elements[0], vcf_pyvcf.elements[0])
-        eq_(vcf_pandas.metadata[vcf_pandas.elements[0]],
-            vcf_pyvcf.metadata[vcf_pyvcf.elements[0]])
     
     for path in paths:
         yield (do_test, path)
