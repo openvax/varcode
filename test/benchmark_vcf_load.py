@@ -42,7 +42,7 @@ def run():
 
     print("Loaded %d variants in %0.3f sec. " % (
         len(result), time.time() - start))
-    print(result)
+    print(result.to_string(limit=5))
 
 if __name__ == '__main__':
     run()

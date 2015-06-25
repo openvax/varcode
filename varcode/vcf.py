@@ -270,31 +270,16 @@ def dataframes_to_variant_collection(
         ["CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER"] +
         (["INFO"] if info_parser else []))
 
-    if info_parser:
-        def records(chunk):
-            for tpl in chunk.itertuples():
-                # Parse the info field
-                info = info_parser(tpl[-1])
-                yield tpl[:-1] + (info,)
-    else:
-        def records(chunk):
-            for tpl in chunk.itertuples():
-                # Use None as the info field.
-                yield tpl + (None,)
-
     variants = []
     metadata = {}
     try:
         for chunk in dataframes:
-            if not info_parser and 'INFO' in chunk:
-                del chunk['INFO']
-
             assert chunk.columns.tolist() == expected_columns,\
                 "dataframe columns (%s) do not match expected columns (%s)" % (
                     chunk.columns, expected_columns)
                 
-            iterator = records(chunk)
-            for (i, chrom, pos, id_, ref, alts, qual, flter, info) in iterator:
+            for tpl in chunk.itertuples():
+                (i, chrom, pos, id_, ref, alts, qual, flter) = tpl[:8]
                 if flter == ".":
                     flter = None
                 elif flter == "PASS":
@@ -307,8 +292,12 @@ def dataframes_to_variant_collection(
                     id_ = None
                 qual = float(qual) if qual != "." else None
                 alt_num = 0
+                info = None
                 for alt in alts.split(","):
                     if alt != ".":
+                        if info_parser is not None and info is None:
+                            # tpl[-1] is info.
+                            info = info_parser(tpl[-1])
                         variant = Variant(
                             chrom,
                             int(pos),  # want a Python int not numpy.int64
