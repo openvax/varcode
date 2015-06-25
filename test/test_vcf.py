@@ -29,7 +29,7 @@ VCF_EXTERNAL_URL = (
 # To load from the branch that introduced these changs:
 # (needed before this gets merged to master, can be removed after)
 # VCF_EXTERNAL_URL = (
-#    "https://raw.githubusercontent.com/hammerlab/varcode/faster-vcf-parsing/test/data/somatic_hg19_14muts.vcf")
+#   "https://raw.githubusercontent.com/hammerlab/varcode/faster-vcf-parsing/test/data/somatic_hg19_14muts.vcf")
 
 def test_load_vcf_local():
     variants = load_vcf(VCF_FILENAME)
@@ -48,6 +48,12 @@ def test_load_vcf_local():
     assert variants.reference_names() == {"GRCh37"}
     assert len(variants) == 14
 
+    # An extra slashe before an absolute path can confuse URL parsing.
+    # Test that it can still be opened:
+    variants = load_vcf("/%s" % VCF_FILENAME)
+    assert variants.reference_names() == {"GRCh37"}
+    assert len(variants) == 14
+
 if RUN_TESTS_REQUIRING_INTERNET:
     def test_load_vcf_external():
         variants = load_vcf(VCF_EXTERNAL_URL)
@@ -63,27 +69,33 @@ def test_vcf_reference_name():
     # after normalization, hg19 should be remapped to GRCh37
     assert variants.reference_names() == {"GRCh37"}
 
-
 def test_pandas_and_pyvcf_implementations_equivalent():
     paths = [
-        data_path("somatic_hg19_14muts.vcf"),
-        data_path("somatic_hg19_14muts.vcf.gz"),
-        data_path("multiallelic.vcf"),
+        {'path': data_path("somatic_hg19_14muts.vcf")},
+        {'path': "/" + data_path("somatic_hg19_14muts.vcf")},
+        {'path': data_path("somatic_hg19_14muts.vcf.gz")},
+        {'path': data_path("multiallelic.vcf")},
+        {'path': data_path("mutect-example.vcf")},
+        {'path': data_path("strelka-example.vcf")},
+        {'path': data_path("mutect-example-headerless.vcf"),
+          'ensembl_version': 75},
     ]
     if RUN_TESTS_REQUIRING_INTERNET:
-        paths.append(VCF_EXTERNAL_URL)
-        paths.append(VCF_EXTERNAL_URL + ".gz")
+        paths.append({'path': VCF_EXTERNAL_URL})
+        paths.append({'path': VCF_EXTERNAL_URL + ".gz"})
 
-    def do_test(path):
-        vcf_pandas = load_vcf_fast(path)
-        vcf_pyvcf = load_vcf(path)
+    def do_test(kwargs):
+        vcf_pandas = load_vcf_fast(**kwargs)
+        vcf_pyvcf = load_vcf(**kwargs)
         eq_(vcf_pandas, vcf_pyvcf)
         eq_(len(vcf_pandas), len(vcf_pyvcf))
         eq_(vcf_pandas.elements, vcf_pyvcf.elements)
         eq_(vcf_pandas.metadata, vcf_pyvcf.metadata)
+        assert len(vcf_pandas) > 1
+        assert len(vcf_pyvcf) > 1
     
-    for path in paths:
-        yield (do_test, path)
+    for kwargs in paths:
+        yield (do_test, kwargs)
         
 def test_reference_arg_to_load_vcf():
     variants = load_vcf(VCF_FILENAME)

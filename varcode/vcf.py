@@ -183,7 +183,7 @@ def load_vcf_fast(
     '''
 
     typechecks.require_string(path, "Path or URL to VCF")
-    parsed_path = urlparse(path)
+    parsed_path = parse_url_or_path(path)
 
     if parsed_path.scheme and parsed_path.scheme.lower() != "file":
         # pandas.read_table nominally supports HTTP, but it tends to crash on
@@ -354,7 +354,7 @@ def read_vcf_into_dataframe(path, include_info=False, chunk_size=None):
     if include_info:
         vcf_field_types['INFO'] = str
 
-    parsed_path = urlparse(path)
+    parsed_path = parse_url_or_path(path)
     if not parsed_path.scheme or parsed_path.scheme.lower() == "file":
         path = parsed_path.path
     else:
@@ -397,23 +397,23 @@ class PyVCFReaderFromPathOrURL(object):
 
         if isinstance(path, vcf.Reader):
             self.vcf_reader = path
-            return
-
-        typechecks.require_string(path, "Path or URL to VCF")
-        self.path = path
-        parsed_path = urlparse(path)
-        if not parsed_path.scheme or parsed_path.scheme.lower() == 'file':
-            self.vcf_reader = vcf.Reader(filename=parsed_path.path)
-        elif parsed_path.scheme.lower() in ("http", "https", "ftp"):
-            self._to_close = response = requests.get(path, stream=True)
-            response.raise_for_status()  # raise error on 404, etc.
-            if path.endswith(".gz"):
-                lines = stream_gzip_decompress_lines(response.iter_content())
-            else:
-                lines = response.iter_lines(decode_unicode=True)
-            self.vcf_reader = vcf.Reader(fsock=lines, compressed=False)
         else:
-            raise ValueError("Unsupported scheme: %s" % parsed_path.scheme)
+            typechecks.require_string(path, "Path or URL to VCF")
+            self.path = path
+            parsed_path = parse_url_or_path(path)
+            if not parsed_path.scheme or parsed_path.scheme.lower() == 'file':
+                self.vcf_reader = vcf.Reader(filename=parsed_path.path)
+            elif parsed_path.scheme.lower() in ("http", "https", "ftp"):
+                self._to_close = response = requests.get(path, stream=True)
+                response.raise_for_status()  # raise error on 404, etc.
+                if path.endswith(".gz"):
+                    lines = stream_gzip_decompress_lines(
+                        response.iter_content())
+                else:
+                    lines = response.iter_lines(decode_unicode=True)
+                self.vcf_reader = vcf.Reader(fsock=lines, compressed=False)
+            else:
+                raise ValueError("Unsupported scheme: %s" % parsed_path.scheme)
 
     def close(self):
         if self._to_close is not None:
@@ -464,3 +464,12 @@ def make_ensembl(
         ensembl_version = ensembl_release_number_for_reference_name(
             reference_name)
     return cached_release(ensembl_version)
+
+def parse_url_or_path(s):
+    # urlparse will parse paths with two leading slashes (e.g. "//foo")
+    # in a strange way. We collapse these paths to start with just one
+    # slash.
+    if s.startswith("//"):
+        s = "/" + s.lstrip("/")
+    return urlparse(s)
+    
