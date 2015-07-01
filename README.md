@@ -12,13 +12,14 @@ import varcode
 
 # Load TCGA MAF containing variants from their
 variants = varcode.load_maf("tcga-ovarian-cancer-variants.maf")
+
 print(variants)
-# <VariantCollection from 'tcga-ovarian-cancer-variants.maf' with 6428 elements>
-#  -- Variant(contig=1, start=69538, ref=G, alt=A, genome=GRCh37)
-#  -- Variant(contig=1, start=881892, ref=T, alt=G, genome=GRCh37)
-#  -- Variant(contig=1, start=3389714, ref=G, alt=A, genome=GRCh37)
-#  -- Variant(contig=1, start=3624325, ref=G, alt=T, genome=GRCh37)
-#  ...
+### <VariantCollection from 'tcga-ovarian-cancer-variants.maf' with 6428 elements>
+###  -- Variant(contig=1, start=69538, ref=G, alt=A, genome=GRCh37)
+###  -- Variant(contig=1, start=881892, ref=T, alt=G, genome=GRCh37)
+###  -- Variant(contig=1, start=3389714, ref=G, alt=A, genome=GRCh37)
+###  -- Variant(contig=1, start=3624325, ref=G, alt=T, genome=GRCh37)
+###  ...
 
 # you can index into a VariantCollection and get back a Variant object
 variant = variants[0]
@@ -35,26 +36,26 @@ TP53_variants = gene_groups["TP53"]
 TP53_effects = TP53_variants.effects()
 
 print(TP53_effects)
-# <EffectCollection with 789 elements>
-# -- PrematureStop(variant=chr17 g.7574003G>A, transcript_name=TP53-001, transcript_id=ENST00000269305, effect_description=p.R342*)
-# -- ThreePrimeUTR(variant=chr17 g.7574003G>A, transcript_name=TP53-005, transcript_id=ENST00000420246)
-# -- PrematureStop(variant=chr17 g.7574003G>A, transcript_name=TP53-002, transcript_id=ENST00000445888, effect_description=p.R342*)
-# -- FrameShift(variant=chr17 g.7574030_7574030delG, transcript_name=TP53-001, transcript_id=ENST00000269305, effect_description=p.R333fs)
-# ...
+### <EffectCollection with 789 elements>
+### -- PrematureStop(variant=chr17 g.7574003G>A, transcript_name=TP53-001, transcript_id=ENST00000269305, effect_description=p.R342*)
+### -- ThreePrimeUTR(variant=chr17 g.7574003G>A, transcript_name=TP53-005, transcript_id=ENST00000420246)
+### -- PrematureStop(variant=chr17 g.7574003G>A, transcript_name=TP53-002, transcript_id=ENST00000445888, effect_description=p.R342*)
+### -- FrameShift(variant=chr17 g.7574030_7574030delG, transcript_name=TP53-001, transcript_id=ENST00000269305, effect_description=p.R333fs)
+### ...
 
 premature_stop_effect = TP53_effects[0]
 
 print(str(premature_stop_effect.mutant_protein_sequence))
-# 'MEEPQSDPSVEPPLSQETFSDLWKLLPENNVLSPLPSQAMDDLMLSPDDIEQWFTEDPGPDEAPRMPEAAPPVAPAPAAPTPAAPAPAPSWPLSSSVPSQKTYQGSYGFRLGFLHSGTAKSVTCTYSPALNKMFCQLAKTCPVQLWVDSTPPPGTRVRAMAIYKQSQHMTEVVRRCPHHERCSDSDGLAPPQHLIRVEGNLRVEYLDDRNTFRHSVVVPYEPPEVGSDCTTIHYNYMCNSSCMGGMNRRPILTIITLEDSSGNLLGRNSFEVRVCACPGRDRRTEEENLRKKGEPHHELPPGSTKRALPNNTSSSPQPKKKPLDGEYFTLQIRGRERFEMF'
+### 'MEEPQSDPSVEPPLSQETFSDLWKLLPENNVLSPLPSQAMDDLMLSPDDIEQWFTEDPGPDEAPRMPEAAPPVAPAPAAPTPAAPAPAPSWPLSSSVPSQKTYQGSYGFRLGFLHSGTAKSVTCTYSPALNKMFCQLAKTCPVQLWVDSTPPPGTRVRAMAIYKQSQHMTEVVRRCPHHERCSDSDGLAPPQHLIRVEGNLRVEYLDDRNTFRHSVVVPYEPPEVGSDCTTIHYNYMCNSSCMGGMNRRPILTIITLEDSSGNLLGRNSFEVRVCACPGRDRRTEEENLRKKGEPHHELPPGSTKRALPNNTSSSPQPKKKPLDGEYFTLQIRGRERFEMF'
 
 print(premature_stop_effect.aa_mutation_start_offset)
-# 341
+### 341
 
 print(premature_stop_effect.transcript)
-# Transcript(id=ENST00000269305, name=TP53-001, gene_name=TP53, biotype=protein_coding, location=17:7571720-7590856)
+### Transcript(id=ENST00000269305, name=TP53-001, gene_name=TP53, biotype=protein_coding, location=17:7571720-7590856)
 
 print(premature_stop_effect.gene.name)
-# 'TP53'
+### 'TP53'
 ```
 
 Effect Types
