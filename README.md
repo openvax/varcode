@@ -4,6 +4,14 @@ Varcode
 Varcode is a library for working with genomic variant data in Python and predicting the impact of those variants on protein sequences.
 
 
+Example
+-------
+
+```
+import varcode
+
+vcf = varcode.load_vcf("tcga-ovarian-cancer-variants.vcf")
+```
 
 Effect Types
 ------------
