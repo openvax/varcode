@@ -10,7 +10,52 @@ Example
 ```
 import varcode
 
-vcf = varcode.load_vcf("tcga-ovarian-cancer-variants.vcf")
+# Load TCGA MAF containing variants from their
+variants = varcode.load_maf("tcga-ovarian-cancer-variants.maf")
+
+print(variants)
+
+# <VariantCollection from 'tcga-ovarian-cancer-variants.maf' with 6428 elements>
+#  -- Variant(contig=1, start=69538, ref=G, alt=A, genome=GRCh37)
+#  -- Variant(contig=1, start=881892, ref=T, alt=G, genome=GRCh37)
+#  -- Variant(contig=1, start=3389714, ref=G, alt=A, genome=GRCh37)
+#  -- Variant(contig=1, start=3624325, ref=G, alt=T, genome=GRCh37)
+#  -- Variant(contig=1, start=3782259, ref=T, alt=C, genome=GRCh37)
+#  -- Variant(contig=1, start=6206923, ref=., alt=G, genome=GRCh37)
+#  -- Variant(contig=1, start=6631275, ref=G, alt=C, genome=GRCh37)
+#  -- Variant(contig=1, start=6885168, ref=C, alt=T, genome=GRCh37)
+#  -- Variant(contig=1, start=7723427, ref=G, alt=A, genome=GRCh37)
+#  ...
+
+# you can index into a VariantCollection and get back a Variant object
+variant = variants[0]
+
+# groupby_gene_name returns a dictionary whose keys are gene names
+# and whose values are themselves VariantCollections
+
+gene_groups = variants.groupby_gene_name()
+
+# only contains variants which affect the TP53 gene
+TP53_variants = gene_groups["TP53"]
+
+# predict protein coding effect of every TP53 variant on
+# each transcript of the TP53 gene
+TP53_effects = TP53_variants.effects()
+
+print(TP53_effects)
+
+# <EffectCollection with 789 elements>
+# -- PrematureStop(variant=chr17 g.7574003G>A, transcript_name=TP53-001, transcript_id=ENST00000269305, effect_description=p.R342*)
+# -- Intronic(variant=chr17 g.7574003G>A, transcript_name=TP53-019, transcript_id=ENST00000359597)
+# -- Intronic(variant=chr17 g.7574003G>A, transcript_name=TP53-018, transcript_id=ENST00000413465)
+# -- ThreePrimeUTR(variant=chr17 g.7574003G>A, transcript_name=TP53-005, transcript_id=ENST00000420246)
+# -- PrematureStop(variant=chr17 g.7574003G>A, transcript_name=TP53-002, transcript_id=ENST00000445888, effect_description=p.R342*)
+# -- ThreePrimeUTR(variant=chr17 g.7574003G>A, transcript_name=TP53-004, transcript_id=ENST00000455263)
+# -- NoncodingTranscript(variant=chr17 g.7574003G>A, transcript_name=TP53-006, transcript_id=ENST00000504290)
+# -- NoncodingTranscript(variant=chr17 g.7574003G>A, transcript_name=TP53-008, transcript_id=ENST00000504937)
+# -- NoncodingTranscript(variant=chr17 g.7574003G>A, transcript_name=TP53-007, transcript_id=ENST00000510385)
+# -- FrameShift(variant=chr17 g.7574030_7574030delG, transcript_name=TP53-001, transcript_id=ENST00000269305, effect_description=p.R333fs)
+# ...
 ```
 
 Effect Types
