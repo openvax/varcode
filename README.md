@@ -8,6 +8,7 @@ Varcode is a library for working with genomic variant data in Python and predict
 Effect Types
 ------------
 **Intergenic**: Occurs outside of any annotated gene.
+
 **Intragenic**: Within the annotated boundaries of a gene but not in a region that's transcribed into pre-mRNA.
 
   - *IncompleteTranscript*: Can't determine effect since transcript annotation is incomplete (often missing either the start or stop codon).
