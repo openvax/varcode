@@ -136,7 +136,7 @@ def load_vcf_fast(
         include_info=True,
         chunk_size=10**5,
         max_variants=None):
-    '''
+    """
     Load reference name and Variant objects from the given VCF filename.
 
     This is an experimental faster implementation of `load_vcf`. It is
@@ -183,7 +183,7 @@ def load_vcf_fast(
 
     max_variants : int, optional
         If specified, return only the first max_variants variants.
-    '''
+    """
 
     typechecks.require_string(path, "Path or URL to VCF")
     parsed_path = parse_url_or_path(path)
@@ -237,7 +237,7 @@ def dataframes_to_variant_collection(
         max_variants=None,
         variant_kwargs={},
         variant_collection_kwargs={}):
-    '''
+    """
     Load a VariantCollection from an iterable of pandas dataframes.
 
     This takes an iterable of dataframes instead of a single dataframe to avoid
@@ -267,7 +267,7 @@ def dataframes_to_variant_collection(
 
     variant_collection_kwargs : dict, optional
         Additional keyword parameters to pass to VariantCollection.__init__.
-    '''
+    """
 
     expected_columns = (
         ["CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER"] +
@@ -374,7 +374,7 @@ def read_vcf_into_dataframe(path, include_info=False, chunk_size=None):
     return reader
 
 class PyVCFReaderFromPathOrURL(object):
-    '''
+    """
     Thin wrapper over a PyVCF Reader object that supports loading over URLs,
     and a close() function (pyvcf somehow doesn't have a close() funciton).
 
@@ -384,7 +384,7 @@ class PyVCFReaderFromPathOrURL(object):
         path that was loaded, if available.
 
     vcf_reader : pyvcf Reader instance
-    '''
+    """
     def __init__(self, path):
         """
         Construct a new wrapper.
@@ -450,9 +450,9 @@ def make_ensembl(
         ensembl_version,
         reference_name, 
         reference_vcf_key):
-    '''
+    """
     Helper function to make an ensembl instance.
-    '''
+    """
     
     if not ensembl_version:
         if reference_name:
