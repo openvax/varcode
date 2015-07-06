@@ -363,9 +363,15 @@ def read_vcf_into_dataframe(path, include_info=False, chunk_size=None):
     else:
         raise NotImplementedError("Only local files are supported.")
 
+    compression = None
+    if path.endswith(".gz"):
+        compression = "gzip"
+    elif path.endswith(".bz2"):
+        compression = "bz2"
+
     reader = pandas.read_table(
         path,
-        compression='infer',
+        compression=compression,
         comment="#",
         chunksize=chunk_size,
         dtype=vcf_field_types,
