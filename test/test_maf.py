@@ -30,7 +30,7 @@ def test_maf():
     eq_(len(tcga_ov_variants), len(expected_tcga_ov_variants))
     for v_expect, v_maf in zip(expected_tcga_ov_variants, tcga_ov_variants):
         eq_(v_expect, v_maf)
-        gene_name = v_maf.info['Hugo_Symbol']
+        gene_name = tcga_ov_variants.metadata[v_maf]['Hugo_Symbol']
         assert any(gene.name == gene_name for gene in v_maf.genes), \
             "Expected gene name %s but got %s" % (gene_name, v_maf.genes)
 

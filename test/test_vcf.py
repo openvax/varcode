@@ -12,17 +12,91 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 from nose.tools import eq_
-from varcode import load_vcf, Variant
+from varcode import load_vcf, load_vcf_fast, Variant
 from . import data_path
 
+# Set to 1 to enable, 0 to disable.
+# TODO: consider running in an in-process HTTP server instead for these tests.
+RUN_TESTS_REQUIRING_INTERNET = bool(int(
+    os.environ.get("RUN_TESTS_REQUIRING_INTERNET", 0)))
+
 VCF_FILENAME = data_path("somatic_hg19_14muts.vcf")
+VCF_EXTERNAL_URL = (
+    "https://raw.githubusercontent.com/hammerlab/varcode/master/test/data/somatic_hg19_14muts.vcf")
+
+# To load from the branch that introduced these changs:
+# (needed before this gets merged to master, can be removed after)
+# VCF_EXTERNAL_URL = (
+#   "https://raw.githubusercontent.com/hammerlab/varcode/faster-vcf-parsing/test/data/somatic_hg19_14muts.vcf")
+
+def test_load_vcf_local():
+    variants = load_vcf(VCF_FILENAME)
+    assert variants.reference_names() == {"GRCh37"}
+    assert len(variants) == 14
+    
+    variants = load_vcf(VCF_FILENAME + ".gz")
+    assert variants.reference_names() == {"GRCh37"}
+    assert len(variants) == 14
+    
+    variants = load_vcf("file://%s" % VCF_FILENAME)
+    assert variants.reference_names() == {"GRCh37"}
+    assert len(variants) == 14
+    
+    variants = load_vcf("file://%s.gz" % VCF_FILENAME)
+    assert variants.reference_names() == {"GRCh37"}
+    assert len(variants) == 14
+
+    # An extra slashe before an absolute path can confuse URL parsing.
+    # Test that it can still be opened:
+    variants = load_vcf("/%s" % VCF_FILENAME)
+    assert variants.reference_names() == {"GRCh37"}
+    assert len(variants) == 14
+
+if RUN_TESTS_REQUIRING_INTERNET:
+    def test_load_vcf_external():
+        variants = load_vcf(VCF_EXTERNAL_URL)
+        assert variants.reference_names() == {"GRCh37"}
+        assert len(variants) == 14
+        
+        variants = load_vcf(VCF_EXTERNAL_URL + ".gz")
+        assert variants.reference_names() == {"GRCh37"}
+        assert len(variants) == 14
 
 def test_vcf_reference_name():
     variants = load_vcf(VCF_FILENAME)
     # after normalization, hg19 should be remapped to GRCh37
     assert variants.reference_names() == {"GRCh37"}
 
+def test_pandas_and_pyvcf_implementations_equivalent():
+    paths = [
+        {'path': data_path("somatic_hg19_14muts.vcf")},
+        {'path': "/" + data_path("somatic_hg19_14muts.vcf")},
+        {'path': data_path("somatic_hg19_14muts.vcf.gz")},
+        {'path': data_path("multiallelic.vcf")},
+        {'path': data_path("mutect-example.vcf")},
+        {'path': data_path("strelka-example.vcf")},
+        {'path': data_path("mutect-example-headerless.vcf"),
+          'ensembl_version': 75},
+    ]
+    if RUN_TESTS_REQUIRING_INTERNET:
+        paths.append({'path': VCF_EXTERNAL_URL})
+        paths.append({'path': VCF_EXTERNAL_URL + ".gz"})
+
+    def do_test(kwargs):
+        vcf_pandas = load_vcf_fast(**kwargs)
+        vcf_pyvcf = load_vcf(**kwargs)
+        eq_(vcf_pandas, vcf_pyvcf)
+        eq_(len(vcf_pandas), len(vcf_pyvcf))
+        eq_(vcf_pandas.elements, vcf_pyvcf.elements)
+        eq_(vcf_pandas.metadata, vcf_pyvcf.metadata)
+        assert len(vcf_pandas) > 1
+        assert len(vcf_pyvcf) > 1
+    
+    for kwargs in paths:
+        yield (do_test, kwargs)
+        
 def test_reference_arg_to_load_vcf():
     variants = load_vcf(VCF_FILENAME)
     eq_(variants, load_vcf(VCF_FILENAME, ensembl_version=75))
@@ -39,8 +113,8 @@ def test_vcf_number_entries():
     assert len(variants) == 14, \
         "Expected 14 mutations, got %d" % (len(variants),)
 
-def _check_variant_gene_name(variant):
-    expected_gene_names = variant.info['GE']
+def _check_variant_gene_name(collection, variant):
+    expected_gene_names = collection.metadata[variant]['info']['GE']
     assert variant.gene_names == expected_gene_names, \
         "Expected gene name %s for variant %s, got %s" % (
             expected_gene_names, variant, variant.gene_names)
@@ -48,7 +122,7 @@ def _check_variant_gene_name(variant):
 def test_vcf_gene_names():
     variants = load_vcf(VCF_FILENAME)
     for variant in variants:
-        yield (_check_variant_gene_name, variant)
+        yield (_check_variant_gene_name, variants, variant)
 
 def test_multiple_alleles_per_line():
     variants = load_vcf(data_path("multiallelic.vcf"))

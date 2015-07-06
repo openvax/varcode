@@ -105,9 +105,9 @@ def test_deletion_no_suffix():
 def test_serialization():
     variants = [
         Variant(
-            1, start=10, ref="AA", alt="AAT", ensembl=77, info={"foo": "bar"}),
+            1, start=10, ref="AA", alt="AAT", ensembl=77),
         Variant(10, start=15, ref="A", alt="G"),
-        Variant(20, start=150, ref="", alt="G", info={"bar": 2}),
+        Variant(20, start=150, ref="", alt="G"),
     ]
     for original in variants:
         # This causes the variant's ensembl object to make a SQL connection,
@@ -119,14 +119,16 @@ def test_serialization():
         # Test pickling.
         serialized = pickle.dumps(original)
         reconstituted = pickle.loads(serialized)
-        assert original.exactly_equal(reconstituted)
+        assert original == reconstituted
 
-        # Test json, with all fields.
+        assert original.contig == reconstituted.contig
+        assert original.ref == reconstituted.ref
+        assert original.alt == reconstituted.alt
+        assert original.start == reconstituted.start
+        assert original.end == reconstituted.end
+
+        # Test json.
         serialized = original.to_json()
         reconstituted = Variant.from_json(serialized)
-        assert original.exactly_equal(reconstituted)
+        assert original == reconstituted
 
-        # Test json, only basic fields.
-        serialized = original.with_only_basic_fields().to_json()
-        reconstituted = Variant.from_json(serialized)
-        eq_(original, reconstituted)

@@ -16,6 +16,8 @@ from __future__ import print_function, division, absolute_import
 
 import numpy as np
 
+import typechecks
+
 # include all pseudonucleotides encoding repeats and uncertain bases
 STANDARD_NUCLEOTIDES = {'A', 'C', 'T', 'G'}
 
@@ -67,17 +69,13 @@ def normalize_nucleotide_string(nucleotides, allow_extended_nucleotides=False):
     # some MAF files represent deletions/insertions with NaN ref/alt values
     if isinstance(nucleotides, float) and np.isnan(nucleotides):
         return ""
-    # VCF files sometimes have '.' ref or alt for insertions and deletions
-    elif nucleotides == ".":
+    
+    # VCF files sometimes have '.' ref or alt for insertions and deletions, and
+    # MAF files sometimes have '-' ref or alt for insertions and deletions.
+    if nucleotides == "." or nucleotides == "-":
         return ""
-    # MAF files sometimes have '-' ref or alt for insertions and deletions
-    elif nucleotides == "-":
-        return ""
-
-    if not isinstance(nucleotides, str):
-        raise TypeError(
-                "Expected nucleotide string, got %s : %s" % (
-                    nucleotides, type(nucleotides)))
+    
+    typechecks.require_string(nucleotides, "nucleotide string")
 
     nucleotides = nucleotides.upper()
 
@@ -85,9 +83,9 @@ def normalize_nucleotide_string(nucleotides, allow_extended_nucleotides=False):
         valid_nucleotides = EXTENDED_NUCLEOTIDES
     else:
         valid_nucleotides = STANDARD_NUCLEOTIDES
-    for letter in set(nucleotides):
-        if letter not in valid_nucleotides:
-            raise ValueError(
-                "Invalid character in nucleotide string: %s" % letter)
+
+    if not set(nucleotides) <= valid_nucleotides:
+        raise ValueError("Invalid character(s) in nucleotide string: %s"
+            % ",".join(set(nucleotides) - valid_nucleotides))
 
     return nucleotides

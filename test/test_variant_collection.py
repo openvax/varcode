@@ -67,11 +67,13 @@ def test_gene_counts():
 def test_serialization():
     original = VariantCollection([
             Variant(
-                1, start=10, ref="AA", alt="AAT", ensembl=77, info={"a": "b"}),
+                1, start=10, ref="AA", alt="AAT", ensembl=77),
             Variant(10, start=15, ref="A", alt="G"),
-            Variant(20, start=150, ref="", alt="G", info={"bar": 2}),
+            Variant(20, start=150, ref="", alt="G"),
     ])
-    
+    original.metadata[original[0]] = {"a": "b"}
+    original.metadata[original[2]] = {"bar": 2}
+
     # This causes the variants' ensembl objects to make a SQL connection,
     # which makes the ensembl object non-serializable. By calling this
     # method, we are checking that we don't attempt to directly serialize
@@ -82,12 +84,12 @@ def test_serialization():
     serialized = pickle.dumps(original)
     reconstituted = pickle.loads(serialized)
     eq_(original, reconstituted)
-    assert original.exactly_equal(reconstituted), (
-        "%s != %s" % (original, reconstituted))
+    eq_(reconstituted[0], original[0])
+    eq_(reconstituted.metadata[original[0]], original.metadata[original[0]])
 
     # Test json.
     serialized = original.to_json()
     reconstituted = VariantCollection.from_json(serialized)
     eq_(original, reconstituted)
-    assert original.exactly_equal(reconstituted), (
-        "%s != %s" % (original, reconstituted))
+    eq_(reconstituted[0], original[0])
+    eq_(reconstituted.metadata[original[0]], original.metadata[original[0]])
