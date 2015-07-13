@@ -7,7 +7,7 @@ Varcode is a library for working with genomic variant data in Python and predict
 Example
 -------
 
-```
+```python
 import varcode
 
 # Load TCGA MAF containing variants from their
