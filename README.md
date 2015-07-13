@@ -60,52 +60,32 @@ print(premature_stop_effect.gene.name)
 
 Effect Types
 ------------
-  `Intergenic`: Occurs outside of any annotated gene.
 
-  `Intragenic`: Within the annotated boundaries of a gene but not in a region that's transcribed into pre-mRNA.
-
-  `IncompleteTranscript`: Can't determine effect since transcript annotation is incomplete (often missing either the start or stop codon).
-
-  `NoncodingTranscript`: Transcript doesn't code for a protein.
-
-  `SpliceDonor`: Mutation in the first two nucleotides of an intron, likely to affect splicing.
-
-  `SpliceAcceptor`: Mutation in the last two nucleotides of an intron,
-  likely to affect splicing.
-
-  `IntronicSpliceSite`: Mutation near the beginning or end of an intron but less likely to affect splicing than donor/acceptor mutations.
-
-  `ExonicSpliceSite`: Mutation at the beginning or end of an exon, may affect splicing.
-
-  `Intronic`: Variant occurs between exons and is unlikely to affect splicing.
-
-  `ThreePrimeUTR`: Variant affects 3' untranslated region after stop codon of mRNA.
-
-  `FivePrimeUTR`: Variant affects 5' untranslated region before start codon.
-
-  `Silent`: Mutation in coding sequence which does not change the amino acid sequence of the translated protein.
-
-  `Substitution`: Coding mutation which causes simple substitution of one amino acid for another.
-
-  `Insertion`: Coding mutation which causes insertion of amino acid(s).
-
-  `Deletion`: Coding mutation which causes deletion of amino acid(s).
-
-  `ComplexSubstitution`: Insertion and deletion of multiple amino acids.
-
-  `StartLoss`: Mutation causes loss of start codon, likely result is that an alternate start codon will be used down-stream (possibly in a different frame).
-
-  `AlternateStartCodon`: Replace annotated start codon with alternative  start codon (e.g. ATG>CAG).
-
-  `StopLoss`: Loss of stop codon, causes extension of protein by translation of nucleotides from 3' UTR.
-
-  `PrematureStop`: Insertion of stop codon, truncates protein.
-
-  `FrameShift`: Out-of-frame insertion or deletion of nucleotides, causes novel protein sequence and often premature stop codon.
-
-  `FrameShiftTruncation`: A frameshift which leads immediately to a stop codon (no novel amino acids created).
-
-  `ExonLoss`: Deletion of entire exon, significantly disrupts protein.
+Effect type  | Description
+-----------: | :-----------
+*AlternateStartCodon* | Replace annotated start codon with alternative  start codon (*e.g.* `ATG>CAG`).
+*ComplexSubstitution* | Insertion and deletion of multiple amino acids.
+*Deletion* | Coding mutation which causes deletion of amino acid(s).
+*ExonLoss* | Deletion of entire exon, significantly disrupts protein.
+*ExonicSpliceSite* | Mutation at the beginning or end of an exon, may affect splicing.
+*FivePrimeUTR* | Variant affects 5' untranslated region before start codon.
+*FrameShiftTruncation* | A frameshift which leads immediately to a stop codon (no novel amino acids created).
+*FrameShift* | Out-of-frame insertion or deletion of nucleotides, causes novel protein sequence and often premature stop codon.
+*IncompleteTranscript* | Can't determine effect since transcript annotation is incomplete (often missing either the start or stop codon).
+*Insertion* | Coding mutation which causes insertion of amino acid(s).
+*Intergenic* | Occurs outside of any annotated gene.
+*Intragenic* |Within the annotated boundaries of a gene but not in a region that's transcribed into pre-mRNA.
+*IntronicSpliceSite* | Mutation near the beginning or end of an intron but less likely to affect splicing than donor/acceptor mutations.
+*Intronic* | Variant occurs between exons and is unlikely to affect splicing.
+*NoncodingTranscript* | Transcript doesn't code for a protein.
+*PrematureStop* | Insertion of stop codon, truncates protein.
+*Silent* | Mutation in coding sequence which does not change the amino acid sequence of the translated protein.
+*SpliceAcceptor* | Mutation in the last two nucleotides of an intron, likely to affect splicing.
+*SpliceDonor* | Mutation in the first two nucleotides of an intron, likely to affect splicing.
+*StartLoss* | Mutation causes loss of start codon, likely result is that an alternate start codon will be used down-stream (possibly in a different frame).
+*StopLoss* | Loss of stop codon, causes extension of protein by translation of nucleotides from 3' UTR.
+*Substitution* | Coding mutation which causes simple substitution of one amino acid for another.
+*ThreePrimeUTR* | Variant affects 3' untranslated region after stop codon of mRNA.
 
 
 Coordinate System
