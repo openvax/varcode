@@ -36,9 +36,9 @@ class EffectCollection(Collection):
     def __init__(
             self,
             effects,
-            path=None,
             distinct=False,
-            sort_key=None):
+            sort_key=None,
+            collection_metadata=None):
         """Construct an EffectCollection from a sequence of MutationEffects.
 
         Parameters
@@ -56,10 +56,14 @@ class EffectCollection(Collection):
         sort_key : callable
         """
         require_iterable_of(effects, MutationEffect)
+
+        if not collection_metadata:
+            collection_metadata = {}
+
         Collection.__init__(
             self,
             elements=effects,
-            path=path,
+            collection_metadata=collection_metadata,
             distinct=distinct,
             sort_key=sort_key)
 

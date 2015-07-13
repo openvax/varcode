@@ -77,6 +77,7 @@ def test_pandas_and_pyvcf_implementations_equivalent():
         {'path': data_path("multiallelic.vcf")},
         {'path': data_path("mutect-example.vcf")},
         {'path': data_path("strelka-example.vcf")},
+        {'path': data_path("multisample.vcf")},
         {'path': data_path("mutect-example-headerless.vcf"),
           'ensembl_version': 75},
     ]
@@ -90,7 +91,7 @@ def test_pandas_and_pyvcf_implementations_equivalent():
         eq_(vcf_pandas, vcf_pyvcf)
         eq_(len(vcf_pandas), len(vcf_pyvcf))
         eq_(vcf_pandas.elements, vcf_pyvcf.elements)
-        eq_(vcf_pandas.metadata, vcf_pyvcf.metadata)
+        eq_(vcf_pandas.variant_metadata, vcf_pyvcf.variant_metadata)
         assert len(vcf_pandas) > 1
         assert len(vcf_pyvcf) > 1
     
@@ -114,7 +115,7 @@ def test_vcf_number_entries():
         "Expected 14 mutations, got %d" % (len(variants),)
 
 def _check_variant_gene_name(collection, variant):
-    expected_gene_names = collection.metadata[variant]['info']['GE']
+    expected_gene_names = collection.variant_metadata[variant]['info']['GE']
     assert variant.gene_names == expected_gene_names, \
         "Expected gene name %s for variant %s, got %s" % (
             expected_gene_names, variant, variant.gene_names)
@@ -134,3 +135,7 @@ def test_multiple_alleles_per_line():
         Variant(1, 1431105, "A", "G", ensembl=ensembl),
     ]
     eq_(set(variant_list), set(expected_variants))
+
+def test_mutliple_samples():
+    variants = load_vcf(data_path("multisample.vcf"))
+

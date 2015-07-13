@@ -24,20 +24,28 @@ class Collection(object):
     def __init__(
             self,
             elements,
-            path=None,
             distinct=False,
-            sort_key=None):
+            sort_key=None,
+            collection_metadata={}):
         self.distinct = distinct
         if distinct:
             elements = set(elements)
         self.elements = sorted(elements, key=sort_key)
-        self.path = path
-        if path:
-            # get the filename without any directory prefix
-            self.filename = os.path.split(path)[1]
-        else:
-            self.filename = None
 
+        self.collection_metadata = dict(collection_metadata)
+        path = self.collection_metadata.get('path')
+        if path and not self.collection_metadata.get('filename'):
+            # get the filename without any directory prefix if we have a path.
+            self.collection_metadata['filename'] = os.path.split(path)[1]
+
+    @property
+    def path(self):
+        return self.collection_metadata.get('path')
+    
+    @property
+    def filename(self):
+        return self.collection_metadata.get('filename')
+    
     def short_string(self):
         """
         Compact string representation which doesn't print any of the
@@ -101,7 +109,7 @@ class Collection(object):
         """
         return self.__class__(
             new_elements,
-            path=self.path,
+            collection_metadata=self.collection_metadata,
             distinct=self.distinct)
 
     def filter(self, filter_fn):

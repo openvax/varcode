@@ -27,10 +27,10 @@ class VariantCollection(Collection):
     def __init__(
             self,
             variants,
-            path=None,
             distinct=True,
             sort_key=None,
-            metadata=None):
+            collection_metadata=None,
+            variant_metadata=None):
         """
         Construct a VariantCollection from a list of Variant records.
 
@@ -52,13 +52,16 @@ class VariantCollection(Collection):
             def sort_key(variant):
                 return (variant.contig, variant.start)
 
+        if not collection_metadata:
+            collection_metadata = {}
+
         Collection.__init__(
             self,
             elements=variants,
-            path=path,
+            collection_metadata=collection_metadata,
             distinct=distinct,
             sort_key=sort_key)
-        self.metadata = {} if metadata is None else metadata
+        self.variant_metadata = variant_metadata if variant_metadata else {}
 
     @memoize
     def dataframe(self):
@@ -233,18 +236,18 @@ class VariantCollection(Collection):
     def __getstate__(self):
         result = dict(self.__dict__)
         result['elements'] = [
-            (e.__getstate__(), self.metadata.get(e)) for e in self]
-        del result['metadata']
+            (e.__getstate__(), self.variant_metadata.get(e)) for e in self]
+        del result['variant_metadata']
         return result
 
     def __setstate__(self, state):
         self.elements = []
-        self.metadata = {}
+        self.variant_metadata = {}
         for (variant_data, meta_entry) in state.pop('elements'):
             variant = Variant.from_dict(variant_data)
             self.elements.append(variant)
             if meta_entry is not None:
-                self.metadata[variant] = meta_entry
+                self.variant_metadata[variant] = meta_entry
         self.__dict__.update(state)
 
     def exactly_equal(self, other):

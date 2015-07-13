@@ -100,7 +100,7 @@ def load_maf(path):
 
     ensembl_objects = {}
     variants = []
-    metadata = {}
+    variant_metadata = {}
     for _, x in maf_df.iterrows():
         contig = x.Chromosome
         start_pos = x.Start_Position
@@ -170,7 +170,7 @@ def load_maf(path):
             ensembl=ensembl)
 
         # keep metadata about the variant and its TCGA annotation
-        metadata[variant] = {
+        variant_metadata[variant] = {
             'Hugo_Symbol': x.Hugo_Symbol,
             'Center': x.Center,
             'Strand': x.Strand,
@@ -186,5 +186,5 @@ def load_maf(path):
 
     return VariantCollection(
         variants=variants,
-        path=path,
-        metadata=metadata)
+        collection_metadata={'path': path},
+        variant_metadata=variant_metadata)

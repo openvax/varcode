@@ -47,7 +47,6 @@ def load_vcf(
         max_variants=None):
     """
     Load reference name and Variant objects from the given VCF filename.
-
     This uses PyVCF to parse the file. It is slower than the pandas
     implementation used in `load_vcf_fast`, but is better tested and more 
     robust.
@@ -85,7 +84,7 @@ def load_vcf(
     """
 
     variants = []
-    metadata = {}
+    variant_metadata = {}
     handle = PyVCFReaderFromPathOrURL(path)
     try:
         ensembl = make_ensembl(
@@ -109,7 +108,7 @@ def load_vcf(
                     ensembl=ensembl,
                     allow_extended_nucleotides=allow_extended_nucleotides)
                 variants.append(variant)
-                metadata[variant] = {
+                variant_metadata[variant] = {
                     "id": record.ID,
                     "qual": record.QUAL,
                     "filter": record.FILTER,
@@ -124,7 +123,9 @@ def load_vcf(
         handle.close()
 
     return VariantCollection(
-        variants=variants, path=handle.path, metadata=metadata)
+        variants=variants,
+        collection_metadata={'path': handle.path},
+        variant_metadata=variant_metadata)
     
 def load_vcf_fast(
         path,
@@ -228,7 +229,7 @@ def load_vcf_fast(
         variant_kwargs={
             'ensembl': ensembl,
             'allow_extended_nucleotides': allow_extended_nucleotides},
-        variant_collection_kwargs={"path": path})
+        variant_collection_kwargs={"collection_metadata": {'path': path}})
 
 def dataframes_to_variant_collection(
         dataframes,
@@ -274,7 +275,7 @@ def dataframes_to_variant_collection(
         (["INFO"] if info_parser else []))
 
     variants = []
-    metadata = {}
+    variant_metadata = {}
     try:
         for chunk in dataframes:
             assert chunk.columns.tolist() == expected_columns,\
@@ -308,7 +309,7 @@ def dataframes_to_variant_collection(
                             alt,
                             **variant_kwargs)
                         variants.append(variant)
-                        metadata[variant] = {
+                        variant_metadata[variant] = {
                             'id': id_,
                             'qual': qual,
                             'filter': flter,
@@ -322,7 +323,9 @@ def dataframes_to_variant_collection(
         pass
 
     return VariantCollection(
-        variants=variants, metadata=metadata, **variant_collection_kwargs)
+        variants=variants,
+        variant_metadata=variant_metadata,
+        **variant_collection_kwargs)
 
 def read_vcf_into_dataframe(path, include_info=False, chunk_size=None):
     """
