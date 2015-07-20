@@ -39,6 +39,7 @@ from .variant_collection import VariantCollection
 
 def load_vcf(
         path,
+        genome=None,
         only_passing=True,
         ensembl_version=None,
         reference_name=None,
@@ -60,14 +61,18 @@ def load_vcf(
         schemes are "file", "http", "https", and "ftp". Can also be a pyvcf
         Reader instance.
 
+    genome : Genome, optional
+        Optionally pass in a PyEnsembl Genome or EnsemblRelease object
+        to exactly specify the annotation data source
+
     only_passing : boolean, optional
         If true, any entries whose FILTER field is not one of "." or "PASS" is
         dropped.
 
     ensembl_version : int, optional
-        Which release of Ensembl to use for annotation, by default inferred
-        from the reference path. If specified, then `reference_name` and
-        `reference_vcf_key` are ignored.
+        If using Ensembl: which release of Ensembl to use for annotation,
+        by default inferred from the reference path. If specified, then 
+        `reference_name` and `reference_vcf_key` are ignored.
 
     reference_name : str, optional
         Name of reference genome against which variants from VCF were aligned.
@@ -88,11 +93,12 @@ def load_vcf(
     metadata = {}
     handle = PyVCFReaderFromPathOrURL(path)
     try:
-        ensembl = make_ensembl(
-            handle.vcf_reader,
-            ensembl_version,
-            reference_name,
-            reference_vcf_key)
+        if not genome:
+            genome = make_ensembl(
+                handle.vcf_reader,
+                ensembl_version,
+                reference_name,
+                reference_vcf_key)
 
         for record in handle.vcf_reader:
             if only_passing and record.FILTER and record.FILTER != "PASS":
@@ -106,7 +112,7 @@ def load_vcf(
                     start=record.POS,
                     ref=record.REF,
                     alt=alt.sequence,
-                    ensembl=ensembl,
+                    ensembl=genome,
                     allow_extended_nucleotides=allow_extended_nucleotides)
                 variants.append(variant)
                 metadata[variant] = {
@@ -128,6 +134,7 @@ def load_vcf(
     
 def load_vcf_fast(
         path,
+        genome=None,
         only_passing=True,
         ensembl_version=None,
         reference_name=None,
@@ -153,6 +160,10 @@ def load_vcf_fast(
 
     path : str
         Path to VCF (*.vcf) or compressed VCF (*.vcf.gz).
+
+    genome : Genome, optional
+        Optionally pass in a PyEnsembl Genome or EnsemblRelease object
+        to exactly specify the annotation data source
 
     only_passing : boolean, optional
         If true, any entries whose FILTER field is not one of "." or "PASS" is
@@ -198,6 +209,7 @@ def load_vcf_fast(
         # implementation here.
         return load_vcf(
             path,
+            genome=genome,
             only_passing=only_passing,
             ensembl_version=ensembl_version,
             reference_name=reference_name,
@@ -214,8 +226,9 @@ def load_vcf_fast(
     handle = PyVCFReaderFromPathOrURL(path)
     handle.close()
 
-    ensembl = make_ensembl(
-        handle.vcf_reader, ensembl_version, reference_name, reference_vcf_key)
+    if not genome:
+        genome = make_ensembl(
+            handle.vcf_reader, ensembl_version, reference_name, reference_vcf_key)
 
     df_iterator = read_vcf_into_dataframe(
         path, include_info=include_info, chunk_size=chunk_size)
@@ -226,7 +239,7 @@ def load_vcf_fast(
         only_passing=only_passing,
         max_variants=max_variants,
         variant_kwargs={
-            'ensembl': ensembl,
+            'ensembl': genome,
             'allow_extended_nucleotides': allow_extended_nucleotides},
         variant_collection_kwargs={"path": path})
 
