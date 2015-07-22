@@ -17,7 +17,6 @@ def test_load_vcf_mouse():
                     gtf_path_or_url=MOUSE_GTF_PATH,
                     transcript_fasta_path_or_url=MOUSE_TRANSCRIPT_FASTA_PATH,
                     protein_fasta_path_or_url=MOUSE_PROTEIN_FASTA_PATH)
-
     variants = load_vcf(MOUSE_VCF, genome=genome)
     eq_(len(variants), 217)
     variants = load_vcf_fast(MOUSE_VCF, genome=genome)
@@ -28,7 +27,6 @@ def test_specific_variant_mouse():
                     gtf_path_or_url=MOUSE_GTF_PATH,
                     transcript_fasta_path_or_url=MOUSE_TRANSCRIPT_FASTA_PATH,
                     protein_fasta_path_or_url=MOUSE_PROTEIN_FASTA_PATH)
-
     # Exon #2 at http://useast.ensembl.org/Mus_musculus/Transcript/Exons?
     # db=core;g=ENSMUSG00000017167;r=11:101170523-101190724;t=ENSMUST00000103109
     variant = Variant(contig=11, start=101177240, ref="G", alt="T", ensembl=genome)
