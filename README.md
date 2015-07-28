@@ -3,6 +3,25 @@ Varcode
 
 Varcode is a library for working with genomic variant data in Python and predicting the impact of those variants on protein sequences.
 
+Installation
+------------
+
+You can install varcode using [pip](https://pip.pypa.io/en/latest/quickstart.html):
+
+```bash
+pip install varcode
+```
+
+Optionally, you can pre-populate metadata caches through [PyEnsembl](https://github.com/hammerlab/pyensembl) as follows:
+
+```bash
+# Downloads and installs the Ensembl releases (75 and 76)
+pyensembl install --release 75 76
+```
+
+This will eliminate a potential delay of several minutes required to install the relevant data
+when using the `varcode` for the first time.
+
 
 Example
 -------
@@ -91,7 +110,3 @@ Effect type  | Description
 Coordinate System
 -----------------
 Varcode currently uses a "base counted, one start" genomic coordinate system, to match the Ensembl annotation database. We are planning to switch over to "space counted, zero start" (interbase) coordinates, since that system allows for more uniform logic (no special cases for insertions). To learn more about genomic coordinate systems, read this [blog post](http://alternateallele.blogspot.com/2012/03/genome-coordinate-conventions.html).
-
-
-
-
