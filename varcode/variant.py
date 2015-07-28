@@ -531,6 +531,11 @@ class Variant(object):
 
         before_exon = before_forward_exon or before_backward_exon
 
+        # distance cutoffs based on consensus splice sequences from
+        # http://www.ncbi.nlm.nih.gov/pmc/articles/PMC2947103/
+        # 5' splice site: MAG|GURAGU consensus
+        #   M is A or C; R is purine; | is the exon-intron boundary
+        # 3' splice site: YAG|R
         if distance_to_exon <= 2:
             if before_exon:
                 # 2 last nucleotides of intron before exon are the splice
@@ -545,9 +550,9 @@ class Variant(object):
             # to cause problems as nucleotides 1-2 but still implicated in
             # alternative splicing
             return IntronicSpliceSite
-        elif before_exon and distance_to_exon <= 4:
-            # nucleotides -4 and -3 before exon are part of the 3' splicing
-            # motif but allow for more degeneracy than the -2, -1 nucleotides
+        elif before_exon and distance_to_exon <= 3:
+            # nucleotide -3 before exon is part of the 3' splicing
+            # motif but allows for more degeneracy than the -2, -1 nucleotides
             return IntronicSpliceSite
         else:
             # intronic mutation unrelated to splicing
