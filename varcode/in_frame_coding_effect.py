@@ -187,12 +187,9 @@ def in_frame_coding_effect(
     else:
         # pull out reference codons and construct mutant codons
         # for non-insertion variant
-
-        original_protein_sequence = transcript.protein_sequence
-
         first_ref_codon_index = int(cds_offset / 3)
 
-        assert first_ref_codon_index <= len(original_protein_sequence), \
+        assert first_ref_codon_index <= len(transcript.protein_sequence), \
             ("Unexpected mutation at offset %d (5' UTR starts at %d"
              " while annotating %s on %s") % (
              first_ref_codon_index,
@@ -284,7 +281,7 @@ def in_frame_coding_effect(
             original_protein_subsequence[n_shared_amino_acids:]
         mutant_protein_subsequence = \
             mutant_protein_subsequence[n_shared_amino_acids:]
-        if mutation_aa_pos < len(original_protein_sequence) - 1:
+        if mutation_aa_pos < len(original_protein_subsequence) - 1:
             # only call this mutation a premature stop if it decreases
             # the length of the protein
             return PrematureStop(
