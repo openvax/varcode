@@ -131,4 +131,3 @@ def test_serialization():
         serialized = original.to_json()
         reconstituted = Variant.from_json(serialized)
         assert original == reconstituted
-

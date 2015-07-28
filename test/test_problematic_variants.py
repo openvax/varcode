@@ -142,6 +142,12 @@ should_not_crash_variants = [
         ref="",
         alt="A",
         ensembl=ensembl_grch38),
+    Variant(
+        contig=7,
+        start=117120188,
+        ref="A",
+        alt="AAGT",
+        ensembl=ensembl_grch37)
 ]
 
 def try_effect_annotation(variant):
