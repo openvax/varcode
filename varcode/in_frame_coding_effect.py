@@ -281,7 +281,7 @@ def in_frame_coding_effect(
             original_protein_subsequence[n_shared_amino_acids:]
         mutant_protein_subsequence = \
             mutant_protein_subsequence[n_shared_amino_acids:]
-        if mutation_aa_pos < len(original_protein_subsequence) - 1:
+        if len(mutant_protein_subsequence) < len(original_protein_subsequence):
             # only call this mutation a premature stop if it decreases
             # the length of the protein
             return PrematureStop(
