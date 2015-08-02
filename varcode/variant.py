@@ -23,6 +23,7 @@ from memoized_property import memoized_property
 from pyensembl import (
     Transcript,
     EnsemblRelease,
+    Genome,
     ensembl_grch38,
     cached_release,
 )
@@ -99,8 +100,8 @@ class Variant(object):
         alt : str
             Alternate nucleotide(s)
 
-        ensembl : EnsemblRelease
-            Ensembl object used for determining gene/transcript annotations
+        ensembl : Genome or EnsemblRelease
+            Object used for determining gene/transcript annotations
 
         info : dict, optional
             Extra metadata about this variant
@@ -108,7 +109,7 @@ class Variant(object):
         self.contig = normalize_chromosome(contig)
 
         # user might supply Ensembl release as an integer
-        if isinstance(ensembl, EnsemblRelease):
+        if isinstance(ensembl, Genome) or isinstance(ensembl, EnsemblRelease):
             self.ensembl = ensembl
         elif isinstance(ensembl, int):
             self.ensembl = EnsemblRelease(release=ensembl)
@@ -172,12 +173,12 @@ class Variant(object):
         return self.ensembl.reference_name
 
     def __str__(self):
-        return "Variant(contig=%s, start=%d, ref=%s, alt=%s, genome=%s)" % (
+        return "Variant(contig=%s, start=%d, ref=%s, alt=%s, reference_name=%s)" % (
             self.contig,
             self.start,
             self.ref if self.ref else ".",
             self.alt if self.alt else ".",
-            self.reference_name,)
+            self.reference_name)
 
     def __repr__(self):
         return str(self)
@@ -220,7 +221,7 @@ class Variant(object):
             self.end == other.end and
             self.ref == other.ref and
             self.alt == other.alt and
-            self.ensembl.release == other.ensembl.release)
+            self.ensembl == other.ensembl)
 
     def __getstate__(self):
         fields = self.fields()
