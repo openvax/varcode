@@ -151,7 +151,7 @@ def load_maf(path):
             end_offset = len(ref) - 1
         expected_end_pos = start_pos + end_offset
 
-        if len(ref) > 0 and abs(end_pos - expected_end_pos) > 1:
+        if len(ref) > 0 and end_pos != expected_end_pos:
             # only check for correct ending since the meaning of start/end
             # for insertions is different than for substitutions
             #
