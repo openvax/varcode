@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from __future__ import print_function, division, absolute_import
-
+import logging
 
 import pandas
 from pyensembl import EnsemblRelease
@@ -150,10 +150,14 @@ def load_maf(path):
         else:
             end_offset = len(ref) - 1
         expected_end_pos = start_pos + end_offset
+
         if len(ref) > 0 and end_pos != expected_end_pos:
             # only check for correct ending since the meaning of start/end
-            # for insertions is different thn for substitutions
-            raise ValueError(
+            # for insertions is different than for substitutions
+            #
+            # Only warn since some MAF files in the wild seem to violate
+            # expectations for end position coordinates
+            logging.warn(
                 "Expected variant %s:%s '%s' > '%s' to end at %d but got %d" % (
                     contig,
                     start_pos,

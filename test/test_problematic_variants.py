@@ -147,6 +147,14 @@ should_not_crash_variants = [
         start=117120188,
         ref="A",
         alt="AAGT",
+        ensembl=ensembl_grch37),
+    # had problems with end coordinate loading this one from a MAF but also
+    # want to make sure it doesn't cause other trouble
+    Variant(
+        contig=1,
+        start=109461324,
+        ref="GG",
+        alt="TT",
         ensembl=ensembl_grch37)
 ]
 
