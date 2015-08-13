@@ -508,7 +508,7 @@ class Deletion(BaseSubstitution):
 
 
 class PrematureStop(BaseSubstitution):
-    """In-frame insertion of codons ending with a stop codon. May also involve
+    """In-frame insertion of codons containing a stop codon. May also involve
     insertion/deletion/substitution of other amino acids preceding the stop."""
     def __init__(
             self,

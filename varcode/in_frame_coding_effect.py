@@ -162,7 +162,7 @@ def in_frame_coding_effect(
             # then we can just translate the inserted sequence since it's on
             # codon boundary
             inserted_amino_acids = translate(alt, first_codon_is_start=False)
-            if alt[-3:] in STOP_CODONS:
+            if STOP_CODONS.intersection(alt[3*i:3*i + 3] for i in xrange(len(alt)/3)):
                 # if we're inserting an in-frame stop codon
                 return PrematureStop(
                     variant=variant,
@@ -263,7 +263,7 @@ def in_frame_coding_effect(
     mutant_protein_subsequence = translate(
         mutant_codons,
         first_codon_is_start=(first_ref_codon_index == 0))
-    if mutant_codons[-3:] in STOP_CODONS:
+    if STOP_CODONS.intersection(mutant_codons[3*i:3*i + 3] for i in xrange(len(mutant_codons)/3)):
         # if the new coding sequence contains a stop codon, then this is a
         # PrematureStop mutation
 
