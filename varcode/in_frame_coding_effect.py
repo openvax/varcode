@@ -177,9 +177,10 @@ def in_frame_coding_effect(
                 aa_alt=inserted_amino_acids)
         else:
             # inserting inside a reference codon
+            # include an extra codon at the end of the reference so that if we insert a stop before a stop, we can return Silent
             ref_codon = sequence_from_start_codon[
-                first_ref_codon_index * 3:first_ref_codon_index * 3 + 3]
-            last_ref_codon_index = first_ref_codon_index
+                first_ref_codon_index * 3:first_ref_codon_index * 3 + 6]
+            last_ref_codon_index = first_ref_codon_index + 1
             # split the reference codon into nucleotides before/after insertion
             prefix = ref_codon[:offset_in_first_ref_codon + 1]
             suffix = ref_codon[offset_in_first_ref_codon + 1:]
