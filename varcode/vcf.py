@@ -50,14 +50,14 @@ def load_vcf(
     Load reference name and Variant objects from the given VCF filename.
 
     This uses PyVCF to parse the file. It is slower than the pandas
-    implementation used in `load_vcf_fast`, but is better tested and more 
+    implementation used in `load_vcf_fast`, but is better tested and more
     robust.
 
     Parameters
     ----------
 
     path : str or vcf.Reader
-        Path or URL to VCF (*.vcf) or compressed VCF (*.vcf.gz). Supported URL 
+        Path or URL to VCF (*.vcf) or compressed VCF (*.vcf.gz). Supported URL
         schemes are "file", "http", "https", and "ftp". Can also be a pyvcf
         Reader instance.
 
@@ -71,7 +71,7 @@ def load_vcf(
 
     ensembl_version : int, optional
         If using Ensembl: which release of Ensembl to use for annotation,
-        by default inferred from the reference path. If specified, then 
+        by default inferred from the reference path. If specified, then
         `reference_name` and `reference_vcf_key` are ignored.
 
     reference_name : str, optional
@@ -94,7 +94,7 @@ def load_vcf(
     handle = PyVCFReaderFromPathOrURL(path)
     try:
         if not genome:
-            genome = make_ensembl(
+            genome = make_pyensembl_genome_object(
                 handle.vcf_reader,
                 ensembl_version,
                 reference_name,
@@ -131,7 +131,7 @@ def load_vcf(
 
     return VariantCollection(
         variants=variants, path=handle.path, metadata=metadata)
-    
+
 def load_vcf_fast(
         path,
         genome=None,
@@ -227,8 +227,11 @@ def load_vcf_fast(
     handle.close()
 
     if not genome:
-        genome = make_ensembl(
-            handle.vcf_reader, ensembl_version, reference_name, reference_vcf_key)
+        genome = make_pyensembl_genome_object(
+            handle.vcf_reader,
+            ensembl_version,
+            reference_name,
+            reference_vcf_key)
 
     df_iterator = read_vcf_into_dataframe(
         path, include_info=include_info, chunk_size=chunk_size)
@@ -293,7 +296,7 @@ def dataframes_to_variant_collection(
             assert chunk.columns.tolist() == expected_columns,\
                 "dataframe columns (%s) do not match expected columns (%s)" % (
                     chunk.columns, expected_columns)
-                
+
             for tpl in chunk.itertuples():
                 (i, chrom, pos, id_, ref, alts, qual, flter) = tpl[:8]
                 if flter == ".":
@@ -326,7 +329,7 @@ def dataframes_to_variant_collection(
                             'qual': qual,
                             'filter': flter,
                             'info': info,
-                            'alt_allele_index': alt_num, 
+                            'alt_allele_index': alt_num,
                         }
                         if max_variants and len(variants) > max_variants:
                             raise StopIteration
@@ -464,15 +467,14 @@ def stream_gzip_decompress_lines(stream):
                 yield line
     yield previous
 
-def make_ensembl(
+def make_pyensembl_genome_object(
         vcf_reader,
         ensembl_version,
-        reference_name, 
+        reference_name,
         reference_vcf_key):
     """
-    Helper function to make an ensembl instance.
+    Helper function to make a pyensembl.Genome instance.
     """
-    
     if not ensembl_version:
         if reference_name:
             # normalize the reference name in case it's in a weird format

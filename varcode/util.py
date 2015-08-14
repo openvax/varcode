@@ -18,7 +18,7 @@ import logging
 
 from Bio.Seq import reverse_complement
 from pyensembl import EnsemblRelease
-from pyensembl.release_info import MAX_ENSEMBL_RELEASE
+from pyensembl import MAX_ENSEMBL_RELEASE
 
 from .nucleotides import STANDARD_NUCLEOTIDES
 from .variant import Variant

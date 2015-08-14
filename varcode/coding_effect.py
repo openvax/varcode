@@ -53,8 +53,8 @@ def coding_effect(
 
     # reference nucleotides found on the transcript, if these don't match
     # what we were told to expect from the variant then raise an exception
-    ref_nucleotides_from_transcript = \
-        sequence[transcript_offset:transcript_offset + len(ref)]
+    ref_nucleotides_from_transcript = str(
+        sequence[transcript_offset:transcript_offset + len(ref)])
 
     # Make sure that the reference sequence agrees with what we expected
     # from the VCF
@@ -106,7 +106,7 @@ def coding_effect(
         "Expected CDS offset (%d) < |CDS| (%d) for %s on %s" % (
             cds_offset, cds_len, variant, transcript)
 
-    sequence_from_start_codon = sequence[cds_start_offset:]
+    sequence_from_start_codon = str(sequence[cds_start_offset:])
 
     # is this an in-frame mutations?
     if (len(ref) - len(alt)) % 3 == 0:
