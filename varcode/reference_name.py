@@ -14,31 +14,26 @@
 
 from __future__ import print_function, division, absolute_import
 
-def infer_reference_name(path):
-    # NCBI builds and hg releases aren't identical
-    # but the differences are all on chrM and unplaced contigs
-    candidates = {
-        'NCBI36': ['hg18', 'B36', 'GRCh36', 'NCBI36'],
-        'GRCh37': ['hg19', 'B37', 'GRCh37', 'NCBI37'],
-        'GRCh38': ['hg38', 'B38', 'GRCh38', 'NCBI38'],
-    }
+# NCBI builds and hg releases aren't identical
+# but the differences are all on chrM and unplaced contigs
+reference_alias_dict = {
+    "NCBI36": ["hg18", "B36", "NCBI36"],
+    "GRCh37": ["hg19", "B37", "NCBI37"],
+    "GRCh38": ["hg38", "B38", "NCBI38"],
+    "GRCm37": ["mm9"],
+    "GRCm38": ["mm10"],
+}
 
-    for name in sorted(candidates.keys(), reverse=True):
-        aliases = candidates[name]
-        for alias in aliases:
-            if alias in path:
-                return name
-            if alias.lower() in path:
-                return name
-
+def infer_reference_name(reference_name_or_path):
+    """
+    Given a string containing a reference name (such as a path to
+    that reference's FASTA file), return its canonical name
+    as used by Ensembl.
+    """
+    for assembly_name in sorted(reference_alias_dict.keys(), reverse=True):
+        candiate_list = [assembly_name] + reference_alias_dict[assembly_name]
+        for candidate in candiate_list:
+            if candidate.lower() in reference_name_or_path.lower():
+                return assembly_name
     raise ValueError(
-        "Failed to infer human genome assembly name for %s" % path)
-
-def ensembl_release_number_for_reference_name(name):
-    if name == "NCBI36":
-        return 54
-    elif name == "GRCh37":
-        return 75
-    else:
-        assert name == "GRCh38", "Unrecognized reference name: %s" % name
-        return 78
+        "Failed to infer genome assembly name for %s" % reference_name_or_path)
