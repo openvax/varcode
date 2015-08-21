@@ -16,14 +16,11 @@ from __future__ import print_function, division, absolute_import
 import logging
 
 import pandas
-from pyensembl import EnsemblRelease
+from pyensembl import genome_for_reference_name
 from typechecks import require_string
 
 from .nucleotides import normalize_nucleotide_string
-from .reference_name import (
-    infer_reference_name,
-    ensembl_release_number_for_reference_name
-)
+from .reference_name import infer_reference_name
 from .variant import Variant
 from .variant_collection import VariantCollection
 
@@ -120,9 +117,7 @@ def load_maf(path):
                 reference_name = str(ncbi_build)
 
             reference_name = infer_reference_name(reference_name)
-            ensembl_release = ensembl_release_number_for_reference_name(
-                reference_name)
-            ensembl = EnsemblRelease(release=ensembl_release)
+            ensembl = genome_for_reference_name(reference_name)
             ensembl_objects[ncbi_build] = ensembl
 
         # have to try both Tumor_Seq_Allele1 and Tumor_Seq_Allele2

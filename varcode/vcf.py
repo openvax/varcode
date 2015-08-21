@@ -25,15 +25,12 @@ try:
 except ImportError:
     from urllib.parse import urlparse  # Python 3
 
+from pyensembl import genome_for_reference_name
 import pandas
-from pyensembl import cached_release
 import typechecks
 import vcf  # PyVCF
 
-from .reference_name import (
-    infer_reference_name,
-    ensembl_release_number_for_reference_name
-)
+from .reference_name import infer_reference_name
 from .variant import Variant
 from .variant_collection import VariantCollection
 
@@ -41,7 +38,6 @@ def load_vcf(
         path,
         genome=None,
         only_passing=True,
-        ensembl_version=None,
         reference_name=None,
         reference_vcf_key="reference",
         allow_extended_nucleotides=False,
@@ -50,29 +46,24 @@ def load_vcf(
     Load reference name and Variant objects from the given VCF filename.
 
     This uses PyVCF to parse the file. It is slower than the pandas
-    implementation used in `load_vcf_fast`, but is better tested and more 
+    implementation used in `load_vcf_fast`, but is better tested and more
     robust.
 
     Parameters
     ----------
 
     path : str or vcf.Reader
-        Path or URL to VCF (*.vcf) or compressed VCF (*.vcf.gz). Supported URL 
+        Path or URL to VCF (*.vcf) or compressed VCF (*.vcf.gz). Supported URL
         schemes are "file", "http", "https", and "ftp". Can also be a pyvcf
         Reader instance.
 
-    genome : Genome, optional
+    genome : pyensembl.Genome, optional
         Optionally pass in a PyEnsembl Genome or EnsemblRelease object
         to exactly specify the annotation data source
 
     only_passing : boolean, optional
         If true, any entries whose FILTER field is not one of "." or "PASS" is
         dropped.
-
-    ensembl_version : int, optional
-        If using Ensembl: which release of Ensembl to use for annotation,
-        by default inferred from the reference path. If specified, then 
-        `reference_name` and `reference_vcf_key` are ignored.
 
     reference_name : str, optional
         Name of reference genome against which variants from VCF were aligned.
@@ -94,9 +85,8 @@ def load_vcf(
     handle = PyVCFReaderFromPathOrURL(path)
     try:
         if not genome:
-            genome = make_ensembl(
+            genome = make_pyensembl_genome_object(
                 handle.vcf_reader,
-                ensembl_version,
                 reference_name,
                 reference_vcf_key)
 
@@ -131,12 +121,11 @@ def load_vcf(
 
     return VariantCollection(
         variants=variants, path=handle.path, metadata=metadata)
-    
+
 def load_vcf_fast(
         path,
         genome=None,
         only_passing=True,
-        ensembl_version=None,
         reference_name=None,
         reference_vcf_key="reference",
         allow_extended_nucleotides=False,
@@ -168,11 +157,6 @@ def load_vcf_fast(
     only_passing : boolean, optional
         If true, any entries whose FILTER field is not one of "." or "PASS" is
         dropped.
-
-    ensembl_version : int, optional
-        Which release of Ensembl to use for annotation, by default inferred
-        from the reference path. If specified, then `reference_name` and
-        `reference_vcf_key` are ignored.
 
     reference_name : str, optional
         Name of reference genome against which variants from VCF were aligned.
@@ -211,7 +195,6 @@ def load_vcf_fast(
             path,
             genome=genome,
             only_passing=only_passing,
-            ensembl_version=ensembl_version,
             reference_name=reference_name,
             reference_vcf_key=reference_vcf_key,
             allow_extended_nucleotides=allow_extended_nucleotides,
@@ -227,8 +210,10 @@ def load_vcf_fast(
     handle.close()
 
     if not genome:
-        genome = make_ensembl(
-            handle.vcf_reader, ensembl_version, reference_name, reference_vcf_key)
+        genome = make_pyensembl_genome_object(
+            handle.vcf_reader,
+            reference_name,
+            reference_vcf_key)
 
     df_iterator = read_vcf_into_dataframe(
         path, include_info=include_info, chunk_size=chunk_size)
@@ -293,7 +278,7 @@ def dataframes_to_variant_collection(
             assert chunk.columns.tolist() == expected_columns,\
                 "dataframe columns (%s) do not match expected columns (%s)" % (
                     chunk.columns, expected_columns)
-                
+
             for tpl in chunk.itertuples():
                 (i, chrom, pos, id_, ref, alts, qual, flter) = tpl[:8]
                 if flter == ".":
@@ -326,7 +311,7 @@ def dataframes_to_variant_collection(
                             'qual': qual,
                             'filter': flter,
                             'info': info,
-                            'alt_allele_index': alt_num, 
+                            'alt_allele_index': alt_num,
                         }
                         if max_variants and len(variants) > max_variants:
                             raise StopIteration
@@ -464,28 +449,24 @@ def stream_gzip_decompress_lines(stream):
                 yield line
     yield previous
 
-def make_ensembl(
+def make_pyensembl_genome_object(
         vcf_reader,
-        ensembl_version,
-        reference_name, 
+        reference_name,
         reference_vcf_key):
     """
-    Helper function to make an ensembl instance.
+    Helper function to make a pyensembl.Genome instance.
     """
-    
-    if not ensembl_version:
-        if reference_name:
-            # normalize the reference name in case it's in a weird format
-            reference_name = infer_reference_name(reference_name)
-        elif reference_vcf_key not in vcf_reader.metadata:
-            raise ValueError("Unable to infer reference genome for %s" % (
-                vcf_reader.filename,))
-        else:
-            reference_path = vcf_reader.metadata[reference_vcf_key]
-            reference_name = infer_reference_name(reference_path)
-        ensembl_version = ensembl_release_number_for_reference_name(
-            reference_name)
-    return cached_release(ensembl_version)
+
+    if reference_name:
+        # normalize the reference name in case it's in a weird format
+        reference_name = infer_reference_name(reference_name)
+    elif reference_vcf_key not in vcf_reader.metadata:
+        raise ValueError("Unable to infer reference genome for %s" % (
+            vcf_reader.filename,))
+    else:
+        reference_path = vcf_reader.metadata[reference_vcf_key]
+        reference_name = infer_reference_name(reference_path)
+    return genome_for_reference_name(reference_name)
 
 def parse_url_or_path(s):
     # urlparse will parse paths with two leading slashes (e.g. "//foo")

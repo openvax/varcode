@@ -69,12 +69,12 @@ def normalize_nucleotide_string(nucleotides, allow_extended_nucleotides=False):
     # some MAF files represent deletions/insertions with NaN ref/alt values
     if isinstance(nucleotides, float) and np.isnan(nucleotides):
         return ""
-    
+
     # VCF files sometimes have '.' ref or alt for insertions and deletions, and
     # MAF files sometimes have '-' ref or alt for insertions and deletions.
     if nucleotides == "." or nucleotides == "-":
         return ""
-    
+
     typechecks.require_string(nucleotides, "nucleotide string")
 
     nucleotides = nucleotides.upper()

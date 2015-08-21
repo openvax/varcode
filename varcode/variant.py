@@ -610,8 +610,8 @@ class Variant(object):
             strand_ref = genome_ref
             strand_alt = genome_alt
 
-        expected_ref = transcript.sequence[
-            transcript_offset:transcript_offset + len(strand_ref)]
+        expected_ref = str(transcript.sequence[
+            transcript_offset:transcript_offset + len(strand_ref)])
 
         if strand_ref != expected_ref:
             raise ValueError(

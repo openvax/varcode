@@ -14,6 +14,7 @@
 
 import os
 from nose.tools import eq_
+from pyensembl import cached_release
 from varcode import load_vcf, load_vcf_fast, Variant
 from . import data_path
 
@@ -35,15 +36,15 @@ def test_load_vcf_local():
     variants = load_vcf(VCF_FILENAME)
     assert variants.reference_names() == {"GRCh37"}
     assert len(variants) == 14
-    
+
     variants = load_vcf(VCF_FILENAME + ".gz")
     assert variants.reference_names() == {"GRCh37"}
     assert len(variants) == 14
-    
+
     variants = load_vcf("file://%s" % VCF_FILENAME)
     assert variants.reference_names() == {"GRCh37"}
     assert len(variants) == 14
-    
+
     variants = load_vcf("file://%s.gz" % VCF_FILENAME)
     assert variants.reference_names() == {"GRCh37"}
     assert len(variants) == 14
@@ -59,7 +60,7 @@ if RUN_TESTS_REQUIRING_INTERNET:
         variants = load_vcf(VCF_EXTERNAL_URL)
         assert variants.reference_names() == {"GRCh37"}
         assert len(variants) == 14
-        
+
         variants = load_vcf(VCF_EXTERNAL_URL + ".gz")
         assert variants.reference_names() == {"GRCh37"}
         assert len(variants) == 14
@@ -78,7 +79,7 @@ def test_pandas_and_pyvcf_implementations_equivalent():
         {'path': data_path("mutect-example.vcf")},
         {'path': data_path("strelka-example.vcf")},
         {'path': data_path("mutect-example-headerless.vcf"),
-          'ensembl_version': 75},
+          'genome': cached_release(75)},
     ]
     if RUN_TESTS_REQUIRING_INTERNET:
         paths.append({'path': VCF_EXTERNAL_URL})
@@ -93,13 +94,13 @@ def test_pandas_and_pyvcf_implementations_equivalent():
         eq_(vcf_pandas.metadata, vcf_pyvcf.metadata)
         assert len(vcf_pandas) > 1
         assert len(vcf_pyvcf) > 1
-    
+
     for kwargs in paths:
         yield (do_test, kwargs)
-        
+
 def test_reference_arg_to_load_vcf():
     variants = load_vcf(VCF_FILENAME)
-    eq_(variants, load_vcf(VCF_FILENAME, ensembl_version=75))
+    eq_(variants, load_vcf(VCF_FILENAME, genome=cached_release(75)))
     eq_(variants, load_vcf(VCF_FILENAME, reference_name="grch37"))
     eq_(variants, load_vcf(VCF_FILENAME, reference_name="GRCh37"))
     eq_(variants, load_vcf(VCF_FILENAME, reference_name="b37"))

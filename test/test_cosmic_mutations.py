@@ -43,9 +43,12 @@ def _substitution(chrom, pos, dna_ref, dna_alt, transcript_id, aa_ref, aa_alt):
     effect = _get_effect(chrom, pos, dna_ref, dna_alt, transcript_id)
     assert isinstance(effect, Substitution), \
         "Expected effect to be substitution, got %s" % (effect,)
+
     assert effect.aa_ref == aa_ref, \
-        "Expected aa_ref='%s' but got %s" % (
-            aa_ref, effect)
+        "Expected aa_ref='%s' : %s but got %s : %s from %s" % (
+            aa_ref, type(aa_ref),
+            effect.aa_ref, type(effect.aa_ref),
+            effect)
     assert effect.aa_alt == aa_alt, \
         "Expected aa_alt='%s' but got %s" % (
             aa_alt, effect)

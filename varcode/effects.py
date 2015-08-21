@@ -106,7 +106,6 @@ class MutationEffect(object):
 
 class Intergenic(MutationEffect):
     """Variant has unknown effect if it occurs between genes"""
-    
     short_description = "intergenic"
 
 
