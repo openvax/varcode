@@ -34,6 +34,12 @@ def test_load_vcf_mouse_with_ensembl_release():
     variants = load_vcf_fast(MOUSE_VCF, genome=ensembl_mouse_genome)
     eq_(len(variants), 217)
 
+def test_load_vcf_mouse_with_inferred_genome():
+    variants = load_vcf(MOUSE_VCF)
+    eq_(len(variants), 217)
+    variants = load_vcf_fast(MOUSE_VCF)
+    eq_(len(variants), 217)
+
 def test_specific_variant_mouse_with_explicit_urls():
     # Exon #2 at http://useast.ensembl.org/Mus_musculus/Transcript/Exons?
     # db=core;g=ENSMUSG00000017167;r=11:101170523-101190724;t=ENSMUST00000103109

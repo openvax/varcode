@@ -16,8 +16,10 @@
 Effect annotation for variants which modify the coding sequence without
 changing the reading frame.
 """
+from __future__ import division, absolute_import, print_function
 
-import six
+from six.moves import range
+
 from .effects import (
     Silent,
     Insertion,
@@ -149,7 +151,7 @@ def in_frame_coding_effect(
     variant : Variant
     """
 
-    first_ref_codon_index = int(cds_offset / 3)
+    first_ref_codon_index = cds_offset // 3
 
     # which nucleotide of the first codon got changed?
     offset_in_first_ref_codon = cds_offset % 3
@@ -163,7 +165,9 @@ def in_frame_coding_effect(
             # then we can just translate the inserted sequence since it's on
             # codon boundary
             inserted_amino_acids = translate(alt, first_codon_is_start=False)
-            if STOP_CODONS.intersection(alt[3*i:3*i + 3] for i in six.moves.range(len(alt)/3)):
+            n_alt_codons = len(alt) // 3
+            if STOP_CODONS.intersection(
+                    alt[3 * i:3 * i + 3] for i in range(n_alt_codons)):
                 # if we're inserting an in-frame stop codon
                 return PrematureStop(
                     variant=variant,
@@ -264,7 +268,11 @@ def in_frame_coding_effect(
     mutant_protein_subsequence = translate(
         mutant_codons,
         first_codon_is_start=(first_ref_codon_index == 0))
-    if STOP_CODONS.intersection(mutant_codons[3*i:3*i + 3] for i in six.moves.range(len(mutant_codons)/3)):
+
+    n_mutant_codons = len(mutant_codons) // 3
+    if STOP_CODONS.intersection(
+            mutant_codons[3 * i:3 * i + 3]
+            for i in range(n_mutant_codons)):
         # if the new coding sequence contains a stop codon, then this is a
         # PrematureStop mutation
 
