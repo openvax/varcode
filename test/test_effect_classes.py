@@ -352,3 +352,39 @@ def test_intronic():
         variant,
         transcript_id="ENST00000357654",
         effect_class=Intronic)
+
+def test_disruptive_insertion_stop_gain():
+    variant = Variant(
+        "7",
+        117182143,
+        ref="",
+        alt="GTA",
+        ensembl=ensembl_grch37)
+    expect_effect(
+        variant,
+        transcript_id="ENST00000003084",
+        effect_class=PrematureStop)
+
+def test_substitution_nonfinal_stop_gain():
+    variant = Variant(
+        "7",
+        117182145,
+        ref="ACAG",
+        alt="TAAC",
+        ensembl=ensembl_grch37)
+    expect_effect(
+        variant,
+        transcript_id="ENST00000003084",
+        effect_class=PrematureStop)
+
+def test_insertion_nonfinal_stop_gain():
+    variant = Variant(
+        "7",
+        117182144,
+        ref="",
+        alt="TAGGTT",
+        ensembl=ensembl_grch37)
+    expect_effect(
+        variant,
+        transcript_id="ENST00000003084",
+        effect_class=PrematureStop)
