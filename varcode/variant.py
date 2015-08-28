@@ -22,10 +22,10 @@ from Bio.Seq import reverse_complement
 from memoized_property import memoized_property
 from pyensembl import (
     Transcript,
-    EnsemblRelease,
+    cached_release,
+    genome_for_reference_name,
     Genome,
     ensembl_grch38,
-    cached_release,
 )
 from pyensembl.locus import normalize_chromosome
 from pyensembl.biotypes import is_coding_biotype
@@ -76,7 +76,8 @@ class Variant(object):
         "_gene_ids",
         "_coding_genes",)
 
-    def __init__(self,
+    def __init__(
+            self,
             contig,
             start,
             ref,
@@ -108,15 +109,18 @@ class Variant(object):
         """
         self.contig = normalize_chromosome(contig)
 
-        # user might supply Ensembl release as an integer
-        if isinstance(ensembl, Genome) or isinstance(ensembl, EnsemblRelease):
+        # user might supply Ensembl release as an integer, reference name,
+        # or pyensembl.Genome object
+        if isinstance(ensembl, Genome):
             self.ensembl = ensembl
         elif isinstance(ensembl, int):
-            self.ensembl = EnsemblRelease(release=ensembl)
+            self.ensembl = cached_release(ensembl)
+        elif isinstance(ensembl, str):
+            self.ensembl = genome_for_reference_name(ensembl)
         else:
-            raise TypeError("Expected ensembl to be an int or an "
-                "EnsemblRelease instance, got: %s:%s" %
-                (type(ensembl), str(ensembl)))
+            raise TypeError(
+                ("Expected ensembl to be an int, string, or pyensembl.Genome "
+                 "instance, got %s : %s") % (type(ensembl), str(ensembl)))
 
         if (ref in STANDARD_NUCLEOTIDES and
                 alt in STANDARD_NUCLEOTIDES and
@@ -125,7 +129,7 @@ class Variant(object):
             # Optimization for common case.
             self.original_ref = self.ref = ref
             self.original_alt = self.alt = alt
-            self.original_start = self.start = self.end = start
+            self.original_start = self.start = self.end = int(start)
             return
 
         # we want to preserve the ref/alt/pos both as they appeared in the
