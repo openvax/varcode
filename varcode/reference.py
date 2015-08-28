@@ -14,6 +14,13 @@
 
 from __future__ import print_function, division, absolute_import
 
+from pyensembl import (
+    Genome,
+    cached_release,
+    genome_for_reference_name,
+)
+from typechecks import is_string, is_integer
+
 # NCBI builds and hg releases aren't identical
 # but the differences are all on chrM and unplaced contigs
 reference_alias_dict = {
@@ -48,3 +55,29 @@ def infer_reference_name(reference_name_or_path):
                 return assembly_name
     raise ValueError(
         "Failed to infer genome assembly name for %s" % reference_name_or_path)
+
+def infer_genome(genome_object_string_or_int):
+    """
+    If given an integer, return associated human EnsemblRelease for that
+    Ensembl version.
+
+    If given a string, return latest EnsemblRelease which has a reference
+    of the same name.
+
+    If given a PyEnsembl Genome, simply return it.
+    """
+    if isinstance(genome_object_string_or_int, Genome):
+        return genome_object_string_or_int
+    if is_integer(genome_object_string_or_int):
+        return cached_release(genome_object_string_or_int)
+    elif is_string(genome_object_string_or_int):
+        # first infer the canonical reference name, e.g. mapping hg19 -> GRCh37
+        # and then get the associated PyEnsembl Genome object
+        reference_name = infer_reference_name(genome_object_string_or_int)
+        return genome_for_reference_name(reference_name)
+    else:
+        raise TypeError(
+                ("Expected genome to be an int, string, or pyensembl.Genome "
+                 "instance, got %s : %s") % (
+                    str(genome_object_string_or_int),
+                    type(genome_object_string_or_int)))

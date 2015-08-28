@@ -21,20 +21,12 @@ import zlib
 import collections
 
 from six.moves.urllib.parse import urlparse
-from pyensembl import (
-    Genome,
-    cached_release,
-    genome_for_reference_name
-)
+
 import pandas
-from typechecks import (
-    is_string,
-    is_integer,
-    require_string
-)
+from typechecks import require_string
 import vcf  # PyVCF
 
-from .reference_name import infer_reference_name
+from .reference import infer_genome
 from .variant import Variant
 from .variant_collection import VariantCollection
 
@@ -85,7 +77,10 @@ def load_vcf(
 
     handle = PyVCFReaderFromPathOrURL(path)
     try:
-        genome = infer_genome(genome, handle.vcf_reader, reference_vcf_key)
+        genome = infer_genome_from_vcf(
+            genome,
+            handle.vcf_reader,
+            reference_vcf_key)
 
         for record in handle.vcf_reader:
             if only_passing and record.FILTER and record.FILTER != "PASS":
@@ -200,7 +195,10 @@ def load_vcf_fast(
     # data. We can close the file after that.
     handle = PyVCFReaderFromPathOrURL(path)
     handle.close()
-    genome = infer_genome(genome, handle.vcf_reader, reference_vcf_key)
+    genome = infer_genome_from_vcf(
+        genome,
+        handle.vcf_reader,
+        reference_vcf_key)
 
     df_iterator = read_vcf_into_dataframe(
         path, include_info=include_info, chunk_size=chunk_size)
@@ -436,41 +434,19 @@ def stream_gzip_decompress_lines(stream):
                 yield line
     yield previous
 
-
-def infer_genome(genome, vcf_reader, reference_vcf_key):
-    """
-    If genome is an integer, return associated human EnsemblRelease for that
-    Ensembl version.
-
-    If genome is a string, return latest EnsemblRelease which has a reference
-    of the same name.
-
-    If genome is a PyEnsembl Genome, simply return it.
-
-    If genome is not provided, attempt to infer the genome from the VCF header.
-    """
-    if isinstance(genome, Genome):
-        return genome
-    if is_integer(genome):
-        return cached_release(genome)
-    elif is_string(genome):
-        # first infer the canonical reference name, e.g. mapping hg19 -> GRCh37
-        # and then get the associated PyEnsembl Genome object
-        return genome_for_reference_name(infer_reference_name(genome))
-    else:
-        return infer_genome_from_vcf(vcf_reader, reference_vcf_key)
-
-def infer_genome_from_vcf(vcf_reader, reference_vcf_key):
+def infer_genome_from_vcf(genome, vcf_reader, reference_vcf_key):
     """
     Helper function to make a pyensembl.Genome instance.
     """
-    if reference_vcf_key not in vcf_reader.metadata:
+    if genome:
+        return infer_genome(genome)
+    elif reference_vcf_key not in vcf_reader.metadata:
         raise ValueError("Unable to infer reference genome for %s" % (
             vcf_reader.filename,))
     else:
         reference_path = vcf_reader.metadata[reference_vcf_key]
-        reference_name = infer_reference_name(reference_path)
-        return genome_for_reference_name(reference_name)
+        return infer_genome(reference_path)
+
 
 def parse_url_or_path(s):
     # urlparse will parse paths with two leading slashes (e.g. "//foo")
