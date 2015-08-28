@@ -98,15 +98,16 @@ def test_pandas_and_pyvcf_implementations_equivalent():
     for kwargs in paths:
         yield (do_test, kwargs)
 
-def test_reference_arg_to_load_vcf():
+def test_genome_arg_to_load_vcf():
     variants = load_vcf(VCF_FILENAME)
+    eq_(variants, load_vcf(VCF_FILENAME, genome=75))
     eq_(variants, load_vcf(VCF_FILENAME, genome=cached_release(75)))
-    eq_(variants, load_vcf(VCF_FILENAME, reference_name="grch37"))
-    eq_(variants, load_vcf(VCF_FILENAME, reference_name="GRCh37"))
-    eq_(variants, load_vcf(VCF_FILENAME, reference_name="b37"))
+    eq_(variants, load_vcf(VCF_FILENAME, genome="grch37"))
+    eq_(variants, load_vcf(VCF_FILENAME, genome="GRCh37"))
+    eq_(variants, load_vcf(VCF_FILENAME, genome="b37"))
     # TODO: actually make hg19 different from b37! They should use
     # different MT sequences
-    eq_(variants, load_vcf(VCF_FILENAME, reference_name="hg19"))
+    eq_(variants, load_vcf(VCF_FILENAME, genome="hg19"))
 
 def test_vcf_number_entries():
     # there are 14 mutations listed in the VCF, make sure they are all parsed
