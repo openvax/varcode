@@ -20,14 +20,18 @@ import requests
 import zlib
 import collections
 
-try:
-    from urlparse import urlparse  # Python 2
-except ImportError:
-    from urllib.parse import urlparse  # Python 3
-
-from pyensembl import genome_for_reference_name
+from six.moves.urllib.parse import urlparse
+from pyensembl import (
+    Genome,
+    cached_release,
+    genome_for_reference_name
+)
 import pandas
-import typechecks
+from typechecks import (
+    is_string,
+    is_integer,
+    require_string
+)
 import vcf  # PyVCF
 
 from .reference_name import infer_reference_name
@@ -37,9 +41,8 @@ from .variant_collection import VariantCollection
 def load_vcf(
         path,
         genome=None,
-        only_passing=True,
-        reference_name=None,
         reference_vcf_key="reference",
+        only_passing=True,
         allow_extended_nucleotides=False,
         max_variants=None):
     """
@@ -57,21 +60,18 @@ def load_vcf(
         schemes are "file", "http", "https", and "ftp". Can also be a pyvcf
         Reader instance.
 
-    genome : pyensembl.Genome, optional
-        Optionally pass in a PyEnsembl Genome or EnsemblRelease object
-        to exactly specify the annotation data source
-
-    only_passing : boolean, optional
-        If true, any entries whose FILTER field is not one of "." or "PASS" is
-        dropped.
-
-    reference_name : str, optional
-        Name of reference genome against which variants from VCF were aligned.
-        If specified, then `reference_vcf_key` is ignored.
+    genome : {pyensembl.Genome, reference name, Ensembl version int}, optional
+        Optionally pass in a PyEnsembl Genome object, name of reference, or
+        PyEnsembl release version to specify the reference associated with a VCF
+        (otherwise infer reference from VCF using reference_vcf_key)
 
     reference_vcf_key : str, optional
         Name of metadata field which contains path to reference FASTA
         file (default = 'reference')
+
+    only_passing : boolean, optional
+        If true, any entries whose FILTER field is not one of "." or "PASS" is
+        dropped.
 
     allow_extended_nucleotides : boolean, default False
         Allow characters other that A,C,T,G in the ref and alt strings.
@@ -82,13 +82,10 @@ def load_vcf(
 
     variants = []
     metadata = {}
+
     handle = PyVCFReaderFromPathOrURL(path)
     try:
-        if not genome:
-            genome = make_pyensembl_genome_object(
-                handle.vcf_reader,
-                reference_name,
-                reference_vcf_key)
+        genome = infer_genome(genome, handle.vcf_reader, reference_vcf_key)
 
         for record in handle.vcf_reader:
             if only_passing and record.FILTER and record.FILTER != "PASS":
@@ -125,9 +122,8 @@ def load_vcf(
 def load_vcf_fast(
         path,
         genome=None,
-        only_passing=True,
-        reference_name=None,
         reference_vcf_key="reference",
+        only_passing=True,
         allow_extended_nucleotides=False,
         include_info=True,
         chunk_size=10**5,
@@ -150,21 +146,18 @@ def load_vcf_fast(
     path : str
         Path to VCF (*.vcf) or compressed VCF (*.vcf.gz).
 
-    genome : Genome, optional
-        Optionally pass in a PyEnsembl Genome or EnsemblRelease object
-        to exactly specify the annotation data source
-
-    only_passing : boolean, optional
-        If true, any entries whose FILTER field is not one of "." or "PASS" is
-        dropped.
-
-    reference_name : str, optional
-        Name of reference genome against which variants from VCF were aligned.
-        If specified, then `reference_vcf_key` is ignored.
+    genome : {pyensembl.Genome, reference name, Ensembl version int}, optional
+        Optionally pass in a PyEnsembl Genome object, name of reference, or
+        PyEnsembl release version to specify the reference associated with a VCF
+        (otherwise infer reference from VCF using reference_vcf_key)
 
     reference_vcf_key : str, optional
         Name of metadata field which contains path to reference FASTA
         file (default = 'reference')
+
+    only_passing : boolean, optional
+        If true, any entries whose FILTER field is not one of "." or "PASS" is
+        dropped.
 
     allow_extended_nucleotides : boolean, default False
         Allow characters other that A,C,T,G in the ref and alt strings.
@@ -180,7 +173,7 @@ def load_vcf_fast(
         If specified, return only the first max_variants variants.
     """
 
-    typechecks.require_string(path, "Path or URL to VCF")
+    require_string(path, "Path or URL to VCF")
     parsed_path = parse_url_or_path(path)
 
     if parsed_path.scheme and parsed_path.scheme.lower() != "file":
@@ -194,9 +187,8 @@ def load_vcf_fast(
         return load_vcf(
             path,
             genome=genome,
-            only_passing=only_passing,
-            reference_name=reference_name,
             reference_vcf_key=reference_vcf_key,
+            only_passing=only_passing,
             allow_extended_nucleotides=allow_extended_nucleotides,
             max_variants=max_variants)
 
@@ -208,12 +200,7 @@ def load_vcf_fast(
     # data. We can close the file after that.
     handle = PyVCFReaderFromPathOrURL(path)
     handle.close()
-
-    if not genome:
-        genome = make_pyensembl_genome_object(
-            handle.vcf_reader,
-            reference_name,
-            reference_vcf_key)
+    genome = infer_genome(genome, handle.vcf_reader, reference_vcf_key)
 
     df_iterator = read_vcf_into_dataframe(
         path, include_info=include_info, chunk_size=chunk_size)
@@ -405,7 +392,7 @@ class PyVCFReaderFromPathOrURL(object):
         if isinstance(path, vcf.Reader):
             self.vcf_reader = path
         else:
-            typechecks.require_string(path, "Path or URL to VCF")
+            require_string(path, "Path or URL to VCF")
             self.path = path
             parsed_path = parse_url_or_path(path)
             if not parsed_path.scheme or parsed_path.scheme.lower() == 'file':
@@ -449,24 +436,41 @@ def stream_gzip_decompress_lines(stream):
                 yield line
     yield previous
 
-def make_pyensembl_genome_object(
-        vcf_reader,
-        reference_name,
-        reference_vcf_key):
+
+def infer_genome(genome, vcf_reader, reference_vcf_key):
+    """
+    If genome is an integer, return associated human EnsemblRelease for that
+    Ensembl version.
+
+    If genome is a string, return latest EnsemblRelease which has a reference
+    of the same name.
+
+    If genome is a PyEnsembl Genome, simply return it.
+
+    If genome is not provided, attempt to infer the genome from the VCF header.
+    """
+    if isinstance(genome, Genome):
+        return genome
+    if is_integer(genome):
+        return cached_release(genome)
+    elif is_string(genome):
+        # first infer the canonical reference name, e.g. mapping hg19 -> GRCh37
+        # and then get the associated PyEnsembl Genome object
+        return genome_for_reference_name(infer_reference_name(genome))
+    else:
+        return infer_genome_from_vcf(vcf_reader, reference_vcf_key)
+
+def infer_genome_from_vcf(vcf_reader, reference_vcf_key):
     """
     Helper function to make a pyensembl.Genome instance.
     """
-
-    if reference_name:
-        # normalize the reference name in case it's in a weird format
-        reference_name = infer_reference_name(reference_name)
-    elif reference_vcf_key not in vcf_reader.metadata:
+    if reference_vcf_key not in vcf_reader.metadata:
         raise ValueError("Unable to infer reference genome for %s" % (
             vcf_reader.filename,))
     else:
         reference_path = vcf_reader.metadata[reference_vcf_key]
         reference_name = infer_reference_name(reference_path)
-    return genome_for_reference_name(reference_name)
+        return genome_for_reference_name(reference_name)
 
 def parse_url_or_path(s):
     # urlparse will parse paths with two leading slashes (e.g. "//foo")
