@@ -49,8 +49,9 @@ class VariantCollection(Collection):
         sort_key : callable
         """
         if sort_key is None:
-            def sort_key(variant):
+            def sort_key_fn(variant):
                 return (variant.contig, variant.start)
+            sort_key = sort_key_fn
 
         Collection.__init__(
             self,
@@ -59,23 +60,6 @@ class VariantCollection(Collection):
             distinct=distinct,
             sort_key=sort_key)
         self.metadata = {} if metadata is None else metadata
-
-    @memoize
-    def dataframe(self):
-        """
-        Construct a dataframe of the core Variant fields for all variants
-        in this collection.
-        """
-        columns = [
-            "reference_name"
-            "contig",
-            "start",
-            "end",
-            "ref",
-            "alt",
-            "gene_names",
-        ]
-        self._dataframe_from_columns(columns)
 
     @memoize
     def effects(self, raise_on_error=True):

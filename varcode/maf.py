@@ -23,6 +23,7 @@ from .nucleotides import normalize_nucleotide_string
 from .reference import infer_genome
 from .variant import Variant
 from .variant_collection import VariantCollection
+from .common import read_csv_as_df
 
 TCGA_PATIENT_ID_LENGTH = 12
 
@@ -57,7 +58,7 @@ def load_maf_dataframe(path, nrows=None, verbose=False):
 
     n_basic_columns = len(MAF_COLUMN_NAMES)
 
-    df = pandas.read_csv(
+    df = read_csv_as_df(
         path,
         comment="#",
         sep="\t",
