@@ -19,6 +19,7 @@ import pysam
 from varcode import Variant as VarcodeVariant
 from varcode.read_evidence import PileupCollection
 from varcode import Locus
+from pysam.csamfile import Samfile
 from .data import data_path
 
 # This will be moved into mainline varcode soon. For now, however,
@@ -111,7 +112,7 @@ def test_read_evidence_gatk_mini_bundle_extract():
         Locus.from_inclusive_coordinates("20", 10008796),            # 9
         Locus.from_inclusive_coordinates("20", 10008921),            # 10
     ]
-    handle = pysam.Samfile(data_path("reads/gatk_mini_bundle_extract.bam"))
+    handle = Samfile(data_path("reads/gatk_mini_bundle_extract.bam"))
     evidence = PileupCollection.from_bam(handle, loci)
 
     eq_(evidence.allele_summary(loci[0]), [("ACT", 9)])
@@ -167,7 +168,7 @@ def test_read_evidence_gatk_mini_bundle_extract():
 
 
 def test_read_evidence_variant_matching_gatk_mini_bundle_extract():
-    handle = pysam.Samfile(data_path("reads/gatk_mini_bundle_extract.bam"))
+    handle = Samfile(data_path("reads/gatk_mini_bundle_extract.bam"))
 
     loci = [
         Locus.from_inclusive_coordinates("20", 10008951),  # 0
@@ -205,7 +206,7 @@ def test_read_evidence_variant_matching_gatk_mini_bundle_extract():
 
 def test_read_evidence_variant_matching_gatk_bundle_native_varcode_variant():
     # Try native varcode Variant.
-    handle = pysam.Samfile(data_path("reads/gatk_mini_bundle_extract.bam"))
+    handle = Samfile(data_path("reads/gatk_mini_bundle_extract.bam"))
     locus = Locus.from_inclusive_coordinates("20", 10008951)
     variant = VarcodeVariant(
         locus.contig,

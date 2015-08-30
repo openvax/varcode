@@ -21,6 +21,7 @@ import re
 
 import pandas
 import pysam
+from pysam.csamfile import Samfile
 import typechecks
 import pyensembl
 
@@ -539,7 +540,7 @@ class PileupCollection(object):
 
         close_on_completion = False
         if typechecks.is_string(pysam_samfile):
-            pysam_samfile = pysam.Samfile(pysam_samfile)
+            pysam_samfile = Samfile(pysam_samfile)
             close_on_completion = True        
 
         try:
