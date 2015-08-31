@@ -23,6 +23,8 @@ script:
   # mouse releases
   - pyensembl install --release 81 --species mouse
   - nosetests test --with-coverage --cover-package=varcode && ./lint.sh
+after_success:
+  coveralls
 deploy:
   provider: pypi
   user: hammerlab
