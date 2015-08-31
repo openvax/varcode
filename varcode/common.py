@@ -15,7 +15,6 @@
 from __future__ import print_function, division, absolute_import
 from collections import defaultdict
 from functools import wraps
-import pandas as pd
 
 def groupby_field(records, field_name):
     """
@@ -49,10 +48,3 @@ def memoize(fn):
             return memoized_values[key]
 
     return wrapped_fn
-
-
-def read_csv_as_df(*args, **kwargs):
-    """Tell pylint that read_csv returns a DataFrame"""
-    df = pd.read_csv(*args, **kwargs)
-    assert type(df) == pd.DataFrame
-    return pd.DataFrame(df)

@@ -23,7 +23,6 @@ from .nucleotides import normalize_nucleotide_string
 from .reference import infer_genome
 from .variant import Variant
 from .variant_collection import VariantCollection
-from .common import read_csv_as_df
 
 TCGA_PATIENT_ID_LENGTH = 12
 
@@ -58,7 +57,9 @@ def load_maf_dataframe(path, nrows=None, verbose=False):
 
     n_basic_columns = len(MAF_COLUMN_NAMES)
 
-    df = read_csv_as_df(
+    # pylint: disable=no-member
+    # pylint gets confused by read_csv
+    df = pandas.read_csv(
         path,
         comment="#",
         sep="\t",
@@ -91,6 +92,8 @@ def load_maf(path):
     """
     Load reference name and Variant objects from MAF filename.
     """
+    # pylint: disable=no-member
+    # pylint gets confused by read_csv inside load_maf_dataframe
     maf_df = load_maf_dataframe(path)
 
     if len(maf_df) == 0:

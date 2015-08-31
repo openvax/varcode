@@ -13,13 +13,13 @@
 # limitations under the License.
 
 from pyensembl import EnsemblRelease
-from varcode.common import read_csv_as_df
 from varcode import (
     ExonicSpliceSite,
     Substitution,
     Variant,
     TranscriptMutationEffect
 )
+import pandas as pd
 
 from . import data_path
 
@@ -78,7 +78,10 @@ def test_dbnsfp_validation_set():
     # - ensembl_transcript : transcript ID
     # - dna_position : base-1 position within chromosome
     # - dna_ref : reference DNA nucleotide
-    validation_set = read_csv_as_df(data_path('dbnsfp_validation_set.csv'))
+
+    # pylint: disable=no-member
+    # pylint gets confused by read_csv
+    validation_set = pd.read_csv(data_path('dbnsfp_validation_set.csv'))
     for _, row in validation_set.iterrows():
         args = (
             row['ensembl_transcript'],
