@@ -196,10 +196,12 @@ def in_frame_coding_effect(
         first_ref_codon_index = int(cds_offset / 3)
 
         assert first_ref_codon_index <= len(transcript.protein_sequence), \
-            ("Unexpected mutation at offset %d (5' UTR starts at %d"
+            ("Unexpected mutation at offset %d (5' UTR starts at %d)"
              " while annotating %s on %s") % (
-             first_ref_codon_index,
-             len(transcript.protein_sequence))
+                 first_ref_codon_index,
+                 len(transcript.protein_sequence),
+                 variant,
+                 transcript)
         n_ref_nucleotides = len(ref)
         last_ref_codon_index = int((cds_offset + n_ref_nucleotides - 1) / 3)
 

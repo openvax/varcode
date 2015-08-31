@@ -13,10 +13,10 @@
 # limitations under the License.
 from __future__ import absolute_import
 
-import pandas as pd
 from nose.tools import eq_
 from pyensembl import ensembl_grch37 as ensembl
 from varcode import Variant
+import pandas as pd
 
 from .data import tcga_ov_variants, ov_wustle_variants
 
@@ -52,6 +52,8 @@ def test_maf_aa_changes():
     assert len(ov_wustle_variants) == 5
 
     expected_changes = {}
+    # pylint: disable=no-member
+    # pylint gets confused by read_csv
     maf_fields = pd.read_csv(
         ov_wustle_variants.path,
         sep="\t",

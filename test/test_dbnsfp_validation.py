@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pandas as pd
 from pyensembl import EnsemblRelease
 from varcode import (
     ExonicSpliceSite,
@@ -20,6 +19,7 @@ from varcode import (
     Variant,
     TranscriptMutationEffect
 )
+import pandas as pd
 
 from . import data_path
 
@@ -78,6 +78,9 @@ def test_dbnsfp_validation_set():
     # - ensembl_transcript : transcript ID
     # - dna_position : base-1 position within chromosome
     # - dna_ref : reference DNA nucleotide
+
+    # pylint: disable=no-member
+    # pylint gets confused by read_csv
     validation_set = pd.read_csv(data_path('dbnsfp_validation_set.csv'))
     for _, row in validation_set.iterrows():
         args = (

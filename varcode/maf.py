@@ -57,6 +57,8 @@ def load_maf_dataframe(path, nrows=None, verbose=False):
 
     n_basic_columns = len(MAF_COLUMN_NAMES)
 
+    # pylint: disable=no-member
+    # pylint gets confused by read_csv
     df = pandas.read_csv(
         path,
         comment="#",
@@ -90,6 +92,8 @@ def load_maf(path):
     """
     Load reference name and Variant objects from MAF filename.
     """
+    # pylint: disable=no-member
+    # pylint gets confused by read_csv inside load_maf_dataframe
     maf_df = load_maf_dataframe(path)
 
     if len(maf_df) == 0:
