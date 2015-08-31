@@ -49,9 +49,9 @@ class VariantCollection(Collection):
         sort_key : callable
         """
         if sort_key is None:
-            def sort_key_fn(variant):
+            # pylint: disable=function-redefined
+            def sort_key(variant):
                 return (variant.contig, variant.start)
-            sort_key = sort_key_fn
 
         Collection.__init__(
             self,
