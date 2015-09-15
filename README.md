@@ -28,6 +28,7 @@ when using the `varcode` for the first time.
 Example
 -------
 
+
 ```python
 import varcode
 
@@ -78,6 +79,8 @@ print(premature_stop_effect.transcript)
 print(premature_stop_effect.gene.name)
 ### 'TP53'
 ```
+
+If you are looking for a quick start guide, you can check out [this iPython book](./examples/varcode-quick_start.ipynb) that demonstrates simple use cases of Varcode
 
 Effect Types
 ------------
