@@ -40,7 +40,7 @@ if __name__ == '__main__':
     setup(
         name='varcode',
         packages=find_packages(),
-        version="0.3.19",
+        version="0.4.0",
         description="Variant annotation in Python",
         long_description=readme,
         url="https://github.com/hammerlab/varcode",
@@ -62,6 +62,5 @@ if __name__ == '__main__':
             'biopython>=1.64',
             'pyvcf>=0.6.7',
             'memoized_property>=1.0.2',
-            'pysam>=0.8.3',
         ],
     )
