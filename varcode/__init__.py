@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .locus import Locus
 from .variant import Variant
 from .collection import Collection
 from .effect_collection import EffectCollection
@@ -52,7 +51,6 @@ from .effects import (
 
 __all__ = [
     # basic classes
-    "Locus",
     "Variant",
     "Collection",
     "EffectCollection",
