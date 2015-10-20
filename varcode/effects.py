@@ -40,9 +40,12 @@ class MutationEffect(object):
 
     @property
     def short_description(self):
-        raise ValueError(
-            "Property short_description not implemented for %s" % (
-                self.__class__.__name__,))
+        """
+        A short but human-readable description of the effect.
+        Defaults to class name for most of the non-coding effects,
+        but is more informative for coding ones.
+        """
+        return self.__class__.__name__.lower()
 
     transcript = None
     gene = None
@@ -115,6 +118,7 @@ class Intragenic(MutationEffect):
     apparently does happen sometimes, maybe some genes have two distinct sets
     of exons which are never simultaneously expressed?
     """
+    short_description = "intragenic"
 
     def __init__(self, variant, gene):
         MutationEffect.__init__(self, variant)
