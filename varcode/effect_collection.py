@@ -178,7 +178,6 @@ class EffectCollection(Collection):
                 lines.append("  Highest Priority Effect: %s" % best)
         return "\n".join(lines)
 
-    @memoize
     def top_priority_effect(self):
         """Highest priority MutationEffect of all genes/transcripts overlapped
         by this variant. If this variant doesn't overlap anything, then this
