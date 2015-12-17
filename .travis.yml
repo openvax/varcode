@@ -19,10 +19,16 @@ before_install:
   - conda update -q conda
   # Useful for debugging any issues with conda
   - conda info -a
+addons:
+  apt:
+    packages:
+    # install pandoc for use with pypandoc for converting the README
+    # from markdown to RST
+    - pandoc
 install:
   - >
       conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION
-      numpy scipy nose pandas matplotlib pandoc
+      numpy scipy nose pandas matplotlib
   - source activate test-environment
   - pip install pypandoc
   - pip install -r requirements.txt
