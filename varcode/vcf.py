@@ -20,7 +20,7 @@ import requests
 import zlib
 import collections
 
-from six.moves.urllib.parse import urlparse
+from six.moves import urllib
 
 import pandas
 from typechecks import require_string
@@ -29,6 +29,7 @@ import vcf  # PyVCF
 from .reference import infer_genome
 from .variant import Variant
 from .variant_collection import VariantCollection
+
 
 def load_vcf(
         path,
@@ -114,6 +115,7 @@ def load_vcf(
     return VariantCollection(
         variants=variants, path=handle.path, metadata=metadata)
 
+
 def load_vcf_fast(
         path,
         genome=None,
@@ -121,7 +123,7 @@ def load_vcf_fast(
         only_passing=True,
         allow_extended_nucleotides=False,
         include_info=True,
-        chunk_size=10**5,
+        chunk_size=10 ** 5,
         max_variants=None):
     """
     Load reference name and Variant objects from the given VCF filename.
@@ -212,6 +214,7 @@ def load_vcf_fast(
             'ensembl': genome,
             'allow_extended_nucleotides': allow_extended_nucleotides},
         variant_collection_kwargs={"path": path})
+
 
 def dataframes_to_variant_collection(
         dataframes,
@@ -307,6 +310,7 @@ def dataframes_to_variant_collection(
     return VariantCollection(
         variants=variants, metadata=metadata, **variant_collection_kwargs)
 
+
 def read_vcf_into_dataframe(path, include_info=False, chunk_size=None):
     """
     Load the data of a VCF into a pandas dataframe. All headers are ignored.
@@ -362,6 +366,7 @@ def read_vcf_into_dataframe(path, include_info=False, chunk_size=None):
         usecols=range(len(vcf_field_types)))
     return reader
 
+
 class PyVCFReaderFromPathOrURL(object):
     """
     Thin wrapper over a PyVCF Reader object that supports loading over URLs,
@@ -411,6 +416,7 @@ class PyVCFReaderFromPathOrURL(object):
         if self._to_close is not None:
             self._to_close.close()
 
+
 def stream_gzip_decompress_lines(stream):
     """
     Uncompress a gzip stream into lines of text.
@@ -434,6 +440,7 @@ def stream_gzip_decompress_lines(stream):
                 yield line
     yield previous
 
+
 def infer_genome_from_vcf(genome, vcf_reader, reference_vcf_key):
     """
     Helper function to make a pyensembl.Genome instance.
@@ -454,4 +461,4 @@ def parse_url_or_path(s):
     # slash.
     if s.startswith("//"):
         s = "/" + s.lstrip("/")
-    return urlparse(s)
+    return urllib.parse.urlparse(s)

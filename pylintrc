@@ -2,3 +2,8 @@
 # Without ignoring this, we get errors like:
 # E:249,20: Module 'numpy' has no 'nan' member (no-member)
 ignored-modules = numpy
+
+[MESSAGES CONTROL]
+# getting false positives due to this issue with pylint:
+# https://bitbucket.org/logilab/pylint/issues/701/false-positives-with-not-an-iterable-and
+disable=unsubscriptable-object,not-an-iterable
