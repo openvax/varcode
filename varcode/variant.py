@@ -55,6 +55,7 @@ from .nucleotides import normalize_nucleotide_string, STANDARD_NUCLEOTIDES
 from .string_helpers import trim_shared_flanking_strings
 from .transcript_helpers import interval_offset_on_transcript
 
+
 class Variant(object):
     __slots__ = (
         "contig",
@@ -144,9 +145,11 @@ class Variant(object):
 
         # the original entries must preserve the number of nucleotides in
         # ref and alt but we still want to normalize e.g. '-' and '.' into ''
-        self.original_ref = normalize_nucleotide_string(ref,
+        self.original_ref = normalize_nucleotide_string(
+            ref,
             allow_extended_nucleotides=allow_extended_nucleotides)
-        self.original_alt = normalize_nucleotide_string(alt,
+        self.original_alt = normalize_nucleotide_string(
+            alt,
             allow_extended_nucleotides=allow_extended_nucleotides)
         self.original_start = int(start)
 
@@ -305,7 +308,8 @@ class Variant(object):
         Protein coding transcripts
         """
         return [
-            transcript for transcript in self.transcripts
+            transcript
+            for transcript in self.transcripts
             if is_coding_biotype(transcript.biotype)
         ]
 
@@ -376,11 +380,10 @@ class Variant(object):
         if len(gene_ids) == 0:
             return EffectCollection([Intergenic(self)])
 
-        overlapping_transcripts = self.transcripts
-
         # group transcripts by their gene ID
         transcripts_grouped_by_gene = groupby_field(
-            overlapping_transcripts, 'gene_id')
+            self.transcripts,
+            'gene_id')
 
         # list of all MutationEffects for all genes & transcripts
         effects = []
