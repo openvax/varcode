@@ -14,6 +14,7 @@ before_install:
     fi
   - bash miniconda.sh -b -p $HOME/miniconda
   - export PATH="$HOME/miniconda/bin:$PATH"
+  # reset the shell's lookup table for program name to path mappings
   - hash -r
   - conda config --set always_yes yes --set changeps1 no
   - conda update -q conda
