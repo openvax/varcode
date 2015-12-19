@@ -89,6 +89,8 @@ class Collection(object):
         return self.elements[idx]
 
     def __eq__(self, other):
+        if self is other:
+            return True
         return (
             self.__class__ == other.__class__ and
             len(self) == len(other) and

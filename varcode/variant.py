@@ -222,6 +222,8 @@ class Variant(object):
             self.ensembl.release)
 
     def __eq__(self, other):
+        if self is other:
+            return True
         return (
             self.contig == other.contig and
             self.start == other.start and
