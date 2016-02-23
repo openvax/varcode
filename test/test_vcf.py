@@ -78,8 +78,7 @@ def test_pandas_and_pyvcf_implementations_equivalent():
         {'path': data_path("multiallelic.vcf")},
         {'path': data_path("mutect-example.vcf")},
         {'path': data_path("strelka-example.vcf")},
-        {'path': data_path("mutect-example-headerless.vcf"),
-          'genome': cached_release(75)},
+        {'path': data_path("mutect-example-headerless.vcf"), 'genome': cached_release(75)},
     ]
     if RUN_TESTS_REQUIRING_INTERNET:
         paths.append({'path': VCF_EXTERNAL_URL})

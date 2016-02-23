@@ -19,7 +19,7 @@ from typechecks import require_iterable_of
 
 from .collection import Collection
 from .common import memoize
-from .effects import MutationEffect, NonsilentCodingMutation
+from .effects import MutationEffect
 from .effect_ordering import (
     effect_priority,
     effect_sort_key,
@@ -143,8 +143,7 @@ class EffectCollection(Collection):
         """
         Create a new EffectCollection containing only non-silent coding effects
         """
-        return self.filter(
-            lambda effect: isinstance(effect, NonsilentCodingMutation))
+        return self.filter(lambda effect: effect.modifies_protein_sequence)
 
     def detailed_string(self):
         """

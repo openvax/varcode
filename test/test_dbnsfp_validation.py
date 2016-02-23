@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from pyensembl import EnsemblRelease
+from pyensembl import ensembl_grch37
 from varcode import (
     ExonicSpliceSite,
     Substitution,
@@ -23,8 +23,6 @@ import pandas as pd
 
 from . import data_path
 
-ensembl = EnsemblRelease(75)
-
 def validate_transcript_mutation(
         ensembl_transcript_id,
         chrom,
@@ -33,7 +31,7 @@ def validate_transcript_mutation(
         dna_alt,
         aa_pos,
         aa_alt):
-    variant = Variant(chrom, dna_position, dna_ref, dna_alt, ensembl)
+    variant = Variant(chrom, dna_position, dna_ref, dna_alt, ensembl_grch37)
     effects = variant.effects()
     transcript_id_dict = {
         effect.transcript.id: effect
@@ -58,14 +56,14 @@ def validate_transcript_mutation(
     assert (
         effect_aa_pos + 1 == aa_pos and
         effect_aa_alt == aa_alt), \
-            "Mutant amino acid %s not found at %d for chr%s:%s %s>%s : %s" % (
-                aa_alt,
-                aa_pos,
-                chrom,
-                dna_position,
-                dna_ref,
-                dna_alt,
-                effect)
+        "Mutant amino acid %s not found at %d for chr%s:%s %s>%s : %s" % (
+            aa_alt,
+            aa_pos,
+            chrom,
+            dna_position,
+            dna_ref,
+            dna_alt,
+            effect)
 
 def test_dbnsfp_validation_set():
     # check that amino acid substitution gives

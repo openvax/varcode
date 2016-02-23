@@ -20,7 +20,9 @@ try:
     import cPickle as pickle
 except ImportError:
     import pickle
-from pyensembl import ensembl77
+
+from pyensembl import ensembl_grch38
+
 from varcode import Variant
 from nose.tools import eq_
 
@@ -106,7 +108,7 @@ def test_deletion_no_suffix():
 def test_serialization():
     variants = [
         Variant(
-            1, start=10, ref="AA", alt="AAT", ensembl=ensembl77),
+            1, start=10, ref="AA", alt="AAT", ensembl=ensembl_grch38),
         Variant(10, start=15, ref="A", alt="G"),
         Variant(20, start=150, ref="", alt="G"),
     ]

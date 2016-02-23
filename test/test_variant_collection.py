@@ -65,12 +65,13 @@ def test_gene_counts():
     # eq_(coding_gene_counts, expected_counts)
 
 def test_serialization():
-    original = VariantCollection([
+    original = VariantCollection(
+        [
             Variant(
                 1, start=10, ref="AA", alt="AAT", ensembl=77),
             Variant(10, start=15, ref="A", alt="G"),
             Variant(20, start=150, ref="", alt="G"),
-    ])
+        ])
     original.metadata[original[0]] = {"a": "b"}
     original.metadata[original[2]] = {"bar": 2}
 
