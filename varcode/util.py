@@ -14,7 +14,6 @@
 
 from __future__ import print_function, division, absolute_import
 import random
-import logging
 
 from Bio.Seq import reverse_complement
 from pyensembl import EnsemblRelease
@@ -50,7 +49,7 @@ def random_variants(
 
     # we should finish way before this loop is over but just in case
     # something is wrong with PyEnsembl we want to avoid an infinite loop
-    for i in range(count * 100):
+    for _ in range(count * 100):
         if len(variants) < count:
             transcript_id = rng.choice(transcript_ids)
             transcript = ensembl.transcript_by_id(transcript_id)
@@ -61,13 +60,7 @@ def random_variants(
             exon = rng.choice(transcript.exons)
             base1_genomic_position = rng.randint(exon.start, exon.end)
             transcript_offset = transcript.spliced_offset(base1_genomic_position)
-
-            try:
-                seq = transcript.sequence
-            except ValueError as e:
-                logging.warn(e)
-                # can't get sequence for non-coding transcripts
-                continue
+            seq = transcript.sequence
 
             ref = str(seq[transcript_offset])
             if transcript.on_backward_strand:
