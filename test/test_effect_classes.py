@@ -24,7 +24,7 @@ from varcode import (
     # transcript effects
     #
     IncompleteTranscript,
-    NoncodingTranscript,
+    # NoncodingTranscript, TODO: write a noncoding transcript test
     FivePrimeUTR,
     ThreePrimeUTR,
     Intronic,
