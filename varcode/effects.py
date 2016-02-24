@@ -265,6 +265,10 @@ class ExonicSpliceSite(Exonic, SpliceSite):
     def modifies_protein_sequence(self):
         return self.alternate_effect.modifies_protein_sequence
 
+    @memoized_property
+    def modifies_coding_sequence(self):
+        return self.alternate_effect.modifies_coding_sequence
+
 class CodingMutation(Exonic):
     """
     Base class for all mutations which result in a modified coding sequence.
