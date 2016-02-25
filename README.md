@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/hammerlab/varcode.svg?branch=master)](https://travis-ci.org/hammerlab/varcode) [![Coverage Status](https://coveralls.io/repos/hammerlab/varcode/badge.svg?branch=master&service=github)](https://coveralls.io/github/hammerlab/varcode?branch=master)
+[![Build Status](https://travis-ci.org/hammerlab/varcode.svg?branch=master)](https://travis-ci.org/hammerlab/varcode) [![Coverage Status](https://coveralls.io/repos/hammerlab/varcode/badge.svg?branch=master&service=github)](https://coveralls.io/github/hammerlab/varcode?branch=master) [![DOI](https://zenodo.org/badge/18834/hammerlab/varcode.svg)](https://zenodo.org/badge/latestdoi/18834/hammerlab/varcode)
 
 Varcode
 =======
