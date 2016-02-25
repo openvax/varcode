@@ -22,7 +22,6 @@ def _time_variant_annotation(variant_collection):
     effects = variant_collection.effects()
     end_t = time.time()
     assert len(effects.groupby_variant()) == len(variant_collection)
-
     elapsed_t = end_t - start_t
     return elapsed_t
 
@@ -30,7 +29,7 @@ def _time_variant_annotation(variant_collection):
 def test_effect_timing(
         n_variants=100,
         random_seed=0,
-        n_warmup_variants=20):
+        n_warmup_variants=5):
     warmup_collection = random_variants(
         n_warmup_variants,
         random_seed=None)

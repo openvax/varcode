@@ -24,7 +24,7 @@ from varcode import (
     # transcript effects
     #
     IncompleteTranscript,
-    NoncodingTranscript,
+    # NoncodingTranscript, TODO: write a noncoding transcript test
     FivePrimeUTR,
     ThreePrimeUTR,
     Intronic,
@@ -41,9 +41,13 @@ from varcode import (
     ExonicSpliceSite,
     # TODO: SpliceDonor, SpliceReceptor
 )
-from pyensembl import ensembl_grch37, ensembl_grch38
+from pyensembl import ensembl_grch37, cached_release
 
 from .common import expect_effect
+
+# tried using more recent releases but found that many of them
+# are very specific to Ensembl data between releases 77-81
+ensembl_grch38 = cached_release(81)
 
 def test_incomplete():
     # transcript EGFR-009 (ENST00000450046 in Ensembl 78)
@@ -153,9 +157,9 @@ def test_exon_loss():
         "17",
         43082404,
         ref="".join([
-          "CTTTTTCTGATGTGCTTTGTTCTGGATTTCGCAGGTCCTCAAGGGCAGAAGAGTCACTTATGATG",
-          "GAAGGGTAGCTGTTAGAAGGCTGGCTCCCATGCTGTTCTAACACAGCTTCAGTAATTAGATTAGT",
-          "TAAAGTGATGTGGTGTTTTCTGGCAAACTTGTACACGAGCAT"
+            "CTTTTTCTGATGTGCTTTGTTCTGGATTTCGCAGGTCCTCAAGGGCAGAAGAGTCACTTATGATG",
+            "GAAGGGTAGCTGTTAGAAGGCTGGCTCCCATGCTGTTCTAACACAGCTTCAGTAATTAGATTAGT",
+            "TAAAGTGATGTGGTGTTTTCTGGCAAACTTGTACACGAGCAT"
         ]),
         alt="",
         ensembl=ensembl_grch38)

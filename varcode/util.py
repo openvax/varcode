@@ -14,7 +14,6 @@
 
 from __future__ import print_function, division, absolute_import
 import random
-import logging
 
 from Bio.Seq import reverse_complement
 from pyensembl import EnsemblRelease
@@ -48,45 +47,46 @@ def random_variants(
 
     variants = []
 
-    while len(variants) < count:
-        transcript_id = rng.choice(transcript_ids)
-        transcript = ensembl.transcript_by_id(transcript_id)
+    # we should finish way before this loop is over but just in case
+    # something is wrong with PyEnsembl we want to avoid an infinite loop
+    for _ in range(count * 100):
+        if len(variants) < count:
+            transcript_id = rng.choice(transcript_ids)
+            transcript = ensembl.transcript_by_id(transcript_id)
 
-        if not transcript.complete:
-            continue
+            if not transcript.complete:
+                continue
 
-        exon = rng.choice(transcript.exons)
-        base1_genomic_position = rng.randint(exon.start, exon.end)
-        transcript_offset = transcript.spliced_offset(base1_genomic_position)
-
-        try:
+            exon = rng.choice(transcript.exons)
+            base1_genomic_position = rng.randint(exon.start, exon.end)
+            transcript_offset = transcript.spliced_offset(base1_genomic_position)
             seq = transcript.sequence
-        except ValueError as e:
-            logging.warn(e)
-            # can't get sequence for non-coding transcripts
-            continue
 
-        ref = str(seq[transcript_offset])
-        if transcript.on_backward_strand:
-            ref = reverse_complement(ref)
+            ref = str(seq[transcript_offset])
+            if transcript.on_backward_strand:
+                ref = reverse_complement(ref)
 
-        alt_nucleotides = [x for x in STANDARD_NUCLEOTIDES if x != ref]
+            alt_nucleotides = [x for x in STANDARD_NUCLEOTIDES if x != ref]
 
-        if insertions:
-            nucleotide_pairs = [
-                x + y
-                for x in STANDARD_NUCLEOTIDES
-                for y in STANDARD_NUCLEOTIDES
-            ]
-            alt_nucleotides.extend(nucleotide_pairs)
-        if deletions:
-            alt_nucleotides.append("")
-        alt = rng.choice(alt_nucleotides)
-        variant = Variant(
-            transcript.contig,
-            base1_genomic_position,
-            ref=ref,
-            alt=alt,
-            ensembl=ensembl)
-        variants.append(variant)
-    return VariantCollection(variants)
+            if insertions:
+                nucleotide_pairs = [
+                    x + y
+                    for x in STANDARD_NUCLEOTIDES
+                    for y in STANDARD_NUCLEOTIDES
+                ]
+                alt_nucleotides.extend(nucleotide_pairs)
+            if deletions:
+                alt_nucleotides.append("")
+            alt = rng.choice(alt_nucleotides)
+            variant = Variant(
+                transcript.contig,
+                base1_genomic_position,
+                ref=ref,
+                alt=alt,
+                ensembl=ensembl)
+            variants.append(variant)
+        else:
+            return VariantCollection(variants)
+    raise ValueError(
+        ("Unable to generate %d random variants, "
+         "there may be a problem with PyEnsembl") % count)

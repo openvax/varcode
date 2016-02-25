@@ -13,13 +13,26 @@ import time
 import varcode
 
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("path", help="Path or URL to VCF")
-parser.add_argument("--profile", action="store_true", default=False,
+
+parser.add_argument(
+    "path", help="Path or URL to VCF")
+
+parser.add_argument(
+    "--profile", action="store_true",
+    default=False,
     help="Run in a profiler.")
-parser.add_argument("--no-info-field",
-    dest="info_field", action="store_false", default=True)
-parser.add_argument("--pyvcf",
-    help="use pyvcf implementation", action="store_true", default=False)
+
+parser.add_argument(
+    "--no-info-field",
+    dest="info_field",
+    action="store_false",
+    default=True)
+
+parser.add_argument(
+    "--pyvcf",
+    help="use pyvcf implementation",
+    action="store_true",
+    default=False)
 
 def run():
     args = parser.parse_args()
@@ -29,7 +42,7 @@ def run():
         extra_args["include_info"] = False
 
     start = time.time()
-    
+
     if args.pyvcf:
         result = varcode.load_vcf(
             args.path,

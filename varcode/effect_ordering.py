@@ -12,13 +12,38 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .effects import *
+from .effects import (
+    Failure,
+    IncompleteTranscript,
+    Intergenic,
+    Intragenic,
+    NoncodingTranscript,
+    Intronic,
+    ThreePrimeUTR,
+    FivePrimeUTR,
+    Silent,
+    Substitution,
+    Insertion,
+    Deletion,
+    ComplexSubstitution,
+    AlternateStartCodon,
+    IntronicSpliceSite,
+    ExonicSpliceSite,
+    StopLoss,
+    SpliceDonor,
+    SpliceAcceptor,
+    PrematureStop,
+    FrameShiftTruncation,
+    StartLoss,
+    FrameShift,
+    ExonLoss,
+)
 
 transcript_effect_priority_list = [
     Failure,
+    IncompleteTranscript,
     Intergenic,
     Intragenic,
-    IncompleteTranscript,
     NoncodingTranscript,
     Intronic,
     ThreePrimeUTR,
