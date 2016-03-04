@@ -1,4 +1,4 @@
-# Copyright (c) 2015. Mount Sinai School of Medicine
+# Copyright (c) 2016. Mount Sinai School of Medicine
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -85,7 +85,8 @@ def normalize_nucleotide_string(nucleotides, allow_extended_nucleotides=False):
         valid_nucleotides = STANDARD_NUCLEOTIDES
 
     if not set(nucleotides) <= valid_nucleotides:
-        raise ValueError("Invalid character(s) in nucleotide string: %s"
-            % ",".join(set(nucleotides) - valid_nucleotides))
+        raise ValueError(
+            "Invalid character(s) in nucleotide string: %s" % (
+                ",".join(set(nucleotides) - valid_nucleotides),))
 
     return nucleotides

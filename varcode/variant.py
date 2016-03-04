@@ -1,4 +1,4 @@
-# Copyright (c) 2015. Mount Sinai School of Medicine
+# Copyright (c) 2016. Mount Sinai School of Medicine
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -681,3 +681,41 @@ class Variant(object):
                 exon=exon,
                 alternate_effect=coding_effect_annotation)
         return coding_effect_annotation
+
+    @property
+    def is_insertion(self):
+        """
+        Does this variant represent the insertion of nucleotides into the
+        reference genome?
+        """
+        # An insertion would appear in a VCF like C>CT, so that the
+        # alternate allele starts with the reference nucleotides.
+        # Since the nucleotide strings may be normalized in the constructor,
+        # it's worth noting that the normalized form of this variant would be
+        # ''>'T', so that 'T'.startswith('') still holds.
+        return (len(self.ref) < len(self.alt)) and self.alt.startswith(self.ref)
+
+    @property
+    def is_deletion(self):
+        """
+        Does this variant represent the deletion of nucleotides from the
+        reference genome?
+        """
+        # A deletion would appear in a VCF like CT>C, so that the
+        # reference allele starts with the alternate nucleotides.
+        # This is true even in the normalized case, where the alternate
+        # nucleotides are an empty string.
+        return (len(self.ref) > len(self.alt)) and self.ref.startswith(self.alt)
+
+    @property
+    def is_indel(self):
+        """Is this variant either an insertion or deletion?"""
+        return self.is_insertion or self.is_deletion
+
+    @property
+    def preserves_reading_frame(self):
+        """
+        If this variant occurs in the coding region of a gene, would it
+        prerseve the ORF or create a frameshift mutation?
+        """
+        return (len(self.alt) - len(self.ref)) % 3 == 0

@@ -41,6 +41,10 @@ def test_insertion_shared_prefix():
     eq_(variant.start, 11)
     eq_(variant.end, 11)
     eq_(variant.short_description, "chr1 g.11_12insT")
+    assert variant.is_indel
+    assert variant.is_insertion
+    assert not variant.is_deletion
+    assert not variant.preserves_reading_frame
 
 def test_insertion_no_prefix():
     variant = Variant(1, start=11, ref="", alt="T")
@@ -53,6 +57,10 @@ def test_insertion_no_prefix():
     eq_(variant.start, 11)
     eq_(variant.end, 11)
     eq_(variant.short_description, "chr1 g.11_12insT")
+    assert variant.is_indel
+    assert variant.is_insertion
+    assert not variant.is_deletion
+    assert not variant.preserves_reading_frame
 
 def test_substitution_no_prefix():
     variant = Variant(1, start=11, ref="A", alt="T")
@@ -65,6 +73,10 @@ def test_substitution_no_prefix():
     eq_(variant.start, 11)
     eq_(variant.end, 11)
     eq_(variant.short_description, "chr1 g.11A>T")
+    assert not variant.is_indel
+    assert not variant.is_insertion
+    assert not variant.is_deletion
+    assert variant.preserves_reading_frame
 
 
 def test_substitution_shared_prefix():
@@ -78,6 +90,10 @@ def test_substitution_shared_prefix():
     eq_(variant.start, 11)
     eq_(variant.end, 11)
     eq_(variant.short_description, "chr1 g.11A>T")
+    assert not variant.is_indel
+    assert not variant.is_insertion
+    assert not variant.is_deletion
+    assert variant.preserves_reading_frame
 
 
 def test_deletion_shared_suffix():
@@ -91,6 +107,10 @@ def test_deletion_shared_suffix():
     eq_(variant.start, 10)
     eq_(variant.end, 11)
     eq_(variant.short_description, "chr1 g.10_11delAA")
+    assert variant.is_indel
+    assert not variant.is_insertion
+    assert variant.is_deletion
+    assert not variant.preserves_reading_frame
 
 
 def test_deletion_no_suffix():
@@ -104,6 +124,10 @@ def test_deletion_no_suffix():
     eq_(variant.start, 10)
     eq_(variant.end, 11)
     eq_(variant.short_description, "chr1 g.10_11delAA")
+    assert variant.is_indel
+    assert not variant.is_insertion
+    assert variant.is_deletion
+    assert not variant.preserves_reading_frame
 
 def test_serialization():
     variants = [

@@ -1,4 +1,4 @@
-# Copyright (c) 2015. Mount Sinai School of Medicine
+# Copyright (c) 2016. Mount Sinai School of Medicine
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -103,9 +103,9 @@ def translate(
             raise ValueError(
                 ("Expected first codon of %s to be start codon"
                  " (one of %s) but got %s") % (
-                 protein_sequence[:10],
-                 START_CODONS,
-                 nucleotide_sequence))
+                    protein_sequence[:10],
+                    START_CODONS,
+                    nucleotide_sequence))
 
     return protein_sequence
 
