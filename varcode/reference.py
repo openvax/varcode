@@ -1,4 +1,4 @@
-# Copyright (c) 2015. Mount Sinai School of Medicine
+# Copyright (c) 2016. Mount Sinai School of Medicine
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -77,7 +77,7 @@ def infer_genome(genome_object_string_or_int):
         return genome_for_reference_name(reference_name)
     else:
         raise TypeError(
-                ("Expected genome to be an int, string, or pyensembl.Genome "
-                 "instance, got %s : %s") % (
-                    str(genome_object_string_or_int),
-                    type(genome_object_string_or_int)))
+            ("Expected genome to be an int, string, or pyensembl.Genome "
+                "instance, got %s : %s") % (
+                str(genome_object_string_or_int),
+                type(genome_object_string_or_int)))

@@ -1,4 +1,4 @@
-# Copyright (c) 2015. Mount Sinai School of Medicine
+# Copyright (c) 2016. Mount Sinai School of Medicine
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,8 +15,6 @@
 from __future__ import print_function, division, absolute_import
 import json
 from collections import Counter
-
-from typechecks import require_iterable_of
 
 from .collection import Collection
 from .effect_collection import EffectCollection

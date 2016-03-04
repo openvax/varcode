@@ -1,4 +1,4 @@
-# Copyright (c) 2015. Mount Sinai School of Medicine
+# Copyright (c) 2016. Mount Sinai School of Medicine
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -100,8 +100,12 @@ def load_cufflinks_tracking_file(
             mask = status == status_value
             n_dropped = mask.sum()
             if n_dropped > 0:
-                logging.info("Dropping %d/%d entries from %s with status=%s",
-                    n_dropped, len(df), filename, status_value)
+                logging.info(
+                    "Dropping %d/%d entries from %s with status=%s",
+                    n_dropped,
+                    len(df),
+                    filename,
+                    status_value)
                 df = df[~mask]
 
     if drop_nonchromosomal_loci:
@@ -124,8 +128,11 @@ def load_cufflinks_tracking_file(
     if drop_novel:
         n_dropped = (~known).sum()
         if n_dropped > 0:
-            logging.info("Dropping %d/%d novel entries from %s",
-                n_dropped, len(df), filename)
+            logging.info(
+                "Dropping %d/%d novel entries from %s",
+                n_dropped,
+                len(df),
+                filename)
             df = df[known]
             known = np.ones(len(df), dtype='bool')
 

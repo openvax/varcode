@@ -1,4 +1,4 @@
-# Copyright (c) 2015. Mount Sinai School of Medicine
+# Copyright (c) 2016. Mount Sinai School of Medicine
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -182,7 +182,8 @@ def in_frame_coding_effect(
                 aa_alt=inserted_amino_acids)
         else:
             # inserting inside a reference codon
-            # include an extra codon at the end of the reference so that if we insert a stop before a stop, we can return Silent
+            # include an extra codon at the end of the reference so that if we
+            # insert a stop before a stop, we can return Silent
             ref_codon = sequence_from_start_codon[
                 first_ref_codon_index * 3:first_ref_codon_index * 3 + 6]
             last_ref_codon_index = first_ref_codon_index + 1
@@ -208,10 +209,10 @@ def in_frame_coding_effect(
         assert last_ref_codon_index >= first_ref_codon_index, \
             ("Expected first_ref_codon_index (%d) <= "
              "last_ref_codon_index (%d) while annotating %s on %s") % (
-             first_ref_codon_index,
-             last_ref_codon_index,
-             variant,
-             transcript)
+                first_ref_codon_index,
+                last_ref_codon_index,
+                variant,
+                transcript)
         # codons in the reference sequence
         ref_codons = sequence_from_start_codon[
             first_ref_codon_index * 3:last_ref_codon_index * 3 + 3]
