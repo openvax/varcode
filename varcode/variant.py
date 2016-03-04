@@ -180,11 +180,11 @@ class Variant(object):
         return self.ensembl.reference_name
 
     def __str__(self):
-        return "Variant(contig=%s, start=%d, ref=%s, alt=%s, reference_name=%s)" % (
+        return "Variant(contig=%s, start=%d, ref='%s', alt='%s', reference_name='%s')" % (
             self.contig,
             self.start,
-            self.ref if self.ref else ".",
-            self.alt if self.alt else ".",
+            self.ref,
+            self.alt,
             self.reference_name)
 
     def __repr__(self):

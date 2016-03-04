@@ -31,7 +31,7 @@ def test_reference_names():
 
 def test_to_string():
     string_repr = str(ov_wustle_variants)
-    assert "start=10238758, ref=G, alt=C" in string_repr, \
+    assert "start=10238758, ref='G', alt='C'" in string_repr, \
         "Expected variant g.10238758 G>C in __str__:\n%s" % (
             string_repr,)
 
@@ -40,7 +40,7 @@ def test_detailed_string():
     # expect one of the gene names from the MAF to be in the summary string
     assert "UBE4B" in detailed_string, \
         "Expected gene name UBE4B in detailed_string():\n%s" % detailed_string
-    assert "start=10238758, ref=G, alt=C" in detailed_string, \
+    assert "start=10238758, ref='G', alt='C'" in detailed_string, \
         "Expected variant g.10238758 G>C in detailed_string():\n%s" % (
             detailed_string,)
 
