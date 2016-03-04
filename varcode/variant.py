@@ -713,9 +713,9 @@ class Variant(object):
         return self.is_insertion or self.is_deletion
 
     @property
-    def is_frameshift(self):
+    def preserves_reading_frame(self):
         """
-        If this variant occurs in the coding region of a gene, would it change
-        the reading frame?
+        If this variant occurs in the coding region of a gene, would it
+        prerseve the ORF or create a frameshift mutation?
         """
-        return (len(self.alt) - len(self.ref)) % 3 != 0
+        return (len(self.alt) - len(self.ref)) % 3 == 0
