@@ -74,8 +74,6 @@ def test_substitution_no_prefix():
     assert not variant.is_indel
     assert not variant.is_insertion
     assert not variant.is_deletion
-    assert variant.preserves_reading_frame
-
 
 def test_substitution_shared_prefix():
     variant = Variant(1, start=10, ref="AA", alt="AT")
