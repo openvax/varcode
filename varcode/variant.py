@@ -180,11 +180,11 @@ class Variant(object):
         return self.ensembl.reference_name
 
     def __str__(self):
-        return "Variant(contig=%s, start=%d, ref=%s, alt=%s, reference_name=%s)" % (
+        return "Variant(contig='%s', start=%d, ref='%s', alt='%s', reference_name='%s')" % (
             self.contig,
             self.start,
-            self.ref if self.ref else ".",
-            self.alt if self.alt else ".",
+            self.ref,
+            self.alt,
             self.reference_name)
 
     def __repr__(self):
@@ -711,11 +711,3 @@ class Variant(object):
     def is_indel(self):
         """Is this variant either an insertion or deletion?"""
         return self.is_insertion or self.is_deletion
-
-    @property
-    def preserves_reading_frame(self):
-        """
-        If this variant occurs in the coding region of a gene, would it
-        prerseve the ORF or create a frameshift mutation?
-        """
-        return (len(self.alt) - len(self.ref)) % 3 == 0

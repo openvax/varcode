@@ -44,7 +44,6 @@ def test_insertion_shared_prefix():
     assert variant.is_indel
     assert variant.is_insertion
     assert not variant.is_deletion
-    assert not variant.preserves_reading_frame
 
 def test_insertion_no_prefix():
     variant = Variant(1, start=11, ref="", alt="T")
@@ -60,7 +59,6 @@ def test_insertion_no_prefix():
     assert variant.is_indel
     assert variant.is_insertion
     assert not variant.is_deletion
-    assert not variant.preserves_reading_frame
 
 def test_substitution_no_prefix():
     variant = Variant(1, start=11, ref="A", alt="T")
@@ -76,8 +74,6 @@ def test_substitution_no_prefix():
     assert not variant.is_indel
     assert not variant.is_insertion
     assert not variant.is_deletion
-    assert variant.preserves_reading_frame
-
 
 def test_substitution_shared_prefix():
     variant = Variant(1, start=10, ref="AA", alt="AT")
@@ -93,8 +89,6 @@ def test_substitution_shared_prefix():
     assert not variant.is_indel
     assert not variant.is_insertion
     assert not variant.is_deletion
-    assert variant.preserves_reading_frame
-
 
 def test_deletion_shared_suffix():
     variant = Variant(1, start=10, ref="AAC", alt="C")
@@ -110,8 +104,6 @@ def test_deletion_shared_suffix():
     assert variant.is_indel
     assert not variant.is_insertion
     assert variant.is_deletion
-    assert not variant.preserves_reading_frame
-
 
 def test_deletion_no_suffix():
     variant = Variant(1, start=10, ref="AA", alt="")
@@ -127,7 +119,6 @@ def test_deletion_no_suffix():
     assert variant.is_indel
     assert not variant.is_insertion
     assert variant.is_deletion
-    assert not variant.preserves_reading_frame
 
 def test_serialization():
     variants = [
