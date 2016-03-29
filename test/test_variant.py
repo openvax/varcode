@@ -151,15 +151,15 @@ def test_serialization():
 def test_chromosome_normalization():
     # trimmin of mithochondrial name
     eq_(Variant("M", 1, "A", "G").contig, "MT")
-    eq_(Variant("M", 1, "A", "G", preserve_contig_name=True).contig, "M")
+    eq_(Variant("M", 1, "A", "G", normalize_contig_name=False).contig, "M")
 
     eq_(Variant("chrM", 1, "A", "G").contig, "MT")
-    eq_(Variant("chrM", 1, "A", "G", preserve_contig_name=True).contig, "chrM")
+    eq_(Variant("chrM", 1, "A", "G", normalize_contig_name=False).contig, "chrM")
 
     # uppercase
     eq_(Variant("chrm", 1, "A", "G").contig, "MT")
-    eq_(Variant("chrm", 1, "A", "G", preserve_contig_name=True).contig, "chrm")
+    eq_(Variant("chrm", 1, "A", "G", normalize_contig_name=False).contig, "chrm")
 
     # trimming of 'chr' prefix from hg19
     eq_(Variant("chr1", 1, "A", "G").contig, "1")
-    eq_(Variant("chr1", 1, "A", "G", preserve_contig_name=True).contig, "chr1")
+    eq_(Variant("chr1", 1, "A", "G", normalize_contig_name=False).contig, "chr1")

@@ -85,7 +85,7 @@ class Variant(object):
             alt,
             ensembl=ensembl_grch38,
             allow_extended_nucleotides=False,
-            preserve_contig_name=False):
+            normalize_contig_name=True):
         """
         Construct a Variant object.
 
@@ -109,10 +109,10 @@ class Variant(object):
         allow_extended_nucleotides : bool
             Extended nucleotides include 'Y' for pyrimidies or 'N' for any base
 
-        preserve_contig_name : bool
+        normalize_contig_name : bool
             By default the contig name will be normalized by trimming a 'chr'
             prefix and converting all letters to upper-case. If we don't want
-            this behavior then pass preserve_contig_name=True.
+            this behavior then pass normalize_contig_name=False.
         """
         # user might supply Ensembl release as an integer, reference name,
         # or pyensembl.Genome object
@@ -126,10 +126,10 @@ class Variant(object):
             raise TypeError(
                 ("Expected ensembl to be an int, string, or pyensembl.Genome "
                  "instance, got %s : %s") % (type(ensembl), str(ensembl)))
-        if preserve_contig_name:
-            self.contig = contig
-        else:
+        if normalize_contig_name:
             self.contig = normalize_chromosome(contig)
+        else:
+            self.contig = contig
 
         if ref != alt and (ref in STANDARD_NUCLEOTIDES) and (
                 alt in STANDARD_NUCLEOTIDES):
