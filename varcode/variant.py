@@ -84,7 +84,8 @@ class Variant(object):
             ref,
             alt,
             ensembl=ensembl_grch38,
-            allow_extended_nucleotides=False):
+            allow_extended_nucleotides=False,
+            preserve_contig_name=False):
         """
         Construct a Variant object.
 
@@ -105,11 +106,15 @@ class Variant(object):
         ensembl : Genome or EnsemblRelease
             Object used for determining gene/transcript annotations
 
-        info : dict, optional
-            Extra metadata about this variant
-        """
-        self.contig = normalize_chromosome(contig)
+        allow_extended_nucleotides : bool
+            Extended nucleotides include 'Y' for pyrimidies or 'N' for any base
 
+        preserve_contig_name : bool
+            By default the contig name will be normalized by trimming a 'chr'
+            prefix and converting all letters to upper-case. If we don't want
+            this behavior then pass preserve_contig_name=True.
+
+        """
         # user might supply Ensembl release as an integer, reference name,
         # or pyensembl.Genome object
         if isinstance(ensembl, Genome):
@@ -122,11 +127,15 @@ class Variant(object):
             raise TypeError(
                 ("Expected ensembl to be an int, string, or pyensembl.Genome "
                  "instance, got %s : %s") % (type(ensembl), str(ensembl)))
+        if preserve_contig_name:
+            self.contig = contig
+        else:
+            self.contig = normalize_chromosome(contig)
 
-        if (ref in STANDARD_NUCLEOTIDES and
-                alt in STANDARD_NUCLEOTIDES and
-                ref != alt):
-
+        if ref == alt:
+            raise ValueError(
+                "Variant expects ref != alt but both have value '%s'" % (ref,))
+        elif ref in STANDARD_NUCLEOTIDES and alt in STANDARD_NUCLEOTIDES:
             # Optimization for common case.
             self.original_ref = self.ref = ref
             self.original_alt = self.alt = alt
