@@ -16,10 +16,8 @@
 Test simple properties of Variant objects, such as their trimming
 of shared prefix/suffix strings from ref/alt fields.
 """
-try:
-    import cPickle as pickle
-except ImportError:
-    import pickle
+
+from six.moves import cPickle as pickle
 
 from pyensembl import ensembl_grch38
 
@@ -137,15 +135,31 @@ def test_serialization():
         # Test pickling.
         serialized = pickle.dumps(original)
         reconstituted = pickle.loads(serialized)
-        assert original == reconstituted
+        eq_(original, reconstituted)
 
-        assert original.contig == reconstituted.contig
-        assert original.ref == reconstituted.ref
-        assert original.alt == reconstituted.alt
-        assert original.start == reconstituted.start
-        assert original.end == reconstituted.end
+        eq_(original.contig, reconstituted.contig)
+        eq_(original.ref, reconstituted.ref)
+        eq_(original.alt, reconstituted.alt)
+        eq_(original.start, reconstituted.start)
+        eq_(original.end, reconstituted.end)
 
         # Test json.
         serialized = original.to_json()
         reconstituted = Variant.from_json(serialized)
-        assert original == reconstituted
+        eq_(original, reconstituted)
+
+def test_chromosome_normalization():
+    # trimmin of mithochondrial name
+    eq_(Variant("M", 1, "A", "G").contig, "MT")
+    eq_(Variant("M", 1, "A", "G", normalize_contig_name=False).contig, "M")
+
+    eq_(Variant("chrM", 1, "A", "G").contig, "MT")
+    eq_(Variant("chrM", 1, "A", "G", normalize_contig_name=False).contig, "chrM")
+
+    # uppercase
+    eq_(Variant("chrm", 1, "A", "G").contig, "MT")
+    eq_(Variant("chrm", 1, "A", "G", normalize_contig_name=False).contig, "chrm")
+
+    # trimming of 'chr' prefix from hg19
+    eq_(Variant("chr1", 1, "A", "G").contig, "1")
+    eq_(Variant("chr1", 1, "A", "G", normalize_contig_name=False).contig, "chr1")
