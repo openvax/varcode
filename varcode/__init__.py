@@ -49,7 +49,7 @@ from .effects import (
     ExonLoss,
 )
 
-__version__ = "0.4.5"
+__version__ = "0.4.6"
 
 __all__ = [
     # basic classes
