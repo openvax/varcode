@@ -78,7 +78,8 @@ def test_pandas_and_pyvcf_implementations_equivalent():
         {'path': data_path("multiallelic.vcf")},
         {'path': data_path("mutect-example.vcf")},
         {'path': data_path("strelka-example.vcf")},
-        {'path': data_path("mutect-example-headerless.vcf"), 'genome': cached_release(75)},
+        {'path': data_path("mutect-example-headerless.vcf"),
+            'genome': cached_release(75)},
     ]
     if RUN_TESTS_REQUIRING_INTERNET:
         paths.append({'path': VCF_EXTERNAL_URL})
@@ -135,3 +136,12 @@ def test_multiple_alleles_per_line():
         Variant(1, 1431105, "A", "G", ensembl=ensembl),
     ]
     eq_(set(variant_list), set(expected_variants))
+
+def test_sample_info_genotype():
+    variants = load_vcf(data_path("multiallelic.vcf"))
+    assert len(variants) == 2, "Expected 2 variants but got %s" % variants
+    eq_(variants.metadata[variants[0]]['sample_info']['metastasis']['GT'],
+        '0/1')
+    eq_(variants.metadata[variants[1]]['sample_info']['metastasis']['GT'],
+        '0/1')
+
