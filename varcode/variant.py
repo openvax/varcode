@@ -234,6 +234,9 @@ class Variant(object):
             self.end,
             self.ref,
             self.alt,
+            self.original_start,
+            self.original_ref,
+            self.original_alt,
             self.ensembl.release)
 
     def __eq__(self, other):
@@ -248,18 +251,18 @@ class Variant(object):
             self.ensembl == other.ensembl)
 
     def __getstate__(self):
-        fields = self.fields()
-        return {
-            field: fields[i] for (i, field) in enumerate(fields._fields)
-        }
+        # When pickle.load'ing, we want the original values vs. the normalized values.
+        # Normalization will happen upon object creation.
+        return [self.contig, self.original_start, self.original_ref, self.original_alt, self.ensembl.release]
 
     def __setstate__(self, fields):
-        # This field require special logic.
-        self.ensembl = cached_release(fields.pop("release"))
+        # Special logic needed for JSON serialization, since EnsemblRelease
+        # is not JSON serializable.
+        # TODO: this does not work for Genome objects; only EnsemblRelease.
+        ensembl = cached_release(fields.pop())
+        fields.append(ensembl)
 
-        # Remaining fields  are simple properties that just get set.
-        for (key, value) in fields.items():
-            setattr(self, key, value)
+        self.__init__(*fields)
 
     def to_json(self):
         """
