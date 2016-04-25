@@ -142,6 +142,9 @@ def test_serialization():
         eq_(original.alt, reconstituted.alt)
         eq_(original.start, reconstituted.start)
         eq_(original.end, reconstituted.end)
+        eq_(original.original_ref, reconstituted.original_ref)
+        eq_(original.original_alt, reconstituted.original_alt)
+        eq_(original.original_start, reconstituted.original_start)
 
         # Test json.
         serialized = original.to_json()
