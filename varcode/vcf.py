@@ -341,7 +341,7 @@ def dataframes_to_variant_collection(
                             if sample_names:
                                 # Sample name -> field -> value dict.
                                 sample_info = sample_info_parser(
-                                    tpl[10:],  # sample info columns
+                                    list(tpl[10:]),  # sample info columns
                                     tpl[9],    # FORMAT column
                                 )
 
