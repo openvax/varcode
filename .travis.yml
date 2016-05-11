@@ -55,3 +55,4 @@ deploy:
     secure: "H0prsAPV1n4ksLO0Zp4xq7SuGGRFmo9HhEcEtfPiSTyh8u4Zxbv/bPjyCLVDilBIKieQsuluV6jqoW6Px5LhUGZwq/k7RN7u1eNuahmpkIwWamjdsNORgvHte6inWNjKGo4GJLM232e2A50kkHnJKDZulfE8eGg4FrRQtfKSkik="
   on:
     branch: master
+    tags: true
