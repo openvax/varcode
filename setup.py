@@ -14,9 +14,9 @@
 
 from __future__ import print_function
 import os
-import re
 
 from setuptools import setup, find_packages
+import versioneer
 
 readme_filename = "README.md"
 current_directory = os.path.dirname(__file__)
@@ -37,20 +37,13 @@ except Exception as e:
     print(e)
     print("Failed to convert %s from Markdown to reStructuredText" % readme_filename)
 
-with open('varcode/__init__.py', 'r') as f:
-    version = re.search(
-        r'^__version__\s*=\s*[\'"]([^\'"]*)[\'"]',
-        f.read(),
-        re.MULTILINE).group(1)
-
-if not version:
-    raise RuntimeError("Cannot find version information")
 
 if __name__ == '__main__':
     setup(
         name='varcode',
         packages=find_packages(),
-        version=version,
+        version=versioneer.get_version(),
+        cmdclass=versioneer.get_cmdclass(),
         description="Variant annotation in Python",
         long_description=readme,
         url="https://github.com/hammerlab/varcode",
