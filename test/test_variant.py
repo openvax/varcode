@@ -166,3 +166,17 @@ def test_chromosome_normalization():
     # trimming of 'chr' prefix from hg19
     eq_(Variant("chr1", 1, "A", "G").contig, "1")
     eq_(Variant("chr1", 1, "A", "G", normalize_contig_name=False).contig, "chr1")
+
+def test_snv_transition_transversion():
+    ref_variant = Variant(1, start=100, ref="C", alt="C")
+    assert not ref_variant.is_snv
+
+    variant = Variant(1, start=100, ref="C", alt="T")
+    assert variant.is_snv
+    assert variant.is_transition
+    assert not variant.is_transversion
+
+    transversion = Variant(1, start=100, ref="C", alt="A")
+    assert transversion.is_snv
+    assert not transversion.is_transition
+    assert transversion.is_transversion
