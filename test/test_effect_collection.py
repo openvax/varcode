@@ -22,5 +22,5 @@ from .data import tcga_ov_variants
 tcga_ov_effects = tcga_ov_variants.effects()
 
 def test_as_dataframe():
-    df = tcga_ov_effects.as_dataframe()
+    df = tcga_ov_effects.to_dataframe()
     eq_(len(tcga_ov_effects), len(df))

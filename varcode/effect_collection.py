@@ -264,7 +264,7 @@ class EffectCollection(Collection):
             counter[effect.gene_name] += 1
         return counter
 
-    def as_dataframe(self):
+    def to_dataframe(self):
         """Build a dataframe from the effect collection"""
         def row_from_effect(effect):
             row = {}
