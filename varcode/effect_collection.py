@@ -268,8 +268,8 @@ class EffectCollection(Collection):
         """Build a dataframe from the effect collection"""
         def row_from_effect(effect):
             row = {}
-            row['chr'] = effect.variant.contig
-            row['position'] = effect.variant.start
+            row['contig'] = effect.variant.contig
+            row['start'] = effect.variant.start
             row['ref'] = effect.variant.ref
             row['alt'] = effect.variant.alt
             row['gene_id'] = effect.gene_id
