@@ -14,6 +14,7 @@
 
 from __future__ import print_function, division, absolute_import
 from collections import Counter, OrderedDict
+import pandas as pd
 
 from typechecks import require_iterable_of
 
@@ -262,3 +263,26 @@ class EffectCollection(Collection):
         for effect in self:
             counter[effect.gene_name] += 1
         return counter
+
+    def to_dataframe(self):
+        """Build a dataframe from the effect collection"""
+        def row_from_effect(effect):
+            row = {}
+            row['contig'] = effect.variant.contig
+            row['start'] = effect.variant.start
+            row['ref'] = effect.variant.ref
+            row['alt'] = effect.variant.alt
+            row['gene_id'] = effect.gene_id
+            row['gene_name'] = effect.gene_name
+            row['transcript_id'] = effect.transcript_id
+            row['transcript_name'] = effect.transcript_name
+            row['variant'] = str(effect.variant)
+            row['is_snv'] = effect.variant.is_snv
+            row['is_indel'] = effect.variant.is_indel
+            row['is_transversion'] = effect.variant.is_transversion
+            row['is_transition'] = effect.variant.is_transition
+            row['effect'] = str(effect)
+            row['effect_type'] = effect.__class__.__name__
+            row['effect_description'] = effect.short_description
+            return row
+        return pd.DataFrame.from_records([row_from_effect(effect) for effect in self])

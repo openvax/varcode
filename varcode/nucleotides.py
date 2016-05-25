@@ -49,6 +49,12 @@ EXTENDED_NUCLEOTIDES = {
     'N',  # any base
 }
 
+def is_purine(nucleotide, allow_extended_nucleotides=False):
+    """Is the nucleotide a purine"""
+    if not allow_extended_nucleotides and nucleotide not in STANDARD_NUCLEOTIDES:
+        raise ValueError("{} is a non-standard nucleotide, neither purine or pyrimidine".format(nucleotide))
+    return nucleotide in PURINE_NUCLEOTIDES
+
 def all_standard_nucleotides(nucleotides):
     return all(base in STANDARD_NUCLEOTIDES for base in nucleotides)
 

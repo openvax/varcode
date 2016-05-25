@@ -51,7 +51,11 @@ from .effects import (
     ExonLoss,
     ExonicSpliceSite,
 )
-from .nucleotides import normalize_nucleotide_string, STANDARD_NUCLEOTIDES
+from .nucleotides import (
+    normalize_nucleotide_string, 
+    STANDARD_NUCLEOTIDES,
+    is_purine
+)
 from .string_helpers import trim_shared_flanking_strings
 from .transcript_helpers import interval_offset_on_transcript
 
@@ -729,3 +733,18 @@ class Variant(object):
     def is_indel(self):
         """Is this variant either an insertion or deletion?"""
         return self.is_insertion or self.is_deletion
+
+    @property
+    def is_snv(self):
+        """Is the variant a single nucleotide variant"""
+        return (len(self.ref) == len(self.alt) == 1) and (self.ref != self.alt)  
+
+    @property
+    def is_transition(self):
+        """Is this variant and pyrimidine to pyrimidine change or purine to purine change"""
+        return self.is_snv and is_purine(self.ref) == is_purine(self.alt)
+
+    @property
+    def is_transversion(self):
+        """Is this variant a pyrimidine to purine change or vice versa"""
+        return self.is_snv and is_purine(self.ref) != is_purine(self.alt)
