@@ -131,6 +131,7 @@ def cdna_codon_sequence_after_insertion_frameshift(
     # special logic for insertions
     coding_sequence_after_insertion = \
         sequence_from_start_codon[cds_offset_before_insertion + 1:]
+
     if cds_offset_before_insertion % 3 == 2:
         # insertion happens after last nucleotide in a codon,
         # doesn't disrupt the existing codon from cds_offset-2 to cds_offset
@@ -159,6 +160,41 @@ def cdna_codon_sequence_after_insertion_frameshift(
         nucleotides_before +
         inserted_nucleotides +
         coding_sequence_after_insertion)
+    return mutated_codon_index, sequence_from_mutated_codon
+
+
+def cdna_codon_sequence_after_deletion_or_substitution_frameshift(
+        sequence_from_start_codon,
+        cds_offset,
+        ref,
+        alt):
+    """
+    Logic for any frameshift which isn't an insertion.
+
+    We have insertions as a special case since our base-inclusive
+    indexing means something different for insertions:
+       cds_offset = base before insertion
+    Whereas in this case:
+      cds_offset = first reference base affected by a variant
+
+    Returns index of first modified codon and sequence from that codon
+    onward.
+    """
+    mutated_codon_index = cds_offset // 3
+    # get the sequence starting from the first modified codon until the end
+    # of the transcript.
+    sequence_after_mutated_codon = \
+        sequence_from_start_codon[mutated_codon_index * 3:]
+
+    # the variant's ref nucleotides should start either 0, 1, or 2 nucleotides
+    # into `sequence_after_mutated_codon`
+    offset_into_mutated_codon = cds_offset % 3
+
+    sequence_from_mutated_codon = substitute(
+        sequence=sequence_after_mutated_codon,
+        offset=offset_into_mutated_codon,
+        ref=ref,
+        alt=alt)
     return mutated_codon_index, sequence_from_mutated_codon
 
 def frameshift_coding_effect(
@@ -190,29 +226,13 @@ def frameshift_coding_effect(
 
     transcript : Transcript
     """
-
     if len(ref) != 0:
-        # Logic for any frameshift which isn't an insertion.
-        # We have reat insertions as a special case since our base-inclusive
-        # indexing means something different for insertions:
-        #   cds_offset = base before insertion
-        # Whereas in this case:
-        #   cds_offset = first reference base affected by a variant
-        mutated_codon_index = int(cds_offset / 3)
-        # get the sequence starting from the first modified codon until the end
-        # of the transcript.
-        sequence_after_mutated_codon = \
-            sequence_from_start_codon[mutated_codon_index * 3:]
-
-        # the variant's ref nucleotides should start either 0, 1, or 2 nucleotides
-        # into `sequence_after_mutated_codon`
-        offset_into_mutated_codon = cds_offset % 3
-
-        sequence_from_mutated_codon = substitute(
-            sequence=sequence_after_mutated_codon,
-            offset=offset_into_mutated_codon,
-            ref=ref,
-            alt=alt)
+        mutated_codon_index, sequence_from_mutated_codon = \
+            cdna_codon_sequence_after_deletion_or_substitution_frameshift(
+                sequence_from_start_codon=sequence_from_start_codon,
+                cds_offset=cds_offset,
+                ref=ref,
+                alt=alt)
     else:
         mutated_codon_index, sequence_from_mutated_codon = \
             cdna_codon_sequence_after_insertion_frameshift(
