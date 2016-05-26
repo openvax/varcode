@@ -28,7 +28,7 @@ from .mutate import substitute
 from .string_helpers import trim_shared_prefix
 from .translate import translate
 
-def _frameshift(
+def create_frameshift_effect(
         mutated_codon_index,
         sequence_from_mutated_codon,
         variant,
@@ -118,8 +118,48 @@ def _frameshift(
         transcript=transcript,
         aa_mutation_start_offset=mutation_start_position,
         aa_ref=aa_ref,
-        shifted_sequence=mutant_protein_suffix)
+        shifted_sequence=str(mutant_protein_suffix))
 
+def cdna_codon_sequence_after_insertion_frameshift(
+        sequence_from_start_codon,
+        cds_offset_before_insertion,
+        inserted_nucleotides):
+    """
+    Returns index of mutated codon and nucleotide sequence starting at the first
+    mutated codon.
+    """
+    # special logic for insertions
+    coding_sequence_after_insertion = \
+        sequence_from_start_codon[cds_offset_before_insertion + 1:]
+    if cds_offset_before_insertion % 3 == 2:
+        # insertion happens after last nucleotide in a codon,
+        # doesn't disrupt the existing codon from cds_offset-2 to cds_offset
+        mutated_codon_index = cds_offset_before_insertion // 3 + 1
+        nucleotides_before = ""
+    elif cds_offset_before_insertion % 3 == 1:
+        # insertion happens after 2nd nucleotide of a codon
+        # codon positions:
+        #   1) cds_offset - 1
+        #   2) cds_offset
+        #    <----- Insertsion
+        #   3) cds_offset + 1
+        mutated_codon_index = cds_offset_before_insertion // 3
+        nucleotides_before = sequence_from_start_codon[
+            cds_offset_before_insertion - 1:cds_offset_before_insertion + 1]
+    elif cds_offset_before_insertion % 3 == 0:
+        # insertion happens after 1st nucleotide of a codon
+        # codon positions:
+        #   1) cds_offset
+        #    <----- Insertsion
+        #   2) cds_offset + 1
+        #   3) cds_offset + 2
+        mutated_codon_index = cds_offset_before_insertion // 3
+        nucleotides_before = sequence_from_start_codon[cds_offset_before_insertion]
+    sequence_from_mutated_codon = (
+        nucleotides_before +
+        inserted_nucleotides +
+        coding_sequence_after_insertion)
+    return mutated_codon_index, sequence_from_mutated_codon
 
 def frameshift_coding_effect(
         ref,
@@ -174,48 +214,12 @@ def frameshift_coding_effect(
             ref=ref,
             alt=alt)
     else:
-        # special logic for insertions
-        coding_sequence_after_insertion = \
-            sequence_from_start_codon[cds_offset + 1:]
-        if cds_offset % 3 == 2:
-            # insertion happens after last nucleotide in a codon,
-            # doesn't disrupt the existing codon from cds_offset-2 to cds_offset
-            mutated_codon_index = int(cds_offset / 3) + 1
-            sequence_from_mutated_codon = (
-                alt + coding_sequence_after_insertion)
-        elif cds_offset % 3 == 1:
-            # insertion happens after 2nd nucleotide of a codon
-            # codon positions:
-            #   1) cds_offset - 1
-            #   2) cds_offset
-            #    <----- Insertsion
-            #   3) cds_offset + 1
-            mutated_codon_index = int(cds_offset / 3)
-            nucleotides_before = sequence_from_start_codon[
-                cds_offset - 1:cds_offset + 1]
-            nucleotide_after = sequence_from_start_codon[cds_offset + 1]
-            sequence_from_mutated_codon = (
-                nucleotides_before +
-                alt +
-                nucleotide_after +
-                coding_sequence_after_insertion)
-        elif cds_offset % 3 == 0:
-            # insertion happens after 1st nucleotide of a codon
-            # codon positions:
-            #   1) cds_offset
-            #    <----- Insertsion
-            #   2) cds_offset + 1
-            #   3) cds_offset + 2
-            mutated_codon_index = int(cds_offset / 3)
-            nucleotide_before = sequence_from_start_codon[cds_offset]
-            nucleotides_after = sequence_from_start_codon[
-                cds_offset + 1:cds_offset + 3]
-            sequence_from_mutated_codon = (
-                nucleotide_before +
-                alt +
-                nucleotides_after +
-                coding_sequence_after_insertion)
-    return _frameshift(
+        mutated_codon_index, sequence_from_mutated_codon = \
+            cdna_codon_sequence_after_insertion_frameshift(
+                sequence_from_start_codon=sequence_from_start_codon,
+                cds_offset_before_insertion=cds_offset,
+                inserted_nucleotides=alt)
+    return create_frameshift_effect(
         mutated_codon_index=mutated_codon_index,
         sequence_from_mutated_codon=sequence_from_mutated_codon,
         variant=variant,
