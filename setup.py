@@ -39,11 +39,16 @@ except Exception as e:
 
 
 if __name__ == '__main__':
+    cmdclass = versioneer.get_cmdclass()
+    print("Command class = %s" % cmdclass)
+
+    version = versioneer.get_version()
+    print("Version: %s" % version)
     setup(
         name='varcode',
         packages=find_packages(),
-        version=versioneer.get_version(),
-        cmdclass=versioneer.get_cmdclass(),
+        version=version,
+        cmdclass=cmdclass,
         description="Variant annotation in Python",
         long_description=readme,
         url="https://github.com/hammerlab/varcode",
