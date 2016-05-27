@@ -6,21 +6,28 @@ from varcode import load_vcf, load_vcf_fast, Variant, Substitution
 from pyensembl import Genome, EnsemblRelease
 from . import data_path
 
-MOUSE_GTF_PATH = "ftp://ftp.ensembl.org/pub/release-81/gtf/mus_musculus/Mus_musculus.GRCm38.81.gtf.gz"
-MOUSE_TRANSCRIPT_FASTA_PATH = "ftp://ftp.ensembl.org/pub/release-81/fasta/mus_musculus/cdna/Mus_musculus.GRCm38.cdna.all.fa.gz"
-MOUSE_PROTEIN_FASTA_PATH = "ftp://ftp.ensembl.org/pub/release-81/fasta/mus_musculus/pep/Mus_musculus.GRCm38.pep.all.fa.gz"
+MOUSE_ENSEMBL_RELEASE = 83
+SERVER = "ftp://ftp.ensembl.org"
+MOUSE_GTF_PATH = \
+    SERVER + "/pub/release-%d/gtf/mus_musculus/Mus_musculus.GRCm38.%d.gtf.gz" % (
+        MOUSE_ENSEMBL_RELEASE, MOUSE_ENSEMBL_RELEASE)
+MOUSE_TRANSCRIPT_FASTA_PATH = \
+    SERVER + "/pub/release-%d/fasta/mus_musculus/cdna/Mus_musculus.GRCm38.cdna.all.fa.gz"
+MOUSE_PROTEIN_FASTA_PATH = \
+    SERVER + "/pub/release-%d/fasta/mus_musculus/pep/Mus_musculus.GRCm38.pep.all.fa.gz" % (
+        MOUSE_ENSEMBL_RELEASE)
 
 MOUSE_VCF = data_path("mouse_vcf_dbsnp_chr1_partial.vcf")
 
 explicit_url_genome = Genome(
     reference_name="GRCm38",
     annotation_name="ensembl",
-    annotation_version=81,
+    annotation_version=MOUSE_ENSEMBL_RELEASE,
     gtf_path_or_url=MOUSE_GTF_PATH,
     transcript_fasta_path_or_url=MOUSE_TRANSCRIPT_FASTA_PATH,
     protein_fasta_path_or_url=MOUSE_PROTEIN_FASTA_PATH)
 
-ensembl_mouse_genome = EnsemblRelease(81, species="mouse")
+ensembl_mouse_genome = EnsemblRelease(MOUSE_ENSEMBL_RELEASE, species="mouse")
 
 def test_load_vcf_mouse_with_explicit_urls():
     variants = load_vcf(MOUSE_VCF, genome=explicit_url_genome)

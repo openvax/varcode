@@ -17,8 +17,6 @@
 TODO: generalize this to work with the mitochondrial codon table.
 """
 
-import logging
-
 from Bio.Data import CodonTable
 from Bio.Seq import Seq
 
@@ -108,36 +106,3 @@ def translate(
                     nucleotide_sequence))
 
     return protein_sequence
-
-def transcript_protein_sequence(transcript):
-    """Get protein sequence for a transcript, translate it from the
-    coding sequence if for some reason Ensembl didn't include this transcript
-    in its FASTA of protein sequences.
-    """
-    cds_start_offset = transcript.first_start_codon_spliced_offset
-    cds_stop_offset = transcript.last_stop_codon_spliced_offset
-    cds_len = cds_stop_offset - cds_start_offset + 1
-
-    original_protein = transcript.protein_sequence
-
-    if not original_protein:
-        # Ensembl should have given us a protein sequence for every
-        # transcript but it's possible that we're trying to annotate a
-        # transcript whose biotype isn't included in the protein sequence FASTA
-        logging.warn("No protein sequence for %s in Ensembl", transcript)
-
-        original_protein = translate(
-            transcript.sequence[cds_start_offset:cds_stop_offset + 1])
-
-    # subtract 3 for the stop codon and divide by 3 since
-    # 3 nucleotides = 1 codon = 1 amino acid
-    expected_protein_length = int((cds_len - 3) / 3)
-    if len(original_protein) != expected_protein_length:
-        raise ValueError(
-            "Expected protein sequence of %s to be %d amino acids"
-            "but got %d : %s" % (
-                transcript,
-                expected_protein_length,
-                len(original_protein),
-                original_protein))
-    return original_protein
