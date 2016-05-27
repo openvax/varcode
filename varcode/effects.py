@@ -234,6 +234,16 @@ class ExonLoss(Exonic):
 
     short_description = "exon-loss"
 
+    @property
+    def modifies_protein_sequence(self):
+        # TODO: distinguish between exon loss in the CDS and UTRs
+        return True
+
+    @property
+    def modifies_coding_sequence(self):
+        # TODO: distinguish between exon loss in the CDS and UTRs
+        return True
+
 class ExonicSpliceSite(Exonic, SpliceSite):
     """
     Mutation in the last three nucleotides before an intron
@@ -287,8 +297,9 @@ class CodingMutation(Exonic):
         ])
         return "%s(%s)" % (self.__class__.__name__, fields_str)
 
-    modifies_coding_sequence = True
-
+    @property
+    def modifies_coding_sequence(self):
+        return True
 
 class Silent(CodingMutation):
     """Mutation to an exon of a coding region which doesn't change the
@@ -320,7 +331,9 @@ class Silent(CodingMutation):
         self.aa_pos = aa_pos
         self.aa_ref = aa_ref
 
-    short_description = "silent"
+    @property
+    def short_description(self):
+        return "silent"
 
 class AlternateStartCodon(Silent):
     """Change to the start codon (e.g. ATG>CTG) but without changing the
@@ -382,8 +395,9 @@ class NonsilentCodingMutation(CodingMutation):
         self.aa_mutation_end_offset = aa_mutation_end_offset
         self.aa_ref = aa_ref
 
-    modifies_protein_sequence = True
-
+    @property
+    def modifies_protein_sequence(self):
+        return True
 
 class StartLoss(NonsilentCodingMutation):
     """

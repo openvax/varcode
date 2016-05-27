@@ -39,6 +39,7 @@ from varcode import (
     FrameShift,
     ExonLoss,
     ExonicSpliceSite,
+    FrameShiftTruncation,
     # TODO: SpliceDonor, SpliceReceptor
 )
 from pyensembl import ensembl_grch37, cached_release
@@ -60,7 +61,9 @@ def test_incomplete():
     expect_effect(
         variant,
         transcript_id="ENST00000450046",
-        effect_class=IncompleteTranscript)
+        effect_class=IncompleteTranscript,
+        modifies_coding_sequence=False,
+        modifies_protein_sequence=False)
 
 
 def test_noncoding_polymorphic_pseudogene():
@@ -69,7 +72,9 @@ def test_noncoding_polymorphic_pseudogene():
     expect_effect(
         variant,
         transcript_id="ENST00000430863",
-        effect_class=NoncodingTranscript)
+        effect_class=NoncodingTranscript,
+        modifies_coding_sequence=False,
+        modifies_protein_sequence=False)
 
 def test_start_loss():
     # transcript EGFR-005 (ENST00000420316 in Ensembl 77)
@@ -83,7 +88,9 @@ def test_start_loss():
     expect_effect(
         variant,
         transcript_id="ENST00000420316",
-        effect_class=StartLoss)
+        effect_class=StartLoss,
+        modifies_coding_sequence=True,
+        modifies_protein_sequence=True)
 
 def test_alternate_start_codon():
     # transcript EGFR-005 (ENST00000420316 in Ensembl 77)
@@ -99,7 +106,9 @@ def test_alternate_start_codon():
     expect_effect(
         variant,
         transcript_id="ENST00000420316",
-        effect_class=AlternateStartCodon)
+        effect_class=AlternateStartCodon,
+        modifies_coding_sequence=True,
+        modifies_protein_sequence=False)
 
 
 def test_stop_loss():
@@ -112,7 +121,9 @@ def test_stop_loss():
     expect_effect(
         variant,
         transcript_id="ENST00000361297",
-        effect_class=StopLoss)
+        effect_class=StopLoss,
+        modifies_coding_sequence=True,
+        modifies_protein_sequence=True)
 
 def test_stop_gain():
     # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
@@ -132,7 +143,9 @@ def test_stop_gain():
     expect_effect(
         variant,
         transcript_id="ENST00000357654",
-        effect_class=PrematureStop)
+        effect_class=PrematureStop,
+        modifies_coding_sequence=True,
+        modifies_protein_sequence=True)
 
 def test_stop_gain_with_extra_amino_acids():
     # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
@@ -152,7 +165,9 @@ def test_stop_gain_with_extra_amino_acids():
     expect_effect(
         variant,
         transcript_id="ENST00000357654",
-        effect_class=PrematureStop)
+        effect_class=PrematureStop,
+        modifies_coding_sequence=True,
+        modifies_protein_sequence=True)
 
 def test_exon_loss():
     # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
@@ -174,7 +189,9 @@ def test_exon_loss():
     expect_effect(
         variant,
         transcript_id="ENST00000357654",
-        effect_class=ExonLoss)
+        effect_class=ExonLoss,
+        modifies_coding_sequence=True,
+        modifies_protein_sequence=True)
 
 
 def test_exonic_splice_site():
@@ -193,7 +210,9 @@ def test_exonic_splice_site():
     expect_effect(
         variant,
         transcript_id="ENST00000357654",
-        effect_class=ExonicSpliceSite)
+        effect_class=ExonicSpliceSite,
+        modifies_coding_sequence=True,
+        modifies_protein_sequence=True)
 
 def test_deletion():
     # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
@@ -211,7 +230,9 @@ def test_deletion():
     expect_effect(
         variant,
         transcript_id="ENST00000357654",
-        effect_class=Deletion)
+        effect_class=Deletion,
+        modifies_coding_sequence=True,
+        modifies_protein_sequence=True)
 
 def test_insertion():
     # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
@@ -229,7 +250,9 @@ def test_insertion():
     expect_effect(
         variant,
         transcript_id="ENST00000357654",
-        effect_class=Insertion)
+        effect_class=Insertion,
+        modifies_coding_sequence=True,
+        modifies_protein_sequence=True)
 
 def test_frameshift():
     # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
@@ -247,7 +270,29 @@ def test_frameshift():
     expect_effect(
         variant,
         transcript_id="ENST00000357654",
-        effect_class=FrameShift)
+        effect_class=FrameShift,
+        modifies_coding_sequence=True,
+        modifies_protein_sequence=True)
+
+def test_frameshift_truncation():
+    # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 84)
+    # Chromosome 17: 43,044,295-43,125,370 reverse strand.
+    #
+    # Out of frame insertion after first codon of exon #11
+    # creates immediate "TAG" stop codon
+    # Inspired by rs786202998 from dbSNP, turns GAA -> TGA|A
+    variant = Variant(
+        "17",
+        43091031,
+        ref="",
+        alt="A",
+        ensembl=ensembl_grch38)
+    expect_effect(
+        variant,
+        transcript_id="ENST00000357654",
+        effect_class=FrameShiftTruncation,
+        modifies_coding_sequence=True,
+        modifies_protein_sequence=True)
 
 def test_substitution():
     # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
@@ -265,7 +310,9 @@ def test_substitution():
     expect_effect(
         variant,
         transcript_id="ENST00000357654",
-        effect_class=Substitution)
+        effect_class=Substitution,
+        modifies_coding_sequence=True,
+        modifies_protein_sequence=True)
 
 def test_silent():
     # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
@@ -283,7 +330,9 @@ def test_silent():
     expect_effect(
         variant,
         transcript_id="ENST00000357654",
-        effect_class=Silent)
+        effect_class=Silent,
+        modifies_coding_sequence=True,
+        modifies_protein_sequence=False)
 
 def test_silent_stop_codons():
     silent_stop_codon_variants = {
@@ -307,7 +356,7 @@ def test_silent_stop_codons():
             ensembl=ensembl_grch37),
     }
     for transcript_id, variant in silent_stop_codon_variants.items():
-        yield (expect_effect, variant, transcript_id, Silent)
+        yield (expect_effect, variant, transcript_id, Silent, True, False)
 
 def test_five_prime_utr():
     # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
@@ -327,7 +376,9 @@ def test_five_prime_utr():
     expect_effect(
         variant,
         transcript_id="ENST00000357654",
-        effect_class=FivePrimeUTR)
+        effect_class=FivePrimeUTR,
+        modifies_coding_sequence=False,
+        modifies_protein_sequence=False)
 
 def test_three_prime_utr():
     # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
@@ -346,7 +397,9 @@ def test_three_prime_utr():
     expect_effect(
         variant,
         transcript_id="ENST00000357654",
-        effect_class=ThreePrimeUTR)
+        effect_class=ThreePrimeUTR,
+        modifies_coding_sequence=False,
+        modifies_protein_sequence=False)
 
 def test_intronic():
     # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
@@ -363,7 +416,9 @@ def test_intronic():
     expect_effect(
         variant,
         transcript_id="ENST00000357654",
-        effect_class=Intronic)
+        effect_class=Intronic,
+        modifies_coding_sequence=False,
+        modifies_protein_sequence=False)
 
 def test_disruptive_insertion_stop_gain():
     variant = Variant(
@@ -375,7 +430,9 @@ def test_disruptive_insertion_stop_gain():
     expect_effect(
         variant,
         transcript_id="ENST00000003084",
-        effect_class=PrematureStop)
+        effect_class=PrematureStop,
+        modifies_coding_sequence=True,
+        modifies_protein_sequence=True)
 
 def test_substitution_nonfinal_stop_gain():
     variant = Variant(
@@ -387,7 +444,9 @@ def test_substitution_nonfinal_stop_gain():
     expect_effect(
         variant,
         transcript_id="ENST00000003084",
-        effect_class=PrematureStop)
+        effect_class=PrematureStop,
+        modifies_coding_sequence=True,
+        modifies_protein_sequence=True)
 
 def test_insertion_nonfinal_stop_gain():
     variant = Variant(
@@ -399,4 +458,6 @@ def test_insertion_nonfinal_stop_gain():
     expect_effect(
         variant,
         transcript_id="ENST00000003084",
-        effect_class=PrematureStop)
+        effect_class=PrematureStop,
+        modifies_coding_sequence=True,
+        modifies_protein_sequence=True)
