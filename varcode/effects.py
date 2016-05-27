@@ -632,7 +632,7 @@ class StopLoss(KnownAminoAcidChange):
             self.extended_protein_sequence)
 
 
-class FrameShift(NonsilentCodingMutation):
+class FrameShift(KnownAminoAcidChange):
     def __init__(
             self,
             variant,
