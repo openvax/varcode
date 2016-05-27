@@ -261,7 +261,7 @@ class ExonicSpliceSite(Exonic, SpliceSite):
 
     short_description = "exonic-splice-site"
 
-    @memoized_property
+    @property
     def mutant_protein_sequence(self):
         """
         TODO: determine when exonic splice variants cause exon skipping
@@ -271,11 +271,11 @@ class ExonicSpliceSite(Exonic, SpliceSite):
         """
         return self.alternate_effect.mutant_protein_sequence
 
-    @memoized_property
+    @property
     def modifies_protein_sequence(self):
         return self.alternate_effect.modifies_protein_sequence
 
-    @memoized_property
+    @property
     def modifies_coding_sequence(self):
         return self.alternate_effect.modifies_coding_sequence
 
