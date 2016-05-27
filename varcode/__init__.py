@@ -49,6 +49,11 @@ from .effects import (
     ExonLoss,
 )
 
+from ._version import get_versions
+__version__ = get_versions()['version']
+del get_versions
+
+
 __all__ = [
     # basic classes
     "Variant",
@@ -92,7 +97,3 @@ __all__ = [
     "FrameShift",
     "ExonLoss",
 ]
-
-from ._version import get_versions
-__version__ = get_versions()['version']
-del get_versions
