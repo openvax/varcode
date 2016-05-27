@@ -111,13 +111,11 @@ def create_frameshift_effect(
         return FrameShiftTruncation(
             variant=variant,
             transcript=transcript,
-            stop_codon_offset=mutation_start_position,
-            aa_ref=aa_ref)
+            stop_codon_offset=mutation_start_position)
     return FrameShift(
         variant=variant,
         transcript=transcript,
         aa_mutation_start_offset=mutation_start_position,
-        aa_ref=aa_ref,
         shifted_sequence=str(mutant_protein_suffix))
 
 def cdna_codon_sequence_after_insertion_frameshift(
@@ -145,6 +143,8 @@ def cdna_codon_sequence_after_insertion_frameshift(
         #    <----- Insertsion
         #   3) cds_offset + 1
         mutated_codon_index = cds_offset_before_insertion // 3
+        # the first codon in the returned sequence will contain two reference
+        # nucleotides before the insertion
         nucleotides_before = sequence_from_start_codon[
             cds_offset_before_insertion - 1:cds_offset_before_insertion + 1]
     elif cds_offset_before_insertion % 3 == 0:
@@ -155,6 +155,8 @@ def cdna_codon_sequence_after_insertion_frameshift(
         #   2) cds_offset + 1
         #   3) cds_offset + 2
         mutated_codon_index = cds_offset_before_insertion // 3
+        # the first codon in the returned sequence will contain one reference
+        # nucleotide before the insertion
         nucleotides_before = sequence_from_start_codon[cds_offset_before_insertion]
     sequence_from_mutated_codon = (
         nucleotides_before +

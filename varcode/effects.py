@@ -234,6 +234,16 @@ class ExonLoss(Exonic):
 
     short_description = "exon-loss"
 
+    @property
+    def modifies_protein_sequence(self):
+        # TODO: distinguish between exon loss in the CDS and UTRs
+        return True
+
+    @property
+    def modifies_coding_sequence(self):
+        # TODO: distinguish between exon loss in the CDS and UTRs
+        return True
+
 class ExonicSpliceSite(Exonic, SpliceSite):
     """
     Mutation in the last three nucleotides before an intron
@@ -251,7 +261,7 @@ class ExonicSpliceSite(Exonic, SpliceSite):
 
     short_description = "exonic-splice-site"
 
-    @memoized_property
+    @property
     def mutant_protein_sequence(self):
         """
         TODO: determine when exonic splice variants cause exon skipping
@@ -261,11 +271,11 @@ class ExonicSpliceSite(Exonic, SpliceSite):
         """
         return self.alternate_effect.mutant_protein_sequence
 
-    @memoized_property
+    @property
     def modifies_protein_sequence(self):
         return self.alternate_effect.modifies_protein_sequence
 
-    @memoized_property
+    @property
     def modifies_coding_sequence(self):
         return self.alternate_effect.modifies_coding_sequence
 
@@ -287,8 +297,9 @@ class CodingMutation(Exonic):
         ])
         return "%s(%s)" % (self.__class__.__name__, fields_str)
 
-    modifies_coding_sequence = True
-
+    @property
+    def modifies_coding_sequence(self):
+        return True
 
 class Silent(CodingMutation):
     """Mutation to an exon of a coding region which doesn't change the
@@ -320,7 +331,9 @@ class Silent(CodingMutation):
         self.aa_pos = aa_pos
         self.aa_ref = aa_ref
 
-    short_description = "silent"
+    @property
+    def short_description(self):
+        return "silent"
 
 class AlternateStartCodon(Silent):
     """Change to the start codon (e.g. ATG>CTG) but without changing the
@@ -382,13 +395,42 @@ class NonsilentCodingMutation(CodingMutation):
         self.aa_mutation_end_offset = aa_mutation_end_offset
         self.aa_ref = aa_ref
 
-    modifies_protein_sequence = True
+    @property
+    def modifies_protein_sequence(self):
+        return True
 
-class BaseSubstitution(NonsilentCodingMutation):
+class StartLoss(NonsilentCodingMutation):
     """
-    Coding mutation which replaces some amino acids into others.
-    The total number of amino acids changed must be greater than one on
-    either the reference or alternate.
+    When a start codon is lost it's difficult to determine if there is
+    an alternative Kozak consensus sequence (either before or after the
+    original) from which an alternative start codon can be inferred.
+    """
+    def __init__(
+            self,
+            variant,
+            transcript):
+        NonsilentCodingMutation.__init__(
+            self,
+            variant=variant,
+            transcript=transcript,
+            aa_mutation_start_offset=0,
+            aa_mutation_end_offset=1,
+            aa_ref=transcript.protein_sequence[0])
+
+    @property
+    def mutant_protein_sequence(self):
+        # TODO: scan downstream in the cDNA sequence to predict an alternate
+        # start codon using a Kozak sequence template
+        return None
+
+    @memoized_property
+    def short_description(self):
+        return "p.%s1? (start-loss)" % (self.transcript.protein_sequence[0],)
+
+class KnownAminoAcidChange(NonsilentCodingMutation):
+    """
+    Coding mutations in which we can predict what the new/mutant protein
+    sequence will be.
     """
     def __init__(
             self,
@@ -429,7 +471,7 @@ class BaseSubstitution(NonsilentCodingMutation):
         suffix = original[self.aa_mutation_start_offset + len(self.aa_ref):]
         return prefix + self.aa_alt + suffix
 
-class Substitution(BaseSubstitution):
+class Substitution(KnownAminoAcidChange):
     """
     Single amino acid substitution, e.g. BRAF-001 V600E
     """
@@ -446,7 +488,7 @@ class Substitution(BaseSubstitution):
         if len(aa_alt) != 1:
             raise ValueError(
                 "Simple substitution can't have aa_alt='%s'" % (aa_alt,))
-        BaseSubstitution.__init__(
+        KnownAminoAcidChange.__init__(
             self,
             variant=variant,
             transcript=transcript,
@@ -454,7 +496,7 @@ class Substitution(BaseSubstitution):
             aa_ref=aa_ref,
             aa_alt=aa_alt)
 
-class ComplexSubstitution(BaseSubstitution):
+class ComplexSubstitution(KnownAminoAcidChange):
     """
     In-frame substitution of multiple amino acids, e.g. TP53-002 p.391FY>QQQ
     Can change the length of the protein sequence but since it has
@@ -472,7 +514,7 @@ class ComplexSubstitution(BaseSubstitution):
             raise ValueError(
                 "ComplexSubstitution can't have aa_ref='%s' and aa_alt='%s'" % (
                     aa_ref, aa_alt))
-        BaseSubstitution.__init__(
+        KnownAminoAcidChange.__init__(
             self,
             variant=variant,
             transcript=transcript,
@@ -480,7 +522,7 @@ class ComplexSubstitution(BaseSubstitution):
             aa_ref=aa_ref,
             aa_alt=aa_alt)
 
-class Insertion(BaseSubstitution):
+class Insertion(KnownAminoAcidChange):
     """
     In-frame insertion of one or more amino acids.
     """
@@ -490,7 +532,7 @@ class Insertion(BaseSubstitution):
             transcript,
             aa_mutation_start_offset,
             aa_alt):
-        BaseSubstitution.__init__(
+        KnownAminoAcidChange.__init__(
             self,
             variant=variant,
             transcript=transcript,
@@ -498,7 +540,7 @@ class Insertion(BaseSubstitution):
             aa_ref="",
             aa_alt=aa_alt)
 
-class Deletion(BaseSubstitution):
+class Deletion(KnownAminoAcidChange):
     """
     In-frame deletion of one or more amino acids.
     """
@@ -509,7 +551,7 @@ class Deletion(BaseSubstitution):
             transcript,
             aa_mutation_start_offset,
             aa_ref):
-        BaseSubstitution.__init__(
+        KnownAminoAcidChange.__init__(
             self,
             variant=variant,
             transcript=transcript,
@@ -518,7 +560,7 @@ class Deletion(BaseSubstitution):
             aa_alt="")
 
 
-class PrematureStop(BaseSubstitution):
+class PrematureStop(KnownAminoAcidChange):
     """In-frame insertion of codons containing a stop codon. May also involve
     insertion/deletion/substitution of other amino acids preceding the stop."""
     def __init__(
@@ -538,7 +580,7 @@ class PrematureStop(BaseSubstitution):
         assert "*" not in aa_alt, \
             ("Unexpected aa_ref = '%s', should only include amino acids "
              "before the new stop codon.") % aa_alt
-        BaseSubstitution.__init__(
+        KnownAminoAcidChange.__init__(
             self,
             variant,
             transcript,
@@ -567,7 +609,7 @@ class PrematureStop(BaseSubstitution):
         return prefix + self.aa_alt
 
 
-class StopLoss(BaseSubstitution):
+class StopLoss(KnownAminoAcidChange):
     def __init__(
             self,
             variant,
@@ -575,7 +617,7 @@ class StopLoss(BaseSubstitution):
             extended_protein_sequence):
         aa_mutation_start_offset = len(transcript.protein_sequence)
         self.extended_protein_sequence = extended_protein_sequence
-        BaseSubstitution.__init__(
+        KnownAminoAcidChange.__init__(
             self,
             variant,
             transcript,
@@ -589,40 +631,13 @@ class StopLoss(BaseSubstitution):
             self.aa_mutation_start_offset + 1,
             self.extended_protein_sequence)
 
-class StartLoss(BaseSubstitution):
-    """
-    When a start codon is lost it's difficult to determine if there is
-    an alternative Kozak consensus sequence (either before or after the
-    original) from which an alternative start codon can be inferred.
-    """
-    def __init__(
-            self,
-            variant,
-            transcript,
-            aa_alt="?"):
-        BaseSubstitution.__init__(
-            self,
-            variant=variant,
-            transcript=transcript,
-            aa_mutation_start_offset=0,
-            aa_ref="M",
-            aa_alt=aa_alt)
 
-    @property
-    def mutant_protein_sequence(self):
-        return None
-
-    @memoized_property
-    def short_description(self):
-        return "p.%d? (start-loss)" % (self.aa_mutation_start_offset,)
-
-class FrameShift(NonsilentCodingMutation):
+class FrameShift(KnownAminoAcidChange):
     def __init__(
             self,
             variant,
             transcript,
             aa_mutation_start_offset,
-            aa_ref,
             shifted_sequence):
         """Frameshift mutation preserves all the amino acids up to
         aa_mutation_start_offset and then replaces the rest of the protein with
@@ -630,15 +645,15 @@ class FrameShift(NonsilentCodingMutation):
         aa_ref as the chracter before the variant sequence, a frameshift starts
         at aa_ref.
         """
-        n_new_amino_acids = len(shifted_sequence)
-        NonsilentCodingMutation.__init__(
+        self.shifted_sequence = shifted_sequence
+        aa_ref = transcript.protein_sequence[aa_mutation_start_offset:]
+        KnownAminoAcidChange.__init__(
             self,
             variant=variant,
             transcript=transcript,
             aa_mutation_start_offset=aa_mutation_start_offset,
-            aa_mutation_end_offset=aa_mutation_start_offset + n_new_amino_acids,
-            aa_ref=aa_ref)
-        self.shifted_sequence = shifted_sequence
+            aa_ref=aa_ref,
+            aa_alt=shifted_sequence)
 
     @memoized_property
     def mutant_protein_sequence(self):
@@ -649,7 +664,7 @@ class FrameShift(NonsilentCodingMutation):
     @memoized_property
     def short_description(self):
         return "p.%s%dfs" % (
-            self.aa_ref,
+            self.aa_ref[0],
             self.aa_mutation_start_offset + 1)
 
 class FrameShiftTruncation(PrematureStop, FrameShift):

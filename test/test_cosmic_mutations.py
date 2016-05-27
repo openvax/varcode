@@ -93,7 +93,7 @@ def _frameshift(
     assert isinstance(effect, FrameShift), \
         "Expected frameshift, got %s" % (effect,)
     effect_aa_pos = effect.aa_mutation_start_offset
-    assert effect.aa_ref == aa_ref and effect_aa_pos + 1 == aa_pos, \
+    assert effect.aa_ref[0] == aa_ref and effect_aa_pos + 1 == aa_pos, \
         ("Expected frameshift to replace p.%d%s but instead got %s" % (
             aa_pos, aa_ref, effect))
 
