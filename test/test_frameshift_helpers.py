@@ -33,7 +33,7 @@ def test_cdna_codon_sequence_after_insertion_frameshift_at_end_of_codon():
     eq_(s, "ATTGCCCTAG")
 
 def test_cdna_codon_sequence_after_insertion_frameshift_after_codon():
-    # insertion: AT_T_GCCCTAG
+    # insertion: ATG_T_CCCTAG
     i, s = cdna_codon_sequence_after_insertion_frameshift(
         sequence_from_start_codon="ATGCCCTAG",
         cds_offset_before_insertion=2,
