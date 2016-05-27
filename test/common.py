@@ -18,9 +18,11 @@ def check_effect_properties(effect):
     # try accessing all the properties to make sure none crash
     for attribute_name in expected_effect_properties:
         getattr(effect, attribute_name)
-    assert effect.short_description is not None
     assert effect.modifies_coding_sequence in {False, True}
     assert effect.modifies_protein_sequence in {False, True}
+    assert len(str(effect)) > 0
+    assert len(repr(effect)) > 0
+    assert len(effect.short_description) > 0
 
 def expect_effect(
         variant,

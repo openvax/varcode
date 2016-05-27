@@ -34,7 +34,7 @@ from .effects import (
 from .string_helpers import trim_shared_flanking_strings
 from .translate import START_CODONS, STOP_CODONS, translate
 
-def _choose_annotation(
+def _choose_in_frame_annotation(
         aa_mutation_start_offset,
         aa_ref,
         aa_alt,
@@ -304,7 +304,7 @@ def in_frame_coding_effect(
                 aa_ref=original_protein_subsequence,
                 aa_alt=mutant_protein_subsequence)
 
-    return _choose_annotation(
+    return _choose_in_frame_annotation(
         aa_mutation_start_offset=first_ref_codon_index,
         aa_ref=original_protein_subsequence,
         aa_alt=mutant_protein_subsequence,

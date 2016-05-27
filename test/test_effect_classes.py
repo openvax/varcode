@@ -24,7 +24,7 @@ from varcode import (
     # transcript effects
     #
     IncompleteTranscript,
-    # NoncodingTranscript, TODO: write a noncoding transcript test
+    NoncodingTranscript,
     FivePrimeUTR,
     ThreePrimeUTR,
     Intronic,
@@ -62,6 +62,14 @@ def test_incomplete():
         transcript_id="ENST00000450046",
         effect_class=IncompleteTranscript)
 
+
+def test_noncoding_polymorphic_pseudogene():
+    # variant in MROH5-001, which is a polymorphic pseudogene
+    variant = Variant("8", 142458077, "C", "T", ensembl_grch37)
+    expect_effect(
+        variant,
+        transcript_id="ENST00000430863",
+        effect_class=NoncodingTranscript)
 
 def test_start_loss():
     # transcript EGFR-005 (ENST00000420316 in Ensembl 77)
