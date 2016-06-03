@@ -32,7 +32,7 @@ from pyensembl.biotypes import is_coding_biotype
 from typechecks import require_instance
 
 from .coding_effect import coding_effect
-from .common import groupby_field, memoize
+from .common import groupby_field
 from .effect_helpers import changes_exonic_splice_site
 from .effect_collection import EffectCollection
 from .effects import (
@@ -52,7 +52,7 @@ from .effects import (
     ExonicSpliceSite,
 )
 from .nucleotides import (
-    normalize_nucleotide_string, 
+    normalize_nucleotide_string,
     STANDARD_NUCLEOTIDES,
     is_purine
 )
@@ -257,7 +257,13 @@ class Variant(object):
     def __getstate__(self):
         # When pickle.load'ing, we want the original values vs. the normalized values.
         # Normalization will happen upon object creation.
-        return [self.contig, self.original_start, self.original_ref, self.original_alt, self.ensembl.release]
+        return [
+            self.contig,
+            self.original_start,
+            self.original_ref,
+            self.original_alt,
+            self.ensembl.release
+        ]
 
     def __setstate__(self, fields):
         # Special logic needed for JSON serialization, since EnsemblRelease
@@ -295,7 +301,6 @@ class Variant(object):
         """
         return Variant.from_dict(json.loads(serialized))
 
-    @memoized_property
     def short_description(self):
         """
         HGVS nomenclature for genomic variants
@@ -326,7 +331,7 @@ class Variant(object):
         return self.ensembl.transcripts_at_locus(
             self.contig, self.start, self.end)
 
-    @memoized_property
+    @property
     def coding_transcripts(self):
         """
         Protein coding transcripts
@@ -337,11 +342,11 @@ class Variant(object):
             if is_coding_biotype(transcript.biotype)
         ]
 
-    @memoized_property
+    @property
     def transcript_ids(self):
         return [transcript.id for transcript in self.transcripts]
 
-    @memoized_property
+    @property
     def transcript_names(self):
         return [transcript.name for transcript in self.transcripts]
 
@@ -353,7 +358,7 @@ class Variant(object):
         return self.ensembl.genes_at_locus(
             self.contig, self.start, self.end)
 
-    @memoized_property
+    @property
     def gene_ids(self):
         """
         Return IDs of all genes which overlap this variant. Calling
@@ -363,7 +368,7 @@ class Variant(object):
         return self.ensembl.gene_ids_at_locus(
             self.contig, self.start, self.end)
 
-    @memoized_property
+    @property
     def gene_names(self):
         """
         Return names of all genes which overlap this variant. Calling
@@ -373,7 +378,7 @@ class Variant(object):
         return self.ensembl.gene_names_at_locus(
             self.contig, self.start, self.end)
 
-    @memoized_property
+    @property
     def coding_genes(self):
         """
         Protein coding transcripts
@@ -383,7 +388,6 @@ class Variant(object):
             if is_coding_biotype(gene.biotype)
         ]
 
-    @memoize
     def effects(self, raise_on_error=True):
         """Determine the effects of a variant on any transcripts it overlaps.
         Returns an EffectCollection object.
@@ -436,7 +440,6 @@ class Variant(object):
                                 error)
         return EffectCollection(effects)
 
-    @memoize
     def effect_on_transcript(self, transcript):
         """Return the transcript effect (such as FrameShift) that results from
         applying this genomic variant to a particular transcript.
@@ -737,7 +740,7 @@ class Variant(object):
     @property
     def is_snv(self):
         """Is the variant a single nucleotide variant"""
-        return (len(self.ref) == len(self.alt) == 1) and (self.ref != self.alt)  
+        return (len(self.ref) == len(self.alt) == 1) and (self.ref != self.alt)
 
     @property
     def is_transition(self):
