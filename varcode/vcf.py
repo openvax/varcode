@@ -22,7 +22,7 @@ from six.moves import urllib
 
 import pandas
 from typechecks import require_string
-import vcf
+import vcf as pyvcf
 
 from .reference import infer_genome
 from .variant import Variant
@@ -462,14 +462,14 @@ class PyVCFReaderFromPathOrURL(object):
         self.vcf_reader = None  # vcf_reader. Will always be set.
         self._to_close = None  # object to call close() on when we're done.
 
-        if isinstance(path, vcf.Reader):
+        if isinstance(path, pyvcf.Reader):
             self.vcf_reader = path
         else:
             require_string(path, "Path or URL to VCF")
             self.path = path
             parsed_path = parse_url_or_path(path)
             if not parsed_path.scheme or parsed_path.scheme.lower() == 'file':
-                self.vcf_reader = vcf.Reader(filename=parsed_path.path)
+                self.vcf_reader = pyvcf.Reader(filename=parsed_path.path)
             elif parsed_path.scheme.lower() in ("http", "https", "ftp"):
                 self._to_close = response = requests.get(path, stream=True)
                 response.raise_for_status()  # raise error on 404, etc.
@@ -478,7 +478,7 @@ class PyVCFReaderFromPathOrURL(object):
                         response.iter_content())
                 else:
                     lines = response.iter_lines(decode_unicode=True)
-                self.vcf_reader = vcf.Reader(fsock=lines, compressed=False)
+                self.vcf_reader = pyvcf.Reader(fsock=lines, compressed=False)
             else:
                 raise ValueError("Unsupported scheme: %s" % parsed_path.scheme)
 
