@@ -71,15 +71,8 @@ class Variant(object):
         "original_ref",
         "original_alt",
         "original_start",
-        "_short_description",
         "_transcripts",
-        "_transcript_ids",
-        "_transcript_names",
-        "_coding_transcripts",
-        "_genes",
-        "_gene_names",
-        "_gene_ids",
-        "_coding_genes",)
+        "_genes",)
 
     def __init__(
             self,
@@ -301,6 +294,7 @@ class Variant(object):
         """
         return Variant.from_dict(json.loads(serialized))
 
+    @property
     def short_description(self):
         """
         HGVS nomenclature for genomic variants
