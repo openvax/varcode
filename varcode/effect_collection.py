@@ -19,7 +19,6 @@ import pandas as pd
 from typechecks import require_iterable_of
 
 from .collection import Collection
-from .common import memoize
 from .effects import MutationEffect
 from .effect_ordering import (
     effect_priority,
@@ -190,7 +189,6 @@ class EffectCollection(Collection):
 
     # TODO: find a way to express these kinds of methods without
     # duplicating every single groupby_* method
-    @memoize
     def top_priority_effect_per_variant(self):
         """Highest priority effect for each unique variant"""
         return OrderedDict(
@@ -198,7 +196,6 @@ class EffectCollection(Collection):
             for (variant, variant_effects)
             in self.groupby_variant().items())
 
-    @memoize
     def top_priority_effect_per_transcript_id(self):
         """Highest priority effect for each unique transcript ID"""
         return OrderedDict(
@@ -206,7 +203,6 @@ class EffectCollection(Collection):
             for (transcript_id, variant_effects)
             in self.groupby_transcript_id().items())
 
-    @memoize
     def top_priority_effect_per_gene_id(self):
         """Highest priority effect for each unique gene ID"""
         return OrderedDict(
@@ -257,7 +253,6 @@ class EffectCollection(Collection):
 
         return top_pair[0]
 
-    @memoize
     def gene_counts(self):
         counter = Counter()
         for effect in self:

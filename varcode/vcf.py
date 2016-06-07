@@ -12,19 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# required so that 'import vcf' gets the global PyVCF package,
-# rather than our local vcf module
-from __future__ import absolute_import
 
+from __future__ import absolute_import, print_function, division
 import requests
 import zlib
-import collections
+from collections import OrderedDict
 
 from six.moves import urllib
 
 import pandas
 from typechecks import require_string
-import vcf  # PyVCF
+import vcf as pyvcf
 
 from .reference import infer_genome
 from .variant import Variant
@@ -248,7 +246,7 @@ def pyvcf_calls_to_sample_info_list(calls):
     name to its per-sample info:
         sample name -> field -> value
     """
-    return collections.OrderedDict(
+    return OrderedDict(
         (call.sample, call.data._asdict()) for call in calls)
 
 def dataframes_to_variant_collection(
@@ -306,8 +304,8 @@ def dataframes_to_variant_collection(
 
     if info_parser and sample_names:
         if sample_info_parser is None:
-            raise TypeError("Must specify sample_info_parser if specifying "
-                "sample_names")
+            raise TypeError(
+                "Must specify sample_info_parser if specifying sample_names")
         expected_columns.append("FORMAT")
         expected_columns.extend(sample_names)
 
@@ -401,7 +399,7 @@ def read_vcf_into_dataframe(
     VCF file. Otherwise, an iterable of dataframes, each with chunk_size rows.
 
     """
-    vcf_field_types = collections.OrderedDict()
+    vcf_field_types = OrderedDict()
     vcf_field_types['CHROM'] = str
     vcf_field_types['POS'] = int
     vcf_field_types['ID'] = str
@@ -464,14 +462,14 @@ class PyVCFReaderFromPathOrURL(object):
         self.vcf_reader = None  # vcf_reader. Will always be set.
         self._to_close = None  # object to call close() on when we're done.
 
-        if isinstance(path, vcf.Reader):
+        if isinstance(path, pyvcf.Reader):
             self.vcf_reader = path
         else:
             require_string(path, "Path or URL to VCF")
             self.path = path
             parsed_path = parse_url_or_path(path)
             if not parsed_path.scheme or parsed_path.scheme.lower() == 'file':
-                self.vcf_reader = vcf.Reader(filename=parsed_path.path)
+                self.vcf_reader = pyvcf.Reader(filename=parsed_path.path)
             elif parsed_path.scheme.lower() in ("http", "https", "ftp"):
                 self._to_close = response = requests.get(path, stream=True)
                 response.raise_for_status()  # raise error on 404, etc.
@@ -480,7 +478,7 @@ class PyVCFReaderFromPathOrURL(object):
                         response.iter_content())
                 else:
                     lines = response.iter_lines(decode_unicode=True)
-                self.vcf_reader = vcf.Reader(fsock=lines, compressed=False)
+                self.vcf_reader = pyvcf.Reader(fsock=lines, compressed=False)
             else:
                 raise ValueError("Unsupported scheme: %s" % parsed_path.scheme)
 

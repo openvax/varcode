@@ -59,7 +59,6 @@ class VariantCollection(Collection):
             sort_key=sort_key)
         self.metadata = {} if metadata is None else metadata
 
-    @memoize
     def effects(self, raise_on_error=True):
         """
         Parameters
@@ -76,7 +75,6 @@ class VariantCollection(Collection):
             for effect in variant.effects(raise_on_error=raise_on_error)
         ])
 
-    @memoize
     def gene_counts(self):
         """
         Count how many variants overlap each gene name.
@@ -95,7 +93,6 @@ class VariantCollection(Collection):
         """
         return set(variant.reference_name for variant in self)
 
-    @memoize
     def groupby_gene_name(self):
         """
         Group variants by the gene names they overlap, which may put each
@@ -103,11 +100,9 @@ class VariantCollection(Collection):
         """
         return self.multi_groupby(lambda x: x.gene_names)
 
-    @memoize
     def groupby_gene_id(self):
         return self.multi_groupby(lambda x: x.gene_ids)
 
-    @memoize
     def detailed_string(self):
         lines = []
         gene_groups = self.groupby_gene_id()
