@@ -151,8 +151,8 @@ def load_vcf_fast(
 
     genome : {pyensembl.Genome, reference name, Ensembl version int}, optional
         Optionally pass in a PyEnsembl Genome object, name of reference, or
-        PyEnsembl release version to specify the reference associated with a VCF
-        (otherwise infer reference from VCF using reference_vcf_key)
+        PyEnsembl release version to specify the reference associated with a
+        VCF (otherwise infer reference from VCF using reference_vcf_key)
 
     reference_vcf_key : str, optional
         Name of metadata field which contains path to reference FASTA
@@ -426,6 +426,7 @@ def read_vcf_into_dataframe(
     elif path.endswith(".bz2"):
         compression = "bz2"
 
+    print(vcf_field_types)
     reader = pandas.read_table(
         path,
         compression=compression,
@@ -469,7 +470,9 @@ class PyVCFReaderFromPathOrURL(object):
             self.path = path
             parsed_path = parse_url_or_path(path)
             if not parsed_path.scheme or parsed_path.scheme.lower() == 'file':
-                self.vcf_reader = pyvcf.Reader(filename=parsed_path.path)
+                self.vcf_reader = pyvcf.Reader(
+                    filename=parsed_path.path,
+                    strict_whitespace=True)
             elif parsed_path.scheme.lower() in ("http", "https", "ftp"):
                 self._to_close = response = requests.get(path, stream=True)
                 response.raise_for_status()  # raise error on 404, etc.
@@ -478,7 +481,10 @@ class PyVCFReaderFromPathOrURL(object):
                         response.iter_content())
                 else:
                     lines = response.iter_lines(decode_unicode=True)
-                self.vcf_reader = pyvcf.Reader(fsock=lines, compressed=False)
+                self.vcf_reader = pyvcf.Reader(
+                    fsock=lines,
+                    compressed=False,
+                    strict_whitespace=True)
             else:
                 raise ValueError("Unsupported scheme: %s" % parsed_path.scheme)
 
