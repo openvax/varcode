@@ -98,7 +98,7 @@ class Collection(object):
 
     def clone_with_new_elements(self, new_elements):
         """
-        Create another collection of the same class and  with same metadata
+        Create another collection of the same class and with same state
         but possibly different Variant or Effect entries.
         """
         return self.__class__(

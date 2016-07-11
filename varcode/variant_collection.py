@@ -121,6 +121,17 @@ class VariantCollection(Collection):
         joined_lines = "\n".join(lines)
         return "%s\n%s" % (header, joined_lines)
 
+    def clone_with_new_elements(self, new_elements):
+        """
+        Create another VariantCollection of the same class and with
+        same state (including metadata) but possibly different entries.
+        """
+        return self.__class__(
+            new_elements,
+            path=self.path,
+            distinct=self.distinct,
+            metadata=self.metadata)
+
     def filter_by_transcript_expression(
             self,
             transcript_expression_dict,
