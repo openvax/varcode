@@ -125,6 +125,10 @@ class VariantCollection(Collection):
         """
         Create another VariantCollection of the same class and with
         same state (including metadata) but possibly different entries.
+
+        Warning: metadata is a dictionary keyed by variants. This method
+        leaves that dictionary as-is, which may result in extraneous entries
+        or missing entries.
         """
         return self.__class__(
             new_elements,
