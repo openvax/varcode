@@ -50,7 +50,7 @@ class MutationEffect(object):
     transcript = None
     gene = None
 
-    @memoized_property
+    @property
     def original_protein_sequence(self):
         """Amino acid sequence of a coding transcript (without the nucleotide
         variant/mutation)
@@ -60,28 +60,28 @@ class MutationEffect(object):
         else:
             return None
 
-    @memoized_property
+    @property
     def gene_name(self):
         if self.gene:
             return self.gene.name
         else:
             return None
 
-    @memoized_property
+    @property
     def gene_id(self):
         if self.gene:
             return self.gene.id
         else:
             return None
 
-    @memoized_property
+    @property
     def transcript_name(self):
         if self.transcript:
             return self.transcript.name
         else:
             return None
 
-    @memoized_property
+    @property
     def transcript_id(self):
         if self.transcript:
             return self.transcript.id
@@ -355,7 +355,7 @@ class AlternateStartCodon(Silent):
         self.ref_codon = ref_codon
         self.alt_codon = alt_codon
 
-    @memoized_property
+    @property
     def short_description(self):
         return "alternate-start-codon (%s>%s)" % (
             self.ref_codon, self.alt_codon)
@@ -423,7 +423,7 @@ class StartLoss(NonsilentCodingMutation):
         # start codon using a Kozak sequence template
         return None
 
-    @memoized_property
+    @property
     def short_description(self):
         return "p.%s1? (start-loss)" % (self.transcript.protein_sequence[0],)
 
@@ -448,7 +448,7 @@ class KnownAminoAcidChange(NonsilentCodingMutation):
             aa_ref=aa_ref)
         self.aa_alt = aa_alt
 
-    @memoized_property
+    @property
     def short_description(self):
         if len(self.aa_ref) == 0:
             return "p.%dins%s" % (
@@ -596,7 +596,7 @@ class PrematureStop(KnownAminoAcidChange):
                 transcript,
                 len(transcript.protein_sequence))
 
-    @memoized_property
+    @property
     def short_description(self):
         return "p.%s%d%s*" % (
             self.aa_ref,
@@ -625,7 +625,7 @@ class StopLoss(KnownAminoAcidChange):
             aa_ref="*",
             aa_alt=extended_protein_sequence)
 
-    @memoized_property
+    @property
     def short_description(self):
         return "p.*%d%s (stop-loss)" % (
             self.aa_mutation_start_offset + 1,
@@ -661,7 +661,7 @@ class FrameShift(KnownAminoAcidChange):
         prefix = original_aa_sequence[:self.aa_mutation_start_offset]
         return prefix + self.shifted_sequence
 
-    @memoized_property
+    @property
     def short_description(self):
         return "p.%s%dfs" % (
             self.aa_ref[0],
@@ -685,7 +685,7 @@ class FrameShiftTruncation(PrematureStop, FrameShift):
             aa_mutation_start_offset=stop_codon_offset,
             aa_ref=aa_ref)
 
-    @memoized_property
+    @property
     def short_description(self):
         return "p.%s%dfs*" % (
             self.aa_ref,

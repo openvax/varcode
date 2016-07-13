@@ -16,10 +16,8 @@ from __future__ import print_function, division, absolute_import
 import logging
 import json
 
-from collections import namedtuple
-
 from Bio.Seq import reverse_complement
-from memoized_property import memoized_property
+
 from pyensembl import (
     Transcript,
     cached_release,
@@ -72,7 +70,8 @@ class Variant(object):
         "original_alt",
         "original_start",
         "_transcripts",
-        "_genes",)
+        "_genes",
+    )
 
     def __init__(
             self,
@@ -111,6 +110,11 @@ class Variant(object):
             prefix and converting all letters to upper-case. If we don't want
             this behavior then pass normalize_contig_name=False.
         """
+
+        # first initialize the _genes and _transcripts fields we use to cache
+        # lists of overlapping pyensembl Gene and Transcript objects
+        self._genes = self._transcripts = None
+
         # user might supply Ensembl release as an integer, reference name,
         # or pyensembl.Genome object
         if isinstance(ensembl, Genome):
@@ -214,28 +218,6 @@ class Variant(object):
             return self.start < other.start
         return self.contig < other.contig
 
-    # The identifying fields of a variant
-    BasicFields = namedtuple(
-        "BasicFields",
-        "contig start end ref alt release")
-
-    def fields(self):
-        """
-        All identifying fields of a variant (contig, pos, ref, alt, genome)
-        in a single tuple. This makes for cleaner printing, hashing, and
-        comparisons.
-        """
-        return Variant.BasicFields(
-            self.contig,
-            self.start,
-            self.end,
-            self.ref,
-            self.alt,
-            self.original_start,
-            self.original_ref,
-            self.original_alt,
-            self.ensembl.release)
-
     def __eq__(self, other):
         if self is other:
             return True
@@ -320,10 +302,11 @@ class Variant(object):
             return "chr%s g.%d%s>%s" % (
                 self.contig, self.start, self.ref, self.alt)
 
-    @memoized_property
     def transcripts(self):
-        return self.ensembl.transcripts_at_locus(
-            self.contig, self.start, self.end)
+        if self._transcripts is None:
+            self._transcripts = self.ensembl.transcripts_at_locus(
+                self.contig, self.start, self.end)
+        return self._transcripts
 
     @property
     def coding_transcripts(self):
@@ -344,13 +327,14 @@ class Variant(object):
     def transcript_names(self):
         return [transcript.name for transcript in self.transcripts]
 
-    @memoized_property
     def genes(self):
         """
         Return Gene object for all genes which overlap this variant.
         """
-        return self.ensembl.genes_at_locus(
-            self.contig, self.start, self.end)
+        if self._genes is None:
+            self._genes = self.ensembl.genes_at_locus(
+                self.contig, self.start, self.end)
+        return self._genes
 
     @property
     def gene_ids(self):
