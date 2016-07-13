@@ -253,3 +253,25 @@ class VariantCollection(Collection):
             self.__class__ == other.__class__ and
             len(self) == len(other) and
             all(x.exactly_equal(y) for (x, y) in zip(self, other)))
+
+    @classmethod
+    def union(cls, variant_collections, merge_metadata=True):
+        """
+        Returns the union of variants in a several VariantCollection objects.
+
+        By default the metadata dictionaries are merged by mapping each variant
+        to a list of tuples, where the first element is a VariantCollection's
+        path and the second element is its associated metadata.
+        """
+        pass
+
+    @classmethod
+    def intersection(cls, variant_collections, merge_metadata=True):
+        """
+        Returns the intersection of variants in several VariantCollection objects.
+
+        By default the metadata dictionaries are merged by mapping each variant
+        to a list of tuples, where the first element is a VariantCollection's
+        path and the second element is its associated metadata.
+        """
+        pass
