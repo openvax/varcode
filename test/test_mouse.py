@@ -3,10 +3,10 @@ from __future__ import absolute_import
 from nose.tools import eq_
 
 from varcode import load_vcf, load_vcf_fast, Variant, Substitution
-from pyensembl import Genome, EnsemblRelease
+from pyensembl import Genome, EnsemblRelease, MAX_ENSEMBL_RELEASE
 from . import data_path
 
-MOUSE_ENSEMBL_RELEASE = 83
+MOUSE_ENSEMBL_RELEASE = MAX_ENSEMBL_RELEASE
 SERVER = "ftp://ftp.ensembl.org"
 MOUSE_GTF_PATH = \
     SERVER + "/pub/release-%d/gtf/mus_musculus/Mus_musculus.GRCm38.%d.gtf.gz" % (
