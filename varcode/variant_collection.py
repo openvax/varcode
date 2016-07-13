@@ -16,10 +16,12 @@ from __future__ import print_function, division, absolute_import
 import json
 from collections import Counter
 
+import pandas as pd
+
 from .collection import Collection
 from .effect_collection import EffectCollection
 from .common import memoize
-from . import Variant
+from .variant import Variant
 
 class VariantCollection(Collection):
     def __init__(
@@ -275,3 +277,16 @@ class VariantCollection(Collection):
         path and the second element is its associated metadata.
         """
         pass
+
+    def to_dataframe(self):
+        """Build a DataFrame from this variant collection"""
+        def row_from_variant(variant):
+            return {
+                "chr": variant.contig,
+                "start": variant.original_pos,
+                "ref": variant.original_ref,
+                "alt": variant.original_alt,
+                "gene_name": ";".join(variant.gene_names),
+                "gene_id": ";".join(variant.gene_ids)
+            }
+        return pd.DataFrame.from_records([row_from_variant(v) for v in self])
