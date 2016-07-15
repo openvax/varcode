@@ -73,6 +73,7 @@ def test_vcf_reference_name():
 def test_pandas_and_pyvcf_implementations_equivalent():
     paths = [
         {'path': data_path("somatic_hg19_14muts.vcf")},
+        {'path': data_path("somatic_hg19_14muts.space_in_sample_name.vcf")},
         {'path': "/" + data_path("somatic_hg19_14muts.vcf")},
         {'path': data_path("somatic_hg19_14muts.vcf.gz")},
         {'path': data_path("multiallelic.vcf")},
