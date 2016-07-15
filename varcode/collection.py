@@ -24,31 +24,80 @@ class Collection(object):
     def __init__(
             self,
             elements,
-            path=None,
+            sources=set([]),
             distinct=False,
             sort_key=None):
+        """
+        Parameters
+        ----------
+        elements : list
+            Collection of any class which  is compatible with the sort key
+
+        sources : list of str
+            List of file paths or other source descriptions for where the
+            underlying data came from.
+
+        distinct : bool
+            Only keep distinct entries or allow duplicates.
+
+        sort_key : fn
+            Function which maps each element to a sorting criterion.
+        """
         self.distinct = distinct
         if distinct:
             elements = set(elements)
         self.elements = sorted(elements, key=sort_key)
-        self.path = path
-        if path:
-            # get the filename without any directory prefix
-            self.filename = os.path.split(path)[1]
-        else:
-            self.filename = None
+
+        # sources must be distinct even if elements aren't
+        self.sources = list(set(sources))
+
+    @property
+    def source(self):
+        """
+        Returns the single source name for a variant collection if it is unique,
+        otherwise raises an error.
+        """
+        if len(self.sources) == 1:
+            raise ValueError("No source associatd with VariantCollection")
+        elif len(self.sources) > 1:
+            raise ValueError("Multiple sources for VariantCollection")
+        return self.sources[0]
+
+    @property
+    def path(self):
+        """
+        Alternative name for VariantCollection.source maintained for backward
+        compatibility.
+        """
+        return self.source
+
+    @property
+    def filenames(self):
+        """
+        Assuming sources are paths to VCF or MAF files, trim their directory
+        path and return just the file names.
+        """
+        return [os.path.split(source)[1] for source in self.sources if source]
+
+    @property
+    def filename(self):
+        """
+        Return single filename if there is a single non-empty source.
+        Keeping this property for backward compatibility.
+        """
+        return self.filenames[0]
 
     def short_string(self):
         """
         Compact string representation which doesn't print any of the
         collection elements.
         """
-        file_str = ""
-        if self.filename:
-            file_str = " from '%s'" % self.filename
+        source_str = ""
+        if self.sources:
+            source_str = " from '%s'" % ",".join(self.sources)
         return "<%s%s with %d elements>" % (
             self.__class__.__name__,
-            file_str,
+            source_str,
             len(self))
 
     def to_string(self, limit=None):

@@ -14,8 +14,9 @@
 
 from __future__ import print_function, division, absolute_import
 import json
-from collections import Counter
+from collections import Counter, defaultdict
 
+from typechecks import require_iterable_of
 import pandas as pd
 
 from .collection import Collection
@@ -27,10 +28,10 @@ class VariantCollection(Collection):
     def __init__(
             self,
             variants,
-            path=None,
+            sources=[],
             distinct=True,
             sort_key=None,
-            metadata=None):
+            metadata_by_sources={}):
         """
         Construct a VariantCollection from a list of Variant records.
 
@@ -39,27 +40,47 @@ class VariantCollection(Collection):
         variants : iterable
             Variant objects contained in this VariantCollection
 
-        path : str, optional
-            File path from which we loaded variants, though the current
+        sources : list or set of str
+            File path(s) from which we loaded variants, though the current
             VariantCollection may only contain a subset of them.
 
         distinct : bool
             Don't keep repeated variants
 
         sort_key : callable
+
+        metadata_by_sources : dict
+            Dictionary mapping each source name (e.g. VCF path) to a dictionary
+            from metadata attributes to values.
         """
+        require_iterable_of(variants, Variant)
+
         if sort_key is None:
             # pylint: disable=function-redefined
-            def sort_key(variant):
-                return (variant.contig, variant.start)
+            sort_key = Variant.ascending_position_sort_key
 
         Collection.__init__(
             self,
             elements=variants,
-            path=path,
+            sources=sources,
             distinct=distinct,
             sort_key=sort_key)
-        self.metadata = {} if metadata is None else metadata
+        self.metadata_by_sources = metadata_by_sources
+
+    @property
+    def metadata(self):
+        """
+        The most common usage of a VariantCollection is loading a single VCF,
+        in which case it's annoying to have to always specify that path
+        when accessing metadata fields. This property is meant to both maintain
+        backward compatibility with old versions of Varcode and make the common
+        case easier.
+        """
+        if len(self.sources) > 1:
+            raise ValueError(
+                ("This variant collection has multiple sources, "
+                 "use metadata_by_sources instead."))
+        return self.metadata_by_sources[self.sources[0]]
 
     def effects(self, raise_on_error=True):
         """
@@ -134,7 +155,7 @@ class VariantCollection(Collection):
         """
         return self.__class__(
             new_elements,
-            path=self.path,
+            sources=self.sources,
             distinct=self.distinct,
             metadata=self.metadata)
 
@@ -191,12 +212,12 @@ class VariantCollection(Collection):
         """
         return json.dumps(self.__getstate__())
 
-    def write_json_file(self, filename):
+    def write_json_file(self, path):
         """
         Serialize this VariantCollection to a JSON representation and write it
         out to a text file.
         """
-        with open(filename, "w") as f:
+        with open(path, "w") as f:
             f.write(self.to_json())
 
     @classmethod
@@ -216,11 +237,11 @@ class VariantCollection(Collection):
         return cls.from_dict(json.loads(serialized))
 
     @classmethod
-    def read_json_file(cls, filename):
+    def read_json_file(cls, path):
         """
         Construct a VariantCollection from a JSON file.
         """
-        with open(filename, 'r') as f:
+        with open(path, 'r') as f:
             json_string = f.read()
         return cls.from_json(json_string)
 
@@ -257,26 +278,56 @@ class VariantCollection(Collection):
             all(x.exactly_equal(y) for (x, y) in zip(self, other)))
 
     @classmethod
-    def union(cls, variant_collections, merge_metadata=True):
+    def _merge_metadata_dictionaries(cls, dictionaries, combined_variants=None):
         """
-        Returns the union of variants in a several VariantCollection objects.
+        Helper function for combining variant collections: given multiple
+        dictionaries mapping:
+             variant -> source name -> attribute -> value
 
-        By default the metadata dictionaries are merged by mapping each variant
-        to a list of tuples, where the first element is a VariantCollection's
-        path and the second element is its associated metadata.
+        Returns dictionary with union of all variants and sources.
         """
-        pass
+        combined_metadata = defaultdict(dict)
+        if combined_variants is None:
+            combined_variants = set.union(*dictionaries.keys())
+        for variant in combined_variants:
+            for d in dictionaries:
+                for source, attribute_to_values in d.get(variant, {}).items():
+                    combined_metadata[variant][source].update(attribute_to_values)
+        return combined_metadata
 
     @classmethod
-    def intersection(cls, variant_collections, merge_metadata=True):
+    def union(cls, variant_collections, distinct=True, sort_key=None):
+        """
+        Returns the union of variants in a several VariantCollection objects.
+        """
+        combined_variants = set.union(*variant_collections)
+        combined_metadata = cls._merge_metadata_dictionaries(
+            dictionaries=[vc.metadata_by_sources for vc in variant_collections],
+            combined_variants=combined_variants)
+        combined_sources = list(set.union(*[vc.sources for vc in variant_collections]))
+        return cls(
+            variants=combined_variants,
+            sources=combined_sources,
+            distinct=distinct,
+            sort_key=sort_key,
+            metadata_by_sources=combined_metadata)
+
+    @classmethod
+    def intersection(cls, variant_collections, distinct=True, sort_key=None):
         """
         Returns the intersection of variants in several VariantCollection objects.
-
-        By default the metadata dictionaries are merged by mapping each variant
-        to a list of tuples, where the first element is a VariantCollection's
-        path and the second element is its associated metadata.
         """
-        pass
+        combined_variants = set.intersection(*variant_collections)
+        combined_metadata = cls._merge_metadata_dictionaries(
+            dictionaries=[vc.metadata_by_sources for vc in variant_collections],
+            combined_variants=combined_variants)
+        combined_sources = list(set.union(*[vc.sources for vc in variant_collections]))
+        return cls(
+            variants=combined_variants,
+            sources=combined_sources,
+            distinct=distinct,
+            sort_key=sort_key,
+            metadata_by_sources=combined_metadata)
 
     def to_dataframe(self):
         """Build a DataFrame from this variant collection"""

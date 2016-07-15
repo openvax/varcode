@@ -729,3 +729,10 @@ class Variant(object):
     def is_transversion(self):
         """Is this variant a pyrimidine to purine change or vice versa"""
         return self.is_snv and is_purine(self.ref) != is_purine(self.alt)
+
+    def ascending_position_sort_key(self):
+        """
+        Sort key function used to sort variants in ascending order by
+        chromosomal position.
+        """
+        return (self.contig, self.start)

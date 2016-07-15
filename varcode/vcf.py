@@ -103,14 +103,14 @@ def load_vcf(
                     sample_info = pyvcf_calls_to_sample_info_list(
                         record.samples)
 
-                metadata[variant] = {
+                metadata[variant] = {handle.path: {
                     "id": record.ID,
                     "qual": record.QUAL,
                     "filter": record.FILTER,
                     "alt_allele_index": alt_num,
                     "info": info,
                     "sample_info": sample_info,
-                }
+                }}
                 if max_variants and len(variants) > max_variants:
                     raise StopIteration
     except StopIteration:
@@ -119,7 +119,7 @@ def load_vcf(
         handle.close()
 
     return VariantCollection(
-        variants=variants, path=handle.path, metadata=metadata)
+        variants=variants, sources=[handle.path], metadata_by_sources=metadata)
 
 
 def load_vcf_fast(

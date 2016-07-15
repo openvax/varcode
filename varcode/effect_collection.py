@@ -36,7 +36,7 @@ class EffectCollection(Collection):
     def __init__(
             self,
             effects,
-            path=None,
+            sources=[],
             distinct=False,
             sort_key=None):
         """Construct an EffectCollection from a sequence of MutationEffects.
@@ -59,7 +59,7 @@ class EffectCollection(Collection):
         Collection.__init__(
             self,
             elements=effects,
-            path=path,
+            sources=sources,
             distinct=distinct,
             sort_key=sort_key)
 
