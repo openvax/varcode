@@ -426,7 +426,6 @@ def read_vcf_into_dataframe(
     elif path.endswith(".bz2"):
         compression = "bz2"
 
-    print(vcf_field_types)
     reader = pandas.read_table(
         path,
         compression=compression,
