@@ -238,7 +238,7 @@ def load_vcf_fast(
         variant_kwargs={
             'ensembl': genome,
             'allow_extended_nucleotides': allow_extended_nucleotides},
-        variant_collection_kwargs={"path": path})
+        sources={path})
 
 def pyvcf_calls_to_sample_info_list(calls):
     """
@@ -251,6 +251,7 @@ def pyvcf_calls_to_sample_info_list(calls):
 
 def dataframes_to_variant_collection(
         dataframes,
+        source_path,
         info_parser=None,
         only_passing=True,
         max_variants=None,
@@ -272,6 +273,9 @@ def dataframes_to_variant_collection(
             ["CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER"]
         and 'INFO' if `info_parser` is not Null. Columns must be in this
         order.
+
+    source_path : str
+        Path of VCF file from which DataFrame chunks were generated.
 
     info_parser : string -> object, optional
         Callable to parse INFO strings.
@@ -296,6 +300,9 @@ def dataframes_to_variant_collection(
 
     variant_collection_kwargs : dict, optional
         Additional keyword parameters to pass to VariantCollection.__init__.
+
+    sources : set or list
+        Paths from which variants were loaded.
     """
 
     expected_columns = (
@@ -365,7 +372,10 @@ def dataframes_to_variant_collection(
         pass
 
     return VariantCollection(
-        variants=variants, metadata=metadata, **variant_collection_kwargs)
+        variants=variants,
+        sources={source_path},
+        metadata_by_sources={source_path: metadata},
+        **variant_collection_kwargs)
 
 
 def read_vcf_into_dataframe(

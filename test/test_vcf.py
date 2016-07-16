@@ -12,11 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import print_function, division, absolute_import
 import os
 from nose.tools import eq_
 from pyensembl import cached_release
 from varcode import load_vcf, load_vcf_fast, Variant
-from . import data_path
+from .data import data_path
 
 # Set to 1 to enable, 0 to disable.
 # TODO: consider running in an in-process HTTP server instead for these tests.
@@ -145,4 +146,3 @@ def test_sample_info_genotype():
         '0/1')
     eq_(variants.metadata[variants[1]]['sample_info']['metastasis']['GT'],
         '0/1')
-

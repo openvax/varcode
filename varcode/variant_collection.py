@@ -80,6 +80,7 @@ class VariantCollection(Collection):
             raise ValueError(
                 ("This variant collection has multiple sources, "
                  "use metadata_by_sources instead."))
+        print(self.metadata_by_sources)
         return self.metadata_by_sources[self.sources[0]]
 
     def effects(self, raise_on_error=True):
@@ -282,52 +283,58 @@ class VariantCollection(Collection):
         """
         Helper function for combining variant collections: given multiple
         dictionaries mapping:
-             variant -> source name -> attribute -> value
+             source name -> (variant -> (attribute -> value))
 
         Returns dictionary with union of all variants and sources.
         """
-        combined_metadata = defaultdict(dict)
+        # three levels of nested dictionaries!
+        #   {source name: {variant: {attribute: value}}}
+        combined_dictionary = defaultdict(defaultdict(dict))
         if combined_variants is None:
-            combined_variants = set.union(*dictionaries.keys())
-        for variant in combined_variants:
-            for d in dictionaries:
-                for source, attribute_to_values in d.get(variant, {}).items():
-                    combined_metadata[variant][source].update(attribute_to_values)
-        return combined_metadata
+            combined_variants = set.union(*[
+                d.values().keys() for d in dictionaries])
+        for source_name, variant_to_metadata_dict in dictionaries:
+            for variant in combined_variants:
+                metadata_dict = variant_to_metadata_dict.get(variant, {})
+                combined_dictionary[source_name][variant].update(metadata_dict)
+        return combined_dictionary
+
+    @classmethod
+    def _combine_variant_collections(
+            cls, combine_fn, variant_collections, distinct=True, sort_key=None):
+        combined_variants = combine_fn(*variant_collections)
+        combined_metadata = cls._merge_metadata_dictionaries(
+            dictionaries=[vc.metadata_by_sources for vc in variant_collections],
+            combined_variants=combined_variants)
+        combined_sources = list(set.union(*[vc.sources for vc in variant_collections]))
+        return cls(
+            variants=combined_variants,
+            sources=combined_sources,
+            distinct=distinct,
+            sort_key=sort_key,
+            metadata_by_sources=combined_metadata)
 
     @classmethod
     def union(cls, variant_collections, distinct=True, sort_key=None):
         """
         Returns the union of variants in a several VariantCollection objects.
         """
-        combined_variants = set.union(*variant_collections)
-        combined_metadata = cls._merge_metadata_dictionaries(
-            dictionaries=[vc.metadata_by_sources for vc in variant_collections],
-            combined_variants=combined_variants)
-        combined_sources = list(set.union(*[vc.sources for vc in variant_collections]))
-        return cls(
-            variants=combined_variants,
-            sources=combined_sources,
+        return cls._combine_variant_collections(
+            combine_fn=set.union,
+            variant_collections=variant_collections,
             distinct=distinct,
-            sort_key=sort_key,
-            metadata_by_sources=combined_metadata)
+            sort_key=sort_key)
 
     @classmethod
     def intersection(cls, variant_collections, distinct=True, sort_key=None):
         """
         Returns the intersection of variants in several VariantCollection objects.
         """
-        combined_variants = set.intersection(*variant_collections)
-        combined_metadata = cls._merge_metadata_dictionaries(
-            dictionaries=[vc.metadata_by_sources for vc in variant_collections],
-            combined_variants=combined_variants)
-        combined_sources = list(set.union(*[vc.sources for vc in variant_collections]))
-        return cls(
-            variants=combined_variants,
-            sources=combined_sources,
+        return cls._combine_variant_collections(
+            combine_fn=set.intersection,
+            variant_collections=variant_collections,
             distinct=distinct,
-            sort_key=sort_key,
-            metadata_by_sources=combined_metadata)
+            sort_key=sort_key)
 
     def to_dataframe(self):
         """Build a DataFrame from this variant collection"""
