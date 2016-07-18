@@ -28,10 +28,9 @@ class VariantCollection(Collection):
     def __init__(
             self,
             variants,
-            sources=[],
             distinct=True,
             sort_key=None,
-            metadata_by_sources={}):
+            source_to_metadata_dict={}):
         """
         Construct a VariantCollection from a list of Variant records.
 
@@ -40,16 +39,12 @@ class VariantCollection(Collection):
         variants : iterable
             Variant objects contained in this VariantCollection
 
-        sources : list or set of str
-            File path(s) from which we loaded variants, though the current
-            VariantCollection may only contain a subset of them.
-
         distinct : bool
             Don't keep repeated variants
 
         sort_key : callable
 
-        metadata_by_sources : dict
+        source_to_metadata_dict : dict
             Dictionary mapping each source name (e.g. VCF path) to a dictionary
             from metadata attributes to values.
         """
@@ -62,26 +57,9 @@ class VariantCollection(Collection):
         Collection.__init__(
             self,
             elements=variants,
-            sources=sources,
             distinct=distinct,
-            sort_key=sort_key)
-        self.metadata_by_sources = metadata_by_sources
-
-    @property
-    def metadata(self):
-        """
-        The most common usage of a VariantCollection is loading a single VCF,
-        in which case it's annoying to have to always specify that path
-        when accessing metadata fields. This property is meant to both maintain
-        backward compatibility with old versions of Varcode and make the common
-        case easier.
-        """
-        if len(self.sources) > 1:
-            raise ValueError(
-                ("This variant collection has multiple sources, "
-                 "use metadata_by_sources instead."))
-        print(self.metadata_by_sources)
-        return self.metadata_by_sources[self.sources[0]]
+            sort_key=sort_key,
+            source_to_metadata_dict=source_to_metadata_dict)
 
     def effects(self, raise_on_error=True):
         """

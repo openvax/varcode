@@ -187,5 +187,4 @@ def load_maf(path):
 
     return VariantCollection(
         variants=variants,
-        sources={path},
-        metadata_by_sources={path: metadata})
+        source_to_metadata_dict={path: metadata})

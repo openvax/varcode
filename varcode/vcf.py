@@ -103,14 +103,14 @@ def load_vcf(
                     sample_info = pyvcf_calls_to_sample_info_list(
                         record.samples)
 
-                metadata[variant] = {handle.path: {
+                metadata[variant] = {
                     "id": record.ID,
                     "qual": record.QUAL,
                     "filter": record.FILTER,
                     "alt_allele_index": alt_num,
                     "info": info,
                     "sample_info": sample_info,
-                }}
+                }
                 if max_variants and len(variants) > max_variants:
                     raise StopIteration
     except StopIteration:
@@ -119,7 +119,8 @@ def load_vcf(
         handle.close()
 
     return VariantCollection(
-        variants=variants, sources=[handle.path], metadata_by_sources=metadata)
+        variants=variants,
+        source_to_metadata_dict={path: metadata})
 
 
 def load_vcf_fast(
@@ -230,6 +231,7 @@ def load_vcf_fast(
 
     return dataframes_to_variant_collection(
         df_iterator,
+        source_path=path,
         info_parser=handle.vcf_reader._parse_info if include_info else None,
         only_passing=only_passing,
         max_variants=max_variants,
@@ -237,8 +239,7 @@ def load_vcf_fast(
         sample_info_parser=sample_info_parser,
         variant_kwargs={
             'ensembl': genome,
-            'allow_extended_nucleotides': allow_extended_nucleotides},
-        sources={path})
+            'allow_extended_nucleotides': allow_extended_nucleotides})
 
 def pyvcf_calls_to_sample_info_list(calls):
     """
@@ -373,8 +374,7 @@ def dataframes_to_variant_collection(
 
     return VariantCollection(
         variants=variants,
-        sources={source_path},
-        metadata_by_sources={source_path: metadata},
+        source_to_metadata_dict={source_path: metadata},
         **variant_collection_kwargs)
 
 

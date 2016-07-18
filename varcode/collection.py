@@ -24,32 +24,55 @@ class Collection(object):
     def __init__(
             self,
             elements,
-            sources=set([]),
             distinct=False,
-            sort_key=None):
+            sort_key=None,
+            source_to_metadata_dict={}):
         """
         Parameters
         ----------
         elements : list
             Collection of any class which  is compatible with the sort key
 
-        sources : list of str
-            List of file paths or other source descriptions for where the
-            underlying data came from.
-
         distinct : bool
             Only keep distinct entries or allow duplicates.
 
         sort_key : fn
             Function which maps each element to a sorting criterion.
+
+        source_to_metadata_dict : dict
+            Dictionary mapping sources names (most often file paths) to
+            dictionaries from each element, each of which has a dictionary of
+            metadata attributes. This nested dictionary has a type signature
+            of source->element->attribute-value.
         """
         self.distinct = distinct
         if distinct:
             elements = set(elements)
+        self.sort_key = sort_key
         self.elements = sorted(elements, key=sort_key)
+        self.source_to_metadata_dict = source_to_metadata_dict
 
-        # sources must be distinct even if elements aren't
-        self.sources = list(set(sources))
+    @property
+    def sources(self):
+        return list(sorted(self.source_to_metadata_dict.keys()))
+
+    @property
+    def metadata(self):
+        """
+        The most common usage of a VariantCollection is loading a single VCF,
+        in which case it's annoying to have to always specify that path
+        when accessing metadata fields. This property is meant to both maintain
+        backward compatibility with old versions of Varcode and make the common
+        case easier.
+        """
+
+        if len(self.sources) > 1:
+            raise ValueError(
+                ("This variant collection has multiple sources, "
+                 "use metadata_by_sources instead."))
+        elif len(self.sources) == 0:
+            raise ValueError("No metadata associated with this VariantCollection")
+        return self.source_to_metadata_dict[self.sources[0]]
 
     @property
     def source(self):
@@ -152,8 +175,9 @@ class Collection(object):
         """
         return self.__class__(
             new_elements,
-            path=self.path,
-            distinct=self.distinct)
+            distinct=self.distinct,
+            sort_key=self.sort_key,
+            source_to_metadata_dict=self.source_to_metadata_dict)
 
     def filter(self, filter_fn):
         return self.clone_with_new_elements([
