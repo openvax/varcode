@@ -4,7 +4,7 @@ from nose.tools import eq_
 
 from varcode import load_vcf, load_vcf_fast, Variant, Substitution
 from pyensembl import Genome, EnsemblRelease, MAX_ENSEMBL_RELEASE
-from . import data_path
+from .data import data_path
 
 MOUSE_ENSEMBL_RELEASE = MAX_ENSEMBL_RELEASE
 SERVER = "ftp://ftp.ensembl.org"

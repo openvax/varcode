@@ -21,7 +21,7 @@ from varcode import Collection
 def test_collection_len():
     collection = Collection([1, 2, 3])
     assert len(collection) == 3
-    collection = Collection([])
+    collection = Collection([], element_type=int)
     assert len(collection) == 0
 
 def test_collection_eq():
@@ -48,4 +48,3 @@ def test_groupby():
     groups = collection.groupby(lambda x: x[0])
     eq_(len(groups), 2)
     eq_(set(groups.keys()), {"a", "b"})
-

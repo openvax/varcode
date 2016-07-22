@@ -21,7 +21,7 @@ from varcode import (
 )
 import pandas as pd
 
-from . import data_path
+from .data import data_path
 
 def validate_transcript_mutation(
         ensembl_transcript_id,

@@ -36,7 +36,7 @@ class Collection(Serializable):
     def __init__(
             self,
             elements,
-            element_type,
+            element_type=None,
             distinct=False,
             sort_key=None,
             source_to_metadata_dict={}):
@@ -61,8 +61,17 @@ class Collection(Serializable):
             metadata attributes. This nested dictionary has a type signature
             of source->element->attribute-value.
         """
+        if element_type is None:
+            # attempt to infer element type if none is explicitly given
+            types = set(type(x) for x in elements)
+            if len(types) != 1:
+                raise ValueError(
+                    "Could not determine unique type for elements of %s" % elements)
+            element_type = list(types)[0]
+        else:
+            require_iterable_of(elements, element_type)
+
         self.element_type = element_type
-        require_iterable_of(elements, element_type)
         self.distinct = distinct
         if distinct:
             elements = set(elements)
