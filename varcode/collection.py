@@ -24,8 +24,6 @@ from serializable import (
     function_from_serializable_representation,
     object_to_serializable_representation,
     object_from_serializable_representation,
-    class_to_serializable_representation,
-    class_from_serializable_representation
 )
 
 class Collection(Serializable):
@@ -71,7 +69,6 @@ class Collection(Serializable):
         else:
             require_iterable_of(elements, element_type)
 
-        self.element_type = element_type
         self.distinct = distinct
         if distinct:
             elements = set(elements)
@@ -85,7 +82,6 @@ class Collection(Serializable):
                 object_to_serializable_representation(element)
                 for element in self.elements
             ],
-            element_type=class_to_serializable_representation(self.element_type),
             distinct=self.distinct,
             sort_key=function_to_serializable_representation(self.sort_key),
             source_to_metadata_dict=self.source_to_metadata_dict)
@@ -96,8 +92,6 @@ class Collection(Serializable):
             object_from_serializable_representation(obj_repr)
             for obj_repr in state_dict["elements"]
         ]
-        state_dict["element_type"] = class_from_serializable_representation(
-            state_dict["element_type"])
         state_dict["sort_key"] = function_from_serializable_representation(
             state_dict["sort_key"])
         return state_dict

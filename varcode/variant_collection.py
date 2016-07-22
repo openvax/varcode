@@ -56,6 +56,22 @@ class VariantCollection(Collection):
             sort_key=sort_key,
             source_to_metadata_dict=source_to_metadata_dict)
 
+    def to_dict(self):
+        """
+        Since Collection.to_dict() returns a state dictionary with an
+        'elements' field we have to rename it to 'variants'.
+        """
+        state_dict = Collection.to_dict(self)
+        state_dict["variants"] = state_dict.pop("elements")
+        return state_dict
+
+    @classmethod
+    def _reconstruct_nested_objects(cls, state_dict):
+        state_dict["elements"] = state_dict.pop("variants")
+        state_dict = Collection._reconstruct_nested_objects(state_dict)
+        state_dict["variants"] = state_dict.pop("elements")
+        return state_dict
+
     def effects(self, raise_on_error=True):
         """
         Parameters

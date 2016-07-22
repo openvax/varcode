@@ -37,6 +37,22 @@ class EffectCollection(Collection):
             element_type=MutationEffect,
             **kwargs)
 
+    def to_dict(self):
+        """
+        Since Collection.to_dict() returns a state dictionary with an
+        'elements' field we have to rename it to 'effects'.
+        """
+        state_dict = Collection.to_dict(self)
+        state_dict["effects"] = state_dict.pop("elements")
+        return state_dict
+
+    @classmethod
+    def _reconstruct_nested_objects(cls, state_dict):
+        state_dict["elements"] = state_dict.pop("effects")
+        state_dict = Collection._reconstruct_nested_objects(state_dict)
+        state_dict["effects"] = state_dict.pop("elements")
+        return state_dict
+
     def groupby_variant(self):
         return self.groupby(key_fn=lambda effect: effect.variant)
 
