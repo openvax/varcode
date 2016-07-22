@@ -16,8 +16,6 @@ from __future__ import print_function, division, absolute_import
 from collections import Counter, OrderedDict
 import pandas as pd
 
-from typechecks import require_iterable_of
-
 from .collection import Collection
 from .effects import MutationEffect
 from .effect_ordering import (
@@ -32,30 +30,12 @@ class EffectCollection(Collection):
     Collection of MutationEffect objects and helpers for grouping or filtering
     them.
     """
-
-    def __init__(
-            self,
-            effects,
-            distinct=False,
-            sort_key=None):
-        """Construct an EffectCollection from a sequence of MutationEffects.
-
-        Parameters
-        ----------
-        effects : iterable
-            MutationEffect objects
-
-        distinct : bool
-            Don't keep repeated effects
-
-        sort_key : callable
-        """
-        require_iterable_of(effects, MutationEffect)
+    def __init__(self, effects, **kwargs):
         Collection.__init__(
             self,
             elements=effects,
-            distinct=distinct,
-            sort_key=sort_key)
+            element_type=MutationEffect,
+            **kwargs)
 
     def groupby_variant(self):
         return self.groupby(key_fn=lambda effect: effect.variant)

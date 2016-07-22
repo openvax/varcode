@@ -14,7 +14,6 @@
 
 from __future__ import print_function, division, absolute_import
 import logging
-import json
 
 from Bio.Seq import reverse_complement
 
@@ -27,7 +26,13 @@ from pyensembl import (
 )
 from pyensembl.locus import normalize_chromosome
 from pyensembl.biotypes import is_coding_biotype
+from serializable import (
+    Serializable,
+    object_to_serializable_representation,
+    object_from_serializable_representation,
+)
 from typechecks import require_instance
+
 
 from .coding_effect import coding_effect
 from .common import groupby_field
@@ -58,7 +63,7 @@ from .string_helpers import trim_shared_flanking_strings
 from .transcript_helpers import interval_offset_on_transcript
 
 
-class Variant(object):
+class Variant(Serializable):
     __slots__ = (
         "contig",
         "start",
@@ -66,6 +71,8 @@ class Variant(object):
         "ref",
         "alt",
         "ensembl",
+        "normalize_contig_name",
+        "allow_extended_nucleotides",
         "original_ref",
         "original_alt",
         "original_start",
@@ -127,6 +134,10 @@ class Variant(object):
             raise TypeError(
                 ("Expected ensembl to be an int, string, or pyensembl.Genome "
                  "instance, got %s : %s") % (type(ensembl), str(ensembl)))
+
+        self.normalize_contig_name = normalize_contig_name
+        self.allow_extended_nucleotides = allow_extended_nucleotides
+
         if normalize_contig_name:
             self.contig = normalize_chromosome(contig)
         else:
@@ -229,52 +240,24 @@ class Variant(object):
             self.alt == other.alt and
             self.ensembl == other.ensembl)
 
-    def __getstate__(self):
-        # When pickle.load'ing, we want the original values vs. the normalized values.
-        # Normalization will happen upon object creation.
-        return [
-            self.contig,
-            self.original_start,
-            self.original_ref,
-            self.original_alt,
-            self.ensembl.release
-        ]
-
-    def __setstate__(self, fields):
-        # Special logic needed for JSON serialization, since EnsemblRelease
-        # is not JSON serializable.
-        # TODO: this does not work for Genome objects; only EnsemblRelease.
-        ensembl = cached_release(fields.pop())
-        fields.append(ensembl)
-
-        self.__init__(*fields)
-
-    def to_json(self):
+    def to_dict(self):
         """
-        Serialize to JSON.
-
-        Returns
-        ----------
-        String giving the Variant instance serialized in JSON format.
-
+        We want the original values (un-normalized) field values while
+        serializing since normalization will happen in __init__.
         """
-        return json.dumps(self.__getstate__())
+        return dict(
+            contig=self.contig,
+            start=self.original_start,
+            ref=self.original_ref,
+            alt=self.original_alt,
+            ensembl=object_to_serializable_representation(self.ensembl),
+            allow_extended_nucleotides=self.allow_extended_nucleotides,
+            normalize_contig_name=self.normalize_contig_name)
 
     @classmethod
-    def from_dict(cls, state):
-        """
-        Unserialize a Variant encoded as a Python dict.
-        """
-        instance = cls.__new__(cls)
-        instance.__setstate__(state)
-        return instance
-
-    @classmethod
-    def from_json(cls, serialized):
-        """
-        Unserialize a Variant encoded as a string of JSON.
-        """
-        return Variant.from_dict(json.loads(serialized))
+    def _reconstruct_nested_objects(cls, state_dict):
+        state_dict["ensembl"] = object_from_serializable_representation(state_dict["ensembl"])
+        return state_dict
 
     @property
     def short_description(self):
@@ -282,26 +265,29 @@ class Variant(object):
         HGVS nomenclature for genomic variants
         More info: http://www.hgvs.org/mutnomen/
         """
-        if self.ref == self.alt:
-            # no change
-            return "chr%s g.%d%s" % (
-                self.contig, self.start, self.ref)
-        elif len(self.ref) == 0:
-            # insertions
+        if self.is_insertion:
             return "chr%s g.%d_%dins%s" % (
                 self.contig,
                 self.start,
                 self.start + 1,
                 self.alt)
-        elif len(self.alt) == 0:
-            # deletion
+        elif self.is_deletion:
             return "chr%s g.%d_%ddel%s" % (
-                self.contig, self.start, self.end, self.ref)
+                self.contig,
+                self.start,
+                self.end,
+                self.ref)
+        elif self.ref == self.alt:
+            return "chr%s g.%d%s" % (self.contig, self.start, self.ref)
         else:
             # substitution
             return "chr%s g.%d%s>%s" % (
-                self.contig, self.start, self.ref, self.alt)
+                self.contig,
+                self.start,
+                self.ref,
+                self.alt)
 
+    @property
     def transcripts(self):
         if self._transcripts is None:
             self._transcripts = self.ensembl.transcripts_at_locus(
@@ -327,6 +313,7 @@ class Variant(object):
     def transcript_names(self):
         return [transcript.name for transcript in self.transcripts]
 
+    @property
     def genes(self):
         """
         Return Gene object for all genes which overlap this variant.
@@ -730,9 +717,10 @@ class Variant(object):
         """Is this variant a pyrimidine to purine change or vice versa"""
         return self.is_snv and is_purine(self.ref) != is_purine(self.alt)
 
-    def ascending_position_sort_key(self):
-        """
-        Sort key function used to sort variants in ascending order by
-        chromosomal position.
-        """
-        return (self.contig, self.start)
+
+def variant_ascending_position_sort_key(variant):
+    """
+    Sort key function used to sort variants in ascending order by
+    chromosomal position.
+    """
+    return (variant.contig, variant.start)

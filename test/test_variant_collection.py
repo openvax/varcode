@@ -72,9 +72,8 @@ def test_serialization():
             Variant(10, start=15, ref="A", alt="G"),
             Variant(20, start=150, ref="", alt="G"),
         ],
-        source_to_metadata={
-            "": {"a": "b", "bar": 2}
-        })
+        source_to_metadata_dict={"test_data": {"a": "b", "bar": 2}},
+    )
 
     # This causes the variants' ensembl objects to make a SQL connection,
     # which makes the ensembl object non-serializable. By calling this

@@ -16,7 +16,19 @@ from __future__ import print_function, division, absolute_import
 import os.path
 from collections import defaultdict
 
-class Collection(object):
+from typechecks import require_iterable_of
+
+from serializable import (
+    Serializable,
+    function_to_serializable_representation,
+    function_from_serializable_representation,
+    object_to_serializable_representation,
+    object_from_serializable_representation,
+    class_to_serializable_representation,
+    class_from_serializable_representation
+)
+
+class Collection(Serializable):
     """
     Methods shared by EffectCollection and VariantCollection.
     """
@@ -24,6 +36,7 @@ class Collection(object):
     def __init__(
             self,
             elements,
+            element_type,
             distinct=False,
             sort_key=None,
             source_to_metadata_dict={}):
@@ -32,6 +45,9 @@ class Collection(object):
         ----------
         elements : list
             Collection of any class which  is compatible with the sort key
+
+        element_type : type
+            Expected type for each element.
 
         distinct : bool
             Only keep distinct entries or allow duplicates.
@@ -45,12 +61,37 @@ class Collection(object):
             metadata attributes. This nested dictionary has a type signature
             of source->element->attribute-value.
         """
+        self.element_type = element_type
+        require_iterable_of(elements, element_type)
         self.distinct = distinct
         if distinct:
             elements = set(elements)
         self.sort_key = sort_key
         self.elements = sorted(elements, key=sort_key)
         self.source_to_metadata_dict = source_to_metadata_dict
+
+    def to_dict(self):
+        return dict(
+            elements=[
+                object_to_serializable_representation(element)
+                for element in self.elements
+            ],
+            element_type=class_to_serializable_representation(self.element_type),
+            distinct=self.distinct,
+            sort_key=function_to_serializable_representation(self.sort_key),
+            source_to_metadata_dict=self.source_to_metadata_dict)
+
+    @classmethod
+    def _reconstruct_nested_objects(cls, state_dict):
+        state_dict["elements"] = [
+            object_from_serializable_representation(obj_repr)
+            for obj_repr in state_dict["elements"]
+        ]
+        state_dict["element_type"] = class_from_serializable_representation(
+            state_dict["element_type"])
+        state_dict["sort_key"] = function_from_serializable_representation(
+            state_dict["sort_key"])
+        return state_dict
 
     @property
     def sources(self):
@@ -144,9 +185,6 @@ class Collection(object):
 
     def __str__(self):
         return self.to_string(limit=50)
-
-    def __repr__(self):
-        return str(self)
 
     def __len__(self):
         return len(self.elements)

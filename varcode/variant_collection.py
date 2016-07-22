@@ -13,23 +13,23 @@
 # limitations under the License.
 
 from __future__ import print_function, division, absolute_import
-import json
+
 from collections import Counter, defaultdict
 
-from typechecks import require_iterable_of
 import pandas as pd
 
 from .collection import Collection
 from .effect_collection import EffectCollection
 from .common import memoize
-from .variant import Variant
+from .variant import Variant, variant_ascending_position_sort_key
+
 
 class VariantCollection(Collection):
     def __init__(
             self,
             variants,
             distinct=True,
-            sort_key=None,
+            sort_key=variant_ascending_position_sort_key,
             source_to_metadata_dict={}):
         """
         Construct a VariantCollection from a list of Variant records.
@@ -48,15 +48,10 @@ class VariantCollection(Collection):
             Dictionary mapping each source name (e.g. VCF path) to a dictionary
             from metadata attributes to values.
         """
-        require_iterable_of(variants, Variant)
-
-        if sort_key is None:
-            # pylint: disable=function-redefined
-            sort_key = Variant.ascending_position_sort_key
-
         Collection.__init__(
             self,
             elements=variants,
+            element_type=Variant,
             distinct=distinct,
             sort_key=sort_key,
             source_to_metadata_dict=source_to_metadata_dict)
@@ -134,9 +129,9 @@ class VariantCollection(Collection):
         """
         return self.__class__(
             new_elements,
-            sources=self.sources,
+            source_to_metadata_dict=self.source_to_metadata_dict,
             distinct=self.distinct,
-            metadata=self.metadata)
+            sort_key=self.sort_key)
 
     def filter_by_transcript_expression(
             self,
@@ -183,63 +178,6 @@ class VariantCollection(Collection):
             multi_key_fn=lambda effect: effect.gene_ids,
             value_dict=gene_expression_dict,
             threshold=min_expression_value)
-
-    def to_json(self):
-        """
-        Returns a string giving this variant collection serialized in JSON
-        format.
-        """
-        return json.dumps(self.__getstate__())
-
-    def write_json_file(self, path):
-        """
-        Serialize this VariantCollection to a JSON representation and write it
-        out to a text file.
-        """
-        with open(path, "w") as f:
-            f.write(self.to_json())
-
-    @classmethod
-    def from_dict(cls, state):
-        """
-        Deserialize a VariantCollection encoded as a Python dict.
-        """
-        instance = cls.__new__(cls)
-        instance.__setstate__(state)
-        return instance
-
-    @classmethod
-    def from_json(cls, serialized):
-        """
-        Construct a VariantCollection from a JSON string.
-        """
-        return cls.from_dict(json.loads(serialized))
-
-    @classmethod
-    def read_json_file(cls, path):
-        """
-        Construct a VariantCollection from a JSON file.
-        """
-        with open(path, 'r') as f:
-            json_string = f.read()
-        return cls.from_json(json_string)
-
-    def __getstate__(self):
-        result = dict(self.__dict__)
-        result['elements'] = [
-            (e.__getstate__(), self.metadata.get(e)) for e in self]
-        del result['metadata']
-        return result
-
-    def __setstate__(self, state):
-        self.elements = []
-        self.metadata = {}
-        for (variant_data, meta_entry) in state.pop('elements'):
-            variant = Variant.from_dict(variant_data)
-            self.elements.append(variant)
-            if meta_entry is not None:
-                self.metadata[variant] = meta_entry
-        self.__dict__.update(state)
 
     def exactly_equal(self, other):
         '''
