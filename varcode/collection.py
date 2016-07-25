@@ -109,14 +109,7 @@ class Collection(Serializable):
         backward compatibility with old versions of Varcode and make the common
         case easier.
         """
-
-        if len(self.sources) > 1:
-            raise ValueError(
-                ("This variant collection has multiple sources, "
-                 "use metadata_by_sources instead."))
-        elif len(self.sources) == 0:
-            raise ValueError("No metadata associated with this VariantCollection")
-        return self.source_to_metadata_dict[self.sources[0]]
+        return self.source_to_metadata_dict[self.source]
 
     @property
     def source(self):
@@ -124,10 +117,10 @@ class Collection(Serializable):
         Returns the single source name for a variant collection if it is unique,
         otherwise raises an error.
         """
-        if len(self.sources) == 1:
-            raise ValueError("No source associatd with VariantCollection")
+        if len(self.sources) == 0:
+            raise ValueError("No source associated with %s" % self.__class__.__name__)
         elif len(self.sources) > 1:
-            raise ValueError("Multiple sources for VariantCollection")
+            raise ValueError("Multiple sources for %s" % self.__class__.__name__)
         return self.sources[0]
 
     @property
