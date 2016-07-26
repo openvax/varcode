@@ -98,8 +98,8 @@ def make_variants_parser(**kwargs):
 def variant_collection_from_args(args, required=True):
     variant_collections = []
 
-    if args.reference_name:
-        genome = genome_for_reference_name(args.reference_name)
+    if args.genome:
+        genome = genome_for_reference_name(args.genome)
     else:
         # no genome specified, assume it can be inferred from the file(s)
         # we're loading
