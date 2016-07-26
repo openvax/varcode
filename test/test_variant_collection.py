@@ -65,15 +65,17 @@ def test_gene_counts():
     # eq_(coding_gene_counts, expected_counts)
 
 def test_serialization():
+    variant_list = [
+        Variant(
+            1, start=10, ref="AA", alt="AAT", ensembl=77),
+        Variant(10, start=15, ref="A", alt="G"),
+        Variant(20, start=150, ref="", alt="G"),
+    ]
     original = VariantCollection(
-        [
-            Variant(
-                1, start=10, ref="AA", alt="AAT", ensembl=77),
-            Variant(10, start=15, ref="A", alt="G"),
-            Variant(20, start=150, ref="", alt="G"),
-        ],
-        source_to_metadata_dict={"test_data": {"a": "b", "bar": 2}},
-    )
+        variant_list,
+        source_to_metadata_dict={
+            "test_data":
+                {variant: {"a": "b", "bar": 2} for variant in variant_list}})
 
     # This causes the variants' ensembl objects to make a SQL connection,
     # which makes the ensembl object non-serializable. By calling this

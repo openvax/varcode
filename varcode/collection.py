@@ -18,13 +18,8 @@ from collections import defaultdict
 
 from typechecks import require_iterable_of
 
-from serializable import (
-    Serializable,
-    function_to_serializable_representation,
-    function_from_serializable_representation,
-    object_to_serializable_representation,
-    object_from_serializable_representation,
-)
+from serializable import Serializable
+
 
 class Collection(Serializable):
     """
@@ -78,23 +73,10 @@ class Collection(Serializable):
 
     def to_dict(self):
         return dict(
-            elements=[
-                object_to_serializable_representation(element)
-                for element in self.elements
-            ],
+            elements=self.elements,
             distinct=self.distinct,
-            sort_key=function_to_serializable_representation(self.sort_key),
+            sort_key=self.sort_key,
             source_to_metadata_dict=self.source_to_metadata_dict)
-
-    @classmethod
-    def _reconstruct_nested_objects(cls, state_dict):
-        state_dict["elements"] = [
-            object_from_serializable_representation(obj_repr)
-            for obj_repr in state_dict["elements"]
-        ]
-        state_dict["sort_key"] = function_from_serializable_representation(
-            state_dict["sort_key"])
-        return state_dict
 
     @property
     def sources(self):

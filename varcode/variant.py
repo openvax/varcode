@@ -26,11 +26,7 @@ from pyensembl import (
 )
 from pyensembl.locus import normalize_chromosome
 from pyensembl.biotypes import is_coding_biotype
-from serializable import (
-    Serializable,
-    object_to_serializable_representation,
-    object_from_serializable_representation,
-)
+from serializable import Serializable
 from typechecks import require_instance
 
 
@@ -250,14 +246,9 @@ class Variant(Serializable):
             start=self.original_start,
             ref=self.original_ref,
             alt=self.original_alt,
-            ensembl=object_to_serializable_representation(self.ensembl),
+            ensembl=self.ensembl,
             allow_extended_nucleotides=self.allow_extended_nucleotides,
             normalize_contig_name=self.normalize_contig_name)
-
-    @classmethod
-    def _reconstruct_nested_objects(cls, state_dict):
-        state_dict["ensembl"] = object_from_serializable_representation(state_dict["ensembl"])
-        return state_dict
 
     @property
     def short_description(self):

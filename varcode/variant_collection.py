@@ -65,13 +65,6 @@ class VariantCollection(Collection):
         state_dict["variants"] = state_dict.pop("elements")
         return state_dict
 
-    @classmethod
-    def _reconstruct_nested_objects(cls, state_dict):
-        state_dict["elements"] = state_dict.pop("variants")
-        state_dict = Collection._reconstruct_nested_objects(state_dict)
-        state_dict["variants"] = state_dict.pop("elements")
-        return state_dict
-
     def effects(self, raise_on_error=True):
         """
         Parameters

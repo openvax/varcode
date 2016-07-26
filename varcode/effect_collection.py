@@ -46,13 +46,6 @@ class EffectCollection(Collection):
         state_dict["effects"] = state_dict.pop("elements")
         return state_dict
 
-    @classmethod
-    def _reconstruct_nested_objects(cls, state_dict):
-        state_dict["elements"] = state_dict.pop("effects")
-        state_dict = Collection._reconstruct_nested_objects(state_dict)
-        state_dict["effects"] = state_dict.pop("elements")
-        return state_dict
-
     def groupby_variant(self):
         return self.groupby(key_fn=lambda effect: effect.variant)
 
