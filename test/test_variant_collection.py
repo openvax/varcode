@@ -93,16 +93,22 @@ def test_serialization():
     # the ensembl object.
     original.effects()
 
-    # Test pickling.
-    serialized = pickle.dumps(original)
-    reconstituted = pickle.loads(serialized)
-    eq_(original, reconstituted)
-    eq_(reconstituted[0], original[0])
-    eq_(reconstituted.metadata[original[0]], original.metadata[original[0]])
+    original_first_variant = original[0]
+    original_metadata = original.metadata
 
-    # Test json.
-    serialized = original.to_json()
-    reconstituted = VariantCollection.from_json(serialized)
-    eq_(original, reconstituted)
-    eq_(reconstituted[0], original[0])
-    eq_(reconstituted.metadata[original[0]], original.metadata[original[0]])
+    # Test pickling
+    reconstructed = pickle.loads(pickle.dumps(original))
+    eq_(original, reconstructed)
+    eq_(reconstructed[0], original_first_variant)
+    eq_(reconstructed.metadata[original_first_variant],
+        original_metadata[original_first_variant])
+
+    # Test JSON serialization
+    variants_from_json = VariantCollection.from_json(original.to_json())
+    eq_(original, variants_from_json)
+
+    eq_(variants_from_json[0], original_first_variant)
+
+    # pylint: disable=no-member
+    eq_(variants_from_json.metadata[original_first_variant],
+        original_metadata[original_first_variant])

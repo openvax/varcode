@@ -136,7 +136,7 @@ def variant_collection_from_args(args, required=True):
     if required and len(variant_collections) == 0:
         raise ValueError(
             "No variants loaded (use --maf, --vcf, --variant, or --json-variants options)")
-
+    # pylint: disable=no-value-for-parameter
     return VariantCollection.union(*variant_collections)
 
 def main(args_list=None):
