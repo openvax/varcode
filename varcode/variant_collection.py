@@ -217,43 +217,66 @@ class VariantCollection(Collection):
         combined_dictionary = {}
         for source_to_metadata_dict in dictionaries:
             for source_name, variant_to_metadata_dict in source_to_metadata_dict.items():
-                if source_name not in combined_dictionary:
-                    combined_dictionary[source_name] = {}
+                combined_dictionary.setdefault(source_name, {})
                 combined_source_dict = combined_dictionary[source_name]
                 for variant, metadata_dict in variant_to_metadata_dict.items():
-                    if variant not in combined_source_dict:
-                        combined_source_dict[variant] = {}
+                    combined_source_dict.setdefault(variant, {})
                     combined_source_dict[variant].update(metadata_dict)
         return combined_dictionary
 
     @classmethod
     def _combine_variant_collections(cls, combine_fn, variant_collections, kwargs):
-        combined_variants = combine_fn(*[set(vc) for vc in variant_collections])
-        combined_metadata = cls._merge_metadata_dictionaries(
-            dictionaries=[vc.source_to_metadata_dict for vc in variant_collections])
-        return cls(
-            variants=combined_variants,
-            source_to_metadata_dict=combined_metadata,
-            **kwargs)
+        """
+        Create a single VariantCollection from multiple different collections.
 
-    @classmethod
-    def union(cls, *variant_collections, **kwargs):
+        Parameters
+        ----------
+
+        cls : class
+            Should be VariantCollection
+
+        combine_fn : function
+            Function which takes any number of sets of variants and returns
+            some combination of them (typically union or intersection).
+
+        variant_collections : tuple of VariantCollection
+
+        kwargs : dict
+            Optional dictionary of keyword arguments to pass to the initializer
+            for VariantCollection.
+        """
+        kwargs["variants"] = combine_fn(*[set(vc) for vc in variant_collections])
+        kwargs["source_to_metadata_dict"] = cls._merge_metadata_dictionaries(
+            [vc.source_to_metadata_dict for vc in variant_collections])
+        for key, value in variant_collections[0].to_dict().items():
+            # If some optional parameter isn't explicitly specified as an
+            # argument to union() or intersection() then use the same value
+            # as the first VariantCollection.
+            #
+            # I'm doing this so that the meaning of VariantCollection.union
+            # and VariantCollection.intersection with a single argument is
+            # the identity function (rather than setting optional parameters
+            # to their default values.
+            if key not in kwargs:
+                kwargs[key] = value
+        return cls(**kwargs)
+
+    def union(self, *others, **kwargs):
         """
         Returns the union of variants in a several VariantCollection objects.
         """
-        return cls._combine_variant_collections(
+        return self._combine_variant_collections(
             combine_fn=set.union,
-            variant_collections=variant_collections,
+            variant_collections=(self,) + others,
             kwargs=kwargs)
 
-    @classmethod
-    def intersection(cls, *variant_collections, **kwargs):
+    def intersection(self, *others, **kwargs):
         """
         Returns the intersection of variants in several VariantCollection objects.
         """
-        return cls._combine_variant_collections(
+        return self._combine_variant_collections(
             combine_fn=set.intersection,
-            variant_collections=variant_collections,
+            variant_collections=(self,) + others,
             kwargs=kwargs)
 
     def to_dataframe(self):
@@ -261,7 +284,7 @@ class VariantCollection(Collection):
         def row_from_variant(variant):
             return {
                 "chr": variant.contig,
-                "start": variant.original_pos,
+                "start": variant.original_start,
                 "ref": variant.original_ref,
                 "alt": variant.original_alt,
                 "gene_name": ";".join(variant.gene_names),

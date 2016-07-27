@@ -130,16 +130,14 @@ def variant_collection_from_args(args, required=True):
 
     for json_path in args.json_variants:
         with open(json_path, 'r') as f:
-            json_string = f.read()
             variant_collections.append(
-                VariantCollection.from_json(json_string))
+                VariantCollection.from_json(f.read()))
+
     if required and len(variant_collections) == 0:
         raise ValueError(
             "No variants loaded (use --maf, --vcf, --variant, or --json-variants options)")
-    elif len(variant_collections) == 1:
-        return variant_collections[0]
-    else:
-        return VariantCollection.union(variant_collections)
+
+    return VariantCollection.union(*variant_collections)
 
 def main(args_list=None):
     """
@@ -160,6 +158,5 @@ def main(args_list=None):
     arg_parser.add_argument("--output-csv", help="Output path to CSV")
     args = arg_parser.parse_args(args_list)
     variants = variant_collection_from_args(args)
-    print(variants)
     if args.output_csv:
         variants.to_dataframe().to_csv(args.output_csv)
