@@ -80,7 +80,7 @@ class Collection(Serializable):
 
     @property
     def sources(self):
-        return list(sorted(self.source_to_metadata_dict.keys()))
+        return set(self.source_to_metadata_dict.keys())
 
     @property
     def metadata(self):
@@ -103,7 +103,7 @@ class Collection(Serializable):
             raise ValueError("No source associated with %s" % self.__class__.__name__)
         elif len(self.sources) > 1:
             raise ValueError("Multiple sources for %s" % self.__class__.__name__)
-        return self.sources[0]
+        return list(self.sources)[0]
 
     @property
     def path(self):

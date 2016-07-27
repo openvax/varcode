@@ -26,6 +26,16 @@ from .data import ov_wustle_variants, tcga_ov_variants
 
 from varcode import VariantCollection, Variant
 
+def test_variant_collection_union():
+    combined = ov_wustle_variants.union(tcga_ov_variants)
+    eq_(set(combined.sources), {ov_wustle_variants.source, tcga_ov_variants.source})
+    eq_(len(combined), len(ov_wustle_variants) + len(tcga_ov_variants))
+
+def test_variant_collection_intersection():
+    combined = ov_wustle_variants.intersection(tcga_ov_variants)
+    eq_(set(combined.sources), {ov_wustle_variants.source, tcga_ov_variants.source})
+    eq_(len(combined), 0)
+
 def test_reference_names():
     eq_(ov_wustle_variants.reference_names(), {"GRCh37"})
 
