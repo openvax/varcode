@@ -1,4 +1,4 @@
-from varcode.cli.variants import main as varcode_variants_main
+from varcode.cli.variants_script import main as run_script
 from .data import ov_wustle_variants, db_snp_variants
 
 from tempfile import NamedTemporaryFile
@@ -19,7 +19,7 @@ def test_varcode_variants_script():
         commandline_args.append(str(variant.original_alt))
     with NamedTemporaryFile(mode="r+", delete=True) as f:
         commandline_args.extend(["--output-csv", f.name])
-        varcode_variants_main(commandline_args)
+        run_script(commandline_args)
         f.flush()
         combined_variants = pd.read_csv(f.name)
         assert len(combined_variants) == (len(ov_wustle_variants) + len(db_snp_variants))

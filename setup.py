@@ -74,6 +74,6 @@ if __name__ == '__main__':
         ],
         entry_points={
             'console_scripts': [
-                'varcode-variants = varcode.cli.variants:main'
+                'varcode-variants = varcode.cli.variants_script:main'
             ]
         })

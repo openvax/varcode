@@ -14,7 +14,6 @@
 
 from __future__ import print_function, division, absolute_import
 from argparse import ArgumentParser
-import sys
 
 from pyensembl import genome_for_reference_name
 
@@ -138,27 +137,3 @@ def variant_collection_from_args(args, required=True):
             "No variants loaded (use --maf, --vcf, --variant, or --json-variants options)")
     # pylint: disable=no-value-for-parameter
     return VariantCollection.union(*variant_collections)
-
-def main(args_list=None):
-    """
-    Script which loads variants and annotates them with  overlapping genes.
-
-    Example usage:
-        varcode-variants
-            --vcf mutect.vcf \
-            --vcf strelka.vcf \
-            --maf tcga_brca.maf \
-            --variant chr1 498584 C G \
-            --json-variants more_variants.json
-    """
-    if args_list is None:
-        args_list = sys.argv[1:]
-    arg_parser = make_variants_parser(
-        description="Annotate variants with overlapping gene names")
-    arg_parser.add_argument("--output-csv", help="Output path to CSV")
-    args = arg_parser.parse_args(args_list)
-    variants = variant_collection_from_args(args)
-    variants_dataframe = variants.to_dataframe()
-    print(variants_dataframe)
-    if args.output_csv:
-        variants_dataframe.to_csv(args.output_csv, index=False)
