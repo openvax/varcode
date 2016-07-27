@@ -158,6 +158,7 @@ def main(args_list=None):
     arg_parser.add_argument("--output-csv", help="Output path to CSV")
     args = arg_parser.parse_args(args_list)
     variants = variant_collection_from_args(args)
-    print(variants)
+    variants_dataframe = variants.to_dataframe()
+    print(variants_dataframe)
     if args.output_csv:
-        variants.to_dataframe().to_csv(args.output_csv)
+        variants_dataframe.to_csv(args.output_csv)
