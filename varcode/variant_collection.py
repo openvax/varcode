@@ -14,7 +14,7 @@
 
 from __future__ import print_function, division, absolute_import
 
-from collections import Counter
+from collections import Counter, OrderedDict
 
 import pandas as pd
 
@@ -281,13 +281,18 @@ class VariantCollection(Collection):
 
     def to_dataframe(self):
         """Build a DataFrame from this variant collection"""
+
         def row_from_variant(variant):
-            return {
-                "chr": variant.contig,
-                "start": variant.original_start,
-                "ref": variant.original_ref,
-                "alt": variant.original_alt,
-                "gene_name": ";".join(variant.gene_names),
-                "gene_id": ";".join(variant.gene_ids)
-            }
-        return pd.DataFrame.from_records([row_from_variant(v) for v in self])
+            return OrderedDict([
+                ("chr", variant.contig),
+                ("start", variant.original_start),
+                ("ref", variant.original_ref),
+                ("alt", variant.original_alt),
+                ("gene_name", ";".join(variant.gene_names)),
+                ("gene_id", ";".join(variant.gene_ids))
+            ])
+        rows = [row_from_variant(v) for v in self]
+        if len(rows) == 0:
+            # TODO: return a DataFrame with the appropriate columns
+            return pd.DataFrame()
+        return pd.DataFrame.from_records(rows, columns=rows[0].keys())
