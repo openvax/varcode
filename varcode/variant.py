@@ -69,6 +69,7 @@ class Variant(Serializable):
         "ensembl",
         "normalize_contig_name",
         "allow_extended_nucleotides",
+        "original_contig",
         "original_ref",
         "original_alt",
         "original_start",
@@ -133,14 +134,10 @@ class Variant(Serializable):
 
         self.normalize_contig_name = normalize_contig_name
         self.allow_extended_nucleotides = allow_extended_nucleotides
+        self.original_contig = contig
+        self.contig = normalize_chromosome(contig) if normalize_contig_name else contig
 
-        if normalize_contig_name:
-            self.contig = normalize_chromosome(contig)
-        else:
-            self.contig = contig
-
-        if ref != alt and (ref in STANDARD_NUCLEOTIDES) and (
-                alt in STANDARD_NUCLEOTIDES):
+        if ref != alt and ref in STANDARD_NUCLEOTIDES and alt in STANDARD_NUCLEOTIDES:
             # Optimization for common case.
             self.original_ref = self.ref = ref
             self.original_alt = self.alt = alt
@@ -242,7 +239,7 @@ class Variant(Serializable):
         serializing since normalization will happen in __init__.
         """
         return dict(
-            contig=self.contig,
+            contig=self.original_contig,
             start=self.original_start,
             ref=self.original_ref,
             alt=self.original_alt,

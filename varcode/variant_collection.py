@@ -14,7 +14,7 @@
 
 from __future__ import print_function, division, absolute_import
 
-from collections import Counter, OrderedDict
+from collections import OrderedDict
 
 import pandas as pd
 
@@ -48,22 +48,50 @@ class VariantCollection(Collection):
             Dictionary mapping each source name (e.g. VCF path) to a dictionary
             from metadata attributes to values.
         """
+        self.source_to_metadata_dict = source_to_metadata_dict
+        self.variants = variants
         Collection.__init__(
             self,
             elements=variants,
             element_type=Variant,
             distinct=distinct,
             sort_key=sort_key,
-            source_to_metadata_dict=source_to_metadata_dict)
+            sources=set(source_to_metadata_dict.keys()))
+
+    @property
+    def metadata(self):
+        """
+        The most common usage of a VariantCollection is loading a single VCF,
+        in which case it's annoying to have to always specify that path
+        when accessing metadata fields. This property is meant to both maintain
+        backward compatibility with old versions of Varcode and make the common
+        case easier.
+        """
+        return self.source_to_metadata_dict[self.source]
 
     def to_dict(self):
         """
         Since Collection.to_dict() returns a state dictionary with an
         'elements' field we have to rename it to 'variants'.
         """
-        state_dict = Collection.to_dict(self)
-        state_dict["variants"] = state_dict.pop("elements")
-        return state_dict
+        return dict(
+            variants=self.variants,
+            distinct=self.distinct,
+            sort_key=self.sort_key,
+            source_to_metadata_dict=self.source_to_metadata_dict)
+
+    def clone_with_new_elements(self, new_elements):
+        """
+        Create another VariantCollection of the same class and with
+        same state (including metadata) but possibly different entries.
+
+        Warning: metadata is a dictionary keyed by variants. This method
+        leaves that dictionary as-is, which may result in extraneous entries
+        or missing entries.
+        """
+        state_dict = self.to_dict()
+        state_dict["variants"] = new_elements
+        return self.from_dict(state_dict)
 
     def effects(self, raise_on_error=True):
         """
@@ -80,16 +108,6 @@ class VariantCollection(Collection):
             for variant in self
             for effect in variant.effects(raise_on_error=raise_on_error)
         ])
-
-    def gene_counts(self):
-        """
-        Count how many variants overlap each gene name.
-        """
-        counter = Counter()
-        for variant in self:
-            for gene_name in variant.gene_names:
-                counter[gene_name] += 1
-        return counter
 
     @memoize
     def reference_names(self):
@@ -126,21 +144,6 @@ class VariantCollection(Collection):
         header = self.short_string()
         joined_lines = "\n".join(lines)
         return "%s\n%s" % (header, joined_lines)
-
-    def clone_with_new_elements(self, new_elements):
-        """
-        Create another VariantCollection of the same class and with
-        same state (including metadata) but possibly different entries.
-
-        Warning: metadata is a dictionary keyed by variants. This method
-        leaves that dictionary as-is, which may result in extraneous entries
-        or missing entries.
-        """
-        return self.__class__(
-            new_elements,
-            source_to_metadata_dict=self.source_to_metadata_dict,
-            distinct=self.distinct,
-            sort_key=self.sort_key)
 
     def filter_by_transcript_expression(
             self,

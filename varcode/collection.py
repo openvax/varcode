@@ -23,6 +23,7 @@ from serializable import Serializable
 
 class Collection(Serializable):
     """
+    Typed collection with grouping and filtering functions. A
     Methods shared by EffectCollection and VariantCollection.
     """
 
@@ -32,7 +33,7 @@ class Collection(Serializable):
             element_type=None,
             distinct=False,
             sort_key=None,
-            source_to_metadata_dict={}):
+            sources=set([])):
         """
         Parameters
         ----------
@@ -48,11 +49,8 @@ class Collection(Serializable):
         sort_key : fn
             Function which maps each element to a sorting criterion.
 
-        source_to_metadata_dict : dict
-            Dictionary mapping sources names (most often file paths) to
-            dictionaries from each element, each of which has a dictionary of
-            metadata attributes. This nested dictionary has a type signature
-            of source->element->attribute-value.
+        sources : set
+            Set of files from which this collection was generated.
         """
         if element_type is None:
             # attempt to infer element type if none is explicitly given
@@ -60,38 +58,38 @@ class Collection(Serializable):
             if len(types) != 1:
                 raise ValueError(
                     "Could not determine unique type for elements of %s" % elements)
-            element_type = list(types)[0]
+            self.element_type = list(types)[0]
         else:
-            require_iterable_of(elements, element_type)
-
+            self.element_type = element_type
+        require_iterable_of(elements, self.element_type)
         self.distinct = distinct
         if distinct:
             elements = set(elements)
         self.sort_key = sort_key
         self.elements = sorted(elements, key=sort_key)
-        self.source_to_metadata_dict = source_to_metadata_dict
+        self.sources = sources
 
     def to_dict(self):
+        if self.__class__ is not Collection:
+            raise ValueError(
+                "Derived class %s should implement own to_dict()" % (
+                    self.__class__.__name__,))
         return dict(
             elements=self.elements,
             distinct=self.distinct,
             sort_key=self.sort_key,
-            source_to_metadata_dict=self.source_to_metadata_dict)
+            sources=self.sources)
 
-    @property
-    def sources(self):
-        return set(self.source_to_metadata_dict.keys())
-
-    @property
-    def metadata(self):
-        """
-        The most common usage of a VariantCollection is loading a single VCF,
-        in which case it's annoying to have to always specify that path
-        when accessing metadata fields. This property is meant to both maintain
-        backward compatibility with old versions of Varcode and make the common
-        case easier.
-        """
-        return self.source_to_metadata_dict[self.source]
+    def clone_with_new_elements(self, new_elements):
+        if self.__class__ is not Collection:
+            raise ValueError(
+                "Derived class %s should implement own clone_with_new_elements()" % (
+                    self.__class__.__name__,))
+        return Collection(
+            new_elements,
+            distinct=self.distinct,
+            sort_key=self.sort_key,
+            sources=self.sources)
 
     @property
     def source(self):
@@ -119,7 +117,7 @@ class Collection(Serializable):
         Assuming sources are paths to VCF or MAF files, trim their directory
         path and return just the file names.
         """
-        return [os.path.split(source)[1] for source in self.sources if source]
+        return [os.path.basename(source) for source in self.sources if source]
 
     @property
     def filename(self):
@@ -184,17 +182,6 @@ class Collection(Serializable):
             len(self) == len(other) and
             all(x == y for (x, y) in zip(self, other)))
 
-    def clone_with_new_elements(self, new_elements):
-        """
-        Create another collection of the same class and with same state
-        but possibly different Variant or Effect entries.
-        """
-        return self.__class__(
-            new_elements,
-            distinct=self.distinct,
-            sort_key=self.sort_key,
-            source_to_metadata_dict=self.source_to_metadata_dict)
-
     def filter(self, filter_fn):
         return self.clone_with_new_elements([
             element
@@ -236,6 +223,18 @@ class Collection(Serializable):
             k: self.clone_with_new_elements(elements)
             for (k, elements)
             in result_dict.items()
+        }
+
+    def gene_counts(self):
+        """
+        Returns number of elements overlapping each gene name. Expects the
+        derived class (VariantCollection or EffectCollection) to have
+        an implementation of groupby_gene_name.
+        """
+        return {
+            gene_name: len(group)
+            for (gene_name, group)
+            in self.groupby_gene_name().items()
         }
 
     def filter_above_threshold(

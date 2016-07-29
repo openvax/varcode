@@ -28,102 +28,7 @@ from .reference import infer_genome
 from .variant import Variant
 from .variant_collection import VariantCollection
 
-
 def load_vcf(
-        path,
-        genome=None,
-        reference_vcf_key="reference",
-        only_passing=True,
-        allow_extended_nucleotides=False,
-        max_variants=None):
-    """
-    Load reference name and Variant objects from the given VCF filename.
-
-    This uses PyVCF to parse the file. It is slower than the pandas
-    implementation used in `load_vcf_fast`, but is better tested and more
-    robust.
-
-    Parameters
-    ----------
-
-    path : str or vcf.Reader
-        Path or URL to VCF (*.vcf) or compressed VCF (*.vcf.gz). Supported URL
-        schemes are "file", "http", "https", and "ftp". Can also be a pyvcf
-        Reader instance.
-
-    genome : {pyensembl.Genome, reference name, Ensembl version int}, optional
-        Optionally pass in a PyEnsembl Genome object, name of reference, or
-        PyEnsembl release version to specify the reference associated with a
-        VCF (otherwise infer reference from VCF using reference_vcf_key)
-
-    reference_vcf_key : str, optional
-        Name of metadata field which contains path to reference FASTA
-        file (default = 'reference')
-
-    only_passing : boolean, optional
-        If true, any entries whose FILTER field is not one of "." or "PASS" is
-        dropped.
-
-    allow_extended_nucleotides : boolean, default False
-        Allow characters other that A,C,T,G in the ref and alt strings.
-
-    max_variants : int, optional
-        If specified, return only the first max_variants variants.
-    """
-
-    variants = []
-    metadata = {}
-
-    handle = PyVCFReaderFromPathOrURL(path)
-    try:
-        genome = infer_genome_from_vcf(
-            genome,
-            handle.vcf_reader,
-            reference_vcf_key)
-
-        for record in handle.vcf_reader:
-            if only_passing and record.FILTER and record.FILTER != "PASS":
-                continue
-            info = sample_info = None
-            for (alt_num, alt) in enumerate(record.ALT):
-                # We ignore "no-call" variants, i.e. those where X.ALT = [None]
-                if not alt:
-                    continue
-                variant = Variant(
-                    contig=record.CHROM,
-                    start=record.POS,
-                    ref=record.REF,
-                    alt=alt.sequence,
-                    ensembl=genome,
-                    allow_extended_nucleotides=allow_extended_nucleotides)
-                variants.append(variant)
-                if info is None:
-                    info = dict(record.INFO)
-                if sample_info is None:
-                    sample_info = pyvcf_calls_to_sample_info_list(
-                        record.samples)
-
-                metadata[variant] = {
-                    "id": record.ID,
-                    "qual": record.QUAL,
-                    "filter": record.FILTER,
-                    "alt_allele_index": alt_num,
-                    "info": info,
-                    "sample_info": sample_info,
-                }
-                if max_variants and len(variants) > max_variants:
-                    raise StopIteration
-    except StopIteration:
-        pass
-    finally:
-        handle.close()
-
-    return VariantCollection(
-        variants=variants,
-        source_to_metadata_dict={path: metadata})
-
-
-def load_vcf_fast(
         path,
         genome=None,
         reference_vcf_key="reference",
@@ -241,6 +146,12 @@ def load_vcf_fast(
             'ensembl': genome,
             'allow_extended_nucleotides': allow_extended_nucleotides})
 
+def load_vcf_fast(*args, **kwargs):
+    """
+    Same as load_vcf, keeping this name for backwards compatibility.
+    """
+    return load_vcf(*args, **kwargs)
+
 def pyvcf_calls_to_sample_info_list(calls):
     """
     Given pyvcf.model._Call instances, return a dict mapping each sample
@@ -301,9 +212,6 @@ def dataframes_to_variant_collection(
 
     variant_collection_kwargs : dict, optional
         Additional keyword parameters to pass to VariantCollection.__init__.
-
-    sources : set or list
-        Paths from which variants were loaded.
     """
 
     expected_columns = (

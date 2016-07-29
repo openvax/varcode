@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from __future__ import print_function, division, absolute_import
-from collections import Counter, OrderedDict
+from collections import OrderedDict
 import pandas as pd
 
 from .collection import Collection
@@ -30,21 +30,43 @@ class EffectCollection(Collection):
     Collection of MutationEffect objects and helpers for grouping or filtering
     them.
     """
-    def __init__(self, effects, **kwargs):
+    def __init__(self, effects, distinct=False, sort_key=None, sources=set([])):
+        """
+        Parameters
+        ----------
+        effects : list
+            Collection of any class which  is compatible with the sort key
+
+
+        distinct : bool
+            Only keep distinct entries or allow duplicates.
+
+        sort_key : fn
+            Function which maps each element to a sorting criterion.
+
+        sources : set
+            Set of files from which this collection was generated.
+        """
+        self.effects = effects
         Collection.__init__(
             self,
             elements=effects,
             element_type=MutationEffect,
-            **kwargs)
+            distinct=distinct,
+            sort_key=sort_key,
+            sources=sources)
 
     def to_dict(self):
-        """
-        Since Collection.to_dict() returns a state dictionary with an
-        'elements' field we have to rename it to 'effects'.
-        """
-        state_dict = Collection.to_dict(self)
-        state_dict["effects"] = state_dict.pop("elements")
-        return state_dict
+        return dict(
+            effects=self.effects,
+            sort_key=self.sort_key,
+            distinct=self.distinct,
+            sources=self.sources)
+
+    def clone_with_new_elements(self, new_elements):
+        state_dict = self.to_dict()
+        state_dict["effects"] = new_elements
+        return self.from_dict(state_dict)
 
     def groupby_variant(self):
         return self.groupby(key_fn=lambda effect: effect.variant)
@@ -218,6 +240,7 @@ class EffectCollection(Collection):
         effect priority and transcript length.
         """
         effect_expression_dict = self.effect_expression(expression_levels)
+
         if len(effect_expression_dict) == 0:
             return None
 
@@ -230,17 +253,7 @@ class EffectCollection(Collection):
             (effect, fpkm) = effect_fpkm_pair
             return (fpkm, effect_sort_key(effect))
 
-        top_pair = max(
-            effect_expression_dict.items(),
-            key=key_fn)
-
-        return top_pair[0]
-
-    def gene_counts(self):
-        counter = Counter()
-        for effect in self:
-            counter[effect.gene_name] += 1
-        return counter
+        return max(effect_expression_dict.items(), key=key_fn)[0]
 
     def to_dataframe(self):
         """Build a dataframe from the effect collection"""
