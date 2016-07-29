@@ -64,9 +64,11 @@ class EffectCollection(Collection):
             sources=self.sources)
 
     def clone_with_new_elements(self, new_elements):
-        state_dict = self.to_dict()
-        state_dict["effects"] = new_elements
-        return self.from_dict(state_dict)
+        return Collection.clone_with_new_elements(
+            self,
+            new_elements,
+            drop_keywords={"element_type"},
+            rename_dict={"elements": "effects"})
 
     def groupby_variant(self):
         return self.groupby(key_fn=lambda effect: effect.variant)

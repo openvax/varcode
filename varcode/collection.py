@@ -80,16 +80,30 @@ class Collection(Serializable):
             sort_key=self.sort_key,
             sources=self.sources)
 
-    def clone_with_new_elements(self, new_elements):
-        if self.__class__ is not Collection:
-            raise ValueError(
-                "Derived class %s should implement own clone_with_new_elements()" % (
-                    self.__class__.__name__,))
-        return Collection(
+    def clone_with_new_elements(
+            self,
             new_elements,
+            drop_keywords=set([]),
+            rename_dict={},
+            extra_kwargs={}):
+        """
+        Create another Collection of the same class and with same state but
+        possibly different entries. Extra parameters to control which keyword
+        arguments get passed to the initializer are necessary since derived
+        classes have different constructors than the base class.
+        """
+        kwargs = dict(
+            elements=new_elements,
+            element_type=self.element_type,
             distinct=self.distinct,
             sort_key=self.sort_key,
             sources=self.sources)
+        for name in drop_keywords:
+            kwargs.pop(name)
+        for old_name, new_name in rename_dict.items():
+            kwargs[new_name] = kwargs.pop(old_name)
+        kwargs.update(extra_kwargs)
+        return self.__class__(**kwargs)
 
     @property
     def source(self):

@@ -30,6 +30,7 @@ class VariantCollection(Collection):
             variants,
             distinct=True,
             sort_key=variant_ascending_position_sort_key,
+            sources=None,
             source_to_metadata_dict={}):
         """
         Construct a VariantCollection from a list of Variant records.
@@ -44,19 +45,30 @@ class VariantCollection(Collection):
 
         sort_key : callable
 
+        sources : set
+            Optional set of source names, may be larger than those for
+            which we have metadata dictionaries.
+
         source_to_metadata_dict : dict
             Dictionary mapping each source name (e.g. VCF path) to a dictionary
             from metadata attributes to values.
         """
         self.source_to_metadata_dict = source_to_metadata_dict
         self.variants = variants
+        if sources is None:
+            sources = set(source_to_metadata_dict.keys())
+        if any(source not in sources for source in source_to_metadata_dict.keys()):
+            raise ValueError(
+                "Mismatch between sources=%s and keys of source_to_metadata_dict=%s" % (
+                    sources,
+                    set(source_to_metadata_dict.keys())))
         Collection.__init__(
             self,
             elements=variants,
             element_type=Variant,
             distinct=distinct,
             sort_key=sort_key,
-            sources=set(source_to_metadata_dict.keys()))
+            sources=sources)
 
     @property
     def metadata(self):
@@ -78,6 +90,7 @@ class VariantCollection(Collection):
             variants=self.variants,
             distinct=self.distinct,
             sort_key=self.sort_key,
+            sources=self.sources,
             source_to_metadata_dict=self.source_to_metadata_dict)
 
     def clone_with_new_elements(self, new_elements):
@@ -89,9 +102,9 @@ class VariantCollection(Collection):
         leaves that dictionary as-is, which may result in extraneous entries
         or missing entries.
         """
-        state_dict = self.to_dict()
-        state_dict["variants"] = new_elements
-        return self.from_dict(state_dict)
+        kwargs = self.to_dict()
+        kwargs["variants"] = new_elements
+        return self.from_dict(kwargs)
 
     def effects(self, raise_on_error=True):
         """
@@ -251,6 +264,7 @@ class VariantCollection(Collection):
         kwargs["variants"] = combine_fn(*[set(vc) for vc in variant_collections])
         kwargs["source_to_metadata_dict"] = cls._merge_metadata_dictionaries(
             [vc.source_to_metadata_dict for vc in variant_collections])
+        kwargs["sources"] = set.union(*([vc.sources for vc in variant_collections]))
         for key, value in variant_collections[0].to_dict().items():
             # If some optional parameter isn't explicitly specified as an
             # argument to union() or intersection() then use the same value

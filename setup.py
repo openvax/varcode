@@ -70,7 +70,7 @@ if __name__ == '__main__':
             'biopython>=1.64',
             'pyvcf>=0.6.7',
             'memoized_property>=1.0.2',
-            'serializable>=0.0.4',
+            'serializable>=0.0.5',
         ],
         entry_points={
             'console_scripts': [
