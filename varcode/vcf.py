@@ -17,9 +17,9 @@ from __future__ import absolute_import, print_function, division
 import requests
 import zlib
 from collections import OrderedDict
+from warnings import warn
 
 from six.moves import urllib
-
 import pandas
 from typechecks import require_string
 import vcf as pyvcf
@@ -150,6 +150,9 @@ def load_vcf_fast(*args, **kwargs):
     """
     Same as load_vcf, keeping this name for backwards compatibility.
     """
+    warn(
+        "load_vcf_fast is deprecated and has been renamed to load_vcf",
+        DeprecationWarning)
     return load_vcf(*args, **kwargs)
 
 def pyvcf_calls_to_sample_info_list(calls):
