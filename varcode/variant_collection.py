@@ -140,6 +140,9 @@ class VariantCollection(Collection):
     def groupby_gene_id(self):
         return self.multi_groupby(lambda x: x.gene_ids)
 
+    def groupby_gene(self):
+        return self.multi_groupby(lambda x: x.gene)
+
     def detailed_string(self):
         lines = []
         gene_groups = self.groupby_gene_id()

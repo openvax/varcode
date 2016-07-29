@@ -73,15 +73,6 @@ class EffectCollection(Collection):
     def groupby_variant(self):
         return self.groupby(key_fn=lambda effect: effect.variant)
 
-    def groupby_gene(self):
-        return self.groupby(key_fn=lambda effect: effect.gene)
-
-    def groupby_gene_name(self):
-        return self.groupby(key_fn=lambda effect: effect.gene_name)
-
-    def groupby_gene_id(self):
-        return self.groupby(key_fn=lambda effect: effect.gene_id)
-
     def groupby_transcript(self):
         return self.groupby(key_fn=lambda effect: effect.transcript)
 

@@ -239,6 +239,15 @@ class Collection(Serializable):
             in result_dict.items()
         }
 
+    def groupby_gene(self):
+        return self.groupby(key_fn=lambda x: x.gene)
+
+    def groupby_gene_name(self):
+        return self.groupby(key_fn=lambda x: x.gene_name)
+
+    def groupby_gene_id(self):
+        return self.groupby(key_fn=lambda x: x.gene_id)
+
     def gene_counts(self):
         """
         Returns number of elements overlapping each gene name. Expects the
