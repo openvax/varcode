@@ -14,7 +14,10 @@
 
 from __future__ import print_function, division, absolute_import
 from collections import defaultdict
+
 from functools import wraps
+from Bio.Seq import Seq
+from six import string_types, text_type
 
 def groupby_field(records, field_name):
     """
@@ -48,3 +51,10 @@ def memoize(fn):
             return memoized_values[key]
 
     return wrapped_fn
+
+def bio_seq_to_str(seq):
+    if isinstance(seq, Seq):
+        return str(seq)
+    elif isinstance(seq, string_types):
+        return text_type(seq)
+    return seq

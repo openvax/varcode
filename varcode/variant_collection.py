@@ -13,22 +13,25 @@
 # limitations under the License.
 
 from __future__ import print_function, division, absolute_import
-import json
-from collections import Counter
+
+from collections import OrderedDict
+
+import pandas as pd
 
 from .collection import Collection
 from .effect_collection import EffectCollection
 from .common import memoize
-from . import Variant
+from .variant import variant_ascending_position_sort_key
+
 
 class VariantCollection(Collection):
     def __init__(
             self,
             variants,
-            path=None,
             distinct=True,
-            sort_key=None,
-            metadata=None):
+            sort_key=variant_ascending_position_sort_key,
+            sources=None,
+            source_to_metadata_dict={}):
         """
         Construct a VariantCollection from a list of Variant records.
 
@@ -37,27 +40,70 @@ class VariantCollection(Collection):
         variants : iterable
             Variant objects contained in this VariantCollection
 
-        path : str, optional
-            File path from which we loaded variants, though the current
-            VariantCollection may only contain a subset of them.
-
         distinct : bool
             Don't keep repeated variants
 
         sort_key : callable
-        """
-        if sort_key is None:
-            # pylint: disable=function-redefined
-            def sort_key(variant):
-                return (variant.contig, variant.start)
 
+        sources : set
+            Optional set of source names, may be larger than those for
+            which we have metadata dictionaries.
+
+        source_to_metadata_dict : dict
+            Dictionary mapping each source name (e.g. VCF path) to a dictionary
+            from metadata attributes to values.
+        """
+        self.source_to_metadata_dict = source_to_metadata_dict
+        self.variants = variants
+        if sources is None:
+            sources = set(source_to_metadata_dict.keys())
+        if any(source not in sources for source in source_to_metadata_dict.keys()):
+            raise ValueError(
+                "Mismatch between sources=%s and keys of source_to_metadata_dict=%s" % (
+                    sources,
+                    set(source_to_metadata_dict.keys())))
         Collection.__init__(
             self,
             elements=variants,
-            path=path,
             distinct=distinct,
-            sort_key=sort_key)
-        self.metadata = {} if metadata is None else metadata
+            sort_key=sort_key,
+            sources=sources)
+
+    @property
+    def metadata(self):
+        """
+        The most common usage of a VariantCollection is loading a single VCF,
+        in which case it's annoying to have to always specify that path
+        when accessing metadata fields. This property is meant to both maintain
+        backward compatibility with old versions of Varcode and make the common
+        case easier.
+        """
+        return self.source_to_metadata_dict[self.source]
+
+    def to_dict(self):
+        """
+        Since Collection.to_dict() returns a state dictionary with an
+        'elements' field we have to rename it to 'variants'.
+        """
+        return dict(
+            variants=self.variants,
+            distinct=self.distinct,
+            sort_key=self.sort_key,
+            sources=self.sources,
+            source_to_metadata_dict=self.source_to_metadata_dict)
+
+    def clone_with_new_elements(self, new_elements):
+        """
+        Create another VariantCollection of the same class and with
+        same state (including metadata) but possibly different entries.
+
+        Warning: metadata is a dictionary keyed by variants. This method
+        leaves that dictionary as-is, which may result in extraneous entries
+        or missing entries.
+        """
+        kwargs = self.to_dict()
+        kwargs["variants"] = new_elements
+        return self.from_dict(kwargs)
 
     def effects(self, raise_on_error=True):
         """
@@ -75,16 +121,6 @@ class VariantCollection(Collection):
             for effect in variant.effects(raise_on_error=raise_on_error)
         ])
 
-    def gene_counts(self):
-        """
-        Count how many variants overlap each gene name.
-        """
-        counter = Counter()
-        for variant in self:
-            for gene_name in variant.gene_names:
-                counter[gene_name] += 1
-        return counter
-
     @memoize
     def reference_names(self):
         """
@@ -92,6 +128,9 @@ class VariantCollection(Collection):
         collection.
         """
         return set(variant.reference_name for variant in self)
+
+    def groupby_gene(self):
+        return self.multi_groupby(lambda x: x.genes)
 
     def groupby_gene_name(self):
         """
@@ -102,6 +141,18 @@ class VariantCollection(Collection):
 
     def groupby_gene_id(self):
         return self.multi_groupby(lambda x: x.gene_ids)
+
+    def gene_counts(self):
+        """
+        Returns number of elements overlapping each gene name. Expects the
+        derived class (VariantCollection or EffectCollection) to have
+        an implementation of groupby_gene_name.
+        """
+        return {
+            gene_name: len(group)
+            for (gene_name, group)
+            in self.groupby_gene_name().items()
+        }
 
     def detailed_string(self):
         lines = []
@@ -120,21 +171,6 @@ class VariantCollection(Collection):
         header = self.short_string()
         joined_lines = "\n".join(lines)
         return "%s\n%s" % (header, joined_lines)
-
-    def clone_with_new_elements(self, new_elements):
-        """
-        Create another VariantCollection of the same class and with
-        same state (including metadata) but possibly different entries.
-
-        Warning: metadata is a dictionary keyed by variants. This method
-        leaves that dictionary as-is, which may result in extraneous entries
-        or missing entries.
-        """
-        return self.__class__(
-            new_elements,
-            path=self.path,
-            distinct=self.distinct,
-            metadata=self.metadata)
 
     def filter_by_transcript_expression(
             self,
@@ -182,63 +218,6 @@ class VariantCollection(Collection):
             value_dict=gene_expression_dict,
             threshold=min_expression_value)
 
-    def to_json(self):
-        """
-        Returns a string giving this variant collection serialized in JSON
-        format.
-        """
-        return json.dumps(self.__getstate__())
-
-    def write_json_file(self, filename):
-        """
-        Serialize this VariantCollection to a JSON representation and write it
-        out to a text file.
-        """
-        with open(filename, "w") as f:
-            f.write(self.to_json())
-
-    @classmethod
-    def from_dict(cls, state):
-        """
-        Deserialize a VariantCollection encoded as a Python dict.
-        """
-        instance = cls.__new__(cls)
-        instance.__setstate__(state)
-        return instance
-
-    @classmethod
-    def from_json(cls, serialized):
-        """
-        Construct a VariantCollection from a JSON string.
-        """
-        return cls.from_dict(json.loads(serialized))
-
-    @classmethod
-    def read_json_file(cls, filename):
-        """
-        Construct a VariantCollection from a JSON file.
-        """
-        with open(filename, 'r') as f:
-            json_string = f.read()
-        return cls.from_json(json_string)
-
-    def __getstate__(self):
-        result = dict(self.__dict__)
-        result['elements'] = [
-            (e.__getstate__(), self.metadata.get(e)) for e in self]
-        del result['metadata']
-        return result
-
-    def __setstate__(self, state):
-        self.elements = []
-        self.metadata = {}
-        for (variant_data, meta_entry) in state.pop('elements'):
-            variant = Variant.from_dict(variant_data)
-            self.elements.append(variant)
-            if meta_entry is not None:
-                self.metadata[variant] = meta_entry
-        self.__dict__.update(state)
-
     def exactly_equal(self, other):
         '''
         Comparison between VariantCollection instances that takes into account
@@ -253,3 +232,97 @@ class VariantCollection(Collection):
             self.__class__ == other.__class__ and
             len(self) == len(other) and
             all(x.exactly_equal(y) for (x, y) in zip(self, other)))
+
+    @classmethod
+    def _merge_metadata_dictionaries(cls, dictionaries):
+        """
+        Helper function for combining variant collections: given multiple
+        dictionaries mapping:
+             source name -> (variant -> (attribute -> value))
+
+        Returns dictionary with union of all variants and sources.
+        """
+        # three levels of nested dictionaries!
+        #   {source name: {variant: {attribute: value}}}
+        combined_dictionary = {}
+        for source_to_metadata_dict in dictionaries:
+            for source_name, variant_to_metadata_dict in source_to_metadata_dict.items():
+                combined_dictionary.setdefault(source_name, {})
+                combined_source_dict = combined_dictionary[source_name]
+                for variant, metadata_dict in variant_to_metadata_dict.items():
+                    combined_source_dict.setdefault(variant, {})
+                    combined_source_dict[variant].update(metadata_dict)
+        return combined_dictionary
+
+    @classmethod
+    def _combine_variant_collections(cls, combine_fn, variant_collections, kwargs):
+        """
+        Create a single VariantCollection from multiple different collections.
+
+        Parameters
+        ----------
+
+        cls : class
+            Should be VariantCollection
+
+        combine_fn : function
+            Function which takes any number of sets of variants and returns
+            some combination of them (typically union or intersection).
+
+        variant_collections : tuple of VariantCollection
+
+        kwargs : dict
+            Optional dictionary of keyword arguments to pass to the initializer
+            for VariantCollection.
+        """
+        kwargs["variants"] = combine_fn(*[set(vc) for vc in variant_collections])
+        kwargs["source_to_metadata_dict"] = cls._merge_metadata_dictionaries(
+            [vc.source_to_metadata_dict for vc in variant_collections])
+        kwargs["sources"] = set.union(*([vc.sources for vc in variant_collections]))
+        for key, value in variant_collections[0].to_dict().items():
+            # If some optional parameter isn't explicitly specified as an
+            # argument to union() or intersection() then use the same value
+            # as the first VariantCollection.
+            #
+            # I'm doing this so that the meaning of VariantCollection.union
+            # and VariantCollection.intersection with a single argument is
+            # the identity function (rather than setting optional parameters
+            # to their default values.
+            if key not in kwargs:
+                kwargs[key] = value
+        return cls(**kwargs)
+
+    def union(self, *others, **kwargs):
+        """
+        Returns the union of variants in a several VariantCollection objects.
+        """
+        return self._combine_variant_collections(
+            combine_fn=set.union,
+            variant_collections=(self,) + others,
+            kwargs=kwargs)
+
+    def intersection(self, *others, **kwargs):
+        """
+        Returns the intersection of variants in several VariantCollection objects.
+        """
+        return self._combine_variant_collections(
+            combine_fn=set.intersection,
+            variant_collections=(self,) + others,
+            kwargs=kwargs)
+
+    def to_dataframe(self):
+        """Build a DataFrame from this variant collection"""
+        def row_from_variant(variant):
+            return OrderedDict([
+                ("chr", variant.contig),
+                ("start", variant.original_start),
+                ("ref", variant.original_ref),
+                ("alt", variant.original_alt),
+                ("gene_name", ";".join(variant.gene_names)),
+                ("gene_id", ";".join(variant.gene_ids))
+            ])
+        rows = [row_from_variant(v) for v in self]
+        if len(rows) == 0:
+            # TODO: return a DataFrame with the appropriate columns
+            return pd.DataFrame()
+        return pd.DataFrame.from_records(rows, columns=rows[0].keys())

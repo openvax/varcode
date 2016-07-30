@@ -13,13 +13,10 @@
 # limitations under the License.
 
 from __future__ import print_function, division, absolute_import
-from collections import Counter, OrderedDict
+from collections import OrderedDict
 import pandas as pd
 
-from typechecks import require_iterable_of
-
 from .collection import Collection
-from .effects import MutationEffect
 from .effect_ordering import (
     effect_priority,
     effect_sort_key,
@@ -32,39 +29,55 @@ class EffectCollection(Collection):
     Collection of MutationEffect objects and helpers for grouping or filtering
     them.
     """
-
-    def __init__(
-            self,
-            effects,
-            path=None,
-            distinct=False,
-            sort_key=None):
-        """Construct an EffectCollection from a sequence of MutationEffects.
-
+    def __init__(self, effects, distinct=False, sort_key=None, sources=set([])):
+        """
         Parameters
         ----------
-        effects : iterable
-            MutationEffect objects
+        effects : list
+            Collection of any class which  is compatible with the sort key
 
-        path : str, optional
-            File path from which we loaded variants which gave rise to these
-            effects.
 
         distinct : bool
-            Don't keep repeated effects
+            Only keep distinct entries or allow duplicates.
 
-        sort_key : callable
+        sort_key : fn
+            Function which maps each element to a sorting criterion.
+
+        sources : set
+            Set of files from which this collection was generated.
         """
-        require_iterable_of(effects, MutationEffect)
+        self.effects = effects
         Collection.__init__(
             self,
             elements=effects,
-            path=path,
             distinct=distinct,
-            sort_key=sort_key)
+            sort_key=sort_key,
+            sources=sources)
+
+    def to_dict(self):
+        return dict(
+            effects=self.effects,
+            sort_key=self.sort_key,
+            distinct=self.distinct,
+            sources=self.sources)
+
+    def clone_with_new_elements(self, new_elements):
+        return Collection.clone_with_new_elements(
+            self,
+            new_elements,
+            rename_dict={"elements": "effects"})
 
     def groupby_variant(self):
         return self.groupby(key_fn=lambda effect: effect.variant)
+
+    def groupby_transcript(self):
+        return self.groupby(key_fn=lambda effect: effect.transcript)
+
+    def groupby_transcript_name(self):
+        return self.groupby(key_fn=lambda effect: effect.transcript_name)
+
+    def groupby_transcript_id(self):
+        return self.groupby(key_fn=lambda effect: effect.transcript_id)
 
     def groupby_gene(self):
         return self.groupby(key_fn=lambda effect: effect.gene)
@@ -75,14 +88,17 @@ class EffectCollection(Collection):
     def groupby_gene_id(self):
         return self.groupby(key_fn=lambda effect: effect.gene_id)
 
-    def groupby_transcript(self):
-        return self.groupby(key_fn=lambda effect: effect.transcript)
-
-    def groupby_transcript_name(self):
-        return self.groupby(key_fn=lambda effect: effect.transcript_name)
-
-    def groupby_transcript_id(self):
-        return self.groupby(key_fn=lambda effect: effect.transcript_id)
+    def gene_counts(self):
+        """
+        Returns number of elements overlapping each gene name. Expects the
+        derived class (VariantCollection or EffectCollection) to have
+        an implementation of groupby_gene_name.
+        """
+        return {
+            gene_name: len(group)
+            for (gene_name, group)
+            in self.groupby_gene_name().items()
+        }
 
     def filter_by_transcript_expression(
             self,
@@ -235,6 +251,7 @@ class EffectCollection(Collection):
         effect priority and transcript length.
         """
         effect_expression_dict = self.effect_expression(expression_levels)
+
         if len(effect_expression_dict) == 0:
             return None
 
@@ -247,17 +264,7 @@ class EffectCollection(Collection):
             (effect, fpkm) = effect_fpkm_pair
             return (fpkm, effect_sort_key(effect))
 
-        top_pair = max(
-            effect_expression_dict.items(),
-            key=key_fn)
-
-        return top_pair[0]
-
-    def gene_counts(self):
-        counter = Counter()
-        for effect in self:
-            counter[effect.gene_name] += 1
-        return counter
+        return max(effect_expression_dict.items(), key=key_fn)[0]
 
     def to_dataframe(self):
         """Build a dataframe from the effect collection"""

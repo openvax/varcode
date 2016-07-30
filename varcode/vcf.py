@@ -17,9 +17,9 @@ from __future__ import absolute_import, print_function, division
 import requests
 import zlib
 from collections import OrderedDict
+from warnings import warn
 
 from six.moves import urllib
-
 import pandas
 from typechecks import require_string
 import vcf as pyvcf
@@ -28,101 +28,7 @@ from .reference import infer_genome
 from .variant import Variant
 from .variant_collection import VariantCollection
 
-
 def load_vcf(
-        path,
-        genome=None,
-        reference_vcf_key="reference",
-        only_passing=True,
-        allow_extended_nucleotides=False,
-        max_variants=None):
-    """
-    Load reference name and Variant objects from the given VCF filename.
-
-    This uses PyVCF to parse the file. It is slower than the pandas
-    implementation used in `load_vcf_fast`, but is better tested and more
-    robust.
-
-    Parameters
-    ----------
-
-    path : str or vcf.Reader
-        Path or URL to VCF (*.vcf) or compressed VCF (*.vcf.gz). Supported URL
-        schemes are "file", "http", "https", and "ftp". Can also be a pyvcf
-        Reader instance.
-
-    genome : {pyensembl.Genome, reference name, Ensembl version int}, optional
-        Optionally pass in a PyEnsembl Genome object, name of reference, or
-        PyEnsembl release version to specify the reference associated with a
-        VCF (otherwise infer reference from VCF using reference_vcf_key)
-
-    reference_vcf_key : str, optional
-        Name of metadata field which contains path to reference FASTA
-        file (default = 'reference')
-
-    only_passing : boolean, optional
-        If true, any entries whose FILTER field is not one of "." or "PASS" is
-        dropped.
-
-    allow_extended_nucleotides : boolean, default False
-        Allow characters other that A,C,T,G in the ref and alt strings.
-
-    max_variants : int, optional
-        If specified, return only the first max_variants variants.
-    """
-
-    variants = []
-    metadata = {}
-
-    handle = PyVCFReaderFromPathOrURL(path)
-    try:
-        genome = infer_genome_from_vcf(
-            genome,
-            handle.vcf_reader,
-            reference_vcf_key)
-
-        for record in handle.vcf_reader:
-            if only_passing and record.FILTER and record.FILTER != "PASS":
-                continue
-            info = sample_info = None
-            for (alt_num, alt) in enumerate(record.ALT):
-                # We ignore "no-call" variants, i.e. those where X.ALT = [None]
-                if not alt:
-                    continue
-                variant = Variant(
-                    contig=record.CHROM,
-                    start=record.POS,
-                    ref=record.REF,
-                    alt=alt.sequence,
-                    ensembl=genome,
-                    allow_extended_nucleotides=allow_extended_nucleotides)
-                variants.append(variant)
-                if info is None:
-                    info = dict(record.INFO)
-                if sample_info is None:
-                    sample_info = pyvcf_calls_to_sample_info_list(
-                        record.samples)
-
-                metadata[variant] = {
-                    "id": record.ID,
-                    "qual": record.QUAL,
-                    "filter": record.FILTER,
-                    "alt_allele_index": alt_num,
-                    "info": info,
-                    "sample_info": sample_info,
-                }
-                if max_variants and len(variants) > max_variants:
-                    raise StopIteration
-    except StopIteration:
-        pass
-    finally:
-        handle.close()
-
-    return VariantCollection(
-        variants=variants, path=handle.path, metadata=metadata)
-
-
-def load_vcf_fast(
         path,
         genome=None,
         reference_vcf_key="reference",
@@ -230,6 +136,7 @@ def load_vcf_fast(
 
     return dataframes_to_variant_collection(
         df_iterator,
+        source_path=path,
         info_parser=handle.vcf_reader._parse_info if include_info else None,
         only_passing=only_passing,
         max_variants=max_variants,
@@ -237,8 +144,16 @@ def load_vcf_fast(
         sample_info_parser=sample_info_parser,
         variant_kwargs={
             'ensembl': genome,
-            'allow_extended_nucleotides': allow_extended_nucleotides},
-        variant_collection_kwargs={"path": path})
+            'allow_extended_nucleotides': allow_extended_nucleotides})
+
+def load_vcf_fast(*args, **kwargs):
+    """
+    Same as load_vcf, keeping this name for backwards compatibility.
+    """
+    warn(
+        "load_vcf_fast is deprecated and has been renamed to load_vcf",
+        DeprecationWarning)
+    return load_vcf(*args, **kwargs)
 
 def pyvcf_calls_to_sample_info_list(calls):
     """
@@ -251,6 +166,7 @@ def pyvcf_calls_to_sample_info_list(calls):
 
 def dataframes_to_variant_collection(
         dataframes,
+        source_path,
         info_parser=None,
         only_passing=True,
         max_variants=None,
@@ -272,6 +188,9 @@ def dataframes_to_variant_collection(
             ["CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER"]
         and 'INFO' if `info_parser` is not Null. Columns must be in this
         order.
+
+    source_path : str
+        Path of VCF file from which DataFrame chunks were generated.
 
     info_parser : string -> object, optional
         Callable to parse INFO strings.
@@ -365,7 +284,9 @@ def dataframes_to_variant_collection(
         pass
 
     return VariantCollection(
-        variants=variants, metadata=metadata, **variant_collection_kwargs)
+        variants=variants,
+        source_to_metadata_dict={source_path: metadata},
+        **variant_collection_kwargs)
 
 
 def read_vcf_into_dataframe(

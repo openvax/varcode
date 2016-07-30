@@ -13,13 +13,11 @@
 # limitations under the License.
 
 from __future__ import print_function, division, absolute_import
-import logging
 
 import pandas
 
 from typechecks import require_string
 
-from .nucleotides import normalize_nucleotide_string
 from .reference import infer_genome
 from .variant import Variant
 from .variant_collection import VariantCollection
@@ -88,6 +86,7 @@ def load_maf_dataframe(path, nrows=None, verbose=False):
                     expected, actual))
     return df
 
+
 def load_maf(path):
     """
     Load reference name and Variant objects from MAF filename.
@@ -105,7 +104,6 @@ def load_maf(path):
     for _, x in maf_df.iterrows():
         contig = x.Chromosome
         start_pos = x.Start_Position
-        end_pos = x.End_Position
         ref = x.Reference_Allele
 
         # it's possible in a MAF file to have multiple Ensembl releases
@@ -133,36 +131,6 @@ def load_maf(path):
                         ref, x,))
             alt = x.Tumor_Seq_Allele2
 
-        # nucleotide sequences get normalized in the Variant constructor
-        # but also doing it here so we can check the lengths correctly
-        ref = normalize_nucleotide_string(ref)
-        alt = normalize_nucleotide_string(alt)
-        if len(ref) == 0:
-            # Since insertions happen *between* reference coordinates
-            # it's not clear what their start/end should be. So,
-            # by convention, MAF files make the start the reference position
-            # before the inserted nucleotides and the end position comes after
-            # the inserted nucleotides
-            end_offset = 1
-        else:
-            end_offset = len(ref) - 1
-        expected_end_pos = start_pos + end_offset
-
-        if len(ref) > 0 and end_pos != expected_end_pos:
-            # only check for correct ending since the meaning of start/end
-            # for insertions is different than for substitutions
-            #
-            # Only warn since some MAF files in the wild seem to violate
-            # expectations for end position coordinates
-            logging.warn(
-                "Expected variant %s:%s '%s' > '%s' to end at %d but got %d" % (
-                    contig,
-                    start_pos,
-                    ref,
-                    alt,
-                    expected_end_pos,
-                    end_pos))
-
         variant = Variant(
             contig,
             start_pos,
@@ -187,5 +155,4 @@ def load_maf(path):
 
     return VariantCollection(
         variants=variants,
-        path=path,
-        metadata=metadata)
+        source_to_metadata_dict={path: metadata})

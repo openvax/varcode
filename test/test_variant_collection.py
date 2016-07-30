@@ -26,6 +26,42 @@ from .data import ov_wustle_variants, tcga_ov_variants
 
 from varcode import VariantCollection, Variant
 
+def test_variant_collection_union():
+    combined = ov_wustle_variants.union(tcga_ov_variants)
+    eq_(set(combined.sources), {ov_wustle_variants.source, tcga_ov_variants.source})
+    eq_(len(combined), len(ov_wustle_variants) + len(tcga_ov_variants))
+
+def test_variant_collection_intersection():
+    combined = ov_wustle_variants.intersection(tcga_ov_variants)
+    eq_(set(combined.sources), {ov_wustle_variants.source, tcga_ov_variants.source})
+    eq_(len(combined), 0)
+
+def test_variant_collection_gene_counts():
+    gene_counts = ov_wustle_variants.gene_counts()
+    # test that each gene is counted just once
+    eq_(list(gene_counts.values()), [1] * len(gene_counts))
+
+def test_variant_collection_groupby_gene():
+    genes = ov_wustle_variants.groupby_gene().keys()
+    # make sure that the IDs attached to Gene objects are the same as IDs
+    # of groupby_gene_id
+    gene_ids = set(ov_wustle_variants.groupby_gene_id().keys())
+    eq_({gene.id for gene in genes}, gene_ids)
+
+def test_variant_collection_groupby_gene_id():
+    gene_ids = set(ov_wustle_variants.groupby_gene_id().keys())
+    eq_(gene_ids, {
+        'ENSG00000060718',
+        'ENSG00000156876',
+        'ENSG00000130939',
+        'ENSG00000122477',
+        'ENSG00000162688'
+    })
+
+def test_variant_collection_groupby_gene_name():
+    gene_names = set(ov_wustle_variants.groupby_gene_name().keys())
+    eq_(gene_names, {"AGL", "SASS6", "LRRC39", "UBE4B", "COL11A1"})
+
 def test_reference_names():
     eq_(ov_wustle_variants.reference_names(), {"GRCh37"})
 
@@ -64,16 +100,18 @@ def test_gene_counts():
     # coding_gene_counts = variants.gene_counts(only_coding=True)
     # eq_(coding_gene_counts, expected_counts)
 
-def test_serialization():
+def test_variant_collection_serialization():
+    variant_list = [
+        Variant(
+            1, start=10, ref="AA", alt="AAT", ensembl=77),
+        Variant(10, start=15, ref="A", alt="G"),
+        Variant(20, start=150, ref="", alt="G"),
+    ]
     original = VariantCollection(
-        [
-            Variant(
-                1, start=10, ref="AA", alt="AAT", ensembl=77),
-            Variant(10, start=15, ref="A", alt="G"),
-            Variant(20, start=150, ref="", alt="G"),
-        ])
-    original.metadata[original[0]] = {"a": "b"}
-    original.metadata[original[2]] = {"bar": 2}
+        variant_list,
+        source_to_metadata_dict={
+            "test_data":
+                {variant: {"a": "b", "bar": 2} for variant in variant_list}})
 
     # This causes the variants' ensembl objects to make a SQL connection,
     # which makes the ensembl object non-serializable. By calling this
@@ -81,16 +119,22 @@ def test_serialization():
     # the ensembl object.
     original.effects()
 
-    # Test pickling.
-    serialized = pickle.dumps(original)
-    reconstituted = pickle.loads(serialized)
-    eq_(original, reconstituted)
-    eq_(reconstituted[0], original[0])
-    eq_(reconstituted.metadata[original[0]], original.metadata[original[0]])
+    original_first_variant = original[0]
+    original_metadata = original.metadata
 
-    # Test json.
-    serialized = original.to_json()
-    reconstituted = VariantCollection.from_json(serialized)
-    eq_(original, reconstituted)
-    eq_(reconstituted[0], original[0])
-    eq_(reconstituted.metadata[original[0]], original.metadata[original[0]])
+    # Test pickling
+    reconstructed = pickle.loads(pickle.dumps(original))
+    eq_(original, reconstructed)
+    eq_(reconstructed[0], original_first_variant)
+    eq_(reconstructed.metadata[original_first_variant],
+        original_metadata[original_first_variant])
+
+    # Test JSON serialization
+    variants_from_json = VariantCollection.from_json(original.to_json())
+    eq_(original, variants_from_json)
+
+    eq_(variants_from_json[0], original_first_variant)
+
+    # pylint: disable=no-member
+    eq_(variants_from_json.metadata[original_first_variant],
+        original_metadata[original_first_variant])

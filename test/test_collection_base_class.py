@@ -48,4 +48,3 @@ def test_groupby():
     groups = collection.groupby(lambda x: x[0])
     eq_(len(groups), 2)
     eq_(set(groups.keys()), {"a", "b"})
-

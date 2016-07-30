@@ -16,39 +16,124 @@ from __future__ import print_function, division, absolute_import
 import os.path
 from collections import defaultdict
 
-class Collection(object):
+from serializable import Serializable
+
+
+class Collection(Serializable):
     """
+    Collection base class with grouping and filtering functions.
     Methods shared by EffectCollection and VariantCollection.
     """
-
     def __init__(
             self,
             elements,
-            path=None,
             distinct=False,
-            sort_key=None):
+            sort_key=None,
+            sources=set([])):
+        """
+        Parameters
+        ----------
+        elements : list
+            Collection of any class which  is compatible with the sort key
+
+        distinct : bool
+            Only keep distinct entries or allow duplicates.
+
+        sort_key : fn
+            Function which maps each element to a sorting criterion.
+
+        sources : set
+            Set of files from which this collection was generated.
+        """
         self.distinct = distinct
         if distinct:
             elements = set(elements)
+        self.sort_key = sort_key
         self.elements = sorted(elements, key=sort_key)
-        self.path = path
-        if path:
-            # get the filename without any directory prefix
-            self.filename = os.path.split(path)[1]
-        else:
-            self.filename = None
+        self.sources = sources
+
+    def to_dict(self):
+        if self.__class__ is not Collection:
+            raise ValueError(
+                "Derived class %s should implement own to_dict()" % (
+                    self.__class__.__name__,))
+        return dict(
+            elements=self.elements,
+            distinct=self.distinct,
+            sort_key=self.sort_key,
+            sources=self.sources)
+
+    def clone_with_new_elements(
+            self,
+            new_elements,
+            drop_keywords=set([]),
+            rename_dict={},
+            extra_kwargs={}):
+        """
+        Create another Collection of the same class and with same state but
+        possibly different entries. Extra parameters to control which keyword
+        arguments get passed to the initializer are necessary since derived
+        classes have different constructors than the base class.
+        """
+        kwargs = dict(
+            elements=new_elements,
+            distinct=self.distinct,
+            sort_key=self.sort_key,
+            sources=self.sources)
+        for name in drop_keywords:
+            kwargs.pop(name)
+        for old_name, new_name in rename_dict.items():
+            kwargs[new_name] = kwargs.pop(old_name)
+        kwargs.update(extra_kwargs)
+        return self.__class__(**kwargs)
+
+    @property
+    def source(self):
+        """
+        Returns the single source name for a variant collection if it is unique,
+        otherwise raises an error.
+        """
+        if len(self.sources) == 0:
+            raise ValueError("No source associated with %s" % self.__class__.__name__)
+        elif len(self.sources) > 1:
+            raise ValueError("Multiple sources for %s" % self.__class__.__name__)
+        return list(self.sources)[0]
+
+    @property
+    def path(self):
+        """
+        Alternative name for VariantCollection.source maintained for backward
+        compatibility.
+        """
+        return self.source
+
+    @property
+    def filenames(self):
+        """
+        Assuming sources are paths to VCF or MAF files, trim their directory
+        path and return just the file names.
+        """
+        return [os.path.basename(source) for source in self.sources if source]
+
+    @property
+    def filename(self):
+        """
+        Return single filename if there is a single non-empty source.
+        Keeping this property for backward compatibility.
+        """
+        return self.filenames[0]
 
     def short_string(self):
         """
         Compact string representation which doesn't print any of the
         collection elements.
         """
-        file_str = ""
-        if self.filename:
-            file_str = " from '%s'" % self.filename
+        source_str = ""
+        if self.sources:
+            source_str = " from '%s'" % ",".join(self.sources)
         return "<%s%s with %d elements>" % (
             self.__class__.__name__,
-            file_str,
+            source_str,
             len(self))
 
     def to_string(self, limit=None):
@@ -73,9 +158,6 @@ class Collection(object):
     def __str__(self):
         return self.to_string(limit=50)
 
-    def __repr__(self):
-        return str(self)
-
     def __len__(self):
         return len(self.elements)
 
@@ -95,16 +177,6 @@ class Collection(object):
             self.__class__ == other.__class__ and
             len(self) == len(other) and
             all(x == y for (x, y) in zip(self, other)))
-
-    def clone_with_new_elements(self, new_elements):
-        """
-        Create another collection of the same class and with same state
-        but possibly different Variant or Effect entries.
-        """
-        return self.__class__(
-            new_elements,
-            path=self.path,
-            distinct=self.distinct)
 
     def filter(self, filter_fn):
         return self.clone_with_new_elements([
