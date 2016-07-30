@@ -16,21 +16,17 @@ from __future__ import print_function, division, absolute_import
 import os.path
 from collections import defaultdict
 
-from typechecks import require_iterable_of
-
 from serializable import Serializable
 
 
 class Collection(Serializable):
     """
-    Typed collection with grouping and filtering functions. A
+    Collection base class with grouping and filtering functions.
     Methods shared by EffectCollection and VariantCollection.
     """
-
     def __init__(
             self,
             elements,
-            element_type=None,
             distinct=False,
             sort_key=None,
             sources=set([])):
@@ -39,9 +35,6 @@ class Collection(Serializable):
         ----------
         elements : list
             Collection of any class which  is compatible with the sort key
-
-        element_type : type
-            Expected type for each element.
 
         distinct : bool
             Only keep distinct entries or allow duplicates.
@@ -52,16 +45,6 @@ class Collection(Serializable):
         sources : set
             Set of files from which this collection was generated.
         """
-        if element_type is None:
-            # attempt to infer element type if none is explicitly given
-            types = set(type(x) for x in elements)
-            if len(types) != 1:
-                raise ValueError(
-                    "Could not determine unique type for elements of %s" % elements)
-            self.element_type = list(types)[0]
-        else:
-            self.element_type = element_type
-        require_iterable_of(elements, self.element_type)
         self.distinct = distinct
         if distinct:
             elements = set(elements)
@@ -94,7 +77,6 @@ class Collection(Serializable):
         """
         kwargs = dict(
             elements=new_elements,
-            element_type=self.element_type,
             distinct=self.distinct,
             sort_key=self.sort_key,
             sources=self.sources)
@@ -237,27 +219,6 @@ class Collection(Serializable):
             k: self.clone_with_new_elements(elements)
             for (k, elements)
             in result_dict.items()
-        }
-
-    def groupby_gene(self):
-        return self.groupby(key_fn=lambda x: x.gene)
-
-    def groupby_gene_name(self):
-        return self.groupby(key_fn=lambda x: x.gene_name)
-
-    def groupby_gene_id(self):
-        return self.groupby(key_fn=lambda x: x.gene_id)
-
-    def gene_counts(self):
-        """
-        Returns number of elements overlapping each gene name. Expects the
-        derived class (VariantCollection or EffectCollection) to have
-        an implementation of groupby_gene_name.
-        """
-        return {
-            gene_name: len(group)
-            for (gene_name, group)
-            in self.groupby_gene_name().items()
         }
 
     def filter_above_threshold(

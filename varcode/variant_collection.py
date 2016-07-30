@@ -21,7 +21,7 @@ import pandas as pd
 from .collection import Collection
 from .effect_collection import EffectCollection
 from .common import memoize
-from .variant import Variant, variant_ascending_position_sort_key
+from .variant import variant_ascending_position_sort_key
 
 
 class VariantCollection(Collection):
@@ -65,7 +65,6 @@ class VariantCollection(Collection):
         Collection.__init__(
             self,
             elements=variants,
-            element_type=Variant,
             distinct=distinct,
             sort_key=sort_key,
             sources=sources)
@@ -130,6 +129,9 @@ class VariantCollection(Collection):
         """
         return set(variant.reference_name for variant in self)
 
+    def groupby_gene(self):
+        return self.multi_groupby(lambda x: x.genes)
+
     def groupby_gene_name(self):
         """
         Group variants by the gene names they overlap, which may put each
@@ -140,8 +142,17 @@ class VariantCollection(Collection):
     def groupby_gene_id(self):
         return self.multi_groupby(lambda x: x.gene_ids)
 
-    def groupby_gene(self):
-        return self.multi_groupby(lambda x: x.gene)
+    def gene_counts(self):
+        """
+        Returns number of elements overlapping each gene name. Expects the
+        derived class (VariantCollection or EffectCollection) to have
+        an implementation of groupby_gene_name.
+        """
+        return {
+            gene_name: len(group)
+            for (gene_name, group)
+            in self.groupby_gene_name().items()
+        }
 
     def detailed_string(self):
         lines = []
@@ -301,7 +312,6 @@ class VariantCollection(Collection):
 
     def to_dataframe(self):
         """Build a DataFrame from this variant collection"""
-
         def row_from_variant(variant):
             return OrderedDict([
                 ("chr", variant.contig),

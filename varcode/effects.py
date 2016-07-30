@@ -15,9 +15,11 @@
 from __future__ import print_function, division, absolute_import
 
 from memoized_property import memoized_property
+from serializable import Serializable
 
+from .common import bio_seq_to_str
 
-class MutationEffect(object):
+class MutationEffect(Serializable):
     """
     Base class for mutation effects.
     """
@@ -329,7 +331,7 @@ class Silent(CodingMutation):
             variant=variant,
             transcript=transcript)
         self.aa_pos = aa_pos
-        self.aa_ref = aa_ref
+        self.aa_ref = bio_seq_to_str(aa_ref)
 
     @property
     def short_description(self):
@@ -352,8 +354,8 @@ class AlternateStartCodon(Silent):
             transcript=transcript,
             aa_pos=0,
             aa_ref=aa_ref)
-        self.ref_codon = ref_codon
-        self.alt_codon = alt_codon
+        self.ref_codon = bio_seq_to_str(ref_codon)
+        self.alt_codon = bio_seq_to_str(alt_codon)
 
     @property
     def short_description(self):
@@ -393,7 +395,7 @@ class NonsilentCodingMutation(CodingMutation):
             transcript=transcript)
         self.aa_mutation_start_offset = aa_mutation_start_offset
         self.aa_mutation_end_offset = aa_mutation_end_offset
-        self.aa_ref = aa_ref
+        self.aa_ref = bio_seq_to_str(aa_ref)
 
     @property
     def modifies_protein_sequence(self):
@@ -446,7 +448,7 @@ class KnownAminoAcidChange(NonsilentCodingMutation):
             aa_mutation_start_offset=aa_mutation_start_offset,
             aa_mutation_end_offset=aa_mutation_start_offset + len(aa_alt),
             aa_ref=aa_ref)
-        self.aa_alt = aa_alt
+        self.aa_alt = bio_seq_to_str(aa_alt)
 
     @property
     def short_description(self):

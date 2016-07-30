@@ -17,7 +17,7 @@ from argparse import ArgumentParser
 
 from pyensembl import genome_for_reference_name
 
-from ..vcf import load_vcf_fast
+from ..vcf import load_vcf
 from ..maf import load_maf
 from ..variant_collection import VariantCollection
 from ..variant import Variant
@@ -105,7 +105,7 @@ def variant_collection_from_args(args, required=True):
         genome = None
 
     for vcf_path in args.vcf:
-        variant_collections.append(load_vcf_fast(vcf_path, genome=genome))
+        variant_collections.append(load_vcf(vcf_path, genome=genome))
     for maf_path in args.maf:
         variant_collections.append(load_maf(maf_path))
 

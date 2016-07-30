@@ -17,7 +17,6 @@ from collections import OrderedDict
 import pandas as pd
 
 from .collection import Collection
-from .effects import MutationEffect
 from .effect_ordering import (
     effect_priority,
     effect_sort_key,
@@ -51,7 +50,6 @@ class EffectCollection(Collection):
         Collection.__init__(
             self,
             elements=effects,
-            element_type=MutationEffect,
             distinct=distinct,
             sort_key=sort_key,
             sources=sources)
@@ -67,7 +65,6 @@ class EffectCollection(Collection):
         return Collection.clone_with_new_elements(
             self,
             new_elements,
-            drop_keywords={"element_type"},
             rename_dict={"elements": "effects"})
 
     def groupby_variant(self):
@@ -81,6 +78,27 @@ class EffectCollection(Collection):
 
     def groupby_transcript_id(self):
         return self.groupby(key_fn=lambda effect: effect.transcript_id)
+
+    def groupby_gene(self):
+        return self.groupby(key_fn=lambda effect: effect.gene)
+
+    def groupby_gene_name(self):
+        return self.groupby(key_fn=lambda effect: effect.gene_name)
+
+    def groupby_gene_id(self):
+        return self.groupby(key_fn=lambda effect: effect.gene_id)
+
+    def gene_counts(self):
+        """
+        Returns number of elements overlapping each gene name. Expects the
+        derived class (VariantCollection or EffectCollection) to have
+        an implementation of groupby_gene_name.
+        """
+        return {
+            gene_name: len(group)
+            for (gene_name, group)
+            in self.groupby_gene_name().items()
+        }
 
     def filter_by_transcript_expression(
             self,

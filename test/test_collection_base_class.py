@@ -21,7 +21,7 @@ from varcode import Collection
 def test_collection_len():
     collection = Collection([1, 2, 3])
     assert len(collection) == 3
-    collection = Collection([], element_type=int)
+    collection = Collection([])
     assert len(collection) == 0
 
 def test_collection_eq():

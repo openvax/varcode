@@ -36,6 +36,32 @@ def test_variant_collection_intersection():
     eq_(set(combined.sources), {ov_wustle_variants.source, tcga_ov_variants.source})
     eq_(len(combined), 0)
 
+def test_variant_collection_gene_counts():
+    gene_counts = ov_wustle_variants.gene_counts()
+    # test that each gene is counted just once
+    eq_(list(gene_counts.values()), [1] * len(gene_counts))
+
+def test_variant_collection_groupby_gene():
+    genes = ov_wustle_variants.groupby_gene().keys()
+    # make sure that the IDs attached to Gene objects are the same as IDs
+    # of groupby_gene_id
+    gene_ids = set(ov_wustle_variants.groupby_gene_id().keys())
+    eq_({gene.id for gene in genes}, gene_ids)
+
+def test_variant_collection_groupby_gene_id():
+    gene_ids = set(ov_wustle_variants.groupby_gene_id().keys())
+    eq_(gene_ids, {
+        'ENSG00000060718',
+        'ENSG00000156876',
+        'ENSG00000130939',
+        'ENSG00000122477',
+        'ENSG00000162688'
+    })
+
+def test_variant_collection_groupby_gene_name():
+    gene_names = set(ov_wustle_variants.groupby_gene_name().keys())
+    eq_(gene_names, {"AGL", "SASS6", "LRRC39", "UBE4B", "COL11A1"})
+
 def test_reference_names():
     eq_(ov_wustle_variants.reference_names(), {"GRCh37"})
 
@@ -74,7 +100,7 @@ def test_gene_counts():
     # coding_gene_counts = variants.gene_counts(only_coding=True)
     # eq_(coding_gene_counts, expected_counts)
 
-def test_serialization():
+def test_variant_collection_serialization():
     variant_list = [
         Variant(
             1, start=10, ref="AA", alt="AAT", ensembl=77),
