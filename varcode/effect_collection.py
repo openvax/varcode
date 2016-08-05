@@ -14,9 +14,10 @@
 
 from __future__ import print_function, division, absolute_import
 from collections import OrderedDict
-import pandas as pd
 
-from .collection import Collection
+import pandas as pd
+from sercol import Collection
+
 from .effect_ordering import (
     effect_priority,
     effect_sort_key,

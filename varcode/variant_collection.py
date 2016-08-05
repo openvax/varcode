@@ -17,8 +17,8 @@ from __future__ import print_function, division, absolute_import
 from collections import OrderedDict
 
 import pandas as pd
+from sercol import Collection
 
-from .collection import Collection
 from .effect_collection import EffectCollection
 from .common import memoize
 from .variant import variant_ascending_position_sort_key
