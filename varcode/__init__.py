@@ -13,7 +13,6 @@
 # limitations under the License.
 
 from .variant import Variant
-from .collection import Collection
 from .effect_collection import EffectCollection
 from .variant_collection import VariantCollection
 from .maf import load_maf, load_maf_dataframe
@@ -57,7 +56,6 @@ del get_versions
 __all__ = [
     # basic classes
     "Variant",
-    "Collection",
     "EffectCollection",
     "VariantCollection",
     "effect_priority",
