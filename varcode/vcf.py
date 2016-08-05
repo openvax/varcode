@@ -14,6 +14,7 @@
 
 
 from __future__ import absolute_import, print_function, division
+import os
 import requests
 import zlib
 from collections import OrderedDict
@@ -91,14 +92,24 @@ def load_vcf(
         # implementation of read_table (with engine="python") helps with some
         # issues but introduces a new set of problems (e.g. the dtype parameter
         # is not accepted). For these reasons, we're currently not attempting
-        # to load VCFs over HTTP with pandas, and fall back to the pyvcf
-        # implementation here.
+        # to load VCFs over HTTP with pandas directly, and instead download it
+        # to a temporary file and open that.
+        (filename, headers) = urllib.request.urlretrieve(path)
+
+        # The downloaded file has no file extension, which confuses pyvcf for
+        # gziped files in Python 3. We rename it to have the correct file
+        # extension.
+        new_filename = "%s.%s" % (filename, parsed_path.path.split(".")[-1])
+        os.rename(filename, new_filename)
+
         return load_vcf(
-            path,
+            new_filename,
             genome=genome,
             reference_vcf_key=reference_vcf_key,
             only_passing=only_passing,
             allow_extended_nucleotides=allow_extended_nucleotides,
+            include_info=include_info,
+            chunk_size=chunk_size,
             max_variants=max_variants)
 
     # Loading a local file.
