@@ -13,3 +13,15 @@
 # limitations under the License.
 
 from __future__ import print_function, division, absolute_import
+
+from .variant_args import (
+    add_variant_args,
+    make_variants_parser,
+    variant_collection_from_args,
+)
+
+__all__ = [
+    "add_variant_args",
+    "make_variants_parser",
+    "variant_collection_from_args",
+]
