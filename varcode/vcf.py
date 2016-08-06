@@ -17,6 +17,7 @@ from __future__ import absolute_import, print_function, division
 import os
 import requests
 import zlib
+import logging
 from collections import OrderedDict
 from warnings import warn
 
@@ -94,23 +95,28 @@ def load_vcf(
         # is not accepted). For these reasons, we're currently not attempting
         # to load VCFs over HTTP with pandas directly, and instead download it
         # to a temporary file and open that.
+
         (filename, headers) = urllib.request.urlretrieve(path)
-
-        # The downloaded file has no file extension, which confuses pyvcf for
-        # gziped files in Python 3. We rename it to have the correct file
-        # extension.
-        new_filename = "%s.%s" % (filename, parsed_path.path.split(".")[-1])
-        os.rename(filename, new_filename)
-
-        return load_vcf(
-            new_filename,
-            genome=genome,
-            reference_vcf_key=reference_vcf_key,
-            only_passing=only_passing,
-            allow_extended_nucleotides=allow_extended_nucleotides,
-            include_info=include_info,
-            chunk_size=chunk_size,
-            max_variants=max_variants)
+        try:
+            # The downloaded file has no file extension, which confuses pyvcf
+            # for gziped files in Python 3. We rename it to have the correct
+            # file extension.
+            new_filename = "%s.%s" % (
+                filename, parsed_path.path.split(".")[-1])
+            os.rename(filename, new_filename)
+            filename = new_filename
+            return load_vcf(
+                filename,
+                genome=genome,
+                reference_vcf_key=reference_vcf_key,
+                only_passing=only_passing,
+                allow_extended_nucleotides=allow_extended_nucleotides,
+                include_info=include_info,
+                chunk_size=chunk_size,
+                max_variants=max_variants)
+        finally:
+            logging.info("Removing temporary file: %s" % filename)
+            os.unlink(filename)
 
     # Loading a local file.
     # The file will be opened twice: first to parse the header with pyvcf, then
