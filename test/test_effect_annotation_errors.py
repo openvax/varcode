@@ -63,3 +63,21 @@ def test_issue167_insertion_of_stop_codon():
         variant=variant,
         effect_class=PrematureStop,
         protein_sequence="MDSVPR")
+
+def test_issue168_frameshift_creates_silent_stop_codon():
+    # Issue: https://github.com/hammerlab/varcode/issues/168
+    #
+    # Using genome GRCm38, over transcript ENSMUST00000086738
+    # The coding sequence at chr1/99772765 has transcript ID ENSMUST00000086738
+    # and the end looks like:
+    # TTC ATC TGA ACT ATT GTG TGG TCA TCT GGT CCT CTT TTT (...)
+    #         ^ stop codon
+    # Synonymous FrameShift over the stop codon: TGA -> TAG AAC ...
+    #
+    # ##fileformat=VCFv4.1
+    # #CHROM  POS ID  REF ALT QUAL    FILTER  INFO    FORMAT
+    # chr1    100484699   .   T   TA  5000    .   .   .
+    variant = Variant("chr1", 100484699, "T", "TA", "GRCm38")
+    expect_effect(
+        variant,
+        effect_class=Silent)

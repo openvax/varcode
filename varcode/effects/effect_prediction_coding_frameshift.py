@@ -71,11 +71,6 @@ def create_frameshift_effect(
         # TODO: scan through sequence_from_mutated_codon for
         # Kozak sequence + start codon to choose the new start
         return StartLoss(variant=variant, transcript=transcript)
-    elif mutated_codon_index == original_protein_length:
-        return StopLoss(
-            variant=variant,
-            transcript=transcript,
-            extended_protein_sequence=mutant_protein_suffix)
 
     # the frameshifted sequence may contain some amino acids which are
     # the same as the original protein!
@@ -83,13 +78,13 @@ def create_frameshift_effect(
         ref=original_protein_sequence[mutated_codon_index:],
         alt=mutant_protein_suffix)
     n_unchanged_amino_acids = len(unchanged_amino_acids)
-    mutation_start_position = mutated_codon_index + n_unchanged_amino_acids
-    if mutation_start_position >= original_protein_length:
+    offset_to_first_different_amino_acid = mutated_codon_index + n_unchanged_amino_acids
+    if offset_to_first_different_amino_acid >= original_protein_length:
         # frameshift is either extending the protein or leaving it unchanged
         if len(mutant_protein_suffix) == 0:
             # miraculously, this frameshift left the protein unchanged,
             # most likely by turning one stop codon into another stop codon
-            aa_ref = original_protein_sequence[mutated_codon_index]
+            aa_ref = original_protein_sequence[-n_unchanged_amino_acids:]
             return Silent(
                 variant=variant,
                 transcript=transcript,
@@ -104,7 +99,7 @@ def create_frameshift_effect(
                 transcript=transcript,
                 extended_protein_sequence=mutant_protein_suffix)
     # original amino acid at the mutated codon before the frameshift occurred
-    aa_ref = original_protein_sequence[mutation_start_position]
+    aa_ref = original_protein_sequence[offset_to_first_different_amino_acid]
 
     # TODO: what if all the shifted amino acids were the same and the protein
     # ended up the same length? Add a Silent case?
@@ -114,11 +109,11 @@ def create_frameshift_effect(
         return FrameShiftTruncation(
             variant=variant,
             transcript=transcript,
-            stop_codon_offset=mutation_start_position)
+            stop_codon_offset=offset_to_first_different_amino_acid)
     return FrameShift(
         variant=variant,
         transcript=transcript,
-        aa_mutation_start_offset=mutation_start_position,
+        aa_mutation_start_offset=offset_to_first_different_amino_acid,
         shifted_sequence=str(mutant_protein_suffix))
 
 def cdna_codon_sequence_after_insertion_frameshift(
