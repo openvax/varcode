@@ -29,7 +29,6 @@ from .effect_classes import (
     Deletion,
     ComplexSubstitution,
     AlternateStartCodon,
-    AlternateStopCodon,
     IntronicSpliceSite,
     ExonicSpliceSite,
     StopLoss,
@@ -56,7 +55,7 @@ transcript_effect_priority_list = [
     Silent,
     # changing the stop codon might have more significance than
     # silent variants internal to the coding sequence
-    AlternateStopCodon,
+    # REMOVED: AlternateStopCodon,
     Substitution,
     Insertion,
     Deletion,

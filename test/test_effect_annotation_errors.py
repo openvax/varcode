@@ -18,7 +18,7 @@ test suite.
 """
 
 from varcode import Variant
-from varcode.effects import AlternateStopCodon, PrematureStop
+from varcode.effects import Silent, PrematureStop
 
 def expect_effect(variant, effect_class=None, protein_sequence=None):
     effects = variant.effects()
@@ -45,7 +45,7 @@ def test_issue172_insertion_after_stop_codon():
     variant = Variant("chr1", 100484701, "A", "ACAGCAG", ensembl="GRCm38")
     expect_effect(
         variant=variant,
-        effect_class=AlternateStopCodon)
+        effect_class=Silent)
 
 def test_issue167_insertion_of_stop_codon():
     # Issue: https://github.com/hammerlab/varcode/issues/167

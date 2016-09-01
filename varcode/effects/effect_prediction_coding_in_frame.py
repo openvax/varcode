@@ -29,10 +29,8 @@ from .effect_classes import (
     ComplexSubstitution,
     PrematureStop,
     AlternateStartCodon,
-    AlternateStopCodon,
     StartLoss,
     StopLoss,
-    ThreePrimeUTR
 )
 from .translate import START_CODONS, STOP_CODONS, translate
 
@@ -74,18 +72,11 @@ def _choose_in_frame_annotation(
 
     if len(aa_ref) == len(aa_alt) == 0:
         shared_amino_acids = shared_prefix + shared_suffix
-        if aa_mutation_start_offset < reference_protein_length:
-            return Silent(
-                variant=variant,
-                transcript=transcript,
-                aa_pos=aa_mutation_start_offset,
-                aa_ref=shared_amino_acids)
-        elif aa_mutation_start_offset == reference_protein_length:
-            return AlternateStopCodon(
-                variant=variant,
-                transcript=transcript)
-        else:
-            return ThreePrimeUTR(variant=variant, transcript=transcript)
+        return Silent(
+            variant=variant,
+            transcript=transcript,
+            aa_pos=aa_mutation_start_offset,
+            aa_ref=shared_amino_acids)
 
     # index of first amino acid which is different from the reference
     aa_mutation_start_offset += len(shared_prefix)

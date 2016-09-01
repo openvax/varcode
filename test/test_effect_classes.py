@@ -37,7 +37,6 @@ from varcode.effects import (
     ExonLoss,
     ExonicSpliceSite,
     FrameShiftTruncation,
-    AlternateStopCodon,
     # TODO: SpliceDonor, SpliceReceptor
 )
 from pyensembl import ensembl_grch37, cached_release
@@ -332,7 +331,7 @@ def test_silent():
         modifies_coding_sequence=True,
         modifies_protein_sequence=False)
 
-def test_alternate_stop_codons():
+def test_silent_stop_codons():
     silent_stop_codon_variants = {
         "ENST00000290524": Variant(
             contig=1,
@@ -358,7 +357,7 @@ def test_alternate_stop_codons():
             expect_effect,
             variant,
             transcript_id,
-            AlternateStopCodon,
+            Silent,
             True,
             False)
 

@@ -362,29 +362,6 @@ class AlternateStartCodon(Silent):
         return "alternate-start-codon (%s>%s)" % (
             self.ref_codon, self.alt_codon)
 
-class AlternateStopCodon(Silent):
-    """
-    Change the stop codon (e.g. TAG->TGA) without other alterations
-    to the coding sequence. Currently this also includes downstream
-    modifications to the 5' UTR, eventually we need to move to a model
-    where a single variant can be described by a collection of overlapping
-    modifications.
-    """
-    def __init__(
-            self,
-            variant,
-            transcript):
-        Silent.__init__(
-            self,
-            variant=variant,
-            transcript=transcript,
-            aa_pos=len(transcript.protein_sequence),
-            aa_ref="*")
-
-    @property
-    def short_description(self):
-        return "alternate-stop-codon"
-
 class NonsilentCodingMutation(CodingMutation):
     """
     All coding mutations other than silent codon substitutions
