@@ -151,51 +151,24 @@ def predict_in_frame_coding_effect(
     variant : Variant
     """
 
+    # index (starting from 0) of first affected reference codon
     first_ref_codon_index = cds_offset // 3
 
     # which nucleotide of the first codon got changed?
     offset_in_first_ref_codon = cds_offset % 3
 
     if len(ref) == 0:
-        # logic for insertions is simpler and different from mutations
-        # which remove reference nucleotides
-
-        if offset_in_first_ref_codon == 2:
-            # if insertion is happening after the last nucleotide of a codon
-            # then we can just translate the inserted sequence since it's on
-            # codon boundary
-            inserted_amino_acids = translate(alt, first_codon_is_start=False)
-            n_alt_codons = len(alt) // 3
-            if STOP_CODONS.intersection(
-                    alt[3 * i:3 * i + 3] for i in range(n_alt_codons)):
-                # if we're inserting an in-frame stop codon
-                return PrematureStop(
-                    variant=variant,
-                    transcript=transcript,
-                    aa_mutation_start_offset=first_ref_codon_index,
-                    aa_ref="",
-                    aa_alt=inserted_amino_acids)
-            return Insertion(
-                variant=variant,
-                transcript=transcript,
-                aa_mutation_start_offset=first_ref_codon_index,
-                aa_alt=inserted_amino_acids)
-        else:
-            # inserting inside a reference codon
-            # include an extra codon at the end of the reference so that if we
-            # insert a stop before a stop, we can return Silent
-            ref_codon = sequence_from_start_codon[
-                first_ref_codon_index * 3:first_ref_codon_index * 3 + 6]
-            last_ref_codon_index = first_ref_codon_index + 1
-            # split the reference codon into nucleotides before/after insertion
-            prefix = ref_codon[:offset_in_first_ref_codon + 1]
-            suffix = ref_codon[offset_in_first_ref_codon + 1:]
-            mutant_codons = prefix + alt + suffix
+        # inserting inside a reference codon
+        # include an extra codon at the end of the reference so that if we
+        # insert a stop before a stop, we can return Silent
+        ref_codon = sequence_from_start_codon[
+            first_ref_codon_index * 3:first_ref_codon_index * 3 + 6]
+        last_ref_codon_index = first_ref_codon_index + 1
+        # split the reference codon into nucleotides before/after insertion
+        prefix = ref_codon[:offset_in_first_ref_codon + 1]
+        suffix = ref_codon[offset_in_first_ref_codon + 1:]
+        mutant_codons = prefix + alt + suffix
     else:
-        # pull out reference codons and construct mutant codons
-        # for non-insertion variant
-        first_ref_codon_index = int(cds_offset / 3)
-
         assert first_ref_codon_index <= len(transcript.protein_sequence), \
             ("Unexpected mutation at offset %d (5' UTR starts at %d)"
              " while annotating %s on %s") % (
@@ -233,7 +206,6 @@ def predict_in_frame_coding_effect(
             suffix = ref_codons[-1:]
         else:
             suffix = ""
-
         mutant_codons = prefix + alt + suffix
     assert len(mutant_codons) % 3 == 0, \
         "Expected in-frame mutation but got %s (length = %d)" % (
@@ -294,7 +266,8 @@ def predict_in_frame_coding_effect(
             original_protein_subsequence[n_shared_amino_acids:]
         mutant_protein_subsequence = \
             mutant_protein_subsequence[n_shared_amino_acids:]
-        if len(mutant_protein_subsequence) < len(original_protein_subsequence):
+        n_remaining_amino_acids_in_ref = len(transcript.protein_sequence) - mutation_aa_pos
+        if len(mutant_protein_subsequence) < n_remaining_amino_acids_in_ref:
             # only call this mutation a premature stop if it decreases
             # the length of the protein
             return PrematureStop(
