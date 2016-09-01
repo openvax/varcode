@@ -29,8 +29,10 @@ from .effect_classes import (
     ComplexSubstitution,
     PrematureStop,
     AlternateStartCodon,
+    AlternateStopCodon,
     StartLoss,
     StopLoss,
+    ThreePrimeUTR
 )
 from .translate import START_CODONS, STOP_CODONS, translate
 
@@ -39,7 +41,8 @@ def _choose_in_frame_annotation(
         aa_ref,
         aa_alt,
         transcript,
-        variant):
+        variant,
+        reference_protein_length):
     """Choose a coding effect annotation for in-frame mutations which do
     not affect the start codon and do not introduce a premature stop codon.
     This function encompasses all the logic which does not need to look at the
@@ -61,6 +64,8 @@ def _choose_in_frame_annotation(
     transcript : Transcript
 
     variant : Variant
+
+    reference_protein_length : int
     """
     aa_ref, aa_alt, shared_prefix, shared_suffix = \
         trim_shared_flanking_strings(
@@ -69,16 +74,23 @@ def _choose_in_frame_annotation(
 
     if len(aa_ref) == len(aa_alt) == 0:
         shared_amino_acids = shared_prefix + shared_suffix
-        return Silent(
-            variant=variant,
-            transcript=transcript,
-            aa_pos=aa_mutation_start_offset,
-            aa_ref=shared_amino_acids)
+        if aa_mutation_start_offset < reference_protein_length:
+            return Silent(
+                variant=variant,
+                transcript=transcript,
+                aa_pos=aa_mutation_start_offset,
+                aa_ref=shared_amino_acids)
+        elif aa_mutation_start_offset == reference_protein_length:
+            return AlternateStopCodon(
+                variant=variant,
+                transcript=transcript)
+        else:
+            return ThreePrimeUTR(variant=variant, transcript=transcript)
 
     # index of first amino acid which is different from the reference
     aa_mutation_start_offset += len(shared_prefix)
 
-    if aa_mutation_start_offset == len(transcript.protein_sequence):
+    if aa_mutation_start_offset == reference_protein_length:
         # if non-silent mutation is at the end of the protein then
         # should be a stop-loss
         assert aa_ref == "", \
@@ -245,6 +257,8 @@ def predict_in_frame_coding_effect(
         first_codon_is_start=(first_ref_codon_index == 0))
 
     n_mutant_codons = len(mutant_codons) // 3
+
+    reference_protein_length = len(transcript.protein_sequence)
     if STOP_CODONS.intersection(
             mutant_codons[3 * i:3 * i + 3]
             for i in range(n_mutant_codons)):
@@ -266,7 +280,7 @@ def predict_in_frame_coding_effect(
             original_protein_subsequence[n_shared_amino_acids:]
         mutant_protein_subsequence = \
             mutant_protein_subsequence[n_shared_amino_acids:]
-        n_remaining_amino_acids_in_ref = len(transcript.protein_sequence) - mutation_aa_pos
+        n_remaining_amino_acids_in_ref = reference_protein_length - mutation_aa_pos
         if len(mutant_protein_subsequence) < n_remaining_amino_acids_in_ref:
             # only call this mutation a premature stop if it decreases
             # the length of the protein
@@ -282,4 +296,5 @@ def predict_in_frame_coding_effect(
         aa_ref=original_protein_subsequence,
         aa_alt=mutant_protein_subsequence,
         variant=variant,
-        transcript=transcript)
+        transcript=transcript,
+        reference_protein_length=reference_protein_length)

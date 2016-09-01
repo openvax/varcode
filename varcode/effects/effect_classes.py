@@ -373,23 +373,17 @@ class AlternateStopCodon(Silent):
     def __init__(
             self,
             variant,
-            transcript,
-            aa_ref,
-            ref_codon,
-            alt_codon):
+            transcript):
         Silent.__init__(
             self,
             variant=variant,
             transcript=transcript,
             aa_pos=len(transcript.protein_sequence),
             aa_ref="*")
-        self.ref_codon = bio_seq_to_str(ref_codon)
-        self.alt_codon = bio_seq_to_str(alt_codon)
 
     @property
     def short_description(self):
-        return "alternate-stop-codon (%s>%s)" % (
-            self.ref_codon, self.alt_codon)
+        return "alternate-stop-codon"
 
 class NonsilentCodingMutation(CodingMutation):
     """
