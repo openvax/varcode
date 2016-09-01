@@ -1,3 +1,5 @@
+from varcode.effects import predict_variant_effect_on_transcript
+
 expected_effect_properties = [
     'gene',
     'gene_name',
@@ -29,7 +31,7 @@ def expect_effect(
         modifies_coding_sequence,
         modifies_protein_sequence):
     transcript = variant.ensembl.transcript_by_id(transcript_id)
-    effect = variant.effect_on_transcript(transcript)
+    effect = predict_variant_effect_on_transcript(variant, transcript)
     check_effect_properties(effect)
     assert isinstance(effect, effect_class), \
         "Expected %s on %s to be %s, got %s" % (

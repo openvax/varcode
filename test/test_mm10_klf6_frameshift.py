@@ -1,6 +1,7 @@
-from varcode import Variant, FrameShift
-from varcode.frameshift_coding_effect import (
-    frameshift_coding_effect,
+from varcode import Variant
+from varcode.effects import FrameShift
+from varcode.effects.effect_prediction_coding_frameshift import (
+    predict_frameshift_coding_effect,
     cdna_codon_sequence_after_insertion_frameshift,
 )
 
@@ -26,13 +27,13 @@ def test_mm10_Klf6_frameshift_coding_effect_fn():
     eq_(t.name, "Klf6-201")
     # first start codon offset is 150
     # mutation occurs after offset 462
-    effect = frameshift_coding_effect(
-        "",
-        "G",
-        462 - 150,
-        t.sequence[150:],
-        variant,
-        t)
+    effect = predict_frameshift_coding_effect(
+        ref="",
+        alt="G",
+        cds_offset=462 - 150,
+        sequence_from_start_codon=t.sequence[150:],
+        variant=variant,
+        transcript=t)
     validate_effect_values(effect)
 
 def test_mm10_Klf6_frameshift_cdna_codon_sequence():

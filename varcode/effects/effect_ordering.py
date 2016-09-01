@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .effects import (
+from __future__ import print_function, division, absolute_import
+
+from .effect_classes import (
     Failure,
     IncompleteTranscript,
     Intergenic,
@@ -27,6 +29,7 @@ from .effects import (
     Deletion,
     ComplexSubstitution,
     AlternateStartCodon,
+    AlternateStopCodon,
     IntronicSpliceSite,
     ExonicSpliceSite,
     StopLoss,
@@ -51,11 +54,16 @@ transcript_effect_priority_list = [
     # so give 5' UTR mutations higher prioriry
     FivePrimeUTR,
     Silent,
+    # changing the stop codon might have more significance than
+    # silent variants internal to the coding sequence
+    AlternateStopCodon,
     Substitution,
     Insertion,
     Deletion,
     ComplexSubstitution,
-    # silent mutation which changes the start codon from e.g. ATG > TTG
+    # mutation which changes the start codon from e.g. ATG > TTG that can
+    # be interpreted as silent but also has some chance of causing an
+    # alternative ORF
     AlternateStartCodon,
     # intronic variants near the splice boundaries but which aren't
     # the two nucleotides closest to the exon

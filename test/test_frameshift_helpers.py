@@ -1,4 +1,4 @@
-from varcode.frameshift_coding_effect import (
+from varcode.effects.effect_prediction_coding_frameshift import (
     cdna_codon_sequence_after_insertion_frameshift,
     cdna_codon_sequence_after_deletion_or_substitution_frameshift,
 )

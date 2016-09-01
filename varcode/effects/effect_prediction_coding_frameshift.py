@@ -17,7 +17,11 @@ Effect annotation for variants which modify the coding sequence and change
 reading frame.
 """
 
-from .effects import (
+from __future__ import print_function, division, absolute_import
+
+from ..string_helpers import trim_shared_prefix
+
+from .effect_classes import (
     FrameShift,
     FrameShiftTruncation,
     StartLoss,
@@ -25,7 +29,6 @@ from .effects import (
     Silent
 )
 from .mutate import substitute
-from .string_helpers import trim_shared_prefix
 from .translate import translate
 
 def create_frameshift_effect(
@@ -199,7 +202,7 @@ def cdna_codon_sequence_after_deletion_or_substitution_frameshift(
         alt=alt)
     return mutated_codon_index, sequence_from_mutated_codon
 
-def frameshift_coding_effect(
+def predict_frameshift_coding_effect(
         ref,
         alt,
         cds_offset,

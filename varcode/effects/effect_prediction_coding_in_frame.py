@@ -20,7 +20,8 @@ from __future__ import division, absolute_import, print_function
 
 from six.moves import range
 
-from .effects import (
+from ..string_helpers import trim_shared_flanking_strings
+from .effect_classes import (
     Silent,
     Insertion,
     Deletion,
@@ -31,7 +32,6 @@ from .effects import (
     StartLoss,
     StopLoss,
 )
-from .string_helpers import trim_shared_flanking_strings
 from .translate import START_CODONS, STOP_CODONS, translate
 
 def _choose_in_frame_annotation(
@@ -117,7 +117,7 @@ def _choose_in_frame_annotation(
             aa_alt=aa_alt)
 
 
-def in_frame_coding_effect(
+def predict_in_frame_coding_effect(
         ref,
         alt,
         cds_offset,

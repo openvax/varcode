@@ -14,11 +14,10 @@
 
 from __future__ import print_function, division, absolute_import
 
-from .frameshift_coding_effect import frameshift_coding_effect
-from .in_frame_coding_effect import in_frame_coding_effect
+from .effect_prediction_coding_frameshift import predict_frameshift_coding_effect
+from .effect_prediction_coding_in_frame import predict_in_frame_coding_effect
 
-
-def coding_effect(
+def predict_coding_effect(
         ref,
         alt,
         transcript_offset,
@@ -110,7 +109,7 @@ def coding_effect(
 
     # is this an in-frame mutations?
     if (len(ref) - len(alt)) % 3 == 0:
-        return in_frame_coding_effect(
+        return predict_in_frame_coding_effect(
             ref=ref,
             alt=alt,
             cds_offset=cds_offset,
@@ -118,7 +117,7 @@ def coding_effect(
             variant=variant,
             transcript=transcript)
     else:
-        return frameshift_coding_effect(
+        return predict_frameshift_coding_effect(
             ref=ref,
             alt=alt,
             cds_offset=cds_offset,

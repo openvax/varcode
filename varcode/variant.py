@@ -13,12 +13,8 @@
 # limitations under the License.
 
 from __future__ import print_function, division, absolute_import
-import logging
-
-from Bio.Seq import reverse_complement
 
 from pyensembl import (
-    Transcript,
     cached_release,
     genome_for_reference_name,
     Genome,
@@ -29,35 +25,13 @@ from pyensembl.biotypes import is_coding_biotype
 from serializable import Serializable
 from typechecks import require_instance
 
-
-from .coding_effect import coding_effect
-from .common import groupby_field
-from .effect_helpers import changes_exonic_splice_site
-from .effect_collection import EffectCollection
-from .effects import (
-    Failure,
-    Intergenic,
-    Intragenic,
-    NoncodingTranscript,
-    IncompleteTranscript,
-    FivePrimeUTR,
-    ThreePrimeUTR,
-    Intronic,
-    IntronicSpliceSite,
-    SpliceAcceptor,
-    SpliceDonor,
-    StartLoss,
-    ExonLoss,
-    ExonicSpliceSite,
-)
 from .nucleotides import (
     normalize_nucleotide_string,
     STANDARD_NUCLEOTIDES,
     is_purine
 )
 from .string_helpers import trim_shared_flanking_strings
-from .transcript_helpers import interval_offset_on_transcript
-
+from .effects import predict_variant_effects
 
 class Variant(Serializable):
     __slots__ = (
@@ -248,6 +222,46 @@ class Variant(Serializable):
             normalize_contig_name=self.normalize_contig_name)
 
     @property
+    def trimmed_ref(self):
+        """
+        Eventually the field Variant.ref will store the reference nucleotides
+        as given in a VCF or MAF and trimming of any shared prefix/suffix
+        between ref and alt will be done via the properties trimmed_ref
+        and trimmed_alt.
+        """
+        return self.ref
+
+    @property
+    def trimmed_alt(self):
+        """
+        Eventually the field Variant.ref will store the reference nucleotides
+        as given in a VCF or MAF and trimming of any shared prefix/suffix
+        between ref and alt will be done via the properties trimmed_ref
+        and trimmed_alt.
+        """
+        return self.alt
+
+    @property
+    def trimmed_base1_start(self):
+        """
+        Currently the field Variant.start carries the base-1 starting position
+        adjusted by trimming any shared prefix between Variant.ref and
+        Variant.alt. Eventually this trimming should be done more explicitly
+        via trimmed_* properties.
+        """
+        return self.start
+
+    @property
+    def trimmed_base1_end(self):
+        """
+        Currently the field Variant.end carries the base-1 "last" position of
+        this variant, adjusted by trimming any shared suffix between
+        Variant.ref and Variant.alt. Eventually this trimming should be done
+        more explicitly via trimmed_* properties.
+        """
+        return self.end
+
+    @property
     def short_description(self):
         """
         HGVS nomenclature for genomic variants
@@ -342,323 +356,8 @@ class Variant(Serializable):
         ]
 
     def effects(self, raise_on_error=True):
-        """Determine the effects of a variant on any transcripts it overlaps.
-        Returns an EffectCollection object.
-
-        Parameters
-        ----------
-        raise_on_error : bool
-            Raise an exception if we encounter an error while trying to
-            determine the effect of this variant on a transcript, or simply
-            log the error and continue.
-        """
-        gene_ids = self.gene_ids
-
-        # if this variant isn't overlapping any genes, return a
-        # Intergenic effect
-        # TODO: look for nearby genes and mark those as Upstream and Downstream
-        # effects
-        if len(gene_ids) == 0:
-            return EffectCollection([Intergenic(self)])
-
-        # group transcripts by their gene ID
-        transcripts_grouped_by_gene = groupby_field(
-            self.transcripts,
-            'gene_id')
-
-        # list of all MutationEffects for all genes & transcripts
-        effects = []
-
-        # want effects in the list grouped by the gene they come from
-        for gene_id in sorted(gene_ids):
-            if gene_id not in transcripts_grouped_by_gene:
-                # intragenic variant overlaps a gene but not any transcripts
-                gene = self.ensembl.gene_by_id(gene_id)
-                effects.append(Intragenic(self, gene))
-            else:
-                # gene ID  has transcripts overlapped by this variant
-                for transcript in transcripts_grouped_by_gene[gene_id]:
-                    try:
-                        effect = self.effect_on_transcript(transcript)
-                        effects.append(effect)
-                    except (AssertionError, ValueError) as error:
-                        if raise_on_error:
-                            raise
-                        else:
-                            effects.append(Failure(self, transcript))
-                            logging.warn(
-                                "Encountered error annotating %s for %s: %s",
-                                self,
-                                transcript,
-                                error)
-        return EffectCollection(effects)
-
-    def effect_on_transcript(self, transcript):
-        """Return the transcript effect (such as FrameShift) that results from
-        applying this genomic variant to a particular transcript.
-
-        Parameters
-        ----------
-        transcript :  Transcript
-            Transcript we're going to apply mutation to.
-        """
-
-        if transcript.__class__ is not Transcript:
-            raise TypeError(
-                "Expected %s : %s to have type Transcript" % (
-                    transcript, type(transcript)))
-
-        # check for non-coding transcripts first, since
-        # every non-coding transcript is "incomplete".
-        if not is_coding_biotype(transcript.biotype):
-            return NoncodingTranscript(self, transcript)
-
-        if not transcript.complete:
-            return IncompleteTranscript(self, transcript)
-
-        # since we're using inclusive base-1 coordinates,
-        # checking for overlap requires special logic for insertions
-        insertion = len(self.ref) == 0
-
-        # determine if any exons are deleted, and if not,
-        # what is the closest exon and how far is this variant
-        # from that exon (overlapping the exon = 0 distance)
-        completely_lost_exons = []
-
-        # list of which (exon #, Exon) pairs this mutation overlaps
-        overlapping_exon_numbers_and_exons = []
-
-        distance_to_nearest_exon = float("inf")
-
-        start_in_exon = False
-        end_in_exon = False
-
-        nearest_exon = None
-        for i, exon in enumerate(transcript.exons):
-            if self.start <= exon.start and self.end >= exon.end:
-                completely_lost_exons.append(exon)
-
-            if insertion and exon.strand == "+" and self.end == exon.end:
-                # insertions after an exon don't overlap the exon
-                distance = 1
-            elif insertion and exon.strand == "-" and self.start == exon.start:
-                distance = 1
-            else:
-                distance = exon.distance_to_interval(self.start, self.end)
-
-            if distance == 0:
-                overlapping_exon_numbers_and_exons.append((i + 1, exon))
-                # start is contained in current exon
-                if exon.start <= self.start <= exon.end:
-                    start_in_exon = True
-                # end is contained in current exon
-                if exon.end >= self.end >= exon.start:
-                    end_in_exon = True
-            elif distance < distance_to_nearest_exon:
-                    distance_to_nearest_exon = distance
-                    nearest_exon = exon
-
-        if len(overlapping_exon_numbers_and_exons) == 0:
-            intronic_effect_class = self._choose_intronic_effect_class(
-                nearest_exon, distance_to_nearest_exon)
-            return intronic_effect_class(
-                variant=self,
-                transcript=transcript,
-                nearest_exon=nearest_exon,
-                distance_to_exon=distance_to_nearest_exon)
-        elif len(completely_lost_exons) > 0 or (
-                len(overlapping_exon_numbers_and_exons) > 1):
-            # if spanning multiple exons, or completely deleted an exon
-            # then consider that an ExonLoss mutation
-            exons = [exon for (_, exon) in overlapping_exon_numbers_and_exons]
-            return ExonLoss(self, transcript, exons)
-
-        assert len(overlapping_exon_numbers_and_exons) == 1
-
-        exon_number, exon = overlapping_exon_numbers_and_exons[0]
-
-        exonic_effect_annotation = self._exonic_transcript_effect(
-            exon, exon_number, transcript)
-
-        # simple case: both start and end are in the same
-        if start_in_exon and end_in_exon:
-            return exonic_effect_annotation
-        elif isinstance(exonic_effect_annotation, ExonicSpliceSite):
-            # if mutation bleeds over into intro but even just
-            # the exonic portion got annotated as an exonic splice site
-            # then return it
-            return exonic_effect_annotation
-
-        return ExonicSpliceSite(
-            variant=self,
-            transcript=transcript,
-            exon=exon,
-            alternate_effect=exonic_effect_annotation)
-
-    def _choose_intronic_effect_class(
-            self,
-            nearest_exon,
-            distance_to_exon):
-        """
-        Infer effect of variant which does not overlap any exon of
-        the given transcript.
-        """
-        assert distance_to_exon > 0, \
-            "Expected intronic effect to have distance_to_exon > 0, got %d" % (
-                distance_to_exon,)
-
-        before_forward_exon = (
-            nearest_exon.strand == "+" and
-            (self.start < nearest_exon.start or
-                (self.ref == "" and self.start == nearest_exon.start)))
-
-        before_backward_exon = (
-            nearest_exon.strand == "-" and
-            (self.end > nearest_exon.end or
-                (self.ref == "" and self.end == nearest_exon.end)))
-
-        before_exon = before_forward_exon or before_backward_exon
-
-        # distance cutoffs based on consensus splice sequences from
-        # http://www.ncbi.nlm.nih.gov/pmc/articles/PMC2947103/
-        # 5' splice site: MAG|GURAGU consensus
-        #   M is A or C; R is purine; | is the exon-intron boundary
-        # 3' splice site: YAG|R
-        if distance_to_exon <= 2:
-            if before_exon:
-                # 2 last nucleotides of intron before exon are the splice
-                # acceptor site, typically "AG"
-                return SpliceAcceptor
-            else:
-                # 2 first nucleotides of intron after exon are the splice donor
-                # site, typically "GT"
-                return SpliceDonor
-        elif not before_exon and distance_to_exon <= 6:
-            # variants in nucleotides 3-6 at start of intron aren't as certain
-            # to cause problems as nucleotides 1-2 but still implicated in
-            # alternative splicing
-            return IntronicSpliceSite
-        elif before_exon and distance_to_exon <= 3:
-            # nucleotide -3 before exon is part of the 3' splicing
-            # motif but allows for more degeneracy than the -2, -1 nucleotides
-            return IntronicSpliceSite
-        else:
-            # intronic mutation unrelated to splicing
-            return Intronic
-
-    def _exonic_transcript_effect(self, exon, exon_number, transcript):
-        """Effect of this variant on a Transcript, assuming we already know
-        that this variant overlaps some exon of the transcript.
-
-        Parameters
-        ----------
-        exon : pyensembl.Exon
-            Exon which this variant overlaps
-
-        exon_number : int
-            Index (starting from 1) of the given exon in the transcript's
-            sequence of exons.
-
-        transcript : pyensembl.Transcript
-        """
-
-        genome_ref = self.ref
-        genome_alt = self.alt
-
-        # clip mutation to only affect the current exon
-        if self.start < exon.start:
-            # if mutation starts before current exon then only look
-            # at nucleotides which overlap the exon
-            assert len(genome_ref) > 0, "Unexpected insertion into intron"
-            n_skip_start = exon.start - self.start
-            genome_ref = genome_ref[n_skip_start:]
-            genome_alt = genome_alt[n_skip_start:]
-            genome_start = exon.start
-        else:
-            genome_start = self.start
-
-        if self.end > exon.end:
-            # if mutation goes past exon end then only look at nucleotides
-            # which overlap the exon
-            n_skip_end = self.end - exon.end
-            genome_ref = genome_ref[:-n_skip_end]
-            genome_alt = genome_alt[:len(genome_ref)]
-            genome_end = exon.end
-        else:
-            genome_end = self.end
-
-        transcript_offset = interval_offset_on_transcript(
-            genome_start, genome_end, transcript)
-
-        if transcript.on_backward_strand:
-            strand_ref = reverse_complement(genome_ref)
-            strand_alt = reverse_complement(genome_alt)
-        else:
-            strand_ref = genome_ref
-            strand_alt = genome_alt
-
-        expected_ref = str(transcript.sequence[
-            transcript_offset:transcript_offset + len(strand_ref)])
-
-        if strand_ref != expected_ref:
-            raise ValueError(
-                ("Found ref nucleotides '%s' in sequence"
-                 " of %s at offset %d (chromosome positions %d:%d)"
-                 " but variant %s has '%s'") % (
-                     expected_ref,
-                     transcript,
-                     transcript_offset,
-                     genome_start,
-                     genome_end,
-                     self,
-                     strand_ref))
-
-        utr5_length = min(transcript.start_codon_spliced_offsets)
-
-        # does the variant start inside the 5' UTR?
-        if utr5_length > transcript_offset:
-            # does the variant end after the 5' UTR, within the coding region?
-            if utr5_length < transcript_offset + len(strand_ref):
-                return StartLoss(self, transcript)
-            else:
-                # if variant contained within 5' UTR
-                return FivePrimeUTR(self, transcript)
-
-        utr3_offset = max(transcript.stop_codon_spliced_offsets) + 1
-
-        if transcript_offset >= utr3_offset:
-            return ThreePrimeUTR(self, transcript)
-
-        exon_start_offset = interval_offset_on_transcript(
-            exon.start, exon.end, transcript)
-        exon_end_offset = exon_start_offset + len(exon) - 1
-
-        # Further below we're going to try to predict exonic splice site
-        # modifications, which will take this effect_annotation as their
-        # alternative hypothesis for what happens if splicing doesn't change.
-        # If the mutation doesn't affect an exonic splice site, then
-        # we'll just return this effect.
-        coding_effect_annotation = coding_effect(
-            ref=strand_ref,
-            alt=strand_alt,
-            transcript_offset=transcript_offset,
-            variant=self,
-            transcript=transcript)
-
-        if changes_exonic_splice_site(
-                transcript=transcript,
-                transcript_ref=strand_ref,
-                transcript_alt=strand_alt,
-                transcript_offset=transcript_offset,
-                exon_start_offset=exon_start_offset,
-                exon_end_offset=exon_end_offset,
-                exon_number=exon_number):
-            return ExonicSpliceSite(
-                variant=self,
-                transcript=transcript,
-                exon=exon,
-                alternate_effect=coding_effect_annotation)
-        return coding_effect_annotation
+        return predict_variant_effects(
+            variant=self, raise_on_error=raise_on_error)
 
     @property
     def is_insertion(self):

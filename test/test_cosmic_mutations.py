@@ -13,9 +13,8 @@
 # limitations under the License.
 
 from pyensembl import ensembl_grch37 as ensembl
-from varcode import (
-    Variant,
-    # transcript effects
+from varcode import Variant
+from varcode.effects import (
     Substitution,
     Deletion,
     Insertion,

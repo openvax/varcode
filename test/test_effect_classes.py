@@ -18,11 +18,8 @@ unit test but the goal of this test module is to make sure that there is
 at least one test for each effect class
 """
 
-from varcode import (
-    Variant,
-    #
-    # transcript effects
-    #
+from varcode import Variant
+from varcode.effects import (
     IncompleteTranscript,
     NoncodingTranscript,
     FivePrimeUTR,
