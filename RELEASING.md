@@ -3,8 +3,8 @@
 This document explains what do Pull Request has been reviewed/finalized and you're
 ready to merge your branch into master.
 
-* Assign a version to the release you are preparing. Varcode uses [versioneer], so rather
-than explicitly editing `__version__` variable in the code, you must instead tag the branch with your new version number (e.g. `git tag v1.2.3`).
+* Assign a version to the release you are preparing. Varcode uses [versioneer](https://github.com/warner/python-versioneer), so rather
+than explicitly editing `__version__` variable in the code you must instead tag the branch with your new version number (e.g. `git tag v1.2.3`).
 
 * Once your candidate release branch is tagged you must then run `git push --tags` and merge the branch.
 
