@@ -107,7 +107,6 @@ def test_alternate_start_codon():
         modifies_coding_sequence=True,
         modifies_protein_sequence=False)
 
-
 def test_stop_loss():
     # transcript MAST2-001 (ENST00000361297 in Ensembl 75)
     # location: chrom 1 @ 46,501,738 forward strand
@@ -115,6 +114,36 @@ def test_stop_loss():
     # change G>C in stop codon, should result in stop-loss mutation
     # causing an elongated protein
     variant = Variant("1", 46501738, "G", "C", ensembl=ensembl_grch37)
+    expect_effect(
+        variant,
+        transcript_id="ENST00000361297",
+        effect_class=StopLoss,
+        modifies_coding_sequence=True,
+        modifies_protein_sequence=True)
+
+def test_stop_loss_from_larger_deletion_before_stop_codon():
+    # transcript MAST2-001 (ENST00000361297 in Ensembl 75)
+    # location: chrom 1 @ 46,501,733 forward strand
+
+    # delete stop codon and the codon before it,
+    # should result in stop-loss mutation
+    # causing an elongated protein
+    variant = Variant("1", 46501733, "ACATAG", "", ensembl=ensembl_grch37)
+    expect_effect(
+        variant,
+        transcript_id="ENST00000361297",
+        effect_class=StopLoss,
+        modifies_coding_sequence=True,
+        modifies_protein_sequence=True)
+
+def test_stop_loss_from_larger_deletion_after_stop_codon():
+    # transcript MAST2-001 (ENST00000361297 in Ensembl 75)
+    # location: chrom 1 @ 46,501,736 forward strand
+
+    # delete stop codon and the codon after it,
+    # should result in stop-loss mutation
+    # causing an elongated protein
+    variant = Variant("1", 46501736, "TAGCAG", "", ensembl=ensembl_grch37)
     expect_effect(
         variant,
         transcript_id="ENST00000361297",

@@ -35,12 +35,13 @@ from .effect_classes import (
 from .translate import START_CODONS, STOP_CODONS, translate
 
 def _choose_in_frame_annotation(
-        aa_mutation_start_offset,
+        first_ref_codon_index,
         aa_ref,
         aa_alt,
         transcript,
         variant,
-        reference_protein_length):
+        reference_protein_length,
+        mutant_codons_contain_stop):
     """Choose a coding effect annotation for in-frame mutations which do
     not affect the start codon and do not introduce a premature stop codon.
     This function encompasses all the logic which does not need to look at the
@@ -49,9 +50,10 @@ def _choose_in_frame_annotation(
 
     Parameters
     ----------
-    aa_mutation_start_offset : int
+    first_ref_codon_index : int
         Inclusive (starting from 0) amino acid position of the first ref
-        amino acid which is changed by the mutation.
+        amino acid which is changed by the mutation. Might include
+        synonymous substitutions.
 
     aa_ref : Bio.Seq.Seq
         Original amino acid sequence at aa_pos before the mutation
@@ -64,29 +66,44 @@ def _choose_in_frame_annotation(
     variant : Variant
 
     reference_protein_length : int
+
+    mutant_codons_contain_stop : bool
+        Is there a stop codon in the modified region of the coding sequence?
     """
     aa_ref, aa_alt, shared_prefix, shared_suffix = \
         trim_shared_flanking_strings(
             aa_ref,
             aa_alt)
 
+    # index of first amino acid which is different from the reference
+    aa_mutation_start_offset = first_ref_codon_index + len(shared_prefix)
+    last_ref_amino_acid_index = aa_mutation_start_offset + len(aa_ref)
+
+    if mutant_codons_contain_stop:
+        # if the new coding sequence contains a stop codon, then this is a
+        # PrematureStop mutation
+        n_remaining_amino_acids_in_ref = (
+            reference_protein_length - aa_mutation_start_offset)
+        if len(aa_alt) < n_remaining_amino_acids_in_ref:
+            # only call this mutation a premature stop if it decreases
+            # the length of the protein
+            return PrematureStop(
+                variant=variant,
+                transcript=transcript,
+                aa_mutation_start_offset=aa_mutation_start_offset,
+                aa_ref=aa_ref,
+                aa_alt=aa_alt)
+
     if len(aa_ref) == len(aa_alt) == 0:
-        shared_amino_acids = shared_prefix + shared_suffix
         return Silent(
             variant=variant,
             transcript=transcript,
             aa_pos=aa_mutation_start_offset,
-            aa_ref=shared_amino_acids)
-
-    # index of first amino acid which is different from the reference
-    aa_mutation_start_offset += len(shared_prefix)
-
-    if aa_mutation_start_offset == reference_protein_length:
+            aa_ref=shared_prefix + shared_suffix)
+    elif last_ref_amino_acid_index == reference_protein_length and (
+            not mutant_codons_contain_stop):
         # if non-silent mutation is at the end of the protein then
         # should be a stop-loss
-        assert aa_ref == "", \
-            "Expected end of coding sequence for %s, got '%s'" % (
-                aa_ref)
         return StopLoss(
             variant,
             transcript,
@@ -249,36 +266,10 @@ def predict_in_frame_coding_effect(
         mutant_codons,
         first_codon_is_start=(first_ref_codon_index == 0))
 
-    if contains_stop_codon(mutant_codons):
-        # if the new coding sequence contains a stop codon, then this is a
-        # PrematureStop mutation
+    mutant_codons_contain_stop = contains_stop_codon(mutant_codons)
 
-        # The mutation may do more than just insert a stop codon, so trim any
-        # shared prefix between the old and new amino sequence leading up to the
-        # stop codon
-        n_shared_amino_acids = 0
-        for i, x in enumerate(original_protein_subsequence):
-            if len(mutant_protein_subsequence) < i + 1:
-                break
-            if mutant_protein_subsequence[i] != x:
-                break
-            n_shared_amino_acids += 1
-        mutation_aa_pos = first_ref_codon_index + n_shared_amino_acids
-        original_protein_subsequence = \
-            original_protein_subsequence[n_shared_amino_acids:]
-        mutant_protein_subsequence = \
-            mutant_protein_subsequence[n_shared_amino_acids:]
-        n_remaining_amino_acids_in_ref = reference_protein_length - mutation_aa_pos
-        if len(mutant_protein_subsequence) < n_remaining_amino_acids_in_ref:
-            # only call this mutation a premature stop if it decreases
-            # the length of the protein
-            return PrematureStop(
-                variant=variant,
-                transcript=transcript,
-                aa_mutation_start_offset=mutation_aa_pos,
-                aa_ref=original_protein_subsequence,
-                aa_alt=mutant_protein_subsequence)
-    elif last_ref_codon_index >= reference_protein_length:
+    if not mutant_codons_contain_stop and (
+            last_ref_codon_index >= reference_protein_length):
         # if the mutant codons didn't contain a stop but did mutate the last
         # reference codon then the translated sequence might involve the 3' UTR
         three_prime_utr = transcript.three_prime_utr_sequence
@@ -306,9 +297,10 @@ def predict_in_frame_coding_effect(
             alt_codon=mutant_codons)
 
     return _choose_in_frame_annotation(
-        aa_mutation_start_offset=first_ref_codon_index,
+        first_ref_codon_index=first_ref_codon_index,
         aa_ref=original_protein_subsequence,
         aa_alt=mutant_protein_subsequence,
         variant=variant,
         transcript=transcript,
-        reference_protein_length=reference_protein_length)
+        reference_protein_length=reference_protein_length,
+        mutant_codons_contain_stop=mutant_codons_contain_stop)
