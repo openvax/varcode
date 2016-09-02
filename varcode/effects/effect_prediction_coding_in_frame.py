@@ -34,7 +34,7 @@ from .effect_classes import (
 )
 from .translate import START_CODONS, STOP_CODONS, translate
 
-def _choose_in_frame_annotation(
+def _choose_in_frame_effect_annotation(
         first_ref_codon_index,
         aa_ref,
         aa_alt,
@@ -296,7 +296,9 @@ def predict_in_frame_coding_effect(
             ref_codon=transcript.sequence[:3],
             alt_codon=mutant_codons)
 
-    return _choose_in_frame_annotation(
+    # TODO: move logic for AlternateStartCodon and StartLoss to
+    # the _choose_in_frame_effect_annotation helper
+    return _choose_in_frame_effect_annotation(
         first_ref_codon_index=first_ref_codon_index,
         aa_ref=original_protein_subsequence,
         aa_alt=mutant_protein_subsequence,
