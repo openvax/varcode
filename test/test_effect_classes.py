@@ -151,6 +151,71 @@ def test_stop_loss_from_larger_deletion_after_stop_codon():
         modifies_coding_sequence=True,
         modifies_protein_sequence=True)
 
+def test_stop_loss_from_out_of_frame_deletion_in_stop_codon():
+    # transcript MAST2-001 (ENST00000361297 in Ensembl 75)
+    # location: chrom 1 @ 46,501,736 forward strand
+    #
+    # delete first two nucleotides of stop codon
+    # TAG CAG... -> GCA G...
+    #
+    # should result in stop-loss mutation causing an elongated protein
+    variant = Variant("1", 46501736, "TA", "", ensembl=ensembl_grch37)
+    expect_effect(
+        variant,
+        transcript_id="ENST00000361297",
+        effect_class=StopLoss,
+        modifies_coding_sequence=True,
+        modifies_protein_sequence=True)
+
+
+def test_silent_from_in_frame_deletion_in_stop_codon():
+    # transcript MAST2-001 (ENST00000361297 in Ensembl 75)
+    # location: chrom 1 @ 46,501,737 forward strand
+    #
+    # delete first two nucleotides of stop codon
+    # T_AG C_AG... -> TAG...
+    #
+    # should result in stop-loss mutation causing an elongated protein
+    variant = Variant("1", 46501737, "AGC", "", ensembl=ensembl_grch37)
+    expect_effect(
+        variant,
+        transcript_id="ENST00000361297",
+        effect_class=Silent,
+        modifies_coding_sequence=True,
+        modifies_protein_sequence=False)
+
+def test_silent_from_out_of_frame_deletion_in_stop_codon():
+    # transcript MAST2-001 (ENST00000361297 in Ensembl 75)
+    # location: chrom 1 @ 46,501,738 forward strand
+    #
+    # delete first two nucleotides of stop codon
+    # TA_G C_AG... -> TAA G...
+    #
+    # should result in stop-loss mutation causing an elongated protein
+    variant = Variant("1", 46501738, "GC", "", ensembl=ensembl_grch37)
+    expect_effect(
+        variant,
+        transcript_id="ENST00000361297",
+        effect_class=Silent,
+        modifies_coding_sequence=True,
+        modifies_protein_sequence=False)
+
+def test_silent_from_out_of_frame_insertion_in_stop_codon():
+    # transcript MAST2-001 (ENST00000361297 in Ensembl 75)
+    # location: chrom 1 @ 46,501,737 forward strand
+    #
+    # insert "A" after first two nucleotides of stop codon
+    # TAG CAG... -> TAA GCA G...
+    #
+    # should result in stop-loss mutation causing an elongated protein
+    variant = Variant("1", 46501737, "AG", "AAG", ensembl=ensembl_grch37)
+    expect_effect(
+        variant,
+        transcript_id="ENST00000361297",
+        effect_class=Silent,
+        modifies_coding_sequence=True,
+        modifies_protein_sequence=False)
+
 def test_stop_gain():
     # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
     # Chromosome 17: 43,044,295-43,125,370 reverse strand.
