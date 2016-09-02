@@ -120,6 +120,16 @@ def _choose_in_frame_annotation(
             aa_alt=aa_alt)
 
 
+def contains_stop_codon(mutant_codons):
+    """
+    Given a sequence of codons (expected to have length multiple of three),
+    are any of them a stop codon?
+    """
+    n_mutant_codons = len(mutant_codons) // 3
+    return STOP_CODONS.intersection(
+        mutant_codons[3 * i:3 * i + 3]
+        for i in range(n_mutant_codons))
+
 def predict_in_frame_coding_effect(
         ref,
         alt,
@@ -217,42 +227,29 @@ def predict_in_frame_coding_effect(
     original_protein_subsequence = transcript.protein_sequence[
         first_ref_codon_index:last_ref_codon_index + 1]
 
-    if first_ref_codon_index == 0:
-        if mutant_codons[:3] not in START_CODONS:
-            # if we changed a start codon to something else then
-            # we no longer know where the protein begins (or even in
-            # what frame).
-            # TODO: use the Kozak consensus sequence or a predictive model
-            # to identify the most likely start site
-            return StartLoss(
-                variant=variant,
-                transcript=transcript)
-        elif len(mutant_codons) == 3 and len(ref) == len(alt):
-            # If the change is simple substitution which preserve a
-            # start codon at the beginning
-            return AlternateStartCodon(
-                variant=variant,
-                transcript=transcript,
-                aa_ref=original_protein_subsequence,
-                ref_codon=transcript.sequence[:3],
-                alt_codon=mutant_codons)
+    # this variable is used later to decide whether a Silent effect should
+    # be converted to AlternateStartCodon.
+    modifies_start_codon = (first_ref_codon_index == 0)
+    start_codon_lost = modifies_start_codon and (
+        mutant_codons[:3] not in START_CODONS)
 
-        else:
-            # if the mutation changes the start codon usage but also has
-            # other affects then fall through to the
-            # substitution/insertion/deletion logic further down
-            pass
+    if start_codon_lost:
+        # if we changed a start codon to something else then
+        # we no longer know where the protein begins (or even in
+        # what frame).
+        # TODO: use the Kozak consensus sequence or a predictive model
+        # to identify the most likely start site
+        return StartLoss(
+            variant=variant,
+            transcript=transcript)
+
+    reference_protein_length = len(transcript.protein_sequence)
 
     mutant_protein_subsequence = translate(
         mutant_codons,
         first_codon_is_start=(first_ref_codon_index == 0))
 
-    n_mutant_codons = len(mutant_codons) // 3
-
-    reference_protein_length = len(transcript.protein_sequence)
-    if STOP_CODONS.intersection(
-            mutant_codons[3 * i:3 * i + 3]
-            for i in range(n_mutant_codons)):
+    if contains_stop_codon(mutant_codons):
         # if the new coding sequence contains a stop codon, then this is a
         # PrematureStop mutation
 
@@ -281,6 +278,32 @@ def predict_in_frame_coding_effect(
                 aa_mutation_start_offset=mutation_aa_pos,
                 aa_ref=original_protein_subsequence,
                 aa_alt=mutant_protein_subsequence)
+    elif last_ref_codon_index >= reference_protein_length:
+        # if the mutant codons didn't contain a stop but did mutate the last
+        # reference codon then the translated sequence might involve the 3' UTR
+        three_prime_utr = transcript.three_prime_utr_sequence
+        n_utr_codons = len(three_prime_utr) // 3
+        # trim the 3' UTR sequence to have a length that is a multiple of 3
+        truncated_utr_sequence = three_prime_utr[:n_utr_codons * 3]
+        translated_utr = translate(
+            truncated_utr_sequence, first_codon_is_start=False)
+        # combine the in-frame mutant codons with the truncated sequence of
+        # the 3' UTR
+        mutant_codons += truncated_utr_sequence
+        mutant_protein_subsequence += translated_utr
+
+    if modifies_start_codon and (
+            original_protein_subsequence == mutant_protein_subsequence):
+        # Substitution between start codons gets special treatment since,
+        # though superficially synonymous, this could still potentially
+        # cause a start loss / change in reading frame and might be worth
+        # closer scrutiny
+        return AlternateStartCodon(
+            variant=variant,
+            transcript=transcript,
+            aa_ref=original_protein_subsequence,
+            ref_codon=transcript.sequence[:3],
+            alt_codon=mutant_codons)
 
     return _choose_in_frame_annotation(
         aa_mutation_start_offset=first_ref_codon_index,

@@ -31,7 +31,10 @@ from .nucleotides import (
     is_purine
 )
 from .string_helpers import trim_shared_flanking_strings
-from .effects import predict_variant_effects
+from .effects import (
+    predict_variant_effects,
+    predict_variant_effect_on_transcript
+)
 
 class Variant(Serializable):
     __slots__ = (
@@ -358,6 +361,9 @@ class Variant(Serializable):
     def effects(self, raise_on_error=True):
         return predict_variant_effects(
             variant=self, raise_on_error=raise_on_error)
+
+    def effect_on_transcript(self, transcript):
+        return predict_variant_effect_on_transcript(self, transcript)
 
     @property
     def is_insertion(self):
