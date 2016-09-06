@@ -18,14 +18,16 @@ test suite.
 """
 
 from varcode import Variant
-from varcode.effects import Silent, PrematureStop, StopLoss, Insertion
+from varcode.effects import (
+    Silent, PrematureStop, StopLoss, Insertion, Substitution
+)
 
 def expect_effect(
         variant,
         transcript_id=None,
         effect_class=None,
         protein_sequence=None,
-        aa_alt=None):
+        **kwargs):
     if transcript_id is None:
         effects = variant.effects()
         effect = effects.top_priority_effect()
@@ -42,9 +44,11 @@ def expect_effect(
             "Expected protein sequence %s but got %s" % (
                 protein_sequence,
                 effect.mutant_protein_sequence)
-    if aa_alt is not None:
-        assert effect.aa_alt == aa_alt, \
-            "Expected aa_alt='%s' but got '%s'" % (aa_alt, effect.aa_alt)
+    for field, expected_value in kwargs.items():
+        actual_value = getattr(effect, field)
+        assert actual_value == expected_value, \
+            "Expected %s='%s' but got '%s'" % (
+                field, expected_value, actual_value)
 
 def test_issue167_insertion_of_stop_codon():
     # Issue: https://github.com/hammerlab/varcode/issues/167
@@ -190,3 +194,57 @@ def test_issue172_insertion_after_stop_codon():
     expect_effect(
         variant=variant,
         effect_class=Silent)
+
+def test_issue174_wrong_aa_ref_for_insertion_of_stop_codon():
+    # Issue: https://github.com/hammerlab/varcode/issues/174
+    """
+    chr1 99772782 . A ATGA 5000 . . .
+    PrematureStop (OK)
+    * aa_mutation_start_offset  = 6 (OK)
+    * aa_mutation_end_offset = 6 (OK)
+    * aa_ref = "L" (FAIL, just insertion, ref should be empty)
+    * aa_alt = ""
+    """
+    variant = Variant("chr1", 99772782, "A", "ATGA", "GRCm38")
+    expect_effect(
+        variant=variant,
+        effect_class=PrematureStop,
+        aa_ref="",
+        aa_alt="")
+
+def test_issue175_wrong_end_offset_for_insertion_with_stop_codon():
+    # Issue: https://github.com/hammerlab/varcode/issues/175
+    """
+    chr1 99772782 . A ACCCTGA 5000 .
+    # Annotated as
+    PrematureStop (OK)
+    * aa_mutation_start_offset  = 6 (OK)
+    * aa_mutation_end_offset = 7 (FAIL, should be 6)
+    * aa_ref = "L" (FAIL, just insertion, ref should be empty)
+    * aa_alt = "P"
+    """
+    variant = Variant("chr1", 99772782, "A", "ACCCTGA", "GRCm38")
+    expect_effect(
+        variant=variant,
+        aa_ref="",
+        aa_alt="",
+        aa_mutation_start_offset=6,
+        aa_mutation_end_offset=6)
+
+def test_issue176_substitution_before_stop_codon():
+    # Issue: https://github.com/hammerlab/varcode/issues/176
+    """
+    ##fileformat=VCFv4.1
+    #CHROM POS ID REF ALT QUAL FILTER INFO FORMAT
+    # SNP before the stop codon of transcript ENSMUST00000086738
+    # ATC TGA -> ACC TGA {I -> T}
+    chr1 100484697 . T C 5000 . . .
+    This is annotated as a StopLoss. It's a Substitution. VEP gets it right.
+    """
+    variant = Variant("chr1", 100484697, "T", "C", "GRCm38")
+    expect_effect(
+        variant=variant,
+        transcript_id="ENSMUST00000086738",
+        effect_class=Substitution,
+        aa_ref="I",
+        aa_alt="T")

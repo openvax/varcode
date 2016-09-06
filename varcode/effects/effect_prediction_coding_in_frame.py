@@ -147,6 +147,81 @@ def contains_stop_codon(mutant_codons):
         mutant_codons[3 * i:3 * i + 3]
         for i in range(n_mutant_codons))
 
+def get_codons(
+        ref,
+        alt,
+        cds_offset,
+        sequence_from_start_codon,
+        transcript_id,
+        protein_sequence,
+        variant):
+    # index (starting from 0) of first affected reference codon
+    first_ref_codon_index = cds_offset // 3
+
+    # which nucleotide of the first codon got changed?
+    offset_in_first_ref_codon = cds_offset % 3
+
+    if len(ref) == 0:
+        # inserting inside a reference codon
+        # include an extra codon at the end of the reference so that if we
+        # insert a stop before a stop, we can return Silent
+        ref_codon = sequence_from_start_codon[
+            first_ref_codon_index * 3:first_ref_codon_index * 3 + 6]
+        if offset_in_first_ref_codon == 2:
+            # if insertion happens between codons then we don't actually
+            # need to select any reference codons for modification
+            last_ref_codon_index = first_ref_codon_index
+        else:
+            last_ref_codon_index = first_ref_codon_index + 1
+        # split the reference codon into nucleotides before/after insertion
+        prefix = ref_codon[:offset_in_first_ref_codon + 1]
+        suffix = ref_codon[offset_in_first_ref_codon + 1:]
+        mutant_codons = prefix + alt + suffix
+    else:
+        assert first_ref_codon_index <= len(protein_sequence), \
+            ("Unexpected mutation at offset %d (5' UTR starts at %d)"
+             " while annotating %s on %s") % (
+                 first_ref_codon_index,
+                 len(protein_sequence),
+                 variant,
+                 transcript_id)
+        n_ref_nucleotides = len(ref)
+        last_ref_codon_index = int((cds_offset + n_ref_nucleotides - 1) / 3)
+
+        assert last_ref_codon_index >= first_ref_codon_index, \
+            ("Expected first_ref_codon_index (%d) <= "
+             "last_ref_codon_index (%d) while annotating %s on %s") % (
+                first_ref_codon_index,
+                last_ref_codon_index,
+                variant,
+                transcript_id)
+        # codons in the reference sequence
+        ref_codons = sequence_from_start_codon[
+            first_ref_codon_index * 3:last_ref_codon_index * 3 + 3]
+
+        # We construct the new codons by taking the unmodified prefix
+        # of the first ref codon, the unmodified suffix of the last ref codon
+        # and sticking the alt nucleotides in between.
+        # Since this is supposed to be an in-frame mutation, the concatenated
+        # nucleotide string is expected to have a length that is a multiple of
+        # three.
+        prefix = ref_codons[:offset_in_first_ref_codon]
+
+        offset_in_last_ref_codon = (cds_offset + len(ref) - 1) % 3
+
+        if offset_in_last_ref_codon == 0:
+            suffix = ref_codons[-2:]
+        elif offset_in_last_ref_codon == 1:
+            suffix = ref_codons[-1:]
+        else:
+            suffix = ""
+        mutant_codons = prefix + alt + suffix
+
+    assert len(mutant_codons) % 3 == 0, \
+        "Expected in-frame mutation but got %s (length = %d)" % (
+            mutant_codons, len(mutant_codons))
+    return first_ref_codon_index, last_ref_codon_index, mutant_codons
+
 def predict_in_frame_coding_effect(
         ref,
         alt,
@@ -180,68 +255,18 @@ def predict_in_frame_coding_effect(
 
     variant : Variant
     """
+    protein_sequence = transcript.protein_sequence
 
-    # index (starting from 0) of first affected reference codon
-    first_ref_codon_index = cds_offset // 3
+    first_ref_codon_index, last_ref_codon_index, mutant_codons = get_codons(
+        ref=ref,
+        alt=alt,
+        cds_offset=cds_offset,
+        sequence_from_start_codon=sequence_from_start_codon,
+        transcript_id=transcript.id,
+        protein_sequence=protein_sequence,
+        variant=variant)
 
-    # which nucleotide of the first codon got changed?
-    offset_in_first_ref_codon = cds_offset % 3
-
-    if len(ref) == 0:
-        # inserting inside a reference codon
-        # include an extra codon at the end of the reference so that if we
-        # insert a stop before a stop, we can return Silent
-        ref_codon = sequence_from_start_codon[
-            first_ref_codon_index * 3:first_ref_codon_index * 3 + 6]
-        last_ref_codon_index = first_ref_codon_index + 1
-        # split the reference codon into nucleotides before/after insertion
-        prefix = ref_codon[:offset_in_first_ref_codon + 1]
-        suffix = ref_codon[offset_in_first_ref_codon + 1:]
-        mutant_codons = prefix + alt + suffix
-    else:
-        assert first_ref_codon_index <= len(transcript.protein_sequence), \
-            ("Unexpected mutation at offset %d (5' UTR starts at %d)"
-             " while annotating %s on %s") % (
-                 first_ref_codon_index,
-                 len(transcript.protein_sequence),
-                 variant,
-                 transcript)
-        n_ref_nucleotides = len(ref)
-        last_ref_codon_index = int((cds_offset + n_ref_nucleotides - 1) / 3)
-
-        assert last_ref_codon_index >= first_ref_codon_index, \
-            ("Expected first_ref_codon_index (%d) <= "
-             "last_ref_codon_index (%d) while annotating %s on %s") % (
-                first_ref_codon_index,
-                last_ref_codon_index,
-                variant,
-                transcript)
-        # codons in the reference sequence
-        ref_codons = sequence_from_start_codon[
-            first_ref_codon_index * 3:last_ref_codon_index * 3 + 3]
-
-        # We construct the new codons by taking the unmodified prefix
-        # of the first ref codon, the unmodified suffix of the last ref codon
-        # and sticking the alt nucleotides in between.
-        # Since this is supposed to be an in-frame mutation, the concatenated
-        # nucleotide string is expected to have a length that is a multiple of
-        # three.
-        prefix = ref_codons[:offset_in_first_ref_codon]
-
-        offset_in_last_ref_codon = (cds_offset + len(ref) - 1) % 3
-
-        if offset_in_last_ref_codon == 0:
-            suffix = ref_codons[-2:]
-        elif offset_in_last_ref_codon == 1:
-            suffix = ref_codons[-1:]
-        else:
-            suffix = ""
-        mutant_codons = prefix + alt + suffix
-    assert len(mutant_codons) % 3 == 0, \
-        "Expected in-frame mutation but got %s (length = %d)" % (
-            mutant_codons, len(mutant_codons))
-
-    original_protein_subsequence = transcript.protein_sequence[
+    original_protein_subsequence = protein_sequence[
         first_ref_codon_index:last_ref_codon_index + 1]
 
     # this variable is used later to decide whether a Silent effect should
