@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2016. Mount Sinai School of Medicine
+# Copyright (c) 2016. Mount Sinai School of Medicine
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,33 +22,7 @@ from varcode.effects import (
     Silent, PrematureStop, StopLoss, Insertion, Substitution
 )
 
-def expect_effect(
-        variant,
-        transcript_id=None,
-        effect_class=None,
-        protein_sequence=None,
-        **kwargs):
-    if transcript_id is None:
-        effects = variant.effects()
-        effect = effects.top_priority_effect()
-    else:
-        transcript = variant.ensembl.transcript_by_id(transcript_id)
-        effect = variant.effect_on_transcript(transcript)
-    if effect_class is not None:
-        assert effect.__class__ is effect_class, \
-            "Expected effect class %s but got %s" % (
-                effect_class.__name__,
-                effect.__class__.__name__)
-    if protein_sequence is not None:
-        assert effect.mutant_protein_sequence == protein_sequence, \
-            "Expected protein sequence %s but got %s" % (
-                protein_sequence,
-                effect.mutant_protein_sequence)
-    for field, expected_value in kwargs.items():
-        actual_value = getattr(effect, field)
-        assert actual_value == expected_value, \
-            "Expected %s='%s' but got '%s'" % (
-                field, expected_value, actual_value)
+from .common import expect_effect
 
 def test_issue167_insertion_of_stop_codon():
     # Issue: https://github.com/hammerlab/varcode/issues/167

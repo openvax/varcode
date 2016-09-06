@@ -345,25 +345,28 @@ def test_insertion():
         modifies_coding_sequence=True,
         modifies_protein_sequence=True)
 
-def test_frameshift():
-    # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
-    # Chromosome 17: 43,044,295-43,125,370 reverse strand.
+def test_frameshift_near_start_of_BRCA1_001():
     #
-    # Out of frame insertion after first two codons of exon #12
-    # ENSE00003527960 43,082,575  43,082,404  start_phase = 0
+    # Insertion of genomic "A" after second codon of coding sequence.
     #
-    variant = Variant(
-        "17",
-        43082575 - 6,
-        ref="",
-        alt="A",
-        ensembl=ensembl_grch38)
+    # Transcript: BRCA1-001 (ENST00000357654)
+    # Manually annotated using Ensembl release 85
+    #
+    # Original mRNA coding sequnce:
+    #   ATG GAT TTA TCT GCT CTT CGC GTT GAA GAA GTA CAA
+    #   -M- -D- -L- -S- -A- -L- -A- -V- -E- -E- -V- -Q-
+    #
+    # After variant:
+    #   ATG GAT TTT ATC TGC TCT TCG CGT TGA
+    #   -M- -D- -F- -I- -C- -S- -S- -R-  *
+    variant = Variant("17", 43124096 - 6, ref="", alt="A", ensembl=ensembl_grch38)
     expect_effect(
         variant,
         transcript_id="ENST00000357654",
         effect_class=FrameShift,
         modifies_coding_sequence=True,
-        modifies_protein_sequence=True)
+        modifies_protein_sequence=True,
+        aa_alt="FICSSR")
 
 def test_frameshift_truncation():
     # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 84)
@@ -384,6 +387,34 @@ def test_frameshift_truncation():
         effect_class=FrameShiftTruncation,
         modifies_coding_sequence=True,
         modifies_protein_sequence=True)
+
+
+def test_frameshift_truncation_in_exon_12_of_BRCA1_001():
+    # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
+    # Chromosome 17: 43,044,295-43,125,370 reverse strand.
+    #
+    # Out of frame insertion after first two codons of exon #12
+    # ENSE00003527960 43,082,575  43,082,404  start_phase = 0
+    #
+    # Original mRNA sequence for exon #12:
+    #   CAG AGG GAT ACC ATG
+    #   -Q- -R- -D- -T- -M-
+    # After variant:
+    #   CAG AGG TGA
+    #   -Q- -R-  *
+    variant = Variant(
+        "17",
+        43082575 - 6,
+        ref="",
+        alt="A",
+        ensembl=ensembl_grch38)
+    expect_effect(
+        variant,
+        transcript_id="ENST00000357654",
+        effect_class=FrameShiftTruncation,
+        modifies_coding_sequence=True,
+        modifies_protein_sequence=True,
+        aa_alt="")
 
 def test_substitution():
     # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
@@ -451,9 +482,7 @@ def test_silent_stop_codons():
             expect_effect,
             variant,
             transcript_id,
-            Silent,
-            True,
-            False)
+            Silent)
 
 def test_five_prime_utr():
     # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
