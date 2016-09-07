@@ -127,6 +127,8 @@ def choose_in_frame_effect_annotation(
         ref_codon_end_offset=ref_codon_end_offset,
         reference_protein_length=reference_protein_length,
         transcript=transcript)
+    print("mutant_codons", mutant_codons)
+    print("aa_alt", aa_alt)
 
     if modifies_start_codon and (aa_ref == aa_alt):
         # Substitution between start codons gets special treatment since,
@@ -147,12 +149,12 @@ def choose_in_frame_effect_annotation(
 
     # index of first amino acid which is different from the reference
     aa_mutation_start_offset = ref_codon_start_offset + len(shared_prefix)
-    ref_aa_mutation_end_offset = aa_mutation_start_offset + len(aa_ref)
+    ref_aa_end_offset = aa_mutation_start_offset + len(aa_ref)
 
     print("aa_ref", aa_ref)
     print("aa_alt", aa_alt)
     print("shared_prefix", shared_prefix, len(shared_prefix))
-    print("ref_aa_mutation_end_offset", ref_aa_mutation_end_offset)
+    print("ref_aa_end_offset", ref_aa_end_offset)
 
     mutant_codons_contain_stop = contains_stop_codon(mutant_codons)
 
@@ -176,11 +178,10 @@ def choose_in_frame_effect_annotation(
             transcript=transcript,
             aa_pos=aa_mutation_start_offset,
             aa_ref=shared_prefix + shared_suffix)
-    elif reference_protein_length < ref_aa_mutation_end_offset and (
-            not mutant_codons_contain_stop):
+    elif reference_protein_length <= ref_aa_end_offset and not mutant_codons_contain_stop:
         # if non-silent mutation is at the end of the protein then
         # should be a stop-loss
-        print(ref_aa_mutation_end_offset, reference_protein_length, mutant_codons_contain_stop)
+        print(ref_aa_end_offset, reference_protein_length, mutant_codons_contain_stop)
         return StopLoss(
             variant,
             transcript,
@@ -244,32 +245,34 @@ def get_codons(
     sequence_from_start_codon : str
         cDNA nucleotide coding sequence
 
-
     cds_offset : int
         Integer offset into the coding sequence where ref is replace with alt
     """
     # index (starting from 0) of first affected reference codon
     ref_codon_start_offset = cds_offset // 3
-
     # which nucleotide of the first codon got changed?
     nucleotide_offset_into_first_ref_codon = cds_offset % 3
+    print("ref='%s' alt='%s' start offset = %d nt offset in codon = %d" % (
+        trimmed_ref, trimmed_alt, ref_codon_start_offset, nucleotide_offset_into_first_ref_codon))
 
     if len(trimmed_ref) == 0:
         # inserting inside a reference codon
         # include an extra codon at the end of the reference so that if we
         # insert a stop before a stop, we can return Silent
-        insertion_ref_codon = sequence_from_start_codon[
-            ref_codon_start_offset * 3:ref_codon_start_offset * 3 + 6]
+
         if nucleotide_offset_into_first_ref_codon == 2:
             # if insertion happens between codons then we don't actually
             # need to select any reference codons for modification
             ref_codon_end_offset = ref_codon_start_offset
+            mutant_codons = trimmed_alt
         else:
             ref_codon_end_offset = ref_codon_start_offset + 1
-        # split the reference codon into nucleotides before/after insertion
-        prefix = insertion_ref_codon[:nucleotide_offset_into_first_ref_codon + 1]
-        suffix = insertion_ref_codon[nucleotide_offset_into_first_ref_codon + 1:]
-        mutant_codons = prefix + trimmed_alt + suffix
+            insertion_ref_codon = sequence_from_start_codon[
+                ref_codon_start_offset * 3:ref_codon_start_offset * 3 + 3]
+            # split the reference codon into nucleotides before/after insertion
+            prefix = insertion_ref_codon[:nucleotide_offset_into_first_ref_codon + 1]
+            suffix = insertion_ref_codon[nucleotide_offset_into_first_ref_codon + 1:]
+            mutant_codons = prefix + trimmed_alt + suffix
     else:
         assert ref_codon_start_offset <= len(protein_sequence), \
             ("Unexpected mutation at offset %d (5' UTR starts at %d)"
