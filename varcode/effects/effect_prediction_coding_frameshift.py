@@ -166,8 +166,8 @@ def cdna_codon_sequence_after_insertion_frameshift(
 def cdna_codon_sequence_after_deletion_or_substitution_frameshift(
         sequence_from_start_codon,
         cds_offset,
-        ref,
-        alt):
+        trimmed_ref,
+        trimmed_alt):
     """
     Logic for any frameshift which isn't an insertion.
 
@@ -193,26 +193,30 @@ def cdna_codon_sequence_after_deletion_or_substitution_frameshift(
     sequence_from_mutated_codon = substitute(
         sequence=sequence_after_mutated_codon,
         offset=offset_into_mutated_codon,
-        ref=ref,
-        alt=alt)
+        ref=trimmed_ref,
+        alt=trimmed_alt)
     return mutated_codon_index, sequence_from_mutated_codon
 
 def predict_frameshift_coding_effect(
-        ref,
-        alt,
-        cds_offset,
-        sequence_from_start_codon,
         variant,
-        transcript):
+        transcript,
+        trimmed_ref,
+        trimmed_alt,
+        cds_offset,
+        sequence_from_start_codon):
     """
     Coding effect of a frameshift mutation.
 
     Parameters
     ----------
-    ref : nucleotide sequence
+    variant : Variant
+
+    transcript : Transcript
+
+    trimmed_ref : nucleotide sequence
         Reference nucleotides
 
-    alt : nucleotide sequence
+    trimmed_alt : nucleotide sequence
         Alternate nucleotides introduced by mutation
 
     cds_offset : int
@@ -222,23 +226,20 @@ def predict_frameshift_coding_effect(
     sequence_from_start_codon : nucleotide sequence
         Nucleotides of the coding sequence and 3' UTR
 
-    variant : Variant
-
-    transcript : Transcript
     """
-    if len(ref) != 0:
+    if len(trimmed_ref) != 0:
         mutated_codon_index, sequence_from_mutated_codon = \
             cdna_codon_sequence_after_deletion_or_substitution_frameshift(
                 sequence_from_start_codon=sequence_from_start_codon,
                 cds_offset=cds_offset,
-                ref=ref,
-                alt=alt)
+                trimmed_ref=trimmed_ref,
+                trimmed_alt=trimmed_alt)
     else:
         mutated_codon_index, sequence_from_mutated_codon = \
             cdna_codon_sequence_after_insertion_frameshift(
                 sequence_from_start_codon=sequence_from_start_codon,
                 cds_offset_before_insertion=cds_offset,
-                inserted_nucleotides=alt)
+                inserted_nucleotides=trimmed_alt)
     return create_frameshift_effect(
         mutated_codon_index=mutated_codon_index,
         sequence_from_mutated_codon=sequence_from_mutated_codon,

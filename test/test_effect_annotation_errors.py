@@ -25,8 +25,8 @@ from varcode.effects import (
 from .common import expect_effect
 
 def test_issue167_insertion_of_stop_codon():
-    # Issue: https://github.com/hammerlab/varcode/issues/167
     """
+    Issue: https://github.com/hammerlab/varcode/issues/167
     The coding sequence at chr1/99772765 has transcript ID ENSMUST00000086738
     and looks like:
     ATG GAT TCT GTA CCA AGA CTG ACC AGC ATT TTG
@@ -44,8 +44,8 @@ def test_issue167_insertion_of_stop_codon():
         protein_sequence="MDSVPR")
 
 def test_issue168_frameshift_creates_silent_stop_codon():
-    # Issue: https://github.com/hammerlab/varcode/issues/168
     """
+    Issue: https://github.com/hammerlab/varcode/issues/168
     Using genome GRCm38, over transcript ENSMUST00000086738
     The coding sequence at chr1/99772765 has transcript ID ENSMUST00000086738
     and the end looks like:
@@ -63,8 +63,8 @@ def test_issue168_frameshift_creates_silent_stop_codon():
         effect_class=Silent)
 
 def test_issue169_insertion_of_stop_codon():
-    # Issue: https://github.com/hammerlab/varcode/issues/169
     """
+    Issue: https://github.com/hammerlab/varcode/issues/169
     The coding sequence at chr1/99772765 looks like:
     ATG GAT TCT GTA CCA AGA CTG ACC AGC ATT TTGx
                           ^ 99772782
@@ -92,8 +92,8 @@ def test_issue169_insertion_of_stop_codon():
         effect_class=PrematureStop)
 
 def test_issue170_stop_loss_does_not_translate_into_3prime_utr():
-    # Issue: https://github.com/hammerlab/varcode/issues/170
     """
+    Issue: https://github.com/hammerlab/varcode/issues/170
     Testcase, using genome GRCm38, over transcript ENSMUST00000086738
 
     The coding sequence at chr1/99772765 has transcript ID ENSMUST00000086738
@@ -131,8 +131,8 @@ def test_issue170_stop_loss_does_not_translate_into_3prime_utr():
         aa_alt="STIVWSSGPLFCRGFHLFFFSFF")
 
 def test_issue_171_insertion_before_stop_codon():
-    # Issue: https://github.com/hammerlab/varcode/issues/171
     """
+    Issue: https://github.com/hammerlab/varcode/issues/171
     Test using genome GRCm38, on transcript ENSMUST00000086738
     Insertion before the stop codon: TGA -> TCC TGA
     This is annotated as:
@@ -155,8 +155,8 @@ def test_issue_171_insertion_before_stop_codon():
         effect_class=Insertion)
 
 def test_issue172_insertion_after_stop_codon():
-    # Issue: https://github.com/hammerlab/varcode/issues/172
     """
+    Issue: https://github.com/hammerlab/varcode/issues/172
     Insertion immediately after the stop codon
         TGA ACT ATT -> TAG CAG CAG ACT ATT...
 
@@ -170,8 +170,8 @@ def test_issue172_insertion_after_stop_codon():
         effect_class=Silent)
 
 def test_issue174_wrong_aa_ref_for_insertion_of_stop_codon():
-    # Issue: https://github.com/hammerlab/varcode/issues/174
     """
+    Issue: https://github.com/hammerlab/varcode/issues/174
     chr1 99772782 . A ATGA 5000 . . .
     PrematureStop (OK)
     * aa_mutation_start_offset  = 6 (OK)
@@ -187,8 +187,8 @@ def test_issue174_wrong_aa_ref_for_insertion_of_stop_codon():
         aa_alt="")
 
 def test_issue175_wrong_end_offset_for_insertion_with_stop_codon():
-    # Issue: https://github.com/hammerlab/varcode/issues/175
     """
+    Issue: https://github.com/hammerlab/varcode/issues/175
     chr1 99772782 . A ACCCTGA 5000 .
     # Annotated as
     PrematureStop (OK)
@@ -206,8 +206,8 @@ def test_issue175_wrong_end_offset_for_insertion_with_stop_codon():
         aa_mutation_end_offset=6)
 
 def test_issue176_substitution_before_stop_codon():
-    # Issue: https://github.com/hammerlab/varcode/issues/176
     """
+    Issue: https://github.com/hammerlab/varcode/issues/176
     ##fileformat=VCFv4.1
     #CHROM POS ID REF ALT QUAL FILTER INFO FORMAT
     # SNP before the stop codon of transcript ENSMUST00000086738

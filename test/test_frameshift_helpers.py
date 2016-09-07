@@ -45,8 +45,8 @@ def test_cdna_codon_sequence_after_deletion_or_substitution_frameshift_delA():
     i, s = cdna_codon_sequence_after_deletion_or_substitution_frameshift(
         sequence_from_start_codon="ATGCCCTAG",
         cds_offset=0,
-        ref="A",
-        alt="")
+        trimmed_ref="A",
+        trimmed_alt="")
     eq_(i, 0)
     eq_(s, "TGCCCTAG")
 
@@ -55,7 +55,7 @@ def test_cdna_codon_sequence_after_deletion_or_substitution_frameshift_AT_to_C()
     i, s = cdna_codon_sequence_after_deletion_or_substitution_frameshift(
         sequence_from_start_codon="ATGCCCTAG",
         cds_offset=0,
-        ref="AT",
-        alt="C")
+        trimmed_ref="AT",
+        trimmed_alt="C")
     eq_(i, 0)
     eq_(s, "CGCCCTAG")

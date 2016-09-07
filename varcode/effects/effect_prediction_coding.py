@@ -18,8 +18,8 @@ from .effect_prediction_coding_frameshift import predict_frameshift_coding_effec
 from .effect_prediction_coding_in_frame import predict_in_frame_coding_effect
 
 def predict_coding_effect(
-        ref,
-        alt,
+        trimmed_ref,
+        trimmed_alt,
         transcript_offset,
         variant,
         transcript):
@@ -30,10 +30,10 @@ def predict_coding_effect(
 
     Parameters
     ----------
-    ref : str
+    trimmed_ref : str
         Reference nucleotides we expect to find in the transcript's CDS
 
-    alt : str
+    trimmed_alt : str
         Alternate nucleotides we're replacing the reference with
 
     transcript_offset : int
@@ -50,17 +50,20 @@ def predict_coding_effect(
 
     sequence = transcript.sequence
 
+    n_ref = len(trimmed_ref)
+    n_alt = len(trimmed_alt)
+
     # reference nucleotides found on the transcript, if these don't match
     # what we were told to expect from the variant then raise an exception
     ref_nucleotides_from_transcript = str(
-        sequence[transcript_offset:transcript_offset + len(ref)])
+        sequence[transcript_offset:transcript_offset + n_ref])
 
     # Make sure that the reference sequence agrees with what we expected
     # from the VCF
-    assert ref_nucleotides_from_transcript == ref, \
+    assert ref_nucleotides_from_transcript == trimmed_ref, \
         "%s: expected ref '%s' at offset %d of %s, transcript has '%s'" % (
             variant,
-            ref,
+            trimmed_ref,
             transcript_offset,
             transcript,
             ref_nucleotides_from_transcript)
@@ -76,7 +79,7 @@ def predict_coding_effect(
                 transcript,
                 transcript.sequence[cds_start_offset:cds_stop_offset + 1]))
 
-    if len(ref) == 0 and transcript.strand == "-":
+    if n_ref == 0 and transcript.strand == "-":
         # By convention, genomic insertions happen *after* their base 1 position on
         # a chromosome. On the reverse strand, however, an insertion has to go
         # before the nucleotide at some transcript offset.
@@ -108,19 +111,19 @@ def predict_coding_effect(
     sequence_from_start_codon = str(sequence[cds_start_offset:])
 
     # is this an in-frame mutations?
-    if (len(ref) - len(alt)) % 3 == 0:
+    if (n_ref - n_alt) % 3 == 0:
         return predict_in_frame_coding_effect(
-            ref=ref,
-            alt=alt,
-            cds_offset=cds_offset,
-            sequence_from_start_codon=sequence_from_start_codon,
             variant=variant,
-            transcript=transcript)
+            transcript=transcript,
+            trimmed_ref=trimmed_ref,
+            trimmed_alt=trimmed_alt,
+            cds_offset=cds_offset,
+            sequence_from_start_codon=sequence_from_start_codon)
     else:
         return predict_frameshift_coding_effect(
-            ref=ref,
-            alt=alt,
-            cds_offset=cds_offset,
-            sequence_from_start_codon=sequence_from_start_codon,
             variant=variant,
-            transcript=transcript)
+            transcript=transcript,
+            trimmed_ref=trimmed_ref,
+            trimmed_alt=trimmed_alt,
+            cds_offset=cds_offset,
+            sequence_from_start_codon=sequence_from_start_codon)

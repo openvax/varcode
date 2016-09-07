@@ -362,8 +362,8 @@ def exonic_transcript_effect(variant, exon, exon_number, transcript):
     # If the mutation doesn't affect an exonic splice site, then
     # we'll just return this effect.
     coding_effect_annotation = predict_coding_effect(
-        ref=strand_ref,
-        alt=strand_alt,
+        trimmed_ref=strand_ref,
+        trimmed_alt=strand_alt,
         transcript_offset=transcript_offset,
         variant=variant,
         transcript=transcript)
