@@ -34,14 +34,51 @@ from .effect_classes import (
 )
 from .translate import START_CODONS, STOP_CODONS, translate
 
-def _choose_in_frame_effect_annotation(
+def translate_mutant_codons(
+        mutant_codons,
         first_ref_codon_index,
-        aa_ref,
-        aa_alt,
-        transcript,
-        variant,
+        last_ref_codon_index,
         reference_protein_length,
-        mutant_codons_contain_stop):
+        transcript):
+
+    mutant_protein_subsequence = translate(
+        mutant_codons,
+        first_codon_is_start=(first_ref_codon_index == 0))
+
+    mutant_codons_contain_stop = contains_stop_codon(mutant_codons)
+
+    if not mutant_codons_contain_stop and (
+            last_ref_codon_index >= reference_protein_length):
+        # if the mutant codons didn't contain a stop but did mutate the last
+        # reference codon then the translated sequence might involve the 3' UTR
+        three_prime_utr = transcript.three_prime_utr_sequence
+        n_utr_codons = len(three_prime_utr) // 3
+        # trim the 3' UTR sequence to have a length that is a multiple of 3
+        truncated_utr_sequence = three_prime_utr[:n_utr_codons * 3]
+        translated_utr = translate(
+            truncated_utr_sequence, first_codon_is_start=False)
+        # combine the in-frame mutant codons with the truncated sequence of
+        # the 3' UTR
+        mutant_codons += truncated_utr_sequence
+        mutant_protein_subsequence += translated_utr
+    return mutant_protein_subsequence
+
+def contains_stop_codon(mutant_codons):
+    """
+    Given a sequence of codons (expected to have length multiple of three),
+    are any of them a stop codon?
+    """
+    n_mutant_codons = len(mutant_codons) // 3
+    return STOP_CODONS.intersection(
+        mutant_codons[3 * i:3 * i + 3]
+        for i in range(n_mutant_codons))
+
+def choose_in_frame_effect_annotation(
+        variant,
+        transcript,
+        first_ref_codon_index,
+        last_ref_codon_index,
+        mutant_codons):
     """Choose a coding effect annotation for in-frame mutations which do
     not affect the start codon and do not introduce a premature stop codon.
     This function encompasses all the logic which does not need to look at the
@@ -50,26 +87,59 @@ def _choose_in_frame_effect_annotation(
 
     Parameters
     ----------
+    variant : Variant
+
+    transcript : Transcript
+
     first_ref_codon_index : int
         Inclusive (starting from 0) amino acid position of the first ref
         amino acid which is changed by the mutation. Might include
         synonymous substitutions.
 
-    aa_ref : Bio.Seq.Seq
-        Original amino acid sequence at aa_pos before the mutation
+    last_ref_codon_index : int
 
-    aa_alt : Bio.Seq.Seq
-        Alternate amino acid sequence at aa_pos after the mutation
-
-    transcript : Transcript
-
-    variant : Variant
-
-    reference_protein_length : int
-
-    mutant_codons_contain_stop : bool
-        Is there a stop codon in the modified region of the coding sequence?
+    mutant_codons : str
+        cDNA nucleotide sequence of mutated codons
     """
+
+    modifies_start_codon = (first_ref_codon_index == 0)
+
+    if modifies_start_codon and (mutant_codons[:3] not in START_CODONS):
+        # if we changed a start codon to something else then
+        # we no longer know where the protein begins (or even in
+        # what frame).
+        # TODO: use the Kozak consensus sequence or a predictive model
+        # to identify the most likely start site
+        return StartLoss(
+            variant=variant,
+            transcript=transcript)
+
+    original_protein_sequence = transcript.protein_sequence
+
+    aa_ref = original_protein_sequence[
+        first_ref_codon_index:last_ref_codon_index + 1]
+
+    reference_protein_length = len(original_protein_sequence)
+
+    aa_alt = translate_mutant_codons(
+        mutant_codons=mutant_codons,
+        first_ref_codon_index=first_ref_codon_index,
+        last_ref_codon_index=last_ref_codon_index,
+        reference_protein_length=reference_protein_length,
+        transcript=transcript)
+
+    if modifies_start_codon and (aa_ref == aa_alt):
+        # Substitution between start codons gets special treatment since,
+        # though superficially synonymous, this could still potentially
+        # cause a start loss / change in reading frame and might be worth
+        # closer scrutiny
+        return AlternateStartCodon(
+            variant=variant,
+            transcript=transcript,
+            aa_ref=aa_ref,
+            ref_codon=transcript.sequence[:3],
+            alt_codon=mutant_codons)
+
     aa_ref, aa_alt, shared_prefix, shared_suffix = \
         trim_shared_flanking_strings(
             aa_ref,
@@ -78,6 +148,8 @@ def _choose_in_frame_effect_annotation(
     # index of first amino acid which is different from the reference
     aa_mutation_start_offset = first_ref_codon_index + len(shared_prefix)
     last_ref_amino_acid_index = aa_mutation_start_offset + len(aa_ref)
+
+    mutant_codons_contain_stop = contains_stop_codon(mutant_codons)
 
     if mutant_codons_contain_stop:
         # if the new coding sequence contains a stop codon, then this is a
@@ -137,16 +209,6 @@ def _choose_in_frame_effect_annotation(
             aa_alt=aa_alt)
 
 
-def contains_stop_codon(mutant_codons):
-    """
-    Given a sequence of codons (expected to have length multiple of three),
-    are any of them a stop codon?
-    """
-    n_mutant_codons = len(mutant_codons) // 3
-    return STOP_CODONS.intersection(
-        mutant_codons[3 * i:3 * i + 3]
-        for i in range(n_mutant_codons))
-
 def get_codons(
         ref,
         alt,
@@ -155,6 +217,9 @@ def get_codons(
         transcript_id,
         protein_sequence,
         variant):
+    """
+    Returns reference and mutated codons
+    """
     # index (starting from 0) of first affected reference codon
     first_ref_codon_index = cds_offset // 3
 
@@ -165,7 +230,7 @@ def get_codons(
         # inserting inside a reference codon
         # include an extra codon at the end of the reference so that if we
         # insert a stop before a stop, we can return Silent
-        ref_codon = sequence_from_start_codon[
+        insertion_ref_codon = sequence_from_start_codon[
             first_ref_codon_index * 3:first_ref_codon_index * 3 + 6]
         if offset_in_first_ref_codon == 2:
             # if insertion happens between codons then we don't actually
@@ -174,8 +239,8 @@ def get_codons(
         else:
             last_ref_codon_index = first_ref_codon_index + 1
         # split the reference codon into nucleotides before/after insertion
-        prefix = ref_codon[:offset_in_first_ref_codon + 1]
-        suffix = ref_codon[offset_in_first_ref_codon + 1:]
+        prefix = insertion_ref_codon[:offset_in_first_ref_codon + 1]
+        suffix = insertion_ref_codon[offset_in_first_ref_codon + 1:]
         mutant_codons = prefix + alt + suffix
     else:
         assert first_ref_codon_index <= len(protein_sequence), \
@@ -255,79 +320,18 @@ def predict_in_frame_coding_effect(
 
     variant : Variant
     """
-    protein_sequence = transcript.protein_sequence
-
     first_ref_codon_index, last_ref_codon_index, mutant_codons = get_codons(
         ref=ref,
         alt=alt,
         cds_offset=cds_offset,
         sequence_from_start_codon=sequence_from_start_codon,
         transcript_id=transcript.id,
-        protein_sequence=protein_sequence,
+        protein_sequence=transcript.protein_sequence,
         variant=variant)
 
-    original_protein_subsequence = protein_sequence[
-        first_ref_codon_index:last_ref_codon_index + 1]
-
-    # this variable is used later to decide whether a Silent effect should
-    # be converted to AlternateStartCodon.
-    modifies_start_codon = (first_ref_codon_index == 0)
-    start_codon_lost = modifies_start_codon and (
-        mutant_codons[:3] not in START_CODONS)
-
-    if start_codon_lost:
-        # if we changed a start codon to something else then
-        # we no longer know where the protein begins (or even in
-        # what frame).
-        # TODO: use the Kozak consensus sequence or a predictive model
-        # to identify the most likely start site
-        return StartLoss(
-            variant=variant,
-            transcript=transcript)
-
-    reference_protein_length = len(transcript.protein_sequence)
-
-    mutant_protein_subsequence = translate(
-        mutant_codons,
-        first_codon_is_start=(first_ref_codon_index == 0))
-
-    mutant_codons_contain_stop = contains_stop_codon(mutant_codons)
-
-    if not mutant_codons_contain_stop and (
-            last_ref_codon_index >= reference_protein_length):
-        # if the mutant codons didn't contain a stop but did mutate the last
-        # reference codon then the translated sequence might involve the 3' UTR
-        three_prime_utr = transcript.three_prime_utr_sequence
-        n_utr_codons = len(three_prime_utr) // 3
-        # trim the 3' UTR sequence to have a length that is a multiple of 3
-        truncated_utr_sequence = three_prime_utr[:n_utr_codons * 3]
-        translated_utr = translate(
-            truncated_utr_sequence, first_codon_is_start=False)
-        # combine the in-frame mutant codons with the truncated sequence of
-        # the 3' UTR
-        mutant_codons += truncated_utr_sequence
-        mutant_protein_subsequence += translated_utr
-
-    if modifies_start_codon and (
-            original_protein_subsequence == mutant_protein_subsequence):
-        # Substitution between start codons gets special treatment since,
-        # though superficially synonymous, this could still potentially
-        # cause a start loss / change in reading frame and might be worth
-        # closer scrutiny
-        return AlternateStartCodon(
-            variant=variant,
-            transcript=transcript,
-            aa_ref=original_protein_subsequence,
-            ref_codon=transcript.sequence[:3],
-            alt_codon=mutant_codons)
-
-    # TODO: move logic for AlternateStartCodon and StartLoss to
-    # the _choose_in_frame_effect_annotation helper
-    return _choose_in_frame_effect_annotation(
-        first_ref_codon_index=first_ref_codon_index,
-        aa_ref=original_protein_subsequence,
-        aa_alt=mutant_protein_subsequence,
+    return choose_in_frame_effect_annotation(
         variant=variant,
         transcript=transcript,
-        reference_protein_length=reference_protein_length,
-        mutant_codons_contain_stop=mutant_codons_contain_stop)
+        first_ref_codon_index=first_ref_codon_index,
+        last_ref_codon_index=last_ref_codon_index,
+        mutant_codons=mutant_codons)
