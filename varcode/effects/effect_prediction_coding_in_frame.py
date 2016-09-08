@@ -127,6 +127,8 @@ def choose_in_frame_effect_annotation(
         ref_codon_end_offset=ref_codon_end_offset,
         reference_protein_length=reference_protein_length,
         transcript=transcript)
+    print("ref_codon_start_offset", ref_codon_start_offset)
+    print("ref_codon_end_offset", ref_codon_end_offset)
     print("mutant_codons", mutant_codons)
     print("aa_alt", aa_alt)
 
@@ -255,45 +257,25 @@ def get_codons(
     print("ref='%s' alt='%s' start offset = %d nt offset in codon = %d" % (
         trimmed_ref, trimmed_alt, ref_codon_start_offset, nucleotide_offset_into_first_ref_codon))
 
-    if len(trimmed_ref) == 0:
+    n_ref_nucleotides = len(trimmed_ref)
+    if n_ref_nucleotides == 0:
+        insertion_within_codon = nucleotide_offset_into_first_ref_codon != 2
         # inserting inside a reference codon
         # include an extra codon at the end of the reference so that if we
         # insert a stop before a stop, we can return Silent
-
-        if nucleotide_offset_into_first_ref_codon == 2:
-            # if insertion happens between codons then we don't actually
-            # need to select any reference codons for modification
-            ref_codon_end_offset = ref_codon_start_offset
-            mutant_codons = trimmed_alt
-        else:
-            ref_codon_end_offset = ref_codon_start_offset + 1
-            insertion_ref_codon = sequence_from_start_codon[
-                ref_codon_start_offset * 3:ref_codon_start_offset * 3 + 3]
-            # split the reference codon into nucleotides before/after insertion
-            prefix = insertion_ref_codon[:nucleotide_offset_into_first_ref_codon + 1]
-            suffix = insertion_ref_codon[nucleotide_offset_into_first_ref_codon + 1:]
-            mutant_codons = prefix + trimmed_alt + suffix
+        ref_codon_end_offset = ref_codon_start_offset + insertion_within_codon + 1
+        insertion_ref_codon = sequence_from_start_codon[
+            ref_codon_start_offset * 3:ref_codon_end_offset * 3]
+        print("insertion ref codons", insertion_ref_codon)
+        # split the reference codon into nucleotides before/after insertion
+        prefix = insertion_ref_codon[:nucleotide_offset_into_first_ref_codon + 1]
+        suffix = insertion_ref_codon[nucleotide_offset_into_first_ref_codon + 1:]
+        mutant_codons = prefix + trimmed_alt + suffix
     else:
-        assert ref_codon_start_offset <= len(protein_sequence), \
-            ("Unexpected mutation at offset %d (5' UTR starts at %d)"
-             " while annotating %s on %s") % (
-                 ref_codon_start_offset,
-                 len(protein_sequence),
-                 variant,
-                 transcript_id)
-        n_ref_nucleotides = len(trimmed_ref)
-        ref_codon_end_offset = int((cds_offset + n_ref_nucleotides - 1) / 3)
-
-        assert ref_codon_end_offset >= ref_codon_start_offset, \
-            ("Expected first_ref_codon_index (%d) <= "
-             "last_ref_codon_index (%d) while annotating %s on %s") % (
-                ref_codon_start_offset,
-                ref_codon_end_offset,
-                variant,
-                transcript_id)
+        ref_codon_end_offset = (cds_offset + n_ref_nucleotides - 1) // 3 + 1
         # codons in the reference sequence
         ref_codons = sequence_from_start_codon[
-            ref_codon_start_offset * 3:ref_codon_end_offset * 3 + 3]
+            ref_codon_start_offset * 3:ref_codon_end_offset * 3]
 
         # We construct the new codons by taking the unmodified prefix
         # of the first ref codon, the unmodified suffix of the last ref codon
@@ -311,7 +293,8 @@ def get_codons(
             suffix = ref_codons[-1:]
         else:
             suffix = ""
-        mutant_codons = prefix + trimmed_alt + suffix
+
+    mutant_codons = prefix + trimmed_alt + suffix
 
     assert len(mutant_codons) % 3 == 0, \
         "Expected in-frame mutation but got %s (length = %d)" % (
