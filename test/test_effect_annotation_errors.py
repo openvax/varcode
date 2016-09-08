@@ -196,14 +196,22 @@ def test_issue175_wrong_end_offset_for_insertion_with_stop_codon():
     * aa_mutation_end_offset = 7 (FAIL, should be 6)
     * aa_ref = "L" (FAIL, just insertion, ref should be empty)
     * aa_alt = "P"
+
+    ---
+    After some thought I disagree with the bug report's interpretation of
+    aa_mutation_end_offset. I think that these offsets should indicate the
+    offsets of mutated amino acids in the mutated protein sequence.
+
+    Thus the aa_mutation_end_offset=7 should stay as it is.
     """
     variant = Variant("chr1", 99772782, "A", "ACCCTGA", "GRCm38")
     expect_effect(
         variant=variant,
+        effect_class=PrematureStop,
         aa_ref="",
-        aa_alt="",
+        aa_alt="P",
         aa_mutation_start_offset=6,
-        aa_mutation_end_offset=6)
+        aa_mutation_end_offset=7)
 
 def test_issue176_substitution_before_stop_codon():
     """

@@ -34,45 +34,56 @@ from .effect_classes import (
 )
 from .translate import START_CODONS, STOP_CODONS, translate
 
+def find_first_stop_codon(nucleotide_sequence):
+    """
+    Given a sequence of codons (expected to have length multiple of three),
+    return index of first stop codon, or -1 if none is in the sequence.
+    """
+    n_mutant_codons = len(nucleotide_sequence) // 3
+    for i in range(n_mutant_codons):
+        codon = nucleotide_sequence[3 * i:3 * i + 3]
+        if codon in STOP_CODONS:
+            return i
+    return -1
+
 def translate_mutant_codons(
         mutant_codons,
         ref_codon_start_offset,
         ref_codon_end_offset,
         reference_protein_length,
         transcript):
+    """
+    Returns mutant amino acid sequence and offset of first stop codon
+    (or -1 if there was none)
+    """
+    mutant_stop_codon_index = find_first_stop_codon(mutant_codons)
 
-    mutant_protein_subsequence = translate(
-        mutant_codons,
-        first_codon_is_start=(ref_codon_start_offset == 0))
-
-    mutant_codons_contain_stop = contains_stop_codon(mutant_codons)
-
-    if not mutant_codons_contain_stop and (
-            ref_codon_end_offset >= reference_protein_length):
+    if mutant_stop_codon_index != -1:
+        mutant_codons = mutant_codons[:3 * mutant_stop_codon_index]
+    elif ref_codon_end_offset >= reference_protein_length:
         # if the mutant codons didn't contain a stop but did mutate the last
         # reference codon then the translated sequence might involve the 3' UTR
         three_prime_utr = transcript.three_prime_utr_sequence
         n_utr_codons = len(three_prime_utr) // 3
         # trim the 3' UTR sequence to have a length that is a multiple of 3
         truncated_utr_sequence = three_prime_utr[:n_utr_codons * 3]
-        translated_utr = translate(
-            truncated_utr_sequence, first_codon_is_start=False)
+
         # combine the in-frame mutant codons with the truncated sequence of
         # the 3' UTR
         mutant_codons += truncated_utr_sequence
-        mutant_protein_subsequence += translated_utr
-    return mutant_protein_subsequence
 
-def contains_stop_codon(mutant_codons):
-    """
-    Given a sequence of codons (expected to have length multiple of three),
-    are any of them a stop codon?
-    """
-    n_mutant_codons = len(mutant_codons) // 3
-    stop_codons_in_sequence = STOP_CODONS.intersection(
-        mutant_codons[3 * i:3 * i + 3]
-        for i in range(n_mutant_codons))
-    return len(stop_codons_in_sequence) > 0
+        # note the offset of the first stop codon in the combined
+        # nucleotide sequence of both the end of the CDS and the 3' UTR
+        first_utr_stop_codon_index = find_first_stop_codon(truncated_utr_sequence)
+        if first_utr_stop_codon_index != -1:
+            mutant_stop_codon_index = len(mutant_codons) // 3 + first_utr_stop_codon_index
+
+    amino_acids = translate(
+        mutant_codons,
+        first_codon_is_start=(ref_codon_start_offset == 0))
+
+    return amino_acids, mutant_stop_codon_index
+
 
 def choose_in_frame_effect_annotation(
         variant,
@@ -121,16 +132,12 @@ def choose_in_frame_effect_annotation(
 
     reference_protein_length = len(original_protein_sequence)
 
-    aa_alt = translate_mutant_codons(
+    aa_alt, mutant_stop_codon_index = translate_mutant_codons(
         mutant_codons=mutant_codons,
         ref_codon_start_offset=ref_codon_start_offset,
         ref_codon_end_offset=ref_codon_end_offset,
         reference_protein_length=reference_protein_length,
         transcript=transcript)
-    print("ref_codon_start_offset", ref_codon_start_offset)
-    print("ref_codon_end_offset", ref_codon_end_offset)
-    print("mutant_codons", mutant_codons)
-    print("aa_alt", aa_alt)
 
     if modifies_start_codon and (aa_ref == aa_alt):
         # Substitution between start codons gets special treatment since,
@@ -151,16 +158,10 @@ def choose_in_frame_effect_annotation(
 
     # index of first amino acid which is different from the reference
     aa_mutation_start_offset = ref_codon_start_offset + len(shared_prefix)
-    ref_aa_end_offset = aa_mutation_start_offset + len(aa_ref)
+    if mutant_stop_codon_index != -1:
+        mutant_stop_codon_index += len(shared_prefix)
 
-    print("aa_ref", aa_ref)
-    print("aa_alt", aa_alt)
-    print("shared_prefix", shared_prefix, len(shared_prefix))
-    print("ref_aa_end_offset", ref_aa_end_offset)
-
-    mutant_codons_contain_stop = contains_stop_codon(mutant_codons)
-
-    if mutant_codons_contain_stop:
+    if mutant_stop_codon_index != -1:
         # if the new coding sequence contains a stop codon, then this is a
         # PrematureStop mutation
         n_remaining_amino_acids_in_ref = (
@@ -180,10 +181,9 @@ def choose_in_frame_effect_annotation(
             transcript=transcript,
             aa_pos=aa_mutation_start_offset,
             aa_ref=shared_prefix + shared_suffix)
-    elif reference_protein_length <= ref_aa_end_offset and not mutant_codons_contain_stop:
+    elif ref_codon_start_offset + len(aa_alt) > reference_protein_length:
         # if non-silent mutation is at the end of the protein then
         # should be a stop-loss
-        print(ref_aa_end_offset, reference_protein_length, mutant_codons_contain_stop)
         return StopLoss(
             variant,
             transcript,
@@ -221,8 +221,6 @@ def get_codons(
         variant,
         trimmed_ref,
         trimmed_alt,
-        transcript_id,
-        protein_sequence,
         sequence_from_start_codon,
         cds_offset):
     """
@@ -239,10 +237,6 @@ def get_codons(
 
     trimmed_alt : str
         Trimmed alternate cDNA nucleotides which replace the reference
-
-    transcript_id : str
-
-    protein_sequence : str
 
     sequence_from_start_codon : str
         cDNA nucleotide coding sequence
@@ -338,10 +332,8 @@ def predict_in_frame_coding_effect(
         variant=variant,
         trimmed_ref=trimmed_ref,
         trimmed_alt=trimmed_alt,
-        transcript_id=transcript.id,
         sequence_from_start_codon=sequence_from_start_codon,
-        cds_offset=cds_offset,
-        protein_sequence=transcript.protein_sequence)
+        cds_offset=cds_offset)
     return choose_in_frame_effect_annotation(
         variant=variant,
         transcript=transcript,
