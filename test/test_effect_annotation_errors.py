@@ -130,19 +130,17 @@ def test_issue170_stop_loss_does_not_translate_into_3prime_utr():
         effect_class=StopLoss,
         aa_alt="STIVWSSGPLFCRGFHLFFFSFF")
 
-def test_issue_171_insertion_before_stop_codon():
+def test_issue_171_insertion_into_stop_codon():
     """
     Issue: https://github.com/hammerlab/varcode/issues/171
     Test using genome GRCm38, on transcript ENSMUST00000086738
-    Insertion before the stop codon: TGA -> TCC TGA
+    Insertion before the stop codon: T_GA -> T_CC T_GA
     This is annotated as:
         StopLoss(
             variant=chr1 g.100484699_100484700insCCT,
             transcript_name=Cntnap5b-001,
             transcript_id=ENSMUST00000086738,
             effect_description=p.*1293S (stop-loss))
-        * aa_ref ="*"
-        * aa_alt = "S"
     This should just be a clean insertion.
 
     ##fileformat=VCFv4.1
@@ -152,13 +150,15 @@ def test_issue_171_insertion_before_stop_codon():
     variant = Variant("chr1", 100484699, "T", "TCCT", "GRCm38")
     expect_effect(
         variant,
-        effect_class=Insertion)
+        effect_class=Insertion,
+        aa_ref="",
+        aa_alt="S")
 
 def test_issue172_insertion_after_stop_codon():
     """
     Issue: https://github.com/hammerlab/varcode/issues/172
     Insertion immediately after the stop codon
-        TGA ACT ATT -> TAG CAG CAG ACT ATT...
+        TGA ACT ATT -> TGA CAG CAG ACT ATT...
 
     ##fileformat=VCFv4.1
     #CHROM  POS ID  REF ALT QUAL    FILTER  INFO    FORMAT

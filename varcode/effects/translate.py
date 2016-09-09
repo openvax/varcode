@@ -17,6 +17,9 @@
 TODO: generalize this to work with the mitochondrial codon table.
 """
 
+from __future__ import division, absolute_import, print_function
+
+from six.moves import range
 from Bio.Data import CodonTable
 from Bio.Seq import Seq
 
@@ -106,3 +109,74 @@ def translate(
                     nucleotide_sequence))
 
     return protein_sequence
+
+
+def find_first_stop_codon(nucleotide_sequence):
+    """
+    Given a sequence of codons (expected to have length multiple of three),
+    return index of first stop codon, or -1 if none is in the sequence.
+    """
+    n_mutant_codons = len(nucleotide_sequence) // 3
+    for i in range(n_mutant_codons):
+        codon = nucleotide_sequence[3 * i:3 * i + 3]
+        if codon in STOP_CODONS:
+            return i
+    return -1
+
+def translate_in_frame_mutation(
+        transcript,
+        ref_codon_start_offset,
+        ref_codon_end_offset,
+        mutant_codons):
+    """
+    Returns:
+        - mutant amino acid sequence
+        - offset of first stop codon in the mutant sequence (or -1 if there was none)
+        - boolean flag indicating whether any codons from the 3' UTR were used
+
+    Parameters
+    ----------
+    transcript : pyensembl.Transcript
+        Reference transcript to which a cDNA mutation should be applied.
+
+    ref_codon_start_offset : int
+        Starting (base 0) integer offset into codons (character triplets) of the
+        transcript's reference coding sequence.
+
+    ref_codon_end_offset : int
+        Final (base 0) integer offset into codons of the transcript's
+        reference coding sequence.
+
+    mutant_codons : str
+        Nucleotide sequence to replace the reference codons with
+        (expected to have length that is a multiple of three)
+    """
+    mutant_stop_codon_index = find_first_stop_codon(mutant_codons)
+
+    using_three_prime_utr = False
+    if mutant_stop_codon_index != -1:
+        mutant_codons = mutant_codons[:3 * mutant_stop_codon_index]
+    elif ref_codon_end_offset > len(transcript.protein_sequence):
+        # if the mutant codons didn't contain a stop but did mutate the last
+        # reference codon then the translated sequence might involve the 3' UTR
+        three_prime_utr = transcript.three_prime_utr_sequence
+        n_utr_codons = len(three_prime_utr) // 3
+        # trim the 3' UTR sequence to have a length that is a multiple of 3
+        truncated_utr_sequence = three_prime_utr[:n_utr_codons * 3]
+
+        # note the offset of the first stop codon in the combined
+        # nucleotide sequence of both the end of the CDS and the 3' UTR
+        first_utr_stop_codon_index = find_first_stop_codon(truncated_utr_sequence)
+        using_three_prime_utr = first_utr_stop_codon_index > 0
+        if first_utr_stop_codon_index != -1:
+            n_mutant_codons = len(mutant_codons) // 3
+            mutant_stop_codon_index = n_mutant_codons + first_utr_stop_codon_index
+        # combine the in-frame mutant codons with the truncated sequence of
+        # the 3' UTR
+        mutant_codons += truncated_utr_sequence[:mutant_stop_codon_index * 3]
+
+    amino_acids = translate(
+        mutant_codons,
+        first_codon_is_start=(ref_codon_start_offset == 0))
+
+    return amino_acids, mutant_stop_codon_index, using_three_prime_utr

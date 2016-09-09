@@ -345,7 +345,6 @@ class AlternateStartCodon(Silent):
             self,
             variant,
             transcript,
-            aa_ref,
             ref_codon,
             alt_codon):
         Silent.__init__(
@@ -353,7 +352,7 @@ class AlternateStartCodon(Silent):
             variant=variant,
             transcript=transcript,
             aa_pos=0,
-            aa_ref=aa_ref)
+            aa_ref=transcript.protein_sequence[0])
         self.ref_codon = bio_seq_to_str(ref_codon)
         self.alt_codon = bio_seq_to_str(alt_codon)
 
