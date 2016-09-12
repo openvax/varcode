@@ -24,7 +24,7 @@ from ..common import groupby_field
 from .transcript_helpers import interval_offset_on_transcript
 from .effect_helpers import changes_exonic_splice_site
 from .effect_collection import EffectCollection
-from .effect_prediction_coding import predict_coding_effect
+from .effect_prediction_coding import predict_variant_coding_effect_on_transcript
 from .effect_classes import (
     Failure,
     Intergenic,
@@ -314,16 +314,18 @@ def exonic_transcript_effect(variant, exon, exon_number, transcript):
         genome_start, genome_end, transcript)
 
     if transcript.on_backward_strand:
-        strand_ref = reverse_complement(genome_ref)
-        strand_alt = reverse_complement(genome_alt)
+        cdna_ref = reverse_complement(genome_ref)
+        cdna_alt = reverse_complement(genome_alt)
     else:
-        strand_ref = genome_ref
-        strand_alt = genome_alt
+        cdna_ref = genome_ref
+        cdna_alt = genome_alt
 
-    expected_ref = str(transcript.sequence[
-        transcript_offset:transcript_offset + len(strand_ref)])
+    n_ref = len(cdna_ref)
 
-    if strand_ref != expected_ref:
+    expected_ref = str(
+        transcript.sequence[transcript_offset:transcript_offset + n_ref])
+
+    if cdna_ref != expected_ref:
         raise ValueError(
             ("Found ref nucleotides '%s' in sequence"
              " of %s at offset %d (chromosome positions %d:%d)"
@@ -334,14 +336,17 @@ def exonic_transcript_effect(variant, exon, exon_number, transcript):
                  genome_start,
                  genome_end,
                  variant,
-                 strand_ref))
+                 cdna_ref))
 
     utr5_length = min(transcript.start_codon_spliced_offsets)
 
     # does the variant start inside the 5' UTR?
     if utr5_length > transcript_offset:
         # does the variant end after the 5' UTR, within the coding region?
-        if utr5_length < transcript_offset + len(strand_ref):
+        if utr5_length < transcript_offset + n_ref:
+            # TODO: we *might* lose the Kozak sequence or the start codon
+            # but without looking at the modified sequence how can we tell
+            # for sure that this is a start-loss variant?
             return StartLoss(variant, transcript)
         else:
             # if variant contained within 5' UTR
@@ -361,17 +366,17 @@ def exonic_transcript_effect(variant, exon, exon_number, transcript):
     # alternative hypothesis for what happens if splicing doesn't change.
     # If the mutation doesn't affect an exonic splice site, then
     # we'll just return this effect.
-    coding_effect_annotation = predict_coding_effect(
-        trimmed_ref=strand_ref,
-        trimmed_alt=strand_alt,
-        transcript_offset=transcript_offset,
+    coding_effect_annotation = predict_variant_coding_effect_on_transcript(
         variant=variant,
-        transcript=transcript)
+        transcript=transcript,
+        trimmed_cdna_ref=cdna_ref,
+        trimmed_cdna_alt=cdna_alt,
+        transcript_offset=transcript_offset)
 
     if changes_exonic_splice_site(
             transcript=transcript,
-            transcript_ref=strand_ref,
-            transcript_alt=strand_alt,
+            transcript_ref=cdna_ref,
+            transcript_alt=cdna_alt,
             transcript_offset=transcript_offset,
             exon_start_offset=exon_start_offset,
             exon_end_offset=exon_end_offset,

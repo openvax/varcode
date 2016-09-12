@@ -32,18 +32,87 @@ from .effect_classes import (
 )
 from .translate import translate_in_frame_mutation, START_CODONS
 
+def get_codons(
+        variant,
+        trimmed_cdna_ref,
+        trimmed_cdna_alt,
+        sequence_from_start_codon,
+        cds_offset):
+    """
+    Returns indices of first and last reference codons affected by the variant,
+    as well as the actual sequence of the mutated codons which replace those
+    reference codons.
 
-def choose_in_frame_effect_annotation(
+    Parameters
+    ----------
+    variant : Variant
+
+    trimmed_cdna_ref : str
+        Trimmed reference cDNA nucleotides affected by the variant
+
+    trimmed_cdna_alt : str
+        Trimmed alternate cDNA nucleotides which replace the reference
+
+    sequence_from_start_codon : str
+        cDNA nucleotide coding sequence
+
+    cds_offset : int
+        Integer offset into the coding sequence where ref is replace with alt
+    """
+    # index (starting from 0) of first affected reference codon
+    ref_codon_start_offset = cds_offset // 3
+    # which nucleotide of the first codon got changed?
+    nucleotide_offset_into_first_ref_codon = cds_offset % 3
+
+    n_ref_nucleotides = len(trimmed_cdna_ref)
+    if n_ref_nucleotides == 0:
+        if nucleotide_offset_into_first_ref_codon == 2:
+            # if we're inserting between codons
+            ref_codon_end_offset = ref_codon_start_offset
+        else:
+            # inserting inside a reference codon
+            ref_codon_end_offset = ref_codon_start_offset + 1
+        ref_codons = sequence_from_start_codon[
+            ref_codon_start_offset * 3:ref_codon_end_offset * 3]
+        # split the reference codon into nucleotides before/after insertion
+        prefix = ref_codons[:nucleotide_offset_into_first_ref_codon + 1]
+        suffix = ref_codons[nucleotide_offset_into_first_ref_codon + 1:]
+    else:
+        ref_codon_end_offset = (cds_offset + n_ref_nucleotides - 1) // 3 + 1
+        # codons in the reference sequence
+        ref_codons = sequence_from_start_codon[
+            ref_codon_start_offset * 3:ref_codon_end_offset * 3]
+
+        # We construct the new codons by taking the unmodified prefix
+        # of the first ref codon, the unmodified suffix of the last ref codon
+        # and sticking the alt nucleotides in between.
+        # Since this is supposed to be an in-frame mutation, the concatenated
+        # nucleotide string is expected to have a length that is a multiple of
+        # three.
+        prefix = ref_codons[:nucleotide_offset_into_first_ref_codon]
+
+        offset_in_last_ref_codon = (cds_offset + n_ref_nucleotides - 1) % 3
+
+        if offset_in_last_ref_codon == 0:
+            suffix = ref_codons[-2:]
+        elif offset_in_last_ref_codon == 1:
+            suffix = ref_codons[-1:]
+        else:
+            suffix = ""
+    mutant_codons = prefix + trimmed_cdna_alt + suffix
+    assert len(mutant_codons) % 3 == 0, \
+        "Expected in-frame mutation but got %s (length = %d)" % (
+            mutant_codons, len(mutant_codons))
+    return ref_codon_start_offset, ref_codon_end_offset, mutant_codons
+
+def predict_in_frame_coding_effect(
         variant,
         transcript,
-        ref_codon_start_offset,
-        ref_codon_end_offset,
-        mutant_codons):
-    """Choose a coding effect annotation for in-frame mutations which do
-    not affect the start codon and do not introduce a premature stop codon.
-    This function encompasses all the logic which does not need to look at the
-    specific nucleotides which created each amino acid (can deal only with
-    amino acid sequences).
+        trimmed_cdna_ref,
+        trimmed_cdna_alt,
+        sequence_from_start_codon,
+        cds_offset):
+    """Coding effect of an in-frame nucleotide change
 
     Parameters
     ----------
@@ -51,16 +120,31 @@ def choose_in_frame_effect_annotation(
 
     transcript : Transcript
 
-    ref_codon_start_offset : int
-        Inclusive (starting from 0) amino acid position of the first ref
-        amino acid which is changed by the mutation. Might include
-        synonymous substitutions.
+    trimmed_cdna_ref : str
+        Reference nucleotides from the coding sequence of the transcript
 
-    ref_codon_end_offset : int
+    trimmed_cdna_alt : str
+        Nucleotides to insert in place of the reference nucleotides
 
-    mutant_codons : str
-        cDNA nucleotide sequence of mutated codons
+    sequence_from_start_codon : Bio.Seq or str
+        Transcript sequence from the CDS start codon (including the 3' UTR).
+        This sequence includes the 3' UTR since a mutation may delete the stop
+        codon and we'll have to translate past the normal end of the CDS to
+        determine the new protein sequence.
+
+    cds_offset : int
+        Index of first ref nucleotide, starting from 0 = beginning of coding
+        sequence. If variant is a pure insertion (no ref nucleotides) then this
+        argument indicates the offset *after* which to insert the alt
+        nucleotides.
     """
+    ref_codon_start_offset, ref_codon_end_offset, mutant_codons = get_codons(
+        variant=variant,
+        trimmed_cdna_ref=trimmed_cdna_ref,
+        trimmed_cdna_alt=trimmed_cdna_alt,
+        sequence_from_start_codon=sequence_from_start_codon,
+        cds_offset=cds_offset)
+
     mutation_affects_start_codon = (ref_codon_start_offset == 0)
 
     if mutation_affects_start_codon and mutant_codons[:3] not in START_CODONS:
@@ -73,6 +157,9 @@ def choose_in_frame_effect_annotation(
             variant=variant,
             transcript=transcript)
 
+    # rely on Ensembl's annotation of the protein sequence since we can't
+    # easily predict whether the starting nucleotide is a methionine
+    # (most common) or leucine
     aa_ref = transcript.protein_sequence[ref_codon_start_offset:ref_codon_end_offset]
 
     reference_protein_length = len(transcript.protein_sequence)
@@ -84,21 +171,6 @@ def choose_in_frame_effect_annotation(
             ref_codon_end_offset=ref_codon_end_offset,
             mutant_codons=mutant_codons)
 
-    print("""
-        ref_codon_start_offset=%d
-        ref_codon_end_offset=%d
-        mutant_codons=%s
-        aa_ref=%s
-        aa_alt=%s
-        mutant_stop_codon_index=%d
-        using_three_prime_utr=%s""" % (
-        ref_codon_start_offset,
-        ref_codon_end_offset,
-        mutant_codons,
-        aa_ref,
-        aa_alt,
-        mutant_stop_codon_index,
-        using_three_prime_utr))
     mutant_codons_contain_stop = mutant_stop_codon_index != -1
 
     # trim shared subsequences at the start and end of reference
@@ -120,8 +192,6 @@ def choose_in_frame_effect_annotation(
 
     if mutant_codons_contain_stop:
         mutant_stop_codon_index += n_aa_shared
-
-    print(is_insertion, aa_mutation_start_offset)
 
     if mutation_affects_start_codon and (aa_ref == aa_alt):
             # Substitution between start codons gets special treatment since,
@@ -185,134 +255,10 @@ def choose_in_frame_effect_annotation(
             aa_ref=aa_ref,
             aa_alt=aa_alt)
     else:
+        # multiple amino acids were substituted e.g. p.VQQ39FF
         return ComplexSubstitution(
             variant,
             transcript,
             aa_mutation_start_offset=aa_mutation_start_offset,
             aa_ref=aa_ref,
             aa_alt=aa_alt)
-
-
-def get_codons(
-        variant,
-        trimmed_ref,
-        trimmed_alt,
-        sequence_from_start_codon,
-        cds_offset):
-    """
-    Returns indices of first and last reference codons affected by the variant,
-    as well as the actual sequence of the mutated codons which replace those
-    reference codons.
-
-    Parameters
-    ----------
-    variant : Variant
-
-    trimmed_ref : str
-        Trimmed reference cDNA nucleotides affected by the variant
-
-    trimmed_alt : str
-        Trimmed alternate cDNA nucleotides which replace the reference
-
-    sequence_from_start_codon : str
-        cDNA nucleotide coding sequence
-
-    cds_offset : int
-        Integer offset into the coding sequence where ref is replace with alt
-    """
-    # index (starting from 0) of first affected reference codon
-    ref_codon_start_offset = cds_offset // 3
-    # which nucleotide of the first codon got changed?
-    nucleotide_offset_into_first_ref_codon = cds_offset % 3
-    print("ref='%s' alt='%s' start offset = %d nt offset in codon = %d" % (
-        trimmed_ref, trimmed_alt, ref_codon_start_offset, nucleotide_offset_into_first_ref_codon))
-
-    n_ref_nucleotides = len(trimmed_ref)
-    if n_ref_nucleotides == 0:
-        if nucleotide_offset_into_first_ref_codon == 2:
-            # if we're inserting between codons
-            ref_codon_end_offset = ref_codon_start_offset
-        else:
-            # inserting inside a reference codon
-            ref_codon_end_offset = ref_codon_start_offset + 1
-        ref_codons = sequence_from_start_codon[
-            ref_codon_start_offset * 3:ref_codon_end_offset * 3]
-        # split the reference codon into nucleotides before/after insertion
-        prefix = ref_codons[:nucleotide_offset_into_first_ref_codon + 1]
-        suffix = ref_codons[nucleotide_offset_into_first_ref_codon + 1:]
-    else:
-        ref_codon_end_offset = (cds_offset + n_ref_nucleotides - 1) // 3 + 1
-        # codons in the reference sequence
-        ref_codons = sequence_from_start_codon[
-            ref_codon_start_offset * 3:ref_codon_end_offset * 3]
-
-        # We construct the new codons by taking the unmodified prefix
-        # of the first ref codon, the unmodified suffix of the last ref codon
-        # and sticking the alt nucleotides in between.
-        # Since this is supposed to be an in-frame mutation, the concatenated
-        # nucleotide string is expected to have a length that is a multiple of
-        # three.
-        prefix = ref_codons[:nucleotide_offset_into_first_ref_codon]
-
-        offset_in_last_ref_codon = (cds_offset + len(trimmed_ref) - 1) % 3
-
-        if offset_in_last_ref_codon == 0:
-            suffix = ref_codons[-2:]
-        elif offset_in_last_ref_codon == 1:
-            suffix = ref_codons[-1:]
-        else:
-            suffix = ""
-    print("ref codons", ref_codons)
-    mutant_codons = prefix + trimmed_alt + suffix
-    print("mutant codons", mutant_codons)
-
-    assert len(mutant_codons) % 3 == 0, \
-        "Expected in-frame mutation but got %s (length = %d)" % (
-            mutant_codons, len(mutant_codons))
-    return ref_codon_start_offset, ref_codon_end_offset, mutant_codons
-
-def predict_in_frame_coding_effect(
-        variant,
-        transcript,
-        trimmed_ref,
-        trimmed_alt,
-        sequence_from_start_codon,
-        cds_offset):
-    """Coding effect of an in-frame nucleotide change
-
-    Parameters
-    ----------
-    variant : Variant
-
-    transcript : Transcript
-
-    trimmed_ref : str
-        Reference nucleotides
-
-    trimmed_alt : str
-        Nucleotides to insert in place of the reference nucleotides
-
-    sequence_from_start_codon : Bio.Seq or str
-        Transcript sequence from the CDS start codon (including the 3' UTR).
-        This sequence includes the 3' UTR since a mutation may delete the stop
-        codon and we'll have to translate past the normal end of the CDS to
-        determine the new protein sequence.
-
-    cds_offset : int
-        Index of first ref nucleotide, starting from 0 = beginning of coding
-        sequence. If variant is a pure insertion (no ref nucleotides) then this
-        argument indicates the offset *after* which to insert the `alt`
-        nucleotides.
-    """
-    ref_codon_start_offset, ref_codon_end_offset, mutant_codons = get_codons(
-        variant=variant,
-        trimmed_ref=trimmed_ref,
-        trimmed_alt=trimmed_alt,
-        sequence_from_start_codon=sequence_from_start_codon,
-        cds_offset=cds_offset)
-    return choose_in_frame_effect_annotation(
-        variant=variant,
-        transcript=transcript,
-        ref_codon_start_offset=ref_codon_start_offset,
-        ref_codon_end_offset=ref_codon_end_offset,
-        mutant_codons=mutant_codons)

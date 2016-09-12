@@ -158,8 +158,9 @@ def translate_in_frame_mutation(
     if mutant_stop_codon_index != -1:
         mutant_codons = mutant_codons[:3 * mutant_stop_codon_index]
     elif ref_codon_end_offset > len(transcript.protein_sequence):
-        # if the mutant codons didn't contain a stop but did mutate the last
-        # reference codon then the translated sequence might involve the 3' UTR
+        # if the mutant codons didn't contain a stop but did mutate the
+        # true reference stop codon then the translated sequence might involve
+        # the 3' UTR
         three_prime_utr = transcript.three_prime_utr_sequence
         n_utr_codons = len(three_prime_utr) // 3
         # trim the 3' UTR sequence to have a length that is a multiple of 3

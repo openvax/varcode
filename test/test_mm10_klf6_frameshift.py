@@ -28,8 +28,8 @@ def test_mm10_Klf6_frameshift_coding_effect_fn():
     # first start codon offset is 150
     # mutation occurs after offset 462
     effect = predict_frameshift_coding_effect(
-        trimmed_ref="",
-        trimmed_alt="G",
+        trimmed_cdna_ref="",
+        trimmed_cdna_alt="G",
         cds_offset=462 - 150,
         sequence_from_start_codon=t.sequence[150:],
         variant=variant,
