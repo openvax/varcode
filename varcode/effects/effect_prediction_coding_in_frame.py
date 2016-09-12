@@ -84,6 +84,21 @@ def choose_in_frame_effect_annotation(
             ref_codon_end_offset=ref_codon_end_offset,
             mutant_codons=mutant_codons)
 
+    print("""
+        ref_codon_start_offset=%d
+        ref_codon_end_offset=%d
+        mutant_codons=%s
+        aa_ref=%s
+        aa_alt=%s
+        mutant_stop_codon_index=%d
+        using_three_prime_utr=%s""" % (
+        ref_codon_start_offset,
+        ref_codon_end_offset,
+        mutant_codons,
+        aa_ref,
+        aa_alt,
+        mutant_stop_codon_index,
+        using_three_prime_utr))
     mutant_codons_contain_stop = mutant_stop_codon_index != -1
 
     # trim shared subsequences at the start and end of reference
@@ -142,7 +157,7 @@ def choose_in_frame_effect_annotation(
             transcript=transcript,
             aa_pos=aa_mutation_start_offset,
             aa_ref=shared_prefix + shared_suffix)
-    elif (n_aa_alt > n_ref_amino_acids_after_mutated_site) and using_three_prime_utr:
+    elif using_three_prime_utr:
         # if non-silent mutation is at the end of the protein then
         # should be a stop-loss
         return StopLoss(

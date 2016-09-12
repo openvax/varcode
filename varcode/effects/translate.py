@@ -154,6 +154,7 @@ def translate_in_frame_mutation(
     mutant_stop_codon_index = find_first_stop_codon(mutant_codons)
 
     using_three_prime_utr = False
+
     if mutant_stop_codon_index != -1:
         mutant_codons = mutant_codons[:3 * mutant_stop_codon_index]
     elif ref_codon_end_offset > len(transcript.protein_sequence):
@@ -167,13 +168,20 @@ def translate_in_frame_mutation(
         # note the offset of the first stop codon in the combined
         # nucleotide sequence of both the end of the CDS and the 3' UTR
         first_utr_stop_codon_index = find_first_stop_codon(truncated_utr_sequence)
-        using_three_prime_utr = first_utr_stop_codon_index > 0
-        if first_utr_stop_codon_index != -1:
-            n_mutant_codons = len(mutant_codons) // 3
-            mutant_stop_codon_index = n_mutant_codons + first_utr_stop_codon_index
-        # combine the in-frame mutant codons with the truncated sequence of
-        # the 3' UTR
-        mutant_codons += truncated_utr_sequence[:mutant_stop_codon_index * 3]
+
+        if first_utr_stop_codon_index > 0:
+            # if there is a stop codon in the 3' UTR sequence and it's not the
+            # very first codon
+            using_three_prime_utr = True
+            n_mutant_codons_before_utr = len(mutant_codons) // 3
+            mutant_stop_codon_index = n_mutant_codons_before_utr + first_utr_stop_codon_index
+            # combine the in-frame mutant codons with the truncated sequence of
+            # the 3' UTR
+            mutant_codons += truncated_utr_sequence[:first_utr_stop_codon_index * 3]
+        elif first_utr_stop_codon_index == -1:
+            # if there is no stop codon in the 3' UTR sequence
+            using_three_prime_utr = True
+            mutant_codons += truncated_utr_sequence
 
     amino_acids = translate(
         mutant_codons,
