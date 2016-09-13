@@ -21,6 +21,7 @@ from .effects import (
     top_priority_effect,
     EffectCollection,
     MutationEffect,
+    NonsilentCodingMutation,
 )
 
 from ._version import get_versions
@@ -36,6 +37,7 @@ __all__ = [
     "effect_priority",
     "top_priority_effect",
     "MutationEffect",
+    "NonsilentCodingMutation",
     # file loading
     "load_maf",
     "load_maf_dataframe",
