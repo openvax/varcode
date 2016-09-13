@@ -17,7 +17,11 @@ Effect annotation for variants which modify the coding sequence and change
 reading frame.
 """
 
-from .effects import (
+from __future__ import print_function, division, absolute_import
+
+from ..string_helpers import trim_shared_prefix
+
+from .effect_classes import (
     FrameShift,
     FrameShiftTruncation,
     StartLoss,
@@ -25,7 +29,6 @@ from .effects import (
     Silent
 )
 from .mutate import substitute
-from .string_helpers import trim_shared_prefix
 from .translate import translate
 
 def create_frameshift_effect(
@@ -68,11 +71,6 @@ def create_frameshift_effect(
         # TODO: scan through sequence_from_mutated_codon for
         # Kozak sequence + start codon to choose the new start
         return StartLoss(variant=variant, transcript=transcript)
-    elif mutated_codon_index == original_protein_length:
-        return StopLoss(
-            variant=variant,
-            transcript=transcript,
-            extended_protein_sequence=mutant_protein_suffix)
 
     # the frameshifted sequence may contain some amino acids which are
     # the same as the original protein!
@@ -80,13 +78,13 @@ def create_frameshift_effect(
         ref=original_protein_sequence[mutated_codon_index:],
         alt=mutant_protein_suffix)
     n_unchanged_amino_acids = len(unchanged_amino_acids)
-    mutation_start_position = mutated_codon_index + n_unchanged_amino_acids
-    if mutation_start_position >= original_protein_length:
+    offset_to_first_different_amino_acid = mutated_codon_index + n_unchanged_amino_acids
+    if offset_to_first_different_amino_acid >= original_protein_length:
         # frameshift is either extending the protein or leaving it unchanged
         if len(mutant_protein_suffix) == 0:
             # miraculously, this frameshift left the protein unchanged,
             # most likely by turning one stop codon into another stop codon
-            aa_ref = original_protein_sequence[mutated_codon_index]
+            aa_ref = original_protein_sequence[-n_unchanged_amino_acids:]
             return Silent(
                 variant=variant,
                 transcript=transcript,
@@ -101,7 +99,7 @@ def create_frameshift_effect(
                 transcript=transcript,
                 extended_protein_sequence=mutant_protein_suffix)
     # original amino acid at the mutated codon before the frameshift occurred
-    aa_ref = original_protein_sequence[mutation_start_position]
+    aa_ref = original_protein_sequence[offset_to_first_different_amino_acid]
 
     # TODO: what if all the shifted amino acids were the same and the protein
     # ended up the same length? Add a Silent case?
@@ -111,11 +109,11 @@ def create_frameshift_effect(
         return FrameShiftTruncation(
             variant=variant,
             transcript=transcript,
-            stop_codon_offset=mutation_start_position)
+            stop_codon_offset=offset_to_first_different_amino_acid)
     return FrameShift(
         variant=variant,
         transcript=transcript,
-        aa_mutation_start_offset=mutation_start_position,
+        aa_mutation_start_offset=offset_to_first_different_amino_acid,
         shifted_sequence=str(mutant_protein_suffix))
 
 def cdna_codon_sequence_after_insertion_frameshift(
@@ -168,8 +166,8 @@ def cdna_codon_sequence_after_insertion_frameshift(
 def cdna_codon_sequence_after_deletion_or_substitution_frameshift(
         sequence_from_start_codon,
         cds_offset,
-        ref,
-        alt):
+        trimmed_cdna_ref,
+        trimmed_cdna_alt):
     """
     Logic for any frameshift which isn't an insertion.
 
@@ -195,26 +193,30 @@ def cdna_codon_sequence_after_deletion_or_substitution_frameshift(
     sequence_from_mutated_codon = substitute(
         sequence=sequence_after_mutated_codon,
         offset=offset_into_mutated_codon,
-        ref=ref,
-        alt=alt)
+        ref=trimmed_cdna_ref,
+        alt=trimmed_cdna_alt)
     return mutated_codon_index, sequence_from_mutated_codon
 
-def frameshift_coding_effect(
-        ref,
-        alt,
-        cds_offset,
-        sequence_from_start_codon,
+def predict_frameshift_coding_effect(
         variant,
-        transcript):
+        transcript,
+        trimmed_cdna_ref,
+        trimmed_cdna_alt,
+        cds_offset,
+        sequence_from_start_codon):
     """
     Coding effect of a frameshift mutation.
 
     Parameters
     ----------
-    ref : nucleotide sequence
-        Reference nucleotides
+    variant : Variant
 
-    alt : nucleotide sequence
+    transcript : Transcript
+
+    trimmed_cdna_ref : nucleotide sequence
+        Reference nucleotides in the coding sequence of the given transcript.
+
+    trimmed_cdna_alt : nucleotide sequence
         Alternate nucleotides introduced by mutation
 
     cds_offset : int
@@ -224,23 +226,20 @@ def frameshift_coding_effect(
     sequence_from_start_codon : nucleotide sequence
         Nucleotides of the coding sequence and 3' UTR
 
-    variant : Variant
-
-    transcript : Transcript
     """
-    if len(ref) != 0:
+    if len(trimmed_cdna_ref) != 0:
         mutated_codon_index, sequence_from_mutated_codon = \
             cdna_codon_sequence_after_deletion_or_substitution_frameshift(
                 sequence_from_start_codon=sequence_from_start_codon,
                 cds_offset=cds_offset,
-                ref=ref,
-                alt=alt)
+                trimmed_cdna_ref=trimmed_cdna_ref,
+                trimmed_cdna_alt=trimmed_cdna_alt)
     else:
         mutated_codon_index, sequence_from_mutated_codon = \
             cdna_codon_sequence_after_insertion_frameshift(
                 sequence_from_start_codon=sequence_from_start_codon,
                 cds_offset_before_insertion=cds_offset,
-                inserted_nucleotides=alt)
+                inserted_nucleotides=trimmed_cdna_alt)
     return create_frameshift_effect(
         mutated_codon_index=mutated_codon_index,
         sequence_from_mutated_codon=sequence_from_mutated_codon,

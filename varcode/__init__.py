@@ -13,40 +13,10 @@
 # limitations under the License.
 
 from .variant import Variant
-from .effect_collection import EffectCollection
 from .variant_collection import VariantCollection
 from .maf import load_maf, load_maf_dataframe
 from .vcf import load_vcf, load_vcf_fast
-from .effect_ordering import effect_priority, top_priority_effect
-from .effects import (
-    MutationEffect,
-    TranscriptMutationEffect,
-    Failure,
-    Intergenic,
-    Intragenic,
-    IncompleteTranscript,
-    NoncodingTranscript,
-    Intronic,
-    ThreePrimeUTR,
-    FivePrimeUTR,
-    Silent,
-    NonsilentCodingMutation,
-    Substitution,
-    Insertion,
-    Deletion,
-    ComplexSubstitution,
-    AlternateStartCodon,
-    IntronicSpliceSite,
-    ExonicSpliceSite,
-    StopLoss,
-    SpliceDonor,
-    SpliceAcceptor,
-    PrematureStop,
-    FrameShiftTruncation,
-    StartLoss,
-    FrameShift,
-    ExonLoss,
-)
+from .effects import effect_priority, top_priority_effect, EffectCollection
 
 from ._version import get_versions
 __version__ = get_versions()['version']
@@ -58,6 +28,7 @@ __all__ = [
     "Variant",
     "EffectCollection",
     "VariantCollection",
+    # effects
     "effect_priority",
     "top_priority_effect",
     # file loading
@@ -65,33 +36,4 @@ __all__ = [
     "load_maf_dataframe",
     "load_vcf",
     "load_vcf_fast",
-    # effects
-    "MutationEffect",
-    "TranscriptMutationEffect",
-    "Failure",
-    "IncompleteTranscript",
-    "Intergenic",
-    "Intragenic",
-    "IncompleteTranscript",
-    "NoncodingTranscript",
-    "ThreePrimeUTR",
-    "FivePrimeUTR",
-    "Intronic",
-    "Silent",
-    "NonsilentCodingMutation",
-    "Substitution",
-    "Insertion",
-    "Deletion",
-    "ComplexSubstitution",
-    "AlternateStartCodon",
-    "IntronicSpliceSite",
-    "ExonicSpliceSite",
-    "StopLoss",
-    "SpliceDonor",
-    "SpliceAcceptor",
-    "PrematureStop",
-    "FrameShiftTruncation",
-    "StartLoss",
-    "FrameShift",
-    "ExonLoss",
 ]

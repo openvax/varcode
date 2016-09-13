@@ -14,35 +14,34 @@
 
 from __future__ import print_function, division, absolute_import
 
-from .frameshift_coding_effect import frameshift_coding_effect
-from .in_frame_coding_effect import in_frame_coding_effect
+from .effect_prediction_coding_frameshift import predict_frameshift_coding_effect
+from .effect_prediction_coding_in_frame import predict_in_frame_coding_effect
 
-
-def coding_effect(
-        ref,
-        alt,
-        transcript_offset,
+def predict_variant_coding_effect_on_transcript(
         variant,
-        transcript):
+        transcript,
+        trimmed_cdna_ref,
+        trimmed_cdna_alt,
+        transcript_offset):
     """
-    Given a minimal ref/alt nucleotide string pair and an offset into a given
-    transcript, determine the coding effect of this nucleotide substitution
+    Given a minimal cDNA ref/alt nucleotide string pair and an offset into a
+    given transcript, determine the coding effect of this nucleotide substitution
     onto the translated protein.
 
     Parameters
     ----------
-    ref : str
+    variant : Variant
+
+    transcript : Transcript
+
+    trimmed_cdna_ref : str
         Reference nucleotides we expect to find in the transcript's CDS
 
-    alt : str
+    trimmed_cdna_alt : str
         Alternate nucleotides we're replacing the reference with
 
     transcript_offset : int
         Offset into the full transcript sequence of the ref->alt substitution
-
-    transcript : Transcript
-
-    variant : Variant
     """
     if not transcript.complete:
         raise ValueError(
@@ -51,33 +50,36 @@ def coding_effect(
 
     sequence = transcript.sequence
 
+    n_ref = len(trimmed_cdna_ref)
+    n_alt = len(trimmed_cdna_alt)
+
     # reference nucleotides found on the transcript, if these don't match
     # what we were told to expect from the variant then raise an exception
     ref_nucleotides_from_transcript = str(
-        sequence[transcript_offset:transcript_offset + len(ref)])
+        sequence[transcript_offset:transcript_offset + n_ref])
 
     # Make sure that the reference sequence agrees with what we expected
     # from the VCF
-    assert ref_nucleotides_from_transcript == ref, \
+    assert ref_nucleotides_from_transcript == trimmed_cdna_ref, \
         "%s: expected ref '%s' at offset %d of %s, transcript has '%s'" % (
             variant,
-            ref,
+            trimmed_cdna_ref,
             transcript_offset,
             transcript,
             ref_nucleotides_from_transcript)
 
-    cds_start_offset = transcript.first_start_codon_spliced_offset
-    cds_stop_offset = transcript.last_stop_codon_spliced_offset
+    start_codon_offset = transcript.first_start_codon_spliced_offset
+    stop_codon_offset = transcript.last_stop_codon_spliced_offset
 
-    cds_len = cds_stop_offset + cds_start_offset + 1
+    cds_len = stop_codon_offset - start_codon_offset + 1
 
     if cds_len < 3:
         raise ValueError(
             "Coding sequence for %s is too short: '%s'" % (
                 transcript,
-                transcript.sequence[cds_start_offset:cds_stop_offset + 1]))
+                transcript.sequence[start_codon_offset:stop_codon_offset + 1]))
 
-    if len(ref) == 0 and transcript.strand == "-":
+    if n_ref == 0 and transcript.strand == "-":
         # By convention, genomic insertions happen *after* their base 1 position on
         # a chromosome. On the reverse strand, however, an insertion has to go
         # before the nucleotide at some transcript offset.
@@ -98,30 +100,30 @@ def coding_effect(
         #
         # To preserve the interpretation of the start offset as the base
         # before the insertion, need to subtract one
-        cds_offset = transcript_offset - cds_start_offset - 1
+        cds_offset = transcript_offset - start_codon_offset - 1
     else:
-        cds_offset = transcript_offset - cds_start_offset
+        cds_offset = transcript_offset - start_codon_offset
 
     assert cds_offset < cds_len, \
         "Expected CDS offset (%d) < |CDS| (%d) for %s on %s" % (
             cds_offset, cds_len, variant, transcript)
 
-    sequence_from_start_codon = str(sequence[cds_start_offset:])
+    sequence_from_start_codon = str(sequence[start_codon_offset:])
 
     # is this an in-frame mutations?
-    if (len(ref) - len(alt)) % 3 == 0:
-        return in_frame_coding_effect(
-            ref=ref,
-            alt=alt,
-            cds_offset=cds_offset,
-            sequence_from_start_codon=sequence_from_start_codon,
+    if (n_ref - n_alt) % 3 == 0:
+        return predict_in_frame_coding_effect(
             variant=variant,
-            transcript=transcript)
+            transcript=transcript,
+            trimmed_cdna_ref=trimmed_cdna_ref,
+            trimmed_cdna_alt=trimmed_cdna_alt,
+            cds_offset=cds_offset,
+            sequence_from_start_codon=sequence_from_start_codon)
     else:
-        return frameshift_coding_effect(
-            ref=ref,
-            alt=alt,
-            cds_offset=cds_offset,
-            sequence_from_start_codon=sequence_from_start_codon,
+        return predict_frameshift_coding_effect(
             variant=variant,
-            transcript=transcript)
+            transcript=transcript,
+            trimmed_cdna_ref=trimmed_cdna_ref,
+            trimmed_cdna_alt=trimmed_cdna_alt,
+            cds_offset=cds_offset,
+            sequence_from_start_codon=sequence_from_start_codon)

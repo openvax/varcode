@@ -18,11 +18,8 @@ unit test but the goal of this test module is to make sure that there is
 at least one test for each effect class
 """
 
-from varcode import (
-    Variant,
-    #
-    # transcript effects
-    #
+from varcode import Variant
+from varcode.effects import (
     IncompleteTranscript,
     NoncodingTranscript,
     FivePrimeUTR,
@@ -110,7 +107,6 @@ def test_alternate_start_codon():
         modifies_coding_sequence=True,
         modifies_protein_sequence=False)
 
-
 def test_stop_loss():
     # transcript MAST2-001 (ENST00000361297 in Ensembl 75)
     # location: chrom 1 @ 46,501,738 forward strand
@@ -124,6 +120,101 @@ def test_stop_loss():
         effect_class=StopLoss,
         modifies_coding_sequence=True,
         modifies_protein_sequence=True)
+
+def test_stop_loss_from_larger_deletion_before_stop_codon():
+    # transcript MAST2-001 (ENST00000361297 in Ensembl 75)
+    # location: chrom 1 @ 46,501,733 forward strand
+
+    # delete stop codon and the codon before it,
+    # should result in stop-loss mutation
+    # causing an elongated protein
+    variant = Variant("1", 46501733, "ACATAG", "", ensembl=ensembl_grch37)
+    expect_effect(
+        variant,
+        transcript_id="ENST00000361297",
+        effect_class=StopLoss,
+        modifies_coding_sequence=True,
+        modifies_protein_sequence=True)
+
+def test_stop_loss_from_larger_deletion_after_stop_codon():
+    # transcript MAST2-001 (ENST00000361297 in Ensembl 75)
+    # location: chrom 1 @ 46,501,736 forward strand
+
+    # delete stop codon and the codon after it,
+    # should result in stop-loss mutation
+    # causing an elongated protein
+    variant = Variant("1", 46501736, "TAGCAG", "", ensembl=ensembl_grch37)
+    expect_effect(
+        variant,
+        transcript_id="ENST00000361297",
+        effect_class=StopLoss,
+        modifies_coding_sequence=True,
+        modifies_protein_sequence=True)
+
+def test_stop_loss_from_out_of_frame_deletion_in_stop_codon():
+    # transcript MAST2-001 (ENST00000361297 in Ensembl 75)
+    # location: chrom 1 @ 46,501,736 forward strand
+    #
+    # delete first two nucleotides of stop codon
+    # TAG CAG... -> GCA G...
+    #
+    # should result in stop-loss mutation causing an elongated protein
+    variant = Variant("1", 46501736, "TA", "", ensembl=ensembl_grch37)
+    expect_effect(
+        variant,
+        transcript_id="ENST00000361297",
+        effect_class=StopLoss,
+        modifies_coding_sequence=True,
+        modifies_protein_sequence=True)
+
+
+def test_silent_from_in_frame_deletion_in_stop_codon():
+    # transcript MAST2-001 (ENST00000361297 in Ensembl 75)
+    # location: chrom 1 @ 46,501,737 forward strand
+    #
+    # delete first two nucleotides of stop codon
+    # T_AG C_AG... -> TAG...
+    #
+    # should result in stop-loss mutation causing an elongated protein
+    variant = Variant("1", 46501737, "AGC", "", ensembl=ensembl_grch37)
+    expect_effect(
+        variant,
+        transcript_id="ENST00000361297",
+        effect_class=Silent,
+        modifies_coding_sequence=True,
+        modifies_protein_sequence=False)
+
+def test_silent_from_out_of_frame_deletion_in_stop_codon():
+    # transcript MAST2-001 (ENST00000361297 in Ensembl 75)
+    # location: chrom 1 @ 46,501,738 forward strand
+    #
+    # delete first two nucleotides of stop codon
+    # TA_G C_AG... -> TAA G...
+    #
+    # should result in stop-loss mutation causing an elongated protein
+    variant = Variant("1", 46501738, "GC", "", ensembl=ensembl_grch37)
+    expect_effect(
+        variant,
+        transcript_id="ENST00000361297",
+        effect_class=Silent,
+        modifies_coding_sequence=True,
+        modifies_protein_sequence=False)
+
+def test_silent_from_out_of_frame_insertion_in_stop_codon():
+    # transcript MAST2-001 (ENST00000361297 in Ensembl 75)
+    # location: chrom 1 @ 46,501,737 forward strand
+    #
+    # insert "A" after first two nucleotides of stop codon
+    # TAG CAG... -> TAA GCA G...
+    #
+    # should result in stop-loss mutation causing an elongated protein
+    variant = Variant("1", 46501737, "AG", "AAG", ensembl=ensembl_grch37)
+    expect_effect(
+        variant,
+        transcript_id="ENST00000361297",
+        effect_class=Silent,
+        modifies_coding_sequence=True,
+        modifies_protein_sequence=False)
 
 def test_stop_gain():
     # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
@@ -254,25 +345,28 @@ def test_insertion():
         modifies_coding_sequence=True,
         modifies_protein_sequence=True)
 
-def test_frameshift():
-    # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
-    # Chromosome 17: 43,044,295-43,125,370 reverse strand.
+def test_frameshift_near_start_of_BRCA1_001():
     #
-    # Out of frame insertion after first two codons of exon #12
-    # ENSE00003527960 43,082,575  43,082,404  start_phase = 0
+    # Insertion of genomic "A" after second codon of coding sequence.
     #
-    variant = Variant(
-        "17",
-        43082575 - 6,
-        ref="",
-        alt="A",
-        ensembl=ensembl_grch38)
+    # Transcript: BRCA1-001 (ENST00000357654)
+    # Manually annotated using Ensembl release 85
+    #
+    # Original mRNA coding sequnce:
+    #   ATG GAT TTA TCT GCT CTT CGC GTT GAA GAA GTA CAA
+    #   -M- -D- -L- -S- -A- -L- -A- -V- -E- -E- -V- -Q-
+    #
+    # After variant:
+    #   ATG GAT TTT ATC TGC TCT TCG CGT TGA
+    #   -M- -D- -F- -I- -C- -S- -S- -R-  *
+    variant = Variant("17", 43124096 - 6, ref="", alt="A", ensembl=ensembl_grch38)
     expect_effect(
         variant,
         transcript_id="ENST00000357654",
         effect_class=FrameShift,
         modifies_coding_sequence=True,
-        modifies_protein_sequence=True)
+        modifies_protein_sequence=True,
+        aa_alt="FICSSR")
 
 def test_frameshift_truncation():
     # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 84)
@@ -293,6 +387,34 @@ def test_frameshift_truncation():
         effect_class=FrameShiftTruncation,
         modifies_coding_sequence=True,
         modifies_protein_sequence=True)
+
+
+def test_frameshift_truncation_in_exon_12_of_BRCA1_001():
+    # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
+    # Chromosome 17: 43,044,295-43,125,370 reverse strand.
+    #
+    # Out of frame insertion after first two codons of exon #12
+    # ENSE00003527960 43,082,575  43,082,404  start_phase = 0
+    #
+    # Original mRNA sequence for exon #12:
+    #   CAG AGG GAT ACC ATG
+    #   -Q- -R- -D- -T- -M-
+    # After variant:
+    #   CAG AGG TGA
+    #   -Q- -R-  *
+    variant = Variant(
+        "17",
+        43082575 - 6,
+        ref="",
+        alt="A",
+        ensembl=ensembl_grch38)
+    expect_effect(
+        variant,
+        transcript_id="ENST00000357654",
+        effect_class=FrameShiftTruncation,
+        modifies_coding_sequence=True,
+        modifies_protein_sequence=True,
+        aa_alt="")
 
 def test_substitution():
     # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
@@ -356,7 +478,11 @@ def test_silent_stop_codons():
             ensembl=ensembl_grch37),
     }
     for transcript_id, variant in silent_stop_codon_variants.items():
-        yield (expect_effect, variant, transcript_id, Silent, True, False)
+        yield (
+            expect_effect,
+            variant,
+            transcript_id,
+            Silent)
 
 def test_five_prime_utr():
     # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)

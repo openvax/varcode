@@ -1,4 +1,4 @@
-from varcode.frameshift_coding_effect import (
+from varcode.effects.effect_prediction_coding_frameshift import (
     cdna_codon_sequence_after_insertion_frameshift,
     cdna_codon_sequence_after_deletion_or_substitution_frameshift,
 )
@@ -45,8 +45,8 @@ def test_cdna_codon_sequence_after_deletion_or_substitution_frameshift_delA():
     i, s = cdna_codon_sequence_after_deletion_or_substitution_frameshift(
         sequence_from_start_codon="ATGCCCTAG",
         cds_offset=0,
-        ref="A",
-        alt="")
+        trimmed_cdna_ref="A",
+        trimmed_cdna_alt="")
     eq_(i, 0)
     eq_(s, "TGCCCTAG")
 
@@ -55,7 +55,7 @@ def test_cdna_codon_sequence_after_deletion_or_substitution_frameshift_AT_to_C()
     i, s = cdna_codon_sequence_after_deletion_or_substitution_frameshift(
         sequence_from_start_codon="ATGCCCTAG",
         cds_offset=0,
-        ref="AT",
-        alt="C")
+        trimmed_cdna_ref="AT",
+        trimmed_cdna_alt="C")
     eq_(i, 0)
     eq_(s, "CGCCCTAG")

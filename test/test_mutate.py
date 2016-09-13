@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from varcode import mutate
+from varcode.effects import mutate
 from nose.tools import eq_
 
 def test_snp_mutation():

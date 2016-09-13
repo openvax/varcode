@@ -13,10 +13,10 @@
 # limitations under the License.
 
 from pyensembl import ensembl_grch37
-from varcode import (
+from varcode import Variant
+from varcode.effects import (
     ExonicSpliceSite,
     Substitution,
-    Variant,
     TranscriptMutationEffect
 )
 import pandas as pd

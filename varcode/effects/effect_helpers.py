@@ -16,7 +16,9 @@
 Helper functions for determine effect annotation for a variant
 """
 
-from .nucleotides import PURINE_NUCLEOTIDES, AMINO_NUCLEOTIDES
+from __future__ import print_function, division, absolute_import
+
+from ..nucleotides import PURINE_NUCLEOTIDES, AMINO_NUCLEOTIDES
 
 def variant_overlaps_interval(
         variant_start,
