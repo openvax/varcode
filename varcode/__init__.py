@@ -16,12 +16,17 @@ from .variant import Variant
 from .variant_collection import VariantCollection
 from .maf import load_maf, load_maf_dataframe
 from .vcf import load_vcf, load_vcf_fast
-from .effects import effect_priority, top_priority_effect, EffectCollection
+from .effects import (
+    effect_priority,
+    top_priority_effect,
+    EffectCollection,
+    MutationEffect,
+    NonsilentCodingMutation,
+)
 
 from ._version import get_versions
 __version__ = get_versions()['version']
 del get_versions
-
 
 __all__ = [
     # basic classes
@@ -31,6 +36,8 @@ __all__ = [
     # effects
     "effect_priority",
     "top_priority_effect",
+    "MutationEffect",
+    "NonsilentCodingMutation",
     # file loading
     "load_maf",
     "load_maf_dataframe",
