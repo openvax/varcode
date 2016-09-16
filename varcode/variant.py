@@ -21,7 +21,6 @@ from pyensembl import (
     ensembl_grch38,
 )
 from pyensembl.locus import normalize_chromosome
-from pyensembl.biotypes import is_coding_biotype
 from serializable import Serializable
 from typechecks import require_instance
 
@@ -307,7 +306,7 @@ class Variant(Serializable):
         return [
             transcript
             for transcript in self.transcripts
-            if is_coding_biotype(transcript.biotype)
+            if transcript.is_protein_coding
         ]
 
     @property
@@ -355,7 +354,7 @@ class Variant(Serializable):
         """
         return [
             gene for gene in self.genes
-            if is_coding_biotype(gene.biotype)
+            if gene.is_protein_coding
         ]
 
     def effects(self, raise_on_error=True):
