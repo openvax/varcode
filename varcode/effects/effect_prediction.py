@@ -17,7 +17,6 @@ import logging
 
 from Bio.Seq import reverse_complement
 from pyensembl import Transcript
-from pyensembl.biotypes import is_coding_biotype
 
 from ..common import groupby_field
 
@@ -124,7 +123,7 @@ def predict_variant_effect_on_transcript(variant, transcript):
 
         # check for non-coding transcripts first, since
         # every non-coding transcript is "incomplete".
-        if not is_coding_biotype(transcript.biotype):
+        if not transcript.is_protein_coding:
             return NoncodingTranscript(variant, transcript)
 
         if not transcript.complete:
