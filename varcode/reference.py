@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from __future__ import print_function, division, absolute_import
-
+import operator
 from pyensembl import (
     Genome,
     cached_release,
@@ -25,19 +25,22 @@ from typechecks import is_string, is_integer
 # but the differences are all on chrM and unplaced contigs
 reference_alias_dict = {
     # human assemblies
-    "NCBI36": ["hg18", "B36", "NCBI36"],
-    "GRCh37": ["hg19", "B37", "NCBI37"],
-    "GRCh38": ["hg38", "B38", "NCBI38"],
+    "NCBI36": {'aliases': ["hg18", "B36", "NCBI36"],
+                'sort_order': 36},
+    "GRCh37": {'aliases': ["hg19", "B37", "NCBI37"],
+                'sort_order': 37},
+    "GRCh38": {'aliases': ["hg38", "B38", "NCBI38"],
+                'sort_order': 38},
     # mouse assemblies
-    "GRCm37": ["mm9"],
-    "GRCm38": [
+    "GRCm37": {'aliases': ["mm9"], 'sort_order': 1.37},
+    "GRCm38": {'aliases': [
         "mm10",
         "GCF_000001635.24",  # GRCm38.p4
         "GCF_000001635.23",  # GRCm38.p3
         "GCF_000001635.22",  # GRCm38.p2
         "GCF_000001635.21",  # GRCm38.p1
         "GCF_000001635.20",  # GRCm38
-    ],
+    ], 'sort_order': 1.38}
 }
 
 def infer_reference_name(reference_name_or_path):
@@ -49,7 +52,7 @@ def infer_reference_name(reference_name_or_path):
     # consider reference names in reverse alphabetical order so that
     # e.g. GRCh38 comes before GRCh37
     for assembly_name in sorted(reference_alias_dict.keys(), reverse=True):
-        candidate_list = [assembly_name] + reference_alias_dict[assembly_name]
+        candidate_list = [assembly_name] + reference_alias_dict[assembly_name]['aliases']
         for candidate in candidate_list:
             if candidate.lower() in reference_name_or_path.lower():
                 return assembly_name
