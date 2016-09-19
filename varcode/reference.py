@@ -13,7 +13,6 @@
 # limitations under the License.
 
 from __future__ import print_function, division, absolute_import
-import operator
 from pyensembl import (
     Genome,
     cached_release,
@@ -51,7 +50,7 @@ def infer_reference_name(reference_name_or_path):
     """
     # consider reference names in reverse alphabetical order so that
     # e.g. GRCh38 comes before GRCh37
-    for assembly_name in sorted(reference_alias_dict.keys(), reverse=True):
+    for assembly_name in sorted(reference_alias_dict.keys(), key=lambda d: reference_alias_dict[d]['sort_order'], reverse=True):
         candidate_list = [assembly_name] + reference_alias_dict[assembly_name]['aliases']
         for candidate in candidate_list:
             if candidate.lower() in reference_name_or_path.lower():
