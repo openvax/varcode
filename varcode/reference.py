@@ -19,27 +19,27 @@ from pyensembl import (
     genome_for_reference_name,
 )
 from typechecks import is_string, is_integer
+import os 
+from warnings import warn
+import re
 
 # NCBI builds and hg releases aren't identical
 # but the differences are all on chrM and unplaced contigs
 reference_alias_dict = {
     # human assemblies
-    "NCBI36": {'aliases': ["hg18", "B36", "NCBI36"],
-                'sort_order': 36},
-    "GRCh37": {'aliases': ["hg19", "B37", "NCBI37"],
-                'sort_order': 37},
-    "GRCh38": {'aliases': ["hg38", "B38", "NCBI38"],
-                'sort_order': 38},
+    "NCBI36": ["hg18", "B36", "NCBI36"],
+    "GRCh37": ["hg19", "B37", "NCBI37"],
+    "GRCh38": ["hg38", "B38", "NCBI38"],
     # mouse assemblies
-    "GRCm37": {'aliases': ["mm9"], 'sort_order': 1.37},
-    "GRCm38": {'aliases': [
+    "GRCm37": ["mm9"],
+    "GRCm38": [
         "mm10",
         "GCF_000001635.24",  # GRCm38.p4
         "GCF_000001635.23",  # GRCm38.p3
         "GCF_000001635.22",  # GRCm38.p2
         "GCF_000001635.21",  # GRCm38.p1
         "GCF_000001635.20",  # GRCm38
-    ], 'sort_order': 1.38}
+    ]
 }
 
 def infer_reference_name(reference_name_or_path):
@@ -48,15 +48,38 @@ def infer_reference_name(reference_name_or_path):
     that reference's FASTA file), return its canonical name
     as used by Ensembl.
     """
-    # consider reference names in reverse alphabetical order so that
-    # e.g. GRCh38 comes before GRCh37
-    for assembly_name in sorted(reference_alias_dict.keys(), key=lambda d: reference_alias_dict[d]['sort_order'], reverse=True):
-        candidate_list = [assembly_name] + reference_alias_dict[assembly_name]['aliases']
+    # identify all cases where reference name or path matches candidate aliases
+    reference_file_name = os.path.basename(reference_name_or_path)
+    matches = {'file_name': list(), 'full_path': list()}
+    for assembly_name in sorted(reference_alias_dict.keys(), reverse=True):
+        candidate_list = [assembly_name] + reference_alias_dict[assembly_name]
         for candidate in candidate_list:
-            if candidate.lower() in reference_name_or_path.lower():
-                return assembly_name
-    raise ValueError(
-        "Failed to infer genome assembly name for %s" % reference_name_or_path)
+            if candidate.lower() in reference_file_name.lower():
+                matches['file_name'].append(assembly_name)
+            elif candidate.lower() in reference_name_or_path.lower():
+                matches['full_path'].append(assembly_name)
+    if len(matches['file_name']) == 1:
+        match = matches['file_name'][0]
+    elif len(matches['file_name']) >=1:
+        # identify most recent matching reference
+        match_recency = [int(re.search('\d+', assembly_name).group()) for assembly_name in matches['file_name']]
+        most_recent = [x for (y,x) in sorted(zip(match_recency, matches['file_name']), reverse=True)][0] 
+        warn('More than one reference matches path in header ({path});' +
+            ' the most recent one ({selected}) was used.'.format(
+                path=reference_name_or_path, selected=most_recent))
+        match = most_recent
+    elif len(matches['full_path']) >= 1:
+        match_recency = [int(re.search('\d+', assembly_name).group()) for assembly_name in matches['file_name']]
+        most_recent = [x for (y,x) in sorted(zip(match_recency, matches['file_name']), reverse=True)][0] 
+        warn('Reference could not be matched against filename ({path});' +
+            ' using the most recent match ({selected}) against the full path.'.format(
+                path=reference_name_or_path, selected=most_recent))
+        match = most_recent
+    else:
+        raise ValueError(
+            "Failed to infer genome assembly name for %s" % reference_name_or_path)
+    return match
+
 
 def infer_genome(genome_object_string_or_int):
     """
