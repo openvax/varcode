@@ -70,7 +70,7 @@ if __name__ == '__main__':
             'biopython>=1.64',
             'pyvcf>=0.6.7',
             'memoized_property>=1.0.2',
-            'serializable>=0.0.6',
+            'serializable>=0.0.8',
             'sercol',
         ],
         entry_points={
