@@ -129,6 +129,11 @@ def test_variant_collection_serialization():
     eq_(reconstructed.metadata[original_first_variant],
         original_metadata[original_first_variant])
 
+    merged = original.intersection(original)
+    merged_reconstructed = pickle.loads(pickle.dumps(merged))
+    eq_(merged, merged_reconstructed)
+
+
     # Test JSON serialization
     variants_from_json = VariantCollection.from_json(original.to_json())
     eq_(original, variants_from_json)
