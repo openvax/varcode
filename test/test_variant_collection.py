@@ -133,7 +133,6 @@ def test_variant_collection_serialization():
     merged_reconstructed = pickle.loads(pickle.dumps(merged))
     eq_(merged, merged_reconstructed)
 
-
     # Test JSON serialization
     variants_from_json = VariantCollection.from_json(original.to_json())
     eq_(original, variants_from_json)
@@ -143,3 +142,10 @@ def test_variant_collection_serialization():
     # pylint: disable=no-member
     eq_(variants_from_json.metadata[original_first_variant],
         original_metadata[original_first_variant])
+
+def test_merged_variant_collection_serialization():
+    intersection = ov_wustle_variants.intersection(tcga_ov_variants)
+    eq_(intersection, pickle.loads(pickle.dumps(intersection)))
+
+    union = ov_wustle_variants.union(tcga_ov_variants)
+    eq_(union, pickle.loads(pickle.dumps(union)))
