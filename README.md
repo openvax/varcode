@@ -25,7 +25,7 @@ pyensembl install --release 75 76
 ```
 
 This will eliminate a potential delay of several minutes required to install the relevant data
-when using the `varcode` for the first time.
+when using the Varcode for the first time.
 
 
 Example
@@ -90,7 +90,7 @@ Effect Types
 
 Effect type  | Description
 -----------: | :-----------
-*AlternateStartCodon* | Replace annotated start codon with alternative  start codon (*e.g.* `ATG>CAG`).
+*AlternateStartCodon* | Replace annotated start codon with alternative  start codon (*e.g.* "ATG>CAG").
 *ComplexSubstitution* | Insertion and deletion of multiple amino acids.
 *Deletion* | Coding mutation which causes deletion of amino acid(s).
 *ExonLoss* | Deletion of entire exon, significantly disrupts protein.
