@@ -617,7 +617,6 @@ class StopLoss(KnownAminoAcidChange):
             transcript,
             extended_protein_sequence):
         aa_mutation_start_offset = len(transcript.protein_sequence)
-        self.extended_protein_sequence = extended_protein_sequence
         KnownAminoAcidChange.__init__(
             self,
             variant,
@@ -625,6 +624,10 @@ class StopLoss(KnownAminoAcidChange):
             aa_mutation_start_offset=aa_mutation_start_offset,
             aa_ref="*",
             aa_alt=extended_protein_sequence)
+
+    @property
+    def extended_protein_sequence(self):
+        return self.aa_alt
 
     @property
     def short_description(self):
@@ -646,7 +649,6 @@ class FrameShift(KnownAminoAcidChange):
         aa_ref as the chracter before the variant sequence, a frameshift starts
         at aa_ref.
         """
-        self.shifted_sequence = shifted_sequence
         aa_ref = transcript.protein_sequence[aa_mutation_start_offset:]
         KnownAminoAcidChange.__init__(
             self,
@@ -655,6 +657,10 @@ class FrameShift(KnownAminoAcidChange):
             aa_mutation_start_offset=aa_mutation_start_offset,
             aa_ref=aa_ref,
             aa_alt=shifted_sequence)
+
+    @property
+    def shifted_sequence(self):
+        return self.aa_alt
 
     @memoized_property
     def mutant_protein_sequence(self):
@@ -678,13 +684,17 @@ class FrameShiftTruncation(PrematureStop, FrameShift):
             transcript,
             stop_codon_offset,
             aa_ref=""):
-        self.shifted_sequence = ""
         PrematureStop.__init__(
             self,
             variant=variant,
             transcript=transcript,
             aa_mutation_start_offset=stop_codon_offset,
-            aa_ref=aa_ref)
+            aa_ref=aa_ref,
+            aa_alt="")
+
+    @property
+    def shifted_sequence(self):
+        return self.aa_alt
 
     @property
     def short_description(self):
