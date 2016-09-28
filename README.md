@@ -1,7 +1,7 @@
-<a href="https://pypi.python.org/pypi/varcode/"><img src="https://img.shields.io/pypi/v/varcode.svg?maxAge=2592000" alt="PyPI"></a>
 <a href="https://travis-ci.org/hammerlab/varcode"><img src="https://travis-ci.org/hammerlab/varcode.svg?branch=master" alt="Build Status"></a>
 <a href="https://coveralls.io/github/hammerlab/varcode?branch=master"><img src="https://coveralls.io/repos/hammerlab/varcode/badge.svg?branch=master&service=github" alt="Coverage Status"></a>
 <a href="https://zenodo.org/badge/latestdoi/18834/hammerlab/varcode"><img src="https://zenodo.org/badge/18834/hammerlab/varcode.svg" alt="DOI"></a>
+<a href="https://pypi.python.org/pypi/varcode/"><img src="https://img.shields.io/pypi/v/varcode.svg?maxAge=2592000" alt="PyPI"></a>
 
 Varcode
 =======
