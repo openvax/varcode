@@ -1,4 +1,7 @@
-[![PyPI](https://img.shields.io/pypi/v/varcode.svg?maxAge=2592000)]() [![Build Status](https://travis-ci.org/hammerlab/varcode.svg?branch=master)](https://travis-ci.org/hammerlab/varcode) [![Coverage Status](https://coveralls.io/repos/hammerlab/varcode/badge.svg?branch=master&service=github)](https://coveralls.io/github/hammerlab/varcode?branch=master) [![DOI](https://zenodo.org/badge/18834/hammerlab/varcode.svg)](https://zenodo.org/badge/latestdoi/18834/hammerlab/varcode)
+<a href="https://travis-ci.org/hammerlab/varcode"><img src="https://travis-ci.org/hammerlab/varcode.svg?branch=master" alt="Build Status"></a>
+<a href="https://coveralls.io/github/hammerlab/varcode?branch=master"><img src="https://coveralls.io/repos/hammerlab/varcode/badge.svg?branch=master&service=github" alt="Coverage Status"></a>
+<a href="https://zenodo.org/badge/latestdoi/18834/hammerlab/varcode"><img src="https://zenodo.org/badge/18834/hammerlab/varcode.svg" alt="DOI"></a>
+<a href="https://pypi.python.org/pypi/varcode/"><img src="https://img.shields.io/pypi/v/varcode.svg?maxAge=1000" alt="PyPI"></a>
 
 Varcode
 =======
@@ -22,7 +25,7 @@ pyensembl install --release 75 76
 ```
 
 This will eliminate a potential delay of several minutes required to install the relevant data
-when using the `varcode` for the first time.
+when using the Varcode for the first time.
 
 
 Example
@@ -87,7 +90,7 @@ Effect Types
 
 Effect type  | Description
 -----------: | :-----------
-*AlternateStartCodon* | Replace annotated start codon with alternative  start codon (*e.g.* `ATG>CAG`).
+*AlternateStartCodon* | Replace annotated start codon with alternative  start codon (*e.g.* "ATG>CAG").
 *ComplexSubstitution* | Insertion and deletion of multiple amino acids.
 *Deletion* | Coding mutation which causes deletion of amino acid(s).
 *ExonLoss* | Deletion of entire exon, significantly disrupts protein.
