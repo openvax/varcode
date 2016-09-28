@@ -1,5 +1,162 @@
 # Change Log
 
+## [v0.5.2](https://github.com/hammerlab/varcode/tree/v0.5.2) (2016-09-28)
+[Full Changelog](https://github.com/hammerlab/varcode/compare/v0.5.1...v0.5.2)
+
+**Closed issues:**
+
+- Make sure `Variant` works with any Genome \(not just a human EnsemblRelease\) [\#127](https://github.com/hammerlab/varcode/issues/127)
+
+**Merged pull requests:**
+
+- Move extraneous variables to properties for normalization [\#190](https://github.com/hammerlab/varcode/pull/190) ([tavinathanson](https://github.com/tavinathanson))
+- Use is\_protein\_coding property of pyensembl.Transcript and pyensembl.Gene [\#180](https://github.com/hammerlab/varcode/pull/180) ([iskandr](https://github.com/iskandr))
+
+## [v0.5.1](https://github.com/hammerlab/varcode/tree/v0.5.1) (2016-09-16)
+[Full Changelog](https://github.com/hammerlab/varcode/compare/v0.5.0...v0.5.1)
+
+**Merged pull requests:**
+
+- Add MutationEffect to \_\_init\_\_.py [\#178](https://github.com/hammerlab/varcode/pull/178) ([timodonnell](https://github.com/timodonnell))
+
+## [v0.5.0](https://github.com/hammerlab/varcode/tree/v0.5.0) (2016-09-13)
+[Full Changelog](https://github.com/hammerlab/varcode/compare/v0.4.19...v0.5.0)
+
+**Implemented enhancements:**
+
+- Support collection.as\_dataframe\(\) [\#128](https://github.com/hammerlab/varcode/issues/128)
+
+**Closed issues:**
+
+- Substitution mis-annotated as stop-loss [\#176](https://github.com/hammerlab/varcode/issues/176)
+- Wrong aa\_mutation\_end\_offset for insertion of stop codon [\#175](https://github.com/hammerlab/varcode/issues/175)
+- Wrong aa\_ref for insertion of stop codon [\#174](https://github.com/hammerlab/varcode/issues/174)
+- Insertions after the stop codon annotated as plain Insertions [\#172](https://github.com/hammerlab/varcode/issues/172)
+- Mutations before the stop codon confused as StopLosses [\#171](https://github.com/hammerlab/varcode/issues/171)
+- StopLosses do not translate into 3' UTR [\#170](https://github.com/hammerlab/varcode/issues/170)
+- Insertion of stop codon is annotated as simple Insertion and not PrematureStop [\#169](https://github.com/hammerlab/varcode/issues/169)
+- Synonimous FrameShift over stop codon not annotated as silent  [\#168](https://github.com/hammerlab/varcode/issues/168)
+- Wrong offset for insertion of StopCodon [\#167](https://github.com/hammerlab/varcode/issues/167)
+- Document release process [\#154](https://github.com/hammerlab/varcode/issues/154)
+- compare variants that use different references [\#83](https://github.com/hammerlab/varcode/issues/83)
+- Annotate with predicted pathogenicity [\#46](https://github.com/hammerlab/varcode/issues/46)
+
+**Merged pull requests:**
+
+- Reorganize effect prediction code, fixed annotation bugs/issues [\#173](https://github.com/hammerlab/varcode/pull/173) ([iskandr](https://github.com/iskandr))
+
+## [v0.4.19](https://github.com/hammerlab/varcode/tree/v0.4.19) (2016-09-12)
+[Full Changelog](https://github.com/hammerlab/varcode/compare/v0.4.18...v0.4.19)
+
+**Fixed bugs:**
+
+- original\_start doesn't get pickled [\#141](https://github.com/hammerlab/varcode/issues/141)
+
+**Closed issues:**
+
+- replace `load\_vcf` with `load\_vcf\_fast` ? [\#144](https://github.com/hammerlab/varcode/issues/144)
+- Add `annotate\_random\_variants` commandline script [\#49](https://github.com/hammerlab/varcode/issues/49)
+- support filtering a variant collection to variants overlapping specified gene names [\#32](https://github.com/hammerlab/varcode/issues/32)
+
+## [v0.4.18](https://github.com/hammerlab/varcode/tree/v0.4.18) (2016-08-08)
+[Full Changelog](https://github.com/hammerlab/varcode/compare/v0.4.17...v0.4.18)
+
+**Closed issues:**
+
+- vcf unit tests broken in python 3 \(?\) [\#164](https://github.com/hammerlab/varcode/issues/164)
+- maximum recursion depth exceeded when loading a vcf from a URL [\#163](https://github.com/hammerlab/varcode/issues/163)
+
+**Merged pull requests:**
+
+- In load\_vcf, when passed a URL download it first to a local file then… [\#165](https://github.com/hammerlab/varcode/pull/165) ([timodonnell](https://github.com/timodonnell))
+- Removed Collection from varcode, moved to separate 'sercol' repo instead [\#162](https://github.com/hammerlab/varcode/pull/162) ([iskandr](https://github.com/iskandr))
+
+## [v0.4.17](https://github.com/hammerlab/varcode/tree/v0.4.17) (2016-08-05)
+[Full Changelog](https://github.com/hammerlab/varcode/compare/v0.4.16...v0.4.17)
+
+**Merged pull requests:**
+
+- Commandline interface, simplified serialization, merging VariantCollections [\#161](https://github.com/hammerlab/varcode/pull/161) ([iskandr](https://github.com/iskandr))
+
+## [v0.4.16](https://github.com/hammerlab/varcode/tree/v0.4.16) (2016-07-30)
+[Full Changelog](https://github.com/hammerlab/varcode/compare/v0.4.15...v0.4.16)
+
+## [v0.4.15](https://github.com/hammerlab/varcode/tree/v0.4.15) (2016-07-15)
+[Full Changelog](https://github.com/hammerlab/varcode/compare/v0.4.14...v0.4.15)
+
+**Fixed bugs:**
+
+- Fix clone\_with\_new\_elements for VariantCollection [\#159](https://github.com/hammerlab/varcode/pull/159) ([tavinathanson](https://github.com/tavinathanson))
+
+**Closed issues:**
+
+- load\_vcf\_fast fails when sample names contain spaces [\#158](https://github.com/hammerlab/varcode/issues/158)
+
+**Merged pull requests:**
+
+- Fix load\_vcf\_fast for sample names containing a space character [\#160](https://github.com/hammerlab/varcode/pull/160) ([timodonnell](https://github.com/timodonnell))
+
+## [v0.4.14](https://github.com/hammerlab/varcode/tree/v0.4.14) (2016-06-07)
+[Full Changelog](https://github.com/hammerlab/varcode/compare/v0.4.12...v0.4.14)
+
+**Merged pull requests:**
+
+- Don't memoize so much [\#157](https://github.com/hammerlab/varcode/pull/157) ([iskandr](https://github.com/iskandr))
+
+## [v0.4.12](https://github.com/hammerlab/varcode/tree/v0.4.12) (2016-05-28)
+[Full Changelog](https://github.com/hammerlab/varcode/compare/v0.4.13...v0.4.12)
+
+## [v0.4.13](https://github.com/hammerlab/varcode/tree/v0.4.13) (2016-05-28)
+[Full Changelog](https://github.com/hammerlab/varcode/compare/v0.4.11...v0.4.13)
+
+**Merged pull requests:**
+
+- Fix versioneer prefix format [\#155](https://github.com/hammerlab/varcode/pull/155) ([armish](https://github.com/armish))
+
+## [v0.4.11](https://github.com/hammerlab/varcode/tree/v0.4.11) (2016-05-27)
+[Full Changelog](https://github.com/hammerlab/varcode/compare/v0.4.10...v0.4.11)
+
+## [v0.4.10](https://github.com/hammerlab/varcode/tree/v0.4.10) (2016-05-27)
+[Full Changelog](https://github.com/hammerlab/varcode/compare/v0.4.9...v0.4.10)
+
+## [v0.4.9](https://github.com/hammerlab/varcode/tree/v0.4.9) (2016-05-27)
+[Full Changelog](https://github.com/hammerlab/varcode/compare/v0.4.8...v0.4.9)
+
+**Closed issues:**
+
+- Add serialization for EffectCollection and VariantCollection [\#71](https://github.com/hammerlab/varcode/issues/71)
+
+**Merged pull requests:**
+
+- Reorganized coding effects to use KnownAminoAcidChange base class [\#153](https://github.com/hammerlab/varcode/pull/153) ([iskandr](https://github.com/iskandr))
+
+## [v0.4.8](https://github.com/hammerlab/varcode/tree/v0.4.8) (2016-05-27)
+[Full Changelog](https://github.com/hammerlab/varcode/compare/v0.4.2...v0.4.8)
+
+**Fixed bugs:**
+
+- Potentially wrong translated sequence from frameshift on mm10 [\#151](https://github.com/hammerlab/varcode/issues/151)
+
+**Closed issues:**
+
+- ExonicSpliceSite mutations are classified as Noncoding [\#136](https://github.com/hammerlab/varcode/issues/136)
+- Filter field is not saved after loading a VCF [\#89](https://github.com/hammerlab/varcode/issues/89)
+- investigate porting read evidence module to use impala [\#69](https://github.com/hammerlab/varcode/issues/69)
+- Attach genotypes and other sample information to Variants [\#30](https://github.com/hammerlab/varcode/issues/30)
+- support determining the evidence for a variant in a bam [\#26](https://github.com/hammerlab/varcode/issues/26)
+
+**Merged pull requests:**
+
+- Added unit tests for Klf6 frameshift, fix bug in frameshift translation [\#152](https://github.com/hammerlab/varcode/pull/152) ([iskandr](https://github.com/iskandr))
+- Add as\_dataframe to EffectCollection [\#150](https://github.com/hammerlab/varcode/pull/150) ([arahuja](https://github.com/arahuja))
+- Use versioneer to manage version number [\#149](https://github.com/hammerlab/varcode/pull/149) ([arahuja](https://github.com/arahuja))
+- Fix pyvcf error from passing \_parse\_samples a tuple instead of a list [\#148](https://github.com/hammerlab/varcode/pull/148) ([timodonnell](https://github.com/timodonnell))
+- Fix variant pickling [\#146](https://github.com/hammerlab/varcode/pull/146) ([tavinathanson](https://github.com/tavinathanson))
+- Parse and expose sample info, including for multisample VCFs [\#145](https://github.com/hammerlab/varcode/pull/145) ([timodonnell](https://github.com/timodonnell))
+- Preserve contig name [\#140](https://github.com/hammerlab/varcode/pull/140) ([iskandr](https://github.com/iskandr))
+- Quotes around nucleotides in Variant representation [\#139](https://github.com/hammerlab/varcode/pull/139) ([iskandr](https://github.com/iskandr))
+- added is\_deletion, is\_insertion, and is\_indel properties to variants [\#138](https://github.com/hammerlab/varcode/pull/138) ([iskandr](https://github.com/iskandr))
+
 ## [v0.4.2](https://github.com/hammerlab/varcode/tree/v0.4.2) (2016-02-25)
 **Implemented enhancements:**
 
