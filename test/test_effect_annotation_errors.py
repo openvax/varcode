@@ -230,3 +230,15 @@ def test_issue176_substitution_before_stop_codon():
         effect_class=Substitution,
         aa_ref="I",
         aa_alt="T")
+
+def test_issue193_SNV_stop_gain_in_ZNF45_not_deletion():
+    """
+    Issue: https://github.com/hammerlab/varcode/issues/193
+    SNV chr19:44417544 G>A was being incorrectly annotated as Deletion
+    """
+    variant = Variant('19', 44417544, 'G', 'A', 'GRCh37')
+    expect_effect(
+        variant,
+        effect_class=PrematureStop,
+        modifies_coding_sequence=True,
+        modifies_protein_sequence=True)
