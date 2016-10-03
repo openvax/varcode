@@ -325,6 +325,19 @@ def test_deletion():
         modifies_coding_sequence=True,
         modifies_protein_sequence=True)
 
+
+def test_deletion_of_last_amino_acid():
+    # transcript CFTR-001
+    # last two codons of coding sequence are CTT|TAG
+    variant = Variant("7", 117667103, "CTTT", "T", "GRCh38")
+    expect_effect(
+        variant,
+        transcript_id="ENST00000003084",
+        effect_class=Deletion,
+        modifies_coding_sequence=True,
+        modifies_protein_sequence=True,
+        aa_ref="L")
+
 def test_insertion():
     # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
     # Chromosome 17: 43,044,295-43,125,370 reverse strand.

@@ -208,7 +208,7 @@ def predict_in_frame_coding_effect(
         reference_protein_length - aa_mutation_start_offset - 1)
 
     if mutant_codons_contain_stop and (
-            n_aa_alt < n_ref_amino_acids_after_mutated_site):
+            n_aa_alt <= n_ref_amino_acids_after_mutated_site):
         # if the new coding sequence contains a stop codon, then this is a
         # PrematureStop mutation if it decreases the length of the protein
         return PrematureStop(
