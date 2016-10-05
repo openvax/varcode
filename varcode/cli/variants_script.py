@@ -12,11 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import print_function, division, absolute_import
-
+from __future__ import division, absolute_import
+import logging
+import logging.config
 import sys
 
 from .variant_args import make_variants_parser, variant_collection_from_args
+
+
+logging.config.fileConfig('varcode/cli/logging.conf')
+logger = logging.getLogger(__name__)
+
 
 def main(args_list=None):
     """
@@ -38,6 +44,6 @@ def main(args_list=None):
     args = arg_parser.parse_args(args_list)
     variants = variant_collection_from_args(args)
     variants_dataframe = variants.to_dataframe()
-    print(variants_dataframe)
+    logger.info('\n%s', variants_dataframe)
     if args.output_csv:
         variants_dataframe.to_csv(args.output_csv, index=False)

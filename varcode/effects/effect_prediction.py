@@ -41,6 +41,10 @@ from .effect_classes import (
     ExonicSpliceSite,
 )
 
+
+logger = logging.getLogger(__name__)
+
+
 def predict_variant_effects(variant, raise_on_error=False):
     """Determine the effects of a variant on any transcripts it overlaps.
     Returns an EffectCollection object.
@@ -99,7 +103,7 @@ def predict_variant_effect_on_transcript_or_failure(variant, transcript):
             variant=variant,
             transcript=transcript)
     except (AssertionError, ValueError) as error:
-        logging.warn(
+        logger.warn(
             "Encountered error annotating %s for %s: %s",
             variant,
             transcript,

@@ -47,13 +47,14 @@ if __name__ == '__main__':
     setup(
         name='varcode',
         packages=find_packages(),
+        package_data={'varcode.cli': ['logging.conf']},
         version=version,
         cmdclass=cmdclass,
         description="Variant annotation in Python",
         long_description=readme,
         url="https://github.com/hammerlab/varcode",
         author="Alex Rubinsteyn",
-	author_email="alex rubinsteyn at gmail's fine email service",
+	    author_email="alex rubinsteyn at gmail's fine email service",
         license="http://www.apache.org/licenses/LICENSE-2.0.html",
         classifiers=[
             'Development Status :: 3 - Alpha',

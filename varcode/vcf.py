@@ -30,6 +30,10 @@ from .reference import infer_genome
 from .variant import Variant
 from .variant_collection import VariantCollection
 
+
+logger = logging.getLogger(__name__)
+
+
 def load_vcf(
         path,
         genome=None,
@@ -115,7 +119,7 @@ def load_vcf(
                 chunk_size=chunk_size,
                 max_variants=max_variants)
         finally:
-            logging.info("Removing temporary file: %s" % filename)
+            logger.info("Removing temporary file: %s", filename)
             os.unlink(filename)
 
     # Loading a local file.
