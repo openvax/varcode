@@ -68,7 +68,9 @@ def infer_reference_name(reference_name_or_path):
                 matches['file_name'].append(assembly_name)
             elif candidate.lower() in reference_name_or_path.lower():
                 matches['full_path'].append(assembly_name)
-
+    # remove duplicate matches (happens due to overlapping aliases)
+    matches['file_name'] = list(set(matches['file_name']))
+    matches['full_path'] = list(set(matches['full_path']))
     # given set of existing matches, choose one to return
     # (first select based on file_name, then full path. If multiples, use most recent)
     if len(matches['file_name']) == 1:
