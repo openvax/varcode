@@ -13,14 +13,17 @@
 # limitations under the License.
 
 from nose.tools import eq_
-
+import warnings
 from varcode.reference import infer_reference_name, reference_alias_dict, _most_recent_assembly
 
 ## test cases are given as 
 ## expected response: list of inputs
 reference_test_cases = {
-    'NCBI36': ['ncbi36p2.fasta', 'b36.fasta'],
-    'GRCh38': ['grch38p2.fasta', '##reference=file:///var/lib/cwl/job367935311_index_001zdr/GRCh38.d1.vd1.fa'],
+    'NCBI36': ['ncbi36p2.fasta', 'b36.fasta', '##reference=file:///var/lib/cwl/ncbi36/homo_sapiens.d1.vd1.fa'],
+    'GRCh38': ['grch38p2.fasta', 
+                '##reference=file:///var/lib/cwl/job367935311_index_001zdr/GRCh38.d1.vd1.fa',
+                '##reference=file:///var/lib/cwl/job367935311_index_001zdr/GRCh38.job36.d1.vd1.fa',
+                ],
 }
 
 def test_most_recent_assembly():
@@ -31,15 +34,17 @@ def test_most_recent_assembly():
 
 
 def test_infer_reference_name_aliases():
-    for assembly_name in reference_alias_dict.keys():
-        candidate_list = [assembly_name] + reference_alias_dict[assembly_name]
-        for candidate in candidate_list:
-            eq_(infer_reference_name(candidate), assembly_name)
+    with warnings.catch_warnings(record=True) as w:
+        for assembly_name in reference_alias_dict.keys():
+            candidate_list = [assembly_name] + reference_alias_dict[assembly_name]
+            for candidate in candidate_list:
+                eq_(infer_reference_name(candidate), assembly_name)
 
 
 def test_infer_reference_name_test_cases():
-    for assembly_name in reference_test_cases.keys():
-        candidate_list = [assembly_name] + reference_test_cases[assembly_name]
-        for candidate in candidate_list:
-            eq_(infer_reference_name(candidate), assembly_name)
+    with warnings.catch_warnings(record=True) as w:
+        for assembly_name in reference_test_cases.keys():
+            candidate_list = [assembly_name] + reference_test_cases[assembly_name]
+            for candidate in candidate_list:
+                eq_(infer_reference_name(candidate), assembly_name)
 
