@@ -42,6 +42,16 @@ reference_alias_dict = {
     ]
 }
 
+def _most_recent_assembly(assembly_names):
+    """ 
+    Given list of (in this case, matched) assemblies, identify the most recent
+       ("recency" here is determined by sorting based on the numeric element of the assembly name)
+    """
+    match_recency = [int(re.search('\d+', assembly_name).group()) for assembly_name in assembly_names]
+    most_recent = [x for (y,x) in sorted(zip(match_recency, assembly_names), reverse=True)][0] 
+    return most_recent
+
+
 def infer_reference_name(reference_name_or_path):
     """
     Given a string containing a reference name (such as a path to
@@ -58,19 +68,20 @@ def infer_reference_name(reference_name_or_path):
                 matches['file_name'].append(assembly_name)
             elif candidate.lower() in reference_name_or_path.lower():
                 matches['full_path'].append(assembly_name)
+    # given set of existing matches, choose one to return
+    # (first select based on file_name, then full path. If multiples, use most recent)
     if len(matches['file_name']) == 1:
         match = matches['file_name'][0]
-    elif len(matches['file_name']) >=1:
-        # identify most recent matching reference
-        match_recency = [int(re.search('\d+', assembly_name).group()) for assembly_name in matches['file_name']]
-        most_recent = [x for (y,x) in sorted(zip(match_recency, matches['file_name']), reverse=True)][0] 
+    elif len(matches['file_name']) > 1:
+        # separate logic for >1 vs 1 to give informative warning
+        most_recent = _most_recent_assembly(matches['file_name'])
         warn('More than one reference matches path in header ({path});' +
             ' the most recent one ({selected}) was used.'.format(
-                path=reference_name_or_path, selected=most_recent))
+                path=reference_file_name, selected=most_recent))
         match = most_recent
     elif len(matches['full_path']) >= 1:
-        match_recency = [int(re.search('\d+', assembly_name).group()) for assembly_name in matches['file_name']]
-        most_recent = [x for (y,x) in sorted(zip(match_recency, matches['file_name']), reverse=True)][0] 
+        # combine full-path logic since warning is the same
+        most_recent = _most_recent_assembly(matches['full_path'])
         warn('Reference could not be matched against filename ({path});' +
             ' using the most recent match ({selected}) against the full path.'.format(
                 path=reference_name_or_path, selected=most_recent))
