@@ -68,24 +68,22 @@ def infer_reference_name(reference_name_or_path):
                 matches['file_name'].append(assembly_name)
             elif candidate.lower() in reference_name_or_path.lower():
                 matches['full_path'].append(assembly_name)
+
     # given set of existing matches, choose one to return
     # (first select based on file_name, then full path. If multiples, use most recent)
     if len(matches['file_name']) == 1:
         match = matches['file_name'][0]
     elif len(matches['file_name']) > 1:
         # separate logic for >1 vs 1 to give informative warning
-        most_recent = _most_recent_assembly(matches['file_name'])
-        warn('More than one reference matches path in header ({path});' +
-            ' the most recent one ({selected}) was used.'.format(
-                path=reference_file_name, selected=most_recent))
-        match = most_recent
+        match = _most_recent_assembly(matches['file_name'])
+        warn('More than one reference ({}) matches path in header ({});' \
+            .format(','.join(matches['file_name']), reference_file_name) +
+            ' the most recent one ({}) was used.'.format(match))
     elif len(matches['full_path']) >= 1:
         # combine full-path logic since warning is the same
-        most_recent = _most_recent_assembly(matches['full_path'])
-        warn('Reference could not be matched against filename ({path});' +
-            ' using the most recent match ({selected}) against the full path.'.format(
-                path=reference_name_or_path, selected=most_recent))
-        match = most_recent
+        match = _most_recent_assembly(matches['full_path'])
+        warn('Reference could not be matched against filename ({});'.format(reference_name_or_path) +
+            ' using the most recent match ({}) against the full path.'.format(match))
     else:
         raise ValueError(
             "Failed to infer genome assembly name for %s" % reference_name_or_path)
