@@ -61,7 +61,7 @@ def infer_reference_name(reference_name_or_path):
     # identify all cases where reference name or path matches candidate aliases
     reference_file_name = os.path.basename(reference_name_or_path)
     matches = {'file_name': list(), 'full_path': list()}
-    for assembly_name in sorted(reference_alias_dict.keys(), reverse=True):
+    for assembly_name in reference_alias_dict.keys():
         candidate_list = [assembly_name] + reference_alias_dict[assembly_name]
         for candidate in candidate_list:
             if candidate.lower() in reference_file_name.lower():
