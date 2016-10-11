@@ -15,12 +15,13 @@
 from __future__ import division, absolute_import
 import logging
 import logging.config
+import pkg_resources
 import sys
 
 from .variant_args import make_variants_parser, variant_collection_from_args
 
 
-logging.config.fileConfig('varcode/cli/logging.conf')
+logging.config.fileConfig(pkg_resources.resource_filename(__name__, 'logging.conf'))
 logger = logging.getLogger(__name__)
 
 

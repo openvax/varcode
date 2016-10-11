@@ -54,7 +54,7 @@ if __name__ == '__main__':
         long_description=readme,
         url="https://github.com/hammerlab/varcode",
         author="Alex Rubinsteyn",
-	    author_email="alex rubinsteyn at gmail's fine email service",
+        author_email="alex rubinsteyn at gmail's fine email service",
         license="http://www.apache.org/licenses/LICENSE-2.0.html",
         classifiers=[
             'Development Status :: 3 - Alpha',
@@ -68,12 +68,12 @@ if __name__ == '__main__':
         install_requires=[
             'numpy>=1.7, <2.0',
             'pandas>=0.15',
-            'pyensembl>=1.0.2',
+            'pyensembl>=1.0.3',
             'biopython>=1.64',
             'pyvcf>=0.6.7',
             'memoized_property>=1.0.2',
             'serializable>=0.0.8',
-            'sercol',
+            'sercol>=0.0.2',
         ],
         entry_points={
             'console_scripts': [
