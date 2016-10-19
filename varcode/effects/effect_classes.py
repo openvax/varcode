@@ -205,7 +205,7 @@ class SpliceDonor(IntronicSpliceSite):
     Mutation in the first two intron residues.
     """
     def __init__(self, variant, transcript, nearest_exon, distance_to_exon):
-        SpliceDonor.__init__(
+        IntronicSpliceSite.__init__(
             self, variant, transcript, nearest_exon, distance_to_exon)
 
     short_description = "splice-donor"
