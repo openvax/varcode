@@ -194,8 +194,9 @@ class IntronicSpliceSite(Intronic, SpliceSite):
     nucleotides in an intron, since those are  known to more confidently
     affect splicing and are given their own effect classes below.
     """
-    def __init__(self, *args, **kwargs):
-        Intronic.__init__(self, *args, **kwargs)
+    def __init__(self, variant, transcript, nearest_exon, distance_to_exon):
+        Intronic.__init__(
+            self, variant, transcript, nearest_exon, distance_to_exon)
 
     short_description = "intronic-splice-site"
 
@@ -203,8 +204,9 @@ class SpliceDonor(IntronicSpliceSite):
     """
     Mutation in the first two intron residues.
     """
-    def __init__(self, *args, **kwargs):
-        Intronic.__init__(self, *args, **kwargs)
+    def __init__(self, variant, transcript, nearest_exon, distance_to_exon):
+        IntronicSpliceSite.__init__(
+            self, variant, transcript, nearest_exon, distance_to_exon)
 
     short_description = "splice-donor"
 
