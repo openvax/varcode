@@ -617,14 +617,24 @@ class StopLoss(KnownAminoAcidChange):
             self,
             variant,
             transcript,
-            extended_protein_sequence):
-        aa_mutation_start_offset = len(transcript.protein_sequence)
+            extended_protein_sequence,
+            aa_ref="*"):
+        # StopLoss assumes that we deleted some codons ending with a
+        # stop codon
+        if not aa_ref.endswith("*"):
+            raise ValueError(
+                "StopLoss cannot have aa_ref='%s', must end with '*'" % (
+                    aa_ref,))
+        # subtract 1 for the stop codon
+        n_ref_amino_acids = len(aa_ref) - 1
+        protein_length = len(transcript.protein_sequence)
+        aa_mutation_start_offset = protein_length - n_ref_amino_acids
         KnownAminoAcidChange.__init__(
             self,
             variant,
             transcript,
             aa_mutation_start_offset=aa_mutation_start_offset,
-            aa_ref="*",
+            aa_ref=aa_ref,
             aa_alt=extended_protein_sequence)
 
     @property
@@ -633,7 +643,8 @@ class StopLoss(KnownAminoAcidChange):
 
     @property
     def short_description(self):
-        return "p.*%d%s (stop-loss)" % (
+        return "p.%s%d%s (stop-loss)" % (
+            self.aa_ref,
             self.aa_mutation_start_offset + 1,
             self.extended_protein_sequence)
 
