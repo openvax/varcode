@@ -242,3 +242,39 @@ def test_issue193_SNV_stop_gain_in_ZNF45_not_deletion():
         effect_class=PrematureStop,
         modifies_coding_sequence=True,
         modifies_protein_sequence=True)
+
+def test_issue202_stoploss_deletes_two_amino_acids():
+    """
+    Issue: https://github.com/hammerlab/varcode/issues/202
+    Variant: chr1 100484693 . TTCATCTGA CCC
+    Transcript: ENSMUST00000086738
+    >>>
+    The end of that transcript looks like:
+
+    TTC ATC TGA ACT
+     F   I   *   T
+    and this mutation will cause the location plus downstream to become
+
+    PTIVWSSGPLF(...)
+    The annotation that varcode gives is
+
+    StopLoss
+    * aa_mutation_start_offset = 1292
+    * aa_ref="*"
+    * aa_alt="PTIVWSS(...)"
+    It should actually be
+
+    StopLoss
+    * aa_mutation_start_offset = 1290
+    * aa_ref="FI*"
+    * aa_alt="PTIVWSS(...)"
+    """
+    variant = Variant('chr1', 100484693, 'TTCATCTGA', 'CCC', 'GRCm38')
+    expect_effect(
+        variant,
+        transcript_id='ENSMUST00000086738',
+        effect_class=StopLoss,
+        modifies_coding_sequence=True,
+        modifies_protein_sequence=True,
+        aa_ref='FI*',
+        aa_alt='PTIVWSSGPLF')
