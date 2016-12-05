@@ -79,12 +79,16 @@ def create_frameshift_effect(
         alt=mutant_protein_suffix)
     n_unchanged_amino_acids = len(unchanged_amino_acids)
     offset_to_first_different_amino_acid = mutated_codon_index + n_unchanged_amino_acids
+    # miraculously, this frameshift left the protein unchanged,
+    # most likely by turning one stop codon into another stop codon
+    if n_unchanged_amino_acids == 0:
+        aa_ref = ""
+    else:
+        aa_ref = original_protein_sequence[-n_unchanged_amino_acids:]
     if offset_to_first_different_amino_acid >= original_protein_length:
         # frameshift is either extending the protein or leaving it unchanged
         if len(mutant_protein_suffix) == 0:
-            # miraculously, this frameshift left the protein unchanged,
-            # most likely by turning one stop codon into another stop codon
-            aa_ref = original_protein_sequence[-n_unchanged_amino_acids:]
+
             return Silent(
                 variant=variant,
                 transcript=transcript,
@@ -97,7 +101,8 @@ def create_frameshift_effect(
             return StopLoss(
                 variant=variant,
                 transcript=transcript,
-                extended_protein_sequence=mutant_protein_suffix)
+                aa_ref=aa_ref + "*",
+                aa_alt=mutant_protein_suffix)
     # original amino acid at the mutated codon before the frameshift occurred
     aa_ref = original_protein_sequence[offset_to_first_different_amino_acid]
 

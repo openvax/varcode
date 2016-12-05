@@ -617,8 +617,8 @@ class StopLoss(KnownAminoAcidChange):
             self,
             variant,
             transcript,
-            extended_protein_sequence,
-            aa_ref="*"):
+            aa_ref,
+            aa_alt):
         # StopLoss assumes that we deleted some codons ending with a
         # stop codon
         if not aa_ref.endswith("*"):
@@ -634,11 +634,12 @@ class StopLoss(KnownAminoAcidChange):
             variant,
             transcript,
             aa_mutation_start_offset=aa_mutation_start_offset,
-            aa_ref=aa_ref,
-            aa_alt=extended_protein_sequence)
+            aa_alt=aa_alt,
+            aa_ref=aa_ref)
 
     @property
     def extended_protein_sequence(self):
+        """Deprecated name for aa_alt"""
         return self.aa_alt
 
     @property
