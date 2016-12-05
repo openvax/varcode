@@ -577,12 +577,14 @@ class PrematureStop(KnownAminoAcidChange):
         Insertion of premature stop codon, possibly preceded by a substitution
         of `aa_ref` amino acids for `aa_alt` alternative residues.
         """
-        assert "*" not in aa_ref, \
-            ("Unexpected aa_ref = '%s', should only include amino acids "
-             "before the new stop codon.") % aa_ref
-        assert "*" not in aa_alt, \
-            ("Unexpected aa_ref = '%s', should only include amino acids "
-             "before the new stop codon.") % aa_alt
+        if "*" in aa_ref:
+            raise ValueError(
+                ("Unexpected aa_ref = '%s', should only include amino acids "
+                 "before the new stop codon.") % aa_ref)
+        if "*" in aa_alt:
+            raise ValueError(
+                ("Unexpected aa_ref = '%s', should only include amino acids "
+                 "before the new stop codon.") % aa_alt)
         KnownAminoAcidChange.__init__(
             self,
             variant,
@@ -592,12 +594,13 @@ class PrematureStop(KnownAminoAcidChange):
             aa_alt=aa_alt)
         self.stop_codon_offset = aa_mutation_start_offset + len(aa_alt)
 
-        assert self.stop_codon_offset < len(transcript.protein_sequence), \
-            ("Premature stop codon cannot be at position %d"
-             " since the original protein of %s has length %d") % (
-                self.stop_codon_offset,
-                transcript,
-                len(transcript.protein_sequence))
+        if self.stop_codon_offset >= len(transcript.protein_sequence):
+            raise ValueError(
+                ("Premature stop codon cannot be at position %d"
+                 " since the original protein of %s has length %d") % (
+                    self.stop_codon_offset,
+                    transcript,
+                    len(transcript.protein_sequence)))
 
     @property
     def short_description(self):
@@ -621,12 +624,15 @@ class StopLoss(KnownAminoAcidChange):
             aa_alt):
         # StopLoss assumes that we deleted some codons ending with a
         # stop codon
-        if not aa_ref.endswith("*"):
+        if "*" in aa_ref:
             raise ValueError(
-                "StopLoss cannot have aa_ref='%s', must end with '*'" % (
+                "StopLoss.aa_ref should not contain '*'" % (
                     aa_ref,))
+        if len(aa_alt) == 0:
+            raise ValueError(
+                "If no amino acids added by StopLoss then it should be Silent")
         # subtract 1 for the stop codon
-        n_ref_amino_acids = len(aa_ref) - 1
+        n_ref_amino_acids = len(aa_ref)
         protein_length = len(transcript.protein_sequence)
         aa_mutation_start_offset = protein_length - n_ref_amino_acids
         KnownAminoAcidChange.__init__(
@@ -644,7 +650,7 @@ class StopLoss(KnownAminoAcidChange):
 
     @property
     def short_description(self):
-        return "p.%s%d%s (stop-loss)" % (
+        return "p.%s*%d%s (stop-loss)" % (
             self.aa_ref,
             self.aa_mutation_start_offset + 1,
             self.extended_protein_sequence)

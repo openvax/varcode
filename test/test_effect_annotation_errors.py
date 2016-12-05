@@ -276,5 +276,5 @@ def test_issue202_stoploss_deletes_two_amino_acids():
         effect_class=StopLoss,
         modifies_coding_sequence=True,
         modifies_protein_sequence=True,
-        aa_ref='FI*',
+        aa_ref='FI',
         aa_alt='PTIVWSSGPLFCRGFHLFFFSFF')

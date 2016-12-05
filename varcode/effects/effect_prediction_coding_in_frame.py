@@ -233,7 +233,7 @@ def predict_in_frame_coding_effect(
         return StopLoss(
             variant,
             transcript,
-            aa_ref=aa_ref + "*",
+            aa_ref=aa_ref,
             aa_alt=aa_alt)
     elif n_aa_alt == 0:
         return Deletion(

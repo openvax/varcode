@@ -101,7 +101,7 @@ def create_frameshift_effect(
             return StopLoss(
                 variant=variant,
                 transcript=transcript,
-                aa_ref=aa_ref + "*",
+                aa_ref=aa_ref,
                 aa_alt=mutant_protein_suffix)
     # original amino acid at the mutated codon before the frameshift occurred
     aa_ref = original_protein_sequence[offset_to_first_different_amino_acid]
