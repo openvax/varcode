@@ -626,7 +626,7 @@ class StopLoss(KnownAminoAcidChange):
         # stop codon
         if "*" in aa_ref:
             raise ValueError(
-                "StopLoss.aa_ref should not contain '*'" % (
+                "StopLoss aa_ref '%s' should not contain '*'" % (
                     aa_ref,))
         if len(aa_alt) == 0:
             raise ValueError(
