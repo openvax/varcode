@@ -87,9 +87,15 @@ def load_maf_dataframe(path, nrows=None, verbose=False):
     return df
 
 
-def load_maf(path):
+def load_maf(path, optional_cols=[]):
     """
     Load reference name and Variant objects from MAF filename.
+
+    Parameters
+    ----------
+    optional_cols : list, optional
+        A list of MAF columns to include as metadata if they are present in the MAF.
+        Does not result in an error if those columns are not present.
     """
     # pylint: disable=no-member
     # pylint gets confused by read_csv inside load_maf_dataframe
@@ -150,6 +156,9 @@ def load_maf(path):
             'Tumor_Sample_Barcode': x.Tumor_Sample_Barcode,
             'Matched_Norm_Sample_Barcode': x.Matched_Norm_Sample_Barcode,
         }
+        for optional_col in optional_cols:
+            if optional_col in x:
+                metadata[variant][optional_col] = x[optional_col]
 
         variants.append(variant)
 
