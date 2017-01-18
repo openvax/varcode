@@ -1,5 +1,85 @@
 # Change Log
 
+## [v0.5.12](https://github.com/hammerlab/varcode/tree/v0.5.12) (2017-01-18)
+[Full Changelog](https://github.com/hammerlab/varcode/compare/v0.5.11...v0.5.12)
+
+**Closed issues:**
+
+- Make Varcode correctly infer genome for b37-decoy string [\#207](https://github.com/hammerlab/varcode/issues/207)
+- Longer indels in random variants [\#47](https://github.com/hammerlab/varcode/issues/47)
+- Predict coding sequence of StartLoss mutations [\#4](https://github.com/hammerlab/varcode/issues/4)
+
+**Merged pull requests:**
+
+- Add optional\_cols list to load\_maf [\#209](https://github.com/hammerlab/varcode/pull/209) ([tavinathanson](https://github.com/tavinathanson))
+
+## [v0.5.11](https://github.com/hammerlab/varcode/tree/v0.5.11) (2016-12-05)
+[Full Changelog](https://github.com/hammerlab/varcode/compare/v0.5.10...v0.5.11)
+
+**Fixed bugs:**
+
+- Varcode noncoding variant in a drop\_silent\_and\_noncoding\(\) list [\#200](https://github.com/hammerlab/varcode/issues/200)
+
+**Merged pull requests:**
+
+- Adding aa\_ref argument to StopLoss for variants which delete codons before stop [\#203](https://github.com/hammerlab/varcode/pull/203) ([iskandr](https://github.com/iskandr))
+
+## [v0.5.10](https://github.com/hammerlab/varcode/tree/v0.5.10) (2016-10-19)
+[Full Changelog](https://github.com/hammerlab/varcode/compare/v0.5.9...v0.5.10)
+
+**Fixed bugs:**
+
+- Variant pickling won't work for not-human and non-EnsemblRelease Genomes [\#147](https://github.com/hammerlab/varcode/issues/147)
+
+**Closed issues:**
+
+- Link on PyPI badge broken [\#191](https://github.com/hammerlab/varcode/issues/191)
+- Reference incorrectly inferred when "b36" in reference file path [\#181](https://github.com/hammerlab/varcode/issues/181)
+- Premature stop codon error [\#166](https://github.com/hammerlab/varcode/issues/166)
+
+**Merged pull requests:**
+
+- explicit args to \_\_init\_\_ of Intronic splice effects fixes serialization [\#199](https://github.com/hammerlab/varcode/pull/199) ([iskandr](https://github.com/iskandr))
+- Update RELEASING.md, fixing tagging instructions [\#198](https://github.com/hammerlab/varcode/pull/198) ([julia326](https://github.com/julia326))
+
+## [v0.5.9](https://github.com/hammerlab/varcode/tree/v0.5.9) (2016-10-11)
+[Full Changelog](https://github.com/hammerlab/varcode/compare/v0.5.8...v0.5.9)
+
+**Fixed bugs:**
+
+- StopLoss pickling is broken [\#188](https://github.com/hammerlab/varcode/issues/188)
+
+**Closed issues:**
+
+- One logger per module [\#196](https://github.com/hammerlab/varcode/issues/196)
+- SNV results in deletion [\#193](https://github.com/hammerlab/varcode/issues/193)
+
+**Merged pull requests:**
+
+- One logger per module. [\#197](https://github.com/hammerlab/varcode/pull/197) ([julia326](https://github.com/julia326))
+- Fix edge case where PrematureStop in last amino acid got interpreted as a Deletion  [\#194](https://github.com/hammerlab/varcode/pull/194) ([iskandr](https://github.com/iskandr))
+- Fix inferred-reference-bug [\#182](https://github.com/hammerlab/varcode/pull/182) ([jburos](https://github.com/jburos))
+
+## [v0.5.8](https://github.com/hammerlab/varcode/tree/v0.5.8) (2016-09-28)
+[Full Changelog](https://github.com/hammerlab/varcode/compare/v0.5.7...v0.5.8)
+
+**Merged pull requests:**
+
+- changed Markdown image links to HTML [\#192](https://github.com/hammerlab/varcode/pull/192) ([iskandr](https://github.com/iskandr))
+
+## [v0.5.7](https://github.com/hammerlab/varcode/tree/v0.5.7) (2016-09-28)
+[Full Changelog](https://github.com/hammerlab/varcode/compare/v0.5.3...v0.5.7)
+
+## [v0.5.3](https://github.com/hammerlab/varcode/tree/v0.5.3) (2016-09-28)
+[Full Changelog](https://github.com/hammerlab/varcode/compare/v0.5.2...v0.5.3)
+
+**Merged pull requests:**
+
+- Use conda to install pypandoc [\#189](https://github.com/hammerlab/varcode/pull/189) ([arahuja](https://github.com/arahuja))
+- Ensure README.md is packaged [\#186](https://github.com/hammerlab/varcode/pull/186) ([arahuja](https://github.com/arahuja))
+- Upgrade serializable dependency with tests [\#185](https://github.com/hammerlab/varcode/pull/185) ([arahuja](https://github.com/arahuja))
+- Add pypi badge [\#184](https://github.com/hammerlab/varcode/pull/184) ([arahuja](https://github.com/arahuja))
+
 ## [v0.5.2](https://github.com/hammerlab/varcode/tree/v0.5.2) (2016-09-28)
 [Full Changelog](https://github.com/hammerlab/varcode/compare/v0.5.1...v0.5.2)
 
@@ -57,6 +137,7 @@
 - replace `load\_vcf` with `load\_vcf\_fast` ? [\#144](https://github.com/hammerlab/varcode/issues/144)
 - Add `annotate\_random\_variants` commandline script [\#49](https://github.com/hammerlab/varcode/issues/49)
 - support filtering a variant collection to variants overlapping specified gene names [\#32](https://github.com/hammerlab/varcode/issues/32)
+- Use SPANR to identify splicing misregulation [\#2](https://github.com/hammerlab/varcode/issues/2)
 
 ## [v0.4.18](https://github.com/hammerlab/varcode/tree/v0.4.18) (2016-08-08)
 [Full Changelog](https://github.com/hammerlab/varcode/compare/v0.4.17...v0.4.18)
