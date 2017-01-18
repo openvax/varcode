@@ -117,6 +117,16 @@ def test_vcf_number_entries():
     assert len(variants) == 14, \
         "Expected 14 mutations, got %d" % (len(variants),)
 
+def test_vcf_number_entries_duplicates():
+    # There are 3 duplicated mutations listed in the VCF
+    path_to_vcf_with_duplicates = data_path("duplicates.vcf")
+    variants = load_vcf(path_to_vcf_with_duplicates, genome='hg38',
+                        distinct=True)
+    assert len(variants) == 1
+    variants = load_vcf(path_to_vcf_with_duplicates, genome='hg38',
+                        distinct=False)
+    assert len(variants) == 3
+
 def _check_variant_gene_name(collection, variant):
     expected_gene_names = collection.metadata[variant]['info']['GE']
     assert variant.gene_names == expected_gene_names, \

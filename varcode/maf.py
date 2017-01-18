@@ -87,15 +87,22 @@ def load_maf_dataframe(path, nrows=None, verbose=False):
     return df
 
 
-def load_maf(path, optional_cols=[]):
+def load_maf(path, optional_cols=[], distinct=True):
     """
     Load reference name and Variant objects from MAF filename.
 
     Parameters
     ----------
+
+    path : str
+        Path to MAF (*.maf).
+
     optional_cols : list, optional
         A list of MAF columns to include as metadata if they are present in the MAF.
         Does not result in an error if those columns are not present.
+
+    distinct : bool
+        Don't keep repeated variants
     """
     # pylint: disable=no-member
     # pylint gets confused by read_csv inside load_maf_dataframe
@@ -164,4 +171,5 @@ def load_maf(path, optional_cols=[]):
 
     return VariantCollection(
         variants=variants,
-        source_to_metadata_dict={path: metadata})
+        source_to_metadata_dict={path: metadata},
+        distinct=distinct)

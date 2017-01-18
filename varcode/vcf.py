@@ -42,7 +42,8 @@ def load_vcf(
         allow_extended_nucleotides=False,
         include_info=True,
         chunk_size=10 ** 5,
-        max_variants=None):
+        max_variants=None,
+        distinct=True):
     """
     Load reference name and Variant objects from the given VCF filename.
 
@@ -86,6 +87,9 @@ def load_vcf(
 
     max_variants : int, optional
         If specified, return only the first max_variants variants.
+
+    distinct : bool
+        Don't keep repeated variants
     """
 
     require_string(path, "Path or URL to VCF")
@@ -117,7 +121,8 @@ def load_vcf(
                 allow_extended_nucleotides=allow_extended_nucleotides,
                 include_info=include_info,
                 chunk_size=chunk_size,
-                max_variants=max_variants)
+                max_variants=max_variants,
+                distinct=distinct)
         finally:
             logger.info("Removing temporary file: %s", filename)
             os.unlink(filename)
@@ -165,7 +170,9 @@ def load_vcf(
         sample_info_parser=sample_info_parser,
         variant_kwargs={
             'ensembl': genome,
-            'allow_extended_nucleotides': allow_extended_nucleotides})
+            'allow_extended_nucleotides': allow_extended_nucleotides},
+        variant_collection_kwargs={
+            'distinct': distinct})
 
 def load_vcf_fast(*args, **kwargs):
     """

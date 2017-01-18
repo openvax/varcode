@@ -15,10 +15,10 @@ from __future__ import absolute_import
 
 from nose.tools import eq_
 from pyensembl import ensembl_grch37 as ensembl
-from varcode import Variant
+from varcode import Variant, load_maf
 import pandas as pd
 
-from .data import tcga_ov_variants, ov_wustle_variants
+from .data import tcga_ov_variants, ov_wustle_variants, data_path
 
 def test_maf():
     expected_tcga_ov_variants = [
@@ -72,3 +72,11 @@ def test_maf_aa_changes():
         key = (variant.contig, variant.start)
         expected = expected_changes[key]
         yield (check_same_aa_change, variant, expected)
+
+def test_maf_number_entries_duplicates():
+    # There are 3 duplicated mutations listed in the MAF
+    path_to_maf_with_duplicates = data_path("duplicates.maf")
+    variants = load_maf(path_to_maf_with_duplicates, distinct=True)
+    assert len(variants) == 1
+    variants = load_maf(path_to_maf_with_duplicates, distinct=False)
+    assert len(variants) == 3
