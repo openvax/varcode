@@ -27,7 +27,7 @@ from typechecks import require_string
 import vcf as pyvcf
 
 from .reference import infer_genome
-from .variant import Variant
+from .variant import Variant, variant_ascending_position_sort_key
 from .variant_collection import VariantCollection
 
 
@@ -42,7 +42,8 @@ def load_vcf(
         allow_extended_nucleotides=False,
         include_info=True,
         chunk_size=10 ** 5,
-        max_variants=None):
+        max_variants=None,
+        sort_key=variant_ascending_position_sort_key):
     """
     Load reference name and Variant objects from the given VCF filename.
 
@@ -86,6 +87,10 @@ def load_vcf(
 
     max_variants : int, optional
         If specified, return only the first max_variants variants.
+
+    sort_key : fn
+        Function which maps each element to a sorting criterion.
+        Set to None to not to sort the variants.
     """
 
     require_string(path, "Path or URL to VCF")
@@ -117,7 +122,8 @@ def load_vcf(
                 allow_extended_nucleotides=allow_extended_nucleotides,
                 include_info=include_info,
                 chunk_size=chunk_size,
-                max_variants=max_variants)
+                max_variants=max_variants,
+                sort_key=sort_key)
         finally:
             logger.info("Removing temporary file: %s", filename)
             os.unlink(filename)
@@ -165,7 +171,9 @@ def load_vcf(
         sample_info_parser=sample_info_parser,
         variant_kwargs={
             'ensembl': genome,
-            'allow_extended_nucleotides': allow_extended_nucleotides})
+            'allow_extended_nucleotides': allow_extended_nucleotides},
+        variant_collection_kwargs={'sort_key': sort_key})
+
 
 def load_vcf_fast(*args, **kwargs):
     """
