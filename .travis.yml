@@ -30,14 +30,14 @@ install:
   - pip install .
   - pip install coveralls
 script:
+  # run pylint
   - ./lint.sh
-  # older human Ensembl releases
+  # install older human Ensembl releases needed for tests
   - pyensembl install --release 75 --species human
   - pyensembl install --release 77 --species human
   - pyensembl install --release 81 --species human
-  # latest human Ensembl release
+  # install latest human & mouse Ensembl releases
   - pyensembl install --release 87 --species human
-  # mouse tests written for mouse Ensembl #84 85
   - pyensembl install --release 87 --species mouse
   # now actually run the tests, generate a coverage report and run linter
   - nosetests test --with-coverage --cover-package=varcode
