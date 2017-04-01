@@ -15,10 +15,10 @@ from __future__ import absolute_import
 
 from nose.tools import eq_
 from pyensembl import ensembl_grch37 as ensembl
-from varcode import Variant
+from varcode import Variant, load_maf, load_maf_dataframe
 import pandas as pd
 
-from .data import tcga_ov_variants, ov_wustle_variants
+from .data import tcga_ov_variants, ov_wustle_variants, data_path
 
 def test_maf():
     expected_tcga_ov_variants = [
@@ -72,3 +72,16 @@ def test_maf_aa_changes():
         key = (variant.contig, variant.start)
         expected = expected_changes[key]
         yield (check_same_aa_change, variant, expected)
+
+def test_load_maf():
+    for raise_on_error in [True, False]:
+        variants = load_maf(
+            data_path("ov.wustle.subset5.maf"), raise_on_error=raise_on_error)
+        eq_(len(variants), 5)
+
+
+def test_load_maf_dataframe():
+    for raise_on_error in [True, False]:
+        variants_df = load_maf_dataframe(
+            data_path("ov.wustle.subset5.maf"), raise_on_error=raise_on_error)
+        eq_(len(variants_df), 5)
