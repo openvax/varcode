@@ -19,7 +19,7 @@ import pandas
 from typechecks import require_string
 
 from .reference import infer_genome
-from .variant import Variant
+from .variant import Variant, variant_ascending_position_sort_key
 from .variant_collection import VariantCollection
 
 TCGA_PATIENT_ID_LENGTH = 12
@@ -87,7 +87,8 @@ def load_maf_dataframe(path, nrows=None, verbose=False):
     return df
 
 
-def load_maf(path, optional_cols=[]):
+def load_maf(path, optional_cols=[],
+             sort_key=variant_ascending_position_sort_key):
     """
     Load reference name and Variant objects from MAF filename.
 
@@ -96,6 +97,10 @@ def load_maf(path, optional_cols=[]):
     optional_cols : list, optional
         A list of MAF columns to include as metadata if they are present in the MAF.
         Does not result in an error if those columns are not present.
+
+    sort_key : fn
+        Function which maps each element to a sorting criterion.
+        Set to None to not to sort the variants.
     """
     # pylint: disable=no-member
     # pylint gets confused by read_csv inside load_maf_dataframe
@@ -164,4 +169,5 @@ def load_maf(path, optional_cols=[]):
 
     return VariantCollection(
         variants=variants,
-        source_to_metadata_dict={path: metadata})
+        source_to_metadata_dict={path: metadata},
+        sort_key=sort_key)
