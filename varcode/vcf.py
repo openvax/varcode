@@ -43,7 +43,8 @@ def load_vcf(
         include_info=True,
         chunk_size=10 ** 5,
         max_variants=None,
-        sort_key=variant_ascending_position_sort_key):
+        sort_key=variant_ascending_position_sort_key,
+        distinct=True):
     """
     Load reference name and Variant objects from the given VCF filename.
 
@@ -91,6 +92,9 @@ def load_vcf(
     sort_key : fn
         Function which maps each element to a sorting criterion.
         Set to None to not to sort the variants.
+
+    distinct : boolean, default True
+        Don't keep repeated variants
     """
 
     require_string(path, "Path or URL to VCF")
@@ -123,7 +127,8 @@ def load_vcf(
                 include_info=include_info,
                 chunk_size=chunk_size,
                 max_variants=max_variants,
-                sort_key=sort_key)
+                sort_key=sort_key,
+                distinct=distinct)
         finally:
             logger.info("Removing temporary file: %s", filename)
             os.unlink(filename)
@@ -172,7 +177,7 @@ def load_vcf(
         variant_kwargs={
             'ensembl': genome,
             'allow_extended_nucleotides': allow_extended_nucleotides},
-        variant_collection_kwargs={'sort_key': sort_key})
+        variant_collection_kwargs={'sort_key': sort_key, 'distinct': distinct})
 
 
 def load_vcf_fast(*args, **kwargs):
