@@ -1,4 +1,4 @@
-# Copyright (c) 2016. Mount Sinai School of Medicine
+# Copyright (c) 2016-2017. Mount Sinai School of Medicine
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,10 +13,11 @@
 # limitations under the License.
 
 from __future__ import print_function, division, absolute_import
+import logging
 
 import pandas
-
 from typechecks import require_string
+from numpy import isnan
 
 from .reference import infer_genome
 from .variant import Variant, variant_ascending_position_sort_key
@@ -47,9 +48,20 @@ MAF_COLUMN_NAMES = [
 ]
 
 
-def load_maf_dataframe(path, nrows=None, verbose=False):
+def load_maf_dataframe(path, nrows=None, raise_on_error=True):
     """
     Load the guaranteed columns of a TCGA MAF file into a DataFrame
+
+    Parameters
+    ----------
+    path : str
+        Path to MAF file
+
+    nrows : int
+        Optional limit to number of rows loaded
+
+    raise_on_error : bool
+        Raise an exception upon encountering an error or log an error
     """
     require_string(path, "Path to MAF")
 
@@ -66,9 +78,13 @@ def load_maf_dataframe(path, nrows=None, verbose=False):
         header=0)
 
     if len(df.columns) < n_basic_columns:
-        raise ValueError(
+        error_message = (
             "Too few columns in MAF file %s, expected %d but got  %d : %s" % (
                 path, n_basic_columns, len(df.columns), df.columns))
+        if raise_on_error:
+            raise ValueError(error_message)
+        else:
+            logging.warn(error_message)
 
     # check each pair of expected/actual column names to make sure they match
     for expected, actual in zip(MAF_COLUMN_NAMES, df.columns):
@@ -82,15 +98,21 @@ def load_maf_dataframe(path, nrows=None, verbose=False):
                 df[expected] = df[actual]
                 del df[actual]
             else:
-                raise ValueError("Expected column %s but got %s" % (
-                    expected, actual))
+                error_message = (
+                    "Expected column %s but got %s" % (expected, actual))
+                if raise_on_error:
+                    raise ValueError(error_message)
+                else:
+                    logging.warn(error_message)
+
     return df
 
-
-def load_maf(path,
-             optional_cols=[],
-             sort_key=variant_ascending_position_sort_key,
-             distinct=True):
+def load_maf(
+        path,
+        optional_cols=[],
+        sort_key=variant_ascending_position_sort_key,
+        distinct=True
+        raise_on_error=True):
     """
     Load reference name and Variant objects from MAF filename.
 
@@ -99,7 +121,7 @@ def load_maf(path,
 
     path : str
         Path to MAF (*.maf).
-
+      
     optional_cols : list, optional
         A list of MAF columns to include as metadata if they are present in the MAF.
         Does not result in an error if those columns are not present.
@@ -110,12 +132,15 @@ def load_maf(path,
 
     distinct : bool
         Don't keep repeated variants
+
+    raise_on_error : bool
+        Raise an exception upon encountering an error or just log a warning.
     """
     # pylint: disable=no-member
     # pylint gets confused by read_csv inside load_maf_dataframe
-    maf_df = load_maf_dataframe(path)
+    maf_df = load_maf_dataframe(path, raise_on_error=raise_on_error)
 
-    if len(maf_df) == 0:
+    if len(maf_df) == 0 and raise_on_error:
         raise ValueError("Empty MAF file %s" % path)
 
     ensembl_objects = {}
@@ -123,6 +148,14 @@ def load_maf(path,
     metadata = {}
     for _, x in maf_df.iterrows():
         contig = x.Chromosome
+        if not contig or isnan(contig):
+            error_message = "Invalid contig name: %s" % (contig,)
+            if raise_on_error:
+                raise ValueError(error_message)
+            else:
+                logging.warn(error_message)
+                continue
+
         start_pos = x.Start_Position
         ref = x.Reference_Allele
 
@@ -146,9 +179,14 @@ def load_maf(path,
             alt = x.Tumor_Seq_Allele1
         else:
             if x.Tumor_Seq_Allele2 == ref:
-                raise ValueError(
+                error_message = (
                     "Both tumor alleles agree with reference %s: %s" % (
                         ref, x,))
+                if raise_on_error:
+                    raise ValueError(error_message)
+                else:
+                    logging.warn(error_message)
+                    continue
             alt = x.Tumor_Seq_Allele2
 
         variant = Variant(
