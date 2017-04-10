@@ -73,7 +73,7 @@ if __name__ == '__main__':
             'pyvcf>=0.6.7',
             'memoized_property>=1.0.2',
             'serializable>=0.0.8',
-            'sercol>=0.0.2',
+            'sercol>=0.1.0',
         ],
         entry_points={
             'console_scripts': [
