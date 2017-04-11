@@ -111,7 +111,7 @@ def load_maf(
         path,
         optional_cols=[],
         sort_key=variant_ascending_position_sort_key,
-        distinct=True
+        distinct=True,
         raise_on_error=True):
     """
     Load reference name and Variant objects from MAF filename.
