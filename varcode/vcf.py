@@ -177,8 +177,9 @@ def load_vcf(
         variant_kwargs={
             'ensembl': genome,
             'allow_extended_nucleotides': allow_extended_nucleotides},
-        variant_collection_kwargs={'sort_key': sort_key, 'distinct': distinct})
-
+        variant_collection_kwargs={
+            'sort_key': sort_key,
+            'distinct': distinct})
 
 def load_vcf_fast(*args, **kwargs):
     """

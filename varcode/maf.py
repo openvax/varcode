@@ -107,20 +107,21 @@ def load_maf_dataframe(path, nrows=None, raise_on_error=True):
 
     return df
 
-
 def load_maf(
         path,
         optional_cols=[],
         sort_key=variant_ascending_position_sort_key,
+        distinct=True,
         raise_on_error=True):
     """
     Load reference name and Variant objects from MAF filename.
 
     Parameters
     ----------
-    path : str
-        Path of MAF file
 
+    path : str
+        Path to MAF (*.maf).
+      
     optional_cols : list, optional
         A list of MAF columns to include as metadata if they are present in the MAF.
         Does not result in an error if those columns are not present.
@@ -128,6 +129,9 @@ def load_maf(
     sort_key : fn
         Function which maps each element to a sorting criterion.
         Set to None to not to sort the variants.
+
+    distinct : bool
+        Don't keep repeated variants
 
     raise_on_error : bool
         Raise an exception upon encountering an error or just log a warning.
@@ -213,4 +217,5 @@ def load_maf(
     return VariantCollection(
         variants=variants,
         source_to_metadata_dict={path: metadata},
-        sort_key=sort_key)
+        sort_key=sort_key,
+        distinct=distinct)
