@@ -1,5 +1,38 @@
 # Change Log
 
+## [v0.5.15](https://github.com/hammerlab/varcode/tree/v0.5.15) (2017-04-28)
+[Full Changelog](https://github.com/hammerlab/varcode/compare/v0.5.14...v0.5.15)
+
+**Closed issues:**
+
+- Allow contig to be empty to allow parsing of MAF with faulty mutation\(s\) [\#210](https://github.com/hammerlab/varcode/issues/210)
+
+**Merged pull requests:**
+
+- Fixes to load\_maf [\#223](https://github.com/hammerlab/varcode/pull/223) ([tavinathanson](https://github.com/tavinathanson))
+- added raise\_on\_error option to load\_maf and load\_maf\_dataframe [\#221](https://github.com/hammerlab/varcode/pull/221) ([iskandr](https://github.com/iskandr))
+- Optionally allow duplicated mutations when using load\_vcf or load\_maf. Fixes \#211  [\#212](https://github.com/hammerlab/varcode/pull/212) ([tuomastik](https://github.com/tuomastik))
+
+## [v0.5.14](https://github.com/hammerlab/varcode/tree/v0.5.14) (2017-04-05)
+[Full Changelog](https://github.com/hammerlab/varcode/compare/v0.5.13...v0.5.14)
+
+**Merged pull requests:**
+
+- Adding 'distinct' as a parameter to load\_vcf. [\#222](https://github.com/hammerlab/varcode/pull/222) ([julia326](https://github.com/julia326))
+
+## [v0.5.13](https://github.com/hammerlab/varcode/tree/v0.5.13) (2017-04-01)
+[Full Changelog](https://github.com/hammerlab/varcode/compare/v0.5.12...v0.5.13)
+
+**Closed issues:**
+
+- Effect prediction throws error \(even if raise\_on\_error=False\) [\#213](https://github.com/hammerlab/varcode/issues/213)
+- Optionally allow duplicated mutations when using load\_vcf or load\_maf [\#211](https://github.com/hammerlab/varcode/issues/211)
+
+**Merged pull requests:**
+
+- install ensembl 87 on travis [\#219](https://github.com/hammerlab/varcode/pull/219) ([iskandr](https://github.com/iskandr))
+- Allow user to affect the sorting of variants when loading a VCF or MAF. [\#218](https://github.com/hammerlab/varcode/pull/218) ([tuomastik](https://github.com/tuomastik))
+
 ## [v0.5.12](https://github.com/hammerlab/varcode/tree/v0.5.12) (2017-01-18)
 [Full Changelog](https://github.com/hammerlab/varcode/compare/v0.5.11...v0.5.12)
 
