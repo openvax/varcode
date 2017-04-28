@@ -105,3 +105,16 @@ def test_xy_contigs():
         variants = load_maf(
             data_path("tcga_ov.head.xychr.maf"), raise_on_error=True)
         eq_(len(variants), 4)
+
+
+def test_load_utf8():
+    """
+    Test MAFs loaded with utf-8 encoding.
+    """
+    for raise_on_error in [True, False]:
+        variants = load_maf(
+            data_path("ov.wustle.subset5.maf"), raise_on_error=True, encoding="utf-8")
+        eq_(len(variants), 5)
+        # Make sure we avoid "TypeError: character mapping must return integer, None or unicode"
+        # from Bio.Seq.
+        _ = variants.effects()
