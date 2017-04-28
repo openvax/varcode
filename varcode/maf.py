@@ -17,7 +17,7 @@ import logging
 
 import pandas
 from typechecks import require_string
-from numpy import isnan
+from pandas import isnull
 
 from .reference import infer_genome
 from .variant import Variant, variant_ascending_position_sort_key
@@ -48,7 +48,7 @@ MAF_COLUMN_NAMES = [
 ]
 
 
-def load_maf_dataframe(path, nrows=None, raise_on_error=True):
+def load_maf_dataframe(path, nrows=None, raise_on_error=True, encoding=None):
     """
     Load the guaranteed columns of a TCGA MAF file into a DataFrame
 
@@ -62,6 +62,9 @@ def load_maf_dataframe(path, nrows=None, raise_on_error=True):
 
     raise_on_error : bool
         Raise an exception upon encountering an error or log an error
+
+    encoding : str, optional
+        Encoding to use for UTF when reading MAF file.
     """
     require_string(path, "Path to MAF")
 
@@ -75,7 +78,8 @@ def load_maf_dataframe(path, nrows=None, raise_on_error=True):
         sep="\t",
         low_memory=False,
         skip_blank_lines=True,
-        header=0)
+        header=0,
+        encoding=encoding)
 
     if len(df.columns) < n_basic_columns:
         error_message = (
@@ -112,7 +116,8 @@ def load_maf(
         optional_cols=[],
         sort_key=variant_ascending_position_sort_key,
         distinct=True,
-        raise_on_error=True):
+        raise_on_error=True,
+        encoding=None):
     """
     Load reference name and Variant objects from MAF filename.
 
@@ -121,7 +126,7 @@ def load_maf(
 
     path : str
         Path to MAF (*.maf).
-      
+
     optional_cols : list, optional
         A list of MAF columns to include as metadata if they are present in the MAF.
         Does not result in an error if those columns are not present.
@@ -135,10 +140,13 @@ def load_maf(
 
     raise_on_error : bool
         Raise an exception upon encountering an error or just log a warning.
+
+    encoding : str, optional
+        Encoding to use for UTF when reading MAF file.
     """
     # pylint: disable=no-member
     # pylint gets confused by read_csv inside load_maf_dataframe
-    maf_df = load_maf_dataframe(path, raise_on_error=raise_on_error)
+    maf_df = load_maf_dataframe(path, raise_on_error=raise_on_error, encoding=encoding)
 
     if len(maf_df) == 0 and raise_on_error:
         raise ValueError("Empty MAF file %s" % path)
@@ -148,7 +156,7 @@ def load_maf(
     metadata = {}
     for _, x in maf_df.iterrows():
         contig = x.Chromosome
-        if not contig or isnan(contig):
+        if isnull(contig):
             error_message = "Invalid contig name: %s" % (contig,)
             if raise_on_error:
                 raise ValueError(error_message)
@@ -192,8 +200,8 @@ def load_maf(
         variant = Variant(
             contig,
             start_pos,
-            ref,
-            alt,
+            str(ref),
+            str(alt),
             ensembl=ensembl)
 
         # keep metadata about the variant and its TCGA annotation
