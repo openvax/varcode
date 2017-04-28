@@ -200,8 +200,8 @@ def load_maf(
         variant = Variant(
             contig,
             start_pos,
-            ref,
-            alt,
+            str(ref),
+            str(alt),
             ensembl=ensembl)
 
         # keep metadata about the variant and its TCGA annotation
