@@ -96,3 +96,12 @@ def test_load_maf_dataframe():
             data_path("ov.wustle.subset5.maf"), raise_on_error=raise_on_error)
         eq_(len(variants_df), 5)
 
+
+def test_xy_contigs():
+    """
+    Test MAFs with X and Y chromosomes rather than just numerical chromosomes.
+    """
+    for raise_on_error in [True, False]:
+        variants = load_maf(
+            data_path("tcga_ov.head.xychr.maf"), raise_on_error=True)
+        eq_(len(variants), 4)
