@@ -64,7 +64,7 @@ def load_maf_dataframe(path, nrows=None, raise_on_error=True, encoding=None):
         Raise an exception upon encountering an error or log an error
 
     encoding : str, optional
-        Encoding to use for UTF when reading MAF file (ex. ‘utf-8’).
+        Encoding to use for UTF when reading MAF file.
     """
     require_string(path, "Path to MAF")
 
@@ -142,7 +142,7 @@ def load_maf(
         Raise an exception upon encountering an error or just log a warning.
 
     encoding : str, optional
-        Encoding to use for UTF when reading MAF file (ex. ‘utf-8’).
+        Encoding to use for UTF when reading MAF file.
     """
     # pylint: disable=no-member
     # pylint gets confused by read_csv inside load_maf_dataframe
