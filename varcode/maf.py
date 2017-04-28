@@ -146,7 +146,7 @@ def load_maf(
     """
     # pylint: disable=no-member
     # pylint gets confused by read_csv inside load_maf_dataframe
-    maf_df = load_maf_dataframe(path, raise_on_error=raise_on_error)
+    maf_df = load_maf_dataframe(path, raise_on_error=raise_on_error, encoding=encoding)
 
     if len(maf_df) == 0 and raise_on_error:
         raise ValueError("Empty MAF file %s" % path)
