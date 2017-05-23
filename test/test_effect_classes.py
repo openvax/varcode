@@ -39,7 +39,7 @@ from varcode.effects import (
     FrameShiftTruncation,
     # TODO: SpliceDonor, SpliceReceptor
 )
-from pyensembl import ensembl_grch37, cached_release
+from pyensembl import ensembl_grch37, cached_release, genome_for_reference_name
 
 from .common import expect_effect
 
@@ -598,5 +598,20 @@ def test_insertion_nonfinal_stop_gain():
         variant,
         transcript_id="ENST00000003084",
         effect_class=PrematureStop,
+        modifies_coding_sequence=True,
+        modifies_protein_sequence=True)
+
+def test_variant_ending_after_exon():
+    mouse_genome = genome_for_reference_name("grcm38")
+    variant = Variant(
+        "11",
+        106262686,
+        ref="GTGAAGG",
+        alt="",
+        ensembl=mouse_genome)
+    expect_effect(
+        variant,
+        transcript_id="ENSMUST00000021049",
+        effect_class=ExonicSpliceSite,
         modifies_coding_sequence=True,
         modifies_protein_sequence=True)

@@ -295,6 +295,7 @@ def exonic_transcript_effect(variant, exon, exon_number, transcript):
     if variant_start < exon.start:
         # if mutation starts before current exon then only look
         # at nucleotides which overlap the exon
+        logger.info('Mutation in variant %s starts before exon %s', variant, exon)
         assert len(genome_ref) > 0, "Unexpected insertion into intron"
         n_skip_start = exon.start - variant_start
         genome_ref = genome_ref[n_skip_start:]
@@ -306,6 +307,7 @@ def exonic_transcript_effect(variant, exon, exon_number, transcript):
     if variant_end > exon.end:
         # if mutation goes past exon end then only look at nucleotides
         # which overlap the exon
+        logger.info('Mutation in variant %s ends after exon %s', variant, exon)
         n_skip_end = variant_end - exon.end
         genome_ref = genome_ref[:-n_skip_end]
         genome_alt = genome_alt[:len(genome_ref)]
