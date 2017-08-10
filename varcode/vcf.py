@@ -19,7 +19,6 @@ import requests
 import zlib
 import logging
 from collections import OrderedDict
-from collections import defaultdict
 from warnings import warn
 
 from six.moves import urllib
