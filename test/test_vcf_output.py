@@ -57,7 +57,7 @@ def _do_roundtrip_test(filenames):
         variant_collections = []
         for filename in filenames:
             variant_collections.append(load_fn(filename)(data_path(filename)))
-        return VariantCollection.union(*variant_collections)
+        return variant_collections[0].union(*variant_collections[1:])
 
     variants = load_variants()
 
