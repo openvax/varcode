@@ -42,7 +42,7 @@ def _merge_metadata_naive(variants):
     return {
         k: v
         for d in variants.source_to_metadata_dict.values()
-        for k, v in d.iteritems()
+        for k, v in d.items()
     }
 
 def _do_roundtrip_test(filenames):

@@ -114,7 +114,7 @@ def variants_to_vcf(variants, variant_to_metadata, out=sys.stdout):
         if not info_dict:
             return '.'
 
-        return ';'.join(build_info_pair(k, v) for k,v in info_dict.iteritems())
+        return ';'.join(build_info_pair(k, v) for k,v in info_dict.items())
 
     def build_format_field(variant):
         """Build the sample format string from the given variant.
