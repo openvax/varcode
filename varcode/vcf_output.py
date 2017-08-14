@@ -122,7 +122,7 @@ def variants_to_vcf(variants, variant_to_metadata, out=sys.stdout):
         Each sample column follows this format for the specified variant.
         """
         sample_info = get_metadata_field('sample_info', variant, default={})
-        return ':'.join(sample_info.values()[0].keys()) if sample_info else '.'
+        return ':'.join(list(sample_info.values())[0].keys()) if sample_info else '.'
 
     def build_sample_fields(variant):
         """Build the sample fields for the given variant."""
@@ -199,10 +199,10 @@ def variants_to_vcf(variants, variant_to_metadata, out=sys.stdout):
 
         id2variants = construct_id2variants()
         variants_no_id = id2variants.pop('.', [])  # don't want to merge variants w/ no id
-        merged_variants = map(merge_variant_list, id2variants.values()) + variants_no_id
+        merged_variants = list(map(merge_variant_list, id2variants.values())) + variants_no_id
 
         # groups variants by contig; relative ordering of contigs doesn't matter
-        return sorted(merged_variants, key=lambda v: (v.original_contig, v.original_start))
+        return sorted(merged_variants, key=lambda v: (str(v.original_contig), str(v.original_start)))
 
 
     def get_sample_names():

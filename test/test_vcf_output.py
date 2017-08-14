@@ -61,7 +61,7 @@ def _do_roundtrip_test(filenames):
 
     variants = load_variants()
 
-    with tempfile.NamedTemporaryFile(delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
         metadata = _merge_metadata_naive(variants)
         variants_to_vcf(variants, metadata, out=f)
         tmp_name = f.name
@@ -115,7 +115,7 @@ def test_same_samples_produce_samples():
     original_metadata = _merge_metadata_naive(variants)
     reparsed_metadata = _merge_metadata_naive(reparsed_variants)
 
-    sample_names = set(original_metadata.values()[0]['sample_info'].keys())
+    sample_names = set(list(original_metadata.values())[0]['sample_info'].keys())
     assert all(
             set(d.get('sample_info', {}).keys()) == sample_names
             for d in reparsed_metadata.values())
