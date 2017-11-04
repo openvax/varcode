@@ -324,5 +324,5 @@ class VariantCollection(Collection):
         rows = [row_from_variant(v) for v in self]
         if len(rows) == 0:
             # TODO: return a DataFrame with the appropriate columns
-            return pd.DataFrame()
+            return pd.DataFrame({})
         return pd.DataFrame.from_records(rows, columns=rows[0].keys())

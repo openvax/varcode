@@ -77,6 +77,19 @@ def add_variant_args(arg_parser):
         action="append",
         help="Path to Varcode.VariantCollection object serialized as a JSON file.")
 
+    variant_arg_group.add_argument(
+        "--excel-variants",
+        default=[],
+        action="append",
+        help=(
+            "Path to genomic variants in Excel file. Expect columns to contain "
+            "the following keywords:\n"
+            "   - 'chr' or 'Chromosome'\n"
+            "   - 'pos' or 'Start'\n"
+            "   - 'ref' or 'Reference'\n"
+            "   - 'alt' or 'Variant'\n"
+            "Optional columns:\n"
+            "   - 'vaf' or 'Variant Allele Frequency'"))
     return variant_arg_group
 
 
@@ -131,6 +144,7 @@ def variant_collection_from_args(args, required=True):
         with open(json_path, 'r') as f:
             variant_collections.append(
                 VariantCollection.from_json(f.read()))
+
 
     if required and len(variant_collections) == 0:
         raise ValueError(
