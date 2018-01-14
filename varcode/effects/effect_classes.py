@@ -28,7 +28,7 @@ class MutationEffect(Serializable):
         self.variant = variant
 
     def __str__(self):
-        return "%s(%s)" % (self.__class__.__name__, self.variant)
+        return "%s(variant=%s)" % (self.__class__.__name__, self.variant)
 
     def __repr__(self):
         return str(self)
@@ -134,7 +134,7 @@ class TranscriptMutationEffect(Intragenic):
     def __str__(self):
         return "%s(variant=%s, transcript_name=%s, transcript_id=%s)" % (
             self.__class__.__name__,
-            self.variant.short_description,
+            self.variant,
             self.transcript.name,
             self.transcript.id)
 
@@ -289,7 +289,7 @@ class CodingMutation(Exonic):
     """
     def __str__(self):
         fields = [
-            ("variant", self.variant.short_description),
+            ("variant", self.variant),
             ("transcript_name", self.transcript.name),
             ("transcript_id", self.transcript.id),
             ("effect_description", self.short_description)

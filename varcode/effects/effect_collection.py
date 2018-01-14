@@ -269,21 +269,30 @@ class EffectCollection(Collection):
 
     def to_dataframe(self):
         """Build a dataframe from the effect collection"""
+        # list of properties to extract from Variant objects if they're
+        # not None
+        variant_properties = [
+            "contig",
+            "start",
+            "ref",
+            "alt",
+            "is_snv",
+            "is_transversion",
+            "is_transition"
+        ]
+
         def row_from_effect(effect):
             row = {}
-            row['contig'] = effect.variant.contig
-            row['start'] = effect.variant.start
-            row['ref'] = effect.variant.ref
-            row['alt'] = effect.variant.alt
+
+            row['variant'] = str(effect.variant)
+            for field_name in variant_properties:
+                # if effect.variant is None then this column value will be None
+                row[field_name] = getattr(effect.variant, field_name, None)
             row['gene_id'] = effect.gene_id
             row['gene_name'] = effect.gene_name
             row['transcript_id'] = effect.transcript_id
             row['transcript_name'] = effect.transcript_name
-            row['variant'] = str(effect.variant)
-            row['is_snv'] = effect.variant.is_snv
-            row['is_indel'] = effect.variant.is_indel
-            row['is_transversion'] = effect.variant.is_transversion
-            row['is_transition'] = effect.variant.is_transition
+
             row['effect'] = str(effect)
             row['effect_type'] = effect.__class__.__name__
             row['effect_description'] = effect.short_description
