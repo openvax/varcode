@@ -1,0 +1,17 @@
+##fileformat=VCFv4.1
+##reference=file:///projects/ngs/resources/gatk/2.3/ucsc.hg19.fasta
+##INFO=<ID=GE,Number=.,Type=String,Description="HGNC Gene Symbol (could be more than one)">
+##INFO=<ID=EG,Number=.,Type=String,Description="Entrez Gene ID (could be more than one)">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##contig=<ID=chrM,length=16571>
+##contig=<ID=chr1,length=249250621>
+##contig=<ID=chr10,length=135534747>
+##contig=<ID=chr11,length=135006516>
+##contig=<ID=chr12,length=133851895>
+##contig=<ID=chr14,length=107349540>
+##contig=<ID=chr15,length=102531392>
+##contig=<ID=chr16,length=90354753>
+##contig=<ID=chr17,length=81195210>
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	metastasis
+chr1	53513530	.	A	C	.	.	GE=SCP2;EG=6342	GT	0/1
+chr17	36731197	.	C	AAT	.	.	GE=SRCIN1;EG=80725	GT	0/1

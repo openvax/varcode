@@ -1,0 +1,4 @@
+##fileformat=VCFv4.2
+##reference=file:///projects/ngs/resources/gatk/2.3/ucsc.hg19.fasta
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+chr1	13281	1	C	G	.	PASS	VT=SNP;SOMATIC
