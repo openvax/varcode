@@ -103,7 +103,7 @@ def test_gene_counts():
 def test_variant_collection_serialization():
     variant_list = [
         Variant(
-            1, start=10, ref="AA", alt="AAT", ensembl=77),
+            1, start=10, ref="AA", alt="AAT"),
         Variant(10, start=15, ref="A", alt="G"),
         Variant(20, start=150, ref="", alt="G"),
     ]

@@ -47,6 +47,8 @@ from .common import expect_effect
 # are very specific to Ensembl data between releases 77-81
 ensembl_grch38 = cached_release(81)
 
+mouse_genome = genome_for_reference_name("grcm38")
+
 def test_incomplete():
     # transcript EGFR-009 (ENST00000450046 in Ensembl 78)
     # has an incomplete 3' end
@@ -602,7 +604,6 @@ def test_insertion_nonfinal_stop_gain():
         modifies_protein_sequence=True)
 
 def test_variant_ending_after_exon():
-    mouse_genome = genome_for_reference_name("grcm38")
     variant = Variant(
         "11",
         106262686,
