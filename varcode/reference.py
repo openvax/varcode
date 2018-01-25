@@ -1,4 +1,4 @@
-# Copyright (c) 2016. Mount Sinai School of Medicine
+# Copyright (c) 2016-2018. Mount Sinai School of Medicine
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ from pyensembl import (
     genome_for_reference_name,
 )
 from typechecks import is_string, is_integer
-import os 
+import os
 from warnings import warn
 import re
 
@@ -43,12 +43,16 @@ reference_alias_dict = {
 }
 
 def _most_recent_assembly(assembly_names):
-    """ 
+    """
     Given list of (in this case, matched) assemblies, identify the most recent
        ("recency" here is determined by sorting based on the numeric element of the assembly name)
     """
-    match_recency = [int(re.search('\d+', assembly_name).group()) for assembly_name in assembly_names]
-    most_recent = [x for (y,x) in sorted(zip(match_recency, assembly_names), reverse=True)][0] 
+    match_recency = [
+        int(re.search('\d+', assembly_name).group())
+        for assembly_name in assembly_names
+    ]
+    most_recent = [
+        x for (y, x) in sorted(zip(match_recency, assembly_names), reverse=True)][0]
     return most_recent
 
 
@@ -78,13 +82,17 @@ def infer_reference_name(reference_name_or_path):
     elif len(matches['file_name']) > 1:
         # separate logic for >1 vs 1 to give informative warning
         match = _most_recent_assembly(matches['file_name'])
-        warn('More than one reference ({}) matches path in header ({}); the most recent one ({}) was used.' \
-            .format(','.join(matches['file_name']), reference_file_name, match))
+        warn(
+            ('More than one reference ({}) matches path in header ({}); '
+             'the most recent one ({}) was used.').format(
+                ','.join(matches['file_name']), reference_file_name, match))
     elif len(matches['full_path']) >= 1:
         # combine full-path logic since warning is the same
         match = _most_recent_assembly(matches['full_path'])
-        warn('Reference could not be matched against filename ({}); using best match against full path ({}).' \
-            .format(reference_name_or_path, match))
+        warn((
+            'Reference could not be matched against filename ({}); '
+            'using best match against full path ({}).').format(
+                reference_name_or_path, match))
     else:
         raise ValueError(
             "Failed to infer genome assembly name for %s" % reference_name_or_path)

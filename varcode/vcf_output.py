@@ -1,4 +1,4 @@
-# Copyright (c) 2016. Mount Sinai School of Medicine
+# Copyright (c) 2016-2018. Mount Sinai School of Medicine
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ import sys
 
 def variants_to_vcf(variants, variant_to_metadata, out=sys.stdout):
     """Output a VCF file from a list of Variant records.
-    
+
     Parameters
     ----------
     variants : iterable
@@ -57,8 +57,6 @@ def variants_to_vcf(variants, variant_to_metadata, out=sys.stdout):
     # TODO: If we end up needing more functions to "build" VCF record fields
     # (see functions below), we may want to abstract away the individual
     # functions and create a mapping from field to format function.
-
-
 
     def get_metadata_field(key, variant, default='.'):
         """Retrieve field from variant metadata dictionary."""
@@ -114,7 +112,7 @@ def variants_to_vcf(variants, variant_to_metadata, out=sys.stdout):
         if not info_dict:
             return '.'
 
-        return ';'.join(build_info_pair(k, v) for k,v in info_dict.items())
+        return ';'.join(build_info_pair(k, v) for (k, v) in info_dict.items())
 
     def build_format_field(variant):
         """Build the sample format string from the given variant.
@@ -202,8 +200,9 @@ def variants_to_vcf(variants, variant_to_metadata, out=sys.stdout):
         merged_variants = list(map(merge_variant_list, id2variants.values())) + variants_no_id
 
         # groups variants by contig; relative ordering of contigs doesn't matter
-        return sorted(merged_variants, key=lambda v: (str(v.original_contig), str(v.original_start)))
-
+        return sorted(
+            merged_variants,
+            key=lambda v: (str(v.original_contig), str(v.original_start)))
 
     def get_sample_names():
         """Return the sample names for all variants."""
@@ -256,4 +255,3 @@ def variants_to_vcf(variants, variant_to_metadata, out=sys.stdout):
     for variant in unique_variants_list:
         record = build_vcf_record(variant, add_sample_info=bool(sample_names))
         print('\t'.join(record), file=out)
-
