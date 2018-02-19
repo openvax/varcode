@@ -4,9 +4,11 @@
 <a href="https://coveralls.io/github/openvax/varcode?branch=master">
     <img src="https://coveralls.io/repos/openvax/varcode/badge.svg?branch=master&service=github" alt="Coverage Status" />
 </a>
+<!-- 
 <a href="https://zenodo.org/badge/latestdoi/18834/openvax/varcode">
     <img src="https://zenodo.org/badge/18834/openvax/varcode.svg" alt="DOI" />
 </a>
+-->
 <a href="https://pypi.python.org/pypi/varcode/">
     <img src="https://img.shields.io/pypi/v/varcode.svg?maxAge=1000" alt="PyPI" />
 </a>
@@ -25,7 +27,7 @@ You can install varcode using [pip](https://pip.pypa.io/en/latest/quickstart.htm
 pip install varcode
 ```
 
-Optionally, you can pre-populate metadata caches through [PyEnsembl](https://github.com/hammerlab/pyensembl) as follows:
+Optionally, you can pre-populate metadata caches through [PyEnsembl](https://github.com/openvax/pyensembl) as follows:
 
 ```bash
 # Downloads and installs the Ensembl releases (75 and 76)
