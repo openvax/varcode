@@ -24,7 +24,7 @@ before_install:
 install:
   - >
       conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION
-      numpy nose pandas
+      numpy nose pandas pandoc
   - source activate test-environment
   - conda install -c conda-forge pypandoc
   - pip install -r requirements.txt
@@ -51,3 +51,4 @@ deploy:
   on:
     branch: master
     tags: true
+  condition: $TRAVIS_PYTHON_VERSION = "2.7"
