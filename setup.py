@@ -70,6 +70,7 @@ if __name__ == '__main__':
             'Topic :: Scientific/Engineering :: Bio-Informatics',
         ],
         install_requires=[
+            'gtfparse==0.0.6',
             'numpy>=1.7, <2.0',
             'pandas>=0.15',
             'pyensembl>=1.0.3',
