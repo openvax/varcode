@@ -1,9 +1,8 @@
 sudo: false  # Use container-based infrastructure
 language: minimal
-dist: trusty
 python:
   - "2.7"
-  - "3.4"
+  - "3.6"
 before_install:
   # Commands below copied from: http://conda.pydata.org/docs/travis.html
   # We do this conditionally because it saves us some downloading if the
@@ -45,10 +44,9 @@ after_success:
   coveralls
 deploy:
   provider: pypi
-  user: hammerlab
+  user: openvax
   password:
-    secure: "H0prsAPV1n4ksLO0Zp4xq7SuGGRFmo9HhEcEtfPiSTyh8u4Zxbv/bPjyCLVDilBIKieQsuluV6jqoW6Px5LhUGZwq/k7RN7u1eNuahmpkIwWamjdsNORgvHte6inWNjKGo4GJLM232e2A50kkHnJKDZulfE8eGg4FrRQtfKSkik="
+    secure: "FpDbTEuGN2NGKoSMcD4A8bVvAv1TKhALqZymnjWPfFxy1AvOcRQb2k4tornLjONgccLjw+Uq7Jh66Pv8D9nK8h7AY3Sx9hmip7lSWgIraguWdTvumXfAKIJ+CH+PNRjH9qXBkrdExYBNbF0Mb3XyTmpRU02FEDxNzOJcBS+wokQ="
   on:
     branch: master
-    tags: true
     condition: $TRAVIS_PYTHON_VERSION = "2.7"

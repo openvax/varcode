@@ -1,4 +1,4 @@
-# Copyright (c) 2014. Mount Sinai School of Medicine
+# Copyright (c) 2014-2018. Mount Sinai School of Medicine
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,9 +14,9 @@
 
 from __future__ import print_function
 import os
+import re
 
 from setuptools import setup, find_packages
-import versioneer
 
 readme_filename = "README.md"
 current_directory = os.path.dirname(__file__)
@@ -30,31 +30,35 @@ except Exception as e:
     print(e)
     print("Failed to open %s" % readme_path)
 
+# convert README to restructured text format required by PyPI
 try:
     import pypandoc
-    readme = pypandoc.convert(readme, to='rst', format='md')
+    readme_restructured = pypandoc.convert(readme, to='rst', format='md')
+    with open(readme_path.replace(".md", ".rst"), "w") as f:
+        f.write(readme_restructured)
 except Exception as e:
     print(e)
     print("Failed to convert %s from Markdown to reStructuredText" % readme_filename)
 
+# Determine version number
+with open('varcode/__init__.py', 'r') as f:
+    version = re.search(
+        r'^__version__\s*=\s*[\'"]([^\'"]*)[\'"]',
+        f.read(),
+        re.MULTILINE).group(1)
+    print("Version: %s" % version)
 
 if __name__ == '__main__':
-    cmdclass = versioneer.get_cmdclass()
-    print("Command class = %s" % cmdclass)
-
-    version = versioneer.get_version()
-    print("Version: %s" % version)
     setup(
         name='varcode',
         packages=find_packages(),
         package_data={'varcode.cli': ['logging.conf']},
         version=version,
-        cmdclass=cmdclass,
         description="Variant annotation in Python",
         long_description=readme,
-        url="https://github.com/hammerlab/varcode",
+        url="https://github.com/openvax/varcode",
         author="Alex Rubinsteyn",
-        author_email="alex rubinsteyn at gmail's fine email service",
+        author_email="alex.rubinsteyn@mssm.edu",
         license="http://www.apache.org/licenses/LICENSE-2.0.html",
         classifiers=[
             'Development Status :: 3 - Alpha',

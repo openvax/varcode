@@ -4,7 +4,7 @@
 <a href="https://coveralls.io/github/openvax/varcode?branch=master">
     <img src="https://coveralls.io/repos/openvax/varcode/badge.svg?branch=master&service=github" alt="Coverage Status" />
 </a>
-<!-- 
+<!--
 <a href="https://zenodo.org/badge/latestdoi/18834/openvax/varcode">
     <img src="https://zenodo.org/badge/18834/openvax/varcode.svg" alt="DOI" />
 </a>
