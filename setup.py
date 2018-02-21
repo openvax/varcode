@@ -55,7 +55,7 @@ if __name__ == '__main__':
         package_data={'varcode.cli': ['logging.conf']},
         version=version,
         description="Variant annotation in Python",
-        long_description=readme,
+        long_description=readme_restructured,
         url="https://github.com/openvax/varcode",
         author="Alex Rubinsteyn",
         author_email="alex.rubinsteyn@mssm.edu",
