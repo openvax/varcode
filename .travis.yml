@@ -3,6 +3,17 @@ language: minimal
 python:
   - "2.7"
   - "3.6"
+cache:
+  pip: true
+  # cache directory used for Ensembl downloads of GTF and FASTA files
+  # along with the indexed db of intervals and ID mappings and pickles
+  # of sequence dictionaries. Also, pip
+  directories:
+    - $HOME/.cache/pyensembl/
+    - $HOME/.cache/pyensembl/GRCh37/ensembl75/
+    - $HOME/.cache/pyensembl/GRCh38/ensembl81/
+    - $HOME/.cache/pyensembl/GRCh38/ensembl87/
+    - $HOME/miniconda
 before_install:
   # Commands below copied from: http://conda.pydata.org/docs/travis.html
   # We do this conditionally because it saves us some downloading if the

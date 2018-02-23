@@ -22,21 +22,20 @@ readme_filename = "README.md"
 current_directory = os.path.dirname(__file__)
 readme_path = os.path.join(current_directory, readme_filename)
 
-readme = ""
 try:
     with open(readme_path, 'r') as f:
-        readme = f.read()
+        readme_markdown = f.read()
 except Exception as e:
+    readme_markdown = ""
     print(e)
     print("Failed to open %s" % readme_path)
 
 # convert README to restructured text format required by PyPI
 try:
     import pypandoc
-    readme_restructured = pypandoc.convert(readme, to='rst', format='md')
-    with open(readme_path.replace(".md", ".rst"), "w") as f:
-        f.write(readme_restructured)
+    readme_restructured = pypandoc.convert(readme_markdown, to='rst', format='md')
 except Exception as e:
+    readme_restructured = readme_markdown
     print(e)
     print("Failed to convert %s from Markdown to reStructuredText" % readme_filename)
 
