@@ -25,8 +25,8 @@ explicit_url_genome = Genome(
     annotation_name="ensembl",
     annotation_version=MOUSE_ENSEMBL_RELEASE,
     gtf_path_or_url=MOUSE_GTF_PATH,
-    transcript_fasta_path_or_url=MOUSE_TRANSCRIPT_FASTA_PATH,
-    protein_fasta_path_or_url=MOUSE_PROTEIN_FASTA_PATH)
+    transcript_fasta_paths_or_urls=[MOUSE_TRANSCRIPT_FASTA_PATH],
+    protein_fasta_paths_or_urls=[MOUSE_PROTEIN_FASTA_PATH])
 
 ensembl_mouse_genome = EnsemblRelease(MOUSE_ENSEMBL_RELEASE, species="mouse")
 
