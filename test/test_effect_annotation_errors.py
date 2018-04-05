@@ -243,6 +243,35 @@ def test_issue193_SNV_stop_gain_in_ZNF45_not_deletion():
         modifies_coding_sequence=True,
         modifies_protein_sequence=True)
 
+def test_issue201_synonymous_insertion_before_stop_codon():
+    """
+    Issue: https://github.com/hammerlab/varcode/issues/201
+    ---
+    Genome: GRCm38
+    Transcript: ENSMUST00000086738
+    Variant: chr1 100484695 C>CATATAA
+
+    Synonymous Insertion of an AA and new stop codon before the original stop:
+        TTC ATC TGA -> TTC ATA TAA ATC TGA
+
+    Varcode annotates this as:
+
+    Insertion
+    * aa_mutation_start_offset=1291
+    * aa_mutation_end_offset=1292
+    * aa_ref=''
+    * aa_alt='I'
+
+    This should instead be a Silent() effect.
+    """
+    variant = Variant("chr1", 100484695, "C", "CATATAA", "GRCm38")
+    expect_effect(
+        variant,
+        effect_class=Silent,
+        modifies_coding_sequence=True,
+        transcript_id="ENSMUST00000086738",
+        modifies_protein_sequence=False)
+
 def test_issue202_stoploss_deletes_two_amino_acids():
     """
     Issue: https://github.com/hammerlab/varcode/issues/202
