@@ -19,6 +19,7 @@ cache:
     - $HOME/.cache/pyensembl/GRCh37/ensembl75/
     - $HOME/.cache/pyensembl/GRCh38/ensembl81/
     - $HOME/.cache/pyensembl/GRCh38/ensembl87/
+    - $HOME/.cache/pyensembl/GRCh38/ensembl93/
 before_install:
   - |
     if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
@@ -44,15 +45,42 @@ install:
   - pip install -r requirements.txt
   - pip install .
   - pip install coveralls
-script:
+before_script:
   # run pylint
   - ./lint.sh
   # install older human Ensembl releases needed for tests
-  - pyensembl install --release 75 --species human
-  - pyensembl install --release 81 --species human
+  - >
+    pyensembl install
+    --release 75
+    --species human
+    --custom-mirror https://github.com/openvax/ensembl-data/releases/download/GRCh37.75/
+  - >
+    pyensembl install
+    --release 81
+    --species human
+    --custom-mirror https://github.com/openvax/ensembl-data/releases/download/GRCh38.81/
   # install latest human & mouse Ensembl releases
-  - pyensembl install --release 87 --species human
-  - pyensembl install --release 87 --species mouse
+  - >
+    pyensembl install
+    --release 87
+    --species human
+    --custom-mirror https://github.com/openvax/ensembl-data/releases/download/GRCh38.87/
+  - >
+    pyensembl install
+    --release 87
+    --species mouse
+    --custom-mirror https://github.com/openvax/ensembl-data/releases/download/GRCm38.87/
+  - >
+    pyensembl install
+    --species human
+    --release 93
+    --custom-mirror https://github.com/openvax/ensembl-data/releases/download/GRCh38.93/
+  - >
+    pyensembl install
+    --species mouse
+    --release 93
+    --custom-mirror https://github.com/openvax/ensembl-data/releases/download/GRCm38.93/
+script:
   # now actually run the tests, generate a coverage report and run linter
   - nosetests test --with-coverage --cover-package=varcode
 after_success:

@@ -89,7 +89,6 @@ def test_load_maf():
             data_path("ov.wustle.subset5.maf"), raise_on_error=raise_on_error)
         eq_(len(variants), 5)
 
-
 def test_load_maf_dataframe():
     for raise_on_error in [True, False]:
         variants_df = load_maf_dataframe(
