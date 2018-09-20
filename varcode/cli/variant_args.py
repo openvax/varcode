@@ -72,6 +72,16 @@ def add_variant_args(arg_parser):
             "this option is required."))
 
     variant_arg_group.add_argument(
+        "--download-reference-genome-data",
+        action="store_true",
+        default=False,
+        help=(
+            ("Automatically download genome reference data required for "
+             "annotation using PyEnsembl. Otherwise you must first run "
+             "'pyensembl install' for the release/species corresponding "
+             "to the genome used in your VCF.")))
+
+    variant_arg_group.add_argument(
         "--json-variants",
         default=[],
         action="append",
@@ -94,6 +104,19 @@ def make_variants_parser(**kwargs):
     add_variant_args(parser)
     return parser
 
+
+def download_and_install_reference_data(variant_collections):
+    unique_genomes = {
+        variant.ensembl
+        for variant_collection in variant_collections
+        for variant in variant_collection
+    }
+    for genome in unique_genomes:
+        if not genome.required_local_files_exist():
+            genome.download()
+            genome.index()
+
+
 def variant_collection_from_args(args, required=True):
     variant_collections = []
 
@@ -106,6 +129,7 @@ def variant_collection_from_args(args, required=True):
 
     for vcf_path in args.vcf:
         variant_collections.append(load_vcf(vcf_path, genome=genome))
+
     for maf_path in args.maf:
         variant_collections.append(load_maf(maf_path))
 
@@ -135,5 +159,9 @@ def variant_collection_from_args(args, required=True):
     if required and len(variant_collections) == 0:
         raise ValueError(
             "No variants loaded (use --maf, --vcf, --variant, or --json-variants options)")
+
+    if args.download_reference_genome_data:
+        download_and_install_reference_data(variant_collections)
+
     # pylint: disable=no-value-for-parameter
     return VariantCollection.union(*variant_collections)
