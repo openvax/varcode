@@ -40,6 +40,7 @@ transcript_fpkm_dict = {
     "ENST00000464755": 20.0,
     "ENST00000371763": 30.0,
     "ENST00000613244": 40.0,
+    "ENST00000645461": 5.0,
 }
 
 effects = variants.effects()
@@ -47,13 +48,16 @@ effects = variants.effects()
 empty_variants = VariantCollection([])
 empty_effects = empty_variants.effects()
 
+
 def test_filter_variants():
     eq_(variants.filter(lambda _: True), variants)
     eq_(variants.filter(lambda _: False), empty_variants)
 
+
 def test_filter_effects():
     eq_(effects.filter(lambda _: True), effects)
     eq_(effects.filter(lambda _: False), empty_effects)
+
 
 def test_filter_variants_by_gene_expression():
     eq_(variants.filter_by_gene_expression(
@@ -61,11 +65,13 @@ def test_filter_variants_by_gene_expression():
     eq_(variants.filter_by_gene_expression(
         gene_fpkm_dict, 100.0), empty_variants)
 
+
 def test_filter_effects_by_gene_expression():
     eq_(effects.filter_by_gene_expression(
         gene_fpkm_dict, 0.0), effects)
     eq_(effects.filter_by_gene_expression(
         gene_fpkm_dict, 100.0), empty_effects)
+
 
 def test_filter_variants_by_transcript_expression():
     expect_all = variants.filter_by_gene_expression(
@@ -75,13 +81,16 @@ def test_filter_variants_by_transcript_expression():
         gene_fpkm_dict, 100.0)
     eq_(expect_none, empty_variants)
 
+
 def test_filter_effects_by_transcript_expression():
+
     expect_all = effects.filter_by_transcript_expression(
         transcript_fpkm_dict, 0.0)
     eq_(expect_all, effects)
     expect_none = effects.filter_by_transcript_expression(
         transcript_fpkm_dict, 100.0)
     eq_(expect_none, empty_effects)
+
 
 def test_filter_silent_effects():
     # all dbSNP entries in the collection are silent
