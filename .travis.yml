@@ -60,8 +60,8 @@ before_script:
       pyensembl install
       --release 81
       --species human
-      --custom-mirror https://github.com/openvax/ensembl-data/releases/download/GRCh38.77/
-  - echo "Installed Ensembl 77" && df -h
+      --custom-mirror https://github.com/openvax/ensembl-data/releases/download/GRCh38.81/
+  - echo "Installed Ensembl 81" && df -h
   # Ensembl 93
   - >
       pyensembl install
