@@ -27,15 +27,12 @@ You can install varcode using [pip](https://pip.pypa.io/en/latest/quickstart.htm
 pip install varcode
 ```
 
-Optionally, you can pre-populate metadata caches through [PyEnsembl](https://github.com/openvax/pyensembl) as follows:
+You can install required reference genome data through [PyEnsembl](https://github.com/openvax/pyensembl) as follows:
 
 ```bash
 # Downloads and installs the Ensembl releases (75 and 76)
 pyensembl install --release 75 76
 ```
-
-This will eliminate a potential delay of several minutes required to install the relevant data
-when using the Varcode for the first time.
 
 
 Example
