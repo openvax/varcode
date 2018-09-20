@@ -16,6 +16,7 @@ from __future__ import print_function, division, absolute_import
 
 from collections import OrderedDict
 from os.path import dirname
+from .. import __file__ as package_init_file_path
 from .. import __version__
 
 
@@ -27,7 +28,7 @@ def collect_version_info():
     major Python dependencies such as PyEnsembl
     """
     d = OrderedDict()
-    d["Varcode"] = (__version__, dirname(__file__))
+    d["Varcode"] = (__version__, dirname(package_init_file_path))
     return d
 
 
