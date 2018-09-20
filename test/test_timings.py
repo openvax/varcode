@@ -17,6 +17,7 @@ import time
 
 from varcode.util import random_variants
 
+
 def _time_variant_annotation(variant_collection):
     start_t = time.time()
     effects = variant_collection.effects()
@@ -29,7 +30,7 @@ def _time_variant_annotation(variant_collection):
 def test_effect_timing(
         n_variants=100,
         random_seed=0,
-        n_warmup_variants=5):
+        n_warmup_variants=10):
     warmup_collection = random_variants(
         n_warmup_variants,
         random_seed=None)
@@ -40,8 +41,8 @@ def test_effect_timing(
         random_seed=random_seed)
     elapsed_t = _time_variant_annotation(variant_collection)
     print("Elapsed: %0.4f for %d variants" % (elapsed_t, n_variants))
-    assert elapsed_t / n_variants < 0.1, \
-        "Should be faster than 100ms / variant!"
+    assert elapsed_t / n_variants < 0.5, \
+        "Should be faster than 500ms / variant!"
 
 if __name__ == "__main__":
     test_effect_timing()
