@@ -35,6 +35,7 @@ from .effects import (
     predict_variant_effect_on_transcript
 )
 
+
 class Variant(Serializable):
     __slots__ = (
         "contig",
