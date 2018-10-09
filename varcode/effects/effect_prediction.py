@@ -110,6 +110,7 @@ def predict_variant_effect_on_transcript_or_failure(variant, transcript):
             error)
         return Failure(variant, transcript)
 
+
 def predict_variant_effect_on_transcript(variant, transcript):
         """Return the transcript effect (such as FrameShift) that results from
         applying this genomic variant to a particular transcript.
@@ -218,6 +219,7 @@ def predict_variant_effect_on_transcript(variant, transcript):
             exon=exon,
             alternate_effect=exonic_effect_annotation)
 
+
 def choose_intronic_effect_class(
         variant,
         nearest_exon,
@@ -267,6 +269,7 @@ def choose_intronic_effect_class(
     else:
         # intronic mutation unrelated to splicing
         return Intronic
+
 
 def exonic_transcript_effect(variant, exon, exon_number, transcript):
     """Effect of this variant on a Transcript, assuming we already know

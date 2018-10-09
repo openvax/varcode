@@ -25,6 +25,7 @@ from .effect_ordering import (
     transcript_effect_priority_dict
 )
 
+
 class EffectCollection(Collection):
     """
     Collection of MutationEffect objects and helpers for grouping or filtering

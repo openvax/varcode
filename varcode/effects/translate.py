@@ -1,4 +1,4 @@
-# Copyright (c) 2016. Mount Sinai School of Medicine
+# Copyright (c) 2016-2018 Mount Sinai School of Medicine
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ DNA_CODON_TABLE = CodonTable.standard_dna_table.forward_table
 START_CODONS = set(CodonTable.standard_dna_table.start_codons)
 STOP_CODONS = set(CodonTable.standard_dna_table.stop_codons)
 
+
 def translate_codon(codon, aa_pos):
     """Translate a single codon into a single amino acid or stop '*'
 
@@ -44,6 +45,7 @@ def translate_codon(codon, aa_pos):
         return "*"
     else:
         return DNA_CODON_TABLE[codon]
+
 
 def translate(
         nucleotide_sequence,
@@ -122,6 +124,7 @@ def find_first_stop_codon(nucleotide_sequence):
         if codon in STOP_CODONS:
             return i
     return -1
+
 
 def translate_in_frame_mutation(
         transcript,

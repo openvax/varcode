@@ -17,6 +17,7 @@ from __future__ import absolute_import, print_function, division
 from collections import defaultdict
 import sys
 
+
 def variants_to_vcf(variants, variant_to_metadata, out=sys.stdout):
     """Output a VCF file from a list of Variant records.
 
@@ -248,9 +249,11 @@ def variants_to_vcf(variants, variant_to_metadata, out=sys.stdout):
         headers += ['FORMAT'] + sample_names
 
     unique_variants_list = merge_duplicate_variants()
+    # can't have more than one reference in VCF so pick the first one and pray
+    genome = list({v.ensembl for v in unique_variants_list})[0]
 
     print('##fileformat=VCFv4.2', file=out)
-    print("##reference=file:///projects/ngs/resources/gatk/2.3/ucsc.hg19.fasta", file=out)
+    print('##reference=%s' % genome.reference_name, file=out)
     print('\t'.join(headers), file=out)
     for variant in unique_variants_list:
         record = build_vcf_record(variant, add_sample_info=bool(sample_names))

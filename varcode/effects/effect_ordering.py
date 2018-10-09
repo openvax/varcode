@@ -53,9 +53,16 @@ transcript_effect_priority_list = [
     # so give 5' UTR mutations higher prioriry
     FivePrimeUTR,
     Silent,
-    # changing the stop codon might have more significance than
-    # silent variants internal to the coding sequence
-    # REMOVED: AlternateStopCodon,
+    # intronic variants near the splice boundaries but which aren't
+    # the two nucleotides closest to the exon
+    IntronicSpliceSite,
+    # exonic variants near a splice boundary
+    ExonicSpliceSite,
+    # modification or deletion of stop codon
+    SpliceDonor,
+    # mutation in the two nucleotides immediately preceding an intron/exon
+    # boundary
+    SpliceAcceptor,
     Substitution,
     Insertion,
     Deletion,
@@ -64,19 +71,9 @@ transcript_effect_priority_list = [
     # be interpreted as silent but also has some chance of causing an
     # alternative ORF
     AlternateStartCodon,
-    # intronic variants near the splice boundaries but which aren't
-    # the two nucleotides closest to the exon
-    IntronicSpliceSite,
-    # exonic variants near a splice boundary
-    ExonicSpliceSite,
-    # modification or deletion of stop codon
     StopLoss,
     # mutation in the two nucleotides immediately following an exon/intron
     # boundary
-    SpliceDonor,
-    # mutation in the two nucleotides immediately preceding an intron/exon
-    # boundary
-    SpliceAcceptor,
     PrematureStop,
     # frame-shift which creates immediate stop codon, same as PrematureStop
     FrameShiftTruncation,
@@ -93,9 +90,10 @@ transcript_effect_priority_dict = {
     in enumerate(transcript_effect_priority_list)
 }
 
+
 def effect_priority(effect):
     """
-    Returns the integer priority for a given transcript effect
+    Returns the integer priority for a given transcript effect.
     """
     # since intergenic variants may have a None value for their
     # highest_priority effect it simplifies other code to handle None
@@ -103,6 +101,7 @@ def effect_priority(effect):
     if effect is None:
         return -1
     return transcript_effect_priority_dict[effect.__class__]
+
 
 def effect_sort_key(effect):
     """Returns key tuple with the following fields that should be sorted
@@ -125,13 +124,31 @@ def effect_sort_key(effect):
     effect_class_priority = effect_priority(effect)
     return (effect_class_priority, cds_length, transcript_length)
 
+
+def select_between_exonic_splice_site_and_alternate_effect(effect):
+    if effect.__class__ is not ExonicSpliceSite:
+        return effect
+    if effect.alternate_effect is None:
+        return effect
+    splice_priority = effect_priority(effect)
+    alternate_priority = effect_priority(effect.alternate_effect)
+    if splice_priority > alternate_priority:
+        return effect
+    else:
+        return effect.alternate_effect
+
+
 def top_priority_effect(effects):
     """
     Given a collection of variant transcript effects,
     return the top priority object. In case of multiple transcript
     effects with the same priority, return the one affecting the longest
-    transcript.
+    transcript. ExonicSpliceSite variants require special treatment since
+    they actually represent two effects -- the splicing modification and
+    whatever else would happen to the exonic sequence if nothing else gets
+    changed.
     """
     if len(effects) == 0:
         raise ValueError("List of effects cannot be empty")
+    effects = map(select_between_exonic_splice_site_and_alternate_effect, effects)
     return max(effects, key=effect_sort_key)
