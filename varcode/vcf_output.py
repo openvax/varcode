@@ -249,11 +249,19 @@ def variants_to_vcf(variants, variant_to_metadata, out=sys.stdout):
         headers += ['FORMAT'] + sample_names
 
     unique_variants_list = merge_duplicate_variants()
-    # can't have more than one reference in VCF so pick the first one and pray
-    genome = list({v.ensembl for v in unique_variants_list})[0]
 
+    # usually we have just one reference genome for the whole variant collection
+    # but if variants from multiple sources have been merged then we might
+    # not be able to write out a VCF since the individual variants may be using
+    # different coordinate systems
+    genome_names = list({v.ensembl.reference_name for v in unique_variants_list})
+    if len(genome_names) > 1:
+        raise ValueError(
+            "Cannot create VCF for variants with multiple reference genomes: %s" % (
+                genome_names,))
+    genome_name = genome_names[0]
     print('##fileformat=VCFv4.2', file=out)
-    print('##reference=%s' % genome.reference_name, file=out)
+    print('##reference=%s' % genome_name, file=out)
     print('\t'.join(headers), file=out)
     for variant in unique_variants_list:
         record = build_vcf_record(variant, add_sample_info=bool(sample_names))
