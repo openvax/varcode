@@ -58,7 +58,8 @@ transcript_effect_priority_list = [
     IntronicSpliceSite,
     # exonic variants near a splice boundary
     ExonicSpliceSite,
-    # modification or deletion of stop codon
+    # mutation in the two nucleotides immediately following an exon/intron
+    # boundary
     SpliceDonor,
     # mutation in the two nucleotides immediately preceding an intron/exon
     # boundary
@@ -71,9 +72,9 @@ transcript_effect_priority_list = [
     # be interpreted as silent but also has some chance of causing an
     # alternative ORF
     AlternateStartCodon,
+    # modification or deletion of stop codon
     StopLoss,
-    # mutation in the two nucleotides immediately following an exon/intron
-    # boundary
+    # creation of a new stop codon within the coding sequence
     PrematureStop,
     # frame-shift which creates immediate stop codon, same as PrematureStop
     FrameShiftTruncation,
