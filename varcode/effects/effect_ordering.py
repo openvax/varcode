@@ -127,6 +127,11 @@ def effect_sort_key(effect):
 
 
 def select_between_exonic_splice_site_and_alternate_effect(effect):
+    """
+    If the given effect is an ExonicSpliceSite then it might contain
+    an alternate effect of higher priority. In that case, return the
+    alternate effect. Otherwise, this acts as an identity function.
+    """
     if effect.__class__ is not ExonicSpliceSite:
         return effect
     if effect.alternate_effect is None:
