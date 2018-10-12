@@ -1,4 +1,4 @@
-# Copyright (c) 2016. Mount Sinai School of Medicine
+# Copyright (c) 2016-2018. Mount Sinai School of Medicine
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ from __future__ import print_function, division, absolute_import
 
 from .effect_prediction_coding_frameshift import predict_frameshift_coding_effect
 from .effect_prediction_coding_in_frame import predict_in_frame_coding_effect
+
 
 def predict_variant_coding_effect_on_transcript(
         variant,

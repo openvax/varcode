@@ -1,4 +1,4 @@
-# Copyright (c) 2016. Mount Sinai School of Medicine
+# Copyright (c) 2016-2018. Mount Sinai School of Medicine
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ from memoized_property import memoized_property
 from serializable import Serializable
 
 from .common import bio_seq_to_str
+
 
 class MutationEffect(Serializable):
     """
@@ -126,6 +127,7 @@ class Intragenic(MutationEffect):
         MutationEffect.__init__(self, variant)
         self.gene = gene
 
+
 class TranscriptMutationEffect(Intragenic):
     def __init__(self, variant, transcript):
         Intragenic.__init__(self, variant, gene=transcript.gene)
@@ -144,11 +146,13 @@ class Failure(TranscriptMutationEffect):
     need to create a non-empty list of effects for each variant.
     """
 
+
 class NoncodingTranscript(TranscriptMutationEffect):
     """
     Any mutation to a transcript with a non-coding biotype
     """
     short_description = "non-coding-transcript"
+
 
 class IncompleteTranscript(TranscriptMutationEffect):
     """
@@ -156,12 +160,14 @@ class IncompleteTranscript(TranscriptMutationEffect):
     """
     short_description = "incomplete"
 
+
 class FivePrimeUTR(TranscriptMutationEffect):
     """
     Any mutation to the 5' untranslated region (before the start codon) of
     coding transcript.
     """
     short_description = "5' UTR"
+
 
 class ThreePrimeUTR(TranscriptMutationEffect):
     """
@@ -182,11 +188,13 @@ class Intronic(TranscriptMutationEffect):
 
     short_description = "intronic"
 
+
 class SpliceSite(object):
     """
     Parent class for all splice site mutations.
     """
     pass
+
 
 class IntronicSpliceSite(Intronic, SpliceSite):
     """
@@ -200,6 +208,7 @@ class IntronicSpliceSite(Intronic, SpliceSite):
 
     short_description = "intronic-splice-site"
 
+
 class SpliceDonor(IntronicSpliceSite):
     """
     Mutation in the first two intron residues.
@@ -210,17 +219,20 @@ class SpliceDonor(IntronicSpliceSite):
 
     short_description = "splice-donor"
 
+
 class SpliceAcceptor(IntronicSpliceSite):
     """
     Mutation in the last two intron residues.
     """
     short_description = "splice-acceptor"
 
+
 class Exonic(TranscriptMutationEffect):
     """
     Any mutation which affects the contents of an exon (coding region or UTRs)
     """
     pass
+
 
 class ExonLoss(Exonic):
     """
@@ -247,6 +259,7 @@ class ExonLoss(Exonic):
     def modifies_coding_sequence(self):
         # TODO: distinguish between exon loss in the CDS and UTRs
         return True
+
 
 class ExonicSpliceSite(Exonic, SpliceSite):
     """
@@ -283,6 +296,7 @@ class ExonicSpliceSite(Exonic, SpliceSite):
     def modifies_coding_sequence(self):
         return self.alternate_effect.modifies_coding_sequence
 
+
 class CodingMutation(Exonic):
     """
     Base class for all mutations which result in a modified coding sequence.
@@ -304,6 +318,7 @@ class CodingMutation(Exonic):
     @property
     def modifies_coding_sequence(self):
         return True
+
 
 class Silent(CodingMutation):
     """Mutation to an exon of a coding region which doesn't change the
@@ -339,6 +354,7 @@ class Silent(CodingMutation):
     def short_description(self):
         return "silent"
 
+
 class AlternateStartCodon(Silent):
     """Change to the start codon (e.g. ATG>CTG) but without changing the
     starting amino acid from methionine.
@@ -362,6 +378,7 @@ class AlternateStartCodon(Silent):
     def short_description(self):
         return "alternate-start-codon (%s>%s)" % (
             self.ref_codon, self.alt_codon)
+
 
 class NonsilentCodingMutation(CodingMutation):
     """
@@ -402,11 +419,23 @@ class NonsilentCodingMutation(CodingMutation):
     def modifies_protein_sequence(self):
         return True
 
+
 class StartLoss(NonsilentCodingMutation):
     """
     When a start codon is lost it's difficult to determine if there is
     an alternative Kozak consensus sequence (either before or after the
     original) from which an alternative start codon can be inferred.
+
+    TODO:
+        - look for downstream alternative start codon to predict
+          new coding sequence (probably also requires matching
+          pattern of preceding ~6nt)
+        - If an alternative start codon is changed to ATG then
+          we should make a StrongerStartCodon effect which is effectively
+          silent
+        - If ATG is changed to the two common alternative codons then
+          we should make a WeakerStartCodon effect which is also
+          effectively silent.
     """
     def __init__(
             self,
@@ -429,6 +458,7 @@ class StartLoss(NonsilentCodingMutation):
     @property
     def short_description(self):
         return "p.%s1? (start-loss)" % (self.transcript.protein_sequence[0],)
+
 
 class KnownAminoAcidChange(NonsilentCodingMutation):
     """
@@ -474,6 +504,7 @@ class KnownAminoAcidChange(NonsilentCodingMutation):
         suffix = original[self.aa_mutation_start_offset + len(self.aa_ref):]
         return prefix + self.aa_alt + suffix
 
+
 class Substitution(KnownAminoAcidChange):
     """
     Single amino acid substitution, e.g. BRAF-001 V600E
@@ -498,6 +529,7 @@ class Substitution(KnownAminoAcidChange):
             aa_mutation_start_offset=aa_mutation_start_offset,
             aa_ref=aa_ref,
             aa_alt=aa_alt)
+
 
 class ComplexSubstitution(KnownAminoAcidChange):
     """
@@ -525,6 +557,7 @@ class ComplexSubstitution(KnownAminoAcidChange):
             aa_ref=aa_ref,
             aa_alt=aa_alt)
 
+
 class Insertion(KnownAminoAcidChange):
     """
     In-frame insertion of one or more amino acids.
@@ -542,6 +575,7 @@ class Insertion(KnownAminoAcidChange):
             aa_mutation_start_offset=aa_mutation_start_offset,
             aa_ref="",
             aa_alt=aa_alt)
+
 
 class Deletion(KnownAminoAcidChange):
     """
@@ -693,6 +727,7 @@ class FrameShift(KnownAminoAcidChange):
         return "p.%s%dfs" % (
             self.aa_ref[0],
             self.aa_mutation_start_offset + 1)
+
 
 class FrameShiftTruncation(PrematureStop, FrameShift):
     """

@@ -1,4 +1,4 @@
-# Copyright (c) 2016. Mount Sinai School of Medicine
+# Copyright (c) 2016-2018. Mount Sinai School of Medicine
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@ from .effect_classes import (
     StopLoss,
 )
 from .translate import translate_in_frame_mutation, START_CODONS
+
 
 def get_codons(
         variant,
@@ -104,6 +105,7 @@ def get_codons(
         "Expected in-frame mutation but got %s (length = %d)" % (
             mutant_codons, len(mutant_codons))
     return ref_codon_start_offset, ref_codon_end_offset, mutant_codons
+
 
 def predict_in_frame_coding_effect(
         variant,

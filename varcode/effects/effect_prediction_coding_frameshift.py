@@ -1,4 +1,4 @@
-# Copyright (c) 2016. Mount Sinai School of Medicine
+# Copyright (c) 2016-2018. Mount Sinai School of Medicine
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ from .effect_classes import (
 )
 from .mutate import substitute
 from .translate import translate
+
 
 def create_frameshift_effect(
         mutated_codon_index,
@@ -201,6 +202,7 @@ def cdna_codon_sequence_after_deletion_or_substitution_frameshift(
         ref=trimmed_cdna_ref,
         alt=trimmed_cdna_alt)
     return mutated_codon_index, sequence_from_mutated_codon
+
 
 def predict_frameshift_coding_effect(
         variant,

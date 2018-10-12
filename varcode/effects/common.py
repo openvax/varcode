@@ -17,6 +17,7 @@ from __future__ import print_function, division, absolute_import
 from Bio.Seq import Seq
 from six import string_types, text_type
 
+
 def bio_seq_to_str(seq):
     if isinstance(seq, Seq):
         return str(seq)
