@@ -48,12 +48,6 @@ def load_vcf(
     """
     Load reference name and Variant objects from the given VCF filename.
 
-    This is an experimental faster implementation of `load_vcf`. It is
-    typically about 2X faster, and with `include_info=False`, about 4X faster.
-    If most of the records in the VCF have failed filters (and
-    only_passing=True), this function can be orders of magnitude faster than
-    `load_vcf`.
-
     Currently only local files are supported by this function (no http). If you
     call this on an HTTP URL, it will fall back to `load_vcf`.
 
@@ -181,6 +175,7 @@ def load_vcf(
             'sort_key': sort_key,
             'distinct': distinct})
 
+
 def load_vcf_fast(*args, **kwargs):
     """
     Same as load_vcf, keeping this name for backwards compatibility.
@@ -190,6 +185,7 @@ def load_vcf_fast(*args, **kwargs):
         DeprecationWarning)
     return load_vcf(*args, **kwargs)
 
+
 def pyvcf_calls_to_sample_info_list(calls):
     """
     Given pyvcf.model._Call instances, return a dict mapping each sample
@@ -198,6 +194,7 @@ def pyvcf_calls_to_sample_info_list(calls):
     """
     return OrderedDict(
         (call.sample, call.data._asdict()) for call in calls)
+
 
 def dataframes_to_variant_collection(
         dataframes,
