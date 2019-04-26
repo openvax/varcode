@@ -14,8 +14,6 @@
 
 from __future__ import print_function, division, absolute_import
 
-from collections import Counter
-
 from .effect_classes import (
     Failure,
     IncompleteTranscript,
@@ -102,20 +100,6 @@ def effect_priority(effect):
     return transcript_effect_priority_dict.get(effect.__class__, -1)
 
 
-def effect_has_transcript(effect):
-    """
-    Does the effect have an associated transcript?
-
-    Parameters
-    ----------
-    effect: subclass of MutationEffect
-
-    Returns bool
-    """
-    return effect.transcript is not None
-
-
-
 def apply_to_field_if_exists(effect, field_name, fn, default):
     """
     Apply function to specified field of effect if it is not None,
@@ -126,6 +110,7 @@ def apply_to_field_if_exists(effect, field_name, fn, default):
         return default
     else:
         return fn(value)
+
 
 def apply_to_transcript_if_exists(effect, fn, default):
     """
@@ -544,12 +529,12 @@ def top_priority_effect_for_single_gene(effects):
 def top_priority_effect(effects):
     """
     Given a collection of variant transcript effects,
-    return the top priority object. In case of multiple transcript
-    effects with the same priority, return the one affecting the longest
-    transcript. ExonicSpliceSite variants require special treatment since
-    they actually represent two effects -- the splicing modification and
-    whatever else would happen to the exonic sequence if nothing else gets
-    changed.
+    return the top priority object. ExonicSpliceSite variants require special
+    treatment since they actually represent two effects -- the splicing modification
+    and whatever else would happen to the exonic sequence if nothing else gets
+    changed. In cases where multiple transcripts give rise to multiple
+    effects, use a variety of filtering and sorting heuristics to pick
+    the canonical transcript.
     """
     if len(effects) == 0:
         raise ValueError("List of effects cannot be empty")

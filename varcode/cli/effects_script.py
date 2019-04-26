@@ -47,7 +47,7 @@ def main(args_list=None):
     arg_parser.add_argument("--output-csv", help="Output path to CSV")
     args = arg_parser.parse_args(args_list)
     variants = variant_collection_from_args(args)
-    effects = variants.effects().top_priority_effect_per_variant()
+    effects = variants.effects()
     effects_dataframe = effects.to_dataframe()
     logger.info('\n%s', effects)
     if args.output_csv:
