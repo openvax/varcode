@@ -264,10 +264,10 @@ def parse_transcript_number(effect):
         return 0
     parts = name.split("-")
     last_part = parts[-1]
-    if not last_part.isdigit():
-        return 0
-    else:
+    if last_part.isdigit():
         return int(last_part)
+    else:
+        return 0
 
 
 def multi_gene_effect_sort_key(effect):
@@ -408,10 +408,10 @@ def filter_pipeline(effects, filters):
     """
     for filter_fn in filters:
         filtered_effects = filter_fn(effects)
-        if len(filtered_effects) > 1:
-            effects = filtered_effects
         if len(effects) == 1:
             return effects
+        elif len(filtered_effects) > 1:
+            effects = filtered_effects
     return effects
 
 

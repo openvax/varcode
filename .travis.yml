@@ -67,14 +67,14 @@ before_script:
       pyensembl install
       --release 95
       --species human
-      --custom-mirror https://github.com/openvax/ensembl-data/releases/download/GRCh38.93/
+      --custom-mirror https://github.com/openvax/ensembl-data/releases/download/GRCh38.95/
   - echo "Installed Ensembl 93 for humans" && df -h
   # latest mouse release
   - >
       pyensembl install
       --release 95
       --species mouse
-      --custom-mirror https://github.com/openvax/ensembl-data/releases/download/GRCm38.93/
+      --custom-mirror https://github.com/openvax/ensembl-data/releases/download/GRCm38.95/
   - echo "Installed Ensembl 93 for mice" && df -h
 script:
   # now actually run the tests, generate a coverage report and run linter
