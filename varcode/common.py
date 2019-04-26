@@ -1,4 +1,4 @@
-# Copyright (c) 2016. Mount Sinai School of Medicine
+# Copyright (c) 2016-2019. Mount Sinai School of Medicine
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,22 +17,49 @@ from collections import defaultdict
 
 from functools import wraps
 
-def groupby_field(records, field_name):
+
+def apply_groupby(records, fn, skip_none=False):
     """
     Given a list of objects, group them into a dictionary by
-    the unique values of a given field name.
+    applying fn to each one and using returned values as a dictionary
+    key.
+
+    Parameters
+    ----------
+    records : list
+
+    fn : function
+
+    skip_none : bool
+        If False, then None can be a key in the returned dictionary,
+        otherwise records whose key value is None get skipped.
+
+    Returns dict.
     """
 
     # create an empty list for every new key
     groups = defaultdict(list)
     for record in records:
-        value = getattr(record, field_name)
-        if value is not None:
+        value = fn(record)
+        if value is not None or not skip_none:
             groups[value].append(record)
     return dict(groups)
 
+
+def groupby_field(records, field_name, skip_none=True):
+    """
+    Given a list of objects, group them into a dictionary by
+    the unique values of a given field name.
+    """
+    return apply_groupby(
+        records,
+        lambda obj: getattr(obj, field_name),
+        skip_none=skip_none)
+
+
 def memoize(fn):
-    """Simple memoization decorator for functions and methods,
+    """
+    Simple memoization decorator for functions and methods,
     assumes that all arguments to the function can be hashed and
     compared.
     """

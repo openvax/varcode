@@ -20,7 +20,7 @@ from sercol import Collection
 
 from .effect_ordering import (
     effect_priority,
-    effect_sort_key,
+    multi_gene_effect_sort_key,
     top_priority_effect,
     transcript_effect_priority_dict
 )
@@ -207,6 +207,7 @@ class EffectCollection(Collection):
 
     # TODO: find a way to express these kinds of methods without
     # duplicating every single groupby_* method
+
     def top_priority_effect_per_variant(self):
         """Highest priority effect for each unique variant"""
         return OrderedDict(
@@ -264,7 +265,7 @@ class EffectCollection(Collection):
             `top_priority_effect`.
             """
             (effect, fpkm) = effect_fpkm_pair
-            return (fpkm, effect_sort_key(effect))
+            return (fpkm, multi_gene_effect_sort_key(effect))
 
         return max(effect_expression_dict.items(), key=key_fn)[0]
 
@@ -283,9 +284,9 @@ class EffectCollection(Collection):
         ]
 
         def row_from_effect(effect):
-            row = {}
+            row = OrderedDict()
 
-            row['variant'] = str(effect.variant)
+            row['variant'] = str(effect.variant.short_description)
             for field_name in variant_properties:
                 # if effect.variant is None then this column value will be None
                 row[field_name] = getattr(effect.variant, field_name, None)
@@ -294,8 +295,7 @@ class EffectCollection(Collection):
             row['transcript_id'] = effect.transcript_id
             row['transcript_name'] = effect.transcript_name
 
-            row['effect'] = str(effect)
             row['effect_type'] = effect.__class__.__name__
-            row['effect_description'] = effect.short_description
+            row['effect'] = effect.short_description
             return row
         return pd.DataFrame.from_records([row_from_effect(effect) for effect in self])

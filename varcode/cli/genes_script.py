@@ -1,4 +1,4 @@
-# Copyright (c) 2016-2018. Mount Sinai School of Medicine
+# Copyright (c) 2016-2019. Mount Sinai School of Medicine
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -28,10 +28,10 @@ logger = logging.getLogger(__name__)
 
 def main(args_list=None):
     """
-    Script which loads variants and annotates them with  overlapping genes.
+    Script which loads variants and annotates them with overlapping genes.
 
     Example usage:
-        varcode-variants
+        varcode-genes
             --vcf mutect.vcf \
             --vcf strelka.vcf \
             --maf tcga_brca.maf \

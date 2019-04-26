@@ -1,4 +1,4 @@
-from varcode.cli.variants_script import main as run_script
+from varcode.cli.genes_script import main as run_script
 from .data import ov_wustle_variants, db_snp_variants
 
 from tempfile import NamedTemporaryFile

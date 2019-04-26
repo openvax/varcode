@@ -283,7 +283,7 @@ def test_issue236_codon_split_across_exons():
     """
     Issue: https://github.com/openvax/varcode/issues/236
     Variant:   chr16 1370517 T A
-    Transript: NM_003345 / ENST00000339021
+    Transript: NM_003345 / ENST00000397514
     >>>
     I noticed a case where the reference and mutation AA is incorrect.
     It appears to be due to a variant in a codon split between two exons (NM_003345.4 exons 6 and 7).
@@ -302,7 +302,7 @@ def test_issue236_codon_split_across_exons():
     variant = Variant('chr16', 1370517, 'T', 'A', 'GRCh37')
     expect_effect(
         variant,
-        transcript_id='ENST00000339021',
+        transcript_id='ENST00000397514',
         effect_class=Substitution,
         modifies_coding_sequence=True,
         modifies_protein_sequence=True,

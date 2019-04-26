@@ -55,8 +55,10 @@ def is_purine(nucleotide, allow_extended_nucleotides=False):
         raise ValueError("{} is a non-standard nucleotide, neither purine or pyrimidine".format(nucleotide))
     return nucleotide in PURINE_NUCLEOTIDES
 
+
 def all_standard_nucleotides(nucleotides):
     return all(base in STANDARD_NUCLEOTIDES for base in nucleotides)
+
 
 def normalize_nucleotide_string(nucleotides, allow_extended_nucleotides=False):
     """

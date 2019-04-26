@@ -14,6 +14,8 @@
 
 from __future__ import print_function, division, absolute_import
 
+from collections import Counter
+
 from .effect_classes import (
     Failure,
     IncompleteTranscript,
@@ -40,6 +42,7 @@ from .effect_classes import (
     FrameShift,
     ExonLoss,
 )
+from ..common import apply_groupby
 
 transcript_effect_priority_list = [
     Failure,
@@ -96,34 +99,233 @@ def effect_priority(effect):
     """
     Returns the integer priority for a given transcript effect.
     """
-    # since intergenic variants may have a None value for their
-    # highest_priority effect it simplifies other code to handle None
-    # here
-    if effect is None:
-        return -1
-    return transcript_effect_priority_dict[effect.__class__]
+    return transcript_effect_priority_dict.get(effect.__class__, -1)
 
 
-def effect_sort_key(effect):
-    """Returns key tuple with the following fields that should be sorted
-    lexicographically:
-        - what is the CDS length?
-            This value will be 0 if the effect has no associated transcript
-            or if the transcript is noncoding or incomplete
-        - what is the total length of the transcript?
-            This value will be 0 intra/intergenic variants effects without
-            an associated transcript.
+def effect_has_transcript(effect):
     """
-    # by default, we'll return (0, 0) for effects without an associated
-    # transcript
-    transcript_length = 0
-    cds_length = 0
-    if hasattr(effect, 'transcript') and effect.transcript is not None:
-        transcript_length = len(effect.transcript)
-        if effect.transcript.complete:
-            cds_length = len(effect.transcript.coding_sequence)
-    effect_class_priority = effect_priority(effect)
-    return (effect_class_priority, cds_length, transcript_length)
+    Does the effect have an associated transcript?
+
+    Parameters
+    ----------
+    effect: subclass of MutationEffect
+
+    Returns bool
+    """
+    return effect.transcript is not None
+
+
+
+def apply_to_field_if_exists(effect, field_name, fn, default):
+    """
+    Apply function to specified field of effect if it is not None,
+    otherwise return default.
+    """
+    value = getattr(effect, field_name, None)
+    if value is None:
+        return default
+    else:
+        return fn(value)
+
+def apply_to_transcript_if_exists(effect, fn, default):
+    """
+    Apply function to transcript associated with effect,
+    if it exists, otherwise return default.
+    """
+    return apply_to_field_if_exists(
+        effect=effect,
+        field_name="transcript",
+        fn=fn,
+        default=default)
+
+
+def apply_to_gene_if_exists(effect, fn, default):
+    return apply_to_field_if_exists(
+        effect=effect,
+        field_name="gene",
+        fn=fn,
+        default=default)
+
+
+def number_exons_in_associated_transcript(effect):
+    """
+    Number of exons on transcript associated with effect,
+    if there is one (otherwise return 0).
+    """
+    return apply_to_transcript_if_exists(
+        effect=effect,
+        fn=lambda t: len(t.exons),
+        default=0)
+
+
+def cds_length_of_associated_transcript(effect):
+    """
+    Length of coding sequence of transcript associated with effect,
+    if there is one (otherwise return 0).
+    """
+    return apply_to_transcript_if_exists(
+        effect=effect,
+        fn=lambda t: len(t.coding_sequence) if (t.complete and t.coding_sequence) else 0,
+        default=0)
+
+
+def length_of_associated_transcript(effect):
+    """
+    Length of spliced mRNA sequence of transcript associated with effect,
+    if there is one (otherwise return 0).
+    """
+    return apply_to_transcript_if_exists(
+        effect=effect,
+        fn=lambda t: len(t.sequence),
+        default=0)
+
+
+def name_of_associated_transcript(effect):
+    """
+    Name of transcript associated with effect,
+    if there is one (otherwise return "").
+    """
+    return apply_to_transcript_if_exists(
+        effect=effect,
+        fn=lambda t: t.name,
+        default="")
+
+
+def gene_id_of_associated_transcript(effect):
+    """
+    Ensembl gene ID of transcript associated with effect, returns
+    None if effect does not have transcript.
+    """
+    return apply_to_transcript_if_exists(
+        effect=effect,
+        fn=lambda t: t.gene_id,
+        default=None)
+
+
+def effect_has_complete_transcript(effect):
+    """
+    Parameters
+    ----------
+    effect : subclass of MutationEffect
+
+    Returns True if effect has transcript and that transcript has complete CDS
+    """
+    return apply_to_transcript_if_exists(
+        effect=effect,
+        fn=lambda t: t.complete,
+        default=False)
+
+
+def effect_associated_with_protein_coding_gene(effect):
+    """
+    Parameters
+    ----------
+    effect : subclass of MutationEffect
+
+    Returns True if effect is associated with a gene and that gene
+    has a protein_coding biotype.
+    """
+    return apply_to_gene_if_exists(
+        effect=effect,
+        fn=lambda g: g.biotype == "protein_coding",
+        default=False)
+
+
+def effect_associated_with_protein_coding_transcript(effect):
+    """
+    Parameters
+    ----------
+    effect : subclass of MutationEffect
+
+    Returns True if effect is associated with a transcript and that transcript
+    has a protein_coding biotype.
+    """
+    return apply_to_transcript_if_exists(
+        effect=effect,
+        fn=lambda t: t.biotype == "protein_coding",
+        default=False)
+
+
+def transcript_name_ends_with_01(effect):
+    """
+    Often the canonical transcript seems to be named something like
+    "TP53-001" or "TP53-201", so as a last-ditch tie breaker we're
+    using whether the name ends in "01".
+
+    Parameters
+    ----------
+    effect : subclass of MutationEffect
+
+    Returns bool
+    """
+    return name_of_associated_transcript(effect).endswith("01")
+
+
+def parse_transcript_number(effect):
+    """
+    Try to parse the number at the end of a transcript name associated with
+    an effect.
+
+    e.g. TP53-001 returns the integer 1.
+
+    Parameters
+    ----------
+    effect : subclass of MutationEffect
+
+    Returns int
+    """
+    name = name_of_associated_transcript(effect)
+    if "-" not in name:
+        return 0
+    parts = name.split("-")
+    last_part = parts[-1]
+    if not last_part.isdigit():
+        return 0
+    else:
+        return int(last_part)
+
+
+def multi_gene_effect_sort_key(effect):
+    """
+    This function acts as a sort key for choosing the highest priority
+    effect across multiple genes (so does not assume that effects might
+    involve the same start/stop codons).
+
+    Returns tuple with the following elements:
+        1) Integer priority of the effect type.
+        2) Does the associated gene have a "protein_coding" biotype?
+            False if no gene is associated with effect.
+        3) Does the associated transcript have a "protein_coding" biotype?
+            False if no transcript is associated with effect.
+        4) Is the associated transcript complete?
+            False if no transcript is associated with effect.
+        5) CDS length
+             This value will be 0 if the effect has no associated transcript
+             or if the transcript is noncoding or incomplete
+        6) Total length of the transcript
+             This value will be 0 intra/intergenic variants effects without
+             an associated transcript.
+        7) Number of exons
+             This value will be 0 intra/intergenic variants effects without
+             an associated transcript.
+        8) If everything is the same up this point then let's use the very
+           sloppy heuristic of preferring transcripts like "TP53-201" over
+           "TP53-206", so anything ending with "01" is considered better.
+        9) Lastly, if we end up with two transcripts like "TP53-202" and
+           "TP53-203", prefer the one with the lowest number in the name.
+    """
+
+    return tuple([
+        effect_priority(effect),
+        effect_associated_with_protein_coding_gene(effect),
+        effect_associated_with_protein_coding_transcript(effect),
+        effect_has_complete_transcript(effect),
+        cds_length_of_associated_transcript(effect),
+        length_of_associated_transcript(effect),
+        number_exons_in_associated_transcript(effect),
+        transcript_name_ends_with_01(effect),
+        -parse_transcript_number(effect)
+    ])
 
 
 def select_between_exonic_splice_site_and_alternate_effect(effect):
@@ -144,6 +346,201 @@ def select_between_exonic_splice_site_and_alternate_effect(effect):
         return effect.alternate_effect
 
 
+def keep_max_priority_effects(effects):
+    """
+    Given a list of effects, only keep the ones with the maximum priority
+    effect type.
+
+    Parameters
+    ----------
+    effects : list of MutationEffect subclasses
+
+    Returns list of same length or shorter
+    """
+    priority_values = map(effect_priority, effects)
+    max_priority = max(priority_values)
+    return [e for (e, p) in zip(effects, priority_values) if p == max_priority]
+
+
+def keep_effects_on_protein_coding_transcripts(effects):
+    """
+    Given a list of effects, only keep the ones associated with genes
+    of a protein coding biotype.
+
+    Parameters
+    ----------
+    effects : list of MutationEffect subclasses
+
+    Returns list of same length or shorter
+    """
+    return [
+        e for e in effects if effect_associated_with_protein_coding_transcript(e)
+    ]
+
+
+def keep_effects_on_protein_coding_genes(effects):
+    """
+    Given a list of effects, only keep the ones associated with genes
+    of a protein coding biotype.
+
+    Parameters
+    ----------
+    effects : list of MutationEffect subclasses
+
+    Returns list of same length or shorter
+    """
+    return [e for e in effects if effect_associated_with_protein_coding_gene(e)]
+
+
+def keep_effects_on_complete_transcripts(effects):
+    """
+    Given a list of effects, only keep the ones associated with complete
+    transcripts (which have annotated start and stop codons).
+
+    Parameters
+    ----------
+    effects : list of MutationEffect subclasses
+
+    Returns list of same length or shorter
+    """
+    return [e for e in effects if effect_has_complete_transcript(e)]
+
+
+def filter_pipeline(effects, filters):
+    """
+    Apply each filter to the effect list sequentially. If any filter
+    returns zero values then ignore it. As soon as only one effect is left,
+    return it.
+
+    Parameters
+    ----------
+    effects : list of MutationEffect subclass instances
+
+    filters : list of functions
+        Each function takes a list of effects and returns a list of effects
+
+    Returns list of effects
+    """
+    for filter_fn in filters:
+        filtered_effects = filter_fn(effects)
+        if len(filtered_effects) > 1:
+            effects = filtered_effects
+        if len(effects) == 1:
+            return effects
+    return effects
+
+
+def tie_breaking_sort_key_for_single_gene_effects(effect):
+    """
+    This function assumes that effects have already been filtered
+    by effect priority and we now have a collision where multiple effects
+    arising from different transcripts. Use this sort key to pick transcripts
+    for the following features:
+
+        1) Highest number of exons
+        2) Transcript name ending with "01"
+        3) Lowest number in transcript name (e.g. TP53-002 over TP53-003)
+
+    Returns tuple.
+    """
+
+    return tuple([
+        number_exons_in_associated_transcript(effect),
+        transcript_name_ends_with_01(effect),
+        -parse_transcript_number(effect),
+    ])
+
+
+def top_priority_effect_for_single_gene(effects):
+    """
+    For effects which are from the same gene, check to see if there
+    is a canonical transcript with both the maximum length CDS
+    and maximum length full transcript sequence.
+
+    If not, then use number of exons and transcript name as tie-breaking
+    features.
+
+    Parameters
+    ----------
+    effects : list of MutationEffect subclass instances
+
+    Returns single effect object
+    """
+
+    # first filter effects to keep those on
+    # 1) maximum priority effects
+    # 2) protein coding genes
+    # 3) protein coding transcripts
+    # 4) complete transcripts
+    #
+    # If any of these filters drop all the effects then we move on to the next
+    # filtering step.
+    effects = filter_pipeline(
+        effects=effects,
+        filters=[
+            keep_max_priority_effects,
+            keep_effects_on_protein_coding_genes,
+            keep_effects_on_protein_coding_transcripts,
+            keep_effects_on_complete_transcripts,
+        ],
+    )
+
+    if len(effects) == 1:
+        return effects[0]
+
+    # compare CDS length and transcript lengths of remaining effects
+    # if one effect has the maximum of both categories then return it
+    cds_lengths = [cds_length_of_associated_transcript(e) for e in effects]
+    max_cds_length = max(cds_lengths)
+
+    # get set of indices of all effects with maximum CDS length
+    max_cds_length_indices = {
+        i
+        for (i, l) in enumerate(cds_lengths)
+        if l == max_cds_length
+    }
+
+    seq_lengths = [length_of_associated_transcript(e) for e in effects]
+    max_seq_length = max(seq_lengths)
+
+    # get set of indices for all effects whose associated transcript
+    # has maximum sequence length
+    max_seq_length_indices = {
+        i
+        for (i, l) in enumerate(seq_lengths)
+        if l == max_seq_length
+    }
+
+    # which effects have transcripts with both the longest CDS and
+    # longest full transcript sequence?
+    intersection_of_indices = \
+        max_cds_length_indices.intersection(max_seq_length_indices)
+
+    n_candidates = len(intersection_of_indices)
+    if n_candidates == 1:
+        best_index = intersection_of_indices.pop()
+        return effects[best_index]
+
+    elif n_candidates == 0:
+        # if set of max CDS effects and max sequence length effects is disjoint
+        # then let's try to do the tie-breaking sort over their union
+        union_of_indices = max_cds_length_indices.union(max_seq_length_indices)
+        candidate_effects = [effects[i] for i in union_of_indices]
+
+    else:
+        # if multiple effects have transcripts with the max CDS length and
+        # the max full sequence length then run the tie-breaking sort
+        # over all these candidates
+        candidate_effects = [effects[i] for i in intersection_of_indices]
+
+    # break ties by number of exons, whether name of transcript ends if "01",
+    # and all else being equal, prefer transcript names that end with lower
+    # numbers
+    return max(
+        candidate_effects,
+        key=tie_breaking_sort_key_for_single_gene_effects)
+
+
 def top_priority_effect(effects):
     """
     Given a collection of variant transcript effects,
@@ -156,5 +553,28 @@ def top_priority_effect(effects):
     """
     if len(effects) == 0:
         raise ValueError("List of effects cannot be empty")
-    effects = map(select_between_exonic_splice_site_and_alternate_effect, effects)
-    return max(effects, key=effect_sort_key)
+
+    effects = map(
+        select_between_exonic_splice_site_and_alternate_effect,
+        effects)
+
+    effects_grouped_by_gene = apply_groupby(
+        effects, fn=gene_id_of_associated_transcript, skip_none=False)
+
+    if None in effects_grouped_by_gene:
+        effects_without_genes = effects_grouped_by_gene.pop(None)
+    else:
+        effects_without_genes = []
+
+    # if we had any effects associated with genes then choose one of those
+    if len(effects_grouped_by_gene) > 0:
+        effects_with_genes = [
+            top_priority_effect_for_single_gene(gene_effects)
+            for gene_effects in effects_grouped_by_gene.values()
+        ]
+        return max(effects_with_genes, key=multi_gene_effect_sort_key)
+    else:
+        # if all effects were without genes then choose the best among those
+        assert len(effects_without_genes) > 0
+        return max(effects_without_genes, key=multi_gene_effect_sort_key)
+

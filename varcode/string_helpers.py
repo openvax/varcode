@@ -14,6 +14,7 @@
 
 from __future__ import print_function, division, absolute_import
 
+
 def trim_shared_prefix(ref, alt):
     """
     Sometimes mutations are given with a shared prefix between the reference
@@ -36,6 +37,7 @@ def trim_shared_prefix(ref, alt):
     ref_suffix = ref[i:]
     alt_suffix = alt[i:]
     return ref_suffix, alt_suffix, prefix
+
 
 def trim_shared_suffix(ref, alt):
     """
@@ -62,6 +64,7 @@ def trim_shared_suffix(ref, alt):
     if i == 0:
         return (ref, alt, '')
     return (ref[:-i], alt[:-i], ref[-i:])
+
 
 def trim_shared_flanking_strings(ref, alt):
     """
