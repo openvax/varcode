@@ -278,3 +278,34 @@ def test_issue202_stoploss_deletes_two_amino_acids():
         modifies_protein_sequence=True,
         aa_ref='FI',
         aa_alt='PTIVWSSGPLFCRGFHLFFFSFF')
+
+def test_issue236_codon_split_across_exons():
+    """
+    Issue: https://github.com/openvax/varcode/issues/236
+    Variant:   chr16 1370517 T A
+    Transript: NM_003345 / ENST00000397514
+    >>>
+    I noticed a case where the reference and mutation AA is incorrect.
+    It appears to be due to a variant in a codon split between two exons (NM_003345.4 exons 6 and 7).
+
+    hg19 test variant:
+    chr16 1370517 T A
+
+    The AA change should be p.C138S, but varcode reports p.W138R.
+    This appears to be due to it taking the
+    third base of the codon from the adjacent intron (G), not the adjacent
+    base in the transcript (C).
+
+    Based on this behavior, I would expect any variant in a codon that is split
+    between exon boundaries to have incorrect WT and mutant AA.
+    """
+    variant = Variant('chr16', 1370517, 'T', 'A', 'GRCh37')
+    expect_effect(
+        variant,
+        transcript_id='ENST00000397514',
+        effect_class=Substitution,
+        modifies_coding_sequence=True,
+        modifies_protein_sequence=True,
+        aa_ref='C',
+        aa_alt='S')
+

@@ -17,7 +17,7 @@ import random
 
 from Bio.Seq import reverse_complement
 from pyensembl import EnsemblRelease
-from pyensembl import MAX_ENSEMBL_RELEASE
+from pyensembl import genome_for_reference_name
 
 from .nucleotides import STANDARD_NUCLEOTIDES
 from .variant import Variant
@@ -28,7 +28,7 @@ _transcript_ids_cache = {}
 
 def random_variants(
         count,
-        ensembl_release=MAX_ENSEMBL_RELEASE,
+        genome_name="GRCh38",
         deletions=True,
         insertions=True,
         random_seed=None):
@@ -37,13 +37,13 @@ def random_variants(
     at least one complete coding transcript.
     """
     rng = random.Random(random_seed)
-    ensembl = EnsemblRelease(ensembl_release)
+    ensembl = genome_for_reference_name(genome_name)
 
-    if ensembl_release in _transcript_ids_cache:
-        transcript_ids = _transcript_ids_cache[ensembl_release]
+    if ensembl in _transcript_ids_cache:
+        transcript_ids = _transcript_ids_cache[ensembl]
     else:
         transcript_ids = ensembl.transcript_ids()
-        _transcript_ids_cache[ensembl_release] = transcript_ids
+        _transcript_ids_cache[ensembl] = transcript_ids
 
     variants = []
 

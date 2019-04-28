@@ -1,4 +1,4 @@
-# Copyright (c) 2016-2018. Mount Sinai School of Medicine
+# Copyright (c) 2016-2019. Mount Sinai School of Medicine
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -25,13 +25,16 @@ from .variant_args import make_variants_parser, variant_collection_from_args
 logging.config.fileConfig(pkg_resources.resource_filename(__name__, 'logging.conf'))
 logger = logging.getLogger(__name__)
 
+arg_parser = make_variants_parser(
+    description="Annotate variants with overlapping gene names")
+arg_parser.add_argument("--output-csv", help="Output path to CSV")
 
 def main(args_list=None):
     """
-    Script which loads variants and annotates them with  overlapping genes.
+    Script which loads variants and annotates them with overlapping genes.
 
     Example usage:
-        varcode-variants
+        varcode-genes
             --vcf mutect.vcf \
             --vcf strelka.vcf \
             --maf tcga_brca.maf \
@@ -41,9 +44,6 @@ def main(args_list=None):
     print_version_info()
     if args_list is None:
         args_list = sys.argv[1:]
-    arg_parser = make_variants_parser(
-        description="Annotate variants with overlapping gene names")
-    arg_parser.add_argument("--output-csv", help="Output path to CSV")
     args = arg_parser.parse_args(args_list)
     variants = variant_collection_from_args(args)
     variants_dataframe = variants.to_dataframe()

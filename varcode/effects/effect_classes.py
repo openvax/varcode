@@ -116,7 +116,8 @@ class Intergenic(MutationEffect):
 
 
 class Intragenic(MutationEffect):
-    """Variant within boundaries of a gene but does not overlap
+    """
+    Variant within boundaries of a gene but does not overlap
     introns or exons of any transcript. This seems very peculiar but
     apparently does happen sometimes, maybe some genes have two distinct sets
     of exons which are never simultaneously expressed?
@@ -142,9 +143,11 @@ class TranscriptMutationEffect(Intragenic):
 
 
 class Failure(TranscriptMutationEffect):
-    """Special placeholder effect for when we want to suppress errors but still
+    """
+    Special placeholder effect for when we want to suppress errors but still
     need to create a non-empty list of effects for each variant.
     """
+    pass
 
 
 class NoncodingTranscript(TranscriptMutationEffect):

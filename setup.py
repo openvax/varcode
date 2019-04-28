@@ -1,4 +1,4 @@
-# Copyright (c) 2014-2018. Mount Sinai School of Medicine
+# Copyright (c) 2014-2019. Mount Sinai School of Medicine
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -30,15 +30,6 @@ except Exception as e:
     print(e)
     print("Failed to open %s" % readme_path)
 
-# convert README to restructured text format required by PyPI
-try:
-    import pypandoc
-    readme_restructured = pypandoc.convert(readme_markdown, to='rst', format='md')
-except Exception as e:
-    readme_restructured = readme_markdown
-    print(e)
-    print("Failed to convert %s from Markdown to reStructuredText" % readme_filename)
-
 # Determine version number
 with open('varcode/__init__.py', 'r') as f:
     version = re.search(
@@ -54,10 +45,11 @@ if __name__ == '__main__':
         package_data={'varcode.cli': ['logging.conf']},
         version=version,
         description="Variant annotation in Python",
-        long_description=readme_restructured,
+        long_description=readme_markdown,
+        long_description_content_type='text/markdown',
         url="https://github.com/openvax/varcode",
         author="Alex Rubinsteyn",
-        author_email="alex.rubinsteyn@mssm.edu",
+        author_email="alex@openvax.org",
         license="http://www.apache.org/licenses/LICENSE-2.0.html",
         classifiers=[
             'Development Status :: 3 - Alpha',
@@ -80,6 +72,7 @@ if __name__ == '__main__':
         ],
         entry_points={
             'console_scripts': [
-                'varcode-variants = varcode.cli.variants_script:main'
+                'varcode-genes = varcode.cli.genes_script:main',
+                'varcode = varcode.cli.effects_script:main',
             ]
         })

@@ -1,10 +1,11 @@
-from varcode.cli.variants_script import main as run_script
+from varcode.cli.genes_script import main as run_script
 from .data import ov_wustle_variants, db_snp_variants
 
 from tempfile import NamedTemporaryFile
 import pandas as pd
 
-def test_varcode_variants_script():
+
+def test_varcode_effects_script():
     """
     Load a variant collection with combines the ovarian cancer test VCF
     and a small number of variants from dbSNP

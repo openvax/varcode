@@ -33,19 +33,13 @@ ensembl_mouse_genome = EnsemblRelease(MOUSE_ENSEMBL_RELEASE, species="mouse")
 def test_load_vcf_mouse_with_explicit_urls():
     variants = load_vcf(MOUSE_VCF, genome=explicit_url_genome)
     eq_(len(variants), 217)
-    variants = load_vcf_fast(MOUSE_VCF, genome=explicit_url_genome)
-    eq_(len(variants), 217)
 
 def test_load_vcf_mouse_with_ensembl_release():
     variants = load_vcf(MOUSE_VCF, genome=ensembl_mouse_genome)
     eq_(len(variants), 217)
-    variants = load_vcf_fast(MOUSE_VCF, genome=ensembl_mouse_genome)
-    eq_(len(variants), 217)
 
 def test_load_vcf_mouse_with_inferred_genome():
     variants = load_vcf(MOUSE_VCF)
-    eq_(len(variants), 217)
-    variants = load_vcf_fast(MOUSE_VCF)
     eq_(len(variants), 217)
 
 def test_specific_variant_mouse_with_explicit_urls():

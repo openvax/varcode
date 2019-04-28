@@ -136,7 +136,7 @@ def variant_collection_from_args(args, required=True):
     if args.variant:
         if not genome:
             raise ValueError(
-                "--reference-name must be specified when using --variant")
+                "--genome must be specified when using --variant")
 
         variants = [
             Variant(
