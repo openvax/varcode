@@ -1,4 +1,4 @@
-# Copyright (c) 2016. Mount Sinai School of Medicine
+# Copyright (c) 2016-2019. Mount Sinai School of Medicine
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@ from __future__ import print_function, division, absolute_import
 
 import numpy as np
 
-import typechecks
+from six import string_types
 
 # include all pseudonucleotides encoding repeats and uncertain bases
 STANDARD_NUCLEOTIDES = {'A', 'C', 'T', 'G'}
@@ -49,10 +49,12 @@ EXTENDED_NUCLEOTIDES = {
     'N',  # any base
 }
 
+
 def is_purine(nucleotide, allow_extended_nucleotides=False):
     """Is the nucleotide a purine"""
     if not allow_extended_nucleotides and nucleotide not in STANDARD_NUCLEOTIDES:
-        raise ValueError("{} is a non-standard nucleotide, neither purine or pyrimidine".format(nucleotide))
+        raise ValueError(
+            "{} is a non-standard nucleotide, neither purine or pyrimidine".format(nucleotide))
     return nucleotide in PURINE_NUCLEOTIDES
 
 
@@ -60,7 +62,11 @@ def all_standard_nucleotides(nucleotides):
     return all(base in STANDARD_NUCLEOTIDES for base in nucleotides)
 
 
-def normalize_nucleotide_string(nucleotides, allow_extended_nucleotides=False):
+def normalize_nucleotide_string(
+        nucleotides,
+        allow_extended_nucleotides=False,
+        empty_chars=".-",
+        treat_nan_as_empty=True):
     """
     Normalizes a nucleotide string by converting various ways of encoding empty
     strings into "", making all letters upper case, and checking to make sure
@@ -73,17 +79,21 @@ def normalize_nucleotide_string(nucleotides, allow_extended_nucleotides=False):
 
     extended_nucleotides : bool
         Allow non-canonical nucleotide characters like 'X' for unknown base
+
+    empty_chars : str
+        Characters which encode empty strings, such as "." used in VCF format
+        or "-" used in MAF format
+
+    treat_nan_as_empty : bool
+        Some MAF files represent deletions/insertions with NaN ref/alt values
     """
-    # some MAF files represent deletions/insertions with NaN ref/alt values
-    if isinstance(nucleotides, float) and np.isnan(nucleotides):
+    if nucleotides in empty_chars:
         return ""
-
-    # VCF files sometimes have '.' ref or alt for insertions and deletions, and
-    # MAF files sometimes have '-' ref or alt for insertions and deletions.
-    if nucleotides == "." or nucleotides == "-":
+    elif treat_nan_as_empty and isinstance(nucleotides, float) and np.isnan(nucleotides):
         return ""
-
-    typechecks.require_string(nucleotides, "nucleotide string")
+    elif type(nucleotides) not in string_types:
+        raise TypeError("Expected str for nucleotide string but got %s" % (
+            type(nucleotides),))
 
     nucleotides = nucleotides.upper()
 

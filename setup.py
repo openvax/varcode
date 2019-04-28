@@ -63,12 +63,12 @@ if __name__ == '__main__':
         install_requires=[
             'numpy>=1.7, <2.0',
             'pandas>=0.15',
-            'pyensembl>=1.0.3',
+            'pyensembl>=1.7.4',
             'biopython>=1.64',
             'pyvcf>=0.6.7',
             'memoized_property>=1.0.2',
-            'serializable>=0.0.8',
-            'sercol>=0.1.0',
+            'serializable>=0.1.1',
+            'sercol>=0.1.4',
         ],
         entry_points={
             'console_scripts': [
