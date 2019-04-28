@@ -18,6 +18,8 @@ import numpy as np
 
 from six import string_types
 
+from typechecks import require_string
+
 # include all pseudonucleotides encoding repeats and uncertain bases
 STANDARD_NUCLEOTIDES = {'A', 'C', 'T', 'G'}
 
@@ -91,9 +93,8 @@ def normalize_nucleotide_string(
         return ""
     elif treat_nan_as_empty and isinstance(nucleotides, float) and np.isnan(nucleotides):
         return ""
-    elif type(nucleotides) not in string_types:
-        raise TypeError("Expected str for nucleotide string but got %s" % (
-            type(nucleotides),))
+
+    require_string(nucleotides, name="nucleotide string")
 
     nucleotides = nucleotides.upper()
 
