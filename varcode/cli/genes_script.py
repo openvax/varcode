@@ -25,6 +25,9 @@ from .variant_args import make_variants_parser, variant_collection_from_args
 logging.config.fileConfig(pkg_resources.resource_filename(__name__, 'logging.conf'))
 logger = logging.getLogger(__name__)
 
+arg_parser = make_variants_parser(
+    description="Annotate variants with overlapping gene names")
+arg_parser.add_argument("--output-csv", help="Output path to CSV")
 
 def main(args_list=None):
     """
@@ -41,9 +44,6 @@ def main(args_list=None):
     print_version_info()
     if args_list is None:
         args_list = sys.argv[1:]
-    arg_parser = make_variants_parser(
-        description="Annotate variants with overlapping gene names")
-    arg_parser.add_argument("--output-csv", help="Output path to CSV")
     args = arg_parser.parse_args(args_list)
     variants = variant_collection_from_args(args)
     variants_dataframe = variants.to_dataframe()

@@ -26,6 +26,24 @@ from .variant_args import make_variants_parser, variant_collection_from_args
 logging.config.fileConfig(pkg_resources.resource_filename(__name__, 'logging.conf'))
 logger = logging.getLogger(__name__)
 
+arg_parser = make_variants_parser(
+    description="Annotate variants with overlapping gene names and predicted coding effects")
+
+arg_parser.add_argument("--output-csv", help="Output path to CSV")
+
+arg_parser.add_argument(
+    "--one-per-variant",
+    default=False,
+    action="store_true",
+    help=(
+        "Only return highest priority effect overlapping a variant, "
+        "otherwise all overlapping transcripts are returned."))
+
+arg_parser.add_argument(
+    "--only-coding",
+    default=False,
+    action="store_true",
+    help="Filter silent and non-coding effects")
 
 def main(args_list=None):
     """
@@ -43,12 +61,16 @@ def main(args_list=None):
     print_version_info()
     if args_list is None:
         args_list = sys.argv[1:]
-    arg_parser = make_variants_parser(
-        description="Annotate variants with overlapping gene names and predicted coding effects")
-    arg_parser.add_argument("--output-csv", help="Output path to CSV")
+
     args = arg_parser.parse_args(args_list)
     variants = variant_collection_from_args(args)
     effects = variants.effects()
+    if args.only_coding:
+        effects = effects.drop_silent_and_noncoding()
+    if args.one_per_variant:
+        variant_to_effect_dict = effects.top_priority_effect_per_variant()
+        effects = effects.clone_with_new_elements(list(variant_to_effect_dict.values()))
+
     effects_dataframe = effects.to_dataframe()
     logger.info('\n%s', effects)
     if args.output_csv:
