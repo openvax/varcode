@@ -24,7 +24,7 @@ from .effects import (
     NonsilentCodingMutation,
 )
 
-__version__ = '0.9.1'
+__version__ = '0.9.2'
 
 __all__ = [
     # basic classes

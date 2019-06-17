@@ -1,4 +1,4 @@
-# Copyright (c) 2016. Mount Sinai School of Medicine
+# Copyright (c) 2016-2019. Mount Sinai School of Medicine
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -379,8 +379,9 @@ def read_vcf_into_dataframe(
     elif path.endswith(".bz2"):
         compression = "bz2"
 
-    reader = pandas.read_table(
+    reader = pandas.read_csv(
         path,
+        sep="\t",
         compression=compression,
         comment="#",
         chunksize=chunk_size,
