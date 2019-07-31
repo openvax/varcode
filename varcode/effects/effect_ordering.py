@@ -342,7 +342,7 @@ def keep_max_priority_effects(effects):
 
     Returns list of same length or shorter
     """
-    priority_values = map(effect_priority, effects)
+    priority_values = tuple(map(effect_priority, effects))
     max_priority = max(priority_values)
     return [e for (e, p) in zip(effects, priority_values) if p == max_priority]
 
@@ -407,11 +407,12 @@ def filter_pipeline(effects, filters):
     Returns list of effects
     """
     for filter_fn in filters:
-        filtered_effects = filter_fn(effects)
         if len(effects) == 1:
             return effects
-        elif len(filtered_effects) > 1:
-            effects = filtered_effects
+        filtered_effects = filter_fn(effects)
+        if len(filtered_effects) == 0:
+            return effects
+        effects = filtered_effects
     return effects
 
 
