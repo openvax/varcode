@@ -161,7 +161,7 @@ def length_of_associated_transcript(effect):
     """
     return apply_to_transcript_if_exists(
         effect=effect,
-        fn=lambda t: len(t.sequence),
+        fn=lambda t: len(t.sequence) if t.sequence is not None else 0,
         default=0)
 
 
