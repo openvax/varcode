@@ -99,7 +99,7 @@ def infer_reference_name(reference_name_or_path):
     return match
 
 
-def find_best_genome(genome_object_string_or_int):
+def infer_genome(genome_object_string_or_int):
     """
     If given an integer, return associated human EnsemblRelease for that
     Ensembl version.
