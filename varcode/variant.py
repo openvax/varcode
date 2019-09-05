@@ -1,4 +1,4 @@
-# Copyright (c) 2016. Mount Sinai School of Medicine
+# Copyright (c) 2016-2019. Mount Sinai School of Medicine
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,6 +13,8 @@
 # limitations under the License.
 
 from __future__ import print_function, division, absolute_import
+
+import warnings
 
 from pyensembl import (
     cached_release,
@@ -45,6 +47,7 @@ class Variant(Serializable):
         "alt",
         "ensembl",
         "normalize_contig_name",
+        "convert_hg19_to_grch37",
         "allow_extended_nucleotides",
         "original_contig",
         "original_ref",
@@ -62,7 +65,8 @@ class Variant(Serializable):
             alt,
             ensembl=ensembl_grch38,
             allow_extended_nucleotides=False,
-            normalize_contig_name=True):
+            normalize_contig_name=True,
+            convert_hg19_to_grch37=False):
         """
         Construct a Variant object.
 
@@ -87,9 +91,14 @@ class Variant(Serializable):
             Extended nucleotides include 'Y' for pyrimidies or 'N' for any base
 
         normalize_contig_name : bool
-            By default the contig name will be normalized by trimming a 'chr'
-            prefix and converting all letters to upper-case. If we don't want
+            By default the contig name will be normalized by converting integers
+            to strings (e.g. 1 -> "1"), and converting any letters after "chr"
+            to uppercase (e.g. "chrx" -> "chrX"). If you don't want
             this behavior then pass normalize_contig_name=False.
+
+        convert_hg19_to_grch37 : bool
+            Rename contig names such as "chrX" to "X" and "chrM" to "MT" to make
+            hg19 and GRCh37 variants have the same chromosomes.
         """
 
         # first initialize the _genes and _transcripts fields we use to cache
@@ -110,9 +119,18 @@ class Variant(Serializable):
                  "instance, got %s : %s") % (type(ensembl), str(ensembl)))
 
         self.normalize_contig_name = normalize_contig_name
+        self.convert_hg19_to_grch37 = convert_hg19_to_grch37
         self.allow_extended_nucleotides = allow_extended_nucleotides
         self.original_contig = contig
         self.contig = normalize_chromosome(contig) if normalize_contig_name else contig
+
+        # trim off the starting "chr" from hg19 chromosome names to make them
+        # match GRCh37, also convert "chrM" to "MT".
+        if convert_hg19_to_grch37:
+            if self.contig == "chrM":
+                self.contig = "MT"
+            elif self.contig.startswith("chr"):
+                self.contig == self.contig[3:]
 
         if ref != alt and ref in STANDARD_NUCLEOTIDES and alt in STANDARD_NUCLEOTIDES:
             # Optimization for common case.
@@ -222,7 +240,8 @@ class Variant(Serializable):
             alt=self.original_alt,
             ensembl=self.ensembl,
             allow_extended_nucleotides=self.allow_extended_nucleotides,
-            normalize_contig_name=self.normalize_contig_name)
+            normalize_contig_name=self.normalize_contig_name,
+            convert_hg19_to_grch37=self.convert_hg19_to_grch37)
 
     @property
     def trimmed_ref(self):

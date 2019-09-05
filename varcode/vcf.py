@@ -44,7 +44,9 @@ def load_vcf(
         chunk_size=10 ** 5,
         max_variants=None,
         sort_key=variant_ascending_position_sort_key,
-        distinct=True):
+        distinct=True,
+        normalize_contig_names=True,
+        convert_hg19_to_grch37=False):
     """
     Load reference name and Variant objects from the given VCF filename.
 
@@ -66,14 +68,14 @@ def load_vcf(
         Name of metadata field which contains path to reference FASTA
         file (default = 'reference')
 
-    only_passing : boolean, optional
+    only_passing : bool, optional
         If true, any entries whose FILTER field is not one of "." or "PASS" is
         dropped.
 
-    allow_extended_nucleotides : boolean, default False
+    allow_extended_nucleotides : bool, default False
         Allow characters other that A,C,T,G in the ref and alt strings.
 
-    include_info : boolean, default True
+    include_info : bool, default True
         Whether to parse the INFO and per-sample columns. If you don't need
         these, set to False for faster parsing.
 
@@ -87,8 +89,18 @@ def load_vcf(
         Function which maps each element to a sorting criterion.
         Set to None to not to sort the variants.
 
-    distinct : boolean, default True
+    distinct : bool, default True
         Don't keep repeated variants
+
+    normalize_contig_names : bool, default True
+        By default contig names will be normalized by converting integers
+        to strings (e.g. 1 -> "1"), and converting any letters after "chr"
+        to uppercase (e.g. "chrx" -> "chrX"). If you don't want
+        this behavior then pass normalize_contig_names=False.
+
+    convert_hg19_to_grch37 : bool, default False
+        Rename contig names such as "chrX" to "X" and "chrM" to "MT" to make
+        hg19 and GRCh37 variants have the same chromosomes.
     """
 
     require_string(path, "Path or URL to VCF")
@@ -122,7 +134,9 @@ def load_vcf(
                 chunk_size=chunk_size,
                 max_variants=max_variants,
                 sort_key=sort_key,
-                distinct=distinct)
+                distinct=distinct,
+                normalize_contig_names=normalize_contig_names,
+                convert_hg19_to_grch37=convert_hg19_to_grch37)
         finally:
             logger.info("Removing temporary file: %s", filename)
             os.unlink(filename)
@@ -170,7 +184,9 @@ def load_vcf(
         sample_info_parser=sample_info_parser,
         variant_kwargs={
             'ensembl': genome,
-            'allow_extended_nucleotides': allow_extended_nucleotides},
+            'allow_extended_nucleotides': allow_extended_nucleotides,
+            'normalize_contig_name': normalize_contig_names,
+            "convert_hg19_to_grch37": convert_hg19_to_grch37},
         variant_collection_kwargs={
             'sort_key': sort_key,
             'distinct': distinct})
