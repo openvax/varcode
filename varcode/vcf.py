@@ -26,7 +26,7 @@ import pandas
 from typechecks import require_string
 import vcf as pyvcf
 
-from .reference import infer_genome
+from .reference import infer_genome_and_detect_hg19
 from .variant import Variant, variant_ascending_position_sort_key
 from .variant_collection import VariantCollection
 
@@ -46,7 +46,7 @@ def load_vcf(
         sort_key=variant_ascending_position_sort_key,
         distinct=True,
         normalize_contig_names=True,
-        convert_hg19_to_grch37=False):
+        convert_hg19_contig_names=False):
     """
     Load reference name and Variant objects from the given VCF filename.
 
@@ -98,9 +98,9 @@ def load_vcf(
         to uppercase (e.g. "chrx" -> "chrX"). If you don't want
         this behavior then pass normalize_contig_names=False.
 
-    convert_hg19_to_grch37 : bool, default False
-        Rename contig names such as "chrX" to "X" and "chrM" to "MT" to make
-        hg19 and GRCh37 variants have the same chromosomes.
+    convert_hg19_contig_names : bool, default False
+        Convert chromosome names from hg19 (e.g. "chr1") to equivalent names
+        for GRCh37 (e.g. "1").
     """
 
     require_string(path, "Path or URL to VCF")
@@ -135,8 +135,7 @@ def load_vcf(
                 max_variants=max_variants,
                 sort_key=sort_key,
                 distinct=distinct,
-                normalize_contig_names=normalize_contig_names,
-                convert_hg19_to_grch37=convert_hg19_to_grch37)
+                normalize_contig_names=normalize_contig_names)
         finally:
             logger.info("Removing temporary file: %s", filename)
             os.unlink(filename)
@@ -149,7 +148,7 @@ def load_vcf(
     # data. We can close the file after that.
     handle = PyVCFReaderFromPathOrURL(path)
     handle.close()
-    genome = infer_genome_from_vcf(
+    genome, using_grch37_for_hg19 = infer_genome_from_vcf(
         genome,
         handle.vcf_reader,
         reference_vcf_key)
@@ -185,8 +184,8 @@ def load_vcf(
         variant_kwargs={
             'ensembl': genome,
             'allow_extended_nucleotides': allow_extended_nucleotides,
-            'normalize_contig_name': normalize_contig_names,
-            "convert_hg19_to_grch37": convert_hg19_to_grch37},
+            'normalize_contig_names': normalize_contig_names,
+            'convert_hg19_contig_names': convert_hg19_contig_names or using_grch37_for_hg19},
         variant_collection_kwargs={
             'sort_key': sort_key,
             'distinct': distinct})
@@ -488,16 +487,18 @@ def stream_gzip_decompress_lines(stream):
 
 def infer_genome_from_vcf(genome, vcf_reader, reference_vcf_key):
     """
-    Helper function to make a pyensembl.Genome instance.
+    Helper function to make a pyensembl.Genome instance, also
+    returns a boolean flag indicating whether the original reference
+    name was "hg19" but GRCh37 is being used as a substitute.
     """
     if genome:
-        return infer_genome(genome)
+        return infer_genome_and_detect_hg19(genome)
     elif reference_vcf_key not in vcf_reader.metadata:
         raise ValueError("Unable to infer reference genome for %s" % (
             vcf_reader.filename,))
     else:
         reference_path = vcf_reader.metadata[reference_vcf_key]
-        return infer_genome(reference_path)
+        return infer_genome_and_detect_hg19(reference_path)
 
 
 def parse_url_or_path(s):

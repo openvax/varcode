@@ -99,6 +99,19 @@ def infer_reference_name(reference_name_or_path):
     return match
 
 
+def infer_genome_and_detect_hg19(genome_object_string_or_int):
+    """
+    Returns a pair of (Genome, bool) where the bool corresponds to whether
+    the input requested "hg19" and GRCh37 was returned as a substitute.
+    """
+    genome = infer_genome(genome_object_string_or_int)
+    if is_string(genome_object_string_or_int) and "hg19" in genome_object_string_or_int.lower():
+        grch37_used_for_hg19 = (genome.reference_name == "GRCh37")
+    else:
+        grch37_used_for_hg19 = False
+    return genome, grch37_used_for_hg19
+
+
 def infer_genome(genome_object_string_or_int):
     """
     If given an integer, return associated human EnsemblRelease for that

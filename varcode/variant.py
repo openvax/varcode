@@ -20,11 +20,10 @@ from pyensembl import (
     cached_release,
     genome_for_reference_name,
     Genome,
-    ensembl_grch38,
 )
 from pyensembl.locus import normalize_chromosome
 from serializable import Serializable
-from typechecks import require_instance
+from typechecks import require_instance, is_string
 
 from .nucleotides import (
     normalize_nucleotide_string,
@@ -45,9 +44,10 @@ class Variant(Serializable):
         "end",
         "ref",
         "alt",
-        "ensembl",
-        "normalize_contig_name",
-        "convert_hg19_to_grch37",
+        "original_genome",
+        "genome",
+        "normalize_contig_names",
+        "convert_hg19_contig_names",
         "allow_extended_nucleotides",
         "original_contig",
         "original_ref",
@@ -63,10 +63,11 @@ class Variant(Serializable):
             start,
             ref,
             alt,
-            ensembl=ensembl_grch38,
+            genome=None,
+            ensembl=None,
             allow_extended_nucleotides=False,
-            normalize_contig_name=True,
-            convert_hg19_to_grch37=False):
+            normalize_contig_names=True,
+            convert_hg19_contig_names=False):
         """
         Construct a Variant object.
 
@@ -84,53 +85,75 @@ class Variant(Serializable):
         alt : str
             Alternate nucleotide(s)
 
+        genome : Genome, EnsemblRelease, or str, or int
+            Name of reference genome, Ensembl release number, or object
+            derived from pyensembl.Genome. Default to latest available release
+            of GRCh38
+
         ensembl : Genome or EnsemblRelease
-            Object used for determining gene/transcript annotations
+            Deprecated alias for 'genome'
 
         allow_extended_nucleotides : bool
             Extended nucleotides include 'Y' for pyrimidies or 'N' for any base
 
-        normalize_contig_name : bool
+        normalize_contig_names : bool
             By default the contig name will be normalized by converting integers
             to strings (e.g. 1 -> "1"), and converting any letters after "chr"
             to uppercase (e.g. "chrx" -> "chrX"). If you don't want
             this behavior then pass normalize_contig_name=False.
 
-        convert_hg19_to_grch37 : bool
-            Rename contig names such as "chrX" to "X" and "chrM" to "MT" to make
-            hg19 and GRCh37 variants have the same chromosomes.
+        convert_hg19_contig_names : bool
+            Setting this argument to True signifies that a variant was
+            originally aligned against hg19 but is being annotated with
+            GRCh37 and needs chromosome names to be coverted, such as
+            "chr1" to "1".
+
         """
+        # we renamed the 'ensembl' argument to the more informative 'genome'
+        # but are keeping a deprecated 'ensembl' for backwards compat.
+        # Now have to check to see if both arguments are being used, which is
+        # an error.
+        if genome is None:
+            if ensembl is None:
+                genome = "GRCh38"
+            else:
+                genome = ensembl
+        elif ensembl is not None:
+            raise ValueError(
+                "Cannot specify both 'genome' and 'ensembl' arguments")
 
         # first initialize the _genes and _transcripts fields we use to cache
         # lists of overlapping pyensembl Gene and Transcript objects
         self._genes = self._transcripts = None
 
+
         # user might supply Ensembl release as an integer, reference name,
         # or pyensembl.Genome object
-        if isinstance(ensembl, Genome):
-            self.ensembl = ensembl
-        elif isinstance(ensembl, int):
-            self.ensembl = cached_release(ensembl)
-        elif isinstance(ensembl, str):
-            self.ensembl = genome_for_reference_name(ensembl)
+        self.original_genome = genome
+        if isinstance(genome, Genome):
+            self.genome = genome
+        elif isinstance(genome, int):
+            self.genome = cached_release(genome)
+        elif isinstance(genome, str):
+            self.genome = genome_for_reference_name(genome)
         else:
             raise TypeError(
-                ("Expected ensembl to be an int, string, or pyensembl.Genome "
-                 "instance, got %s : %s") % (type(ensembl), str(ensembl)))
+                ("Expected genome to be an int, string, or pyensembl.Genome "
+                 "instance, got %s : %s") % (type(genome), str(genome)))
 
-        self.normalize_contig_name = normalize_contig_name
-        self.convert_hg19_to_grch37 = convert_hg19_to_grch37
+        self.normalize_contig_names = normalize_contig_names
+        self.convert_hg19_contig_names = convert_hg19_contig_names
         self.allow_extended_nucleotides = allow_extended_nucleotides
         self.original_contig = contig
-        self.contig = normalize_chromosome(contig) if normalize_contig_name else contig
+        self.contig = normalize_chromosome(contig) if normalize_contig_names else contig
 
         # trim off the starting "chr" from hg19 chromosome names to make them
         # match GRCh37, also convert "chrM" to "MT".
-        if convert_hg19_to_grch37:
-            if self.contig == "chrM":
+        if self.convert_hg19_contig_names:
+            if self.contig.startswith("chr"):
+                self.contig = self.contig[3:]
+            if self.contig == "M":
                 self.contig = "MT"
-            elif self.contig.startswith("chr"):
-                self.contig == self.contig[3:]
 
         if ref != alt and ref in STANDARD_NUCLEOTIDES and alt in STANDARD_NUCLEOTIDES:
             # Optimization for common case.
@@ -192,7 +215,23 @@ class Variant(Serializable):
 
     @property
     def reference_name(self):
-        return self.ensembl.reference_name
+        """
+        Name of reference genome associated with this variant.
+
+        Returns str
+        """
+        return self.genome.reference_name
+
+    @property
+    def ensembl(self):
+        """
+        Deprecated alias for Variant.genome
+
+        Returns
+        -------
+        pyensembl.Genome
+        """
+        return self.genome
 
     def __str__(self):
         return "Variant(contig='%s', start=%d, ref='%s', alt='%s', reference_name='%s')" % (
@@ -226,7 +265,7 @@ class Variant(Serializable):
             self.end == other.end and
             self.ref == other.ref and
             self.alt == other.alt and
-            self.ensembl == other.ensembl)
+            self.genome == other.genome)
 
     def to_dict(self):
         """
@@ -238,10 +277,10 @@ class Variant(Serializable):
             start=self.original_start,
             ref=self.original_ref,
             alt=self.original_alt,
-            ensembl=self.ensembl,
+            genome=self.genome,
             allow_extended_nucleotides=self.allow_extended_nucleotides,
-            normalize_contig_name=self.normalize_contig_name,
-            convert_hg19_to_grch37=self.convert_hg19_to_grch37)
+            normalize_contig_names=self.normalize_contig_names,
+            convert_hg19_contig_names=self.convert_hg19_contig_names)
 
     @property
     def trimmed_ref(self):
@@ -314,7 +353,7 @@ class Variant(Serializable):
     @property
     def transcripts(self):
         if self._transcripts is None:
-            self._transcripts = self.ensembl.transcripts_at_locus(
+            self._transcripts = self.genome.transcripts_at_locus(
                 self.contig, self.start, self.end)
         return self._transcripts
 
@@ -343,7 +382,7 @@ class Variant(Serializable):
         Return Gene object for all genes which overlap this variant.
         """
         if self._genes is None:
-            self._genes = self.ensembl.genes_at_locus(
+            self._genes = self.genome.genes_at_locus(
                 self.contig, self.start, self.end)
         return self._genes
 
@@ -354,7 +393,7 @@ class Variant(Serializable):
         this method is significantly cheaper than calling `Variant.genes()`,
         which has to issue many more queries to construct each Gene object.
         """
-        return self.ensembl.gene_ids_at_locus(
+        return self.genome.gene_ids_at_locus(
             self.contig, self.start, self.end)
 
     @property
@@ -364,7 +403,7 @@ class Variant(Serializable):
         this method is significantly cheaper than calling `Variant.genes()`,
         which has to issue many more queries to construct each Gene object.
         """
-        return self.ensembl.gene_names_at_locus(
+        return self.genome.gene_names_at_locus(
             self.contig, self.start, self.end)
 
     @property

@@ -1,5 +1,3 @@
-# Copyright (c) 2015. Mount Sinai School of Medicine
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -71,44 +69,21 @@ def test_vcf_reference_name():
     # after normalization, hg19 should be remapped to GRCh37
     assert variants.reference_names() == {"GRCh37"}
 
-def test_pandas_and_pyvcf_implementations_equivalent():
-    paths = [
-        {'path': data_path("somatic_hg19_14muts.vcf")},
-        {'path': data_path("somatic_hg19_14muts.space_in_sample_name.vcf")},
-        {'path': "/" + data_path("somatic_hg19_14muts.vcf")},
-        {'path': data_path("somatic_hg19_14muts.vcf.gz")},
-        {'path': data_path("multiallelic.vcf")},
-        {'path': data_path("mutect-example.vcf")},
-        {'path': data_path("strelka-example.vcf")},
-        {'path': data_path("mutect-example-headerless.vcf"),
-            'genome': cached_release(75)},
-    ]
-    if RUN_TESTS_REQUIRING_INTERNET:
-        paths.append({'path': VCF_EXTERNAL_URL})
-        paths.append({'path': VCF_EXTERNAL_URL + ".gz"})
-
-    def do_test(kwargs):
-        vcf_pandas = load_vcf_fast(**kwargs)
-        vcf_pyvcf = load_vcf(**kwargs)
-        eq_(vcf_pandas, vcf_pyvcf)
-        eq_(len(vcf_pandas), len(vcf_pyvcf))
-        eq_(vcf_pandas.elements, vcf_pyvcf.elements)
-        eq_(vcf_pandas.metadata, vcf_pyvcf.metadata)
-        assert len(vcf_pandas) > 1
-        assert len(vcf_pyvcf) > 1
-
-    for kwargs in paths:
-        yield (do_test, kwargs)
-
 def test_genome_arg_to_load_vcf():
     variants = load_vcf(VCF_FILENAME)
-    eq_(variants, load_vcf(VCF_FILENAME, genome=75))
-    eq_(variants, load_vcf(VCF_FILENAME, genome=cached_release(75)))
-    eq_(variants, load_vcf(VCF_FILENAME, genome="grch37"))
-    eq_(variants, load_vcf(VCF_FILENAME, genome="GRCh37"))
-    eq_(variants, load_vcf(VCF_FILENAME, genome="b37"))
-    # TODO: actually make hg19 different from b37! They should use
-    # different MT sequences
+    eq_(variants,
+        load_vcf(VCF_FILENAME,
+                 genome=75,
+                 convert_hg19_contig_names=True))
+    eq_(variants,
+        load_vcf(VCF_FILENAME,
+                 genome=cached_release(75),
+                 convert_hg19_contig_names=True))
+    eq_(variants,
+        load_vcf(VCF_FILENAME, genome="grch37", convert_hg19_contig_names=True))
+    eq_(variants, load_vcf(VCF_FILENAME, genome="GRCh37", convert_hg19_contig_names=True))
+    eq_(variants, load_vcf(VCF_FILENAME, genome="b37", convert_hg19_contig_names=True))
+    # hg19 causes different normalization of contig names
     eq_(variants, load_vcf(VCF_FILENAME, genome="hg19"))
 
 def test_vcf_number_entries():
@@ -142,10 +117,9 @@ def test_multiple_alleles_per_line():
     variants = load_vcf(data_path("multiallelic.vcf"))
     assert len(variants) == 2, "Expected 2 variants but got %s" % variants
     variant_list = list(variants)
-    ensembl = variant_list[0].ensembl
     expected_variants = [
-        Variant(1, 1431105, "A", "C", ensembl=ensembl),
-        Variant(1, 1431105, "A", "G", ensembl=ensembl),
+        Variant(1, 1431105, "A", "C", "GRCh37"),
+        Variant(1, 1431105, "A", "G", "GRCh37"),
     ]
     eq_(set(variant_list), set(expected_variants))
 
