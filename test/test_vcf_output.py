@@ -73,12 +73,12 @@ def _do_roundtrip_test(filenames):
     reparsed_variants = load_vcf(tmp_name)
 
     # `==` checks the reference genome, which won't necessarily match.
-    assert all(
-        v1.contig == v2.contig and
-        v1.start == v2.start and
-        v1.ref == v2.ref and
-        v1.start == v2.start
-        for (v1, v2) in zip(variants, reparsed_variants))
+    for (v1, v2) in zip(variants, reparsed_variants):
+        assert (
+            v1.contig == v2.contig and
+            v1.start == v2.start and
+            v1.ref == v2.ref and
+            v1.start == v2.start), (v1, v2)
 
     return (variants, reparsed_variants)
 
