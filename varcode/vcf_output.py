@@ -148,7 +148,7 @@ def variants_to_vcf(variants, variant_to_metadata, out=sys.stdout):
     def build_vcf_record(variant, add_sample_info):
         """Return a list of all the variant's VCF record fields."""
         record = [
-            str(variant.contig),
+            str(variant.original_contig),
             str(variant.original_start),
             get_metadata_field('id', variant),
             variant.original_ref,
@@ -257,7 +257,7 @@ def variants_to_vcf(variants, variant_to_metadata, out=sys.stdout):
     # but if variants from multiple sources have been merged then we might
     # not be able to write out a VCF since the individual variants may be using
     # different coordinate systems
-    genome_names = list({v.genome.reference_name for v in unique_variants_list})
+    genome_names = list({v.genome.reference_name_or_hg19 for v in unique_variants_list})
     if len(genome_names) > 1:
         raise ValueError(
             "Cannot create VCF for variants with multiple reference genomes: %s" % (

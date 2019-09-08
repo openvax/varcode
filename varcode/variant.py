@@ -223,6 +223,20 @@ class Variant(Serializable):
         return self.genome.reference_name
 
     @property
+    def reference_name_or_hg19(self):
+        """
+        Returns the name of the reference associated with this variant or
+        'hg19' if the annotation reference is GRCh37 but the variant comes
+        from sequencing data aligned against hg19.
+
+        Returns str
+        """
+        if self.reference_name == "GRCh37" and self.convert_hg19_contig_names:
+            return "hg19"
+        else:
+            return self.reference_name
+
+    @property
     def ensembl(self):
         """
         Deprecated alias for Variant.genome
