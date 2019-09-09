@@ -169,7 +169,7 @@ def test_hg19_chromosome_names():
 
 def test_contig_name_normalization():
     eq_(Variant(1, 1, "A", "G", normalize_contig_names=True).contig, "1")
-    eq_(Variant("M", 1, "A", "G", normalize_contig_names=False).contig, 1)
+    eq_(Variant("1", 1, "A", "G", normalize_contig_names=False).contig, "1")
 
     # uppercase
     eq_(Variant("chrm", 1, "A", "G", normalize_contig_names=True).contig, "chrM")
