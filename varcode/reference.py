@@ -13,27 +13,36 @@
 # limitations under the License.
 
 from __future__ import print_function, division, absolute_import
+
 from pyensembl import (
     Genome,
     cached_release,
     genome_for_reference_name,
 )
+import pyensembl.species
+
 from typechecks import is_string, is_integer
 import os
 from warnings import warn
 import re
 
-# NCBI builds and hg releases aren't identical
-# but the differences are all on chrM and unplaced contigs
+from .ucsc_reference_names import (
+    ucsc_reference_names,
+    ensembl_to_ucsc_reference_names,
+    ucsc_to_ensembl_reference_names
+)
+
+canonical_reference_names = set(
+    pyensembl.species.Species._reference_names_to_species.keys())
+
+# reference name aliases which preserve contig names
 reference_alias_dict = {
     # human assemblies
-    "NCBI36": ["hg18", "B36", "NCBI36"],
-    "GRCh37": ["hg19", "B37", "NCBI37"],
-    "GRCh38": ["hg38", "B38", "NCBI38"],
+    "NCBI36": ["B36", "NCBI36"],
+    "GRCh37": ["B37", "NCBI37"],
+    "GRCh38": ["B38", "NCBI38"],
     # mouse assemblies
-    "GRCm37": ["mm9"],
     "GRCm38": [
-        "mm10",
         "GCF_000001635.24",  # GRCm38.p4
         "GCF_000001635.23",  # GRCm38.p3
         "GCF_000001635.22",  # GRCm38.p2
@@ -41,6 +50,8 @@ reference_alias_dict = {
         "GCF_000001635.20",  # GRCm38
     ]
 }
+
+
 
 def _most_recent_assembly(assembly_names):
     """
@@ -55,6 +66,8 @@ def _most_recent_assembly(assembly_names):
         x for (y, x) in sorted(zip(match_recency, assembly_names), reverse=True)][0]
     return most_recent
 
+def choose_best_match(assembly_names):
+
 
 def infer_reference_name(reference_name_or_path):
     """
@@ -64,14 +77,20 @@ def infer_reference_name(reference_name_or_path):
     """
     # identify all cases where reference name or path matches candidate aliases
     reference_file_name = os.path.basename(reference_name_or_path)
+    reference_file_name_lower = reference_file_name.lower()
+    reference_name_or_path_lower = reference_name_or_path.lower()
     matches = {'file_name': list(), 'full_path': list()}
-    for assembly_name in reference_alias_dict.keys():
-        candidate_list = [assembly_name] + reference_alias_dict[assembly_name]
+    for assembly_name in canonical_reference_names:
+
+        # if reference_name_or_path_lower.
+        candidate_list = [assembly_name] + reference_alias_dict.get(assembly_name, [])
         for candidate in candidate_list:
             if candidate.lower() in reference_file_name.lower():
                 matches['file_name'].append(assembly_name)
             elif candidate.lower() in reference_name_or_path.lower():
                 matches['full_path'].append(assembly_name)
+        if assembly_name in GRC_to_ucsc_dict:
+            if
     # remove duplicate matches (happens due to overlapping aliases)
     matches['file_name'] = list(set(matches['file_name']))
     matches['full_path'] = list(set(matches['full_path']))

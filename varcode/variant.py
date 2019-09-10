@@ -47,7 +47,7 @@ class Variant(Serializable):
         "original_genome",
         "genome",
         "normalize_contig_names",
-        "convert_hg19_contig_names",
+        "convert_ucsc_contig_names",
         "allow_extended_nucleotides",
         "original_contig",
         "original_ref",
@@ -67,7 +67,7 @@ class Variant(Serializable):
             ensembl=None,
             allow_extended_nucleotides=False,
             normalize_contig_names=True,
-            convert_hg19_contig_names=False):
+            convert_ucsc_contig_names=False):
         """
         Construct a Variant object.
 
@@ -102,11 +102,11 @@ class Variant(Serializable):
             to uppercase (e.g. "chrx" -> "chrX"). If you don't want
             this behavior then pass normalize_contig_name=False.
 
-        convert_hg19_contig_names : bool
+        convert_ucsc_contig_names : bool
             Setting this argument to True signifies that a variant was
-            originally aligned against hg19 but is being annotated with
-            GRCh37 and needs chromosome names to be coverted, such as
-            "chr1" to "1".
+            originally aligned against UCSC reference (e.g. hg19 or mm10) but is
+            being annotated with an Ensembl reference (e.g. GRCh37 or GRCm38)
+            and needs chromosome names to be coverted, such as "chr1" to "1".
 
         """
         # we renamed the 'ensembl' argument to the more informative 'genome'
@@ -142,18 +142,21 @@ class Variant(Serializable):
                  "instance, got %s : %s") % (type(genome), str(genome)))
 
         self.normalize_contig_names = normalize_contig_names
-        self.convert_hg19_contig_names = convert_hg19_contig_names
+        self.convert_ucsc_contig_names = convert_ucsc_contig_names
         self.allow_extended_nucleotides = allow_extended_nucleotides
         self.original_contig = contig
-        self.contig = normalize_chromosome(contig) if normalize_contig_names else contig
+
+        contig = normalize_chromosome(contig) if normalize_contig_names else contig
 
         # trim off the starting "chr" from hg19 chromosome names to make them
         # match GRCh37, also convert "chrM" to "MT".
-        if self.convert_hg19_contig_names:
-            if self.contig.startswith("chr"):
-                self.contig = self.contig[3:]
-            if self.contig == "M":
-                self.contig = "MT"
+        if self.convert_ucsc_contig_names:
+            if contig.startswith("chr"):
+                contig = contig[3:]
+            if contig == "M":
+                contig = "MT"
+
+        self.contig = contig
 
         if ref != alt and ref in STANDARD_NUCLEOTIDES and alt in STANDARD_NUCLEOTIDES:
             # Optimization for common case.
@@ -223,7 +226,7 @@ class Variant(Serializable):
         return self.genome.reference_name
 
     @property
-    def reference_name_or_hg19(self):
+    def ucsc_reference_name(self):
         """
         Returns the name of the reference associated with this variant or
         'hg19' if the annotation reference is GRCh37 but the variant comes
@@ -231,8 +234,12 @@ class Variant(Serializable):
 
         Returns str
         """
-        if self.reference_name == "GRCh37" and self.convert_hg19_contig_names:
+        if self.reference_name == "GRCh37" and self.convert_ucsc_contig_names:
             return "hg19"
+        elif self.reference_name == "GRCh38" and self.convert_ucsc_contig_names:
+            return "hg38"
+        elif self.reference_name == "GRCm38" and self.convert_ucsc_contig_names:
+            return "mm10"
         else:
             return self.reference_name
 
