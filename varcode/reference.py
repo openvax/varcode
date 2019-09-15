@@ -14,6 +14,8 @@
 
 from __future__ import print_function, division, absolute_import
 
+from collections import defaultdict
+
 from pyensembl import (
     Genome,
     cached_release,
@@ -26,17 +28,12 @@ import os
 from warnings import warn
 import re
 
-from .ucsc_reference_names import (
-    ucsc_reference_names,
-    ensembl_to_ucsc_reference_names,
-    ucsc_to_ensembl_reference_names
-)
 
 canonical_reference_names = set(
     pyensembl.species.Species._reference_names_to_species.keys())
 
 # reference name aliases which preserve contig names
-reference_alias_dict = {
+ensembl_reference_aliases = {
     # human assemblies
     "NCBI36": ["B36", "NCBI36"],
     "GRCh37": ["B37", "NCBI37"],
@@ -52,22 +49,103 @@ reference_alias_dict = {
 }
 
 
+ucsc_to_ensembl_reference_names = {
+    # mouse
+    "mm9": "GRCm37",
+    "mm10": "GRCm38",
 
-def _most_recent_assembly(assembly_names):
+    # human
+    "hg18": "NCBI36",
+    "hg19": "GRCh37",
+    "hg38": "GRCh38",
+
+    # cat
+    "felCat9": "Felis_catus_9.0",
+    "felCat8": "Felis_catus_8.0",
+
+    # dog
+    "canFam3": "CanFam3.1",
+    "canFam2": "CanFam2.0",
+    "canFam1": "CanFam1.0",
+
+    # rat
+    "rn6": "Rnor_6.0",
+    "rn5": "Rnor_5.0",
+
+    # chicken
+    "galGal6": "Gallus_gallus_6.0",
+    "galGal5": "Gallus_gallus_5.0",
+    "galGal4": "Gallus_gallus_4.0",
+
+    # TODO: add Zebrafish to PyEnsembl
+    #   "danRer11": "GRCz11",
+    #   "danRer10": "GRCz10",
+
+    # TODO: add cow to PyEnsembl
+    #    "bosTau9": "ARS-UCD1.2",
+    #    "bosTau8": "UMD3.1",
+
+    # TODO: add pig to PyEnsembl
+    #   "susScr11": "Sscrofa11.1",
+    #   "susScr3": "Sscrofa10.2",
+    #   "susScr2": "Sscrofa9.2",
+}
+
+ucsc_reference_names = set(ucsc_to_ensembl_reference_names.keys())
+
+lowercase_ucsc_reference_names = {name.lower() for name in ucsc_reference_names}
+
+ensembl_to_ucsc_reference_names = {v: k for (k, v) in ucsc_reference_names}
+
+def is_ucsc_reference_name(name):
+    return name.strip().lower() in lowercase_ucsc_reference_names
+
+
+# merge the UCSC aliases, which are only an approximate correspondence between
+# genomes (e.g. hg19 isn't exactly GRCh37) and the more straightforward
+# aliases like B37->GRCh37
+
+alias_dict_with_ucsc = ensembl_reference_aliases.copy()
+
+for ensembl_name, ucsc_name in ensembl_to_ucsc_reference_names.items():
+    if ensembl_name in alias_dict_with_ucsc:
+        alias_dict_with_ucsc[ensembl_name].append(ucsc_name)
+    else:
+        alias_dict_with_ucsc[ensembl_name] = [ucsc_name]
+
+
+def most_recent_assembly_name(assembly_names):
     """
-    Given list of (in this case, matched) assemblies, identify the most recent
-       ("recency" here is determined by sorting based on the numeric element of the assembly name)
+    Given list of (in this case, matched) assemblies, identify the most recent,
+    where "recency" is determined by sorting based on the numeric element of
+    the assembly name.
     """
     match_recency = [
         int(re.search('\d+', assembly_name).group())
         for assembly_name in assembly_names
     ]
-    most_recent = [
-        x for (y, x) in sorted(zip(match_recency, assembly_names), reverse=True)][0]
+    sorted_list_of_names = [
+        assembly
+        for (number, assembly) in
+        sorted(zip(match_recency, assembly_names), reverse=True)]
+    most_recent = sorted_list_of_names[0]
     return most_recent
 
-def choose_best_match(assembly_names):
+def choose_best_assembly_name(assembly_names):
+    assembly_names = set(assembly_names)
 
+    if len(assembly_names) == 1:
+        return list(assembly_names)[0]
+
+    assembly_names_ucsc = {
+        name for name in assembly_names if is_ucsc_reference_name(name)}
+    assembly_names_ensembl = assembly_names.difference(assembly_names_ucsc)
+    if len(assembly_names_ensembl) > 0:
+        # drop the UCSC reference names and pick only between the Ensembl
+        # compatible names
+        return most_recent_assembly_name(assembly_names_ensembl)
+    else:
+        return most_recent_assembly_name(assembly_names_ucsc)
 
 def infer_reference_name(reference_name_or_path):
     """
@@ -75,39 +153,47 @@ def infer_reference_name(reference_name_or_path):
     that reference's FASTA file), return its canonical name
     as used by Ensembl.
     """
-    # identify all cases where reference name or path matches candidate aliases
-    reference_file_name = os.path.basename(reference_name_or_path)
-    reference_file_name_lower = reference_file_name.lower()
+
     reference_name_or_path_lower = reference_name_or_path.lower()
-    matches = {'file_name': list(), 'full_path': list()}
+
+    # if reference_name_or_path is an actual genome name, like GRCh37 then
+    # reference_filename_lower will just be the lowercase of the genome name
+    # ("grch37) but if it was a full path to a reference file, such as
+    # '/path/to/GRCh37.fasta' then reference_filename_lower will be
+    # 'grch37.fasta'
+    reference_filename_lower = os.path.basename(reference_name_or_path_lower)
+
+
+    file_name_matches = []
+    full_path_matches = []
     for assembly_name in canonical_reference_names:
 
         # if reference_name_or_path_lower.
-        candidate_list = [assembly_name] + reference_alias_dict.get(assembly_name, [])
+        candidate_list = [assembly_name] + alias_dict_with_ucsc.get(assembly_name, [])
         for candidate in candidate_list:
-            if candidate.lower() in reference_file_name.lower():
-                matches['file_name'].append(assembly_name)
-            elif candidate.lower() in reference_name_or_path.lower():
-                matches['full_path'].append(assembly_name)
-        if assembly_name in GRC_to_ucsc_dict:
-            if
+            if candidate.lower() in reference_filename_lower:
+                file_name_matches.append(assembly_name)
+            elif candidate.lower() in reference_name_or_path_lower:
+                full_path_matches.append(assembly_name)
+
     # remove duplicate matches (happens due to overlapping aliases)
-    matches['file_name'] = list(set(matches['file_name']))
-    matches['full_path'] = list(set(matches['full_path']))
+    file_name_matches = list(set(file_name_matches))
+    full_path_matches = list(set(full_path_matches))
+
     # given set of existing matches, choose one to return
     # (first select based on file_name, then full path. If multiples, use most recent)
-    if len(matches['file_name']) == 1:
-        match = matches['file_name'][0]
-    elif len(matches['file_name']) > 1:
+    if len(file_name_matches) == 1:
+        match = file_name_matches[0]
+    elif len(file_name_matches) > 1:
         # separate logic for >1 vs 1 to give informative warning
-        match = _most_recent_assembly(matches['file_name'])
+        match = choose_best_assembly_name(file_name_matches)
         warn(
             ('More than one reference ({}) matches path in header ({}); '
              'the most recent one ({}) was used.').format(
-                ','.join(matches['file_name']), reference_file_name, match))
-    elif len(matches['full_path']) >= 1:
+                ','.join(file_name_matches), reference_name_or_path, match))
+    elif len(full_path_matches) >= 1:
         # combine full-path logic since warning is the same
-        match = _most_recent_assembly(matches['full_path'])
+        match = choose_best_assembly_name(full_path_matches)
         warn((
             'Reference could not be matched against filename ({}); '
             'using best match against full path ({}).').format(
