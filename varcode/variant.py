@@ -14,22 +14,19 @@
 
 from __future__ import print_function, division, absolute_import
 
-import warnings
-
 from pyensembl import (
-    cached_release,
-    genome_for_reference_name,
     Genome,
 )
 from pyensembl.locus import normalize_chromosome
 from serializable import Serializable
-from typechecks import require_instance, is_string
+from typechecks import require_instance
 
 from .nucleotides import (
     normalize_nucleotide_string,
     STANDARD_NUCLEOTIDES,
     is_purine
 )
+from .reference import  infer_genome, infer_genome_and_convert_ucsc_to_ensembl
 from .string_helpers import trim_shared_flanking_strings
 from .effects import (
     predict_variant_effects,
@@ -67,7 +64,7 @@ class Variant(Serializable):
             ensembl=None,
             allow_extended_nucleotides=False,
             normalize_contig_names=True,
-            convert_ucsc_contig_names=False):
+            convert_ucsc_to_ensembl=True):
         """
         Construct a Variant object.
 
@@ -102,61 +99,56 @@ class Variant(Serializable):
             to uppercase (e.g. "chrx" -> "chrX"). If you don't want
             this behavior then pass normalize_contig_name=False.
 
-        convert_ucsc_contig_names : bool
-            Setting this argument to True signifies that a variant was
-            originally aligned against UCSC reference (e.g. hg19 or mm10) but is
-            being annotated with an Ensembl reference (e.g. GRCh37 or GRCm38)
-            and needs chromosome names to be coverted, such as "chr1" to "1".
-
+        convert_ucsc_to_ensembl : bool
+            Setting this argument to True means that UCSC reference genomes
+            (e.g. "hg19") should be replaced with equivalent Ensembl genomes.
+            This also causes chromosome names to be coverted,
+            such as "chr1" to "1".
         """
-        # we renamed the 'ensembl' argument to the more informative 'genome'
-        # but are keeping a deprecated 'ensembl' for backwards compat.
-        # Now have to check to see if both arguments are being used, which is
-        # an error.
-        if genome is None:
-            if ensembl is None:
-                genome = "GRCh38"
-            else:
-                genome = ensembl
-        elif ensembl is not None:
-            raise ValueError(
-                "Cannot specify both 'genome' and 'ensembl' arguments")
 
         # first initialize the _genes and _transcripts fields we use to cache
         # lists of overlapping pyensembl Gene and Transcript objects
         self._genes = self._transcripts = None
 
+        # store the options which affect how properties of this variant
+        # may be changed/transformed
+        self.normalize_contig_names = normalize_contig_names
+        self.convert_ucsc_to_ensembl = convert_ucsc_to_ensembl
+        self.allow_extended_nucleotides = allow_extended_nucleotides
 
         # user might supply Ensembl release as an integer, reference name,
         # or pyensembl.Genome object
         self.original_genome = genome
-        if isinstance(genome, Genome):
-            self.genome = genome
-        elif isinstance(genome, int):
-            self.genome = cached_release(genome)
-        elif isinstance(genome, str):
-            self.genome = genome_for_reference_name(genome)
+
+        # we renamed the 'ensembl' argument to the more informative 'genome'
+        # but are keeping a deprecated 'ensembl' for backwards compat.
+        # Now have to check to see if both arguments are being used, which is
+        # an error.
+        if genome is None and ensembl is None:
+            genome = "GRCh38"
+        elif genome is None:
+            genome = ensembl
+        elif ensembl is not None:
+            raise ValueError(
+                "Cannot specify both 'genome' and 'ensembl' arguments")
+
+        if convert_ucsc_to_ensembl:
+            self.genome, self.original_genome_was_ucsc = \
+                infer_genome_and_convert_ucsc_to_ensembl(genome)
         else:
-            raise TypeError(
-                ("Expected genome to be an int, string, or pyensembl.Genome "
-                 "instance, got %s : %s") % (type(genome), str(genome)))
+            self.genome = infer_genome(genome)
+            self.original_genome_was_ucsc = False
 
-        self.normalize_contig_names = normalize_contig_names
-        self.convert_ucsc_contig_names = convert_ucsc_contig_names
-        self.allow_extended_nucleotides = allow_extended_nucleotides
         self.original_contig = contig
-
-        contig = normalize_chromosome(contig) if normalize_contig_names else contig
+        self.contig = normalize_chromosome(contig) if normalize_contig_names else contig
 
         # trim off the starting "chr" from hg19 chromosome names to make them
         # match GRCh37, also convert "chrM" to "MT".
         if self.convert_ucsc_contig_names:
-            if contig.startswith("chr"):
-                contig = contig[3:]
-            if contig == "M":
-                contig = "MT"
-
-        self.contig = contig
+            if self.contig.startswith("chr"):
+                self.contig = self.contig[3:]
+            if self.contig == "M":
+                self.contig = "MT"
 
         if ref != alt and ref in STANDARD_NUCLEOTIDES and alt in STANDARD_NUCLEOTIDES:
             # Optimization for common case.
@@ -217,6 +209,23 @@ class Variant(Serializable):
             self.end = self.start + len(trimmed_ref) - 1
 
     @property
+    def original_reference_name(self):
+        """
+        Special property added to help distinguish UCSC reference names
+        from their Ensembl surrogates. If a UCSC reference name was
+        given for the original genome property, then return it here.
+
+        Returns
+        -------
+        str
+        """
+        if self.original_genome_was_ucsc:
+            return self.original_genome
+        else:
+            return self.reference_name
+
+
+    @property
     def reference_name(self):
         """
         Name of reference genome associated with this variant.
@@ -224,24 +233,6 @@ class Variant(Serializable):
         Returns str
         """
         return self.genome.reference_name
-
-    @property
-    def ucsc_reference_name(self):
-        """
-        Returns the name of the reference associated with this variant or
-        'hg19' if the annotation reference is GRCh37 but the variant comes
-        from sequencing data aligned against hg19.
-
-        Returns str
-        """
-        if self.reference_name == "GRCh37" and self.convert_ucsc_contig_names:
-            return "hg19"
-        elif self.reference_name == "GRCh38" and self.convert_ucsc_contig_names:
-            return "hg38"
-        elif self.reference_name == "GRCm38" and self.convert_ucsc_contig_names:
-            return "mm10"
-        else:
-            return self.reference_name
 
     @property
     def ensembl(self):

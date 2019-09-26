@@ -26,7 +26,7 @@ import pandas
 from typechecks import require_string
 import vcf as pyvcf
 
-from .reference import infer_genome_and_detect_hg19
+from .reference import infer_genome_and_convert_ucsc_to_ensembl
 from .variant import Variant, variant_ascending_position_sort_key
 from .variant_collection import VariantCollection
 
@@ -148,7 +148,7 @@ def load_vcf(
     # data. We can close the file after that.
     handle = PyVCFReaderFromPathOrURL(path)
     handle.close()
-    genome, using_grch37_for_hg19 = infer_genome_from_vcf(
+    genome, genome_was_ucsc = infer_genome_from_vcf(
         genome,
         handle.vcf_reader,
         reference_vcf_key)
@@ -489,16 +489,17 @@ def infer_genome_from_vcf(genome, vcf_reader, reference_vcf_key):
     """
     Helper function to make a pyensembl.Genome instance, also
     returns a boolean flag indicating whether the original reference
-    name was "hg19" but GRCh37 is being used as a substitute.
+    name was UCSC (e.g. "hg19") but an Ensembl equivalent (e.g. GRCh37)
+    is being used as a substitute.
     """
     if genome:
-        return infer_genome_and_detect_hg19(genome)
+        return infer_genome_and_convert_ucsc_to_ensembl(genome)
     elif reference_vcf_key not in vcf_reader.metadata:
         raise ValueError("Unable to infer reference genome for %s" % (
             vcf_reader.filename,))
     else:
         reference_path = vcf_reader.metadata[reference_vcf_key]
-        return infer_genome_and_detect_hg19(reference_path)
+        return infer_genome_and_convert_ucsc_to_ensembl(reference_path)
 
 
 def parse_url_or_path(s):

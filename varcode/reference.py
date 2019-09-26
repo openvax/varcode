@@ -28,6 +28,8 @@ import os
 from warnings import warn
 import re
 
+from .common import memoize
+
 
 canonical_reference_names = set(
     pyensembl.species.Species._reference_names_to_species.keys())
@@ -123,8 +125,22 @@ ensembl_to_ucsc_reference_names = {
     v: k
     for (k, v) in ucsc_to_ensembl_reference_names.items()}
 
+
+@memoize
 def is_ucsc_reference_name(name):
-    return name.strip().lower() in lowercase_ucsc_reference_names
+    """
+    Is the given genome name one of the known UCSC genomes?
+
+    Parameters
+    ----------
+    name : str
+
+    Returns
+    -------
+    bool
+    """
+    return (name.strip().lower() in lowercase_ucsc_reference_names)
+
 
 # merge the UCSC aliases, which are only an approximate correspondence between
 # genomes (e.g. hg19 isn't exactly GRCh37) and the more straightforward
@@ -244,6 +260,7 @@ def _collect_candidate_matches(reference_name_or_path):
     full_path_matches = list(set(full_path_matches))
     return file_name_matches, full_path_matches
 
+@memoize
 def infer_reference_name(reference_name_or_path):
     """
     Given a string containing a reference name (such as a path to
@@ -276,19 +293,26 @@ def infer_reference_name(reference_name_or_path):
     return match
 
 
-def infer_genome_and_detect_hg19(genome_object_string_or_int):
+@memoize
+def infer_genome_and_convert_ucsc_to_ensembl(
+        genome_object_string_or_int):
     """
     Returns a pair of (Genome, bool) where the bool corresponds to whether
-    the input requested "hg19" and GRCh37 was returned as a substitute.
+    the input requested a UCSC genome (e.g. "hg19") and an Ensembl (e.g. GRCh37)
+    was returned as a substitute.
     """
-    genome = infer_genome(genome_object_string_or_int)
-    if is_string(genome_object_string_or_int) and "hg19" in genome_object_string_or_int.lower():
-        grch37_used_for_hg19 = (genome.reference_name == "GRCh37")
+    if is_string(genome_object_string_or_int) and is_ucsc_reference_name(genome_object_string_or_int):
+        genome_object_string_or_int = \
+            ucsc_to_ensembl_reference_names[genome_object_string_or_int]
+        converted = True
     else:
-        grch37_used_for_hg19 = False
-    return genome, grch37_used_for_hg19
+        converted = False
+
+    genome = infer_genome(genome_object_string_or_int)
+    return genome, converted
 
 
+@memoize
 def infer_genome(genome_object_string_or_int):
     """
     If given an integer, return associated human EnsemblRelease for that
