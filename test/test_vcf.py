@@ -74,15 +74,15 @@ def test_genome_arg_to_load_vcf():
     eq_(variants,
         load_vcf(VCF_FILENAME,
                  genome=75,
-                 convert_hg19_contig_names=True))
+                 convert_ucsc_to_ensembl=True))
     eq_(variants,
         load_vcf(VCF_FILENAME,
                  genome=cached_release(75),
-                 convert_hg19_contig_names=True))
+                 convert_ucsc_to_ensembl=True))
     eq_(variants,
-        load_vcf(VCF_FILENAME, genome="grch37", convert_hg19_contig_names=True))
-    eq_(variants, load_vcf(VCF_FILENAME, genome="GRCh37", convert_hg19_contig_names=True))
-    eq_(variants, load_vcf(VCF_FILENAME, genome="b37", convert_hg19_contig_names=True))
+        load_vcf(VCF_FILENAME, genome="grch37", convert_ucsc_to_ensembl=True))
+    eq_(variants, load_vcf(VCF_FILENAME, genome="GRCh37", convert_ucsc_to_ensembl=True))
+    eq_(variants, load_vcf(VCF_FILENAME, genome="b37", convert_ucsc_to_ensembl=True))
     # hg19 causes different normalization of contig names
     eq_(variants, load_vcf(VCF_FILENAME, genome="hg19"))
 

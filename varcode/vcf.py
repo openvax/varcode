@@ -46,7 +46,7 @@ def load_vcf(
         sort_key=variant_ascending_position_sort_key,
         distinct=True,
         normalize_contig_names=True,
-        convert_hg19_contig_names=False):
+        convert_ucsc_to_ensembl=False):
     """
     Load reference name and Variant objects from the given VCF filename.
 
@@ -98,7 +98,7 @@ def load_vcf(
         to uppercase (e.g. "chrx" -> "chrX"). If you don't want
         this behavior then pass normalize_contig_names=False.
 
-    convert_hg19_contig_names : bool, default False
+    convert_ucsc_to_ensembl : bool, default False
         Convert chromosome names from hg19 (e.g. "chr1") to equivalent names
         for GRCh37 (e.g. "1").
     """
@@ -185,7 +185,7 @@ def load_vcf(
             'ensembl': genome,
             'allow_extended_nucleotides': allow_extended_nucleotides,
             'normalize_contig_names': normalize_contig_names,
-            'convert_hg19_contig_names': convert_hg19_contig_names or using_grch37_for_hg19},
+            'convert_ucsc_to_ensembl': convert_ucsc_to_ensembl or using_grch37_for_hg19},
         variant_collection_kwargs={
             'sort_key': sort_key,
             'distinct': distinct})
