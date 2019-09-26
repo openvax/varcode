@@ -14,9 +14,6 @@
 
 from __future__ import print_function, division, absolute_import
 
-from pyensembl import (
-    Genome,
-)
 from pyensembl.locus import normalize_chromosome
 from serializable import Serializable
 from typechecks import require_instance
@@ -44,6 +41,7 @@ class Variant(Serializable):
         "original_genome",
         "genome",
         "normalize_contig_names",
+        "convert_ucsc_to_ensembl",
         "convert_ucsc_contig_names",
         "allow_extended_nucleotides",
         "original_contig",
@@ -133,11 +131,11 @@ class Variant(Serializable):
                 "Cannot specify both 'genome' and 'ensembl' arguments")
 
         if convert_ucsc_to_ensembl:
-            self.genome, self.original_genome_was_ucsc = \
+            self.genome, self.convert_ucsc_contig_names = \
                 infer_genome_and_convert_ucsc_to_ensembl(genome)
         else:
             self.genome = infer_genome(genome)
-            self.original_genome_was_ucsc = False
+            self.convert_ucsc_contig_names = False
 
         self.original_contig = contig
         self.contig = normalize_chromosome(contig) if normalize_contig_names else contig
@@ -180,8 +178,8 @@ class Variant(Serializable):
         # normalize the variant by trimming any shared prefix or suffix
         # between ref and alt nucleotide sequences and then
         # offset the variant position in a strand-dependent manner
-        (trimmed_ref, trimmed_alt, prefix, suffix) = (
-            trim_shared_flanking_strings(self.original_ref, self.original_alt))
+        (trimmed_ref, trimmed_alt, prefix, _) = \
+            trim_shared_flanking_strings(self.original_ref, self.original_alt)
 
         self.ref = trimmed_ref
         self.alt = trimmed_alt
@@ -219,7 +217,7 @@ class Variant(Serializable):
         -------
         str
         """
-        if self.original_genome_was_ucsc:
+        if self.convert_ucsc_to_ensembl:
             return self.original_genome
         else:
             return self.reference_name
@@ -292,7 +290,7 @@ class Variant(Serializable):
             genome=self.genome,
             allow_extended_nucleotides=self.allow_extended_nucleotides,
             normalize_contig_names=self.normalize_contig_names,
-            convert_hg19_contig_names=self.convert_hg19_contig_names)
+            convert_ucsc_to_ensembl=self.convert_ucsc_to_ensembl)
 
     @property
     def trimmed_ref(self):

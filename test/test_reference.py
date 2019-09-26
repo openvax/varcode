@@ -14,37 +14,41 @@
 
 from nose.tools import eq_
 import warnings
-from varcode.reference import infer_reference_name, reference_alias_dict, _most_recent_assembly
+from varcode.reference import infer_reference_name, ensembl_reference_aliases, most_recent_assembly_name
 
 ## test cases are given as 
 ## expected response: list of inputs
 reference_test_cases = {
-    'NCBI36': ['ncbi36p2.fasta', 'b36.fasta', '##reference=file:///var/lib/cwl/ncbi36/homo_sapiens.d1.vd1.fa'],
-    'GRCh38': ['grch38p2.fasta', 
-                '##reference=file:///var/lib/cwl/job367935311_index_001zdr/GRCh38.d1.vd1.fa',
-                '##reference=file:///var/lib/cwl/job367935311_index_001zdr/GRCh38.job36.d1.vd1.fa',
-                ],
+    'NCBI36': [
+        'ncbi36p2.fasta', 
+        'b36.fasta', 
+        '##reference=file:///var/lib/cwl/ncbi36/homo_sapiens.d1.vd1.fa'],
+    'GRCh38': [
+        'grch38p2.fasta', 
+        '##reference=file:///var/lib/cwl/job367935311_index_001zdr/GRCh38.d1.vd1.fa',
+        '##reference=file:///var/lib/cwl/job367935311_index_001zdr/GRCh38.job36.d1.vd1.fa',
+    ],
 }
 
 def test_most_recent_assembly():
-    eq_(_most_recent_assembly(['ncbi36', 'grch38']), 'grch38')
-    eq_(_most_recent_assembly(['ncbi36', 'grch38', '37mm']), 'grch38')
-    eq_(_most_recent_assembly(['ncbi36']), 'ncbi36')
-    eq_(_most_recent_assembly(['ncbi36', '35']), 'ncbi36')
+    eq_(most_recent_assembly_name(['ncbi36', 'grch38']), 'grch38')
+    eq_(most_recent_assembly_name(['ncbi36', 'grch38', '37mm']), 'grch38')
+    eq_(most_recent_assembly_name(['ncbi36']), 'ncbi36')
+    eq_(most_recent_assembly_name(['ncbi36', '35']), 'ncbi36')
 
 
 def test_infer_reference_name_aliases():
     with warnings.catch_warnings(record=True) as w:
-        for assembly_name in reference_alias_dict.keys():
-            candidate_list = [assembly_name] + reference_alias_dict[assembly_name]
+        for assembly_name, aliases in ensembl_reference_aliases.items():
+            candidate_list = [assembly_name] + list(aliases)
             for candidate in candidate_list:
                 eq_(infer_reference_name(candidate), assembly_name)
 
 
 def test_infer_reference_name_test_cases():
-    with warnings.catch_warnings(record=True) as w:
-        for assembly_name in reference_test_cases.keys():
-            candidate_list = [assembly_name] + reference_test_cases[assembly_name]
+    with warnings.catch_warnings(record=True):
+        for assembly_name, aliases in reference_test_cases.items():
+            candidate_list = [assembly_name] + list(aliases)
             for candidate in candidate_list:
                 eq_(infer_reference_name(candidate), assembly_name)
 

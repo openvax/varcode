@@ -15,6 +15,9 @@
 from __future__ import print_function, division, absolute_import
 
 from collections import defaultdict
+import os
+from warnings import warn
+import re
 
 from pyensembl import (
     Genome,
@@ -22,14 +25,9 @@ from pyensembl import (
     genome_for_reference_name,
 )
 import pyensembl.species
-
 from typechecks import is_string, is_integer
-import os
-from warnings import warn
-import re
 
 from .common import memoize
-
 
 canonical_reference_names = set(
     pyensembl.species.Species._reference_names_to_species.keys())
@@ -49,7 +47,7 @@ def _initialize_ensembl_alias_dict():
     alias_dict = defaultdict(list)
 
     for ensembl_reference_name in canonical_reference_names:
-        no_dash =  ensembl_reference_name.replace("_", "")
+        no_dash = ensembl_reference_name.replace("_", "")
         no_hyphen = ensembl_reference_name.replace("-", "")
         neither_sep = no_hyphen.replace("_", "")
         for alias in {no_dash, no_hyphen, neither_sep}:
@@ -68,11 +66,11 @@ ensembl_reference_aliases["GRCh38"].extend(["B38", "NCBI38"])
 
 # mouse assemblies
 ensembl_reference_aliases["GRCm38"].extend([
-        "GCF_000001635.24",  # GRCm38.p4
-        "GCF_000001635.23",  # GRCm38.p3
-        "GCF_000001635.22",  # GRCm38.p2
-        "GCF_000001635.21",  # GRCm38.p1
-        "GCF_000001635.20",  # GRCm38
+    "GCF_000001635.24",  # GRCm38.p4
+    "GCF_000001635.23",  # GRCm38.p3
+    "GCF_000001635.22",  # GRCm38.p2
+    "GCF_000001635.21",  # GRCm38.p1
+    "GCF_000001635.20",  # GRCm38
 ])
 
 ucsc_to_ensembl_reference_names = {
@@ -155,23 +153,24 @@ def _merge_ensembl_aliases_with_ucsc():
     -------
     dict
     """
-    alias_dict_with_ucsc = ensembl_reference_aliases.copy()
-    for ensembl_name, ucsc_name in ensembl_to_ucsc_reference_names.items():
-        if ensembl_name in alias_dict_with_ucsc:
-            alias_dict_with_ucsc[ensembl_name].append(ucsc_name)
+    result = ensembl_reference_aliases.copy()
+    for ensembl_name, ucsc_name in ucsc_to_ensembl_reference_names.items():
+        if ensembl_name in result:
+            result[ensembl_name].append(ucsc_name)
         else:
-            alias_dict_with_ucsc[ensembl_name] = [ucsc_name]
+            result[ensembl_name] = [ucsc_name]
+    return result
 
 alias_dict_with_ucsc = _merge_ensembl_aliases_with_ucsc()
 
-def _most_recent_assembly_name(assembly_names):
+def most_recent_assembly_name(assembly_names):
     """
     Given list of (in this case, matched) assemblies, identify the most recent,
     where "recency" is determined by sorting based on the numeric element of
     the assembly name.
     """
     match_recency = [
-        int(re.search('\d+', assembly_name).group())
+        int(re.search(r'\d+', assembly_name).group())
         for assembly_name in assembly_names
     ]
     sorted_list_of_names = [
@@ -182,7 +181,7 @@ def _most_recent_assembly_name(assembly_names):
     return most_recent
 
 
-def _choose_best_assembly_name(assembly_names):
+def choose_best_assembly_name(assembly_names):
     """
     Given a list of reference genome names returns the best according to the
     following criteria:
@@ -205,12 +204,12 @@ def _choose_best_assembly_name(assembly_names):
     assembly_names_ucsc = {
         name for name in assembly_names if is_ucsc_reference_name(name)}
     assembly_names_ensembl = assembly_names.difference(assembly_names_ucsc)
-    if len(assembly_names_ensembl) > 0:
+    if assembly_names_ensembl:
         # drop the UCSC reference names and pick only between the Ensembl
         # compatible names
-        return _most_recent_assembly_name(assembly_names_ensembl)
+        return most_recent_assembly_name(assembly_names_ensembl)
     else:
-        return _most_recent_assembly_name(assembly_names_ucsc)
+        return most_recent_assembly_name(assembly_names_ucsc)
 
 def _collect_candidate_matches(reference_name_or_path):
     """
@@ -275,14 +274,14 @@ def infer_reference_name(reference_name_or_path):
         match = file_name_matches[0]
     elif len(file_name_matches) > 1:
         # separate logic for >1 vs 1 to give informative warning
-        match = _choose_best_assembly_name(file_name_matches)
+        match = choose_best_assembly_name(file_name_matches)
         warn(
             ('More than one reference ({}) matches path in header ({}); '
              'the most recent one ({}) was used.').format(
                 ','.join(file_name_matches), reference_name_or_path, match))
     elif len(full_path_matches) >= 1:
         # combine full-path logic since warning is the same
-        match = _choose_best_assembly_name(full_path_matches)
+        match = choose_best_assembly_name(full_path_matches)
         warn((
             'Reference could not be matched against filename ({}); '
             'using best match against full path ({}).').format(
