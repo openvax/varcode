@@ -19,11 +19,10 @@ import os
 from warnings import warn
 import re
 
-from pyensembl import (
-    Genome,
-    cached_release,
-    genome_for_reference_name,
-)
+from pyensembl import Genome
+from pyensembl import cached_release as cached_ensembl_release
+from pyensembl import genome_for_reference_name as get_genome_for_ensembl_reference_name
+
 import pyensembl.species
 from typechecks import is_string, is_integer
 
@@ -293,47 +292,60 @@ def infer_reference_name(reference_name_or_path):
 
 
 @memoize
-def infer_genome_and_convert_ucsc_to_ensembl(
-        genome_object_string_or_int):
+def infer_genome_for_reference_name(reference_name):
     """
-    Returns a pair of (Genome, bool) where the bool corresponds to whether
-    the input requested a UCSC genome (e.g. "hg19") and an Ensembl (e.g. GRCh37)
-    was returned as a substitute.
+    First infer a canonical Ensembl or UCSC reference name
+    (e.g. hg19 or GRCh37) and if it's a UCSC genome then map it
+    to the equivalent in Ensembl.
+
+    Parameters
+    ----------
+    reference_name : str
+
+    Returns
+    -------
+    pyensembl.EnsemblRelease and a boolean flag indicating whether
+    UCSC genome was converted to Ensembl.
     """
-    if is_string(genome_object_string_or_int) and is_ucsc_reference_name(genome_object_string_or_int):
-        genome_object_string_or_int = \
-            ucsc_to_ensembl_reference_names[genome_object_string_or_int]
-        converted = True
-    else:
-        converted = False
-
-    genome = infer_genome(genome_object_string_or_int)
-    return genome, converted
-
+    converted_ucsc_to_ensembl = False
+    reference_name = infer_reference_name(reference_name)
+    if is_ucsc_reference_name(reference_name):
+        if reference_name not in ucsc_to_ensembl_reference_names:
+            raise ValueError(
+                "Unrecognized UCSC reference name '%s'" % reference_name)
+        reference_name = ucsc_to_ensembl_reference_names[reference_name]
+        converted_ucsc_to_ensembl = True
+    genome =  get_genome_for_ensembl_reference_name(reference_name)
+    return genome, converted_ucsc_to_ensembl
 
 @memoize
 def infer_genome(genome_object_string_or_int):
     """
-    If given an integer, return associated human EnsemblRelease for that
+    If given an integer, get the human EnsemblRelease object for that
     Ensembl version.
 
-    If given a string, return latest EnsemblRelease which has a reference
-    of the same name.
+    If given a string, return latest EnsemblRelease which has an equivalent
+    reference. If the given name is a UCSC genome (e.g. hg19) then convert
+    it to the equivalent Ensembl reference (e.g. GRCh37).
 
-    If given a PyEnsembl Genome, simply return it.
+    If given a PyEnsembl Genome, simply use it.
+
+    Returns a pair of (Genome, bool) where the bool corresponds to whether
+    the input requested a UCSC genome (e.g. "hg19") and an Ensembl (e.g. GRCh37)
+    was returned as a substitute.
     """
+    converted_ucsc_to_ensembl = False
     if isinstance(genome_object_string_or_int, Genome):
-        return genome_object_string_or_int
-    if is_integer(genome_object_string_or_int):
-        return cached_release(genome_object_string_or_int)
+        genome =  genome_object_string_or_int
+    elif is_integer(genome_object_string_or_int):
+        genome = cached_ensembl_release(genome_object_string_or_int)
     elif is_string(genome_object_string_or_int):
-        # first infer the canonical reference name, e.g. mapping hg19 -> GRCh37
-        # and then get the associated PyEnsembl Genome object
-        reference_name = infer_reference_name(genome_object_string_or_int)
-        return genome_for_reference_name(reference_name)
+        genome, converted_ucsc_to_ensembl = \
+            infer_genome_for_reference_name(genome_object_string_or_int)
     else:
         raise TypeError(
             ("Expected genome to be an int, string, or pyensembl.Genome "
                 "instance, got %s : %s") % (
                 str(genome_object_string_or_int),
                 type(genome_object_string_or_int)))
+    return genome, converted_ucsc_to_ensembl

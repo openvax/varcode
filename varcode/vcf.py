@@ -26,7 +26,7 @@ import pandas
 from typechecks import require_string
 import vcf as pyvcf
 
-from .reference import infer_genome_and_convert_ucsc_to_ensembl
+from .reference import infer_genome
 from .variant import Variant, variant_ascending_position_sort_key
 from .variant_collection import VariantCollection
 
@@ -182,10 +182,10 @@ def load_vcf(
         sample_names=handle.vcf_reader.samples if include_info else None,
         sample_info_parser=sample_info_parser,
         variant_kwargs={
-            'ensembl': genome,
+            'genome': genome,
+            'original_genome_was_ucsc': genome_was_ucsc,
             'allow_extended_nucleotides': allow_extended_nucleotides,
-            'normalize_contig_names': normalize_contig_names,
-            'convert_ucsc_to_ensembl': convert_ucsc_to_ensembl or using_grch37_for_hg19},
+            'normalize_contig_names': normalize_contig_names},
         variant_collection_kwargs={
             'sort_key': sort_key,
             'distinct': distinct})
@@ -493,13 +493,13 @@ def infer_genome_from_vcf(genome, vcf_reader, reference_vcf_key):
     is being used as a substitute.
     """
     if genome:
-        return infer_genome_and_convert_ucsc_to_ensembl(genome)
+        return infer_genome(genome)
     elif reference_vcf_key not in vcf_reader.metadata:
         raise ValueError("Unable to infer reference genome for %s" % (
             vcf_reader.filename,))
     else:
         reference_path = vcf_reader.metadata[reference_vcf_key]
-        return infer_genome_and_convert_ucsc_to_ensembl(reference_path)
+        return infer_genome(reference_path)
 
 
 def parse_url_or_path(s):

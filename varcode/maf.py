@@ -172,14 +172,14 @@ def load_maf(
         # specified by the NCBI_Build column)
         ncbi_build = x.NCBI_Build
         if ncbi_build in ensembl_objects:
-            ensembl = ensembl_objects[ncbi_build]
+            genome = ensembl_objects[ncbi_build]
         else:
             if isinstance(ncbi_build, int):
                 reference_name = "B%d" % ncbi_build
             else:
                 reference_name = str(ncbi_build)
-            ensembl = infer_genome(reference_name)
-            ensembl_objects[ncbi_build] = ensembl
+            genome, _ = infer_genome(reference_name)
+            ensembl_objects[ncbi_build] = genome
 
         # have to try both Tumor_Seq_Allele1 and Tumor_Seq_Allele2
         # to figure out which is different from the reference allele
@@ -202,7 +202,7 @@ def load_maf(
             start_pos,
             str(ref),
             str(alt),
-            ensembl=ensembl)
+            genome)
 
         # keep metadata about the variant and its TCGA annotation
         metadata[variant] = {
