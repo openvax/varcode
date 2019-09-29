@@ -82,19 +82,20 @@ def _do_roundtrip_test(filenames):
 
     return (variants, reparsed_variants)
 
-    # TODO: There is definitely more opportunity here to compare metadata
-    # fields, with caveats.
-    #
-    # First, any variants from non-VCF sources (e.g., MAF files) will inevitably
-    # lose some information through the change in representation (more importantly,
-    # even if there is no loss in data, that data will be in a different format in
-    # the new metadata dictionary). Thus, we should either ignore such variants
-    # or only check certain fields.
-    #
-    # Second, without the original metadata headers in the VCF file, all metadata
-    # information will be parsed as strings. Thus, for a simple comparison between
-    # metadata (without the need to individually convert fields), we'd need to add
-    # these headers to the output VCF file. See `vcf_output.py` for more info.
+    # TODO:
+    #   There is definitely more opportunity here to compare metadata
+    #   fields, with caveats.
+    #   ---
+    #   First, any variants from non-VCF sources (e.g., MAF files) will inevitably
+    #   lose some information through the change in representation (more importantly,
+    #   even if there is no loss in data, that data will be in a different format in
+    #   the new metadata dictionary). Thus, we should either ignore such variants
+    #   or only check certain fields.
+    #   ---
+    #   Second, without the original metadata headers in the VCF file, all metadata
+    #   information will be parsed as strings. Thus, for a simple comparison between
+    #   metadata (without the need to individually convert fields), we'd need to add
+    #   these headers to the output VCF file. See `vcf_output.py` for more info.
 
 
 def test_single_file_roundtrip_conversion():
@@ -104,10 +105,9 @@ def test_single_file_roundtrip_conversion():
 
 def test_multiple_file_roundtrip_conversion():
     file_groups = (
-        ['simple.1.vcf', 'simple.2.vcf'],  # basic multi-file test
-        ['duplicates.maf', 'multiallelic.vcf'],  # dif. file formats
+        ['simple.1.vcf', 'simple.2.vcf'],  # basic multi-file VCF test
+        ['duplicates.maf', 'ov.wustle.subset5.maf'],  # multiple MAF files
         ['duplicate-id.1.vcf', 'duplicate-id.2.vcf'],
-        TEST_FILENAMES_HUMAN,
     )
     for file_group in file_groups:
         yield (_do_roundtrip_test, file_group)

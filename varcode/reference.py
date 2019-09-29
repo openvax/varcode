@@ -46,10 +46,17 @@ def _initialize_ensembl_alias_dict():
     alias_dict = defaultdict(list)
 
     for ensembl_reference_name in canonical_reference_names:
-        no_dash = ensembl_reference_name.replace("_", "")
+        no_underscore = ensembl_reference_name.replace("_", "")
         no_hyphen = ensembl_reference_name.replace("-", "")
         neither_sep = no_hyphen.replace("_", "")
-        for alias in {no_dash, no_hyphen, neither_sep}:
+        underscore_to_hyphen = ensembl_reference_name.replace("_", "-")
+        hyphen_to_underscore = ensembl_reference_name.replace("-", "_")
+        for alias in {
+                no_underscore,
+                no_hyphen,
+                neither_sep,
+                underscore_to_hyphen,
+                hyphen_to_underscore}:
             if alias == ensembl_reference_name:
                 continue
             alias_dict[ensembl_reference_name].append(alias)
@@ -153,7 +160,7 @@ def _merge_ensembl_aliases_with_ucsc():
     dict
     """
     result = ensembl_reference_aliases.copy()
-    for ensembl_name, ucsc_name in ucsc_to_ensembl_reference_names.items():
+    for ucsc_name, ensembl_name in ucsc_to_ensembl_reference_names.items():
         if ensembl_name in result:
             result[ensembl_name].append(ucsc_name)
         else:
@@ -243,7 +250,6 @@ def _collect_candidate_matches(reference_name_or_path):
         # if reference_name_or_path_lower.
         candidate_list = [assembly_name] + alias_dict_with_ucsc.get(assembly_name, [])
         for candidate in candidate_list:
-            print(candidate)
             name_to_add = (
                 candidate
                 if is_ucsc_reference_name(candidate)

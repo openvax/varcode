@@ -63,7 +63,6 @@ class Variant(Serializable):
             genome="GRCh38",
             allow_extended_nucleotides=False,
             normalize_contig_names=True,
-            original_genome_was_ucsc=None,
             convert_ucsc_contig_names=None):
         """
         Construct a Variant object.
@@ -96,13 +95,6 @@ class Variant(Serializable):
             to uppercase (e.g. "chrx" -> "chrX"). If you don't want
             this behavior then pass normalize_contig_name=False.
 
-        original_genome_was_ucsc : bool, optional
-            Boolean flag indicating whether the 'original_reference_name'
-            should be populated with a UCSC genome name (e.g. 'hg19') instead
-            of its Ensembl equivalent (e.g. 'GRCh37).
-            If omitted then it's inferred from whether the genome argument
-            is a string which corresponds to a UCSC reference name.
-
         convert_ucsc_contig_names : bool, optional
             Setting this argument to True causes UCSC chromosome names to be
             coverted, such as "chr1" to "1". If the default value (None) is used
@@ -122,13 +114,7 @@ class Variant(Serializable):
         # user might supply Ensembl release as an integer, reference name,
         # or pyensembl.Genome object
         self.original_genome = genome
-        if isinstance(genome, Genome):
-            self.genome = genome
-            # if we're given a PyEnsembl Genome object then assume it's not
-            # a UCSC genome unless explicitly specified
-            self.original_genome_was_ucsc = (original_genome_was_ucsc is True)
-        else:
-            self.genome, self.original_genome_was_ucsc = infer_genome(genome)
+        self.genome, self.original_genome_was_ucsc = infer_genome(genome)
 
         self.reference_name = self.genome.reference_name
         if self.original_genome_was_ucsc:

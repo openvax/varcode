@@ -26,7 +26,10 @@ import pandas
 from typechecks import require_string
 import vcf as pyvcf
 
-from .reference import infer_genome
+from .reference import (
+    infer_genome,
+    ensembl_to_ucsc_reference_names
+)
 from .variant import Variant, variant_ascending_position_sort_key
 from .variant_collection import VariantCollection
 
@@ -148,10 +151,27 @@ def load_vcf(
     # data. We can close the file after that.
     handle = PyVCFReaderFromPathOrURL(path)
     handle.close()
-    genome, genome_was_ucsc = infer_genome_from_vcf(
-        genome,
-        handle.vcf_reader,
-        reference_vcf_key)
+
+    ####
+    # The following code looks a bit crazy because it's motivated by the
+    # desired to preserve UCSC reference names even though the Variant
+    # objects we're creating will convert them to EnsemblRelease genomes
+    # with different reference names.
+    #
+    # For example, if a VCF is aligned against 'hg19' then we want to create a
+    # variant which has 'hg19' as its genome argument, so that serialization
+    # back to VCF will put the correct reference genome in the generated
+    # header.
+    if genome is None:
+        vcf_reader = handle.vcf_reader
+        if reference_vcf_key not in vcf_reader.metadata:
+            raise ValueError("Unable to infer reference genome for %s" % (
+                vcf_reader.filename,))
+        genome = vcf_reader.metadata[reference_vcf_key]
+
+    genome, genome_was_ucsc = infer_genome(genome)
+    if genome_was_ucsc:
+        genome = ensembl_to_ucsc_reference_names[genome.reference_name]
 
     df_iterator = read_vcf_into_dataframe(
         path,
@@ -173,6 +193,17 @@ def load_vcf(
     else:
         sample_info_parser = None
 
+    variant_kwargs = {
+        'genome': genome,
+        'allow_extended_nucleotides': allow_extended_nucleotides,
+        'normalize_contig_names': normalize_contig_names
+    }
+
+    variant_collection_kwargs = {
+        'sort_key': sort_key,
+        'distinct': distinct
+    }
+
     return dataframes_to_variant_collection(
         df_iterator,
         source_path=path,
@@ -181,14 +212,8 @@ def load_vcf(
         max_variants=max_variants,
         sample_names=handle.vcf_reader.samples if include_info else None,
         sample_info_parser=sample_info_parser,
-        variant_kwargs={
-            'genome': genome,
-            'original_genome_was_ucsc': genome_was_ucsc,
-            'allow_extended_nucleotides': allow_extended_nucleotides,
-            'normalize_contig_names': normalize_contig_names},
-        variant_collection_kwargs={
-            'sort_key': sort_key,
-            'distinct': distinct})
+        variant_kwargs=variant_kwargs,
+        variant_collection_kwargs=variant_collection_kwargs)
 
 
 def load_vcf_fast(*args, **kwargs):
@@ -484,22 +509,6 @@ def stream_gzip_decompress_lines(stream):
                 yield line
     yield previous
 
-
-def infer_genome_from_vcf(genome, vcf_reader, reference_vcf_key):
-    """
-    Helper function to make a pyensembl.Genome instance, also
-    returns a boolean flag indicating whether the original reference
-    name was UCSC (e.g. "hg19") but an Ensembl equivalent (e.g. GRCh37)
-    is being used as a substitute.
-    """
-    if genome:
-        return infer_genome(genome)
-    elif reference_vcf_key not in vcf_reader.metadata:
-        raise ValueError("Unable to infer reference genome for %s" % (
-            vcf_reader.filename,))
-    else:
-        reference_path = vcf_reader.metadata[reference_vcf_key]
-        return infer_genome(reference_path)
 
 
 def parse_url_or_path(s):
