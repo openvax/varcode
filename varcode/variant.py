@@ -14,7 +14,6 @@
 
 from __future__ import print_function, division, absolute_import
 
-from pyensembl import Genome
 from pyensembl.locus import normalize_chromosome
 from serializable import Serializable
 from typechecks import require_instance
@@ -241,6 +240,25 @@ class Variant(Serializable):
             self.ref == other.ref and
             self.alt == other.alt and
             self.genome == other.genome)
+
+    def clone_without_ucsc_data(self):
+        """
+        Clone this variant but discarding the original format of its genome
+        and contig: useful if we want to mix hg19 and GRCh37 variants.
+
+        Returns
+        -------
+        Variant
+        """
+        return Variant(
+            contig=self.contig,
+            start=self.original_start,
+            ref=self.original_ref,
+            alt=self.original_alt,
+            genome=self.genome,
+            allow_extended_nucleotides=self.allow_extended_nucleotides,
+            normalize_contig_names=self.normalize_contig_names,
+            convert_ucsc_contig_names=False)
 
     def to_dict(self):
         """

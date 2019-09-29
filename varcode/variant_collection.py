@@ -326,3 +326,7 @@ class VariantCollection(Collection):
             # TODO: return a DataFrame with the appropriate columns
             return pd.DataFrame()
         return pd.DataFrame.from_records(rows, columns=rows[0].keys())
+
+    def clone_without_ucsc_data(self):
+        variants = [v.clone_without_ucsc_data() for v in self]
+        return self.clone_with_new_elements(variants)

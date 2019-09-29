@@ -50,7 +50,7 @@ def _merge_metadata_naive(variants):
     }
 
 
-def _do_roundtrip_test(filenames):
+def _do_roundtrip_test(filenames, convert_ucsc_to_grch37=False):
 
     def load_fn(filename):
         return {
@@ -65,6 +65,8 @@ def _do_roundtrip_test(filenames):
         return variant_collections[0].union(*variant_collections[1:])
 
     variants = load_variants()
+    if convert_ucsc_to_grch37:
+        variants = variants.clone_without_ucsc_data()
 
     with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
         metadata = _merge_metadata_naive(variants)
@@ -112,9 +114,15 @@ def test_multiple_file_roundtrip_conversion():
     for file_group in file_groups:
         yield (_do_roundtrip_test, file_group)
 
+def test_multiple_file_roundtrip_conversion_mixed_references():
+    # testing roundtrip serialization of hg19 VCF files
+    # converted to GRCh37 combined with b37 MAFs
+    _do_roundtrip_test(TEST_FILENAMES_HUMAN, convert_ucsc_to_grch37=True)
 
 def test_same_samples_produce_samples():
-    """Ensures that, if a set of variants have the same samples, the reparsed
+    """test_same_samples_produce_samples
+
+    Ensures that, if a set of variants have the same samples, the reparsed
     collection will output these samples.
     """
     (variants, reparsed_variants) = _do_roundtrip_test(
@@ -130,7 +138,9 @@ def test_same_samples_produce_samples():
 
 
 def test_different_samples_produce_no_samples():
-    """Ensures that, if a set of variants have different samples, the reparsed
+    """test_different_samples_produce_no_samples
+
+    Ensures that, if a set of variants have different samples, the reparsed
     collection will not output any samples.
 
     See `vcf_output.py` for details as to why this is the way it's done for now.
