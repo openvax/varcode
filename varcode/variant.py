@@ -44,6 +44,7 @@ class Variant(Serializable):
         "genome",
         "normalize_contig_names",
         "original_genome_was_ucsc",
+        "convert_ucsc_contig_names",
         "allow_extended_nucleotides",
         "original_contig",
         "original_ref",
@@ -62,7 +63,8 @@ class Variant(Serializable):
             genome="GRCh38",
             allow_extended_nucleotides=False,
             normalize_contig_names=True,
-            original_genome_was_ucsc=False):
+            original_genome_was_ucsc=None,
+            convert_ucsc_contig_names=None):
         """
         Construct a Variant object.
 
@@ -94,11 +96,18 @@ class Variant(Serializable):
             to uppercase (e.g. "chrx" -> "chrX"). If you don't want
             this behavior then pass normalize_contig_name=False.
 
-        original_genome_was_ucsc : bool
-            Setting this argument to True causes chromosome names to be coverted,
-            such as "chr1" to "1". This argument only does anything when
-            the genome argument is an instance of pyensembl.Genome, otherwise
-            its value is inferred.
+        original_genome_was_ucsc : bool, optional
+            Boolean flag indicating whether the 'original_reference_name'
+            should be populated with a UCSC genome name (e.g. 'hg19') instead
+            of its Ensembl equivalent (e.g. 'GRCh37).
+            If omitted then it's inferred from whether the genome argument
+            is a string which corresponds to a UCSC reference name.
+
+        convert_ucsc_contig_names : bool, optional
+            Setting this argument to True causes UCSC chromosome names to be
+            coverted, such as "chr1" to "1". If the default value (None) is used
+            then it defaults to whether or not a UCSC genome was pass in for
+            the 'genome' argument.
         """
 
         # first initialize the _genes and _transcripts fields we use to cache
@@ -112,15 +121,16 @@ class Variant(Serializable):
 
         # user might supply Ensembl release as an integer, reference name,
         # or pyensembl.Genome object
+        self.original_genome = genome
         if isinstance(genome, Genome):
-            self.original_genome = self.genome = genome
+            self.genome = genome
+            # if we're given a PyEnsembl Genome object then assume it's not
+            # a UCSC genome unless explicitly specified
+            self.original_genome_was_ucsc = (original_genome_was_ucsc is True)
         else:
-            self.original_genome = genome
-            self.genome, original_genome_was_ucsc = infer_genome(genome)
+            self.genome, self.original_genome_was_ucsc = infer_genome(genome)
 
-        self.original_genome_was_ucsc = original_genome_was_ucsc
         self.reference_name = self.genome.reference_name
-
         if self.original_genome_was_ucsc:
             self.original_reference_name = ensembl_to_ucsc_reference_names[
                 self.reference_name]
@@ -130,9 +140,14 @@ class Variant(Serializable):
         self.original_contig = contig
         self.contig = normalize_chromosome(contig) if normalize_contig_names else contig
 
+        if convert_ucsc_contig_names is None:
+            self.convert_ucsc_contig_names = self.original_genome_was_ucsc
+        else:
+            self.convert_ucsc_contig_names = convert_ucsc_contig_names
+
         # trim off the starting "chr" from hg19 chromosome names to make them
         # match GRCh37, also convert "chrM" to "MT".
-        if self.original_genome_was_ucsc:
+        if self.convert_ucsc_contig_names:
             if self.contig.startswith("chr"):
                 self.contig = self.contig[3:]
             if self.contig == "M":
@@ -251,10 +266,10 @@ class Variant(Serializable):
             start=self.original_start,
             ref=self.original_ref,
             alt=self.original_alt,
-            genome=self.genome,
+            genome=self.original_genome,
             allow_extended_nucleotides=self.allow_extended_nucleotides,
             normalize_contig_names=self.normalize_contig_names,
-            convert_ucsc_to_ensembl=self.convert_ucsc_to_ensembl)
+            convert_ucsc_contig_names=self.convert_ucsc_contig_names)
 
     @property
     def trimmed_ref(self):

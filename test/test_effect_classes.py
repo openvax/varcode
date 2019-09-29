@@ -1,4 +1,4 @@
-# Copyright (c) 2015. Mount Sinai School of Medicine
+# Copyright (c) 2015-2019. Mount Sinai School of Medicine
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -56,7 +56,7 @@ def test_incomplete():
     # first exon begins: ATCATTCCTTTGGGCCTAGGA
 
     # change the first nucleotide of the 5' UTR A>T
-    variant = Variant("7", 55109723, "A", "T", ensembl=ensembl_grch38)
+    variant = Variant("7", 55109723, "A", "T", ensembl_grch38)
     expect_effect(
         variant,
         transcript_id="ENST00000450046",
@@ -83,7 +83,7 @@ def test_start_loss():
     # which is 55,019,034 + 244 of chr7 = 55019278
     # change the first two nucleotides of the 5' UTR AT>GG
     # making what used to be a start codon into GGG (Glycine)
-    variant = Variant("7", 55019278, "AT", "GG", ensembl=ensembl_grch38)
+    variant = Variant("7", 55019278, "AT", "GG", ensembl_grch38)
     expect_effect(
         variant,
         transcript_id="ENST00000420316",
@@ -101,7 +101,7 @@ def test_alternate_start_codon():
     # making what used to be the standard start codon ATG into TTG,
     # which normally codes for Leucine but can be used as an alternate
     # start codon
-    variant = Variant("7", 55019278, "A", "T", ensembl=ensembl_grch38)
+    variant = Variant("7", 55019278, "A", "T", ensembl_grch38)
     expect_effect(
         variant,
         transcript_id="ENST00000420316",
@@ -115,7 +115,7 @@ def test_stop_loss():
 
     # change G>C in stop codon, should result in stop-loss mutation
     # causing an elongated protein
-    variant = Variant("1", 46501738, "G", "C", ensembl=ensembl_grch37)
+    variant = Variant("1", 46501738, "G", "C", ensembl_grch37)
     expect_effect(
         variant,
         transcript_id="ENST00000361297",
@@ -130,7 +130,7 @@ def test_stop_loss_from_larger_deletion_before_stop_codon():
     # delete stop codon and the codon before it,
     # should result in stop-loss mutation
     # causing an elongated protein
-    variant = Variant("1", 46501733, "ACATAG", "", ensembl=ensembl_grch37)
+    variant = Variant("1", 46501733, "ACATAG", "", ensembl_grch37)
     expect_effect(
         variant,
         transcript_id="ENST00000361297",
@@ -145,7 +145,7 @@ def test_stop_loss_from_larger_deletion_after_stop_codon():
     # delete stop codon and the codon after it,
     # should result in stop-loss mutation
     # causing an elongated protein
-    variant = Variant("1", 46501736, "TAGCAG", "", ensembl=ensembl_grch37)
+    variant = Variant("1", 46501736, "TAGCAG", "", ensembl_grch37)
     expect_effect(
         variant,
         transcript_id="ENST00000361297",
@@ -161,7 +161,7 @@ def test_stop_loss_from_out_of_frame_deletion_in_stop_codon():
     # TAG CAG... -> GCA G...
     #
     # should result in stop-loss mutation causing an elongated protein
-    variant = Variant("1", 46501736, "TA", "", ensembl=ensembl_grch37)
+    variant = Variant("1", 46501736, "TA", "", ensembl_grch37)
     expect_effect(
         variant,
         transcript_id="ENST00000361297",
@@ -178,7 +178,7 @@ def test_silent_from_in_frame_deletion_in_stop_codon():
     # T_AG C_AG... -> TAG...
     #
     # should result in stop-loss mutation causing an elongated protein
-    variant = Variant("1", 46501737, "AGC", "", ensembl=ensembl_grch37)
+    variant = Variant("1", 46501737, "AGC", "", ensembl_grch37)
     expect_effect(
         variant,
         transcript_id="ENST00000361297",
@@ -194,7 +194,7 @@ def test_silent_from_out_of_frame_deletion_in_stop_codon():
     # TA_G C_AG... -> TAA G...
     #
     # should result in stop-loss mutation causing an elongated protein
-    variant = Variant("1", 46501738, "GC", "", ensembl=ensembl_grch37)
+    variant = Variant("1", 46501738, "GC", "", ensembl_grch37)
     expect_effect(
         variant,
         transcript_id="ENST00000361297",
@@ -210,7 +210,7 @@ def test_silent_from_out_of_frame_insertion_in_stop_codon():
     # TAG CAG... -> TAA GCA G...
     #
     # should result in stop-loss mutation causing an elongated protein
-    variant = Variant("1", 46501737, "AG", "AAG", ensembl=ensembl_grch37)
+    variant = Variant("1", 46501737, "AG", "AAG", ensembl_grch37)
     expect_effect(
         variant,
         transcript_id="ENST00000361297",
@@ -230,9 +230,9 @@ def test_stop_gain():
     variant = Variant(
         "17",
         43082575 - 6,
-        ref="",
-        alt="CTA",
-        ensembl=ensembl_grch38)
+        "",
+        "CTA",
+        ensembl_grch38)
     expect_effect(
         variant,
         transcript_id="ENST00000357654",
@@ -252,9 +252,9 @@ def test_stop_gain_with_extra_amino_acids():
     variant = Variant(
         "17",
         43082575 - 6,
-        ref="",
-        alt="CTAAAA",
-        ensembl=ensembl_grch38)
+        "",
+        "CTAAAA",
+        ensembl_grch38)
     expect_effect(
         variant,
         transcript_id="ENST00000357654",
@@ -278,7 +278,7 @@ def test_exon_loss():
             "TAAAGTGATGTGGTGTTTTCTGGCAAACTTGTACACGAGCAT"
         ]),
         alt="",
-        ensembl=ensembl_grch38)
+        genome=ensembl_grch38)
     expect_effect(
         variant,
         transcript_id="ENST00000357654",
@@ -299,7 +299,7 @@ def test_exonic_splice_site():
         43082404,
         ref="C",
         alt="",
-        ensembl=ensembl_grch38)
+        genome=ensembl_grch38)
     expect_effect(
         variant,
         transcript_id="ENST00000357654",
@@ -319,7 +319,7 @@ def test_deletion():
         43082404 + 4,
         ref="TTC",
         alt="",
-        ensembl=ensembl_grch38)
+        genome=ensembl_grch38)
     expect_effect(
         variant,
         transcript_id="ENST00000357654",
@@ -352,7 +352,7 @@ def test_insertion():
         43082575 - 6,
         ref="",
         alt="AAA",
-        ensembl=ensembl_grch38)
+        genome=ensembl_grch38)
     expect_effect(
         variant,
         transcript_id="ENST00000357654",
@@ -374,7 +374,7 @@ def test_frameshift_near_start_of_BRCA1_001():
     # After variant:
     #   ATG GAT TTT ATC TGC TCT TCG CGT TGA
     #   -M- -D- -F- -I- -C- -S- -S- -R-  *
-    variant = Variant("17", 43124096 - 6, ref="", alt="A", ensembl=ensembl_grch38)
+    variant = Variant("17", 43124096 - 6, "", "A", ensembl_grch38)
     expect_effect(
         variant,
         transcript_id="ENST00000357654",
@@ -395,7 +395,7 @@ def test_frameshift_truncation():
         43091031,
         ref="",
         alt="A",
-        ensembl=ensembl_grch38)
+        genome=ensembl_grch38)
     expect_effect(
         variant,
         transcript_id="ENST00000357654",
@@ -422,7 +422,7 @@ def test_frameshift_truncation_in_exon_12_of_BRCA1_001():
         43082575 - 6,
         ref="",
         alt="A",
-        ensembl=ensembl_grch38)
+        genome=ensembl_grch38)
     expect_effect(
         variant,
         transcript_id="ENST00000357654",
@@ -443,7 +443,7 @@ def test_substitution():
         43082575 - 5,
         ref="CCT",
         alt="GGG",
-        ensembl=ensembl_grch38)
+        genome=ensembl_grch38)
     expect_effect(
         variant,
         transcript_id="ENST00000357654",
@@ -463,7 +463,7 @@ def test_silent():
         43082575 - 5,
         ref="CCT",
         alt="TCT",
-        ensembl=ensembl_grch38)
+        genome=ensembl_grch38)
     expect_effect(
         variant,
         transcript_id="ENST00000357654",
@@ -474,23 +474,23 @@ def test_silent():
 def test_silent_stop_codons():
     silent_stop_codon_variants = {
         "ENST00000290524": Variant(
-            contig=1,
-            start=151314663,
+            1,
+            151314663,
             ref="C",
             alt="T",
-            ensembl=ensembl_grch37),
+            genome=ensembl_grch37),
         "ENST00000368725": Variant(
-            contig=1,
-            start=153409535,
+            1,
+            153409535,
             ref="C",
             alt="T",
-            ensembl=ensembl_grch37),
+            genome=ensembl_grch37),
         "ENST00000353479": Variant(
-            contig=10,
-            start=105791994,
+            10,
+            105791994,
             ref="C",
             alt="T",
-            ensembl=ensembl_grch37),
+            genome=ensembl_grch37),
     }
     for transcript_id, variant in silent_stop_codon_variants.items():
         yield (
@@ -513,7 +513,7 @@ def test_five_prime_utr():
         43125370 - 2,
         ref="CTC",
         alt="",
-        ensembl=ensembl_grch38)
+        genome=ensembl_grch38)
     expect_effect(
         variant,
         transcript_id="ENST00000357654",
@@ -534,7 +534,7 @@ def test_three_prime_utr():
         43044295,
         ref="TGG",
         alt="",
-        ensembl=ensembl_grch38)
+        genome=ensembl_grch38)
     expect_effect(
         variant,
         transcript_id="ENST00000357654",
@@ -553,7 +553,7 @@ def test_intronic():
         43082575 + 20,
         ref="",
         alt="CCC",
-        ensembl=ensembl_grch38)
+        genome=ensembl_grch38)
     expect_effect(
         variant,
         transcript_id="ENST00000357654",
@@ -567,7 +567,7 @@ def test_disruptive_insertion_stop_gain():
         117182143,
         ref="",
         alt="GTA",
-        ensembl=ensembl_grch37)
+        genome=ensembl_grch37)
     expect_effect(
         variant,
         transcript_id="ENST00000003084",
@@ -581,7 +581,7 @@ def test_substitution_nonfinal_stop_gain():
         117182145,
         ref="ACAG",
         alt="TAAC",
-        ensembl=ensembl_grch37)
+        genome=ensembl_grch37)
     expect_effect(
         variant,
         transcript_id="ENST00000003084",
@@ -595,7 +595,7 @@ def test_insertion_nonfinal_stop_gain():
         117182144,
         ref="",
         alt="TAGGTT",
-        ensembl=ensembl_grch37)
+        genome=ensembl_grch37)
     expect_effect(
         variant,
         transcript_id="ENST00000003084",
@@ -609,7 +609,7 @@ def test_variant_ending_after_exon():
         106262686,
         ref="GTGAAGG",
         alt="",
-        ensembl=mouse_genome)
+        genome=mouse_genome)
     expect_effect(
         variant,
         transcript_id="ENSMUST00000021049",

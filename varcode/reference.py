@@ -243,6 +243,7 @@ def _collect_candidate_matches(reference_name_or_path):
         # if reference_name_or_path_lower.
         candidate_list = [assembly_name] + alias_dict_with_ucsc.get(assembly_name, [])
         for candidate in candidate_list:
+            print(candidate)
             name_to_add = (
                 candidate
                 if is_ucsc_reference_name(candidate)
