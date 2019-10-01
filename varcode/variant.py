@@ -59,7 +59,8 @@ class Variant(Serializable):
             start,
             ref,
             alt,
-            genome="GRCh38",
+            genome=None,
+            ensembl=None,
             allow_extended_nucleotides=False,
             normalize_contig_names=True,
             convert_ucsc_contig_names=None):
@@ -85,6 +86,10 @@ class Variant(Serializable):
             derived from pyensembl.Genome. Default to latest available release
             of GRCh38
 
+        ensembl : Genome, EnsemblRelease, or str, or int (DEPRECATED)
+            Previous name used instead of 'genome', the two arguments should
+            be mutually exclusive.
+
         allow_extended_nucleotides : bool
             Extended nucleotides include 'Y' for pyrimidies or 'N' for any base
 
@@ -109,6 +114,14 @@ class Variant(Serializable):
         # may be changed/transformed
         self.normalize_contig_names = normalize_contig_names
         self.allow_extended_nucleotides = allow_extended_nucleotides
+
+        # if genome not specified, try the old name 'ensembl'
+        # if ensembl is also None, then default to "GRCh38"
+        if genome is None and ensembl is None:
+            genome = "GRCh38"
+        elif genome is None:
+            genome = ensembl
+
 
         # user might supply Ensembl release as an integer, reference name,
         # or pyensembl.Genome object

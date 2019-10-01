@@ -49,7 +49,7 @@ def load_vcf(
         sort_key=variant_ascending_position_sort_key,
         distinct=True,
         normalize_contig_names=True,
-        convert_ucsc_to_ensembl=False):
+        convert_ucsc_contig_names=None):
     """
     Load reference name and Variant objects from the given VCF filename.
 
@@ -101,9 +101,10 @@ def load_vcf(
         to uppercase (e.g. "chrx" -> "chrX"). If you don't want
         this behavior then pass normalize_contig_names=False.
 
-    convert_ucsc_to_ensembl : bool, default False
+    convert_ucsc_contig_names : bool
         Convert chromosome names from hg19 (e.g. "chr1") to equivalent names
-        for GRCh37 (e.g. "1").
+        for GRCh37 (e.g. "1"). By default this is set to True if the genome
+        of the VCF is a UCSC reference and otherwise set to False.
     """
 
     require_string(path, "Path or URL to VCF")
@@ -138,7 +139,8 @@ def load_vcf(
                 max_variants=max_variants,
                 sort_key=sort_key,
                 distinct=distinct,
-                normalize_contig_names=normalize_contig_names)
+                normalize_contig_names=normalize_contig_names,
+                convert_ucsc_contig_names=convert_ucsc_contig_names)
         finally:
             logger.info("Removing temporary file: %s", filename)
             os.unlink(filename)
@@ -173,6 +175,9 @@ def load_vcf(
     if genome_was_ucsc:
         genome = ensembl_to_ucsc_reference_names[genome.reference_name]
 
+    if convert_ucsc_contig_names is None:
+        convert_ucsc_contig_names = genome_was_ucsc
+
     df_iterator = read_vcf_into_dataframe(
         path,
         include_info=include_info,
@@ -196,7 +201,8 @@ def load_vcf(
     variant_kwargs = {
         'genome': genome,
         'allow_extended_nucleotides': allow_extended_nucleotides,
-        'normalize_contig_names': normalize_contig_names
+        'normalize_contig_names': normalize_contig_names,
+        'convert_ucsc_contig_names': convert_ucsc_contig_names,
     }
 
     variant_collection_kwargs = {
