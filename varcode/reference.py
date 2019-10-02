@@ -31,53 +31,41 @@ from .common import memoize
 canonical_reference_names = set(
     pyensembl.species.Species._reference_names_to_species.keys())
 
-lowercase_canonical_reference_names = {
-    name.lower() for name in canonical_reference_names}
-
-def _initialize_ensembl_alias_dict():
+def normalize_reference_name(name):
     """
-    Create a dictionary of assembly names mapped to simple aliases
-    by trying to remove dashes and underscores from names.
+    Simplify potentially variable ways to write out a reference name
+    by lowercasing it and replacing all dashes and spaces with underscores.
+
+    Parameters
+    ----------
+    name : str
 
     Returns
     -------
-    dict
+    str
     """
-    alias_dict = defaultdict(list)
+    return name.strip().lower().replace("-", "_").replace(" ", "_")
 
-    for ensembl_reference_name in canonical_reference_names:
-        no_underscore = ensembl_reference_name.replace("_", "")
-        no_hyphen = ensembl_reference_name.replace("-", "")
-        neither_sep = no_hyphen.replace("_", "")
-        underscore_to_hyphen = ensembl_reference_name.replace("_", "-")
-        hyphen_to_underscore = ensembl_reference_name.replace("-", "_")
-        for alias in {
-                no_underscore,
-                no_hyphen,
-                neither_sep,
-                underscore_to_hyphen,
-                hyphen_to_underscore}:
-            if alias == ensembl_reference_name:
-                continue
-            alias_dict[ensembl_reference_name].append(alias)
-    return alias_dict
+normalized_canonical_reference_names = {
+    normalize_reference_name(name) for name in canonical_reference_names}
+
 
 # this dict contains reference name aliases which preserve contig names
-ensembl_reference_aliases = _initialize_ensembl_alias_dict()
+ensembl_reference_aliases = {
+    # human assemblies
+    "NCBI36": ["B36", "GRCh36"],
+    "GRCh37": ["B37", "NCBI37"],
+    "GRCh38": ["B38", "NCBI38"],
 
-# human assemblies
-ensembl_reference_aliases["NCBI36"].extend(["B36", "GRCh36"])
-ensembl_reference_aliases["GRCh37"].extend(["B37", "NCBI37"])
-ensembl_reference_aliases["GRCh38"].extend(["B38", "NCBI38"])
-
-# mouse assemblies
-ensembl_reference_aliases["GRCm38"].extend([
-    "GCF_000001635.24",  # GRCm38.p4
-    "GCF_000001635.23",  # GRCm38.p3
-    "GCF_000001635.22",  # GRCm38.p2
-    "GCF_000001635.21",  # GRCm38.p1
-    "GCF_000001635.20",  # GRCm38
-])
+    # mouse assemblies
+    "GRCm38": [
+        "GCF_000001635.24",  # GRCm38.p4
+        "GCF_000001635.23",  # GRCm38.p3
+        "GCF_000001635.22",  # GRCm38.p2
+        "GCF_000001635.21",  # GRCm38.p1
+        "GCF_000001635.20",  # GRCm38
+    ]
+}
 
 ucsc_to_ensembl_reference_names = {
     # mouse
@@ -123,7 +111,10 @@ ucsc_to_ensembl_reference_names = {
 
 ucsc_reference_names = set(ucsc_to_ensembl_reference_names.keys())
 
-lowercase_ucsc_reference_names = {name.lower() for name in ucsc_reference_names}
+normalized_ucsc_reference_names = {
+    normalize_reference_name(name)
+    for name in ucsc_reference_names
+}
 
 ensembl_to_ucsc_reference_names = {
     v: k
@@ -143,8 +134,7 @@ def is_ucsc_reference_name(name):
     -------
     bool
     """
-    return (name.strip().lower() in lowercase_ucsc_reference_names)
-
+    return (normalize_reference_name(name) in normalized_ucsc_reference_names)
 
 # merge the UCSC aliases, which are only an approximate correspondence between
 # genomes (e.g. hg19 isn't exactly GRCh37) and the more straightforward
@@ -159,15 +149,14 @@ def _merge_ensembl_aliases_with_ucsc():
     -------
     dict
     """
-    result = ensembl_reference_aliases.copy()
+    result = {}
     for ucsc_name, ensembl_name in ucsc_to_ensembl_reference_names.items():
-        if ensembl_name in result:
-            result[ensembl_name].append(ucsc_name)
-        else:
-            result[ensembl_name] = [ucsc_name]
+        result[ensembl_name] = [ucsc_name] + \
+            ensembl_reference_aliases.get(ensembl_name, [])
     return result
 
 alias_dict_with_ucsc = _merge_ensembl_aliases_with_ucsc()
+
 
 def most_recent_assembly_name(assembly_names):
     """
@@ -235,29 +224,30 @@ def _collect_candidate_matches(reference_name_or_path):
     If the input is a reference name and not a filename/path then the second
     list will be empty.
     """
-    reference_name_or_path_lower = reference_name_or_path.lower()
+    normalized_reference_name_or_path = \
+        normalize_reference_name(reference_name_or_path)
 
     # if reference_name_or_path is an actual genome name, like GRCh37 then
     # reference_filename_lower will just be the lowercase of the genome name
     # ("grch37) but if it was a full path to a reference file, such as
     # '/path/to/GRCh37.fasta' then reference_filename_lower will be
     # 'grch37.fasta'
-    reference_filename_lower = os.path.basename(reference_name_or_path_lower)
+    normalized_reference_filename = os.path.basename(normalized_reference_name_or_path)
 
     file_name_matches = []
     full_path_matches = []
     for assembly_name in canonical_reference_names:
-        # if reference_name_or_path_lower.
         candidate_list = [assembly_name] + alias_dict_with_ucsc.get(assembly_name, [])
         for candidate in candidate_list:
+            normalized_candidate = normalize_reference_name(candidate)
             name_to_add = (
                 candidate
                 if is_ucsc_reference_name(candidate)
                 else assembly_name)
-            if candidate.lower() in reference_filename_lower:
+            if normalized_candidate in normalized_reference_filename:
                 file_name_matches.append(name_to_add)
 
-            elif candidate.lower() in reference_name_or_path_lower:
+            elif normalized_candidate in normalized_reference_name_or_path:
                 full_path_matches.append(name_to_add)
 
     # remove duplicate matches (happens due to overlapping aliases)

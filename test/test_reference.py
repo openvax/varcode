@@ -39,7 +39,6 @@ def _normalized_alias_matches_canonical(candidate, assembly_name):
 
 def test_infer_reference_name_aliases():
     with warnings.catch_warnings(record=True) as w:
-        assert False, ensembl_reference_aliases
         for assembly_name, aliases in ensembl_reference_aliases.items():
             candidate_list = [assembly_name] + list(aliases)
             for candidate in candidate_list:
