@@ -17,14 +17,14 @@ def validate_effect_values(effect):
 
 
 def test_mm10_Klf6_frameshift():
-    variant = Variant("chr13", 5864876, "", "G", "GRCm38")
+    variant = Variant("chr13", 5864876, "", "G", "mm10")
     effects = variant.effects().drop_silent_and_noncoding()
     eq_(len(effects), 1)
     validate_effect_values(effects[0])
 
 
 def test_mm10_Klf6_frameshift_coding_effect_fn():
-    variant = Variant("chr13", 5864876, "", "G", "GRCm38")
+    variant = Variant("chr13", 5864876, "", "G", "mm10")
     transcripts = variant.transcripts
     coding_transcripts = [
         t for t in transcripts
@@ -46,7 +46,7 @@ def test_mm10_Klf6_frameshift_coding_effect_fn():
 
 
 def test_mm10_Klf6_frameshift_cdna_codon_sequence():
-    variant = Variant("chr13", 5864876, "", "G", "GRCm38")
+    variant = Variant("chr13", 5864876, "", "G", "mm10")
     transcripts = variant.transcripts
     coding_transcripts = [
         t for t in transcripts

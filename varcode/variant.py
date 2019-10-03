@@ -30,7 +30,6 @@ from .effects import (
     predict_variant_effect_on_transcript
 )
 
-
 class Variant(Serializable):
     __slots__ = (
         "contig",
@@ -51,6 +50,8 @@ class Variant(Serializable):
         "original_start",
         "_transcripts",
         "_genes",
+        "_gene_ids",
+        "_gene_names",
     )
 
     def __init__(
@@ -106,9 +107,13 @@ class Variant(Serializable):
             the 'genome' argument.
         """
 
-        # first initialize the _genes and _transcripts fields we use to cache
-        # lists of overlapping pyensembl Gene and Transcript objects
-        self._genes = self._transcripts = None
+        # first initialize the fields we use to cache lists of overlapping
+        # pyensembl Gene and Transcript objects, or their properties such
+        # as names/IDs
+        self._genes = None
+        self._transcripts = None
+        self._gene_ids = None
+        self._gene_names = None
 
         # store the options which affect how properties of this variant
         # may be changed/transformed
@@ -146,10 +151,7 @@ class Variant(Serializable):
         # trim off the starting "chr" from hg19 chromosome names to make them
         # match GRCh37, also convert "chrM" to "MT".
         if self.convert_ucsc_contig_names:
-            if self.contig.startswith("chr"):
-                self.contig = self.contig[3:]
-            if self.contig == "M":
-                self.contig = "MT"
+            self.contig = self._convert_ucsc_contig_name_to_ensembl(self.contig)
 
         if ref != alt and ref in STANDARD_NUCLEOTIDES and alt in STANDARD_NUCLEOTIDES:
             # Optimization for common case.
@@ -209,6 +211,7 @@ class Variant(Serializable):
             self.start = self.original_start + len(prefix)
             self.end = self.start + len(trimmed_ref) - 1
 
+
     @property
     def ensembl(self):
         """
@@ -253,25 +256,6 @@ class Variant(Serializable):
             self.ref == other.ref and
             self.alt == other.alt and
             self.genome == other.genome)
-
-    def clone_without_ucsc_data(self):
-        """
-        Clone this variant but discarding the original format of its genome
-        and contig: useful if we want to mix hg19 and GRCh37 variants.
-
-        Returns
-        -------
-        Variant
-        """
-        return Variant(
-            contig=self.contig,
-            start=self.original_start,
-            ref=self.original_ref,
-            alt=self.original_alt,
-            genome=self.genome,
-            allow_extended_nucleotides=self.allow_extended_nucleotides,
-            normalize_contig_names=self.normalize_contig_names,
-            convert_ucsc_contig_names=False)
 
     def to_dict(self):
         """
@@ -356,9 +340,36 @@ class Variant(Serializable):
                 self.ref,
                 self.alt)
 
+
+    # dictionary from reference names to sets of valid contigs
+    _reference_name_to_valid_contig_names = {}
+
+    def _check_that_genome_has_contig(self):
+        """
+        Any annotation code which wants to look up genomic loci in a reference
+        genome should first run this helper to make sure the normalized contig
+        name is in the genome.
+        """
+        reference_name = self.reference_name
+
+        if reference_name not in self._reference_name_to_valid_contig_names:
+            self._reference_name_to_valid_contig_names[reference_name] = set(
+                self.genome.contigs())
+
+        valid_contigs =  \
+            self._reference_name_to_valid_contig_names[reference_name]
+
+        if self.contig not in valid_contigs:
+            raise ValueError("Invalid contig name '%s' for reference '%s'" % (
+                self.contig,
+                self.reference_name))
+
+
+
     @property
     def transcripts(self):
         if self._transcripts is None:
+            self._check_that_genome_has_contig()
             self._transcripts = self.genome.transcripts_at_locus(
                 self.contig, self.start, self.end)
         return self._transcripts
@@ -388,6 +399,7 @@ class Variant(Serializable):
         Return Gene object for all genes which overlap this variant.
         """
         if self._genes is None:
+            self._check_that_genome_has_contig()
             self._genes = self.genome.genes_at_locus(
                 self.contig, self.start, self.end)
         return self._genes
@@ -399,8 +411,11 @@ class Variant(Serializable):
         this method is significantly cheaper than calling `Variant.genes()`,
         which has to issue many more queries to construct each Gene object.
         """
-        return self.genome.gene_ids_at_locus(
-            self.contig, self.start, self.end)
+        if self._gene_ids is None:
+            self._check_that_genome_has_contig()
+            self._gene_ids = self.genome.gene_ids_at_locus(
+                self.contig, self.start, self.end)
+        return self._gene_ids
 
     @property
     def gene_names(self):
@@ -409,8 +424,11 @@ class Variant(Serializable):
         this method is significantly cheaper than calling `Variant.genes()`,
         which has to issue many more queries to construct each Gene object.
         """
-        return self.genome.gene_names_at_locus(
-            self.contig, self.start, self.end)
+        if self._gene_names is None:
+            self._check_that_genome_has_contig()
+            self._gene_names = self.genome.gene_names_at_locus(
+                self.contig, self.start, self.end)
+        return self._gene_names
 
     @property
     def coding_genes(self):
@@ -474,10 +492,54 @@ class Variant(Serializable):
         """Is this variant a pyrimidine to purine change or vice versa"""
         return self.is_snv and is_purine(self.ref) != is_purine(self.alt)
 
+    def _convert_ucsc_contig_name_to_ensembl(self, contig):
+        """
+        Convert names such as "chr1" to "1" but don't convert the
+        unplaced contigs such as "chrUn_KI270438v1" or alt contigs
+        such as "chr6_apd_hap1".
+
+        Parameters
+        ----------
+        contig : str
+
+        Returns
+        -------
+        str
+        """
+        if contig.startswith("chr") and "_" not in contig:
+            contig = self.contig[3:]
+        if contig == "M":
+            contig = "MT"
+        return contig
+
+    def clone_without_ucsc_data(self):
+        """
+        Clone this variant but discarding the original format of its genome
+        and contig: useful if we want to mix hg19 and GRCh37 variants.
+
+        Returns
+        -------
+        Variant
+        """
+        return Variant(
+            contig=self.contig,
+            start=self.original_start,
+            ref=self.original_ref,
+            alt=self.original_alt,
+            genome=self.genome,
+            allow_extended_nucleotides=self.allow_extended_nucleotides,
+            normalize_contig_names=self.normalize_contig_names,
+            convert_ucsc_contig_names=False)
 
 def variant_ascending_position_sort_key(variant):
     """
     Sort key function used to sort variants in ascending order by
     chromosomal position.
+
+    This is a function rather than method to make it easier to serialize.
+
+    Returns
+    -------
+    tuple of (str, int)
     """
     return (variant.contig, variant.start)

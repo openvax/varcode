@@ -1,4 +1,4 @@
-# Copyright (c) 2016. Mount Sinai School of Medicine
+# Copyright (c) 2016-2019. Mount Sinai School of Medicine
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -69,7 +69,8 @@ def predict_variant_effects(variant, raise_on_error=False):
         effects = []
 
         # group transcripts by their gene ID
-        transcripts_grouped_by_gene = groupby_field(variant.transcripts, 'gene_id')
+        transcripts_grouped_by_gene = \
+            groupby_field(variant.transcripts, 'gene_id')
 
         # want effects in the list grouped by the gene they come from
         for gene_id in sorted(variant.gene_ids):

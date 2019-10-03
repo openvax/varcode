@@ -26,7 +26,7 @@ from .common import expect_effect
 
 def test_substitution_Akt1_chr12_112657169_C_T_G286R():
     expect_effect(
-        variant=Variant("chr12", 112657169, "C", "T", "GRCm38"),
+        variant=Variant("chr12", 112657169, "C", "T", "mm10"),
         effect_class=Substitution,
         aa_mutation_start_offset=285,
         aa_ref="G",
@@ -34,7 +34,7 @@ def test_substitution_Akt1_chr12_112657169_C_T_G286R():
 
 def test_substitution_Apof_chr10_128269477_A_G_I167V():
     expect_effect(
-        variant=Variant("chr10", 128269477, "A", "G", "GRCm38"),
+        variant=Variant("chr10", 128269477, "A", "G", "mm10"),
         effect_class=Substitution,
         aa_mutation_start_offset=166,
         aa_ref="I",
@@ -42,7 +42,7 @@ def test_substitution_Apof_chr10_128269477_A_G_I167V():
 
 def test_substitution_Csmd3_chr15_47857894_A_T_V1551D():
     expect_effect(
-        variant=Variant("chr15", 47857894, "A", "T", "GRCm38"),
+        variant=Variant("chr15", 47857894, "A", "T", "mm10"),
         effect_class=Substitution,
         aa_mutation_start_offset=1550,
         aa_ref="V",
@@ -50,7 +50,7 @@ def test_substitution_Csmd3_chr15_47857894_A_T_V1551D():
 
 def test_substitution_Pprc1_chr19_46062202_T_A_I130N():
     expect_effect(
-        variant=Variant("chr19", 46062202, "T", "A", "GRCm38"),
+        variant=Variant("chr19", 46062202, "T", "A", "mm10"),
         effect_class=Substitution,
         aa_mutation_start_offset=129,
         aa_ref="I",
@@ -58,7 +58,7 @@ def test_substitution_Pprc1_chr19_46062202_T_A_I130N():
 
 def test_substitution_Vipr1_chr9_121664630_T_C_F249S():
     expect_effect(
-        variant=Variant("chr9", 121664630, "T", "C", "GRCm38"),
+        variant=Variant("chr9", 121664630, "T", "C", "mm10"),
         effect_class=Substitution,
         aa_mutation_start_offset=248,
         aa_ref="F",

@@ -64,6 +64,7 @@ ensembl_reference_aliases = {
         "GCF_000001635.22",  # GRCm38.p2
         "GCF_000001635.21",  # GRCm38.p1
         "GCF_000001635.20",  # GRCm38
+        "GCA_000001635", # TODO: what's the difference between GCA_ and GCF_?
     ]
 }
 
