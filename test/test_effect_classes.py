@@ -229,7 +229,7 @@ def test_stop_gain():
     # the phase is 0.
     variant = Variant(
         contig="17",
-        pos=43082575 - 6,
+        start=43082575 - 6,
         ref="",
         alt="CTA",
         genome=ensembl_grch38)
@@ -251,7 +251,7 @@ def test_stop_gain_with_extra_amino_acids():
     # at near beginning since the phase is 0.
     variant = Variant(
         contig="17",
-        pos=43082575 - 6,
+        start=43082575 - 6,
         ref="",
         alt="CTAAAA",
         genome=ensembl_grch38)
@@ -271,7 +271,7 @@ def test_exon_loss():
     #
     variant = Variant(
         contig="17",
-        pos=43082404,
+        start=43082404,
         ref="".join([
             "CTTTTTCTGATGTGCTTTGTTCTGGATTTCGCAGGTCCTCAAGGGCAGAAGAGTCACTTATGATG",
             "GAAGGGTAGCTGTTAGAAGGCTGGCTCCCATGCTGTTCTAACACAGCTTCAGTAATTAGATTAGT",
@@ -296,7 +296,7 @@ def test_exonic_splice_site():
     #
     variant = Variant(
         "17",
-        pos=43082404,
+        start=43082404,
         ref="C",
         alt="",
         genome=ensembl_grch38)
@@ -316,7 +316,7 @@ def test_deletion():
     #
     variant = Variant(
         contig="17",
-        pos=43082404 + 4,
+        start=43082404 + 4,
         ref="TTC",
         alt="",
         genome=ensembl_grch38)
@@ -349,7 +349,7 @@ def test_insertion():
     #
     variant = Variant(
         contig="17",
-        pos=43082575 - 6,
+        start=43082575 - 6,
         ref="",
         alt="AAA",
         genome=ensembl_grch38)
@@ -392,7 +392,7 @@ def test_frameshift_truncation():
     # Inspired by rs786202998 from dbSNP, turns GAA -> TGA|A
     variant = Variant(
         contig="17",
-        pos=43091031,
+        start=43091031,
         ref="",
         alt="A",
         genome=ensembl_grch38)
@@ -419,7 +419,7 @@ def test_frameshift_truncation_in_exon_12_of_BRCA1_001():
     #   -Q- -R-  *
     variant = Variant(
         contig="17",
-        pos=43082575 - 6,
+        start=43082575 - 6,
         ref="",
         alt="A",
         genome=ensembl_grch38)
@@ -460,7 +460,7 @@ def test_silent():
     #
     variant = Variant(
         contig="17",
-        pos=43082575 - 5,
+        start=43082575 - 5,
         ref="CCT",
         alt="TCT",
         genome=ensembl_grch38)
@@ -475,19 +475,19 @@ def test_silent_stop_codons():
     silent_stop_codon_variants = {
         "ENST00000290524": Variant(
             1,
-            pos=151314663,
+            start=151314663,
             ref="C",
             alt="T",
             genome=ensembl_grch37),
         "ENST00000368725": Variant(
             1,
-            pos=153409535,
+            start=153409535,
             ref="C",
             alt="T",
             genome=ensembl_grch37),
         "ENST00000353479": Variant(
             10,
-            pos=105791994,
+            start=105791994,
             ref="C",
             alt="T",
             genome=ensembl_grch37),
@@ -510,7 +510,7 @@ def test_five_prime_utr():
     # CCTGCGCTCAGGAGGCCTTCACCCTCTGCTCTGGGTAAAG
     variant = Variant(
         contig="17",
-        pos=43125370 - 2,
+        start=43125370 - 2,
         ref="CTC",
         alt="",
         genome=ensembl_grch38)
@@ -531,7 +531,7 @@ def test_three_prime_utr():
     # ...CACTTCCA
     variant = Variant(
         contig="17",
-        pos=43044295,
+        start=43044295,
         ref="TGG",
         alt="",
         genome=ensembl_grch38)
@@ -550,7 +550,7 @@ def test_intronic():
     # #12 ENSE00003527960 43,082,575  43,082,404  start_phase = 0
     variant = Variant(
         contig="17",
-        pos=43082575 + 20,
+        start=43082575 + 20,
         ref="",
         alt="CCC",
         genome=ensembl_grch38)
@@ -564,7 +564,7 @@ def test_intronic():
 def test_disruptive_insertion_stop_gain():
     variant = Variant(
         contig="7",
-        pos=117182143,
+        start=117182143,
         ref="",
         alt="GTA",
         genome=ensembl_grch37)
@@ -578,7 +578,7 @@ def test_disruptive_insertion_stop_gain():
 def test_substitution_nonfinal_stop_gain():
     variant = Variant(
         contig="7",
-        pos=117182145,
+        start=117182145,
         ref="ACAG",
         alt="TAAC",
         genome=ensembl_grch37)
@@ -592,7 +592,7 @@ def test_substitution_nonfinal_stop_gain():
 def test_insertion_nonfinal_stop_gain():
     variant = Variant(
         contig="7",
-        pos=117182144,
+        start=117182144,
         ref="",
         alt="TAGGTT",
         genome=ensembl_grch37)
@@ -606,7 +606,7 @@ def test_insertion_nonfinal_stop_gain():
 def test_variant_ending_after_exon():
     variant = Variant(
         contig="11",
-        pos=106262686,
+        start=106262686,
         ref="GTGAAGG",
         alt="",
         genome=mouse_genome)
