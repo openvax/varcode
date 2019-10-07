@@ -24,8 +24,9 @@ def collect_version_info():
     """
     Collection the version and path of Varcode.
 
-    TODO: add a `dependencies=False` option to also collect this info from
-    major Python dependencies such as PyEnsembl
+    TODO:
+        add a `dependencies=False` option to also collect this info from
+        major Python dependencies such as PyEnsembl
     """
     d = OrderedDict()
     d["Varcode"] = (__version__, dirname(package_init_file_path))

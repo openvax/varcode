@@ -37,7 +37,7 @@ def test_issue167_insertion_of_stop_codon():
     CHROM  POS ID  REF ALT QUAL    FILTER  INFO    FORMAT
     chr1    99772782    .   ACTG    ATGA    5000    .   .   .
     """
-    variant = Variant("chr1", 99772782, "A", "ATGA", ensembl="GRCm38")
+    variant = Variant("chr1", 99772782, "A", "ATGA", ensembl="mm10")
     expect_effect(
         variant=variant,
         effect_class=PrematureStop,
@@ -57,7 +57,7 @@ def test_issue168_frameshift_creates_silent_stop_codon():
     #CHROM  POS ID  REF ALT QUAL    FILTER  INFO    FORMAT
     chr1    100484699   .   T   TA  5000    .   .   .
     """
-    variant = Variant("chr1", 100484699, "T", "TA", "GRCm38")
+    variant = Variant("chr1", 100484699, "T", "TA", "mm10")
     expect_effect(
         variant,
         effect_class=Silent)
@@ -80,13 +80,13 @@ def test_issue169_insertion_of_stop_codon():
     # chr1    99772782    .   ACTG    ATTATGA 5000    .   .   .
     """
     # synonymous substitution followed by stop codon
-    variant = Variant("chr1", 99772782, "ACTG", "ATTATGA", "GRCm38")
+    variant = Variant("chr1", 99772782, "ACTG", "ATTATGA", "mm10")
     expect_effect(
         variant,
         effect_class=PrematureStop)
 
     # non-synonymous substitution followed by stop codon
-    variant = Variant("chr1", 99772782, "ACTG", "AACCTGA", "GRCm38")
+    variant = Variant("chr1", 99772782, "ACTG", "AACCTGA", "mm10")
     expect_effect(
         variant,
         effect_class=PrematureStop)
@@ -123,7 +123,7 @@ def test_issue170_stop_loss_does_not_translate_into_3prime_utr():
     #CHROM  POS ID  REF ALT QUAL    FILTER  INFO    FORMAT
     chr1    100484699   .   TG  TC  5000    .   .   .
     """
-    variant = Variant("chr1", 100484699, "TG", "TC", "GRCm38")
+    variant = Variant("chr1", 100484699, "TG", "TC", "mm10")
     expect_effect(
         variant,
         transcript_id="ENSMUST00000086738",
@@ -147,7 +147,7 @@ def test_issue_171_insertion_into_stop_codon():
     #CHROM  POS ID  REF ALT QUAL    FILTER  INFO    FORMAT
     chr1    100484699   .   T   TCCT    5000    .   .   .
     """
-    variant = Variant("chr1", 100484699, "T", "TCCT", "GRCm38")
+    variant = Variant("chr1", 100484699, "T", "TCCT", "mm10")
     expect_effect(
         variant,
         effect_class=Insertion,
@@ -164,7 +164,7 @@ def test_issue172_insertion_after_stop_codon():
     #CHROM  POS ID  REF ALT QUAL    FILTER  INFO    FORMAT
     chr1    100484701   .   A   ACAGCAG 5000    .   .   .
     """
-    variant = Variant("chr1", 100484701, "A", "ACAGCAG", ensembl="GRCm38")
+    variant = Variant("chr1", 100484701, "A", "ACAGCAG", ensembl="mm10")
     expect_effect(
         variant=variant,
         effect_class=Silent)
@@ -179,7 +179,7 @@ def test_issue174_wrong_aa_ref_for_insertion_of_stop_codon():
     * aa_ref = "L" (FAIL, just insertion, ref should be empty)
     * aa_alt = ""
     """
-    variant = Variant("chr1", 99772782, "A", "ATGA", "GRCm38")
+    variant = Variant("chr1", 99772782, "A", "ATGA", "mm10")
     expect_effect(
         variant=variant,
         effect_class=PrematureStop,
@@ -204,7 +204,7 @@ def test_issue175_wrong_end_offset_for_insertion_with_stop_codon():
 
     Thus the aa_mutation_end_offset=7 should stay as it is.
     """
-    variant = Variant("chr1", 99772782, "A", "ACCCTGA", "GRCm38")
+    variant = Variant("chr1", 99772782, "A", "ACCCTGA", "mm10")
     expect_effect(
         variant=variant,
         effect_class=PrematureStop,
@@ -223,7 +223,7 @@ def test_issue176_substitution_before_stop_codon():
     chr1 100484697 . T C 5000 . . .
     This is annotated as a StopLoss. It's a Substitution. VEP gets it right.
     """
-    variant = Variant("chr1", 100484697, "T", "C", "GRCm38")
+    variant = Variant("chr1", 100484697, "T", "C", "mm10")
     expect_effect(
         variant=variant,
         transcript_id="ENSMUST00000086738",
@@ -269,7 +269,7 @@ def test_issue202_stoploss_deletes_two_amino_acids():
     * aa_ref="FI*"
     * aa_alt="PTIVWSS(...)"
     """
-    variant = Variant('chr1', 100484693, 'TTCATCTGA', 'CCC', 'GRCm38')
+    variant = Variant('chr1', 100484693, 'TTCATCTGA', 'CCC', 'mm10')
     expect_effect(
         variant,
         transcript_id='ENSMUST00000086738',
@@ -299,7 +299,7 @@ def test_issue236_codon_split_across_exons():
     Based on this behavior, I would expect any variant in a codon that is split
     between exon boundaries to have incorrect WT and mutant AA.
     """
-    variant = Variant('chr16', 1370517, 'T', 'A', 'GRCh37')
+    variant = Variant('chr16', 1370517, 'T', 'A', 'hg19')
     expect_effect(
         variant,
         transcript_id='ENST00000397514',

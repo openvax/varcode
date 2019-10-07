@@ -1,6 +1,6 @@
-numpy>=1.7, <2.0
+numpy>=1.7
 pandas>=0.15
-pyensembl>=1.7.4
+pyensembl>=1.8.1
 biopython>=1.64
 pyvcf>=0.6.7
 memoized_property>=1.0.2

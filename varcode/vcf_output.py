@@ -31,33 +31,35 @@ def variants_to_vcf(variants, variant_to_metadata, out=sys.stdout):
         of metadata.
     """
 
-    # TODO: The variant metadata dictionary (in the `VariantCollection`)
-    # contains different data depending on the original input file format (VCF,
-    # MAF, CSV).  It's easy to output variants originally in VCF format, but we
-    # might want to consider how fields from MAF (for example) map to those in
-    # VCF.
+    # TODO:
+    #   The variant metadata dictionary (in the `VariantCollection`)
+    #   contains different data depending on the original input file format (VCF,
+    #   MAF, CSV).  It's easy to output variants originally in VCF format, but we
+    #   might want to consider how fields from MAF (for example) map to those in
+    #   VCF.
 
-    # TODO: The VCF file we output doesn't contain any VCF metadata headers, as
-    # the original headers were thrown away when the VCF file was parsed. We
-    # may want to keep some of that information and/or infer some of the
-    # headers based on the variants themselves. The former is difficult because
-    # merge conflicts will inevitably occur; the latter is difficult because
-    # the variants themselves don't contain all the information required for
-    # these metadata headers (e.g., descriptions).
-    #
-    # As a side note, adding headers for certain fields will make them parse
-    # correctly -- into an integer instead of a string (the default), for
-    # example.
+    # TODO:
+    #   The VCF file we output doesn't contain any VCF metadata headers, as
+    #   the original headers were thrown away when the VCF file was parsed. We
+    #   may want to keep some of that information and/or infer some of the
+    #   headers based on the variants themselves. The former is difficult because
+    #   merge conflicts will inevitably occur; the latter is difficult because
+    #   the variants themselves don't contain all the information required for
+    #   these metadata headers (e.g., descriptions).
+    #   As a side note, adding headers for certain fields will make them parse
+    #   correctly -- into an integer instead of a string (the default), for
+    #   example.
 
-    # TODO: If we maintain headers (see above TODO), what should happen if
-    # variant sources use different reference genomes?
-    #
-    # If we don't maintain headers, what should the default reference genome
-    # be? This code chose one fairly arbitrarily.
+    # TODO:
+    #   If we maintain headers (see above), what should happen if
+    #   variant sources use different reference genomes?
+    #   If we don't maintain headers, what should the default reference genome
+    #   be? This code chose one fairly arbitrarily.
 
-    # TODO: If we end up needing more functions to "build" VCF record fields
-    # (see functions below), we may want to abstract away the individual
-    # functions and create a mapping from field to format function.
+    # TODO:
+    #   If we end up needing more functions to "build" VCF record fields
+    #   (see functions below), we may want to abstract away the individual
+    #   functions and create a mapping from field to format function.
 
     def get_metadata_field(key, variant, default='.'):
         """Retrieve field from variant metadata dictionary."""
@@ -181,14 +183,15 @@ def variants_to_vcf(variants, variant_to_metadata, out=sys.stdout):
         def merge_variant_list(duplicates):
             """Merge duplicate variant list into one."""
 
-            # TODO: Currently assumes that only alternate bases differ, but we may
-            # want or need to merge variants that have the same ID but different
-            # contigs, positions, or reference bases. If merging isn't possible (which
-            # I think is the case for many situations), it may be easiest to assign
-            # the "missing value" to the IDs and move on.
+            # TODO:
+            #  Currently assumes that only alternate bases differ, but we may
+            #   want or need to merge variants that have the same ID but different
+            #   contigs, positions, or reference bases. If merging isn't possible (which
+            #   I think is the case for many situations), it may be easiest to assign
+            #   the "missing value" to the IDs and move on.
 
             assert len(duplicates) > 0
-            assert all(v.original_contig == duplicates[0].original_contig and
+            assert all(v.contig == duplicates[0].contig and
                        v.original_start == duplicates[0].original_start and
                        v.original_ref == duplicates[0].original_ref for v in duplicates)
             import copy
@@ -203,7 +206,7 @@ def variants_to_vcf(variants, variant_to_metadata, out=sys.stdout):
         # groups variants by contig; relative ordering of contigs doesn't matter
         return sorted(
             merged_variants,
-            key=lambda v: (str(v.original_contig), str(v.original_start)))
+            key=lambda v: (str(v.contig), str(v.original_start)))
 
     def get_sample_names():
         """Return the sample names for all variants."""
@@ -254,7 +257,7 @@ def variants_to_vcf(variants, variant_to_metadata, out=sys.stdout):
     # but if variants from multiple sources have been merged then we might
     # not be able to write out a VCF since the individual variants may be using
     # different coordinate systems
-    genome_names = list({v.ensembl.reference_name for v in unique_variants_list})
+    genome_names = list({v.original_reference_name for v in unique_variants_list})
     if len(genome_names) > 1:
         raise ValueError(
             "Cannot create VCF for variants with multiple reference genomes: %s" % (

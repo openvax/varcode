@@ -50,7 +50,7 @@ def _merge_metadata_naive(variants):
     }
 
 
-def _do_roundtrip_test(filenames):
+def _do_roundtrip_test(filenames, convert_ucsc_to_grch37=False):
 
     def load_fn(filename):
         return {
@@ -65,6 +65,8 @@ def _do_roundtrip_test(filenames):
         return variant_collections[0].union(*variant_collections[1:])
 
     variants = load_variants()
+    if convert_ucsc_to_grch37:
+        variants = variants.clone_without_ucsc_data()
 
     with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
         metadata = _merge_metadata_naive(variants)
@@ -73,28 +75,29 @@ def _do_roundtrip_test(filenames):
     reparsed_variants = load_vcf(tmp_name)
 
     # `==` checks the reference genome, which won't necessarily match.
-    assert all(
-        v1.contig == v2.contig and
-        v1.start == v2.start and
-        v1.ref == v2.ref and
-        v1.start == v2.start
-        for (v1, v2) in zip(variants, reparsed_variants))
+    for (v1, v2) in zip(variants, reparsed_variants):
+        assert (
+            v1.contig == v2.contig and
+            v1.start == v2.start and
+            v1.ref == v2.ref and
+            v1.start == v2.start), (v1, v2)
 
     return (variants, reparsed_variants)
 
-    # TODO: There is definitely more opportunity here to compare metadata
-    # fields, with caveats.
-    #
-    # First, any variants from non-VCF sources (e.g., MAF files) will inevitably
-    # lose some information through the change in representation (more importantly,
-    # even if there is no loss in data, that data will be in a different format in
-    # the new metadata dictionary). Thus, we should either ignore such variants
-    # or only check certain fields.
-    #
-    # Second, without the original metadata headers in the VCF file, all metadata
-    # information will be parsed as strings. Thus, for a simple comparison between
-    # metadata (without the need to individually convert fields), we'd need to add
-    # these headers to the output VCF file. See `vcf_output.py` for more info.
+    # TODO:
+    #   There is definitely more opportunity here to compare metadata
+    #   fields, with caveats.
+    #   ---
+    #   First, any variants from non-VCF sources (e.g., MAF files) will inevitably
+    #   lose some information through the change in representation (more importantly,
+    #   even if there is no loss in data, that data will be in a different format in
+    #   the new metadata dictionary). Thus, we should either ignore such variants
+    #   or only check certain fields.
+    #   ---
+    #   Second, without the original metadata headers in the VCF file, all metadata
+    #   information will be parsed as strings. Thus, for a simple comparison between
+    #   metadata (without the need to individually convert fields), we'd need to add
+    #   these headers to the output VCF file. See `vcf_output.py` for more info.
 
 
 def test_single_file_roundtrip_conversion():
@@ -104,17 +107,22 @@ def test_single_file_roundtrip_conversion():
 
 def test_multiple_file_roundtrip_conversion():
     file_groups = (
-        ['simple.1.vcf', 'simple.2.vcf'],  # basic multi-file test
-        ['duplicates.maf', 'multiallelic.vcf'],  # dif. file formats
+        ['simple.1.vcf', 'simple.2.vcf'],  # basic multi-file VCF test
+        ['duplicates.maf', 'ov.wustle.subset5.maf'],  # multiple MAF files
         ['duplicate-id.1.vcf', 'duplicate-id.2.vcf'],
-        TEST_FILENAMES_HUMAN,
     )
     for file_group in file_groups:
         yield (_do_roundtrip_test, file_group)
 
+def test_multiple_file_roundtrip_conversion_mixed_references():
+    # testing roundtrip serialization of hg19 VCF files
+    # converted to GRCh37 combined with b37 MAFs
+    _do_roundtrip_test(TEST_FILENAMES_HUMAN, convert_ucsc_to_grch37=True)
 
 def test_same_samples_produce_samples():
-    """Ensures that, if a set of variants have the same samples, the reparsed
+    """test_same_samples_produce_samples
+
+    Ensures that, if a set of variants have the same samples, the reparsed
     collection will output these samples.
     """
     (variants, reparsed_variants) = _do_roundtrip_test(
@@ -130,7 +138,9 @@ def test_same_samples_produce_samples():
 
 
 def test_different_samples_produce_no_samples():
-    """Ensures that, if a set of variants have different samples, the reparsed
+    """test_different_samples_produce_no_samples
+
+    Ensures that, if a set of variants have different samples, the reparsed
     collection will not output any samples.
 
     See `vcf_output.py` for details as to why this is the way it's done for now.

@@ -121,7 +121,7 @@ def test_deletion_no_suffix():
 def test_serialization():
     variants = [
         Variant(
-            1, start=10, ref="AA", alt="AAT", ensembl=ensembl_grch38),
+            1, start=10, ref="AA", alt="AAT", genome=ensembl_grch38),
         Variant(10, start=15, ref="A", alt="G"),
         Variant(20, start=150, ref="", alt="G"),
     ]
@@ -151,21 +151,32 @@ def test_serialization():
         reconstituted = Variant.from_json(serialized)
         eq_(original, reconstituted)
 
-def test_chromosome_normalization():
-    # trimmin of mithochondrial name
-    eq_(Variant("M", 1, "A", "G").contig, "MT")
-    eq_(Variant("M", 1, "A", "G", normalize_contig_name=False).contig, "M")
+def test_hg19_chromosome_names():
+    # trimming of mithochondrial name
+    eq_(Variant("M", 1, "A", "G", "hg19", convert_ucsc_contig_names=True).contig, "MT")
+    eq_(Variant("M", 1, "A", "G", "hg19", convert_ucsc_contig_names=False).contig, "M")
 
-    eq_(Variant("chrM", 1, "A", "G").contig, "MT")
-    eq_(Variant("chrM", 1, "A", "G", normalize_contig_name=False).contig, "chrM")
+    eq_(Variant("chrM", 1, "A", "G", "hg19", convert_ucsc_contig_names=True).contig, "MT")
+    eq_(Variant("chrM", 1, "A", "G", "hg19", convert_ucsc_contig_names=False).contig, "chrM")
 
     # uppercase
-    eq_(Variant("chrm", 1, "A", "G").contig, "MT")
-    eq_(Variant("chrm", 1, "A", "G", normalize_contig_name=False).contig, "chrm")
+    eq_(Variant("chrm", 1, "A", "G", "hg19", convert_ucsc_contig_names=True).contig, "MT")
+    eq_(Variant("chrm", 1, "A", "G", "hg19", convert_ucsc_contig_names=False).contig, "chrM")
 
     # trimming of 'chr' prefix from hg19
-    eq_(Variant("chr1", 1, "A", "G").contig, "1")
-    eq_(Variant("chr1", 1, "A", "G", normalize_contig_name=False).contig, "chr1")
+    eq_(Variant("chr1", 1, "A", "G", "hg19", convert_ucsc_contig_names=True).contig, "1")
+    eq_(Variant("chr1", 1, "A", "G", "hg19", convert_ucsc_contig_names=False).contig, "chr1")
+
+def test_contig_name_normalization():
+    eq_(Variant(1, 1, "A", "G", normalize_contig_names=True).contig, "1")
+    eq_(Variant(1, 1, "A", "G", normalize_contig_names=False).contig, 1)
+
+    # uppercase
+    eq_(Variant(
+        "chrm", 1, "A", "G", normalize_contig_names=True, convert_ucsc_contig_names=False).contig, "chrM")
+    eq_(Variant(
+        "chrm", 1, "A", "G", normalize_contig_names=False, convert_ucsc_contig_names=False).contig, "chrm")
+
 
 def test_snv_transition_transversion():
     ref_variant = Variant(1, start=100, ref="C", alt="C")

@@ -1,4 +1,4 @@
-# Copyright (c) 2016. Mount Sinai School of Medicine
+# Copyright (c) 2016-2019. Mount Sinai School of Medicine
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -126,8 +126,25 @@ class VariantCollection(Collection):
         """
         All distinct reference names used by Variants in this
         collection.
+
+        Returns
+        -------
+        set of str
         """
-        return set(variant.reference_name for variant in self)
+        return {variant.reference_name for variant in self}
+
+    @memoize
+    def original_reference_names(self):
+        """
+        Similar to `reference_names` but preserves UCSC references,
+        so that a variant collection derived from an hg19 VCF would
+        return {"hg19"} instead of {"GRCh37"}.
+
+        Returns
+        -------
+        set of str
+        """
+        return {variant.original_reference_name for variant in self}
 
     def groupby_gene(self):
         return self.multi_groupby(lambda x: x.genes)
@@ -326,3 +343,7 @@ class VariantCollection(Collection):
             # TODO: return a DataFrame with the appropriate columns
             return pd.DataFrame()
         return pd.DataFrame.from_records(rows, columns=rows[0].keys())
+
+    def clone_without_ucsc_data(self):
+        variants = [v.clone_without_ucsc_data() for v in self]
+        return self.clone_with_new_elements(variants)

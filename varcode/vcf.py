@@ -26,7 +26,10 @@ import pandas
 from typechecks import require_string
 import vcf as pyvcf
 
-from .reference import infer_genome
+from .reference import (
+    infer_genome,
+    ensembl_to_ucsc_reference_names
+)
 from .variant import Variant, variant_ascending_position_sort_key
 from .variant_collection import VariantCollection
 
@@ -44,7 +47,9 @@ def load_vcf(
         chunk_size=10 ** 5,
         max_variants=None,
         sort_key=variant_ascending_position_sort_key,
-        distinct=True):
+        distinct=True,
+        normalize_contig_names=True,
+        convert_ucsc_contig_names=None):
     """
     Load reference name and Variant objects from the given VCF filename.
 
@@ -66,14 +71,14 @@ def load_vcf(
         Name of metadata field which contains path to reference FASTA
         file (default = 'reference')
 
-    only_passing : boolean, optional
+    only_passing : bool, optional
         If true, any entries whose FILTER field is not one of "." or "PASS" is
         dropped.
 
-    allow_extended_nucleotides : boolean, default False
+    allow_extended_nucleotides : bool, default False
         Allow characters other that A,C,T,G in the ref and alt strings.
 
-    include_info : boolean, default True
+    include_info : bool, default True
         Whether to parse the INFO and per-sample columns. If you don't need
         these, set to False for faster parsing.
 
@@ -87,8 +92,19 @@ def load_vcf(
         Function which maps each element to a sorting criterion.
         Set to None to not to sort the variants.
 
-    distinct : boolean, default True
+    distinct : bool, default True
         Don't keep repeated variants
+
+    normalize_contig_names : bool, default True
+        By default contig names will be normalized by converting integers
+        to strings (e.g. 1 -> "1"), and converting any letters after "chr"
+        to uppercase (e.g. "chrx" -> "chrX"). If you don't want
+        this behavior then pass normalize_contig_names=False.
+
+    convert_ucsc_contig_names : bool
+        Convert chromosome names from hg19 (e.g. "chr1") to equivalent names
+        for GRCh37 (e.g. "1"). By default this is set to True if the genome
+        of the VCF is a UCSC reference and otherwise set to False.
     """
 
     require_string(path, "Path or URL to VCF")
@@ -122,7 +138,9 @@ def load_vcf(
                 chunk_size=chunk_size,
                 max_variants=max_variants,
                 sort_key=sort_key,
-                distinct=distinct)
+                distinct=distinct,
+                normalize_contig_names=normalize_contig_names,
+                convert_ucsc_contig_names=convert_ucsc_contig_names)
         finally:
             logger.info("Removing temporary file: %s", filename)
             os.unlink(filename)
@@ -135,10 +153,30 @@ def load_vcf(
     # data. We can close the file after that.
     handle = PyVCFReaderFromPathOrURL(path)
     handle.close()
-    genome = infer_genome_from_vcf(
-        genome,
-        handle.vcf_reader,
-        reference_vcf_key)
+
+    ####
+    # The following code looks a bit crazy because it's motivated by the
+    # desired to preserve UCSC reference names even though the Variant
+    # objects we're creating will convert them to EnsemblRelease genomes
+    # with different reference names.
+    #
+    # For example, if a VCF is aligned against 'hg19' then we want to create a
+    # variant which has 'hg19' as its genome argument, so that serialization
+    # back to VCF will put the correct reference genome in the generated
+    # header.
+    if genome is None:
+        vcf_reader = handle.vcf_reader
+        if reference_vcf_key not in vcf_reader.metadata:
+            raise ValueError("Unable to infer reference genome for %s" % (
+                vcf_reader.filename,))
+        genome = vcf_reader.metadata[reference_vcf_key]
+
+    genome, genome_was_ucsc = infer_genome(genome)
+    if genome_was_ucsc:
+        genome = ensembl_to_ucsc_reference_names[genome.reference_name]
+
+    if convert_ucsc_contig_names is None:
+        convert_ucsc_contig_names = genome_was_ucsc
 
     df_iterator = read_vcf_into_dataframe(
         path,
@@ -160,6 +198,20 @@ def load_vcf(
     else:
         sample_info_parser = None
 
+    variant_kwargs = {
+        'genome': genome,
+        'allow_extended_nucleotides': allow_extended_nucleotides,
+        'normalize_contig_names': normalize_contig_names,
+        'convert_ucsc_contig_names': convert_ucsc_contig_names,
+    }
+
+    variant_collection_kwargs = {
+        'sort_key': sort_key,
+        'distinct': distinct
+    }
+
+    # TODO: drop chrMT variants from hg19 and warn user about it
+
     return dataframes_to_variant_collection(
         df_iterator,
         source_path=path,
@@ -168,12 +220,9 @@ def load_vcf(
         max_variants=max_variants,
         sample_names=handle.vcf_reader.samples if include_info else None,
         sample_info_parser=sample_info_parser,
-        variant_kwargs={
-            'ensembl': genome,
-            'allow_extended_nucleotides': allow_extended_nucleotides},
-        variant_collection_kwargs={
-            'sort_key': sort_key,
-            'distinct': distinct})
+        variant_kwargs=variant_kwargs,
+        variant_collection_kwargs=variant_collection_kwargs)
+
 
 
 def load_vcf_fast(*args, **kwargs):
@@ -469,19 +518,6 @@ def stream_gzip_decompress_lines(stream):
                 yield line
     yield previous
 
-
-def infer_genome_from_vcf(genome, vcf_reader, reference_vcf_key):
-    """
-    Helper function to make a pyensembl.Genome instance.
-    """
-    if genome:
-        return infer_genome(genome)
-    elif reference_vcf_key not in vcf_reader.metadata:
-        raise ValueError("Unable to infer reference genome for %s" % (
-            vcf_reader.filename,))
-    else:
-        reference_path = vcf_reader.metadata[reference_vcf_key]
-        return infer_genome(reference_path)
 
 
 def parse_url_or_path(s):
