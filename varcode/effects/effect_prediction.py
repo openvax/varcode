@@ -62,7 +62,16 @@ def predict_variant_effects(variant, raise_on_error=False):
     # Intergenic effect
     # TODO: look for nearby genes and mark those as Upstream and Downstream
     # effects
-    if len(variant.gene_ids) == 0:
+    try:
+        gene_ids = variant.gene_ids
+        transcripts = variant.transcripts
+    except:
+        if raise_on_error:
+            raise
+        else:
+            return []
+
+    if len(gene_ids) == 0:
         effects = [Intergenic(variant)]
     else:
         # list of all MutationEffects for all genes & transcripts
@@ -70,13 +79,13 @@ def predict_variant_effects(variant, raise_on_error=False):
 
         # group transcripts by their gene ID
         transcripts_grouped_by_gene = \
-            groupby_field(variant.transcripts, 'gene_id')
+            groupby_field(transcripts, 'gene_id')
 
         # want effects in the list grouped by the gene they come from
-        for gene_id in sorted(variant.gene_ids):
+        for gene_id in sorted(gene_ids):
             if gene_id not in transcripts_grouped_by_gene:
                 # intragenic variant overlaps a gene but not any transcripts
-                gene = variant.ensembl.gene_by_id(gene_id)
+                gene = variant.genome.gene_by_id(gene_id)
                 effects.append(Intragenic(variant, gene))
             else:
                 # gene ID  has transcripts overlapped by this variant
