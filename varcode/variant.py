@@ -57,7 +57,7 @@ class Variant(Serializable):
     # any keywords which are renamed or removed should be added to this
     # dictionary to preserve the ability to deserialize old representations
     # of Variant objects
-    _KEYWORD_ALIASES = {
+    _SERIALIZABLE_KEYWORD_ALIASES = {
         "normalize_contig_name": "normalize_contig_names"
     }
     
