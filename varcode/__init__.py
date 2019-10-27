@@ -31,11 +31,13 @@ __all__ = [
     "Variant",
     "EffectCollection",
     "VariantCollection",
+
     # effects
     "effect_priority",
     "top_priority_effect",
     "MutationEffect",
     "NonsilentCodingMutation",
+
     # file loading
     "load_maf",
     "load_maf_dataframe",
