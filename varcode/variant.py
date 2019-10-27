@@ -54,6 +54,13 @@ class Variant(Serializable):
         "_gene_names",
     )
 
+    # any keywords which are renamed or removed should be added to this
+    # dictionary to preserve the ability to deserialize old representations
+    # of Variant objects
+    _SERIALIZABLE_KEYWORD_ALIASES = {
+        "normalize_contig_name": "normalize_contig_names"
+    }
+    
     def __init__(
             self,
             contig,

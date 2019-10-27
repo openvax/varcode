@@ -151,6 +151,44 @@ def test_serialization():
         reconstituted = Variant.from_json(serialized)
         eq_(original, reconstituted)
 
+def test_deserialization_old_keywords():
+    old_variant_representation_json = """
+    {
+        "ref": "T",
+        "contig": "22",
+        "start": 23230319,
+        "__class__": {
+            "__name__": "Variant",
+            "__module__": "varcode.variant"
+        },
+        "normalize_contig_name": true,
+        "alt": "G",
+        "allow_extended_nucleotides": false,
+        "ensembl": {
+            "__class__": {
+                "__name__": "EnsemblRelease",
+                "__module__": "pyensembl.ensembl_release"
+            },
+            "release": 75,
+            "server": "ftp://ftp.ensembl.org",
+            "species": {
+                "__class__": {
+                    "__name__": "Species",
+                    "__module__": "pyensembl.species"
+                },
+                "latin_name": "homo_sapiens"
+            }
+        }
+    }
+    """
+    variant = Variant.from_json(old_variant_representation_json)
+    eq_(variant.contig, "22")
+    eq_(variant.ref, "T")
+    eq_(variant.alt, "G")
+    eq_(variant.reference_name, "GRCh37")
+    eq_(variant.normalize_contig_names, True)
+    eq_(variant.allow_extended_nucleotides, False)
+
 def test_hg19_chromosome_names():
     # trimming of mithochondrial name
     eq_(Variant("M", 1, "A", "G", "hg19", convert_ucsc_contig_names=True).contig, "MT")

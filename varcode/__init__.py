@@ -24,18 +24,20 @@ from .effects import (
     NonsilentCodingMutation,
 )
 
-__version__ = '1.0.1'
+__version__ = '1.0.2'
 
 __all__ = [
     # basic classes
     "Variant",
     "EffectCollection",
     "VariantCollection",
+
     # effects
     "effect_priority",
     "top_priority_effect",
     "MutationEffect",
     "NonsilentCodingMutation",
+
     # file loading
     "load_maf",
     "load_maf_dataframe",
