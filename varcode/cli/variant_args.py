@@ -17,7 +17,6 @@ from argparse import ArgumentParser
 
 from ..vcf import load_vcf
 from ..maf import load_maf
-from ..reference import infer_genome
 from ..variant_collection import VariantCollection
 from ..variant import Variant
 
