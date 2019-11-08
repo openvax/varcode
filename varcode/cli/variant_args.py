@@ -1,4 +1,4 @@
-# Copyright (c) 2016. Mount Sinai School of Medicine
+# Copyright (c) 2016-2019. Mount Sinai School of Medicine
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,8 +14,6 @@
 
 from __future__ import print_function, division, absolute_import
 from argparse import ArgumentParser
-
-from pyensembl import genome_for_reference_name
 
 from ..vcf import load_vcf
 from ..maf import load_maf
@@ -120,21 +118,15 @@ def download_and_install_reference_data(variant_collections):
 def variant_collection_from_args(args, required=True):
     variant_collections = []
 
-    if args.genome:
-        genome = genome_for_reference_name(args.genome)
-    else:
-        # no genome specified, assume it can be inferred from the file(s)
-        # we're loading
-        genome = None
-
     for vcf_path in args.vcf:
-        variant_collections.append(load_vcf(vcf_path, genome=genome))
+        variant_collections.append(
+            load_vcf(vcf_path, genome=args.genome))
 
     for maf_path in args.maf:
         variant_collections.append(load_maf(maf_path))
 
     if args.variant:
-        if not genome:
+        if not args.genome:
             raise ValueError(
                 "--genome must be specified when using --variant")
 
@@ -144,7 +136,7 @@ def variant_collection_from_args(args, required=True):
                 start=position,
                 ref=ref,
                 alt=alt,
-                ensembl=genome)
+                genome=args.genome)
             for (chromosome, position, ref, alt)
             in args.variant
         ]

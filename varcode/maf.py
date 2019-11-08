@@ -79,6 +79,7 @@ def load_maf_dataframe(path, nrows=None, raise_on_error=True, encoding=None):
         low_memory=False,
         skip_blank_lines=True,
         header=0,
+        nrows=nrows,
         encoding=encoding)
 
     if len(df.columns) < n_basic_columns:
@@ -117,7 +118,8 @@ def load_maf(
         sort_key=variant_ascending_position_sort_key,
         distinct=True,
         raise_on_error=True,
-        encoding=None):
+        encoding=None,
+        nrows=None):
     """
     Load reference name and Variant objects from MAF filename.
 
@@ -143,10 +145,17 @@ def load_maf(
 
     encoding : str, optional
         Encoding to use for UTF when reading MAF file.
+
+    nrows : int, optional
+        Limit to number of rows loaded
     """
     # pylint: disable=no-member
     # pylint gets confused by read_csv inside load_maf_dataframe
-    maf_df = load_maf_dataframe(path, raise_on_error=raise_on_error, encoding=encoding)
+    maf_df = load_maf_dataframe(
+        path,
+        nrows=nrows,
+        raise_on_error=raise_on_error,
+        encoding=encoding)
 
     if len(maf_df) == 0 and raise_on_error:
         raise ValueError("Empty MAF file %s" % path)
