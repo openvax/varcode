@@ -1,4 +1,3 @@
-# Copyright (c) 2014-2019. Mount Sinai School of Medicine
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -31,7 +30,7 @@ except Exception as e:
     print("Failed to open %s" % readme_path)
 
 # Determine version number
-with open('varcode/__init__.py', 'r') as f:
+with open('varcode/version.py', 'r') as f:
     version = re.search(
         r'^__version__\s*=\s*[\'"]([^\'"]*)[\'"]',
         f.read(),
@@ -52,7 +51,7 @@ if __name__ == '__main__':
         author_email="alex@openvax.org",
         license="http://www.apache.org/licenses/LICENSE-2.0.html",
         classifiers=[
-            'Development Status :: 3 - Alpha',
+            'Development Status :: 4 - Beta',
             'Environment :: Console',
             'Operating System :: OS Independent',
             'Intended Audience :: Science/Research',
@@ -65,7 +64,7 @@ if __name__ == '__main__':
             'pandas>=0.15',
             'pyensembl>=1.8.1',
             'biopython>=1.64',
-            'pyvcf>=0.6.7',
+            'pyvcf3>=1.0.0',
             'memoized_property>=1.0.2',
             'serializable>=0.2.1',
             'sercol>=0.1.4',
