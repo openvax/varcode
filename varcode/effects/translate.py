@@ -1,4 +1,3 @@
-# Copyright (c) 2016-2018 Mount Sinai School of Medicine
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,7 +18,6 @@ TODO: generalize this to work with the mitochondrial codon table.
 
 from __future__ import division, absolute_import, print_function
 
-from six.moves import range
 from Bio.Data import CodonTable
 from Bio.Seq import Seq
 

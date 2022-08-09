@@ -1,8 +1,8 @@
 sudo: false  # Use container-based infrastructure
 language: python
 python:
-  - "2.7"
-  - "3.6"
+  - "3.8"
+  - "3.9"
 git:
   # don't need the default depth of 50
   # but don't want to use a depth of 1 since that affects
@@ -88,4 +88,4 @@ deploy:
     secure: "FpDbTEuGN2NGKoSMcD4A8bVvAv1TKhALqZymnjWPfFxy1AvOcRQb2k4tornLjONgccLjw+Uq7Jh66Pv8D9nK8h7AY3Sx9hmip7lSWgIraguWdTvumXfAKIJ+CH+PNRjH9qXBkrdExYBNbF0Mb3XyTmpRU02FEDxNzOJcBS+wokQ="
   on:
     branch: master
-    condition: $TRAVIS_PYTHON_VERSION = "2.7"
+    condition: $TRAVIS_PYTHON_VERSION = "3.9"

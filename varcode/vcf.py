@@ -1,4 +1,3 @@
-# Copyright (c) 2016-2019. Mount Sinai School of Medicine
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,11 +16,11 @@ from __future__ import absolute_import, print_function, division
 import os
 import requests
 import zlib
+import urllib
 import logging
 from collections import OrderedDict
 from warnings import warn
 
-from six.moves import urllib
 import pandas
 from typechecks import require_string
 import vcf as pyvcf
