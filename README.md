@@ -1,4 +1,5 @@
 <!--
+Test status hidden while migrating from Travis to GitHub actions
 <a href="https://travis-ci.org/openvax/varcode">
     <img src="https://travis-ci.org/openvax/varcode.svg?branch=master" alt="Build Status" />
 </a>
