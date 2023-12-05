@@ -1,6 +1,8 @@
+<!--
 <a href="https://travis-ci.org/openvax/varcode">
     <img src="https://travis-ci.org/openvax/varcode.svg?branch=master" alt="Build Status" />
 </a>
+-->
 <a href="https://coveralls.io/github/openvax/varcode?branch=master">
     <img src="https://coveralls.io/repos/openvax/varcode/badge.svg?branch=master&service=github" alt="Coverage Status" />
 </a>
