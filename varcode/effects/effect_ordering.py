@@ -172,7 +172,7 @@ def name_of_associated_transcript(effect):
     """
     return apply_to_transcript_if_exists(
         effect=effect,
-        fn=lambda t: t.name,
+        fn=lambda t: None if t.name is None else "",
         default="")
 
 
