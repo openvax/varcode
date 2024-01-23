@@ -48,7 +48,7 @@ if __name__ == '__main__':
         long_description_content_type='text/markdown',
         url="https://github.com/openvax/varcode",
         author="Alex Rubinsteyn",
-        author_email="alex@openvax.org",
+        author_email="alex.rubinsteyn@unc.edu",
         license="http://www.apache.org/licenses/LICENSE-2.0.html",
         classifiers=[
             'Development Status :: 4 - Beta',
