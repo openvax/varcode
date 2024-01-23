@@ -76,5 +76,8 @@ def expect_effect(
             format_string = "Expected %s='%s' but got '%s'"
         assert actual_value == expected_value, format_string % (field, expected_value, actual_value)
 
-def eq_(x, y):
-    assert x == y, "%s != %s" % (x, y)
+def eq_(x, y, s=None):
+    if s is None:
+        assert x == y, "%s != %s" % (x, y)
+    else:
+        assert x == y, s
