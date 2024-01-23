@@ -1,10 +1,10 @@
-from nose.tools import eq_
-from varcode.cli.effects_script import main as run_script
-from varcode import Variant
 from tempfile import NamedTemporaryFile
 import pandas as pd
 
+from varcode.cli.effects_script import main as run_script
+from varcode import Variant
 
+from .common import eq_
 def test_varcode_effects_script_kras_g12d_top_effect():
     """
     Load a variant collection with combines the ovarian cancer test VCF

@@ -16,12 +16,9 @@
 Test properties of VariantCollection objects other than effect annotations
 """
 from collections import Counter
-from nose.tools import eq_
-try:
-    import cPickle as pickle
-except ImportError:
-    import pickle
+import pickle
 
+from .common import eq_ 
 from .data import ov_wustle_variants, tcga_ov_variants
 
 from varcode import VariantCollection, Variant

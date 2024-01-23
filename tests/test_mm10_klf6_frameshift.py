@@ -5,7 +5,7 @@ from varcode.effects.effect_prediction_coding_frameshift import (
     cdna_codon_sequence_after_insertion_frameshift,
 )
 
-from nose.tools import eq_
+from .common import eq_
 
 
 def validate_effect_values(effect):

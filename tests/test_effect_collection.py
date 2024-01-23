@@ -16,8 +16,9 @@
 Test properties of EffectCollection
 """
 
-from nose.tools import eq_
+
 from varcode.effects import IncompleteTranscript, Substitution
+from .common import eq_
 from .data import tcga_ov_variants, ov_wustle_variants
 tcga_ov_effects = tcga_ov_variants.effects()
 ov_wustle_effects = ov_wustle_variants.effects()

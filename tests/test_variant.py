@@ -17,12 +17,11 @@ Test simple properties of Variant objects, such as their trimming
 of shared prefix/suffix strings from ref/alt fields.
 """
 
-from six.moves import cPickle as pickle
-
+import pickle
 from pyensembl import ensembl_grch38
 
 from varcode import Variant
-from nose.tools import eq_
+from .common import eq_
 
 def test_insertion_shared_prefix():
     variant = Variant(1, start=10, ref="AA", alt="AAT")

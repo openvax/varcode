@@ -1,6 +1,6 @@
 from __future__ import absolute_import
 
-from nose.tools import eq_
+from .common import eq_
 
 from varcode import load_vcf, load_vcf_fast, Variant
 from varcode.effects import Substitution

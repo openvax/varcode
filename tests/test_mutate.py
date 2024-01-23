@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from varcode.effects import mutate
-from nose.tools import eq_
+from .common import eq_
 
 def test_snp_mutation():
     seq = "AACCTT"

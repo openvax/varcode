@@ -10,9 +10,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from nose.tools import eq_
+
 import warnings
 from varcode.reference import infer_reference_name, ensembl_reference_aliases, most_recent_assembly_name
+from .common import eq_
 
 ## test cases are given as 
 ## expected response: list of inputs

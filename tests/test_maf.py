@@ -13,7 +13,7 @@
 # limitations under the License.
 from __future__ import absolute_import
 
-from nose.tools import eq_
+from .common import eq_
 from pyensembl import ensembl_grch37 as ensembl
 
 from varcode import Variant, load_maf, load_maf_dataframe

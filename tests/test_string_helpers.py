@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from nose.tools import eq_
+from .common import eq_
 
 from varcode.string_helpers import trim_shared_flanking_strings
 

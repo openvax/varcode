@@ -1,6 +1,9 @@
-from nose.tools import eq_
+
 import pickle
+
 from varcode import EffectCollection
+
+from .common import eq_
 from .data import tcga_ov_variants, ov_wustle_variants
 
 tcga_ov_effects = tcga_ov_variants.effects()
