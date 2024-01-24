@@ -12,6 +12,9 @@
 
 
 import warnings
+
+import pytest 
+
 from varcode.reference import infer_reference_name, ensembl_reference_aliases, most_recent_assembly_name
 from .common import eq_
 
@@ -34,30 +37,31 @@ def test_most_recent_assembly():
     eq_(most_recent_assembly_name(['ncbi36', 'grch38', '37mm']), 'grch38')
     eq_(most_recent_assembly_name(['ncbi36']), 'ncbi36')
     eq_(most_recent_assembly_name(['ncbi36', '35']), 'ncbi36')
-
-def _normalized_alias_matches_canonical(candidate, assembly_name):
-    eq_(infer_reference_name(candidate), assembly_name)
-
-def test_infer_reference_name_aliases():
+def generate_reference_name_aliases():
     with warnings.catch_warnings(record=True) as w:
         for assembly_name, aliases in ensembl_reference_aliases.items():
             candidate_list = [assembly_name] + list(aliases)
             for candidate in candidate_list:
-                yield (
-                    _normalized_alias_matches_canonical,
+                yield (                
                     candidate,
                     assembly_name
                 )
 
-
-def test_infer_reference_name_test_cases():
+@pytest.mark.parametrize(['candidate', 'assembly_name'], generate_reference_name_aliases())
+def test_infer_reference_name_aliases(candidate, assembly_name):
+    eq_(infer_reference_name(candidate), assembly_name)
+    
+def generate_reference_name_fasta_filenames():
     with warnings.catch_warnings(record=True):
         for assembly_name, aliases in reference_test_cases.items():
             candidate_list = [assembly_name] + list(aliases)
             for candidate in candidate_list:
                 yield (
-                    _normalized_alias_matches_canonical,
                     candidate,
                     assembly_name
                 )
+
+@pytest.mark.parametrize(['candidate', 'assembly_name'], generate_reference_name_fasta_filenames())
+def test_reference_name_fasta_filenames(candidate, assembly_name):
+    eq_(infer_reference_name(candidate), assembly_name)
 

@@ -16,6 +16,8 @@ unit test but the goal of this test module is to make sure that there is
 at least one test for each effect class
 """
 
+import pytest
+
 from varcode import Variant
 from varcode.effects import (
     IncompleteTranscript,
@@ -469,7 +471,8 @@ def test_silent():
         modifies_coding_sequence=True,
         modifies_protein_sequence=False)
 
-def test_silent_stop_codons():
+
+def generate_silent_stop_codon_effects():
     silent_stop_codon_variants = {
         "ENST00000290524": Variant(
             1,
@@ -492,10 +495,17 @@ def test_silent_stop_codons():
     }
     for transcript_id, variant in silent_stop_codon_variants.items():
         yield (
-            expect_effect,
             variant,
             transcript_id,
             Silent)
+
+@pytest.mark.parametrize(['variant', 'transcript_id', 'effect_class'], generate_silent_stop_codon_effects())
+def test_silent_stop_codons(variant, transcript_id, effect_class):
+    expect_effect(
+        variant,
+        transcript_id=transcript_id,
+        effect_class=effect_class)
+
 
 def test_five_prime_utr():
     # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)

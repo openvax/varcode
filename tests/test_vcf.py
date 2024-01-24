@@ -10,12 +10,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import print_function, division, absolute_import
 import os
-from nose.tools import eq_
+
+import pytest 
+
 from pyensembl import cached_release
-from varcode import load_vcf, load_vcf_fast, Variant
+from varcode import load_vcf, Variant
+
+from .common import eq_
 from .data import data_path
+
+
 
 # Set to 1 to enable, 0 to disable.
 # TODO: consider running in an in-process HTTP server instead for these tests.
@@ -135,16 +140,18 @@ def test_vcf_number_entries_duplicates():
         distinct=False)
     assert len(variants) == 3
 
-def _check_variant_gene_name(collection, variant):
+def generate_vcf_gene_names():
+    variants = load_vcf(HG19_VCF_FILENAME)
+    for variant in variants:
+        yield (variants, variant)
+
+@pytest.mark.parametrize(['collection', 'variant'], generate_vcf_gene_names())
+def test_vcf_gene_names(collection, variant):
     expected_gene_names = collection.metadata[variant]['info']['GE']
     assert variant.gene_names == expected_gene_names, \
         "Expected gene name %s for variant %s, got %s" % (
             expected_gene_names, variant, variant.gene_names)
 
-def test_vcf_gene_names():
-    variants = load_vcf(HG19_VCF_FILENAME)
-    for variant in variants:
-        yield (_check_variant_gene_name, variants, variant)
 
 def test_multiple_alleles_per_line():
     variants = load_vcf(data_path("multiallelic.vcf"))

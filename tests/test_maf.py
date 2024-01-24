@@ -1,5 +1,3 @@
-# Copyright (c) 2015. Mount Sinai School of Medicine
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -11,15 +9,16 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from __future__ import absolute_import
 
-from .common import eq_
+import pytest 
+
 from pyensembl import ensembl_grch37 as ensembl
 
 from varcode import Variant, load_maf, load_maf_dataframe
 
 import pandas as pd
 
+from .common import eq_
 from .data import tcga_ov_variants, ov_wustle_variants, data_path
 
 def test_maf():
@@ -36,16 +35,8 @@ def test_maf():
         assert any(gene.name == gene_name for gene in v_maf.genes), \
             "Expected gene name %s but got %s" % (gene_name, v_maf.genes)
 
-def check_same_aa_change(variant, expected_aa_change):
-    effect = variant.effects().top_priority_effect()
-    change = effect.short_description
-    eq_(
-        change,
-        expected_aa_change,
-        "MAF file had annotation %s but Varcode gave %s" % (
-            expected_aa_change, change))
 
-def test_maf_aa_changes():
+def generate_maf_aa_changes():
     # Parse a MAF file and make sure we're annotating the protein amino acid
     # changes in the same way.
     #
@@ -73,7 +64,18 @@ def test_maf_aa_changes():
     for variant in ov_wustle_variants:
         key = (variant.contig, variant.start)
         expected = expected_changes[key]
-        yield (check_same_aa_change, variant, expected)
+        yield (variant, expected)
+
+@pytest.mark.parametrize(['variant', 'expected_aa_change'], generate_maf_aa_changes())
+def test_maf_aa_changes(variant, expected_aa_change):
+    effect = variant.effects().top_priority_effect()
+    change = effect.short_description
+    eq_(
+        change,
+        expected_aa_change,
+        "MAF file had annotation %s but Varcode gave %s" % (
+            expected_aa_change, change))
+
 
 def test_maf_number_entries_duplicates():
     # There are 3 duplicated mutations listed in the MAF
