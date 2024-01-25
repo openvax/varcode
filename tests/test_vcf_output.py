@@ -1,5 +1,3 @@
-# Copyright (c) 2015. Mount Sinai School of Medicine
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -12,12 +10,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import print_function, division, absolute_import
-from varcode import load_vcf, load_maf
-
-from varcode.vcf_output import variants_to_vcf
-from .data import data_path
 import tempfile
+
+import pytest 
+
+from varcode import load_vcf, load_maf
+from varcode.vcf_output import variants_to_vcf
+
+from .data import data_path
+
 
 TEST_FILENAMES_HUMAN = [
     'duplicates.maf',
@@ -48,6 +49,7 @@ def _merge_metadata_naive(variants):
         for d in variants.source_to_metadata_dict.values()
         for k, v in d.items()
     }
+
 
 
 def _do_roundtrip_test(filenames, convert_ucsc_to_grch37=False):
@@ -100,19 +102,17 @@ def _do_roundtrip_test(filenames, convert_ucsc_to_grch37=False):
     #   these headers to the output VCF file. See `vcf_output.py` for more info.
 
 
-def test_single_file_roundtrip_conversion():
-    for filename in TEST_FILENAMES:
-        yield (_do_roundtrip_test, [filename])
+@pytest.mark.parametrize(['filename'], TEST_FILENAMES)
+def test_roundtrip_serialization_single_file(filename):
+    _do_roundtrip_test([filename])
 
-
-def test_multiple_file_roundtrip_conversion():
-    file_groups = (
+@pytest.mark.parametrize(['filename'], (
         ['simple.1.vcf', 'simple.2.vcf'],  # basic multi-file VCF test
         ['duplicates.maf', 'ov.wustle.subset5.maf'],  # multiple MAF files
         ['duplicate-id.1.vcf', 'duplicate-id.2.vcf'],
-    )
-    for file_group in file_groups:
-        yield (_do_roundtrip_test, file_group)
+    ))
+def test_multiple_file_roundtrip_conversion(file_group):
+    _do_roundtrip_test(file_group)
 
 def test_multiple_file_roundtrip_conversion_mixed_references():
     # testing roundtrip serialization of hg19 VCF files
