@@ -102,15 +102,17 @@ def _do_roundtrip_test(filenames, convert_ucsc_to_grch37=False):
     #   these headers to the output VCF file. See `vcf_output.py` for more info.
 
 
-@pytest.mark.parametrize(['filename'], TEST_FILENAMES)
+@pytest.mark.parametrize(['filename'], [(f,) for f in TEST_FILENAMES])
 def test_roundtrip_serialization_single_file(filename):
     _do_roundtrip_test([filename])
 
-@pytest.mark.parametrize(['filename'], (
-        ['simple.1.vcf', 'simple.2.vcf'],  # basic multi-file VCF test
-        ['duplicates.maf', 'ov.wustle.subset5.maf'],  # multiple MAF files
-        ['duplicate-id.1.vcf', 'duplicate-id.2.vcf'],
-    ))
+FILENAME_PAIRS = (
+    ['simple.1.vcf', 'simple.2.vcf'],  # basic multi-file VCF test
+    ['duplicates.maf', 'ov.wustle.subset5.maf'],  # multiple MAF files
+    ['duplicate-id.1.vcf', 'duplicate-id.2.vcf'],
+)
+
+@pytest.mark.parametrize(['file_group'], [(f,) for f in FILENAME_PAIRS])
 def test_multiple_file_roundtrip_conversion(file_group):
     _do_roundtrip_test(file_group)
 
