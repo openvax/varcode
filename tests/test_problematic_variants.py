@@ -4,6 +4,7 @@ to crash or return an incorrect annotation should be added to this
 test module.
 """
 
+import pytest
 from varcode import Variant
 
 from .common import check_effect_properties
@@ -157,10 +158,8 @@ should_not_crash_variants = [
         genome="GRCh37")
 ]
 
-def try_effect_annotation(variant):
+
+@pytest.mark.parametrize(['variant'], [(v,) for v in should_not_crash_variants])
+def test_crashing_variants(variant):
     effect = variant.effects().top_priority_effect()
     check_effect_properties(effect)
-
-def test_crashing_variants():
-    for variant in should_not_crash_variants:
-        yield (try_effect_annotation, variant)
