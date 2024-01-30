@@ -10,7 +10,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from six import integer_types
 
 expected_effect_properties = [
     'gene',
@@ -66,7 +65,7 @@ def expect_effect(
                 effect.mutant_protein_sequence)
     for field, expected_value in kwargs.items():
         actual_value = getattr(effect, field)
-        if isinstance(expected_value, integer_types):
+        if isinstance(expected_value, int):
             format_string = "Expected %s=%d but got %s"
         elif isinstance(expected_value, float):
             format_string = "Expected %s=%f but got %s"
