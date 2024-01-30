@@ -10,9 +10,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from nose.tools import eq_
-from varcode import VariantCollection
 
+from varcode import VariantCollection
+from .common import eq_
 from .data import (
     snp_rs4244285,
     snp_rs1537415

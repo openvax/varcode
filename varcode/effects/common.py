@@ -1,5 +1,3 @@
-# Copyright (c) 2016. Mount Sinai School of Medicine
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -12,15 +10,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import print_function, division, absolute_import
-
 from Bio.Seq import Seq
-from six import string_types, text_type
+
 
 
 def bio_seq_to_str(seq):
-    if isinstance(seq, Seq):
-        return str(seq)
-    elif isinstance(seq, string_types):
-        return text_type(seq)
-    return seq
+    if type(seq) is str:
+        return seq
+    else:
+        return str(seq) 
+    

@@ -1,4 +1,3 @@
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -15,8 +14,6 @@
 
 TODO: generalize this to work with the mitochondrial codon table.
 """
-
-from __future__ import division, absolute_import, print_function
 
 from Bio.Data import CodonTable
 from Bio.Seq import Seq

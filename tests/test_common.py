@@ -10,8 +10,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from nose.tools import eq_
 import varcode
+from .common import eq_
 
 def test_memoize():
     class State(object):

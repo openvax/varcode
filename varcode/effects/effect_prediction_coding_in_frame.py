@@ -1,5 +1,3 @@
-# Copyright (c) 2016-2018. Mount Sinai School of Medicine
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -16,7 +14,6 @@
 Effect annotation for variants which modify the coding sequence without
 changing the reading frame.
 """
-from __future__ import division, absolute_import, print_function
 
 from ..string_helpers import trim_shared_flanking_strings
 from .effect_classes import (
