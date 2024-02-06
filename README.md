@@ -1,18 +1,17 @@
 [![Tests](https://github.com/openvax/varcode/actions/workflows/tests.yml/badge.svg)](https://github.com/openvax/varcode/actions/workflows/tests.yml)
 <a href="https://coveralls.io/github/openvax/varcode?branch=master">
-    <img src="https://coveralls.io/repos/openvax/varcode/badge.svg?branch=master&service=github" alt="Coverage Status" />
+<img src="https://coveralls.io/repos/openvax/varcode/badge.svg?branch=master&service=github" alt="Coverage Status" />
 </a>
 <a href="https://pypi.python.org/pypi/varcode/">
-    <img src="https://img.shields.io/pypi/v/varcode.svg?maxAge=1000" alt="PyPI" />
+<img src="https://img.shields.io/pypi/v/varcode.svg?maxAge=1000" alt="PyPI" />
 </a>
+[![PyPI downloads](https://img.shields.io/pypi/dm/varcode.svg)](https://pypistats.org/packages/varcode)
 
-Varcode
-=======
+# Varcode
 
 Varcode is a library for working with genomic variant data in Python and predicting the impact of those variants on protein sequences.
 
-Installation
-------------
+## Installation
 
 You can install varcode using [pip](https://pip.pypa.io/en/latest/quickstart.html):
 
@@ -27,10 +26,7 @@ You can install required reference genome data through [PyEnsembl](https://githu
 pyensembl install --release 75 76
 ```
 
-
-Example
--------
-
+## Example
 
 ```python
 import varcode
@@ -85,36 +81,34 @@ print(premature_stop_effect.gene.name)
 
 If you are looking for a quick start guide, you can check out [this iPython book](./examples/varcode-quick_start.ipynb) that demonstrates simple use cases of Varcode
 
-Effect Types
-------------
+## Effect Types
 
-Effect type  | Description
------------: | :-----------
-*AlternateStartCodon* | Replace annotated start codon with alternative  start codon (*e.g.* "ATG>CAG").
-*ComplexSubstitution* | Insertion and deletion of multiple amino acids.
-*Deletion* | Coding mutation which causes deletion of amino acid(s).
-*ExonLoss* | Deletion of entire exon, significantly disrupts protein.
-*ExonicSpliceSite* | Mutation at the beginning or end of an exon, may affect splicing.
-*FivePrimeUTR* | Variant affects 5' untranslated region before start codon.
-*FrameShiftTruncation* | A frameshift which leads immediately to a stop codon (no novel amino acids created).
-*FrameShift* | Out-of-frame insertion or deletion of nucleotides, causes novel protein sequence and often premature stop codon.
-*IncompleteTranscript* | Can't determine effect since transcript annotation is incomplete (often missing either the start or stop codon).
-*Insertion* | Coding mutation which causes insertion of amino acid(s).
-*Intergenic* | Occurs outside of any annotated gene.
-*Intragenic* |Within the annotated boundaries of a gene but not in a region that's transcribed into pre-mRNA.
-*IntronicSpliceSite* | Mutation near the beginning or end of an intron but less likely to affect splicing than donor/acceptor mutations.
-*Intronic* | Variant occurs between exons and is unlikely to affect splicing.
-*NoncodingTranscript* | Transcript doesn't code for a protein.
-*PrematureStop* | Insertion of stop codon, truncates protein.
-*Silent* | Mutation in coding sequence which does not change the amino acid sequence of the translated protein.
-*SpliceAcceptor* | Mutation in the last two nucleotides of an intron, likely to affect splicing.
-*SpliceDonor* | Mutation in the first two nucleotides of an intron, likely to affect splicing.
-*StartLoss* | Mutation causes loss of start codon, likely result is that an alternate start codon will be used down-stream (possibly in a different frame).
-*StopLoss* | Loss of stop codon, causes extension of protein by translation of nucleotides from 3' UTR.
-*Substitution* | Coding mutation which causes simple substitution of one amino acid for another.
-*ThreePrimeUTR* | Variant affects 3' untranslated region after stop codon of mRNA.
+|            Effect type | Description                                                                                                                                   |
+| ---------------------: | :-------------------------------------------------------------------------------------------------------------------------------------------- |
+|  _AlternateStartCodon_ | Replace annotated start codon with alternative start codon (_e.g._ "ATG>CAG").                                                                |
+|  _ComplexSubstitution_ | Insertion and deletion of multiple amino acids.                                                                                               |
+|             _Deletion_ | Coding mutation which causes deletion of amino acid(s).                                                                                       |
+|             _ExonLoss_ | Deletion of entire exon, significantly disrupts protein.                                                                                      |
+|     _ExonicSpliceSite_ | Mutation at the beginning or end of an exon, may affect splicing.                                                                             |
+|         _FivePrimeUTR_ | Variant affects 5' untranslated region before start codon.                                                                                    |
+| _FrameShiftTruncation_ | A frameshift which leads immediately to a stop codon (no novel amino acids created).                                                          |
+|           _FrameShift_ | Out-of-frame insertion or deletion of nucleotides, causes novel protein sequence and often premature stop codon.                              |
+| _IncompleteTranscript_ | Can't determine effect since transcript annotation is incomplete (often missing either the start or stop codon).                              |
+|            _Insertion_ | Coding mutation which causes insertion of amino acid(s).                                                                                      |
+|           _Intergenic_ | Occurs outside of any annotated gene.                                                                                                         |
+|           _Intragenic_ | Within the annotated boundaries of a gene but not in a region that's transcribed into pre-mRNA.                                               |
+|   _IntronicSpliceSite_ | Mutation near the beginning or end of an intron but less likely to affect splicing than donor/acceptor mutations.                             |
+|             _Intronic_ | Variant occurs between exons and is unlikely to affect splicing.                                                                              |
+|  _NoncodingTranscript_ | Transcript doesn't code for a protein.                                                                                                        |
+|        _PrematureStop_ | Insertion of stop codon, truncates protein.                                                                                                   |
+|               _Silent_ | Mutation in coding sequence which does not change the amino acid sequence of the translated protein.                                          |
+|       _SpliceAcceptor_ | Mutation in the last two nucleotides of an intron, likely to affect splicing.                                                                 |
+|          _SpliceDonor_ | Mutation in the first two nucleotides of an intron, likely to affect splicing.                                                                |
+|            _StartLoss_ | Mutation causes loss of start codon, likely result is that an alternate start codon will be used down-stream (possibly in a different frame). |
+|             _StopLoss_ | Loss of stop codon, causes extension of protein by translation of nucleotides from 3' UTR.                                                    |
+|         _Substitution_ | Coding mutation which causes simple substitution of one amino acid for another.                                                               |
+|        _ThreePrimeUTR_ | Variant affects 3' untranslated region after stop codon of mRNA.                                                                              |
 
+## Coordinate System
 
-Coordinate System
------------------
 Varcode currently uses a "base counted, one start" genomic coordinate system, to match the Ensembl annotation database. We are planning to switch over to "space counted, zero start" (interbase) coordinates, since that system allows for more uniform logic (no special cases for insertions). To learn more about genomic coordinate systems, read this [blog post](http://alternateallele.blogspot.com/2012/03/genome-coordinate-conventions.html).
