@@ -79,7 +79,7 @@ def variants_to_vcf(variants, variant_to_metadata, out=sys.stdout):
         corresponding VCF representations.
         """
         filter_metadata = get_metadata_field('filter', variant)
-        if type(filter_metadata) == list:
+        if isinstance(filter_metadata, list):
             return 'PASS' if filter_metadata == [] else ';'.join(filter_metadata)
         else:
             # TODO: Can the filter field ever be something other than the 3
@@ -102,7 +102,7 @@ def variants_to_vcf(variants, variant_to_metadata, out=sys.stdout):
             if val is True:
                 return key
 
-            if type(val) == list:
+            if isinstance(val, list):
                 val = ','.join(map(str, val))
             else:
                 val = str(val)
@@ -132,7 +132,7 @@ def variants_to_vcf(variants, variant_to_metadata, out=sys.stdout):
 
         def build_sample_val(sample_val):
             """Build a specific value for a sample (i.e., one value for one column)."""
-            if type(sample_val) is list:
+            if isinstance(sample_val, list):
                 return ','.join(map(str, sample_val))
             elif sample_val is not None:
                 return str(sample_val)

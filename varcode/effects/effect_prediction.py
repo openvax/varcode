@@ -62,11 +62,11 @@ def predict_variant_effects(variant, raise_on_error=False):
     try:
         gene_ids = variant.gene_ids
         transcripts = variant.transcripts
-    except:
+    except Exception:
         if raise_on_error:
             raise
         else:
-            return []
+            return EffectCollection([])
 
     if len(gene_ids) == 0:
         effects = [Intergenic(variant)]

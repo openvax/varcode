@@ -115,12 +115,15 @@ def download_and_install_reference_data(variant_collections):
 def variant_collection_from_args(args, required=True):
     variant_collections = []
 
-    for vcf_path in args.vcf:
-        variant_collections.append(
-            load_vcf(vcf_path, genome=args.genome))
+    variant_collections.extend(
+        load_vcf(vcf_path, genome=args.genome)
+        for vcf_path in args.vcf
+    )
 
-    for maf_path in args.maf:
-        variant_collections.append(load_maf(maf_path))
+    variant_collections.extend(
+        load_maf(maf_path)
+        for maf_path in args.maf
+    )
 
     if args.variant:
         if not args.genome:

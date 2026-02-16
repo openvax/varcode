@@ -478,8 +478,8 @@ def top_priority_effect_for_single_gene(effects):
     # get set of indices of all effects with maximum CDS length
     max_cds_length_indices = {
         i
-        for (i, l) in enumerate(cds_lengths)
-        if l == max_cds_length
+        for (i, length) in enumerate(cds_lengths)
+        if length == max_cds_length
     }
 
     seq_lengths = [length_of_associated_transcript(e) for e in effects]
@@ -489,8 +489,8 @@ def top_priority_effect_for_single_gene(effects):
     # has maximum sequence length
     max_seq_length_indices = {
         i
-        for (i, l) in enumerate(seq_lengths)
-        if l == max_seq_length
+        for (i, length) in enumerate(seq_lengths)
+        if length == max_seq_length
     }
 
     # which effects have transcripts with both the longest CDS and
@@ -559,4 +559,3 @@ def top_priority_effect(effects):
         # if all effects were without genes then choose the best among those
         assert len(effects_without_genes) > 0
         return max(effects_without_genes, key=multi_gene_effect_sort_key)
-

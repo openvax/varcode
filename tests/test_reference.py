@@ -38,7 +38,7 @@ def test_most_recent_assembly():
     eq_(most_recent_assembly_name(['ncbi36']), 'ncbi36')
     eq_(most_recent_assembly_name(['ncbi36', '35']), 'ncbi36')
 def generate_reference_name_aliases():
-    with warnings.catch_warnings(record=True) as w:
+    with warnings.catch_warnings(record=True):
         for assembly_name, aliases in ensembl_reference_aliases.items():
             candidate_list = [assembly_name] + list(aliases)
             for candidate in candidate_list:
@@ -64,4 +64,3 @@ def generate_reference_name_fasta_filenames():
 @pytest.mark.parametrize(['candidate', 'assembly_name'], generate_reference_name_fasta_filenames())
 def test_reference_name_fasta_filenames(candidate, assembly_name):
     eq_(infer_reference_name(candidate), assembly_name)
-

@@ -179,8 +179,10 @@ class VariantCollection(Collection):
             }
             gene_name_str = ", ".join(sorted(gene_names))
             lines.append("  -- %s (%s):" % (gene_name_str, gene_id))
-            for variant in variant_group:
-                lines.append("  ---- %s" % variant)
+            lines.extend(
+                "  ---- %s" % variant
+                for variant in variant_group
+            )
         header = self.short_string()
         joined_lines = "\n".join(lines)
         return "%s\n%s" % (header, joined_lines)

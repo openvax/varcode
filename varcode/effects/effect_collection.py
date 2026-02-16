@@ -179,11 +179,13 @@ class EffectCollection(Collection):
                     lines.append("  Gene: %s (%s)" % (gene_name, gene_id))
                 # place transcript effects with more significant impact
                 # on top (e.g. FrameShift should go before NoncodingTranscript)
-                for effect in sorted(
+                lines.extend(
+                    "  -- %s" % effect
+                    for effect in sorted(
                         gene_effects,
                         key=effect_priority,
-                        reverse=True):
-                    lines.append("  -- %s" % effect)
+                        reverse=True)
+                )
 
             # if we only printed one effect for this gene then
             # it's redundant to print it again as the highest priority effect

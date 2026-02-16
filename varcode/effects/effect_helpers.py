@@ -16,6 +16,7 @@ Helper functions for determine effect annotation for a variant
 
 
 from ..nucleotides import PURINE_NUCLEOTIDES, AMINO_NUCLEOTIDES
+from .mutate import insert_after, substitute
 
 def variant_overlaps_interval(
         variant_start,
@@ -47,7 +48,7 @@ def variant_overlaps_interval(
         # end after the insertion point, they must be fully contained
         # by the other interval
         return interval_start <= variant_start and interval_end >= variant_start
-    variant_end = variant_start + n_ref_bases
+    variant_end = variant_start + n_ref_bases - 1
     """
     if self._changes_exonic_splice_site(
             strand_ref,
@@ -65,6 +66,36 @@ def matches_exon_end_pattern(seq):
     if len(seq) < 3:
         return False
     return seq[-3] in AMINO_NUCLEOTIDES and seq[-2] == "A" and seq[-1] == "G"
+
+
+def mutate_exon_sequence(
+        transcript,
+        transcript_offset,
+        transcript_ref,
+        transcript_alt,
+        exon_start_offset,
+        exon_end_offset):
+    """
+    Apply a transcript-level variant to an exon sequence.
+
+    Used for a simple splice motif model that compares the reference and
+    mutated exon-end trinucleotides.
+    """
+    exon_sequence = transcript.sequence[exon_start_offset:exon_end_offset + 1]
+    variant_offset_in_exon = transcript_offset - exon_start_offset
+
+    if len(transcript_ref) == 0:
+        return insert_after(
+            sequence=exon_sequence,
+            offset=variant_offset_in_exon,
+            new_residues=transcript_alt)
+
+    return substitute(
+        sequence=exon_sequence,
+        offset=variant_offset_in_exon,
+        ref=transcript_ref,
+        alt=transcript_alt)
+
 
 def changes_exonic_splice_site(
         transcript_offset,
@@ -150,11 +181,17 @@ def changes_exonic_splice_site(
                 exon_end_offset - 2:exon_end_offset + 1]
 
             if matches_exon_end_pattern(end_of_reference_exon):
-                # if the last three nucleotides conform to the consensus
-                # sequence then treat any deviation as an ExonicSpliceSite
-                # mutation
-                end_of_variant_exon = end_of_reference_exon
-                if matches_exon_end_pattern(end_of_variant_exon):
-                    # end of exon matches splicing signal, check if it still
-                    # does after the mutation
+                # Simple exon-end motif model:
+                #   - If reference end matches MAG and
+                #   - mutation changes the final exon trinucleotide away from
+                #     MAG, mark as an exonic splice-site effect.
+                mutated_exon_sequence = mutate_exon_sequence(
+                    transcript=transcript,
+                    transcript_offset=transcript_offset,
+                    transcript_ref=transcript_ref,
+                    transcript_alt=transcript_alt,
+                    exon_start_offset=exon_start_offset,
+                    exon_end_offset=exon_end_offset)
+                end_of_variant_exon = mutated_exon_sequence[-3:]
+                if not matches_exon_end_pattern(end_of_variant_exon):
                     return True

@@ -12,7 +12,7 @@
 
 from .common import eq_
 
-from varcode import load_vcf, load_vcf_fast, Variant
+from varcode import load_vcf, Variant
 from varcode.effects import Substitution
 from pyensembl import Genome, EnsemblRelease
 from .data import data_path

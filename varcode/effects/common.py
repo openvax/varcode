@@ -10,10 +10,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from Bio.Seq import Seq
-
-
-
 def bio_seq_to_str(seq):
     if type(seq) is str:
         return seq
