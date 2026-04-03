@@ -130,6 +130,9 @@ def cdna_codon_sequence_after_insertion_frameshift(
     coding_sequence_after_insertion = \
         sequence_from_start_codon[cds_offset_before_insertion + 1:]
 
+    nucleotides_before = ""
+    mutated_codon_index = cds_offset_before_insertion // 3
+
     if cds_offset_before_insertion % 3 == 2:
         # insertion happens after last nucleotide in a codon,
         # doesn't disrupt the existing codon from cds_offset-2 to cds_offset
