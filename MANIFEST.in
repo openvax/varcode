@@ -1,4 +1,2 @@
-include versioneer.py
-include varcode/_version.py
 include README.md
 include LICENSE

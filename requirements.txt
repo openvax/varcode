@@ -4,6 +4,5 @@ pyensembl>=1.8.1
 biopython>=1.64
 pyvcf3>=1.0.0
 memoized_property>=1.0.2
-pylint>=1.4.4
 serializable>=0.2.1
 sercol>=0.1.4
