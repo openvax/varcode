@@ -150,11 +150,15 @@ def changes_exonic_splice_site(
                 exon_end_offset - 2:exon_end_offset + 1]
 
             if matches_exon_end_pattern(end_of_reference_exon):
-                # if the last three nucleotides conform to the consensus
-                # sequence then treat any deviation as an ExonicSpliceSite
-                # mutation
-                end_of_variant_exon = end_of_reference_exon
-                if matches_exon_end_pattern(end_of_variant_exon):
-                    # end of exon matches splicing signal, check if it still
-                    # does after the mutation
+                # Reference exon end has canonical MAG splice signal.
+                # Apply the mutation to see if the variant disrupts it.
+                mutated_seq = (
+                    transcript.sequence[:transcript_offset] +
+                    transcript_alt +
+                    transcript.sequence[transcript_offset + len(transcript_ref):]
+                )
+                adjusted_end = exon_end_offset + len(transcript_alt) - len(transcript_ref)
+                end_of_variant_exon = mutated_seq[adjusted_end - 2:adjusted_end + 1]
+                if not matches_exon_end_pattern(end_of_variant_exon):
+                    # Variant broke the splice signal
                     return True
