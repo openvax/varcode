@@ -227,6 +227,52 @@ def predict_variant_effect_on_transcript(variant, transcript):
             alternate_effect=exonic_effect_annotation)
 
 
+def _canonical_splice_base(strand, before_exon, distance_to_exon):
+    """Return the expected reference base (on the + strand) at a canonical
+    splice site position, or None if no canonical expectation.
+
+    Canonical splice signals in the pre-mRNA:
+        5' donor:   ...exon | GU...   (GT on DNA)
+        3' acceptor: ...AG | exon...
+
+    On the + strand these appear as GT/AG directly. On the - strand, the
+    complement is used (GT → AC, AG → CT) and the positions are mirrored
+    relative to the exon boundary.
+
+    Parameters
+    ----------
+    strand : str
+        '+' or '-'
+    before_exon : bool
+        True if the variant is upstream of the exon in transcript order
+        (acceptor side), False if downstream (donor side).
+    distance_to_exon : int
+        1 or 2 (positions within the canonical splice dinucleotide).
+    """
+    if distance_to_exon not in (1, 2):
+        return None
+    if strand == "+":
+        if before_exon:
+            # Acceptor AG: -2=A, -1=G (genomic + strand)
+            return "A" if distance_to_exon == 2 else "G"
+        else:
+            # Donor GT: +1=G, +2=T (genomic + strand)
+            return "G" if distance_to_exon == 1 else "T"
+    else:
+        if before_exon:
+            # Reverse-strand acceptor: AG on the - strand pre-mRNA
+            # appears as CT on the + strand. Positions are at exon.end+1
+            # and exon.end+2 (higher genomic coordinates).
+            # +1 = complement(G) = C, +2 = complement(A) = T
+            return "C" if distance_to_exon == 1 else "T"
+        else:
+            # Reverse-strand donor: GT on the - strand pre-mRNA
+            # appears as AC on the + strand. Positions are at exon.start-1
+            # and exon.start-2 (lower genomic coordinates).
+            # -1 = complement(G) = C, -2 = complement(T) = A
+            return "C" if distance_to_exon == 1 else "A"
+
+
 def choose_intronic_effect_class(
         variant,
         nearest_exon,
@@ -256,6 +302,18 @@ def choose_intronic_effect_class(
     #   M is A or C; R is purine; | is the exon-intron boundary
     # 3' splice site: YAG|R
     if distance_to_exon <= 2:
+        # For SNVs at the canonical splice dinucleotide positions,
+        # check whether the reference base matches the expected canonical
+        # signal. If the reference is non-canonical, the splice site was
+        # already unusual, so downgrade to IntronicSpliceSite.
+        canonical = _canonical_splice_base(
+            nearest_exon.strand, before_exon, distance_to_exon)
+        ref = variant.trimmed_ref
+        if canonical and len(ref) == 1 and ref != canonical:
+            # Reference doesn't match canonical splice signal at this
+            # position — this is a non-canonical splice site.
+            return IntronicSpliceSite
+
         if before_exon:
             # 2 last nucleotides of intron before exon are the splice
             # acceptor site, typically "AG"
