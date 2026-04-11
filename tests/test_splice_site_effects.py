@@ -20,13 +20,8 @@ as the primary test transcript.
 Exon 4: genomic 117530899-117531114, transcript offset 405-620
   - Last 3 bases of exon 4 in transcript: AAG (matches MAG splice signal)
   - First base of exon 4 in transcript: G (purine, matches YAG|R acceptor)
-
-Exon 6: genomic 117535248-117535411, transcript offset 711-874
-  - Last 3 bases of exon 6: CAG (matches MAG splice signal)
-  - First base of exon 6: G (purine)
 """
 
-import pytest
 from pyensembl import cached_release
 
 from varcode import Variant
