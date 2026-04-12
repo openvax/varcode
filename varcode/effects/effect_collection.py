@@ -60,13 +60,16 @@ class EffectCollection(Collection):
             sort_key = _default_effect_sort_key
         elif sort_key is False:
             sort_key = None
-        self.effects = effects
         Collection.__init__(
             self,
             elements=effects,
             distinct=distinct,
             sort_key=sort_key,
             sources=sources)
+        # Keep self.effects in sync with the Collection's post-sort
+        # elements so that iterating and reading `.effects` produce
+        # the same order.  See openvax/varcode#220.
+        self.effects = self.elements
 
     def to_dict(self):
         return dict(

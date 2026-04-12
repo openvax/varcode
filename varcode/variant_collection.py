@@ -50,7 +50,6 @@ class VariantCollection(Collection):
             from metadata attributes to values.
         """
         self.source_to_metadata_dict = source_to_metadata_dict
-        self.variants = variants
         if sources is None:
             sources = set(source_to_metadata_dict.keys())
         if any(source not in sources for source in source_to_metadata_dict.keys()):
@@ -64,6 +63,10 @@ class VariantCollection(Collection):
             distinct=distinct,
             sort_key=sort_key,
             sources=sources)
+        # Keep self.variants in sync with the Collection's post-sort,
+        # post-dedup elements so that iterating `vc` and reading
+        # `vc.variants` produce the same order.  See openvax/varcode#220.
+        self.variants = self.elements
 
     @property
     def metadata(self):
