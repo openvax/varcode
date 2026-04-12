@@ -17,7 +17,9 @@ from sercol import Collection
 
 from .effects import EffectCollection
 from .common import memoize
+from .csv_helpers import read_metadata_header, write_metadata_header
 from .variant import Variant, variant_ascending_position_sort_key
+from .version import __version__ as _varcode_version
 
 
 class VariantCollection(Collection):
@@ -343,8 +345,51 @@ class VariantCollection(Collection):
             return pd.DataFrame()
         return pd.DataFrame.from_records(rows, columns=rows[0].keys())
 
+    def to_csv(self, path, include_header=True):
+        """Write this collection to CSV.
+
+        Parameters
+        ----------
+        path : str
+            Output path.
+
+        include_header : bool
+            If True (default), prepend ``# key=value`` metadata lines
+            with varcode version and reference genome so the file can
+            be read back via ``from_csv`` without supplying a genome
+            explicitly. Pass ``include_header=False`` for legacy
+            consumers that don't tolerate comment lines.
+        """
+        df = self.to_dataframe()
+        if not include_header:
+            df.to_csv(path, index=False)
+            return
+
+        metadata = OrderedDict()
+        metadata["varcode_version"] = _varcode_version
+        metadata["reference_name"] = self._serialized_reference_name()
+        with open(path, "w") as f:
+            write_metadata_header(f, metadata)
+            df.to_csv(f, index=False)
+
+    def _serialized_reference_name(self):
+        """Pick a reference-name string to record in the CSV header.
+
+        Uses the first variant's reference_name. Returns None if the
+        collection is empty or has no consistent reference.
+        """
+        names = {v.reference_name for v in self if v.reference_name}
+        if len(names) == 1:
+            return next(iter(names))
+        return None
+
     @classmethod
-    def from_csv(cls, path, genome, distinct=True, sort_key=variant_ascending_position_sort_key):
+    def from_csv(
+            cls,
+            path,
+            genome=None,
+            distinct=True,
+            sort_key=variant_ascending_position_sort_key):
         """Rebuild a VariantCollection from a CSV previously written by
         ``VariantCollection.to_csv()``.
 
@@ -352,12 +397,13 @@ class VariantCollection(Collection):
         ----------
         path : str
             Path to the CSV file. Lines starting with '#' are treated as
-            comments and skipped (reserved for future provenance headers).
+            comments and parsed as ``key=value`` metadata.
 
-        genome : pyensembl.Genome or str or int
-            Reference genome to associate with the loaded variants. This
-            has to be supplied by the caller because the current CSV
-            format does not record the reference.
+        genome : pyensembl.Genome, str, int, or None
+            Reference genome to associate with the loaded variants. If
+            ``None``, the reference is read from the CSV's metadata
+            header (``# reference_name=...``). If neither is available,
+            raises ``ValueError``.
 
         distinct : bool
             Drop duplicate variants (same as the constructor).
@@ -369,6 +415,16 @@ class VariantCollection(Collection):
         -------
         VariantCollection
         """
+        header = read_metadata_header(path)
+        if genome is None:
+            genome = header.get("reference_name")
+        if genome is None:
+            raise ValueError(
+                "from_csv needs a reference genome: pass the `genome` "
+                "argument explicitly, or write the CSV with "
+                "`to_csv(include_header=True)` so `# reference_name=...` "
+                "is recorded in the header. Neither was found at %s." % path)
+
         df = pd.read_csv(path, comment="#", dtype={"chr": str})
         required = {"chr", "start", "ref", "alt"}
         missing = required - set(df.columns)

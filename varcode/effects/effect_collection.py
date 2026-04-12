@@ -15,6 +15,8 @@ from collections import OrderedDict
 import pandas as pd
 from sercol import Collection
 
+from ..csv_helpers import read_metadata_header, write_metadata_header
+from ..version import __version__ as _varcode_version
 from .effect_ordering import (
     effect_priority,
     multi_gene_effect_sort_key,
@@ -315,8 +317,50 @@ class EffectCollection(Collection):
             return row
         return pd.DataFrame.from_records([row_from_effect(effect) for effect in self])
 
+    def to_csv(self, path, include_header=True):
+        """Write this collection to CSV.
+
+        Parameters
+        ----------
+        path : str
+            Output path.
+
+        include_header : bool
+            If True (default), prepend ``# key=value`` metadata lines
+            with varcode version and reference genome so the file can
+            be read back via ``from_csv`` without supplying a genome
+            explicitly. Pass ``include_header=False`` for legacy
+            consumers that don't tolerate comment lines.
+        """
+        df = self.to_dataframe()
+        if not include_header:
+            df.to_csv(path, index=False)
+            return
+
+        metadata = OrderedDict()
+        metadata["varcode_version"] = _varcode_version
+        metadata["reference_name"] = self._serialized_reference_name()
+        with open(path, "w") as f:
+            write_metadata_header(f, metadata)
+            df.to_csv(f, index=False)
+
+    def _serialized_reference_name(self):
+        """Pick a reference-name string to record in the CSV header.
+
+        Uses the first effect's variant's reference_name. Returns None
+        if the collection is empty or has no consistent reference.
+        """
+        names = set()
+        for effect in self:
+            variant = getattr(effect, "variant", None)
+            if variant is not None and variant.reference_name:
+                names.add(variant.reference_name)
+        if len(names) == 1:
+            return next(iter(names))
+        return None
+
     @classmethod
-    def from_csv(cls, path, genome):
+    def from_csv(cls, path, genome=None):
         """Rebuild an EffectCollection from a CSV previously written by
         ``EffectCollection.to_csv()``.
 
@@ -333,11 +377,14 @@ class EffectCollection(Collection):
         ----------
         path : str
             Path to the CSV file. Lines starting with '#' are treated as
-            comments and skipped.
+            comments and parsed as ``key=value`` metadata.
 
-        genome : pyensembl.Genome or str or int
+        genome : pyensembl.Genome, str, int, or None
             Reference genome to associate with the loaded variants and
-            to look up transcripts by ID.
+            to look up transcripts by ID. If ``None``, the reference is
+            read from the CSV's metadata header
+            (``# reference_name=...``). If neither is available, raises
+            ``ValueError``.
 
         Returns
         -------
@@ -345,6 +392,16 @@ class EffectCollection(Collection):
         """
         # Import here to avoid a circular import at module load time.
         from ..variant import Variant
+
+        header = read_metadata_header(path)
+        if genome is None:
+            genome = header.get("reference_name")
+        if genome is None:
+            raise ValueError(
+                "from_csv needs a reference genome: pass the `genome` "
+                "argument explicitly, or write the CSV with "
+                "`to_csv(include_header=True)` so `# reference_name=...` "
+                "is recorded in the header. Neither was found at %s." % path)
 
         df = pd.read_csv(path, comment="#", dtype={"contig": str})
         required = {"contig", "start", "ref", "alt", "transcript_id"}

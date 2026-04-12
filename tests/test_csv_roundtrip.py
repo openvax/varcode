@@ -163,25 +163,153 @@ def test_effect_collection_csv_roundtrip_preserves_transcripts():
 
 
 def test_effect_collection_from_csv_skips_comment_lines():
-    # from_csv should treat '#'-prefixed lines as comments — this is the
-    # convention we'll use for provenance/annotator metadata once #271
-    # lands.
+    # from_csv should treat extra '#'-prefixed lines as comments that
+    # don't interfere with body parsing.
     variant = Variant("17", 43082575 - 5, "CCT", "GGG", "GRCh38")
     original = variant.effects()
 
     path = _tmp_csv()
     try:
         original.to_csv(path)
-        # Prepend a few comment lines.
+        # Prepend a few extra comment lines in addition to the header
+        # that to_csv already wrote.
         with open(path, "r") as f:
             body = f.read()
         with open(path, "w") as f:
-            f.write("# varcode_version=2.0.0\n")
             f.write("# annotator=legacy\n")
-            f.write("# reference=GRCh38\n")
+            f.write("# timestamp=2026-04-12T14:30:00Z\n")
             f.write(body)
-        loaded = EffectCollection.from_csv(path, genome="GRCh38")
+        loaded = EffectCollection.from_csv(path)
     finally:
         os.unlink(path)
 
     assert len(loaded) == len(original)
+
+
+# -----------------------------------------------------------------------
+# Metadata header: genome is optional when the header carries it,
+# required otherwise.
+# -----------------------------------------------------------------------
+
+
+def test_variant_collection_to_csv_writes_metadata_header():
+    variants = [
+        Variant("17", 43082404, "C", "T", "GRCh38"),
+    ]
+    vc = VariantCollection(variants=variants)
+    path = _tmp_csv()
+    try:
+        vc.to_csv(path)
+        with open(path) as f:
+            head = "".join(f.readline() for _ in range(4))
+    finally:
+        os.unlink(path)
+    assert "# varcode_version=" in head
+    assert "# reference_name=GRCh38" in head
+
+
+def test_variant_collection_from_csv_reads_genome_from_header():
+    variants = [
+        Variant("17", 43082404, "C", "T", "GRCh38"),
+        Variant("7", 117531114, "G", "T", "GRCh38"),
+    ]
+    original = VariantCollection(variants=variants)
+    path = _tmp_csv()
+    try:
+        original.to_csv(path)
+        # Don't pass genome — should be read from the header.
+        loaded = VariantCollection.from_csv(path)
+    finally:
+        os.unlink(path)
+    assert len(loaded) == len(original)
+    # The loaded variants should have resolved the same reference.
+    assert all(v.reference_name == "GRCh38" for v in loaded)
+
+
+def test_variant_collection_from_csv_explicit_genome_overrides_header():
+    # Explicit genome argument takes precedence over header.
+    variants = [Variant("17", 43082404, "C", "T", "GRCh38")]
+    path = _tmp_csv()
+    try:
+        VariantCollection(variants=variants).to_csv(path)
+        loaded = VariantCollection.from_csv(path, genome="GRCh38")
+    finally:
+        os.unlink(path)
+    assert len(loaded) == 1
+
+
+def test_variant_collection_from_csv_raises_without_genome_or_header():
+    # If the CSV has no header metadata and the caller doesn't pass
+    # genome, we should raise a clear error rather than guessing.
+    variants = [Variant("17", 43082404, "C", "T", "GRCh38")]
+    path = _tmp_csv()
+    try:
+        VariantCollection(variants=variants).to_csv(path, include_header=False)
+        try:
+            VariantCollection.from_csv(path)
+        except ValueError as e:
+            assert "genome" in str(e) and "reference_name" in str(e), \
+                "Expected error to mention genome and reference_name, got %r" % str(e)
+        else:
+            raise AssertionError("Expected ValueError when no genome is available")
+    finally:
+        os.unlink(path)
+
+
+def test_effect_collection_to_csv_writes_metadata_header():
+    variant = Variant("17", 43082575 - 5, "CCT", "GGG", "GRCh38")
+    ec = variant.effects()
+    path = _tmp_csv()
+    try:
+        ec.to_csv(path)
+        with open(path) as f:
+            head = "".join(f.readline() for _ in range(4))
+    finally:
+        os.unlink(path)
+    assert "# varcode_version=" in head
+    assert "# reference_name=GRCh38" in head
+
+
+def test_effect_collection_from_csv_reads_genome_from_header():
+    variant = Variant("17", 43082575 - 5, "CCT", "GGG", "GRCh38")
+    original = variant.effects()
+    path = _tmp_csv()
+    try:
+        original.to_csv(path)
+        # Don't pass genome — should be read from the header.
+        loaded = EffectCollection.from_csv(path)
+    finally:
+        os.unlink(path)
+    assert len(loaded) == len(original)
+
+
+def test_effect_collection_from_csv_raises_without_genome_or_header():
+    variant = Variant("17", 43082575 - 5, "CCT", "GGG", "GRCh38")
+    ec = variant.effects()
+    path = _tmp_csv()
+    try:
+        ec.to_csv(path, include_header=False)
+        try:
+            EffectCollection.from_csv(path)
+        except ValueError as e:
+            assert "genome" in str(e) and "reference_name" in str(e)
+        else:
+            raise AssertionError("Expected ValueError when no genome is available")
+    finally:
+        os.unlink(path)
+
+
+def test_csv_to_csv_without_header_is_opt_out_legacy_format():
+    # to_csv(include_header=False) produces a plain CSV for legacy
+    # consumers that don't tolerate comment lines.
+    variants = [Variant("17", 43082404, "C", "T", "GRCh38")]
+    path = _tmp_csv()
+    try:
+        VariantCollection(variants=variants).to_csv(path, include_header=False)
+        with open(path) as f:
+            first_line = f.readline()
+    finally:
+        os.unlink(path)
+    # First line should be the column header, not a '#' comment.
+    assert not first_line.startswith("#"), \
+        "include_header=False should not produce leading comment lines"
