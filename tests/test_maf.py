@@ -54,10 +54,11 @@ def generate_maf_aa_changes():
     for _, row in maf_fields.iterrows():
         key = (str(row.Chromosome), row.Start_position)
         change = row.amino_acid_change
-        # silent mutations just specificy which amino acid they affect via
-        # e.g. "p.G384"
+        # silent mutations in this MAF specify only the affected residue
+        # (e.g. "p.G384") — varcode renders these in HGVS notation as
+        # "p.G384=" per https://github.com/openvax/varcode/issues/217.
         if change[-1].isdigit():
-            expected_changes[key] = "silent"
+            expected_changes[key] = change + "="
         else:
             expected_changes[key] = change
 

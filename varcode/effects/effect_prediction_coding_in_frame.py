@@ -217,14 +217,36 @@ def predict_in_frame_coding_effect(
             aa_ref=aa_ref,
             aa_alt=aa_alt)
 
+    # If a mutation introduces a premature stop codon but the resulting
+    # protein is identical to the reference — i.e. the new amino acids
+    # preceding the premature stop happen to match the tail of the
+    # reference protein — then the mutation is effectively silent.
+    # Example: an insertion before the stop codon that replicates the
+    # last residue and introduces a new stop in frame.
+    if mutant_codons_contain_stop:
+        mutant_protein_length = aa_mutation_start_offset + n_aa_alt
+        ref_tail = transcript.protein_sequence[
+            aa_mutation_start_offset:reference_protein_length]
+        if (mutant_protein_length == reference_protein_length and
+                aa_alt == ref_tail):
+            return Silent(
+                variant=variant,
+                transcript=transcript,
+                aa_pos=aa_mutation_start_offset,
+                aa_ref=shared_prefix + aa_alt + shared_suffix)
+
     if (aa_mutation_start_offset > reference_protein_length) or (
             n_aa_ref == n_aa_alt == 0):
         # if inserted nucleotides go after original stop codon or if nothing
-        # is changed in the amino acid sequence then this is a Silent variant
+        # is changed in the amino acid sequence then this is a Silent variant.
+        # For Silent we report the position of the first affected codon
+        # (before the shared-prefix offset is applied), since the user wants
+        # to know *where* the synonymous change happens, not where the first
+        # non-silent change would have been.
         return Silent(
             variant=variant,
             transcript=transcript,
-            aa_pos=aa_mutation_start_offset,
+            aa_pos=aa_mutation_start_offset - n_aa_shared,
             aa_ref=shared_prefix + shared_suffix)
     elif using_three_prime_utr:
         # if non-silent mutation is at the end of the protein then
