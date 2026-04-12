@@ -286,8 +286,17 @@ class EffectCollection(Collection):
 
         return max(effect_expression_dict.items(), key=key_fn)[0]
 
+    _DATAFRAME_COLUMNS = (
+        "variant",
+        "contig", "start", "ref", "alt",
+        "is_snv", "is_transversion", "is_transition",
+        "gene_id", "gene_name",
+        "transcript_id", "transcript_name",
+        "effect_type", "effect",
+    )
+
     def to_dataframe(self):
-        """Build a dataframe from the effect collection"""
+        """Build a dataframe from the effect collection."""
         # list of properties to extract from Variant objects if they're
         # not None
         variant_properties = [
@@ -315,7 +324,12 @@ class EffectCollection(Collection):
             row['effect_type'] = effect.__class__.__name__
             row['effect'] = effect.short_description
             return row
-        return pd.DataFrame.from_records([row_from_effect(effect) for effect in self])
+        # Always emit the same column set even for empty collections so
+        # CSV round-trip doesn't have to special-case len == 0.
+        return pd.DataFrame.from_records(
+            [row_from_effect(effect) for effect in self],
+            columns=self._DATAFRAME_COLUMNS,
+        )
 
     def to_csv(self, path, include_header=True):
         """Write this collection to CSV.
@@ -404,29 +418,32 @@ class EffectCollection(Collection):
                 "`to_csv(include_header=True)` so `# reference_name=...` "
                 "is recorded in the header. Neither was found at %s." % path)
 
-        try:
-            df = pd.read_csv(path, comment="#", dtype={"contig": str})
-        except pd.errors.EmptyDataError:
-            # CSV body is empty (e.g. the collection was empty when
-            # written). Return an empty collection rather than failing.
-            return cls(effects=[])
-        required = {"contig", "start", "ref", "alt", "transcript_id"}
+        df = pd.read_csv(path, comment="#", dtype={"contig": str})
+        required = {"contig", "start", "ref", "alt", "transcript_id", "effect_type"}
         missing = required - set(df.columns)
         if missing:
             raise ValueError(
                 "CSV at %s is missing required columns: %s" % (
                     path, sorted(missing)))
 
+        # Extract columns by name and coerce types up front; zip is
+        # robust against column reordering and extra columns, unlike
+        # itertuples which depends on attribute access to
+        # valid-identifier column names in fixed positions.
+        contigs = df["contig"].astype(str)
+        starts = df["start"].astype(int)
+        refs = df["ref"].fillna("")
+        alts = df["alt"].fillna("")
+        transcript_ids = df["transcript_id"]
+        effect_types = df["effect_type"]
+
         effects = []
         resolved_genome = None
-        # itertuples is much faster than iterrows on large CSVs; use
-        # attribute access via the namedtuple rather than row["col"].
-        for row in df.itertuples(index=False):
-            ref = row.ref if pd.notna(row.ref) else ""
-            alt = row.alt if pd.notna(row.alt) else ""
+        for contig, start, ref, alt, transcript_id, effect_type in zip(
+                contigs, starts, refs, alts, transcript_ids, effect_types):
             variant = Variant(
-                contig=str(row.contig),
-                start=int(row.start),
+                contig=contig,
+                start=start,
                 ref=ref,
                 alt=alt,
                 genome=genome,
@@ -435,7 +452,6 @@ class EffectCollection(Collection):
             # so subsequent transcript lookups don't pay the inference cost.
             if resolved_genome is None:
                 resolved_genome = variant.ensembl
-            transcript_id = row.transcript_id
             if pd.isna(transcript_id) or transcript_id == "":
                 # Row is for an intergenic / intragenic effect — no
                 # transcript context. Rebuild by running the full effect
@@ -443,7 +459,7 @@ class EffectCollection(Collection):
                 effects_for_variant = variant.effects()
                 matched = False
                 for e in effects_for_variant:
-                    if e.transcript is None and e.__class__.__name__ == row.effect_type:
+                    if e.transcript is None and e.__class__.__name__ == effect_type:
                         effects.append(e)
                         matched = True
                         break
@@ -452,7 +468,7 @@ class EffectCollection(Collection):
                         "Could not recover effect of type %r for variant %s "
                         "with no transcript_id in %s; row dropped from "
                         "reconstructed collection." % (
-                            row.effect_type, variant, path)
+                            effect_type, variant, path)
                     )
                 continue
             transcript = resolved_genome.transcript_by_id(str(transcript_id))

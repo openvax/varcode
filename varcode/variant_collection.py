@@ -328,8 +328,12 @@ class VariantCollection(Collection):
             variant_collections=(self,) + others,
             kwargs=kwargs)
 
+    _DATAFRAME_COLUMNS = (
+        "chr", "start", "ref", "alt", "gene_name", "gene_id",
+    )
+
     def to_dataframe(self):
-        """Build a DataFrame from this variant collection"""
+        """Build a DataFrame from this variant collection."""
         def row_from_variant(variant):
             return OrderedDict([
                 ("chr", variant.contig),
@@ -340,10 +344,10 @@ class VariantCollection(Collection):
                 ("gene_id", ";".join(variant.gene_ids))
             ])
         rows = [row_from_variant(v) for v in self]
-        if len(rows) == 0:
-            # TODO: return a DataFrame with the appropriate columns
-            return pd.DataFrame()
-        return pd.DataFrame.from_records(rows, columns=rows[0].keys())
+        # Always return a DataFrame with the expected columns, even
+        # when empty, so downstream code (CSV round-trip, joins) doesn't
+        # have to special-case len == 0.
+        return pd.DataFrame.from_records(rows, columns=self._DATAFRAME_COLUMNS)
 
     def to_csv(self, path, include_header=True):
         """Write this collection to CSV.
@@ -425,30 +429,34 @@ class VariantCollection(Collection):
                 "`to_csv(include_header=True)` so `# reference_name=...` "
                 "is recorded in the header. Neither was found at %s." % path)
 
-        try:
-            df = pd.read_csv(path, comment="#", dtype={"chr": str})
-        except pd.errors.EmptyDataError:
-            # CSV body is empty (e.g. the collection was empty when
-            # written). Return an empty collection rather than failing.
-            return cls(variants=[], distinct=distinct, sort_key=sort_key)
+        df = pd.read_csv(path, comment="#", dtype={"chr": str})
         required = {"chr", "start", "ref", "alt"}
         missing = required - set(df.columns)
         if missing:
             raise ValueError(
                 "CSV at %s is missing required columns: %s" % (
                     path, sorted(missing)))
-        variants = []
-        # itertuples is much faster than iterrows on large CSVs.
-        for row in df.itertuples(index=False):
-            ref = row.ref if pd.notna(row.ref) else ""
-            alt = row.alt if pd.notna(row.alt) else ""
-            variants.append(Variant(
-                contig=str(row.chr),
-                start=int(row.start),
+
+        # Extract the columns we need by name and coerce types up front,
+        # then iterate with zip. This is robust against column reordering
+        # and extra columns (unlike itertuples, which depends on
+        # attribute access to valid-identifier column names in fixed
+        # positions) and avoids the per-row overhead of iterrows.
+        contigs = df["chr"].astype(str)
+        starts = df["start"].astype(int)
+        refs = df["ref"].fillna("")
+        alts = df["alt"].fillna("")
+
+        variants = [
+            Variant(
+                contig=contig,
+                start=start,
                 ref=ref,
                 alt=alt,
                 genome=genome,
-            ))
+            )
+            for contig, start, ref, alt in zip(contigs, starts, refs, alts)
+        ]
         return cls(
             variants=variants,
             distinct=distinct,
