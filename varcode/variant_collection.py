@@ -17,7 +17,9 @@ from sercol import Collection
 
 from .effects import EffectCollection
 from .common import memoize
-from .variant import variant_ascending_position_sort_key
+from .csv_helpers import read_metadata_header, write_metadata_header
+from .variant import Variant, variant_ascending_position_sort_key
+from .version import __version__ as _varcode_version
 
 
 class VariantCollection(Collection):
@@ -326,8 +328,12 @@ class VariantCollection(Collection):
             variant_collections=(self,) + others,
             kwargs=kwargs)
 
+    _DATAFRAME_COLUMNS = (
+        "chr", "start", "ref", "alt", "gene_name", "gene_id",
+    )
+
     def to_dataframe(self):
-        """Build a DataFrame from this variant collection"""
+        """Build a DataFrame from this variant collection."""
         def row_from_variant(variant):
             return OrderedDict([
                 ("chr", variant.contig),
@@ -338,10 +344,124 @@ class VariantCollection(Collection):
                 ("gene_id", ";".join(variant.gene_ids))
             ])
         rows = [row_from_variant(v) for v in self]
-        if len(rows) == 0:
-            # TODO: return a DataFrame with the appropriate columns
-            return pd.DataFrame()
-        return pd.DataFrame.from_records(rows, columns=rows[0].keys())
+        # Always return a DataFrame with the expected columns, even
+        # when empty, so downstream code (CSV round-trip, joins) doesn't
+        # have to special-case len == 0.
+        return pd.DataFrame.from_records(rows, columns=self._DATAFRAME_COLUMNS)
+
+    def to_csv(self, path, include_header=True):
+        """Write this collection to CSV.
+
+        Parameters
+        ----------
+        path : str
+            Output path.
+
+        include_header : bool
+            If True (default), prepend ``# key=value`` metadata lines
+            with varcode version and reference genome so the file can
+            be read back via ``from_csv`` without supplying a genome
+            explicitly. Pass ``include_header=False`` for legacy
+            consumers that don't tolerate comment lines.
+        """
+        df = self.to_dataframe()
+        if not include_header:
+            df.to_csv(path, index=False)
+            return
+
+        metadata = OrderedDict()
+        metadata["varcode_version"] = _varcode_version
+        metadata["reference_name"] = self._serialized_reference_name()
+        with open(path, "w") as f:
+            write_metadata_header(f, metadata)
+            df.to_csv(f, index=False)
+
+    def _serialized_reference_name(self):
+        """Pick a reference-name string to record in the CSV header.
+
+        Uses the first variant's reference_name. Returns None if the
+        collection is empty or has no consistent reference.
+        """
+        names = {v.reference_name for v in self if v.reference_name}
+        if len(names) == 1:
+            return next(iter(names))
+        return None
+
+    @classmethod
+    def from_csv(
+            cls,
+            path,
+            genome=None,
+            distinct=True,
+            sort_key=variant_ascending_position_sort_key):
+        """Rebuild a VariantCollection from a CSV previously written by
+        ``VariantCollection.to_csv()``.
+
+        Parameters
+        ----------
+        path : str
+            Path to the CSV file. Lines starting with '#' are treated as
+            comments and parsed as ``key=value`` metadata.
+
+        genome : pyensembl.Genome, str, int, or None
+            Reference genome to associate with the loaded variants. If
+            ``None``, the reference is read from the CSV's metadata
+            header (``# reference_name=...``). If neither is available,
+            raises ``ValueError``.
+
+        distinct : bool
+            Drop duplicate variants (same as the constructor).
+
+        sort_key : callable
+            Sort key for the resulting collection.
+
+        Returns
+        -------
+        VariantCollection
+        """
+        header = read_metadata_header(path)
+        if genome is None:
+            genome = header.get("reference_name")
+        if genome is None:
+            raise ValueError(
+                "from_csv needs a reference genome: pass the `genome` "
+                "argument explicitly, or write the CSV with "
+                "`to_csv(include_header=True)` so `# reference_name=...` "
+                "is recorded in the header. Neither was found at %s." % path)
+
+        df = pd.read_csv(path, comment="#", dtype={"chr": str})
+        required = {"chr", "start", "ref", "alt"}
+        missing = required - set(df.columns)
+        if missing:
+            raise ValueError(
+                "CSV at %s is missing required columns: %s" % (
+                    path, sorted(missing)))
+
+        # Extract the columns we need by name and coerce types up front,
+        # then iterate with zip. This is robust against column reordering
+        # and extra columns (unlike itertuples, which depends on
+        # attribute access to valid-identifier column names in fixed
+        # positions) and avoids the per-row overhead of iterrows.
+        contigs = df["chr"].astype(str)
+        starts = df["start"].astype(int)
+        refs = df["ref"].fillna("")
+        alts = df["alt"].fillna("")
+
+        variants = [
+            Variant(
+                contig=contig,
+                start=start,
+                ref=ref,
+                alt=alt,
+                genome=genome,
+            )
+            for contig, start, ref, alt in zip(contigs, starts, refs, alts)
+        ]
+        return cls(
+            variants=variants,
+            distinct=distinct,
+            sort_key=sort_key,
+        )
 
     def clone_without_ucsc_data(self):
         variants = [v.clone_without_ucsc_data() for v in self]

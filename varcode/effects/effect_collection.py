@@ -15,6 +15,8 @@ from collections import OrderedDict
 import pandas as pd
 from sercol import Collection
 
+from ..csv_helpers import read_metadata_header, write_metadata_header
+from ..version import __version__ as _varcode_version
 from .effect_ordering import (
     effect_priority,
     multi_gene_effect_sort_key,
@@ -284,8 +286,17 @@ class EffectCollection(Collection):
 
         return max(effect_expression_dict.items(), key=key_fn)[0]
 
+    _DATAFRAME_COLUMNS = (
+        "variant",
+        "contig", "start", "ref", "alt",
+        "is_snv", "is_transversion", "is_transition",
+        "gene_id", "gene_name",
+        "transcript_id", "transcript_name",
+        "effect_type", "effect",
+    )
+
     def to_dataframe(self):
-        """Build a dataframe from the effect collection"""
+        """Build a dataframe from the effect collection."""
         # list of properties to extract from Variant objects if they're
         # not None
         variant_properties = [
@@ -313,4 +324,153 @@ class EffectCollection(Collection):
             row['effect_type'] = effect.__class__.__name__
             row['effect'] = effect.short_description
             return row
-        return pd.DataFrame.from_records([row_from_effect(effect) for effect in self])
+        # Always emit the same column set even for empty collections so
+        # CSV round-trip doesn't have to special-case len == 0.
+        return pd.DataFrame.from_records(
+            [row_from_effect(effect) for effect in self],
+            columns=self._DATAFRAME_COLUMNS,
+        )
+
+    def to_csv(self, path, include_header=True):
+        """Write this collection to CSV.
+
+        Parameters
+        ----------
+        path : str
+            Output path.
+
+        include_header : bool
+            If True (default), prepend ``# key=value`` metadata lines
+            with varcode version and reference genome so the file can
+            be read back via ``from_csv`` without supplying a genome
+            explicitly. Pass ``include_header=False`` for legacy
+            consumers that don't tolerate comment lines.
+        """
+        df = self.to_dataframe()
+        if not include_header:
+            df.to_csv(path, index=False)
+            return
+
+        metadata = OrderedDict()
+        metadata["varcode_version"] = _varcode_version
+        metadata["reference_name"] = self._serialized_reference_name()
+        with open(path, "w") as f:
+            write_metadata_header(f, metadata)
+            df.to_csv(f, index=False)
+
+    def _serialized_reference_name(self):
+        """Pick a reference-name string to record in the CSV header.
+
+        Uses the first effect's variant's reference_name. Returns None
+        if the collection is empty or has no consistent reference.
+        """
+        names = set()
+        for effect in self:
+            variant = getattr(effect, "variant", None)
+            if variant is not None and variant.reference_name:
+                names.add(variant.reference_name)
+        if len(names) == 1:
+            return next(iter(names))
+        return None
+
+    @classmethod
+    def from_csv(cls, path, genome=None):
+        """Rebuild an EffectCollection from a CSV previously written by
+        ``EffectCollection.to_csv()``.
+
+        The current CSV format records (contig, start, ref, alt,
+        transcript_id) but not enough per-effect state to reconstruct
+        effects byte-for-byte. This method takes the pragmatic semantic
+        round-trip path: rebuild each Variant, re-annotate against the
+        recorded transcript, and emit the resulting effect. The
+        resulting collection should match the original whenever
+        annotation is deterministic for a given (variant, transcript)
+        pair.
+
+        Parameters
+        ----------
+        path : str
+            Path to the CSV file. Lines starting with '#' are treated as
+            comments and parsed as ``key=value`` metadata.
+
+        genome : pyensembl.Genome, str, int, or None
+            Reference genome to associate with the loaded variants and
+            to look up transcripts by ID. If ``None``, the reference is
+            read from the CSV's metadata header
+            (``# reference_name=...``). If neither is available, raises
+            ``ValueError``.
+
+        Returns
+        -------
+        EffectCollection
+        """
+        # Import here to avoid a circular import at module load time.
+        import warnings
+        from ..variant import Variant
+
+        header = read_metadata_header(path)
+        if genome is None:
+            genome = header.get("reference_name")
+        if genome is None:
+            raise ValueError(
+                "from_csv needs a reference genome: pass the `genome` "
+                "argument explicitly, or write the CSV with "
+                "`to_csv(include_header=True)` so `# reference_name=...` "
+                "is recorded in the header. Neither was found at %s." % path)
+
+        df = pd.read_csv(path, comment="#", dtype={"contig": str})
+        required = {"contig", "start", "ref", "alt", "transcript_id", "effect_type"}
+        missing = required - set(df.columns)
+        if missing:
+            raise ValueError(
+                "CSV at %s is missing required columns: %s" % (
+                    path, sorted(missing)))
+
+        # Extract columns by name and coerce types up front; zip is
+        # robust against column reordering and extra columns, unlike
+        # itertuples which depends on attribute access to
+        # valid-identifier column names in fixed positions.
+        contigs = df["contig"].astype(str)
+        starts = df["start"].astype(int)
+        refs = df["ref"].fillna("")
+        alts = df["alt"].fillna("")
+        transcript_ids = df["transcript_id"]
+        effect_types = df["effect_type"]
+
+        effects = []
+        resolved_genome = None
+        for contig, start, ref, alt, transcript_id, effect_type in zip(
+                contigs, starts, refs, alts, transcript_ids, effect_types):
+            variant = Variant(
+                contig=contig,
+                start=start,
+                ref=ref,
+                alt=alt,
+                genome=genome,
+            )
+            # Cache the resolved pyensembl.Genome from the first variant
+            # so subsequent transcript lookups don't pay the inference cost.
+            if resolved_genome is None:
+                resolved_genome = variant.ensembl
+            if pd.isna(transcript_id) or transcript_id == "":
+                # Row is for an intergenic / intragenic effect — no
+                # transcript context. Rebuild by running the full effect
+                # set on the variant and taking the non-transcript match.
+                effects_for_variant = variant.effects()
+                matched = False
+                for e in effects_for_variant:
+                    if e.transcript is None and e.__class__.__name__ == effect_type:
+                        effects.append(e)
+                        matched = True
+                        break
+                if not matched:
+                    warnings.warn(
+                        "Could not recover effect of type %r for variant %s "
+                        "with no transcript_id in %s; row dropped from "
+                        "reconstructed collection." % (
+                            effect_type, variant, path)
+                    )
+                continue
+            transcript = resolved_genome.transcript_by_id(str(transcript_id))
+            effects.append(variant.effect_on_transcript(transcript))
+        return cls(effects=effects)
