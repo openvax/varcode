@@ -314,3 +314,73 @@ class EffectCollection(Collection):
             row['effect'] = effect.short_description
             return row
         return pd.DataFrame.from_records([row_from_effect(effect) for effect in self])
+
+    @classmethod
+    def from_csv(cls, path, genome):
+        """Rebuild an EffectCollection from a CSV previously written by
+        ``EffectCollection.to_csv()``.
+
+        The current CSV format records (contig, start, ref, alt,
+        transcript_id) but not enough per-effect state to reconstruct
+        effects byte-for-byte. This method takes the pragmatic semantic
+        round-trip path: rebuild each Variant, re-annotate against the
+        recorded transcript, and emit the resulting effect. The
+        resulting collection should match the original whenever
+        annotation is deterministic for a given (variant, transcript)
+        pair.
+
+        Parameters
+        ----------
+        path : str
+            Path to the CSV file. Lines starting with '#' are treated as
+            comments and skipped.
+
+        genome : pyensembl.Genome or str or int
+            Reference genome to associate with the loaded variants and
+            to look up transcripts by ID.
+
+        Returns
+        -------
+        EffectCollection
+        """
+        # Import here to avoid a circular import at module load time.
+        from ..variant import Variant
+
+        df = pd.read_csv(path, comment="#", dtype={"contig": str})
+        required = {"contig", "start", "ref", "alt", "transcript_id"}
+        missing = required - set(df.columns)
+        if missing:
+            raise ValueError(
+                "CSV at %s is missing required columns: %s" % (
+                    path, sorted(missing)))
+
+        effects = []
+        resolved_genome = None
+        for _, row in df.iterrows():
+            ref = row["ref"] if pd.notna(row["ref"]) else ""
+            alt = row["alt"] if pd.notna(row["alt"]) else ""
+            variant = Variant(
+                contig=str(row["contig"]),
+                start=int(row["start"]),
+                ref=ref,
+                alt=alt,
+                genome=genome,
+            )
+            # Cache the resolved pyensembl.Genome from the first variant
+            # so subsequent transcript lookups don't pay the inference cost.
+            if resolved_genome is None:
+                resolved_genome = variant.ensembl
+            transcript_id = row["transcript_id"]
+            if pd.isna(transcript_id) or transcript_id == "":
+                # Row is for an intergenic / intragenic effect — no
+                # transcript context. Rebuild by running the full effect
+                # set on the variant and taking the non-transcript match.
+                effects_for_variant = variant.effects()
+                for e in effects_for_variant:
+                    if e.transcript is None and e.__class__.__name__ == row["effect_type"]:
+                        effects.append(e)
+                        break
+                continue
+            transcript = resolved_genome.transcript_by_id(str(transcript_id))
+            effects.append(variant.effect_on_transcript(transcript))
+        return cls(effects=effects)

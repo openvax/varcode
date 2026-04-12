@@ -17,7 +17,7 @@ from sercol import Collection
 
 from .effects import EffectCollection
 from .common import memoize
-from .variant import variant_ascending_position_sort_key
+from .variant import Variant, variant_ascending_position_sort_key
 
 
 class VariantCollection(Collection):
@@ -342,6 +342,56 @@ class VariantCollection(Collection):
             # TODO: return a DataFrame with the appropriate columns
             return pd.DataFrame()
         return pd.DataFrame.from_records(rows, columns=rows[0].keys())
+
+    @classmethod
+    def from_csv(cls, path, genome, distinct=True, sort_key=variant_ascending_position_sort_key):
+        """Rebuild a VariantCollection from a CSV previously written by
+        ``VariantCollection.to_csv()``.
+
+        Parameters
+        ----------
+        path : str
+            Path to the CSV file. Lines starting with '#' are treated as
+            comments and skipped (reserved for future provenance headers).
+
+        genome : pyensembl.Genome or str or int
+            Reference genome to associate with the loaded variants. This
+            has to be supplied by the caller because the current CSV
+            format does not record the reference.
+
+        distinct : bool
+            Drop duplicate variants (same as the constructor).
+
+        sort_key : callable
+            Sort key for the resulting collection.
+
+        Returns
+        -------
+        VariantCollection
+        """
+        df = pd.read_csv(path, comment="#", dtype={"chr": str})
+        required = {"chr", "start", "ref", "alt"}
+        missing = required - set(df.columns)
+        if missing:
+            raise ValueError(
+                "CSV at %s is missing required columns: %s" % (
+                    path, sorted(missing)))
+        variants = []
+        for _, row in df.iterrows():
+            ref = row["ref"] if pd.notna(row["ref"]) else ""
+            alt = row["alt"] if pd.notna(row["alt"]) else ""
+            variants.append(Variant(
+                contig=str(row["chr"]),
+                start=int(row["start"]),
+                ref=ref,
+                alt=alt,
+                genome=genome,
+            ))
+        return cls(
+            variants=variants,
+            distinct=distinct,
+            sort_key=sort_key,
+        )
 
     def clone_without_ucsc_data(self):
         variants = [v.clone_without_ucsc_data() for v in self]
