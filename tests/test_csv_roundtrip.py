@@ -409,6 +409,115 @@ def test_effect_collection_roundtrip_preserves_intergenic_effect():
     )
 
 
+# -----------------------------------------------------------------------
+# #274: VariantCollection and EffectCollection use different column
+# names for the contig field ("chr" vs "contig"). Readers should accept
+# either so CSVs are interchangeable across the two types.
+# -----------------------------------------------------------------------
+
+
+def test_variant_collection_from_csv_accepts_contig_column_name():
+    # A CSV written by EffectCollection-style code uses "contig" but
+    # should still load as a VariantCollection.
+    import pandas as pd
+    path = _tmp_csv()
+    try:
+        df = pd.DataFrame([
+            {"contig": "17", "start": 43082404, "ref": "C", "alt": "T"},
+            {"contig": "7", "start": 117531114, "ref": "G", "alt": "T"},
+        ])
+        with open(path, "w") as f:
+            f.write("# reference_name=GRCh38\n")
+            df.to_csv(f, index=False)
+        loaded = VariantCollection.from_csv(path)
+    finally:
+        os.unlink(path)
+    assert len(loaded) == 2
+    starts = sorted(v.start for v in loaded)
+    assert starts == [43082404, 117531114]
+
+
+def test_effect_collection_from_csv_accepts_chr_column_name():
+    # An EffectCollection CSV with the VariantCollection-style "chr"
+    # column should still load — we only need one contig column name
+    # present.
+    import pandas as pd
+    path = _tmp_csv()
+    try:
+        df = pd.DataFrame([
+            {
+                "variant": "chr1 g.100A>T",
+                "chr": "1",  # the alternate name
+                "start": 100,
+                "ref": "A",
+                "alt": "T",
+                "transcript_id": None,
+                "effect_type": "Intergenic",
+                "effect": "intergenic",
+            }
+        ])
+        with open(path, "w") as f:
+            f.write("# reference_name=GRCh38\n")
+            df.to_csv(f, index=False)
+        loaded = EffectCollection.from_csv(path)
+    finally:
+        os.unlink(path)
+    # Intergenic variant at chr1:100 produces at least one Intergenic
+    # effect after re-annotation.
+    assert any(e.__class__.__name__ == "Intergenic" for e in loaded)
+
+
+def test_variant_collection_from_csv_errors_without_contig_column():
+    import pandas as pd
+    path = _tmp_csv()
+    try:
+        df = pd.DataFrame([
+            # No 'chr' or 'contig' column at all.
+            {"start": 100, "ref": "A", "alt": "T"},
+        ])
+        with open(path, "w") as f:
+            f.write("# reference_name=GRCh38\n")
+            df.to_csv(f, index=False)
+        try:
+            VariantCollection.from_csv(path)
+        except ValueError as e:
+            assert "contig" in str(e) and "chr" in str(e), \
+                "Error should list both aliases, got %r" % str(e)
+        else:
+            raise AssertionError("Expected ValueError for missing contig column")
+    finally:
+        os.unlink(path)
+
+
+def test_effect_collection_from_csv_errors_without_contig_column():
+    import pandas as pd
+    path = _tmp_csv()
+    try:
+        df = pd.DataFrame([
+            {
+                "variant": "chr1 g.100A>T",
+                # No 'chr' or 'contig'.
+                "start": 100,
+                "ref": "A",
+                "alt": "T",
+                "transcript_id": None,
+                "effect_type": "Intergenic",
+                "effect": "intergenic",
+            }
+        ])
+        with open(path, "w") as f:
+            f.write("# reference_name=GRCh38\n")
+            df.to_csv(f, index=False)
+        try:
+            EffectCollection.from_csv(path)
+        except ValueError as e:
+            assert "contig" in str(e) and "chr" in str(e)
+        else:
+            raise AssertionError("Expected ValueError for missing contig column")
+    finally:
+        os.unlink(path)
+
+
 def test_effect_collection_from_csv_warns_when_fallback_cant_match():
     # Hand-craft a CSV with an empty transcript_id and a made-up
     # effect_type that the annotation won't produce. from_csv should

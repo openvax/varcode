@@ -33,6 +33,22 @@ from collections import OrderedDict
 
 HEADER_PREFIX = "#"
 
+# VariantCollection historically emits a "chr" column and
+# EffectCollection emits "contig" — the reader should accept either so
+# CSVs are interchangeable across the two collection types. Tracked in
+# openvax/varcode#274.
+CONTIG_COLUMN_ALIASES = ("contig", "chr")
+
+
+def resolve_contig_column(columns):
+    """Return the first of :data:`CONTIG_COLUMN_ALIASES` that appears in
+    ``columns``, or ``None`` if none do.
+    """
+    for name in CONTIG_COLUMN_ALIASES:
+        if name in columns:
+            return name
+    return None
+
 
 def write_metadata_header(file_obj, metadata):
     """Write ``# key=value`` lines for each item in ``metadata``.

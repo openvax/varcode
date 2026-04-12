@@ -15,7 +15,12 @@ from collections import OrderedDict
 import pandas as pd
 from sercol import Collection
 
-from ..csv_helpers import read_metadata_header, write_metadata_header
+from ..csv_helpers import (
+    CONTIG_COLUMN_ALIASES,
+    read_metadata_header,
+    resolve_contig_column,
+    write_metadata_header,
+)
 from ..version import __version__ as _varcode_version
 from .effect_ordering import (
     effect_priority,
@@ -418,8 +423,18 @@ class EffectCollection(Collection):
                 "`to_csv(include_header=True)` so `# reference_name=...` "
                 "is recorded in the header. Neither was found at %s." % path)
 
-        df = pd.read_csv(path, comment="#", dtype={"contig": str})
-        required = {"contig", "start", "ref", "alt", "transcript_id", "effect_type"}
+        # Accept either "contig" or "chr" as the contig column so
+        # CSVs are interchangeable between VariantCollection and
+        # EffectCollection (openvax/varcode#274). Declaring both in
+        # dtype is a no-op for whichever column is absent.
+        df = pd.read_csv(
+            path, comment="#", dtype={"chr": str, "contig": str})
+        contig_col = resolve_contig_column(df.columns)
+        if contig_col is None:
+            raise ValueError(
+                "CSV at %s is missing a contig column: expected one of %s."
+                % (path, list(CONTIG_COLUMN_ALIASES)))
+        required = {"start", "ref", "alt", "transcript_id", "effect_type"}
         missing = required - set(df.columns)
         if missing:
             raise ValueError(
@@ -430,7 +445,7 @@ class EffectCollection(Collection):
         # robust against column reordering and extra columns, unlike
         # itertuples which depends on attribute access to
         # valid-identifier column names in fixed positions.
-        contigs = df["contig"].astype(str)
+        contigs = df[contig_col].astype(str)
         starts = df["start"].astype(int)
         refs = df["ref"].fillna("")
         alts = df["alt"].fillna("")
