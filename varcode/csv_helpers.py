@@ -49,6 +49,10 @@ def write_metadata_header(file_obj, metadata):
 def read_metadata_header(path):
     """Parse leading ``#`` lines of a CSV into a dict.
 
+    Blank / whitespace-only lines at the top are tolerated and skipped;
+    parsing only terminates when a non-blank line that doesn't start
+    with ``#`` is encountered (the CSV body).
+
     Returns
     -------
     OrderedDict
@@ -58,7 +62,10 @@ def read_metadata_header(path):
     metadata = OrderedDict()
     with open(path, "r") as f:
         for line in f:
-            stripped = line.lstrip()
+            stripped = line.strip()
+            if not stripped:
+                # Tolerate blank lines between comment block and body.
+                continue
             if not stripped.startswith(HEADER_PREFIX):
                 break
             content = stripped[len(HEADER_PREFIX):].strip()

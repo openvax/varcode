@@ -313,3 +313,146 @@ def test_csv_to_csv_without_header_is_opt_out_legacy_format():
     # First line should be the column header, not a '#' comment.
     assert not first_line.startswith("#"), \
         "include_header=False should not produce leading comment lines"
+
+
+# -----------------------------------------------------------------------
+# Edge cases: empty collections, blank-line tolerance in header parser,
+# intergenic fallback path in EffectCollection.from_csv.
+# -----------------------------------------------------------------------
+
+
+def test_variant_collection_empty_csv_roundtrip():
+    # Empty collection round-trips without crashing. No reference is
+    # available to write in the header, so from_csv needs an explicit
+    # genome.
+    empty = VariantCollection(variants=[])
+    path = _tmp_csv()
+    try:
+        empty.to_csv(path)
+        loaded = VariantCollection.from_csv(path, genome="GRCh38")
+    finally:
+        os.unlink(path)
+    assert len(loaded) == 0
+
+
+def test_effect_collection_empty_csv_roundtrip():
+    empty = EffectCollection(effects=[])
+    path = _tmp_csv()
+    try:
+        empty.to_csv(path)
+        loaded = EffectCollection.from_csv(path, genome="GRCh38")
+    finally:
+        os.unlink(path)
+    assert len(loaded) == 0
+
+
+def test_header_parser_tolerates_blank_lines():
+    # Hand-edited CSVs sometimes have a blank line between the comment
+    # block and the body; the header parser should skip it rather than
+    # treat it as end-of-header.
+    variants = [Variant("17", 43082404, "C", "T", "GRCh38")]
+    path = _tmp_csv()
+    try:
+        VariantCollection(variants=variants).to_csv(path)
+        # Inject a blank line in the middle of the header.
+        with open(path, "r") as f:
+            content = f.read()
+        lines = content.splitlines(keepends=True)
+        # Insert a blank line after the first header line.
+        new_content = lines[0] + "\n" + "".join(lines[1:])
+        with open(path, "w") as f:
+            f.write(new_content)
+        # Should still read the genome from the header and work fine.
+        loaded = VariantCollection.from_csv(path)
+    finally:
+        os.unlink(path)
+    assert len(loaded) == 1
+    assert loaded[0].reference_name == "GRCh38"
+
+
+def test_effect_collection_roundtrip_preserves_intergenic_effect():
+    # An intergenic variant produces an Intergenic effect with no
+    # transcript. The CSV row will have an empty transcript_id, and
+    # from_csv should reconstruct it via the intergenic fallback path
+    # without warning.
+    import warnings
+
+    # chr1:100 is far from any gene on GRCh38.
+    variant = Variant("1", 100, "A", "T", "GRCh38")
+    original = variant.effects()
+    intergenic_effects = [
+        e for e in original if e.__class__.__name__ == "Intergenic"
+    ]
+    assert len(intergenic_effects) >= 1, (
+        "Test variant should produce at least one Intergenic effect, got %r"
+        % [e.__class__.__name__ for e in original]
+    )
+
+    path = _tmp_csv()
+    try:
+        original.to_csv(path)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            loaded = EffectCollection.from_csv(path)
+    finally:
+        os.unlink(path)
+
+    assert len(loaded) == len(original)
+    assert any(e.__class__.__name__ == "Intergenic" for e in loaded)
+    # No spurious "could not recover" warnings on the normal path.
+    unexpected = [
+        w for w in caught if "Could not recover effect" in str(w.message)
+    ]
+    assert len(unexpected) == 0, (
+        "Unexpected fallback warnings during normal intergenic round-trip: %r"
+        % [str(w.message) for w in unexpected]
+    )
+
+
+def test_effect_collection_from_csv_warns_when_fallback_cant_match():
+    # Hand-craft a CSV with an empty transcript_id and a made-up
+    # effect_type that the annotation won't produce. from_csv should
+    # warn and drop the row rather than silently omitting it.
+    import warnings
+
+    import pandas as pd
+
+    path = _tmp_csv()
+    try:
+        df = pd.DataFrame([{
+            "variant": "chr1 g.100A>T",
+            "contig": "1",
+            "start": 100,
+            "ref": "A",
+            "alt": "T",
+            "is_snv": True,
+            "is_transversion": True,
+            "is_transition": False,
+            "gene_id": None,
+            "gene_name": None,
+            "transcript_id": None,
+            "transcript_name": None,
+            "effect_type": "DefinitelyNotARealEffectClass",
+            "effect": "p.fake",
+        }])
+        # Write a metadata header by hand so from_csv can resolve the
+        # genome, then append the body.
+        with open(path, "w") as f:
+            f.write("# varcode_version=test\n")
+            f.write("# reference_name=GRCh38\n")
+            df.to_csv(f, index=False)
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            loaded = EffectCollection.from_csv(path)
+    finally:
+        os.unlink(path)
+
+    # The unmatched row should be dropped with a warning.
+    assert len(loaded) == 0
+    matching = [
+        w for w in caught if "Could not recover effect" in str(w.message)
+    ]
+    assert len(matching) >= 1, \
+        "Expected a warning when fallback could not match the effect_type"
+    assert "DefinitelyNotARealEffectClass" in str(matching[0].message)

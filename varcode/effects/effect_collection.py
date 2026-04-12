@@ -391,6 +391,7 @@ class EffectCollection(Collection):
         EffectCollection
         """
         # Import here to avoid a circular import at module load time.
+        import warnings
         from ..variant import Variant
 
         header = read_metadata_header(path)
@@ -403,7 +404,12 @@ class EffectCollection(Collection):
                 "`to_csv(include_header=True)` so `# reference_name=...` "
                 "is recorded in the header. Neither was found at %s." % path)
 
-        df = pd.read_csv(path, comment="#", dtype={"contig": str})
+        try:
+            df = pd.read_csv(path, comment="#", dtype={"contig": str})
+        except pd.errors.EmptyDataError:
+            # CSV body is empty (e.g. the collection was empty when
+            # written). Return an empty collection rather than failing.
+            return cls(effects=[])
         required = {"contig", "start", "ref", "alt", "transcript_id"}
         missing = required - set(df.columns)
         if missing:
@@ -413,12 +419,14 @@ class EffectCollection(Collection):
 
         effects = []
         resolved_genome = None
-        for _, row in df.iterrows():
-            ref = row["ref"] if pd.notna(row["ref"]) else ""
-            alt = row["alt"] if pd.notna(row["alt"]) else ""
+        # itertuples is much faster than iterrows on large CSVs; use
+        # attribute access via the namedtuple rather than row["col"].
+        for row in df.itertuples(index=False):
+            ref = row.ref if pd.notna(row.ref) else ""
+            alt = row.alt if pd.notna(row.alt) else ""
             variant = Variant(
-                contig=str(row["contig"]),
-                start=int(row["start"]),
+                contig=str(row.contig),
+                start=int(row.start),
                 ref=ref,
                 alt=alt,
                 genome=genome,
@@ -427,16 +435,25 @@ class EffectCollection(Collection):
             # so subsequent transcript lookups don't pay the inference cost.
             if resolved_genome is None:
                 resolved_genome = variant.ensembl
-            transcript_id = row["transcript_id"]
+            transcript_id = row.transcript_id
             if pd.isna(transcript_id) or transcript_id == "":
                 # Row is for an intergenic / intragenic effect — no
                 # transcript context. Rebuild by running the full effect
                 # set on the variant and taking the non-transcript match.
                 effects_for_variant = variant.effects()
+                matched = False
                 for e in effects_for_variant:
-                    if e.transcript is None and e.__class__.__name__ == row["effect_type"]:
+                    if e.transcript is None and e.__class__.__name__ == row.effect_type:
                         effects.append(e)
+                        matched = True
                         break
+                if not matched:
+                    warnings.warn(
+                        "Could not recover effect of type %r for variant %s "
+                        "with no transcript_id in %s; row dropped from "
+                        "reconstructed collection." % (
+                            row.effect_type, variant, path)
+                    )
                 continue
             transcript = resolved_genome.transcript_by_id(str(transcript_id))
             effects.append(variant.effect_on_transcript(transcript))

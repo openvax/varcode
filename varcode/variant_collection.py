@@ -425,7 +425,12 @@ class VariantCollection(Collection):
                 "`to_csv(include_header=True)` so `# reference_name=...` "
                 "is recorded in the header. Neither was found at %s." % path)
 
-        df = pd.read_csv(path, comment="#", dtype={"chr": str})
+        try:
+            df = pd.read_csv(path, comment="#", dtype={"chr": str})
+        except pd.errors.EmptyDataError:
+            # CSV body is empty (e.g. the collection was empty when
+            # written). Return an empty collection rather than failing.
+            return cls(variants=[], distinct=distinct, sort_key=sort_key)
         required = {"chr", "start", "ref", "alt"}
         missing = required - set(df.columns)
         if missing:
@@ -433,12 +438,13 @@ class VariantCollection(Collection):
                 "CSV at %s is missing required columns: %s" % (
                     path, sorted(missing)))
         variants = []
-        for _, row in df.iterrows():
-            ref = row["ref"] if pd.notna(row["ref"]) else ""
-            alt = row["alt"] if pd.notna(row["alt"]) else ""
+        # itertuples is much faster than iterrows on large CSVs.
+        for row in df.itertuples(index=False):
+            ref = row.ref if pd.notna(row.ref) else ""
+            alt = row.alt if pd.notna(row.alt) else ""
             variants.append(Variant(
-                contig=str(row["chr"]),
-                start=int(row["start"]),
+                contig=str(row.chr),
+                start=int(row.start),
                 ref=ref,
                 alt=alt,
                 genome=genome,
