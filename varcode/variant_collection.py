@@ -21,6 +21,7 @@ from .csv_helpers import (
     CONTIG_COLUMN_ALIASES,
     read_metadata_header,
     resolve_contig_column,
+    warn_on_version_drift,
     write_metadata_header,
 )
 from .variant import Variant, variant_ascending_position_sort_key
@@ -402,6 +403,11 @@ class VariantCollection(Collection):
         """Rebuild a VariantCollection from a CSV previously written by
         ``VariantCollection.to_csv()``.
 
+        The CSV round-trip is human-readable and easy to inspect. For
+        byte-for-byte round-trip or for faster loading of large
+        collections (≳10k variants), prefer ``from_json`` — CSV parsing
+        plus per-row Variant construction is significantly slower.
+
         Parameters
         ----------
         path : str
@@ -425,6 +431,7 @@ class VariantCollection(Collection):
         VariantCollection
         """
         header = read_metadata_header(path)
+        warn_on_version_drift(header, _varcode_version, path)
         if genome is None:
             genome = header.get("reference_name")
         if genome is None:

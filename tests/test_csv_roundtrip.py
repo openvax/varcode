@@ -518,6 +518,98 @@ def test_effect_collection_from_csv_errors_without_contig_column():
         os.unlink(path)
 
 
+# -----------------------------------------------------------------------
+# #275: warn on major-version drift when loading serialized collections.
+# Because from_csv re-runs annotation, mismatch between the varcode
+# version that wrote the file and the one reading it can produce
+# different effects. We only warn on major-version drift since minor
+# and patch are semver-compatible.
+# -----------------------------------------------------------------------
+
+
+def _write_csv_with_header_version(path, version, body_df):
+    with open(path, "w") as f:
+        f.write("# varcode_version=%s\n" % version)
+        f.write("# reference_name=GRCh38\n")
+        body_df.to_csv(f, index=False)
+
+
+def test_from_csv_warns_on_major_version_drift():
+    import warnings
+    import pandas as pd
+
+    path = _tmp_csv()
+    try:
+        body = pd.DataFrame([
+            {"chr": "17", "start": 43082404, "ref": "C", "alt": "T"},
+        ])
+        # Pretend this CSV was written by an ancient 1.0.0.
+        _write_csv_with_header_version(path, "1.0.0", body)
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            VariantCollection.from_csv(path)
+    finally:
+        os.unlink(path)
+
+    drift = [w for w in caught if "major versions" in str(w.message)]
+    assert len(drift) == 1, \
+        "Expected a single major-version drift warning, got %d: %r" % (
+            len(drift), [str(w.message) for w in caught])
+    assert "1.0.0" in str(drift[0].message)
+
+
+def test_from_csv_does_not_warn_on_patch_or_minor_drift():
+    import warnings
+    import pandas as pd
+    import varcode
+
+    path = _tmp_csv()
+    try:
+        body = pd.DataFrame([
+            {"chr": "17", "start": 43082404, "ref": "C", "alt": "T"},
+        ])
+        # Same major (2.x) as current install; different minor/patch.
+        # Compute the major from varcode.__version__.
+        current_major = varcode.__version__.split(".")[0]
+        fake_version = "%s.0.1" % current_major
+        _write_csv_with_header_version(path, fake_version, body)
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            VariantCollection.from_csv(path)
+    finally:
+        os.unlink(path)
+
+    drift = [w for w in caught if "major versions" in str(w.message)]
+    assert len(drift) == 0, \
+        "Should not warn on within-major drift, got: %r" % (
+            [str(w.message) for w in drift])
+
+
+def test_from_csv_ignores_malformed_version_header():
+    import warnings
+    import pandas as pd
+
+    path = _tmp_csv()
+    try:
+        body = pd.DataFrame([
+            {"chr": "17", "start": 43082404, "ref": "C", "alt": "T"},
+        ])
+        # Malformed version string — the drift check should not
+        # raise, just silently skip the comparison.
+        _write_csv_with_header_version(path, "not-a-version", body)
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            VariantCollection.from_csv(path)
+    finally:
+        os.unlink(path)
+
+    drift = [w for w in caught if "major versions" in str(w.message)]
+    assert len(drift) == 0
+
+
 def test_effect_collection_from_csv_warns_when_fallback_cant_match():
     # Hand-craft a CSV with an empty transcript_id and a made-up
     # effect_type that the annotation won't produce. from_csv should

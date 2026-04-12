@@ -19,6 +19,7 @@ from ..csv_helpers import (
     CONTIG_COLUMN_ALIASES,
     read_metadata_header,
     resolve_contig_column,
+    warn_on_version_drift,
     write_metadata_header,
 )
 from ..version import __version__ as _varcode_version
@@ -392,6 +393,14 @@ class EffectCollection(Collection):
         annotation is deterministic for a given (variant, transcript)
         pair.
 
+        **Prefer ``from_json`` for byte-for-byte round-trip** or for
+        larger collections (≳10k effects); per-row re-annotation makes
+        CSV loading significantly slower than JSON. Emits a warning
+        when the CSV header reports a different *major* varcode version
+        than the one currently installed — annotation logic can change
+        across major versions and the reconstructed effects may differ
+        from the ones that were written.
+
         Parameters
         ----------
         path : str
@@ -414,6 +423,7 @@ class EffectCollection(Collection):
         from ..variant import Variant
 
         header = read_metadata_header(path)
+        warn_on_version_drift(header, _varcode_version, path)
         if genome is None:
             genome = header.get("reference_name")
         if genome is None:

@@ -50,6 +50,59 @@ def resolve_contig_column(columns):
     return None
 
 
+def _parse_major_minor(version_string):
+    """Return (major, minor) integers from a semver-ish version string.
+
+    Tolerates trailing ``.patch``, ``+build`` and ``-pre`` suffixes;
+    returns ``None`` when the first two dot-separated components aren't
+    both integers.
+    """
+    if not version_string:
+        return None
+    # Strip build/pre-release metadata.
+    for sep in ("+", "-"):
+        if sep in version_string:
+            version_string = version_string.split(sep, 1)[0]
+    parts = version_string.split(".")
+    if len(parts) < 2:
+        return None
+    try:
+        return (int(parts[0]), int(parts[1]))
+    except ValueError:
+        return None
+
+
+def warn_on_version_drift(header_metadata, current_version, source_path):
+    """Emit ``warnings.warn`` when the CSV's ``varcode_version`` header
+    reports a major-version mismatch against ``current_version``.
+
+    Minor and patch drift are silent (semver guarantees compatibility
+    within a major line). Major drift is load-bearing because
+    annotation logic can change — the effects reconstructed on read
+    may differ from the ones that were written.
+
+    When #271 lands ``annotator`` / ``annotator_version``, that check
+    belongs here too.
+    """
+    import warnings
+
+    serialized = header_metadata.get("varcode_version")
+    if not serialized:
+        return
+    serialized_mm = _parse_major_minor(serialized)
+    current_mm = _parse_major_minor(current_version)
+    if serialized_mm is None or current_mm is None:
+        return
+    if serialized_mm[0] != current_mm[0]:
+        warnings.warn(
+            "CSV at %s was written by varcode %s but you are reading it "
+            "with varcode %s. Because from_csv re-runs annotation on "
+            "read, results may differ across major versions. See "
+            "openvax/varcode#275 for context." % (
+                source_path, serialized, current_version)
+        )
+
+
 def write_metadata_header(file_obj, metadata):
     """Write ``# key=value`` lines for each item in ``metadata``.
 
