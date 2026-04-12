@@ -352,7 +352,13 @@ class Silent(CodingMutation):
 
     @property
     def short_description(self):
-        return "silent"
+        # HGVS p.= notation for synonymous changes: "p.{aa_ref}{1-indexed pos}="
+        # (http://varnomen.hgvs.org/). If aa_ref is empty (the silent
+        # change was fully captured by the shared prefix/suffix and we
+        # have nothing to name), fall back to a positional-only form.
+        if self.aa_ref:
+            return "p.%s%d=" % (self.aa_ref, self.aa_pos + 1)
+        return "p.%d=" % (self.aa_pos + 1)
 
 
 class AlternateStartCodon(Silent):
@@ -638,6 +644,13 @@ class PrematureStop(KnownAminoAcidChange):
 
     @property
     def short_description(self):
+        # When aa_ref is empty, the mutation is an insertion (no residues
+        # were replaced) — use HGVS "ins" notation so the description is
+        # unambiguous. Otherwise fall through to "{ref}{pos}{alt}*".
+        if len(self.aa_ref) == 0:
+            return "p.%dins%s*" % (
+                self.aa_mutation_start_offset + 1,
+                self.aa_alt)
         return "p.%s%d%s*" % (
             self.aa_ref,
             self.aa_mutation_start_offset + 1,

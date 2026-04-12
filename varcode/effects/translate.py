@@ -168,16 +168,18 @@ def translate_in_frame_mutation(
         # nucleotide sequence of both the end of the CDS and the 3' UTR
         first_utr_stop_codon_index = find_first_stop_codon(truncated_utr_sequence)
 
-        if first_utr_stop_codon_index > 0:
-            # if there is a stop codon in the 3' UTR sequence and it's not the
-            # very first codon
+        if first_utr_stop_codon_index >= 0:
+            # if there is a stop codon in the 3' UTR sequence (including the
+            # case where it is the very first codon immediately after the
+            # disrupted original stop)
             using_three_prime_utr = True
             n_mutant_codons_before_utr = len(mutant_codons) // 3
             mutant_stop_codon_index = n_mutant_codons_before_utr + first_utr_stop_codon_index
             # combine the in-frame mutant codons with the truncated sequence of
-            # the 3' UTR
+            # the 3' UTR up to the first UTR stop codon (empty when the UTR
+            # itself starts with a stop)
             mutant_codons += truncated_utr_sequence[:first_utr_stop_codon_index * 3]
-        elif first_utr_stop_codon_index == -1:
+        else:
             # if there is no stop codon in the 3' UTR sequence
             using_three_prime_utr = True
             mutant_codons += truncated_utr_sequence

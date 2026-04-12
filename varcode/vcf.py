@@ -34,6 +34,26 @@ from .variant_collection import VariantCollection
 logger = logging.getLogger(__name__)
 
 
+def _is_symbolic_allele(alt):
+    """Return True if `alt` is a VCF symbolic allele or breakend notation
+    that varcode cannot currently represent as a simple ref/alt Variant.
+
+    Examples of alleles that return True:
+        <DEL>, <DUP>, <INS>, <INV>, <CN0>, <INS:ME:ALU>  (symbolic)
+        G]17:198982], ]17:198982]G, [13:123456[T, T[13:123456[  (breakends)
+        *  (spanning deletion placeholder)
+    """
+    if not alt:
+        return False
+    if alt.startswith("<"):
+        return True
+    if "[" in alt or "]" in alt:
+        return True
+    if alt == "*":
+        return True
+    return False
+
+
 def load_vcf(
         path,
         genome=None,
@@ -308,6 +328,7 @@ def dataframes_to_variant_collection(
 
     variants = []
     metadata = {}
+    n_skipped_symbolic = 0
     try:
         for chunk in dataframes:
             assert chunk.columns.tolist() == expected_columns,\
@@ -331,6 +352,17 @@ def dataframes_to_variant_collection(
                 info = sample_info = None
                 for alt in alts.split(","):
                     if alt != ".":
+                        if _is_symbolic_allele(alt):
+                            # VCF symbolic alleles (e.g. "<CN0>",
+                            # "<INS:ME:ALU>") and breakend notation (e.g.
+                            # "G]17:198982]") represent structural variants
+                            # that varcode cannot currently represent as a
+                            # simple ref/alt Variant. Skip them so the
+                            # rest of the VCF still loads, but track the
+                            # count for a visible warning at the end.
+                            n_skipped_symbolic += 1
+                            alt_num += 1
+                            continue
                         if info_parser is not None and info is None:
                             info = info_parser(tpl[8])  # INFO column
                             if sample_names:
@@ -360,6 +392,15 @@ def dataframes_to_variant_collection(
                     alt_num += 1
     except StopIteration:
         pass
+
+    if n_skipped_symbolic > 0:
+        warn(
+            "Skipped %d symbolic/breakend allele(s) in %s that varcode "
+            "cannot currently represent as simple ref/alt Variants "
+            "(e.g. <DEL>, <CN0>, <INS:ME:ALU>, breakends). "
+            "Tracked in openvax/varcode#264." % (
+                n_skipped_symbolic, source_path)
+        )
 
     return VariantCollection(
         variants=variants,

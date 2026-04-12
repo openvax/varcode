@@ -23,6 +23,14 @@ from .effect_ordering import (
 )
 
 
+def _default_effect_sort_key(effect):
+    """Default sort key for EffectCollection: highest-priority effects
+    first. Negating the priority integer turns Python's ascending sort
+    into descending-by-priority. See openvax/varcode#227.
+    """
+    return -effect_priority(effect)
+
+
 class EffectCollection(Collection):
     """
     Collection of MutationEffect objects and helpers for grouping or filtering
@@ -41,10 +49,17 @@ class EffectCollection(Collection):
 
         sort_key : fn
             Function which maps each element to a sorting criterion.
+            If None (the default), effects are sorted by priority with
+            the most severe effects first. Pass an explicit sort_key to
+            override this behaviour, or `False` to disable sorting.
 
         sources : set
             Set of files from which this collection was generated.
         """
+        if sort_key is None:
+            sort_key = _default_effect_sort_key
+        elif sort_key is False:
+            sort_key = None
         self.effects = effects
         Collection.__init__(
             self,
