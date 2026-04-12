@@ -17,7 +17,13 @@ from sercol import Collection
 
 from .effects import EffectCollection
 from .common import memoize
-from .csv_helpers import read_metadata_header, write_metadata_header
+from .csv_helpers import (
+    CONTIG_COLUMN_ALIASES,
+    read_metadata_header,
+    resolve_contig_column,
+    warn_on_version_drift,
+    write_metadata_header,
+)
 from .variant import Variant, variant_ascending_position_sort_key
 from .version import __version__ as _varcode_version
 
@@ -397,6 +403,11 @@ class VariantCollection(Collection):
         """Rebuild a VariantCollection from a CSV previously written by
         ``VariantCollection.to_csv()``.
 
+        The CSV round-trip is human-readable and easy to inspect. For
+        byte-for-byte round-trip or for faster loading of large
+        collections (≳10k variants), prefer ``from_json`` — CSV parsing
+        plus per-row Variant construction is significantly slower.
+
         Parameters
         ----------
         path : str
@@ -420,6 +431,7 @@ class VariantCollection(Collection):
         VariantCollection
         """
         header = read_metadata_header(path)
+        warn_on_version_drift(header, _varcode_version, path)
         if genome is None:
             genome = header.get("reference_name")
         if genome is None:
@@ -429,8 +441,18 @@ class VariantCollection(Collection):
                 "`to_csv(include_header=True)` so `# reference_name=...` "
                 "is recorded in the header. Neither was found at %s." % path)
 
-        df = pd.read_csv(path, comment="#", dtype={"chr": str})
-        required = {"chr", "start", "ref", "alt"}
+        # Accept either "chr" or "contig" as the contig column so
+        # CSVs are interchangeable between VariantCollection and
+        # EffectCollection (openvax/varcode#274). Declaring both in
+        # dtype is a no-op for whichever column is absent.
+        df = pd.read_csv(
+            path, comment="#", dtype={"chr": str, "contig": str})
+        contig_col = resolve_contig_column(df.columns)
+        if contig_col is None:
+            raise ValueError(
+                "CSV at %s is missing a contig column: expected one of %s."
+                % (path, list(CONTIG_COLUMN_ALIASES)))
+        required = {"start", "ref", "alt"}
         missing = required - set(df.columns)
         if missing:
             raise ValueError(
@@ -442,7 +464,7 @@ class VariantCollection(Collection):
         # and extra columns (unlike itertuples, which depends on
         # attribute access to valid-identifier column names in fixed
         # positions) and avoids the per-row overhead of iterrows.
-        contigs = df["chr"].astype(str)
+        contigs = df[contig_col].astype(str)
         starts = df["start"].astype(int)
         refs = df["ref"].fillna("")
         alts = df["alt"].fillna("")

@@ -409,6 +409,207 @@ def test_effect_collection_roundtrip_preserves_intergenic_effect():
     )
 
 
+# -----------------------------------------------------------------------
+# #274: VariantCollection and EffectCollection use different column
+# names for the contig field ("chr" vs "contig"). Readers should accept
+# either so CSVs are interchangeable across the two types.
+# -----------------------------------------------------------------------
+
+
+def test_variant_collection_from_csv_accepts_contig_column_name():
+    # A CSV written by EffectCollection-style code uses "contig" but
+    # should still load as a VariantCollection.
+    import pandas as pd
+    path = _tmp_csv()
+    try:
+        df = pd.DataFrame([
+            {"contig": "17", "start": 43082404, "ref": "C", "alt": "T"},
+            {"contig": "7", "start": 117531114, "ref": "G", "alt": "T"},
+        ])
+        with open(path, "w") as f:
+            f.write("# reference_name=GRCh38\n")
+            df.to_csv(f, index=False)
+        loaded = VariantCollection.from_csv(path)
+    finally:
+        os.unlink(path)
+    assert len(loaded) == 2
+    starts = sorted(v.start for v in loaded)
+    assert starts == [43082404, 117531114]
+
+
+def test_effect_collection_from_csv_accepts_chr_column_name():
+    # An EffectCollection CSV with the VariantCollection-style "chr"
+    # column should still load — we only need one contig column name
+    # present.
+    import pandas as pd
+    path = _tmp_csv()
+    try:
+        df = pd.DataFrame([
+            {
+                "variant": "chr1 g.100A>T",
+                "chr": "1",  # the alternate name
+                "start": 100,
+                "ref": "A",
+                "alt": "T",
+                "transcript_id": None,
+                "effect_type": "Intergenic",
+                "effect": "intergenic",
+            }
+        ])
+        with open(path, "w") as f:
+            f.write("# reference_name=GRCh38\n")
+            df.to_csv(f, index=False)
+        loaded = EffectCollection.from_csv(path)
+    finally:
+        os.unlink(path)
+    # Intergenic variant at chr1:100 produces at least one Intergenic
+    # effect after re-annotation.
+    assert any(e.__class__.__name__ == "Intergenic" for e in loaded)
+
+
+def test_variant_collection_from_csv_errors_without_contig_column():
+    import pandas as pd
+    path = _tmp_csv()
+    try:
+        df = pd.DataFrame([
+            # No 'chr' or 'contig' column at all.
+            {"start": 100, "ref": "A", "alt": "T"},
+        ])
+        with open(path, "w") as f:
+            f.write("# reference_name=GRCh38\n")
+            df.to_csv(f, index=False)
+        try:
+            VariantCollection.from_csv(path)
+        except ValueError as e:
+            assert "contig" in str(e) and "chr" in str(e), \
+                "Error should list both aliases, got %r" % str(e)
+        else:
+            raise AssertionError("Expected ValueError for missing contig column")
+    finally:
+        os.unlink(path)
+
+
+def test_effect_collection_from_csv_errors_without_contig_column():
+    import pandas as pd
+    path = _tmp_csv()
+    try:
+        df = pd.DataFrame([
+            {
+                "variant": "chr1 g.100A>T",
+                # No 'chr' or 'contig'.
+                "start": 100,
+                "ref": "A",
+                "alt": "T",
+                "transcript_id": None,
+                "effect_type": "Intergenic",
+                "effect": "intergenic",
+            }
+        ])
+        with open(path, "w") as f:
+            f.write("# reference_name=GRCh38\n")
+            df.to_csv(f, index=False)
+        try:
+            EffectCollection.from_csv(path)
+        except ValueError as e:
+            assert "contig" in str(e) and "chr" in str(e)
+        else:
+            raise AssertionError("Expected ValueError for missing contig column")
+    finally:
+        os.unlink(path)
+
+
+# -----------------------------------------------------------------------
+# #275: warn on major-version drift when loading serialized collections.
+# Because from_csv re-runs annotation, mismatch between the varcode
+# version that wrote the file and the one reading it can produce
+# different effects. We only warn on major-version drift since minor
+# and patch are semver-compatible.
+# -----------------------------------------------------------------------
+
+
+def _write_csv_with_header_version(path, version, body_df):
+    with open(path, "w") as f:
+        f.write("# varcode_version=%s\n" % version)
+        f.write("# reference_name=GRCh38\n")
+        body_df.to_csv(f, index=False)
+
+
+def test_from_csv_warns_on_major_version_drift():
+    import warnings
+    import pandas as pd
+
+    path = _tmp_csv()
+    try:
+        body = pd.DataFrame([
+            {"chr": "17", "start": 43082404, "ref": "C", "alt": "T"},
+        ])
+        # Pretend this CSV was written by an ancient 1.0.0.
+        _write_csv_with_header_version(path, "1.0.0", body)
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            VariantCollection.from_csv(path)
+    finally:
+        os.unlink(path)
+
+    drift = [w for w in caught if "major versions" in str(w.message)]
+    assert len(drift) == 1, \
+        "Expected a single major-version drift warning, got %d: %r" % (
+            len(drift), [str(w.message) for w in caught])
+    assert "1.0.0" in str(drift[0].message)
+
+
+def test_from_csv_does_not_warn_on_patch_or_minor_drift():
+    import warnings
+    import pandas as pd
+    import varcode
+
+    path = _tmp_csv()
+    try:
+        body = pd.DataFrame([
+            {"chr": "17", "start": 43082404, "ref": "C", "alt": "T"},
+        ])
+        # Same major (2.x) as current install; different minor/patch.
+        # Compute the major from varcode.__version__.
+        current_major = varcode.__version__.split(".")[0]
+        fake_version = "%s.0.1" % current_major
+        _write_csv_with_header_version(path, fake_version, body)
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            VariantCollection.from_csv(path)
+    finally:
+        os.unlink(path)
+
+    drift = [w for w in caught if "major versions" in str(w.message)]
+    assert len(drift) == 0, \
+        "Should not warn on within-major drift, got: %r" % (
+            [str(w.message) for w in drift])
+
+
+def test_from_csv_ignores_malformed_version_header():
+    import warnings
+    import pandas as pd
+
+    path = _tmp_csv()
+    try:
+        body = pd.DataFrame([
+            {"chr": "17", "start": 43082404, "ref": "C", "alt": "T"},
+        ])
+        # Malformed version string — the drift check should not
+        # raise, just silently skip the comparison.
+        _write_csv_with_header_version(path, "not-a-version", body)
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            VariantCollection.from_csv(path)
+    finally:
+        os.unlink(path)
+
+    drift = [w for w in caught if "major versions" in str(w.message)]
+    assert len(drift) == 0
+
+
 def test_effect_collection_from_csv_warns_when_fallback_cant_match():
     # Hand-craft a CSV with an empty transcript_id and a made-up
     # effect_type that the annotation won't produce. from_csv should
