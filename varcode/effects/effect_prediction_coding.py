@@ -10,6 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from ..errors import ReferenceMismatchError
 from .effect_prediction_coding_frameshift import predict_frameshift_coding_effect
 from .effect_prediction_coding_in_frame import predict_in_frame_coding_effect
 
@@ -57,13 +58,14 @@ def predict_variant_coding_effect_on_transcript(
 
     # Make sure that the reference sequence agrees with what we expected
     # from the VCF
-    assert ref_nucleotides_from_transcript == trimmed_cdna_ref, \
-        "%s: expected ref '%s' at offset %d of %s, transcript has '%s'" % (
-            variant,
-            trimmed_cdna_ref,
-            transcript_offset,
-            transcript,
-            ref_nucleotides_from_transcript)
+    if ref_nucleotides_from_transcript != trimmed_cdna_ref:
+        raise ReferenceMismatchError(
+            variant=variant,
+            transcript=transcript,
+            expected_ref=ref_nucleotides_from_transcript,
+            observed_ref=trimmed_cdna_ref,
+            transcript_offset=transcript_offset,
+        )
 
     start_codon_offset = transcript.first_start_codon_spliced_offset
     stop_codon_offset = transcript.last_stop_codon_spliced_offset

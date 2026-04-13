@@ -11,6 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from .errors import ReferenceMismatchError
 from .variant import Variant
 from .variant_collection import VariantCollection
 from .maf import load_maf, load_maf_dataframe
@@ -22,10 +23,10 @@ from .effects import (
     MutationEffect,
     NonsilentCodingMutation,
 )
-from .version import __version__ 
+from .version import __version__
 
 __all__ = [
-    "__version__", 
+    "__version__",
 
     # basic classes
     "Variant",
@@ -37,6 +38,9 @@ __all__ = [
     "top_priority_effect",
     "MutationEffect",
     "NonsilentCodingMutation",
+
+    # exceptions
+    "ReferenceMismatchError",
 
     # file loading
     "load_maf",
