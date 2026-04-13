@@ -43,7 +43,7 @@ from .effect_classes import (
 logger = logging.getLogger(__name__)
 
 
-def predict_variant_effects(variant, raise_on_error=False):
+def predict_variant_effects(variant, raise_on_error=False, splice_outcomes=False):
     """Determine the effects of a variant on any transcripts it overlaps.
     Returns an EffectCollection object.
 
@@ -55,6 +55,14 @@ def predict_variant_effects(variant, raise_on_error=False):
         Raise an exception if we encounter an error while trying to
         determine the effect of this variant on a transcript, or simply
         log the error and continue.
+
+    splice_outcomes : bool
+        When True, splice-disrupting effects (SpliceDonor,
+        SpliceAcceptor, ExonicSpliceSite, IntronicSpliceSite) are
+        wrapped in a :class:`SpliceOutcomeSet` carrying multiple
+        plausible outcomes (normal splicing, exon skipping, intron
+        retention, cryptic splice). Default False for back-compat.
+        See ``varcode.splice_outcomes`` for details.
     """
     # if this variant isn't overlapping any genes, return a
     # Intergenic effect
@@ -97,7 +105,13 @@ def predict_variant_effects(variant, raise_on_error=False):
                             variant=variant,
                             transcript=transcript)
                     effects.append(effect)
-    return EffectCollection(effects)
+    collection = EffectCollection(effects)
+    if splice_outcomes:
+        # Lazy import to avoid circular deps; splice_outcomes lives at
+        # the package root and consumes effect_classes.
+        from ..splice_outcomes import wrap_splice_effects_in_collection
+        collection = wrap_splice_effects_in_collection(collection)
+    return collection
 
 
 def predict_variant_effect_on_transcript_or_failure(variant, transcript):

@@ -13,6 +13,11 @@
 
 from .errors import ReferenceMismatchError, SampleNotFoundError
 from .genotype import Genotype, Zygosity
+from .splice_outcomes import (
+    SpliceCandidate,
+    SpliceOutcome,
+    SpliceOutcomeSet,
+)
 from .variant import Variant
 from .variant_collection import VariantCollection
 from .maf import load_maf, load_maf_dataframe
@@ -37,6 +42,11 @@ __all__ = [
     # genotype / zygosity
     "Genotype",
     "Zygosity",
+
+    # splice outcome possibility set (openvax/varcode#262)
+    "SpliceCandidate",
+    "SpliceOutcome",
+    "SpliceOutcomeSet",
 
     # effects
     "effect_priority",
