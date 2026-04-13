@@ -16,6 +16,7 @@ from Bio.Seq import reverse_complement
 from pyensembl import Transcript
 
 from ..common import groupby_field
+from ..errors import ReferenceMismatchError
 
 from .transcript_helpers import interval_offset_on_transcript
 from .effect_helpers import changes_exonic_splice_site
@@ -399,17 +400,15 @@ def exonic_transcript_effect(variant, exon, exon_number, transcript):
         transcript.sequence[transcript_offset:transcript_offset + n_ref])
 
     if cdna_ref != expected_ref:
-        raise ValueError(
-            ("Found ref nucleotides '%s' in sequence"
-             " of %s at offset %d (chromosome positions %d:%d)"
-             " but variant %s has '%s'") % (
-                 expected_ref,
-                 transcript,
-                 transcript_offset,
-                 genome_start,
-                 genome_end,
-                 variant,
-                 cdna_ref))
+        raise ReferenceMismatchError(
+            variant=variant,
+            transcript=transcript,
+            expected_ref=expected_ref,
+            observed_ref=cdna_ref,
+            transcript_offset=transcript_offset,
+            genome_start=genome_start,
+            genome_end=genome_end,
+        )
 
     utr5_length = min(transcript.start_codon_spliced_offsets)
 
