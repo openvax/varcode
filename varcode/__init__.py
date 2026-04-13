@@ -11,7 +11,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .errors import ReferenceMismatchError
+from .errors import ReferenceMismatchError, SampleNotFoundError
+from .genotype import Genotype, Zygosity
 from .variant import Variant
 from .variant_collection import VariantCollection
 from .maf import load_maf, load_maf_dataframe
@@ -33,6 +34,10 @@ __all__ = [
     "EffectCollection",
     "VariantCollection",
 
+    # genotype / zygosity
+    "Genotype",
+    "Zygosity",
+
     # effects
     "effect_priority",
     "top_priority_effect",
@@ -41,6 +46,7 @@ __all__ = [
 
     # exceptions
     "ReferenceMismatchError",
+    "SampleNotFoundError",
 
     # file loading
     "load_maf",

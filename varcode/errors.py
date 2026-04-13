@@ -18,6 +18,11 @@ Exception types raised by varcode. ``ReferenceMismatchError`` subclasses
 """
 
 
+class SampleNotFoundError(KeyError):
+    """Raised when genotype info is requested for a sample that isn't
+    present in the VariantCollection's source VCF(s)."""
+
+
 class ReferenceMismatchError(ValueError):
     """Raised when a variant's reported ref allele does not match the
     reference genome at the variant's position.
