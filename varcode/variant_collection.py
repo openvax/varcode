@@ -24,6 +24,8 @@ from .csv_helpers import (
     warn_on_version_drift,
     write_metadata_header,
 )
+from .errors import SampleNotFoundError
+from .genotype import Genotype, Zygosity
 from .variant import Variant, variant_ascending_position_sort_key
 from .version import __version__ as _varcode_version
 
@@ -484,6 +486,142 @@ class VariantCollection(Collection):
             distinct=distinct,
             sort_key=sort_key,
         )
+
+    # ------------------------------------------------------------------
+    # Genotype / zygosity access (openvax/varcode#267).
+    #
+    # The VCF loader already captures per-sample FORMAT fields in
+    # self.source_to_metadata_dict[path][variant]['sample_info']. These
+    # methods surface that data as structured Genotype objects and
+    # provide sample-aware filtering helpers.
+    # ------------------------------------------------------------------
+
+    def _metadata_for(self, variant):
+        """Find the metadata dict for a variant across all sources.
+
+        Returns None if the variant isn't tracked in any of this
+        collection's source-keyed metadata maps.
+        """
+        for variant_map in self.source_to_metadata_dict.values():
+            if variant in variant_map:
+                return variant_map[variant]
+        return None
+
+    @property
+    def samples(self):
+        """Sorted list of sample names present in the collection's
+        ``sample_info`` metadata (empty if no VCFs with sample columns
+        were loaded)."""
+        sample_set = set()
+        for variant_map in self.source_to_metadata_dict.values():
+            for meta in variant_map.values():
+                sample_info = meta.get("sample_info") if meta else None
+                if sample_info:
+                    sample_set.update(sample_info.keys())
+        return sorted(sample_set)
+
+    def has_sample_data(self):
+        """True if the collection has any per-sample genotype info."""
+        return len(self.samples) > 0
+
+    def genotype(self, variant, sample):
+        """Return the ``Genotype`` for ``sample`` at ``variant``.
+
+        Parameters
+        ----------
+        variant : Variant
+        sample : str
+
+        Returns
+        -------
+        Genotype or None
+            ``None`` if the variant has no sample_info metadata at all
+            (e.g. it was constructed directly rather than loaded from
+            a multi-sample VCF).
+
+        Raises
+        ------
+        SampleNotFoundError
+            If the variant's metadata exists but doesn't include the
+            requested sample. Subclass of ``KeyError``.
+        """
+        meta = self._metadata_for(variant)
+        if meta is None:
+            return None
+        sample_info = meta.get("sample_info")
+        if sample_info is None:
+            return None
+        if sample not in sample_info:
+            raise SampleNotFoundError(
+                "Sample %r not found in %s. Available samples: %s" % (
+                    sample, variant, sorted(sample_info.keys())))
+        return Genotype.from_sample_info(sample_info[sample])
+
+    def _alt_index_for(self, variant):
+        """VCF GT-encoded index (1-based) of the variant's alt on the
+        original VCF row, or ``None`` if unknown.
+
+        Single-alt rows and variants not loaded from VCF effectively
+        have alt_allele_index == 0, which encodes to GT index 1.
+        """
+        meta = self._metadata_for(variant)
+        if meta is None:
+            return 1
+        idx = meta.get("alt_allele_index")
+        if idx is None:
+            return 1
+        return idx + 1
+
+    def zygosity(self, variant, sample):
+        """Zygosity of the given sample at the given variant.
+
+        Multi-allelic aware: at a site split into multiple Variants,
+        each asks "does this sample carry *this* alt?".
+        """
+        gt = self.genotype(variant, sample)
+        if gt is None:
+            return Zygosity.MISSING
+        return gt.zygosity_for_alt(self._alt_index_for(variant))
+
+    def for_sample(self, sample):
+        """Return a VariantCollection restricted to variants where
+        ``sample`` carries the alt (heterozygous or homozygous). Useful
+        for multi-sample VCFs where not every row is called in every
+        sample.
+        """
+        return self._filter_by_zygosity(
+            sample,
+            keep=lambda z: z in (Zygosity.HETEROZYGOUS, Zygosity.HOMOZYGOUS),
+        )
+
+    def heterozygous_in(self, sample):
+        """Variants where ``sample`` is heterozygous for this variant's alt."""
+        return self._filter_by_zygosity(
+            sample,
+            keep=lambda z: z is Zygosity.HETEROZYGOUS,
+        )
+
+    def homozygous_alt_in(self, sample):
+        """Variants where ``sample`` is homozygous for this variant's alt."""
+        return self._filter_by_zygosity(
+            sample,
+            keep=lambda z: z is Zygosity.HOMOZYGOUS,
+        )
+
+    def _filter_by_zygosity(self, sample, keep):
+        # Pre-validate the sample once so a typo fails loudly rather
+        # than silently returning an empty collection.
+        if self.has_sample_data() and sample not in self.samples:
+            raise SampleNotFoundError(
+                "Sample %r not found. Available samples: %s" % (
+                    sample, self.samples))
+        return self.filter(
+            lambda v: keep(self.zygosity(v, sample))
+        )
+
+    # ------------------------------------------------------------------
+    # (end genotype methods)
+    # ------------------------------------------------------------------
 
     def clone_without_ucsc_data(self):
         variants = [v.clone_without_ucsc_data() for v in self]
