@@ -1,0 +1,72 @@
+site_name: varcode
+site_description: Library for manipulating genomic variants and predicting their effects
+site_url: https://openvax.github.io/varcode/
+repo_url: https://github.com/openvax/varcode
+repo_name: openvax/varcode
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - content.action.edit
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to light mode
+
+nav:
+  - Home: index.md
+  - Feature guides:
+      - Genotypes & sample queries: genotype.md
+      - CSV round-trip: csv.md
+      - Error handling: errors.md
+  - API reference: api.md
+  - Changelog: changelog.md
+
+markdown_extensions:
+  - admonition
+  - def_list
+  - footnotes
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets:
+      base_path:
+        - .
+        - docs
+  - pymdownx.superfences
+  - tables
+
+plugins:
+  - search
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          options:
+            show_source: true
+            show_root_heading: true
+            show_signature_annotations: true
+            members_order: source
+            docstring_style: numpy
+            docstring_section_style: spacy
+            merge_init_into_class: true

@@ -260,9 +260,12 @@ class EffectCollection(Collection):
             Dictionary mapping transcript IDs to length-normalized expression
             levels (either FPKM or TPM)
 
-        Returns dictionary mapping each transcript effect to an expression
-        quantity. Effects that don't have an associated transcript
-        (e.g. Intergenic) will not be included.
+        Returns
+        -------
+        OrderedDict
+            Mapping from each transcript effect to an expression quantity.
+            Effects that don't have an associated transcript (e.g. Intergenic)
+            are excluded.
         """
         return OrderedDict(
             (effect, expression_levels.get(effect.transcript.id, 0.0))

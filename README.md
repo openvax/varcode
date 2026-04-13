@@ -79,7 +79,22 @@ print(premature_stop_effect.gene.name)
 ### 'TP53'
 ```
 
-If you are looking for a quick start guide, you can check out [this iPython book](./examples/varcode-quick_start.ipynb) that demonstrates simple use cases of Varcode
+If you are looking for a quick start guide, you can check out [this iPython book](./examples/varcode-quick_start.ipynb) that demonstrates simple use cases of Varcode.
+
+## Further reading
+
+Feature guides live in [`docs/`](./docs/):
+
+- [**Genotypes and sample-aware queries**](./docs/genotype.md) — per-sample
+  zygosity on multi-sample VCFs (`Genotype`, `Zygosity`, `VariantCollection.for_sample`,
+  `.heterozygous_in`, `.homozygous_alt_in`). New in 2.3.
+- [**CSV round-trip and metadata headers**](./docs/csv.md) — `to_csv` /
+  `from_csv` on both collection types, with `#`-prefixed provenance
+  headers. New in 2.1, refined in 2.2.
+- [**Error handling**](./docs/errors.md) — `ReferenceMismatchError`,
+  `SampleNotFoundError`, and the `raise_on_error=False` escape hatch.
+
+See [`CHANGELOG.md`](./CHANGELOG.md) for the release history.
 
 ## Effect Types
 
