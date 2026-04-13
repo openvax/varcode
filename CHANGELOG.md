@@ -1,5 +1,96 @@
 # Change Log
 
+## [v2.3.0](https://github.com/openvax/varcode/tree/v2.3.0) (2026-04-13)
+
+**Added**
+- Per-sample genotype / zygosity access ([#267](https://github.com/openvax/varcode/issues/267)).
+  `Genotype` frozen dataclass, `Zygosity` enum (`ABSENT`/`HETEROZYGOUS`/`HOMOZYGOUS`/`MISSING`),
+  new `VariantCollection` methods `.samples`, `.genotype(variant, sample)`,
+  `.zygosity(variant, sample)`, `.for_sample(name)`, `.heterozygous_in(name)`,
+  `.homozygous_alt_in(name)`. Multi-allelic aware: each split Variant
+  reports zygosity relative to its own alt.
+- `varcode.SampleNotFoundError(KeyError)` raised on typoed sample names.
+
+## [v2.2.1](https://github.com/openvax/varcode/tree/v2.2.1) (2026-04-13)
+
+**Fixed**
+- Ref-vs-genome mismatches now raise a dedicated
+  `varcode.ReferenceMismatchError` (subclass of `ValueError`) with an
+  actionable message naming the likely causes and pointing at
+  `raise_on_error=False` ([#215](https://github.com/openvax/varcode/issues/215),
+  [#246](https://github.com/openvax/varcode/issues/246)).
+
+## [v2.2.0](https://github.com/openvax/varcode/tree/v2.2.0) (2026-04-12)
+
+**Added**
+- `from_csv` now accepts either `chr` or `contig` as the contig column
+  name on both `VariantCollection` and `EffectCollection`, so CSVs are
+  interchangeable between the two types
+  ([#274](https://github.com/openvax/varcode/issues/274)).
+- `from_csv` warns on major `varcode_version` drift recorded in the
+  CSV header ([#275](https://github.com/openvax/varcode/issues/275)).
+
+**Changed**
+- `from_csv` docstrings now point users at `from_json` for byte-for-byte
+  round-trip or larger collections
+  ([#276](https://github.com/openvax/varcode/issues/276)).
+
+## [v2.1.0](https://github.com/openvax/varcode/tree/v2.1.0) (2026-04-12)
+
+**Added**
+- `VariantCollection.from_csv` and `EffectCollection.from_csv` for
+  round-trip deserialization ([#273](https://github.com/openvax/varcode/pull/273)).
+- `to_csv` prepends a `# key=value` metadata header by default
+  (`varcode_version`, `reference_name`); `from_csv` reads it so the
+  `genome` argument becomes optional. Pass `include_header=False` for
+  legacy consumers.
+
+**Fixed**
+- `VariantCollection.variants` and `EffectCollection.effects` now
+  match the collection's iteration order instead of holding the raw
+  pre-sort / pre-dedup input list
+  ([#220](https://github.com/openvax/varcode/issues/220)).
+
+## [v2.0.0](https://github.com/openvax/varcode/tree/v2.0.0) (2026-04-11)
+
+Major release — several backward-incompatible fixes. See
+[#263](https://github.com/openvax/varcode/pull/263) and
+[#265](https://github.com/openvax/varcode/pull/265) for full details.
+
+**Breaking**
+- `Silent.short_description` returns HGVS `p.{ref}{pos}=` (e.g.
+  `p.R6=`) instead of the literal `"silent"`
+  ([#217](https://github.com/openvax/varcode/issues/217)).
+- `Silent.aa_pos` no longer includes the shared-prefix offset; it now
+  points at the actual synonymous codon
+  ([#208](https://github.com/openvax/varcode/issues/208)).
+- `PrematureStop.short_description` returns `p.{pos}ins{alt}*` when
+  `aa_ref` is empty instead of the ambiguous `p.{pos}{alt}*`
+  ([#216](https://github.com/openvax/varcode/issues/216)).
+- `EffectCollection` is sorted by effect priority (most severe first)
+  by default. Pass `sort_key=False` to disable or a custom callable
+  to override ([#227](https://github.com/openvax/varcode/issues/227)).
+- Intronic splice classification is sequence-aware: variants at
+  `+1`/`+2` or `-1`/`-2` with a non-canonical reference base are
+  classified as `IntronicSpliceSite` rather than
+  `SpliceDonor`/`SpliceAcceptor`
+  ([#262](https://github.com/openvax/varcode/issues/262)).
+
+**Fixed**
+- SNV in the stop codon with a stop-prefixed 3' UTR is correctly
+  classified as `StopLoss` instead of `Insertion`
+  ([#250](https://github.com/openvax/varcode/issues/250),
+  [#205](https://github.com/openvax/varcode/issues/205)).
+- Insertion before the stop codon that produces an identical protein
+  is correctly classified as `Silent`
+  ([#201](https://github.com/openvax/varcode/issues/201)).
+- `changes_exonic_splice_site` now applies the mutation before
+  checking the splice pattern ([#262](https://github.com/openvax/varcode/issues/262)).
+- VCF loader skips symbolic alleles (`<DEL>`, `<CN0>`, `<INS:ME:ALU>`,
+  ...) and breakend notation with a visible warning instead of
+  crashing ([#88](https://github.com/openvax/varcode/issues/88)).
+  Full SV support is tracked in [#264](https://github.com/openvax/varcode/issues/264).
+
 ## [v0.5.15](https://github.com/hammerlab/varcode/tree/v0.5.15) (2017-04-28)
 [Full Changelog](https://github.com/hammerlab/varcode/compare/v0.5.14...v0.5.15)
 
