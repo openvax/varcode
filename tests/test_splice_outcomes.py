@@ -438,6 +438,97 @@ def test_codon_aligned_exon_skip_still_pure_deletion():
     assert type(skip_candidate.coding_effect).__name__ == "Deletion"
 
 
+# --------------------------------------------------------------------
+# Serialization round-trip (see #295)
+# --------------------------------------------------------------------
+
+
+def test_splice_candidate_round_trip_with_coding_effect():
+    variant = Variant("7", 117531114, "G", "T", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    effects = variant.effects(splice_outcomes=True)
+    target = next(e for e in effects if e.transcript is transcript)
+    normal = next(
+        c for c in target.candidates
+        if c.outcome is SpliceOutcome.NORMAL_SPLICING
+    )
+    d = normal.to_dict()
+    rt = SpliceCandidate.from_dict(d)
+    assert rt.outcome is SpliceOutcome.NORMAL_SPLICING
+    assert rt.plausibility == normal.plausibility
+    assert rt.description == normal.description
+    assert type(rt.coding_effect).__name__ == type(normal.coding_effect).__name__
+    assert rt.coding_effect.aa_ref == normal.coding_effect.aa_ref
+
+
+def test_splice_candidate_round_trip_stub():
+    # Intron retention candidate has coding_effect=None but carries a
+    # predicted_class_name.
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    effects = variant.effects(splice_outcomes=True)
+    target = next(e for e in effects if e.transcript is transcript)
+    intron = next(
+        c for c in target.candidates
+        if c.outcome is SpliceOutcome.INTRON_RETENTION
+    )
+    d = intron.to_dict()
+    rt = SpliceCandidate.from_dict(d)
+    assert rt.outcome is SpliceOutcome.INTRON_RETENTION
+    assert rt.coding_effect is None
+    assert rt.predicted_class_name == "PrematureStop"
+
+
+def test_splice_outcome_set_json_round_trip():
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    effects = variant.effects(splice_outcomes=True)
+    target = next(e for e in effects if e.transcript is transcript)
+
+    payload = target.to_json()
+    restored = SpliceOutcomeSet.from_json(payload)
+
+    assert type(restored) is SpliceOutcomeSet
+    assert len(restored.candidates) == len(target.candidates)
+    assert restored.disrupted_signal_class is target.disrupted_signal_class
+    assert restored.most_likely.outcome is target.most_likely.outcome
+    # Pairwise candidate comparison — tuple equality via __eq__ on the
+    # frozen dataclass + the underlying effect's structural equality.
+    for rt_c, og_c in zip(restored.candidates, target.candidates):
+        assert rt_c.outcome is og_c.outcome
+        assert rt_c.plausibility == og_c.plausibility
+        assert rt_c.predicted_class_name == og_c.predicted_class_name
+        assert (rt_c.coding_effect is None) == (og_c.coding_effect is None)
+        if rt_c.coding_effect is not None:
+            assert type(rt_c.coding_effect) is type(og_c.coding_effect)
+
+
+def test_splice_outcome_set_dict_round_trip_is_idempotent():
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    effects = variant.effects(splice_outcomes=True)
+    target = next(e for e in effects if e.transcript is transcript)
+
+    d = target.to_dict()
+    restored = SpliceOutcomeSet.from_dict(d)
+    # Serializable's to_dict is stable across round-trip — the restored
+    # object's to_dict should match the original's.
+    assert restored.to_dict() == d
+
+
+def test_splice_outcome_set_round_trip_preserves_priority_class():
+    # priority_class is a property derived from disrupted_signal_class,
+    # so round-trip correctness depends on the class being rehydrated
+    # to a class object (not a bare string).
+    from varcode.effects import effect_priority
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    effects = variant.effects(splice_outcomes=True)
+    target = next(e for e in effects if e.transcript is transcript)
+    restored = SpliceOutcomeSet.from_json(target.to_json())
+    assert effect_priority(restored) == effect_priority(target)
+
+
 def test_non_splice_effects_are_not_multi_outcome():
     # Guard against future class-hierarchy rearrangements that might
     # accidentally mark deterministic effects as multi-outcome.
