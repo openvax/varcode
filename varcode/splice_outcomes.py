@@ -53,8 +53,8 @@ from .effects.effect_classes import (
     MutationEffect,
     SpliceAcceptor,
     SpliceDonor,
+    StartLoss,
 )
-from .effects.effect_ordering import effect_priority
 
 
 class SpliceOutcome(Enum):
@@ -157,8 +157,52 @@ class SpliceOutcomeSet(MutationEffect):
         self.disrupted_signal_class = disrupted_signal_class
 
     @property
+    def priority_class(self):
+        """Delegate priority lookup to the disrupted-signal class so a
+        SpliceOutcomeSet sorts as if it were the original splice effect.
+
+        Read by :func:`varcode.effects.effect_priority`.
+        """
+        return self.disrupted_signal_class
+
+    @property
     def most_likely(self) -> SpliceCandidate:
         return self.candidates[0]
+
+    @property
+    def candidate_proteins(self):
+        """Mapping from each :class:`SpliceOutcome` to its computed
+        mutant protein sequence (empty string when the protein is not
+        computable from cDNA alone — i.e. intron retention and
+        cryptic splice).
+
+        Returns
+        -------
+        dict[SpliceOutcome, str]
+            One entry per candidate. The string is empty for stubs.
+        """
+        result = {}
+        for candidate in self.candidates:
+            coding = candidate.coding_effect
+            if coding is not None:
+                protein = getattr(coding, "mutant_protein_sequence", "")
+                result[candidate.outcome] = str(protein) if protein else ""
+            else:
+                result[candidate.outcome] = ""
+        return result
+
+    @property
+    def mutant_protein_sequences(self):
+        """Set of distinct non-empty mutant protein sequences across
+        all candidates.
+
+        Useful for downstream consumers (neoantigen prediction,
+        isovar/vaxrank) that want to enumerate every protein this
+        splice disruption might produce.
+        """
+        return {
+            p for p in self.candidate_proteins.values() if p
+        }
 
     @property
     def short_description(self) -> str:
@@ -213,20 +257,73 @@ _PLAUSIBILITY_EXONIC_SPLICE_SITE = {
 }
 
 # Intronic splice site (positions +3 to +6 or -3): less critical
-# region; normal splicing dominates.
-_PLAUSIBILITY_INTRONIC_SPLICE_SITE = {
+# region; normal splicing dominates. Two variants — donor-side (+3 to +6)
+# and acceptor-side (-3) — which differ only in the cryptic direction.
+_PLAUSIBILITY_INTRONIC_SPLICE_SITE_DONOR = {
     SpliceOutcome.NORMAL_SPLICING: 0.70,
     SpliceOutcome.EXON_SKIPPING: 0.20,
     SpliceOutcome.INTRON_RETENTION: 0.05,
     SpliceOutcome.CRYPTIC_DONOR: 0.05,
 }
 
-_PLAUSIBILITY_TABLES = {
-    SpliceDonor: _PLAUSIBILITY_SPLICE_DONOR,
-    SpliceAcceptor: _PLAUSIBILITY_SPLICE_ACCEPTOR,
-    ExonicSpliceSite: _PLAUSIBILITY_EXONIC_SPLICE_SITE,
-    IntronicSpliceSite: _PLAUSIBILITY_INTRONIC_SPLICE_SITE,
+_PLAUSIBILITY_INTRONIC_SPLICE_SITE_ACCEPTOR = {
+    SpliceOutcome.NORMAL_SPLICING: 0.70,
+    SpliceOutcome.EXON_SKIPPING: 0.20,
+    SpliceOutcome.INTRON_RETENTION: 0.05,
+    SpliceOutcome.CRYPTIC_ACCEPTOR: 0.05,
 }
+
+# Order matters for isinstance matching: more specific classes first.
+# Today all four are leaf classes so ordering doesn't matter in
+# practice, but the iteration pattern in _plausibility_table_for()
+# is future-proof against subclassing.
+_PLAUSIBILITY_TABLES = (
+    (SpliceDonor, _PLAUSIBILITY_SPLICE_DONOR),
+    (SpliceAcceptor, _PLAUSIBILITY_SPLICE_ACCEPTOR),
+    (ExonicSpliceSite, _PLAUSIBILITY_EXONIC_SPLICE_SITE),
+    # IntronicSpliceSite requires side detection to pick the right
+    # cryptic direction; handled in _plausibility_table_for().
+)
+
+
+def _intronic_splice_side_is_acceptor(splice_effect):
+    """True if an IntronicSpliceSite effect is on the acceptor side of
+    its nearest exon.
+
+    The classifier emits IntronicSpliceSite for positions +3–6 (donor
+    side, after exon in transcript order) and -3 (acceptor side,
+    before exon in transcript order). The side determines whether a
+    cryptic donor or cryptic acceptor is the relevant alternative.
+    """
+    exon = getattr(splice_effect, "nearest_exon", None)
+    variant = getattr(splice_effect, "variant", None)
+    if exon is None or variant is None:
+        return False
+    strand = getattr(exon, "strand", "+")
+    variant_start = variant.trimmed_base1_start
+    variant_end = variant.trimmed_base1_end
+    if strand == "+":
+        return variant_start < exon.start
+    # Reverse strand: acceptor-side intronic variants sit past the
+    # genomic end of the exon (which is the 5' end in transcript order).
+    return variant_end > exon.end
+
+
+def _plausibility_table_for(splice_effect):
+    """Return the plausibility table that applies to this splice
+    effect, or None for effects we don't wrap.
+
+    Uses :func:`isinstance` rather than exact-class dispatch so
+    subclasses are handled correctly.
+    """
+    for cls, table in _PLAUSIBILITY_TABLES:
+        if isinstance(splice_effect, cls):
+            return table
+    if isinstance(splice_effect, IntronicSpliceSite):
+        if _intronic_splice_side_is_acceptor(splice_effect):
+            return _PLAUSIBILITY_INTRONIC_SPLICE_SITE_ACCEPTOR
+        return _PLAUSIBILITY_INTRONIC_SPLICE_SITE_DONOR
+    return None
 
 
 # ---------------------------------------------------------------------
@@ -284,8 +381,22 @@ def _build_exon_skipping_candidate(splice_effect, plausibility):
             predicted_class_name="ExonLoss",
         )
 
+    exon_contains_start_codon = _exon_contains_start_codon(transcript, exon)
     exon_length = exon.end - exon.start + 1
-    if exon_length % 3 == 0:
+    if exon_contains_start_codon:
+        # Losing the exon that contains the start codon means the
+        # protein as annotated can't be produced; label this as
+        # StartLoss. We can't easily construct the StartLoss effect
+        # here without more context, so return a stub with the right
+        # predicted class.
+        coding_effect = _build_start_loss_effect(
+            splice_effect.variant, transcript)
+        predicted_class_name = "StartLoss"
+        description = (
+            "Exon %s is skipped and contains the start codon; "
+            "annotated translation initiation is lost." % (
+                getattr(exon, "exon_id", "?"),))
+    elif exon_length % 3 == 0:
         coding_effect = _build_in_frame_exon_skip_effect(
             splice_effect.variant, transcript, exon)
         predicted_class_name = "Deletion"
@@ -293,7 +404,8 @@ def _build_exon_skipping_candidate(splice_effect, plausibility):
             "Exon %s is skipped (in-frame, %d aa removed)." % (
                 getattr(exon, "exon_id", "?"), exon_length // 3))
     else:
-        coding_effect = None
+        coding_effect = _build_out_of_frame_exon_skip_effect(
+            splice_effect.variant, transcript, exon)
         predicted_class_name = "FrameShift"
         description = (
             "Exon %s is skipped (out of frame, frameshift in the "
@@ -353,6 +465,127 @@ def _build_cryptic_splice_candidate(splice_effect, plausibility, outcome):
 # ---------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------
+
+
+def _exon_contains_start_codon(transcript, exon):
+    """True if the given exon contains the annotated start codon."""
+    if not transcript.complete:
+        return False
+    try:
+        start_offsets = transcript.start_codon_spliced_offsets
+    except Exception:
+        return False
+    if not start_offsets:
+        return False
+    exon_start = _exon_start_offset_in_transcript_or_none(transcript, exon)
+    if exon_start is None:
+        return False
+    exon_length = exon.end - exon.start + 1
+    exon_end = exon_start + exon_length - 1
+    first_start = min(start_offsets)
+    return exon_start <= first_start <= exon_end
+
+
+def _exon_start_offset_in_transcript_or_none(transcript, exon):
+    """Like :func:`_exon_start_offset_in_transcript` but returns None
+    on failure instead of raising."""
+    try:
+        return _exon_start_offset_in_transcript(transcript, exon)
+    except (StopIteration, ValueError):
+        return None
+
+
+def _build_start_loss_effect(variant, transcript):
+    """Build a StartLoss effect stub when the start-codon exon is
+    skipped. Returns None if the transcript can't accommodate it.
+    """
+    if not transcript.complete:
+        return None
+    try:
+        return StartLoss(variant=variant, transcript=transcript)
+    except Exception:
+        return None
+
+
+def _build_out_of_frame_exon_skip_effect(variant, transcript, skipped_exon):
+    """Compute the mutant protein for an out-of-frame exon skip.
+
+    Builds the post-skip cDNA by joining all exons except the skipped
+    one, translating from the original start codon, and following the
+    frameshift until the first stop. Returns a Deletion-style effect
+    with aa_ref set to the joined skipped region; leaves the mutant
+    protein accessible via a custom subclass-like shim.
+    """
+    if not transcript.complete:
+        return None
+    try:
+        exon_start_in_tx = _exon_start_offset_in_transcript(
+            transcript, skipped_exon)
+    except (StopIteration, ValueError):
+        return None
+    cds_start_offset = min(transcript.start_codon_spliced_offsets)
+    if exon_start_in_tx < cds_start_offset:
+        return None
+    exon_length = skipped_exon.end - skipped_exon.start + 1
+    # Construct the post-skip cDNA by excising the exon's nucleotides
+    # from the full transcript sequence.
+    full_sequence = str(transcript.sequence)
+    post_skip_cdna = (
+        full_sequence[:exon_start_in_tx]
+        + full_sequence[exon_start_in_tx + exon_length:]
+    )
+    # Translate from the start codon through the frameshift to first stop.
+    coding_from_start = post_skip_cdna[cds_start_offset:]
+    protein = _translate_to_first_stop(coding_from_start)
+    if not protein:
+        return None
+    # Compute the aa position where the frameshift begins — this is
+    # where the exon used to start, in aa coordinates.
+    aa_frameshift_start = (exon_start_in_tx - cds_start_offset) // 3
+    if aa_frameshift_start >= len(transcript.protein_sequence):
+        return None
+    return _ExonSkipFrameshiftEffect(
+        variant=variant,
+        transcript=transcript,
+        aa_frameshift_start=aa_frameshift_start,
+        protein=protein,
+    )
+
+
+def _translate_to_first_stop(cdna):
+    """Translate a cDNA string to protein, stopping at the first stop
+    codon. Returns the protein string without the stop symbol.
+    """
+    from Bio.Seq import Seq
+    n_codons = len(cdna) // 3
+    truncated = str(cdna[:n_codons * 3])
+    protein = str(Seq(truncated).translate(to_stop=True))
+    return protein
+
+
+class _ExonSkipFrameshiftEffect(MutationEffect):
+    """Internal helper effect representing an exon-skip-induced
+    frameshift. Carries the computed mutant protein sequence but isn't
+    intended as a public effect class — it's wrapped inside the
+    SpliceCandidate.
+    """
+    def __init__(self, variant, transcript, aa_frameshift_start, protein):
+        MutationEffect.__init__(self, variant)
+        self.transcript = transcript
+        self.aa_mutation_start_offset = aa_frameshift_start
+        self.aa_ref = str(
+            transcript.protein_sequence[aa_frameshift_start:])
+        # aa_alt is the new amino acids after the frameshift point.
+        self.aa_alt = protein[aa_frameshift_start:]
+        self.mutant_protein_sequence = protein
+
+    @property
+    def short_description(self):
+        return "p.%s%dfs*%d" % (
+            self.aa_ref[:1] if self.aa_ref else "?",
+            self.aa_mutation_start_offset + 1,
+            len(self.aa_alt),
+        )
 
 
 def _affected_exon(splice_effect):
@@ -441,7 +674,7 @@ def enumerate_splice_outcomes(splice_effect):
         input is a splice-disrupting effect; otherwise the input
         unchanged.
     """
-    table = _PLAUSIBILITY_TABLES.get(type(splice_effect))
+    table = _plausibility_table_for(splice_effect)
     if table is None:
         return splice_effect
 
@@ -478,24 +711,5 @@ def wrap_splice_effects_in_collection(effect_collection):
     return effect_collection.clone_with_new_elements(new_effects)
 
 
-# ---------------------------------------------------------------------
-# Priority integration: SpliceOutcomeSet uses the priority of the
-# disrupted-signal class so existing top_priority_effect logic works.
-# ---------------------------------------------------------------------
-
-
-def splice_outcome_set_priority(effect):
-    """Priority score for a SpliceOutcomeSet, computed from the
-    disrupted-signal class so that existing priority comparisons
-    behave naturally.
-    """
-    if not isinstance(effect, SpliceOutcomeSet):
-        return effect_priority(effect)
-    if effect.disrupted_signal_class is not None:
-        # Construct a placeholder effect of the disrupted class to
-        # look up its priority. effect_priority is keyed on class only.
-        class _PlaceholderEffect(effect.disrupted_signal_class):
-            pass
-        # The dict lookup uses the actual class, so use a stub object
-        return effect_priority(effect)
-    return effect_priority(effect)
+# Priority integration happens via the `priority_class` attribute on
+# SpliceOutcomeSet — see `effect_priority` in effects.effect_ordering.

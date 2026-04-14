@@ -92,8 +92,14 @@ transcript_effect_priority_dict = {
 def effect_priority(effect):
     """
     Returns the integer priority for a given transcript effect.
+
+    Effects may opt out of class-based priority lookup by exposing a
+    ``priority_class`` attribute — used by wrapper classes like
+    :class:`varcode.splice_outcomes.SpliceOutcomeSet` to delegate to
+    the wrapped effect's class.
     """
-    return transcript_effect_priority_dict.get(effect.__class__, -1)
+    cls = getattr(effect, "priority_class", None) or effect.__class__
+    return transcript_effect_priority_dict.get(cls, -1)
 
 
 def apply_to_field_if_exists(effect, field_name, fn, default):
