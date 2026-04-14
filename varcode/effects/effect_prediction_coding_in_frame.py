@@ -27,7 +27,8 @@ from .effect_classes import (
     StartLoss,
     StopLoss,
 )
-from .translate import translate_in_frame_mutation, START_CODONS
+from .codon_tables import codon_table_for_transcript
+from .translate import translate_in_frame_mutation
 
 
 def get_codons(
@@ -145,8 +146,9 @@ def predict_in_frame_coding_effect(
         cds_offset=cds_offset)
 
     mutation_affects_start_codon = (ref_codon_start_offset == 0)
+    codon_table = codon_table_for_transcript(transcript)
 
-    if mutation_affects_start_codon and mutant_codons[:3] not in START_CODONS:
+    if mutation_affects_start_codon and mutant_codons[:3] not in codon_table.start_codons:
         # if we changed a start codon to something else then
         # we no longer know where the protein begins (or even in
         # what frame).

@@ -24,6 +24,7 @@ from .effect_classes import (
     StopLoss,
     Silent
 )
+from .codon_tables import codon_table_for_transcript
 from .mutate import substitute
 from .translate import translate
 
@@ -62,7 +63,8 @@ def create_frameshift_effect(
         nucleotide_sequence=sequence_from_mutated_codon,
         first_codon_is_start=False,
         to_stop=True,
-        truncate=True)
+        truncate=True,
+        codon_table=codon_table_for_transcript(transcript))
 
     if mutated_codon_index == 0:
         # TODO: scan through sequence_from_mutated_codon for

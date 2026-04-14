@@ -46,6 +46,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
+from .effects.codon_tables import codon_table_for_transcript, translate_sequence
 from .effects.effect_classes import (
     Deletion,
     ExonicSpliceSite,
@@ -543,7 +544,8 @@ def _build_out_of_frame_exon_skip_effect(variant, transcript, skipped_exon):
     )
     # Translate from the start codon through the frameshift to first stop.
     coding_from_start = post_skip_cdna[cds_start_offset:]
-    protein = _translate_to_first_stop(coding_from_start)
+    protein = _translate_to_first_stop(
+        coding_from_start, codon_table=codon_table_for_transcript(transcript))
     if not protein:
         return None
     # Compute the aa position where the frameshift begins — this is
@@ -559,15 +561,20 @@ def _build_out_of_frame_exon_skip_effect(variant, transcript, skipped_exon):
     )
 
 
-def _translate_to_first_stop(cdna):
+def _translate_to_first_stop(cdna, codon_table=None):
     """Translate a cDNA string to protein, stopping at the first stop
     codon. Returns the protein string without the stop symbol.
+
+    ``codon_table`` defaults to the standard nuclear table; pass the
+    vertebrate mitochondrial table for mt transcripts so AGA/AGG act
+    as stops and TGA codes for Trp.
     """
-    from Bio.Seq import Seq
+    if codon_table is None:
+        from .effects.codon_tables import STANDARD
+        codon_table = STANDARD
     n_codons = len(cdna) // 3
     truncated = str(cdna[:n_codons * 3])
-    protein = str(Seq(truncated).translate(to_stop=True))
-    return protein
+    return translate_sequence(truncated, codon_table=codon_table, to_stop=True)
 
 
 class _ExonSkipFrameshiftEffect(MutationEffect):

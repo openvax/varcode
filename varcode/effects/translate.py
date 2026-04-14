@@ -12,86 +12,96 @@
 
 """Helpers for cDNA -> protein translation.
 
-TODO: generalize this to work with the mitochondrial codon table.
+Codon tables live in :mod:`varcode.effects.codon_tables` as plain
+Python dicts/frozensets — no BioPython dependency for codon lookup.
+Mitochondrial transcripts are routed to NCBI translation table 2 via
+:func:`codon_table_for_transcript`; everything else uses table 1.
 """
 
-from Bio.Data import CodonTable
-from Bio.Seq import Seq
+from .codon_tables import (
+    STANDARD,
+    codon_table_for_transcript,
+    translate_sequence,
+)
 
-DNA_CODON_TABLE = CodonTable.standard_dna_table.forward_table
-START_CODONS = set(CodonTable.standard_dna_table.start_codons)
-STOP_CODONS = set(CodonTable.standard_dna_table.stop_codons)
+# Back-compat module-level constants — callers that imported these
+# names directly still get the standard (nuclear) table. Code paths
+# that need mitochondrial handling look up the per-transcript table
+# through codon_table_for_transcript().
+DNA_CODON_TABLE = STANDARD.forward_table
+START_CODONS = STANDARD.start_codons
+STOP_CODONS = STANDARD.stop_codons
 
 
-def translate_codon(codon, aa_pos):
-    """Translate a single codon into a single amino acid or stop '*'
+def translate_codon(codon, aa_pos, codon_table=STANDARD):
+    """Translate a single codon into a single amino acid or stop '*'.
 
     Parameters
     ----------
     codon : str
-        Expected to be of length 3
+        Expected to be of length 3.
     aa_pos : int
-        Codon/amino acid offset into the protein (starting from 0)
+        Codon/amino acid offset into the protein (starting from 0).
+    codon_table : CodonTable
+        Defaults to the standard nuclear table. Pass
+        :data:`VERTEBRATE_MITOCHONDRIAL` for mt transcripts.
     """
     # not handling rare Leucine or Valine starts!
-    if aa_pos == 0 and codon in START_CODONS:
+    if aa_pos == 0 and codon in codon_table.start_codons:
         return "M"
-    elif codon in STOP_CODONS:
+    elif codon in codon_table.stop_codons:
         return "*"
     else:
-        return DNA_CODON_TABLE[codon]
+        return codon_table.forward_table[codon]
 
 
 def translate(
         nucleotide_sequence,
         first_codon_is_start=True,
         to_stop=True,
-        truncate=False):
-    """Translates cDNA coding sequence into amino acid protein sequence.
-
-    Should typically start with a start codon but allowing non-methionine
-    first residues since the CDS we're translating might have been affected
-    by a start loss mutation.
-
-    The sequence may include the 3' UTR but will stop translation at the first
-    encountered stop codon.
+        truncate=False,
+        codon_table=STANDARD):
+    """Translate a cDNA coding sequence into an amino acid string.
 
     Parameters
     ----------
-    nucleotide_sequence : BioPython Seq
-        cDNA sequence
-
+    nucleotide_sequence : str or convertible-to-str
+        cDNA sequence.
     first_codon_is_start : bool
-        Treat the beginning of nucleotide_sequence (translates methionin)
-
+        Treat the first codon as a start codon (translates to 'M' even
+        when the codon is a non-ATG alternate start like TTG/GTG).
+    to_stop : bool
+        Stop translation at the first stop codon.
     truncate : bool
-        Truncate sequence if it's not a multiple of 3 (default = False)
-    Returns BioPython Seq of amino acids
-    """
-    if not isinstance(nucleotide_sequence, Seq):
-        nucleotide_sequence = Seq(nucleotide_sequence)
+        Truncate the sequence to a multiple of 3 before translating.
+    codon_table : CodonTable
+        Defaults to standard. For mt transcripts pass the vertebrate
+        mitochondrial table.
 
+    Returns
+    -------
+    str
+        Amino acid sequence (previously returned a ``Bio.Seq.Seq``;
+        now a plain string — all in-repo callers already use string
+        semantics).
+    """
+    seq = str(nucleotide_sequence)
     if truncate:
-        # if sequence isn't a multiple of 3, truncate it so BioPython
-        # doesn't complain
-        n_nucleotides = int(len(nucleotide_sequence) / 3) * 3
-        nucleotide_sequence = nucleotide_sequence[:n_nucleotides]
+        n_nucleotides = (len(seq) // 3) * 3
+        seq = seq[:n_nucleotides]
     else:
-        n_nucleotides = len(nucleotide_sequence)
+        n_nucleotides = len(seq)
 
     assert n_nucleotides % 3 == 0, \
         ("Expected nucleotide sequence to be multiple of 3"
-         " but got %s of length %d") % (
-            nucleotide_sequence,
-            n_nucleotides)
+         " but got %s of length %d") % (seq[:30], n_nucleotides)
 
-    # passing cds=False to translate since we may want to deal with premature
-    # stop codons
-    protein_sequence = nucleotide_sequence.translate(to_stop=to_stop, cds=False)
+    protein_sequence = translate_sequence(
+        seq, codon_table=codon_table, to_stop=to_stop)
 
     if first_codon_is_start and (
             len(protein_sequence) == 0 or protein_sequence[0] != "M"):
-        if nucleotide_sequence[:3] in START_CODONS:
+        if seq[:3].upper() in codon_table.start_codons:
             # TODO: figure out when these should be made into methionines
             # and when left as whatever amino acid they normally code for
             # e.g. Leucine start codons
@@ -102,21 +112,25 @@ def translate(
                 ("Expected first codon of %s to be start codon"
                  " (one of %s) but got %s") % (
                     protein_sequence[:10],
-                    START_CODONS,
-                    nucleotide_sequence))
+                    sorted(codon_table.start_codons),
+                    seq[:30]))
 
     return protein_sequence
 
 
-def find_first_stop_codon(nucleotide_sequence):
+def find_first_stop_codon(nucleotide_sequence, codon_table=STANDARD):
     """
     Given a sequence of codons (expected to have length multiple of three),
-    return index of first stop codon, or -1 if none is in the sequence.
+    return the codon offset of the first stop codon, or -1 if none is in
+    the sequence. The meaning of "stop" depends on ``codon_table`` — in
+    the vertebrate mitochondrial table, AGA and AGG are stops.
     """
-    n_mutant_codons = len(nucleotide_sequence) // 3
+    seq = str(nucleotide_sequence).upper()
+    n_mutant_codons = len(seq) // 3
+    stops = codon_table.stop_codons
     for i in range(n_mutant_codons):
-        codon = nucleotide_sequence[3 * i:3 * i + 3]
-        if codon in STOP_CODONS:
+        codon = seq[3 * i:3 * i + 3]
+        if codon in stops:
             return i
     return -1
 
@@ -131,6 +145,11 @@ def translate_in_frame_mutation(
         - mutant amino acid sequence
         - offset of first stop codon in the mutant sequence (or -1 if there was none)
         - boolean flag indicating whether any codons from the 3' UTR were used
+
+    The codon table is selected automatically from the transcript's
+    contig — mitochondrial transcripts use NCBI table 2 (AGA/AGG as
+    stops, TGA as Trp, ATA as Met); everything else uses the standard
+    table.
 
     Parameters
     ----------
@@ -149,7 +168,10 @@ def translate_in_frame_mutation(
         Nucleotide sequence to replace the reference codons with
         (expected to have length that is a multiple of three)
     """
-    mutant_stop_codon_index = find_first_stop_codon(mutant_codons)
+    codon_table = codon_table_for_transcript(transcript)
+
+    mutant_stop_codon_index = find_first_stop_codon(
+        mutant_codons, codon_table=codon_table)
 
     using_three_prime_utr = False
 
@@ -166,7 +188,8 @@ def translate_in_frame_mutation(
 
         # note the offset of the first stop codon in the combined
         # nucleotide sequence of both the end of the CDS and the 3' UTR
-        first_utr_stop_codon_index = find_first_stop_codon(truncated_utr_sequence)
+        first_utr_stop_codon_index = find_first_stop_codon(
+            truncated_utr_sequence, codon_table=codon_table)
 
         if first_utr_stop_codon_index >= 0:
             # if there is a stop codon in the 3' UTR sequence (including the
@@ -186,6 +209,7 @@ def translate_in_frame_mutation(
 
     amino_acids = translate(
         mutant_codons,
-        first_codon_is_start=(ref_codon_start_offset == 0))
+        first_codon_is_start=(ref_codon_start_offset == 0),
+        codon_table=codon_table)
 
     return amino_acids, mutant_stop_codon_index, using_three_prime_utr
