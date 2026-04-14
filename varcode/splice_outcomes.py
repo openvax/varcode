@@ -50,6 +50,7 @@ from .effects.effect_classes import (
     Deletion,
     ExonicSpliceSite,
     IntronicSpliceSite,
+    MultiOutcomeEffect,
     MutationEffect,
     SpliceAcceptor,
     SpliceDonor,
@@ -131,9 +132,14 @@ class SpliceCandidate:
         )
 
 
-class SpliceOutcomeSet(MutationEffect):
+class SpliceOutcomeSet(MultiOutcomeEffect):
     """A splice-disrupting variant's effect, expressed as a set of
     plausible outcomes rather than a single Effect.
+
+    Implements the :class:`MultiOutcomeEffect` protocol: downstream
+    consumers can write ``isinstance(effect, MultiOutcomeEffect)`` to
+    catch this and any future multi-outcome wrapper (RNA evidence,
+    germline-aware, etc.) uniformly — see #299.
 
     For back-compat, :attr:`short_description` delegates to the most
     plausible candidate. Callers that want all candidates iterate
@@ -145,7 +151,7 @@ class SpliceOutcomeSet(MutationEffect):
     """
 
     def __init__(self, variant, transcript, candidates, disrupted_signal_class=None):
-        MutationEffect.__init__(self, variant)
+        MultiOutcomeEffect.__init__(self, variant)
         self.transcript = transcript
         # Sort candidates by plausibility descending so .candidates[0]
         # is always the most likely.
@@ -274,15 +280,17 @@ _PLAUSIBILITY_INTRONIC_SPLICE_SITE_ACCEPTOR = {
 }
 
 # Order matters for isinstance matching: more specific classes first.
-# Today all four are leaf classes so ordering doesn't matter in
-# practice, but the iteration pattern in _plausibility_table_for()
-# is future-proof against subclassing.
+# SpliceDonor and SpliceAcceptor are subclasses of IntronicSpliceSite
+# (see effect_classes.py), so they must be checked before the
+# IntronicSpliceSite fallback in _plausibility_table_for — otherwise
+# a SpliceDonor would incorrectly fall into the intronic-window table.
+# IntronicSpliceSite itself is deliberately held out of this tuple and
+# dispatched separately so side detection can pick the right cryptic
+# direction.
 _PLAUSIBILITY_TABLES = (
     (SpliceDonor, _PLAUSIBILITY_SPLICE_DONOR),
     (SpliceAcceptor, _PLAUSIBILITY_SPLICE_ACCEPTOR),
     (ExonicSpliceSite, _PLAUSIBILITY_EXONIC_SPLICE_SITE),
-    # IntronicSpliceSite requires side detection to pick the right
-    # cryptic direction; handled in _plausibility_table_for().
 )
 
 
@@ -294,19 +302,18 @@ def _intronic_splice_side_is_acceptor(splice_effect):
     side, after exon in transcript order) and -3 (acceptor side,
     before exon in transcript order). The side determines whether a
     cryptic donor or cryptic acceptor is the relevant alternative.
+
+    Caller contract: ``splice_effect`` must be an ``IntronicSpliceSite``
+    (guaranteed by :func:`_plausibility_table_for`), so ``variant`` and
+    ``nearest_exon`` are always present.
     """
-    exon = getattr(splice_effect, "nearest_exon", None)
-    variant = getattr(splice_effect, "variant", None)
-    if exon is None or variant is None:
-        return False
-    strand = getattr(exon, "strand", "+")
-    variant_start = variant.trimmed_base1_start
-    variant_end = variant.trimmed_base1_end
-    if strand == "+":
-        return variant_start < exon.start
+    exon = splice_effect.nearest_exon
+    variant = splice_effect.variant
+    if exon.strand == "+":
+        return variant.trimmed_base1_start < exon.start
     # Reverse strand: acceptor-side intronic variants sit past the
     # genomic end of the exon (which is the 5' end in transcript order).
-    return variant_end > exon.end
+    return variant.trimmed_base1_end > exon.end
 
 
 def _plausibility_table_for(splice_effect):

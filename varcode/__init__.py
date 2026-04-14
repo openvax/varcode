@@ -26,6 +26,7 @@ from .effects import (
     effect_priority,
     top_priority_effect,
     EffectCollection,
+    MultiOutcomeEffect,
     MutationEffect,
     NonsilentCodingMutation,
 )
@@ -51,6 +52,7 @@ __all__ = [
     # effects
     "effect_priority",
     "top_priority_effect",
+    "MultiOutcomeEffect",
     "MutationEffect",
     "NonsilentCodingMutation",
 

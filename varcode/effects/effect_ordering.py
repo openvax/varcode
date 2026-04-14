@@ -320,6 +320,13 @@ def select_between_exonic_splice_site_and_alternate_effect(effect):
     If the given effect is an ExonicSpliceSite then it might contain
     an alternate effect of higher priority. In that case, return the
     alternate effect. Otherwise, this acts as an identity function.
+
+    An exact-class check (not ``isinstance``) is used because the
+    function is only meant to unwrap bare ``ExonicSpliceSite``
+    instances. This has a useful side effect under
+    ``splice_outcomes=True``: the wrapping ``SpliceOutcomeSet`` passes
+    through unchanged (so every plausible outcome stays visible) and
+    sorts by its ``priority_class``.
     """
     if effect.__class__ is not ExonicSpliceSite:
         return effect

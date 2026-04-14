@@ -24,6 +24,7 @@ from .effect_prediction import (
 )
 from .effect_classes import (
     MutationEffect,
+    MultiOutcomeEffect,
     TranscriptMutationEffect,
     NonsilentCodingMutation,
     Failure,
@@ -65,6 +66,7 @@ __all__ = [
 
     # effect classes
     "MutationEffect",
+    "MultiOutcomeEffect",
     "TranscriptMutationEffect",
     "Failure",
     "IncompleteTranscript",

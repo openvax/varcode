@@ -25,6 +25,7 @@ Coverage:
   - Multi-allelic and reverse-strand variants work too
 """
 
+import pytest
 from pyensembl import cached_release
 
 import varcode
@@ -353,6 +354,45 @@ def test_package_level_exports():
 
 
 # --------------------------------------------------------------------
+# MultiOutcomeEffect protocol (see #299 for the planned generalization).
+# --------------------------------------------------------------------
+
+
+def test_splice_outcome_set_is_a_multi_outcome_effect():
+    # Downstream consumers filter multi-outcome results with
+    # isinstance(e, MultiOutcomeEffect) so future wrappers (RNA
+    # evidence #259, germline-aware #268, etc.) don't force churn.
+    from varcode import MultiOutcomeEffect
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    effects = variant.effects(splice_outcomes=True)
+    target = next(e for e in effects if e.transcript is transcript)
+    assert isinstance(target, MultiOutcomeEffect)
+    # Protocol surface: candidates, most_likely, priority_class.
+    assert hasattr(target, "candidates") and len(target.candidates) > 0
+    assert target.most_likely is target.candidates[0]
+    assert target.priority_class is target.disrupted_signal_class
+
+
+def test_multi_outcome_effect_exported_at_package_level():
+    from varcode import MultiOutcomeEffect
+    from varcode import effects
+    assert MultiOutcomeEffect is effects.MultiOutcomeEffect
+    # Confirm SpliceOutcomeSet is a subclass, not a duck.
+    assert issubclass(SpliceOutcomeSet, MultiOutcomeEffect)
+
+
+def test_non_splice_effects_are_not_multi_outcome():
+    # Guard against future class-hierarchy rearrangements that might
+    # accidentally mark deterministic effects as multi-outcome.
+    from varcode import MultiOutcomeEffect
+    from varcode.effects import Substitution, Silent, Intronic, MutationEffect
+    for cls in (Substitution, Silent, Intronic, MutationEffect):
+        assert not issubclass(cls, MultiOutcomeEffect), (
+            "%s should not be a MultiOutcomeEffect" % cls.__name__)
+
+
+# --------------------------------------------------------------------
 # Priority integration: SpliceOutcomeSet sorts as if it were the
 # disrupted-signal class (review feedback on PR #292).
 # --------------------------------------------------------------------
@@ -497,26 +537,26 @@ def test_out_of_frame_exon_skip_produces_mutant_protein():
     # out of frame — need a different exon. Use a variant known to
     # target an out-of-frame exon. We'll discover one empirically
     # by finding an exon whose length is not divisible by 3.
-    for exon in ensembl_grch38.transcript_by_id(
-            CFTR_TRANSCRIPT_ID).exons[2:]:
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    target_exon = None
+    for exon in transcript.exons[2:]:
         length = exon.end - exon.start + 1
         if length % 3 != 0:
             target_exon = exon
             break
-    else:
-        # All exons in-frame; skip this test.
-        return
+    if target_exon is None:
+        pytest.skip("No out-of-frame exon found in CFTR beyond exon 2")
 
     # Construct a donor-side disrupting variant at this exon's end
     # (+1 position after the exon in + strand coords).
-    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     donor_plus_1 = target_exon.end + 1
     # Use a canonical-ref SNV to ensure SpliceDonor classification.
     variant = Variant("7", donor_plus_1, "G", "A", ensembl_grch38)
     bare = variant.effect_on_transcript(transcript)
     if not isinstance(bare, SpliceDonor):
-        # Skip the test if the canonical G isn't actually there.
-        return
+        pytest.skip(
+            "Canonical donor G not present at %d; classifier emitted %s "
+            "rather than SpliceDonor." % (donor_plus_1, type(bare).__name__))
     effects = variant.effects(splice_outcomes=True)
     splice_set = next(e for e in effects if e.transcript is transcript)
     skip_candidate = next(
