@@ -48,6 +48,7 @@ from typing import Optional
 
 from .effects.codon_tables import codon_table_for_transcript, translate_sequence
 from .effects.effect_classes import (
+    ComplexSubstitution,
     Deletion,
     ExonicSpliceSite,
     IntronicSpliceSite,
@@ -56,7 +57,9 @@ from .effects.effect_classes import (
     SpliceAcceptor,
     SpliceDonor,
     StartLoss,
+    Substitution,
 )
+from .string_helpers import trim_shared_flanking_strings
 
 
 class SpliceOutcome(Enum):
@@ -407,7 +410,14 @@ def _build_exon_skipping_candidate(splice_effect, plausibility):
     elif exon_length % 3 == 0:
         coding_effect = _build_in_frame_exon_skip_effect(
             splice_effect.variant, transcript, exon)
-        predicted_class_name = "Deletion"
+        # The in-frame-skip helper now returns Deletion, Substitution,
+        # or ComplexSubstitution depending on whether the skip touches
+        # a codon-straddling boundary (see #298). Derive the label
+        # from the actual effect class when available.
+        predicted_class_name = (
+            type(coding_effect).__name__
+            if coding_effect is not None
+            else "Deletion")
         description = (
             "Exon %s is skipped (in-frame, %d aa removed)." % (
                 getattr(exon, "exon_id", "?"), exon_length // 3))
@@ -616,11 +626,23 @@ def _affected_exon(splice_effect):
 
 
 def _build_in_frame_exon_skip_effect(variant, transcript, skipped_exon):
-    """Construct a Deletion effect representing an in-frame exon skip.
+    """Construct the coding effect of an in-frame exon skip.
 
-    Computes the amino acid range corresponding to the skipped exon
-    and emits a Deletion. Falls back to None if the math doesn't
-    work out (e.g. exon spans the start codon).
+    When the skipped exon's first base sits at a codon boundary, the
+    skip is a clean :class:`Deletion` of ``exon_length / 3`` amino
+    acids. When the exon starts mid-codon (phase 1 or 2), the boundary
+    codon is reshaped from flanking bases of the preceding and
+    following exons — so the skip touches ``exon_length / 3 + 1``
+    original codons and replaces them with one new codon. Depending
+    on whether that new codon's amino acid matches either flanking
+    residue, the effect is :class:`Deletion`, :class:`Substitution`,
+    or :class:`ComplexSubstitution` — we compute each candidate and
+    let :func:`trim_shared_flanking_strings` collapse it to the
+    minimal edit. See openvax/varcode#298.
+
+    Returns ``None`` when the math can't be completed (e.g. the
+    skipped exon overlaps the 5' UTR or extends past the reference
+    protein's end).
     """
     if not transcript.complete:
         return None
@@ -634,20 +656,103 @@ def _build_in_frame_exon_skip_effect(variant, transcript, skipped_exon):
         # Exon overlaps the 5' UTR or start codon; the simple
         # amino-acid math doesn't apply.
         return None
+
     aa_start = (exon_start_in_tx - cds_start_offset) // 3
+    cds_offset_in_exon = (exon_start_in_tx - cds_start_offset) % 3
     exon_length = skipped_exon.end - skipped_exon.start + 1
-    n_aa_removed = exon_length // 3
-    aa_end = aa_start + n_aa_removed
+
+    if cds_offset_in_exon == 0:
+        # Codon-aligned skip: exon_length / 3 codons are cleanly
+        # removed with no boundary reshaping.
+        n_aa_removed = exon_length // 3
+        aa_end = aa_start + n_aa_removed
+        if aa_end > len(transcript.protein_sequence):
+            return None
+        aa_ref = str(transcript.protein_sequence[aa_start:aa_end])
+        if not aa_ref:
+            return None
+        return Deletion(
+            variant=variant,
+            transcript=transcript,
+            aa_mutation_start_offset=aa_start,
+            aa_ref=aa_ref,
+        )
+
+    # Mid-codon skip: exon starts at phase 1 or 2 of codon aa_start.
+    # The original codons touched are aa_start through aa_start + n,
+    # where n = exon_length / 3 (the two boundary codons plus the
+    # fully-internal ones; n + 1 codons total). After skipping, those
+    # n+1 codons are replaced by ONE reshaped codon composed of the
+    # preceding exon's trailing bases plus the following exon's
+    # leading bases.
+    n_aa_touched = exon_length // 3 + 1
+    aa_end = aa_start + n_aa_touched
     if aa_end > len(transcript.protein_sequence):
         return None
+
     aa_ref = str(transcript.protein_sequence[aa_start:aa_end])
     if not aa_ref:
         return None
-    return Deletion(
+
+    full_sequence = str(transcript.sequence)
+    pre_bases = cds_offset_in_exon                # 1 or 2
+    post_bases = 3 - cds_offset_in_exon           # 2 or 1
+    boundary_codon_start = exon_start_in_tx - pre_bases
+    post_exon_offset = exon_start_in_tx + exon_length
+    if (boundary_codon_start < 0
+            or post_exon_offset + post_bases > len(full_sequence)):
+        # Not enough flanking sequence to reconstruct the boundary
+        # codon (e.g. skipping the terminal exon).
+        return None
+    new_codon = (
+        full_sequence[boundary_codon_start:exon_start_in_tx]
+        + full_sequence[post_exon_offset:post_exon_offset + post_bases]
+    )
+    if len(new_codon) != 3:
+        return None
+    try:
+        aa_alt = translate_sequence(
+            new_codon,
+            codon_table=codon_table_for_transcript(transcript),
+            to_stop=False)
+    except ValueError:
+        return None
+    # aa_alt may contain '*' if the reshaped codon is a stop; leave
+    # that to the caller to interpret (the next candidate builder
+    # that specializes on premature stops can pick it up later).
+
+    trimmed_ref, trimmed_alt, shared_prefix, _ = trim_shared_flanking_strings(
+        aa_ref, aa_alt)
+    # Shared prefix shifts the effective mutation start forward.
+    aa_mutation_start_offset = aa_start + len(shared_prefix)
+
+    if not trimmed_alt and not trimmed_ref:
+        # Reshaped codon happens to match the boundary exactly — the
+        # skip is effectively silent at the protein level. Return None
+        # so the caller falls back to the predicted-class-name stub
+        # (exceedingly rare in practice).
+        return None
+    if not trimmed_alt:
+        return Deletion(
+            variant=variant,
+            transcript=transcript,
+            aa_mutation_start_offset=aa_mutation_start_offset,
+            aa_ref=trimmed_ref,
+        )
+    if len(trimmed_ref) == 1 and len(trimmed_alt) == 1:
+        return Substitution(
+            variant=variant,
+            transcript=transcript,
+            aa_mutation_start_offset=aa_mutation_start_offset,
+            aa_ref=trimmed_ref,
+            aa_alt=trimmed_alt,
+        )
+    return ComplexSubstitution(
         variant=variant,
         transcript=transcript,
-        aa_mutation_start_offset=aa_start,
-        aa_ref=aa_ref,
+        aa_mutation_start_offset=aa_mutation_start_offset,
+        aa_ref=trimmed_ref,
+        aa_alt=trimmed_alt,
     )
 
 

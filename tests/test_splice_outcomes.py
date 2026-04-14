@@ -382,6 +382,62 @@ def test_multi_outcome_effect_exported_at_package_level():
     assert issubclass(SpliceOutcomeSet, MultiOutcomeEffect)
 
 
+# --------------------------------------------------------------------
+# Boundary-codon reconstruction when in-frame exon skip starts
+# mid-codon (see #298). CFTR exon 6 (cDNA 875-1000, length 126) is
+# in-frame but starts at codon phase 2, so the preceding exon
+# contributes 2 bases to the boundary codon. Skipping it reshapes
+# that codon from two flanking-exon bases.
+# --------------------------------------------------------------------
+
+
+def test_mid_codon_in_frame_exon_skip_reshapes_boundary():
+    # Donor +1 disruption at CFTR exon 6's 3' end.
+    variant = Variant("7", 117536674, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    bare = variant.effect_on_transcript(transcript)
+    if not isinstance(bare, SpliceDonor):
+        pytest.skip(
+            "Canonical donor G not present at 117536674; "
+            "classifier emitted %s." % type(bare).__name__)
+    effects = variant.effects(splice_outcomes=True)
+    splice_set = next(e for e in effects if e.transcript is transcript)
+    skip_candidate = next(
+        c for c in splice_set.candidates
+        if c.outcome is SpliceOutcome.EXON_SKIPPING
+    )
+    # Pre-#298, this returned a plain Deletion with an aa_ref that
+    # didn't account for the reshaped boundary codon. Post-#298, the
+    # effect is a Deletion / Substitution / ComplexSubstitution
+    # depending on what the reshaped codon translates to.
+    assert skip_candidate.coding_effect is not None, (
+        "Expected a concrete coding_effect for mid-codon in-frame skip, "
+        "got stub with predicted_class_name=%s"
+        % skip_candidate.predicted_class_name)
+    effect_class = type(skip_candidate.coding_effect).__name__
+    assert effect_class in ("Deletion", "Substitution", "ComplexSubstitution"), (
+        "Expected Deletion/Substitution/ComplexSubstitution, got %s"
+        % effect_class)
+    # Whichever class it is, the predicted_class_name label matches.
+    assert skip_candidate.predicted_class_name == effect_class
+
+
+def test_codon_aligned_exon_skip_still_pure_deletion():
+    # CFTR exon 3 (cDNA 405-620, length 216) starts AND ends at codon
+    # boundaries (phase 0, in-frame). No boundary reshaping needed;
+    # result should stay a pure Deletion.
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    effects = variant.effects(splice_outcomes=True)
+    splice_set = next(e for e in effects if e.transcript is transcript)
+    skip_candidate = next(
+        c for c in splice_set.candidates
+        if c.outcome is SpliceOutcome.EXON_SKIPPING
+    )
+    # CFTR exon 3 is codon-aligned, so we expect a clean Deletion.
+    assert type(skip_candidate.coding_effect).__name__ == "Deletion"
+
+
 def test_non_splice_effects_are_not_multi_outcome():
     # Guard against future class-hierarchy rearrangements that might
     # accidentally mark deterministic effects as multi-outcome.
