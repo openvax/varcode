@@ -46,7 +46,9 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
+from .effects.codon_tables import codon_table_for_transcript, translate_sequence
 from .effects.effect_classes import (
+    ComplexSubstitution,
     Deletion,
     ExonicSpliceSite,
     IntronicSpliceSite,
@@ -55,7 +57,9 @@ from .effects.effect_classes import (
     SpliceAcceptor,
     SpliceDonor,
     StartLoss,
+    Substitution,
 )
+from .string_helpers import trim_shared_flanking_strings
 
 
 class SpliceOutcome(Enum):
@@ -131,6 +135,43 @@ class SpliceCandidate:
             self.plausibility,
         )
 
+    def to_dict(self):
+        """JSON-friendly dict for persistence and round-trip (see #295).
+
+        ``outcome`` is encoded as its enum value (string); the optional
+        ``coding_effect`` is nested via its own Serializable ``to_dict``
+        and tagged with ``__effect_class__`` (a bare effect class name
+        the registry knows how to resolve; using ``__class__`` would
+        collide with the ``python-serializable`` polymorphic-dispatch
+        key).
+        """
+        coding = None
+        if self.coding_effect is not None:
+            coding = self.coding_effect.to_dict()
+            coding["__effect_class__"] = type(self.coding_effect).__name__
+        return {
+            "outcome": self.outcome.value,
+            "plausibility": self.plausibility,
+            "description": self.description,
+            "coding_effect": coding,
+            "predicted_class_name": self.predicted_class_name,
+        }
+
+    @classmethod
+    def from_dict(cls, state):
+        """Rehydrate from the dict produced by :meth:`to_dict`."""
+        coding_effect = None
+        coding_state = state.get("coding_effect")
+        if coding_state is not None:
+            coding_effect = _rehydrate_coding_effect(coding_state)
+        return cls(
+            outcome=SpliceOutcome(state["outcome"]),
+            plausibility=state["plausibility"],
+            description=state["description"],
+            coding_effect=coding_effect,
+            predicted_class_name=state.get("predicted_class_name"),
+        )
+
 
 class SpliceOutcomeSet(MultiOutcomeEffect):
     """A splice-disrupting variant's effect, expressed as a set of
@@ -161,6 +202,39 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
         # replaced (SpliceDonor, SpliceAcceptor, ExonicSpliceSite, or
         # IntronicSpliceSite). Used for priority lookup.
         self.disrupted_signal_class = disrupted_signal_class
+
+    def to_dict(self):
+        """JSON-friendly dict for persistence and round-trip (see #295).
+
+        ``candidates`` serialize as a list of :class:`SpliceCandidate`
+        dicts. ``disrupted_signal_class`` encodes as a bare class name
+        string that :meth:`_reconstruct_nested_objects` resolves back
+        to the class object via the splice-class registry.
+        """
+        return {
+            "variant": self.variant,
+            "transcript": self.transcript,
+            "candidates": [c.to_dict() for c in self.candidates],
+            "disrupted_signal_class": (
+                self.disrupted_signal_class.__name__
+                if self.disrupted_signal_class is not None
+                else None),
+        }
+
+    @classmethod
+    def _reconstruct_nested_objects(cls, state_dict):
+        """Rehydrate candidates and disrupted_signal_class before
+        :meth:`Serializable.from_dict` expands kwargs.
+        """
+        state_dict = dict(state_dict)
+        if "candidates" in state_dict:
+            state_dict["candidates"] = tuple(
+                SpliceCandidate.from_dict(c) for c in state_dict["candidates"])
+        if "disrupted_signal_class" in state_dict:
+            name = state_dict["disrupted_signal_class"]
+            state_dict["disrupted_signal_class"] = (
+                _SPLICE_SIGNAL_CLASS_REGISTRY.get(name) if name else None)
+        return state_dict
 
     @property
     def priority_class(self):
@@ -406,7 +480,14 @@ def _build_exon_skipping_candidate(splice_effect, plausibility):
     elif exon_length % 3 == 0:
         coding_effect = _build_in_frame_exon_skip_effect(
             splice_effect.variant, transcript, exon)
-        predicted_class_name = "Deletion"
+        # The in-frame-skip helper now returns Deletion, Substitution,
+        # or ComplexSubstitution depending on whether the skip touches
+        # a codon-straddling boundary (see #298). Derive the label
+        # from the actual effect class when available.
+        predicted_class_name = (
+            type(coding_effect).__name__
+            if coding_effect is not None
+            else "Deletion")
         description = (
             "Exon %s is skipped (in-frame, %d aa removed)." % (
                 getattr(exon, "exon_id", "?"), exon_length // 3))
@@ -543,7 +624,8 @@ def _build_out_of_frame_exon_skip_effect(variant, transcript, skipped_exon):
     )
     # Translate from the start codon through the frameshift to first stop.
     coding_from_start = post_skip_cdna[cds_start_offset:]
-    protein = _translate_to_first_stop(coding_from_start)
+    protein = _translate_to_first_stop(
+        coding_from_start, codon_table=codon_table_for_transcript(transcript))
     if not protein:
         return None
     # Compute the aa position where the frameshift begins — this is
@@ -559,15 +641,20 @@ def _build_out_of_frame_exon_skip_effect(variant, transcript, skipped_exon):
     )
 
 
-def _translate_to_first_stop(cdna):
+def _translate_to_first_stop(cdna, codon_table=None):
     """Translate a cDNA string to protein, stopping at the first stop
     codon. Returns the protein string without the stop symbol.
+
+    ``codon_table`` defaults to the standard nuclear table; pass the
+    vertebrate mitochondrial table for mt transcripts so AGA/AGG act
+    as stops and TGA codes for Trp.
     """
-    from Bio.Seq import Seq
+    if codon_table is None:
+        from .effects.codon_tables import STANDARD
+        codon_table = STANDARD
     n_codons = len(cdna) // 3
     truncated = str(cdna[:n_codons * 3])
-    protein = str(Seq(truncated).translate(to_stop=True))
-    return protein
+    return translate_sequence(truncated, codon_table=codon_table, to_stop=True)
 
 
 class _ExonSkipFrameshiftEffect(MutationEffect):
@@ -609,11 +696,23 @@ def _affected_exon(splice_effect):
 
 
 def _build_in_frame_exon_skip_effect(variant, transcript, skipped_exon):
-    """Construct a Deletion effect representing an in-frame exon skip.
+    """Construct the coding effect of an in-frame exon skip.
 
-    Computes the amino acid range corresponding to the skipped exon
-    and emits a Deletion. Falls back to None if the math doesn't
-    work out (e.g. exon spans the start codon).
+    When the skipped exon's first base sits at a codon boundary, the
+    skip is a clean :class:`Deletion` of ``exon_length / 3`` amino
+    acids. When the exon starts mid-codon (phase 1 or 2), the boundary
+    codon is reshaped from flanking bases of the preceding and
+    following exons — so the skip touches ``exon_length / 3 + 1``
+    original codons and replaces them with one new codon. Depending
+    on whether that new codon's amino acid matches either flanking
+    residue, the effect is :class:`Deletion`, :class:`Substitution`,
+    or :class:`ComplexSubstitution` — we compute each candidate and
+    let :func:`trim_shared_flanking_strings` collapse it to the
+    minimal edit. See openvax/varcode#298.
+
+    Returns ``None`` when the math can't be completed (e.g. the
+    skipped exon overlaps the 5' UTR or extends past the reference
+    protein's end).
     """
     if not transcript.complete:
         return None
@@ -627,20 +726,103 @@ def _build_in_frame_exon_skip_effect(variant, transcript, skipped_exon):
         # Exon overlaps the 5' UTR or start codon; the simple
         # amino-acid math doesn't apply.
         return None
+
     aa_start = (exon_start_in_tx - cds_start_offset) // 3
+    cds_offset_in_exon = (exon_start_in_tx - cds_start_offset) % 3
     exon_length = skipped_exon.end - skipped_exon.start + 1
-    n_aa_removed = exon_length // 3
-    aa_end = aa_start + n_aa_removed
+
+    if cds_offset_in_exon == 0:
+        # Codon-aligned skip: exon_length / 3 codons are cleanly
+        # removed with no boundary reshaping.
+        n_aa_removed = exon_length // 3
+        aa_end = aa_start + n_aa_removed
+        if aa_end > len(transcript.protein_sequence):
+            return None
+        aa_ref = str(transcript.protein_sequence[aa_start:aa_end])
+        if not aa_ref:
+            return None
+        return Deletion(
+            variant=variant,
+            transcript=transcript,
+            aa_mutation_start_offset=aa_start,
+            aa_ref=aa_ref,
+        )
+
+    # Mid-codon skip: exon starts at phase 1 or 2 of codon aa_start.
+    # The original codons touched are aa_start through aa_start + n,
+    # where n = exon_length / 3 (the two boundary codons plus the
+    # fully-internal ones; n + 1 codons total). After skipping, those
+    # n+1 codons are replaced by ONE reshaped codon composed of the
+    # preceding exon's trailing bases plus the following exon's
+    # leading bases.
+    n_aa_touched = exon_length // 3 + 1
+    aa_end = aa_start + n_aa_touched
     if aa_end > len(transcript.protein_sequence):
         return None
+
     aa_ref = str(transcript.protein_sequence[aa_start:aa_end])
     if not aa_ref:
         return None
-    return Deletion(
+
+    full_sequence = str(transcript.sequence)
+    pre_bases = cds_offset_in_exon                # 1 or 2
+    post_bases = 3 - cds_offset_in_exon           # 2 or 1
+    boundary_codon_start = exon_start_in_tx - pre_bases
+    post_exon_offset = exon_start_in_tx + exon_length
+    if (boundary_codon_start < 0
+            or post_exon_offset + post_bases > len(full_sequence)):
+        # Not enough flanking sequence to reconstruct the boundary
+        # codon (e.g. skipping the terminal exon).
+        return None
+    new_codon = (
+        full_sequence[boundary_codon_start:exon_start_in_tx]
+        + full_sequence[post_exon_offset:post_exon_offset + post_bases]
+    )
+    if len(new_codon) != 3:
+        return None
+    try:
+        aa_alt = translate_sequence(
+            new_codon,
+            codon_table=codon_table_for_transcript(transcript),
+            to_stop=False)
+    except ValueError:
+        return None
+    # aa_alt may contain '*' if the reshaped codon is a stop; leave
+    # that to the caller to interpret (the next candidate builder
+    # that specializes on premature stops can pick it up later).
+
+    trimmed_ref, trimmed_alt, shared_prefix, _ = trim_shared_flanking_strings(
+        aa_ref, aa_alt)
+    # Shared prefix shifts the effective mutation start forward.
+    aa_mutation_start_offset = aa_start + len(shared_prefix)
+
+    if not trimmed_alt and not trimmed_ref:
+        # Reshaped codon happens to match the boundary exactly — the
+        # skip is effectively silent at the protein level. Return None
+        # so the caller falls back to the predicted-class-name stub
+        # (exceedingly rare in practice).
+        return None
+    if not trimmed_alt:
+        return Deletion(
+            variant=variant,
+            transcript=transcript,
+            aa_mutation_start_offset=aa_mutation_start_offset,
+            aa_ref=trimmed_ref,
+        )
+    if len(trimmed_ref) == 1 and len(trimmed_alt) == 1:
+        return Substitution(
+            variant=variant,
+            transcript=transcript,
+            aa_mutation_start_offset=aa_mutation_start_offset,
+            aa_ref=trimmed_ref,
+            aa_alt=trimmed_alt,
+        )
+    return ComplexSubstitution(
         variant=variant,
         transcript=transcript,
-        aa_mutation_start_offset=aa_start,
-        aa_ref=aa_ref,
+        aa_mutation_start_offset=aa_mutation_start_offset,
+        aa_ref=trimmed_ref,
+        aa_alt=trimmed_alt,
     )
 
 
@@ -720,3 +902,88 @@ def wrap_splice_effects_in_collection(effect_collection):
 
 # Priority integration happens via the `priority_class` attribute on
 # SpliceOutcomeSet — see `effect_priority` in effects.effect_ordering.
+
+
+# ---------------------------------------------------------------------
+# Serialization helpers (see #295).
+#
+# to_dict on SpliceCandidate / SpliceOutcomeSet encodes the enum as
+# its string value, the coding_effect via its own Serializable
+# to_dict (tagged with __class__ name), and disrupted_signal_class
+# as a bare class name. Rehydration looks class names up in these
+# registries and calls from_dict on the resolved class.
+# ---------------------------------------------------------------------
+
+
+# Eagerly-populated registry of effect classes we might encounter as
+# the coding_effect of a SpliceCandidate. Built lazily on first use to
+# avoid import-time cycles with effect_classes.
+_CODING_EFFECT_CLASS_REGISTRY = None
+
+
+def _coding_effect_class_registry():
+    global _CODING_EFFECT_CLASS_REGISTRY
+    if _CODING_EFFECT_CLASS_REGISTRY is None:
+        from .effects import effect_classes as ec
+        _CODING_EFFECT_CLASS_REGISTRY = {
+            cls.__name__: cls
+            for cls in (
+                ec.Substitution,
+                ec.Silent,
+                ec.Insertion,
+                ec.Deletion,
+                ec.ComplexSubstitution,
+                ec.AlternateStartCodon,
+                ec.FrameShift,
+                ec.FrameShiftTruncation,
+                ec.PrematureStop,
+                ec.StartLoss,
+                ec.StopLoss,
+                ec.ExonLoss,
+                ec.IntronicSpliceSite,
+                ec.ExonicSpliceSite,
+                ec.SpliceDonor,
+                ec.SpliceAcceptor,
+                ec.Intronic,
+                ec.FivePrimeUTR,
+                ec.ThreePrimeUTR,
+                ec.NoncodingTranscript,
+                ec.IncompleteTranscript,
+                ec.Intragenic,
+                ec.Intergenic,
+            )
+        }
+    return _CODING_EFFECT_CLASS_REGISTRY
+
+
+_SPLICE_SIGNAL_CLASS_REGISTRY = {
+    "SpliceDonor": SpliceDonor,
+    "SpliceAcceptor": SpliceAcceptor,
+    "ExonicSpliceSite": ExonicSpliceSite,
+    "IntronicSpliceSite": IntronicSpliceSite,
+}
+
+
+def _rehydrate_coding_effect(state):
+    """Resolve a coding-effect dict (with ``__effect_class__`` tag) to a
+    concrete instance. ``_ExonSkipFrameshiftEffect`` (the internal
+    shim from out-of-frame exon skip math) is handled separately
+    since it isn't in the public effect-class registry.
+    """
+    state = dict(state)
+    class_name = state.pop("__effect_class__", None)
+    if class_name == "_ExonSkipFrameshiftEffect":
+        # Internal shim — reconstruct minimally via its __init__.
+        return _ExonSkipFrameshiftEffect(
+            variant=state["variant"],
+            transcript=state["transcript"],
+            aa_frameshift_start=state["aa_mutation_start_offset"],
+            protein=state["mutant_protein_sequence"],
+        )
+    registry = _coding_effect_class_registry()
+    effect_cls = registry.get(class_name)
+    if effect_cls is None:
+        raise ValueError(
+            "Unknown coding_effect class %r when rehydrating "
+            "SpliceCandidate" % class_name)
+    return effect_cls.from_dict(state)
