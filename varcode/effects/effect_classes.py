@@ -107,6 +107,32 @@ class MutationEffect(Serializable):
     aa_mutation_end_offset = None
 
 
+class MultiOutcomeEffect(MutationEffect):
+    """Marker base class for effects that represent a set of plausible
+    outcomes rather than a single deterministic effect.
+
+    Subclasses must expose:
+
+    * ``candidates`` — sequence of outcome objects, sorted
+      most-plausible-first.
+    * ``most_likely`` — the top candidate (i.e. ``candidates[0]``).
+    * ``priority_class`` — effect class whose priority this set adopts
+      (read by :func:`varcode.effects.effect_priority`).
+
+    Downstream consumers filter for multi-outcome results with
+    ``isinstance(effect, MultiOutcomeEffect)`` so new wrappers (RNA
+    evidence #259, germline-aware #268, etc.) can implement the same
+    protocol without downstream code churn.
+
+    The contract above is documented but not enforced at runtime —
+    this is a deliberately minimal hedge. A subclass that passes
+    ``isinstance`` but omits ``candidates`` will ``AttributeError``
+    at first access. See #299 for the planned formalization into a
+    full protocol with a common ``Candidate`` type and runtime
+    enforcement.
+    """
+
+
 class Intergenic(MutationEffect):
     """Variant has unknown effect if it occurs between genes"""
     short_description = "intergenic"

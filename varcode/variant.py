@@ -443,9 +443,28 @@ class Variant(Serializable):
             if gene.is_protein_coding
         ]
 
-    def effects(self, raise_on_error=True):
+    def effects(self, raise_on_error=True, splice_outcomes=False):
+        """Predict the variant's effects on overlapping transcripts.
+
+        Parameters
+        ----------
+        raise_on_error : bool
+            If True, raise on annotation errors; if False, capture
+            them as Failure effects.
+
+        splice_outcomes : bool
+            If True, splice-disrupting effects are wrapped in a
+            :class:`varcode.splice_outcomes.SpliceOutcomeSet` carrying
+            multiple plausible outcomes (normal splicing, exon
+            skipping, intron retention, cryptic splice). Opt-in;
+            default False preserves existing behaviour. See
+            openvax/varcode#262.
+        """
         return predict_variant_effects(
-            variant=self, raise_on_error=raise_on_error)
+            variant=self,
+            raise_on_error=raise_on_error,
+            splice_outcomes=splice_outcomes,
+        )
 
     def effect_on_transcript(self, transcript):
         return predict_variant_effect_on_transcript(self, transcript)

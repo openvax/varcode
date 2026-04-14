@@ -114,7 +114,7 @@ class VariantCollection(Collection):
         kwargs["variants"] = new_elements
         return self.from_dict(kwargs)
 
-    def effects(self, raise_on_error=True):
+    def effects(self, raise_on_error=True, splice_outcomes=False):
         """
         Parameters
         ----------
@@ -123,11 +123,19 @@ class VariantCollection(Collection):
             transcript, should it be raised? This default is True, meaning
             errors result in raised exceptions, otherwise they are only logged.
 
+        splice_outcomes : bool, optional
+            If True, splice-disrupting effects are wrapped in a
+            :class:`varcode.splice_outcomes.SpliceOutcomeSet` carrying
+            multiple plausible outcomes. Opt-in; default False
+            preserves existing behaviour. See openvax/varcode#262.
         """
         return EffectCollection([
             effect
             for variant in self
-            for effect in variant.effects(raise_on_error=raise_on_error)
+            for effect in variant.effects(
+                raise_on_error=raise_on_error,
+                splice_outcomes=splice_outcomes,
+            )
         ])
 
     @memoize
