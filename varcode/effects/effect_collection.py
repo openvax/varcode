@@ -44,7 +44,15 @@ class EffectCollection(Collection):
     Collection of MutationEffect objects and helpers for grouping or filtering
     them.
     """
-    def __init__(self, effects, distinct=False, sort_key=None, sources=set([])):
+    def __init__(
+            self,
+            effects,
+            distinct=False,
+            sort_key=None,
+            sources=set([]),
+            annotator=None,
+            annotator_version=None,
+            annotated_at=None):
         """
         Parameters
         ----------
@@ -63,6 +71,21 @@ class EffectCollection(Collection):
 
         sources : set
             Set of files from which this collection was generated.
+
+        annotator : str or None
+            Name of the :class:`EffectAnnotator` that produced these
+            effects. Populated automatically by
+            :func:`predict_variant_effects`; ``None`` for collections
+            built by hand. See openvax/varcode#271.
+
+        annotator_version : str or None
+            Version string of the annotator (typically the varcode
+            version for built-in annotators). ``None`` when
+            ``annotator`` is None.
+
+        annotated_at : str or None
+            ISO-8601 UTC timestamp recording when the annotation ran.
+            Populated by :func:`predict_variant_effects`.
         """
         if sort_key is None:
             sort_key = _default_effect_sort_key
@@ -78,19 +101,34 @@ class EffectCollection(Collection):
         # elements so that iterating and reading `.effects` produce
         # the same order.  See openvax/varcode#220.
         self.effects = self.elements
+        self.annotator = annotator
+        self.annotator_version = annotator_version
+        self.annotated_at = annotated_at
 
     def to_dict(self):
         return dict(
             effects=self.effects,
             sort_key=self.sort_key,
             distinct=self.distinct,
-            sources=self.sources)
+            sources=self.sources,
+            annotator=self.annotator,
+            annotator_version=self.annotator_version,
+            annotated_at=self.annotated_at)
 
     def clone_with_new_elements(self, new_elements):
+        # Forward annotator provenance explicitly — sercol's base
+        # clone_with_new_elements only carries distinct/sort_key/sources,
+        # so without this the cloned collection would silently lose
+        # its #271 provenance metadata.
         return Collection.clone_with_new_elements(
             self,
             new_elements,
-            rename_dict={"elements": "effects"})
+            rename_dict={"elements": "effects"},
+            extra_kwargs={
+                "annotator": self.annotator,
+                "annotator_version": self.annotator_version,
+                "annotated_at": self.annotated_at,
+            })
 
     def groupby_variant(self):
         return self.groupby(key_fn=lambda effect: effect.variant)
@@ -363,6 +401,11 @@ class EffectCollection(Collection):
         metadata = OrderedDict()
         metadata["varcode_version"] = _varcode_version
         metadata["reference_name"] = self._serialized_reference_name()
+        # Annotator provenance (#271 stage 3b). Each field is skipped
+        # when None by write_metadata_header.
+        metadata["annotator"] = self.annotator
+        metadata["annotator_version"] = self.annotator_version
+        metadata["annotated_at"] = self.annotated_at
         with open(path, "w") as f:
             write_metadata_header(f, metadata)
             df.to_csv(f, index=False)
@@ -501,4 +544,9 @@ class EffectCollection(Collection):
                 continue
             transcript = resolved_genome.transcript_by_id(str(transcript_id))
             effects.append(variant.effect_on_transcript(transcript))
-        return cls(effects=effects)
+        return cls(
+            effects=effects,
+            annotator=header.get("annotator"),
+            annotator_version=header.get("annotator_version"),
+            annotated_at=header.get("annotated_at"),
+        )

@@ -79,6 +79,8 @@ def predict_variant_effects(
     # load time, so we defer to break the cycle.
     from ..annotators.registry import resolve_annotator
     annotator_instance = resolve_annotator(annotator)
+    annotator_name = getattr(annotator_instance, "name", None)
+    annotator_version = getattr(annotator_instance, "version", None)
     # if this variant isn't overlapping any genes, return a
     # Intergenic effect
     # TODO: look for nearby genes and mark those as Upstream and Downstream
@@ -124,7 +126,14 @@ def predict_variant_effects(
                                 variant, transcript, error)
                             effect = Failure(variant, transcript)
                     effects.append(effect)
-    collection = EffectCollection(effects)
+    from datetime import datetime, timezone
+    annotated_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    collection = EffectCollection(
+        effects,
+        annotator=annotator_name,
+        annotator_version=annotator_version,
+        annotated_at=annotated_at,
+    )
     if splice_outcomes:
         # Lazy import to avoid circular deps; splice_outcomes lives at
         # the package root and consumes effect_classes.

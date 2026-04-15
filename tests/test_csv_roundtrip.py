@@ -299,6 +299,93 @@ def test_effect_collection_from_csv_raises_without_genome_or_header():
         os.unlink(path)
 
 
+# -----------------------------------------------------------------------
+# Annotator provenance round-trip (#271 stage 3b)
+# -----------------------------------------------------------------------
+
+
+def test_effect_collection_carries_annotator_provenance():
+    variant = Variant("17", 43082575 - 5, "CCT", "GGG", "GRCh38")
+    ec = variant.effects()
+    # predict_variant_effects should have populated the fields from
+    # the resolved annotator (legacy by default).
+    assert ec.annotator == "legacy"
+    assert ec.annotator_version is not None
+    assert ec.annotated_at is not None
+
+
+def test_effect_collection_to_csv_emits_annotator_header():
+    variant = Variant("17", 43082575 - 5, "CCT", "GGG", "GRCh38")
+    ec = variant.effects()
+    path = _tmp_csv()
+    try:
+        ec.to_csv(path)
+        with open(path) as f:
+            head = "".join(f.readline() for _ in range(8))
+    finally:
+        os.unlink(path)
+    assert "# annotator=legacy" in head
+    assert "# annotator_version=" in head
+    assert "# annotated_at=" in head
+
+
+def test_effect_collection_from_csv_recovers_annotator_metadata():
+    variant = Variant("17", 43082575 - 5, "CCT", "GGG", "GRCh38")
+    original = variant.effects()
+    path = _tmp_csv()
+    try:
+        original.to_csv(path)
+        loaded = EffectCollection.from_csv(path)
+    finally:
+        os.unlink(path)
+    assert loaded.annotator == original.annotator
+    assert loaded.annotator_version == original.annotator_version
+    # annotated_at is preserved verbatim from the header, not
+    # refreshed — so the restored collection remembers when it was
+    # originally produced.
+    assert loaded.annotated_at == original.annotated_at
+
+
+def test_effect_collection_clone_preserves_annotator_metadata():
+    # filter / groupby / clone_with_new_elements flow through to_dict;
+    # the provenance fields must survive so derived collections don't
+    # lose their origin.
+    variant = Variant("17", 43082575 - 5, "CCT", "GGG", "GRCh38")
+    ec = variant.effects()
+    cloned = ec.clone_with_new_elements(list(ec.elements))
+    assert cloned.annotator == ec.annotator
+    assert cloned.annotator_version == ec.annotator_version
+    assert cloned.annotated_at == ec.annotated_at
+
+
+def test_effect_collection_from_csv_warns_on_annotator_mismatch():
+    import warnings
+    variant = Variant("17", 43082575 - 5, "CCT", "GGG", "GRCh38")
+    ec = variant.effects()
+    path = _tmp_csv()
+    try:
+        ec.to_csv(path)
+        # Rewrite the header to claim a different annotator.
+        with open(path) as f:
+            lines = f.readlines()
+        with open(path, "w") as f:
+            for line in lines:
+                if line.startswith("# annotator="):
+                    f.write("# annotator=sequence_diff\n")
+                else:
+                    f.write(line)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            EffectCollection.from_csv(path)
+    finally:
+        os.unlink(path)
+
+    messages = [str(w.message) for w in caught]
+    assert any(
+        "sequence_diff" in m and "legacy" in m for m in messages), (
+        "Expected a warning about annotator mismatch, got: %r" % messages)
+
+
 def test_csv_to_csv_without_header_is_opt_out_legacy_format():
     # to_csv(include_header=False) produces a plain CSV for legacy
     # consumers that don't tolerate comment lines.
