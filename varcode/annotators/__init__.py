@@ -64,6 +64,11 @@ class EffectAnnotator(Protocol):
     * :meth:`annotate_on_transcript` — the per-transcript entry
       point.
 
+    Optionally exposes ``version`` (string) — used in CSV provenance
+    headers so readers can detect when a serialized collection came
+    from a different annotator version. Built-in annotators track
+    varcode's version; third-party annotators expose their own.
+
     The protocol is intentionally narrow at this stage — additional
     methods (``annotate_collection``, ``annotate_with_context``) will
     be added as downstream work needs them. The contract is

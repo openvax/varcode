@@ -20,11 +20,19 @@ then, this annotator is the default and produces byte-for-byte
 identical output to ``Variant.effect_on_transcript(transcript)``.
 """
 
+from ..version import __version__ as _varcode_version
+
 
 class LegacyEffectAnnotator:
     """Wraps :func:`varcode.effects.predict_variant_effect_on_transcript`."""
 
     name = "legacy"
+
+    version = _varcode_version
+    """Built-in annotators track varcode's own version. Third-party
+    annotators (isovar's plugin, exacto's plugin) expose their own
+    version string here; CSV provenance headers and round-trip
+    warnings read from this field. See #271."""
 
     supports = frozenset({"snv", "indel", "mnv"})
     """Variant kinds this annotator handles. Splice-possibility

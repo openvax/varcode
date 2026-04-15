@@ -81,26 +81,59 @@ def warn_on_version_drift(header_metadata, current_version, source_path):
     annotation logic can change — the effects reconstructed on read
     may differ from the ones that were written.
 
-    When #271 lands ``annotator`` / ``annotator_version``, that check
-    belongs here too.
+    Also checks ``annotator`` and ``annotator_version`` when both are
+    present in the header: warns when the CSV was written with a
+    different annotator than the current default, or when the
+    annotator version has a major mismatch (#271 stage 3b).
     """
     import warnings
 
     serialized = header_metadata.get("varcode_version")
-    if not serialized:
-        return
-    serialized_mm = _parse_major_minor(serialized)
-    current_mm = _parse_major_minor(current_version)
-    if serialized_mm is None or current_mm is None:
-        return
-    if serialized_mm[0] != current_mm[0]:
-        warnings.warn(
-            "CSV at %s was written by varcode %s but you are reading it "
-            "with varcode %s. Because from_csv re-runs annotation on "
-            "read, results may differ across major versions. See "
-            "openvax/varcode#275 for context." % (
-                source_path, serialized, current_version)
-        )
+    if serialized:
+        serialized_mm = _parse_major_minor(serialized)
+        current_mm = _parse_major_minor(current_version)
+        if serialized_mm is not None and current_mm is not None:
+            if serialized_mm[0] != current_mm[0]:
+                warnings.warn(
+                    "CSV at %s was written by varcode %s but you are reading it "
+                    "with varcode %s. Because from_csv re-runs annotation on "
+                    "read, results may differ across major versions. See "
+                    "openvax/varcode#275 for context." % (
+                        source_path, serialized, current_version))
+
+    serialized_annotator = header_metadata.get("annotator")
+    if serialized_annotator:
+        # Lazy import to avoid a load-time cycle with varcode.annotators.
+        from .annotators.registry import get_default_annotator
+        current_annotator = getattr(get_default_annotator(), "name", None)
+        if current_annotator and serialized_annotator != current_annotator:
+            warnings.warn(
+                "CSV at %s was written by annotator %r but the current "
+                "default annotator is %r. from_csv re-runs annotation on "
+                "read, so reconstructed effects reflect %r, not the "
+                "annotator that originally produced the CSV. Use "
+                "varcode.use_annotator(%r) around from_csv if you need "
+                "the original annotator's output." % (
+                    source_path, serialized_annotator, current_annotator,
+                    current_annotator, serialized_annotator))
+
+    serialized_annotator_version = header_metadata.get("annotator_version")
+    if serialized_annotator_version:
+        from .annotators.registry import get_default_annotator
+        current_annotator_version = getattr(
+            get_default_annotator(), "version", None)
+        if current_annotator_version:
+            serialized_mm = _parse_major_minor(serialized_annotator_version)
+            current_mm = _parse_major_minor(current_annotator_version)
+            if (serialized_mm is not None and current_mm is not None
+                    and serialized_mm[0] != current_mm[0]):
+                warnings.warn(
+                    "CSV at %s was written by annotator version %s; "
+                    "current annotator version is %s (major mismatch). "
+                    "Reconstructed effects may differ from the originals." % (
+                        source_path,
+                        serialized_annotator_version,
+                        current_annotator_version))
 
 
 def write_metadata_header(file_obj, metadata):
