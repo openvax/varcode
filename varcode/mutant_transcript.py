@@ -93,6 +93,21 @@ class MutantTranscript:
     translation is lazy). Callers that require the protein must
     check or compute it themselves for now — the sequence-diff
     annotator in stage 2 will guarantee it's populated.
+
+    **Forward-looking — structural variants (SVs).** The single
+    ``reference_transcript`` field expresses point variants and
+    indels cleanly but doesn't fit fusions, translocations, or large
+    rearrangements. The planned generalization is a
+    ``reference_segments`` alternative — a sequence of
+    ``(transcript_or_interval, cdna_range)`` pairs, where a fusion is
+    two segments from two transcripts and a translocation-to-intergenic
+    is one transcript segment plus a genomic-interval segment. SV
+    annotators that don't have a unique mutant protein (e.g. a
+    translocation producing many candidate ORFs that only RNA can
+    resolve) should return ``List[MutantTranscript]`` or wrap it in a
+    :class:`MultiOutcomeEffect` per #299. See #252 / #257 / #259 /
+    #305 for the roadmap. The current dataclass shape is the
+    point-variant subset; the SV extension doesn't break it.
     """
 
     reference_transcript: object
