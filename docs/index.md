@@ -31,6 +31,10 @@ for a longer walkthrough and the effect-class table.
 
 ## Feature guides
 
+- [**Effect annotation**](effect_annotation.md) — how variants
+  become effects, splice outcome representations, pluggable
+  annotators, possibility sets for ambiguous outcomes, and the
+  SV-extensibility roadmap. Start here.
 - [**Genotypes and sample-aware queries**](genotype.md) — per-sample
   zygosity on multi-sample VCFs. New in 2.3.
 - [**CSV round-trip and metadata headers**](csv.md) — `to_csv` /

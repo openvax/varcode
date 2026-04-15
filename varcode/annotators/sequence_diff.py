@@ -18,6 +18,11 @@ not functional.** This module currently ships a class skeleton,
 a classifier signature with a documented decision table, and
 TODOs. See the PR description and #309 for the rollout plan.
 
+See :doc:`/effect_annotation` for the user-facing guide covering
+how legacy, sequence-diff, splice outcomes, and the SV roadmap
+fit together. This module docstring captures implementation
+detail relevant to reviewers of the classifier itself.
+
 Algorithm
 ---------
 
