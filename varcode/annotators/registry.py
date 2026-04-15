@@ -1,0 +1,86 @@
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""Process-global registry for :class:`EffectAnnotator` instances.
+
+Kept as a module-level dict (not a class) to match the flat registry
+pattern in the rest of varcode. Default selection is ``"legacy"``
+until the sequence-diff annotator ships; callers that want a
+non-default annotator pass one explicitly or call
+:func:`set_default_annotator`. See #271.
+"""
+
+from .legacy import LegacyEffectAnnotator
+
+
+class UnsupportedVariantError(ValueError):
+    """Raised when an :class:`EffectAnnotator` is asked to handle a
+    variant kind outside its declared ``supports`` set.
+
+    Prefer this over silent mis-annotation — the whole point of the
+    pluggable-annotator design is that callers can see exactly which
+    annotator handles which variant kinds.
+    """
+    pass
+
+
+_REGISTRY = {}
+_DEFAULT_NAME = "legacy"
+
+
+def register_annotator(annotator):
+    """Add an annotator to the process-global registry, keyed by its
+    ``.name``. Re-registering under the same name overrides the
+    previous entry — this is deliberate so callers can swap
+    implementations in tests.
+    """
+    name = getattr(annotator, "name", None)
+    if not name:
+        raise ValueError(
+            "Annotator %r has no .name attribute; cannot register." % annotator)
+    _REGISTRY[name] = annotator
+    return annotator
+
+
+def get_annotator(name):
+    """Look up a registered annotator by name. Raises ``KeyError``
+    if no annotator is registered under that name.
+    """
+    return _REGISTRY[name]
+
+
+def get_default_annotator():
+    """Return the annotator currently configured as the default.
+
+    Stage-1 default is ``"legacy"``. After #271 stage 2 lands (the
+    sequence-diff annotator), that becomes the new default and
+    ``"legacy"`` stays available as an opt-in for users who need
+    byte-for-byte compatibility with 2.x output.
+    """
+    return _REGISTRY[_DEFAULT_NAME]
+
+
+def set_default_annotator(name):
+    """Swap the process-wide default annotator. ``name`` must refer
+    to a registered annotator.
+    """
+    global _DEFAULT_NAME
+    if name not in _REGISTRY:
+        raise KeyError(
+            "No annotator registered under %r — call register_annotator() "
+            "first or pick from %r." % (name, sorted(_REGISTRY)))
+    _DEFAULT_NAME = name
+
+
+# Register the legacy annotator at import time so there is always a
+# default available without the caller having to bootstrap.
+register_annotator(LegacyEffectAnnotator())
