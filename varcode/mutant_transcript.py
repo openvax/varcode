@@ -147,3 +147,129 @@ class MutantTranscript:
         edits — how much longer or shorter the mutant cDNA is than
         the reference."""
         return sum(e.length_delta for e in self.edits)
+
+
+# ---------------------------------------------------------------------
+# Construction (#271 stage 2)
+# ---------------------------------------------------------------------
+
+
+_COMPLEMENT = {"A": "T", "T": "A", "G": "C", "C": "G", "N": "N"}
+
+
+def _reverse_complement(seq: str) -> str:
+    return "".join(_COMPLEMENT.get(b, b) for b in reversed(seq.upper()))
+
+
+def apply_variant_to_transcript(variant, transcript):
+    """Construct a :class:`MutantTranscript` by applying ``variant``
+    to ``transcript``'s spliced cDNA.
+
+    Returns a :class:`MutantTranscript` whose ``cdna_sequence`` is
+    populated, plus ``mutant_protein_sequence`` when the variant
+    lies after the start codon (so translation from the canonical
+    start is well-defined). The codon table is selected from the
+    transcript's contig — mitochondrial transcripts use NCBI table
+    2 automatically (see :func:`varcode.effects.codon_tables.codon_table_for_transcript`).
+
+    Returns ``None`` when the variant can't be cleanly applied:
+
+    * Transcript is not protein-coding or is incomplete.
+    * Variant doesn't overlap the transcript at all.
+    * Variant spans more than one exon (splice-junction-crossing
+      variants need the splice-aware path; not handled here).
+    * Reference allele doesn't match the transcript's cDNA at the
+      computed offset.
+
+    Callers that get ``None`` should fall back to the legacy
+    :class:`EffectAnnotator`. The forthcoming sequence-diff annotator
+    layers effect classification on top of this builder.
+    """
+    # Lazy imports to keep module-level deps light.
+    from pyensembl import Transcript
+    from .effects.codon_tables import (
+        codon_table_for_transcript,
+        translate_sequence,
+    )
+    from .effects.transcript_helpers import interval_offset_on_transcript
+
+    if not isinstance(transcript, Transcript):
+        return None
+    if not transcript.is_protein_coding or not transcript.complete:
+        return None
+
+    variant_start = variant.trimmed_base1_start
+    variant_end = variant.trimmed_base1_end
+
+    # Variant must overlap exactly one exon — we don't handle
+    # splice-junction-spanning edits at this stage.
+    overlapping = [
+        ex for ex in transcript.exons
+        if variant_start >= ex.start and variant_end <= ex.end
+    ]
+    if len(overlapping) != 1:
+        return None
+
+    try:
+        cdna_offset = interval_offset_on_transcript(
+            variant_start, variant_end, transcript)
+    except (ValueError, KeyError):
+        return None
+
+    # Strand-flip ref/alt for reverse-strand transcripts.
+    genome_ref = variant.trimmed_ref
+    genome_alt = variant.trimmed_alt
+    if transcript.on_backward_strand:
+        cdna_ref = _reverse_complement(genome_ref)
+        cdna_alt = _reverse_complement(genome_alt)
+    else:
+        cdna_ref = genome_ref
+        cdna_alt = genome_alt
+
+    # Validate reference matches.
+    full_sequence = str(transcript.sequence)
+    n_ref = len(cdna_ref)
+    expected_ref = full_sequence[cdna_offset:cdna_offset + n_ref]
+    if cdna_ref != expected_ref:
+        return None
+
+    edit = TranscriptEdit(
+        cdna_start=cdna_offset,
+        cdna_end=cdna_offset + n_ref,
+        alt_bases=cdna_alt,
+        source_variant=variant,
+    )
+
+    mutant_cdna = (
+        full_sequence[:cdna_offset]
+        + cdna_alt
+        + full_sequence[cdna_offset + n_ref:]
+    )
+
+    mutant_protein = None
+    cds_start = min(transcript.start_codon_spliced_offsets)
+    if cdna_offset >= cds_start:
+        # Variant lands in or after the CDS — translate the new
+        # coding sequence from the canonical start to the first
+        # stop. The codon table is mt-aware via the transcript's
+        # contig.
+        codon_table = codon_table_for_transcript(transcript)
+        coding = mutant_cdna[cds_start:]
+        truncated = coding[:(len(coding) // 3) * 3]
+        try:
+            mutant_protein = translate_sequence(
+                truncated, codon_table=codon_table, to_stop=True)
+        except ValueError:
+            mutant_protein = None
+    # If cdna_offset < cds_start the variant is in the 5' UTR; we
+    # don't attempt translation here since it might (depending on the
+    # exact variant) preserve, lose, or shift the start codon — that
+    # interpretation is the legacy annotator's responsibility for now.
+
+    return MutantTranscript(
+        reference_transcript=transcript,
+        edits=(edit,),
+        cdna_sequence=mutant_cdna,
+        mutant_protein_sequence=mutant_protein,
+        annotator_name="sequence_diff",
+    )
