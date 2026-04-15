@@ -37,6 +37,11 @@ include = ["varcode", "varcode.*"]
 varcode-genes = "varcode.cli.genes_script:main"
 varcode = "varcode.cli.effects_script:main"
 
+[tool.pytest.ini_options]
+markers = [
+    "parity: parity harness for SequenceDiffEffectAnnotator (WIP #271 stage 3d, #309). Run explicitly with `pytest -m parity` once the classifier lands.",
+]
+
 [tool.ruff.lint]
 select = ["E", "F"]
 ignore = ["F821", "E501", "F841", "E731", "E741", "E722", "E721"]
