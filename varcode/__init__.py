@@ -11,8 +11,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from .annotators import (
+    EffectAnnotator,
+    LegacyEffectAnnotator,
+    UnsupportedVariantError,
+    get_annotator,
+    get_default_annotator,
+    register_annotator,
+    set_default_annotator,
+)
 from .errors import ReferenceMismatchError, SampleNotFoundError
 from .genotype import Genotype, Zygosity
+from .mutant_transcript import MutantTranscript, TranscriptEdit
 from .splice_outcomes import (
     SpliceCandidate,
     SpliceOutcome,
@@ -48,6 +58,17 @@ __all__ = [
     "SpliceCandidate",
     "SpliceOutcome",
     "SpliceOutcomeSet",
+
+    # MutantTranscript data model + pluggable annotators (openvax/varcode#271)
+    "MutantTranscript",
+    "TranscriptEdit",
+    "EffectAnnotator",
+    "LegacyEffectAnnotator",
+    "UnsupportedVariantError",
+    "get_annotator",
+    "get_default_annotator",
+    "register_annotator",
+    "set_default_annotator",
 
     # effects
     "effect_priority",
