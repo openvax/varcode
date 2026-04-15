@@ -22,7 +22,11 @@ from .annotators import (
 )
 from .errors import ReferenceMismatchError, SampleNotFoundError
 from .genotype import Genotype, Zygosity
-from .mutant_transcript import MutantTranscript, TranscriptEdit
+from .mutant_transcript import (
+    MutantTranscript,
+    TranscriptEdit,
+    apply_variant_to_transcript,
+)
 from .splice_outcomes import (
     SpliceCandidate,
     SpliceOutcome,
@@ -62,6 +66,7 @@ __all__ = [
     # MutantTranscript data model + pluggable annotators (openvax/varcode#271)
     "MutantTranscript",
     "TranscriptEdit",
+    "apply_variant_to_transcript",
     "EffectAnnotator",
     "LegacyEffectAnnotator",
     "UnsupportedVariantError",
