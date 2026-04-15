@@ -43,7 +43,11 @@ from .effect_classes import (
 logger = logging.getLogger(__name__)
 
 
-def predict_variant_effects(variant, raise_on_error=False, splice_outcomes=False):
+def predict_variant_effects(
+        variant,
+        raise_on_error=False,
+        splice_outcomes=False,
+        annotator=None):
     """Determine the effects of a variant on any transcripts it overlaps.
     Returns an EffectCollection object.
 
@@ -63,7 +67,18 @@ def predict_variant_effects(variant, raise_on_error=False, splice_outcomes=False
         plausible outcomes (normal splicing, exon skipping, intron
         retention, cryptic splice). Default False for back-compat.
         See ``varcode.splice_outcomes`` for details.
+
+    annotator : str, EffectAnnotator, or None
+        Which registered :class:`EffectAnnotator` to use per-transcript.
+        ``None`` (default) picks up whatever is currently set via
+        :func:`set_default_annotator` / :func:`use_annotator` — today
+        that's ``"legacy"``. A string is looked up in the registry;
+        an instance is used directly. See openvax/varcode#271.
     """
+    # Lazy import — varcode.annotators depends on varcode.effects at
+    # load time, so we defer to break the cycle.
+    from ..annotators.registry import resolve_annotator
+    annotator_instance = resolve_annotator(annotator)
     # if this variant isn't overlapping any genes, return a
     # Intergenic effect
     # TODO: look for nearby genes and mark those as Upstream and Downstream
@@ -97,13 +112,17 @@ def predict_variant_effects(variant, raise_on_error=False, splice_outcomes=False
                 # gene ID  has transcripts overlapped by this variant
                 for transcript in transcripts_grouped_by_gene[gene_id]:
                     if raise_on_error:
-                        effect = predict_variant_effect_on_transcript(
-                            variant=variant,
-                            transcript=transcript)
+                        effect = annotator_instance.annotate_on_transcript(
+                            variant, transcript)
                     else:
-                        effect = predict_variant_effect_on_transcript_or_failure(
-                            variant=variant,
-                            transcript=transcript)
+                        try:
+                            effect = annotator_instance.annotate_on_transcript(
+                                variant, transcript)
+                        except (AssertionError, ValueError) as error:
+                            logger.warn(
+                                "Encountered error annotating %s for %s: %s",
+                                variant, transcript, error)
+                            effect = Failure(variant, transcript)
                     effects.append(effect)
     collection = EffectCollection(effects)
     if splice_outcomes:

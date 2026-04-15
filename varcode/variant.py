@@ -443,7 +443,7 @@ class Variant(Serializable):
             if gene.is_protein_coding
         ]
 
-    def effects(self, raise_on_error=True, splice_outcomes=False):
+    def effects(self, raise_on_error=True, splice_outcomes=False, annotator=None):
         """Predict the variant's effects on overlapping transcripts.
 
         Parameters
@@ -459,11 +459,19 @@ class Variant(Serializable):
             skipping, intron retention, cryptic splice). Opt-in;
             default False preserves existing behaviour. See
             openvax/varcode#262.
+
+        annotator : str, EffectAnnotator, or None
+            Per-call annotator override. ``None`` uses the currently
+            configured default (``"legacy"`` today; swappable via
+            :func:`varcode.set_default_annotator` or
+            :func:`varcode.use_annotator`). String names are resolved
+            against the registry. See openvax/varcode#271.
         """
         return predict_variant_effects(
             variant=self,
             raise_on_error=raise_on_error,
             splice_outcomes=splice_outcomes,
+            annotator=annotator,
         )
 
     def effect_on_transcript(self, transcript):

@@ -18,7 +18,9 @@ from .annotators import (
     get_annotator,
     get_default_annotator,
     register_annotator,
+    resolve_annotator,
     set_default_annotator,
+    use_annotator,
 )
 from .errors import ReferenceMismatchError, SampleNotFoundError
 from .genotype import Genotype, Zygosity
@@ -73,7 +75,9 @@ __all__ = [
     "get_annotator",
     "get_default_annotator",
     "register_annotator",
+    "resolve_annotator",
     "set_default_annotator",
+    "use_annotator",
 
     # effects
     "effect_priority",

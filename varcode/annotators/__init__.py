@@ -41,7 +41,9 @@ from .registry import (
     get_annotator,
     get_default_annotator,
     register_annotator,
+    resolve_annotator,
     set_default_annotator,
+    use_annotator,
 )
 
 
@@ -83,5 +85,7 @@ __all__ = [
     "get_annotator",
     "get_default_annotator",
     "register_annotator",
+    "resolve_annotator",
     "set_default_annotator",
+    "use_annotator",
 ]

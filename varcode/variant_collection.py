@@ -114,7 +114,7 @@ class VariantCollection(Collection):
         kwargs["variants"] = new_elements
         return self.from_dict(kwargs)
 
-    def effects(self, raise_on_error=True, splice_outcomes=False):
+    def effects(self, raise_on_error=True, splice_outcomes=False, annotator=None):
         """
         Parameters
         ----------
@@ -128,6 +128,11 @@ class VariantCollection(Collection):
             :class:`varcode.splice_outcomes.SpliceOutcomeSet` carrying
             multiple plausible outcomes. Opt-in; default False
             preserves existing behaviour. See openvax/varcode#262.
+
+        annotator : str, EffectAnnotator, or None
+            Per-call annotator override applied to every variant in
+            the collection. See :meth:`Variant.effects` and
+            openvax/varcode#271.
         """
         return EffectCollection([
             effect
@@ -135,6 +140,7 @@ class VariantCollection(Collection):
             for effect in variant.effects(
                 raise_on_error=raise_on_error,
                 splice_outcomes=splice_outcomes,
+                annotator=annotator,
             )
         ])
 
