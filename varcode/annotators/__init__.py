@@ -20,7 +20,7 @@ users can choose between:
 
 * ``legacy`` — the offset-based annotator that has shipped since
   2.0.0. Wraps :func:`varcode.effects.predict_variant_effect_on_transcript`.
-* ``sequence_diff`` — the coming annotator that materializes a
+* ``protein_diff`` — the coming annotator that materializes a
   :class:`MutantTranscript` and diffs its translated protein
   against the reference. Not in this stage; see #271.
 
@@ -28,7 +28,7 @@ Third parties (Isovar, Exacto) can register their own annotators by
 implementing the Protocol and calling :func:`register_annotator`.
 
 This stage 1 PR ships only the Protocol + registry + legacy wrapper;
-the sequence-diff annotator, fast-path routing, per-call selection on
+the protein-diff annotator, fast-path routing, per-call selection on
 ``Variant.effects()``, and ``EffectCollection`` provenance fields
 land in follow-up PRs as outlined in #271.
 """
@@ -36,7 +36,7 @@ land in follow-up PRs as outlined in #271.
 from typing import Protocol, runtime_checkable
 
 from .legacy import LegacyEffectAnnotator
-from .sequence_diff import SequenceDiffEffectAnnotator
+from .protein_diff import ProteinDiffEffectAnnotator
 from .registry import (
     UnsupportedVariantError,
     get_annotator,

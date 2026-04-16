@@ -129,7 +129,7 @@ def test_legacy_annotator_matches_effect_on_transcript():
 
 # ====================================================================
 # UnsupportedVariantError is available as an exception class for the
-# sequence-diff annotator to raise. No code throws it yet (no
+# protein-diff annotator to raise. No code throws it yet (no
 # annotator currently checks `.supports` at runtime), but downstream
 # code can already catch it.
 # ====================================================================
@@ -296,31 +296,31 @@ def test_resolve_annotator_resolves_none_to_default():
 
 
 # ====================================================================
-# SequenceDiffEffectAnnotator (#309, stage 3d)
+# ProteinDiffEffectAnnotator (#309, stage 3d)
 # ====================================================================
 
 
-def test_sequence_diff_annotator_is_registered():
-    from varcode.annotators import SequenceDiffEffectAnnotator
-    annotator = get_annotator("sequence_diff")
-    assert isinstance(annotator, SequenceDiffEffectAnnotator)
+def test_protein_diff_annotator_is_registered():
+    from varcode.annotators import ProteinDiffEffectAnnotator
+    annotator = get_annotator("protein_diff")
+    assert isinstance(annotator, ProteinDiffEffectAnnotator)
 
 
-def test_sequence_diff_annotator_satisfies_protocol():
-    from varcode.annotators import SequenceDiffEffectAnnotator
-    assert isinstance(SequenceDiffEffectAnnotator(), EffectAnnotator)
+def test_protein_diff_annotator_satisfies_protocol():
+    from varcode.annotators import ProteinDiffEffectAnnotator
+    assert isinstance(ProteinDiffEffectAnnotator(), EffectAnnotator)
 
 
-def test_sequence_diff_usable_via_kwarg():
+def test_protein_diff_usable_via_kwarg():
     variant = Variant("7", 117531095, "T", "A", ensembl_grch38)
-    effects = variant.effects(annotator="sequence_diff")
+    effects = variant.effects(annotator="protein_diff")
     assert len(effects) > 0
 
 
-def test_sequence_diff_parity_on_coding_snv():
+def test_protein_diff_parity_on_coding_snv():
     variant = Variant("7", 117531095, "T", "A", ensembl_grch38)
     legacy = list(variant.effects(annotator="legacy"))
-    sdiff = list(variant.effects(annotator="sequence_diff"))
+    sdiff = list(variant.effects(annotator="protein_diff"))
     assert len(legacy) == len(sdiff)
     for le, se in zip(legacy, sdiff):
         assert type(le).__name__ == type(se).__name__, (
@@ -330,59 +330,59 @@ def test_sequence_diff_parity_on_coding_snv():
                 le.short_description, se.short_description))
 
 
-def test_sequence_diff_parity_on_splice_donor():
+def test_protein_diff_parity_on_splice_donor():
     # SpliceDonor: pure-intronic → legacy-only path. Both annotators
-    # should agree because sequence_diff delegates to legacy.
+    # should agree because protein_diff delegates to legacy.
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     legacy = list(variant.effects(annotator="legacy"))
-    sdiff = list(variant.effects(annotator="sequence_diff"))
+    sdiff = list(variant.effects(annotator="protein_diff"))
     for le, se in zip(legacy, sdiff):
         assert type(le).__name__ == type(se).__name__
         assert le.short_description == se.short_description
 
 
-def test_sequence_diff_parity_on_exonic_splice_site():
+def test_protein_diff_parity_on_exonic_splice_site():
     # ExonicSpliceSite: dual-dispatch. Splice class from legacy,
-    # alternate_effect from sequence-diff's protein diff.
+    # alternate_effect from protein-diff's protein diff.
     variant = Variant("7", 117531114, "G", "T", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id("ENST00000003084")
     legacy = variant.effect_on_transcript(transcript)
-    from varcode.annotators import SequenceDiffEffectAnnotator
-    sdiff = SequenceDiffEffectAnnotator().annotate_on_transcript(
+    from varcode.annotators import ProteinDiffEffectAnnotator
+    sdiff = ProteinDiffEffectAnnotator().annotate_on_transcript(
         variant, transcript)
     from varcode.effects import ExonicSpliceSite
     assert isinstance(legacy, ExonicSpliceSite)
     assert isinstance(sdiff, ExonicSpliceSite)
-    # alternate_effect comes from sequence-diff in the new annotator.
+    # alternate_effect comes from protein-diff in the new annotator.
     assert sdiff.alternate_effect is not None
     assert type(sdiff.alternate_effect).__name__ == type(legacy.alternate_effect).__name__
 
 
-def test_sequence_diff_parity_on_reverse_strand_mnv():
+def test_protein_diff_parity_on_reverse_strand_mnv():
     # BRCA1 reverse-strand MNV — exercises the strand-flip path.
     variant = Variant("17", 43082570, "CCT", "GGG", ensembl_grch38)
     legacy = list(variant.effects(annotator="legacy"))
-    sdiff = list(variant.effects(annotator="sequence_diff"))
+    sdiff = list(variant.effects(annotator="protein_diff"))
     for le, se in zip(legacy, sdiff):
         assert type(le).__name__ == type(se).__name__
         assert le.short_description == se.short_description
 
 
-def test_sequence_diff_parity_on_mt_codon_table():
+def test_protein_diff_parity_on_mt_codon_table():
     # MT-CO1 TCA→TGA: Substitution to Trp under mt table.
     variant = Variant("MT", 6739, "C", "G", ensembl_grch38)
     legacy = list(variant.effects(annotator="legacy"))
-    sdiff = list(variant.effects(annotator="sequence_diff"))
+    sdiff = list(variant.effects(annotator="protein_diff"))
     for le, se in zip(legacy, sdiff):
         assert type(le).__name__ == type(se).__name__
         assert le.short_description == se.short_description
 
 
-def test_sequence_diff_parity_on_mt_premature_stop():
+def test_protein_diff_parity_on_mt_premature_stop():
     # MT-CO1 CGA→AGA: PrematureStop under mt table.
     variant = Variant("MT", 6015, "C", "A", ensembl_grch38)
     legacy = list(variant.effects(annotator="legacy"))
-    sdiff = list(variant.effects(annotator="sequence_diff"))
+    sdiff = list(variant.effects(annotator="protein_diff"))
     for le, se in zip(legacy, sdiff):
         assert type(le).__name__ == type(se).__name__
         assert le.short_description == se.short_description

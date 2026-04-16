@@ -13,7 +13,7 @@
 """Shared fast path for trivial single-codon SNVs (openvax/varcode#271,
 stage 3c).
 
-Both the legacy and forthcoming sequence-diff annotators dispatch
+Both the legacy and forthcoming protein-diff annotators dispatch
 coding-SNV variants through the same short-circuit so they agree on
 the common case. The full :func:`predict_in_frame_coding_effect` logic
 only runs for variants that actually need it — indels, MNVs,
@@ -23,7 +23,7 @@ classification.
 
 Extracting this helper doesn't change behaviour on its own: legacy
 still produces the same Effect classes and same ``short_description``
-byte-for-byte. The value comes in stage 3d when the sequence-diff
+byte-for-byte. The value comes in stage 3d when the protein-diff
 annotator shares this code path, removing it as a source of A/B
 divergence between the two annotators.
 """

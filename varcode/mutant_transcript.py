@@ -14,7 +14,7 @@
 variants to a reference transcript (openvax/varcode#271, stage 1).
 
 :class:`TranscriptEdit` and :class:`MutantTranscript` are the types
-used by the forthcoming sequence-diff :class:`EffectAnnotator`
+used by the forthcoming protein-diff :class:`EffectAnnotator`
 (``varcode.annotators``) to reshape effect annotation from
 "reason about offsets against the reference" to "materialize the
 mutant sequence, translate it, compare to the reference protein."
@@ -81,7 +81,7 @@ class MutantTranscript:
     applied, optionally carrying the mutated cDNA and protein
     sequences.
 
-    Producers (the sequence-diff annotator, RNA-evidence importers,
+    Producers (the protein-diff annotator, RNA-evidence importers,
     the splice-outcomes rewrite, germline-aware annotation) construct
     this once per (transcript, variant-set, context) and hand it to
     downstream consumers. Each consumer reads the fields it cares
@@ -91,7 +91,7 @@ class MutantTranscript:
     Sequence fields are ``Optional[str]`` because not every producer
     computes them eagerly (some stages just need the edit list; full
     translation is lazy). Callers that require the protein must
-    check or compute it themselves for now — the sequence-diff
+    check or compute it themselves for now — the protein-diff
     annotator in stage 2 will guarantee it's populated.
 
     **Forward-looking — structural variants (SVs).** The single
@@ -129,7 +129,7 @@ class MutantTranscript:
     codon. ``None`` if not yet translated, or if the edit set
     doesn't produce a coherent ORF (e.g. start-codon loss). Callers
     that need a guaranteed-present protein should use the
-    sequence-diff annotator once it lands."""
+    protein-diff annotator once it lands."""
 
     annotator_name: str = "unknown"
     """Name of the :class:`EffectAnnotator` (or other producer) that
@@ -197,7 +197,7 @@ def apply_variant_to_transcript(variant, transcript):
       computed offset.
 
     Callers that get ``None`` should fall back to the legacy
-    :class:`EffectAnnotator`. The forthcoming sequence-diff annotator
+    :class:`EffectAnnotator`. The forthcoming protein-diff annotator
     layers effect classification on top of this builder.
     """
     # Lazy imports to keep module-level deps light.
@@ -286,5 +286,5 @@ def apply_variant_to_transcript(variant, transcript):
         edits=(edit,),
         cdna_sequence=mutant_cdna,
         mutant_protein_sequence=mutant_protein,
-        annotator_name="sequence_diff",
+        annotator_name="protein_diff",
     )

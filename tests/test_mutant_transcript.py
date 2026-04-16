@@ -113,11 +113,11 @@ def test_mutant_transcript_carries_sequences_when_producer_supplies_them():
         edits=(TranscriptEdit(10, 13, "TTT"),),
         cdna_sequence="AAA...TTT...GGG",
         mutant_protein_sequence="MKL*",
-        annotator_name="sequence_diff",
+        annotator_name="protein_diff",
     )
     assert mt.cdna_sequence == "AAA...TTT...GGG"
     assert mt.mutant_protein_sequence == "MKL*"
-    assert mt.annotator_name == "sequence_diff"
+    assert mt.annotator_name == "protein_diff"
 
 
 def test_mutant_transcript_is_exported_at_package_root():
@@ -140,7 +140,7 @@ def test_apply_snv_to_forward_strand_coding_variant():
     mt = apply_variant_to_transcript(variant, transcript)
     assert mt is not None
     assert mt.reference_transcript is transcript
-    assert mt.annotator_name == "sequence_diff"
+    assert mt.annotator_name == "protein_diff"
     assert len(mt.edits) == 1
     edit = mt.edits[0]
     assert edit.cdna_end - edit.cdna_start == 1

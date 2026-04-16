@@ -14,7 +14,7 @@
 
 Shared classifier used by both the splice-outcome builder
 (:mod:`varcode.splice_outcomes`, #305) and the forthcoming
-:class:`SequenceDiffEffectAnnotator` (#309 / stage 3d). Reduces
+:class:`ProteinDiffEffectAnnotator` (#309 / stage 3d). Reduces
 the protein pair via :func:`trim_shared_flanking_strings` and
 dispatches to the standard Effect classes.
 

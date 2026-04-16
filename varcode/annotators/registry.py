@@ -14,7 +14,7 @@
 
 Kept as a module-level dict (not a class) to match the flat registry
 pattern in the rest of varcode. Default selection is ``"legacy"``
-until the sequence-diff annotator ships; callers that want a
+until the protein-diff annotator ships; callers that want a
 non-default annotator pass one explicitly or call
 :func:`set_default_annotator`. See #271.
 """
@@ -22,7 +22,7 @@ non-default annotator pass one explicitly or call
 from contextlib import contextmanager
 
 from .legacy import LegacyEffectAnnotator
-from .sequence_diff import SequenceDiffEffectAnnotator
+from .protein_diff import ProteinDiffEffectAnnotator
 
 
 class UnsupportedVariantError(ValueError):
@@ -65,7 +65,7 @@ def get_default_annotator():
     """Return the annotator currently configured as the default.
 
     Stage-1 default is ``"legacy"``. After #271 stage 2 lands (the
-    sequence-diff annotator), that becomes the new default and
+    protein-diff annotator), that becomes the new default and
     ``"legacy"`` stays available as an opt-in for users who need
     byte-for-byte compatibility with 2.x output.
     """
@@ -116,7 +116,7 @@ def use_annotator(name_or_instance):
     Useful for A/B comparisons and scoped overrides without mutating
     global state across the codebase::
 
-        with varcode.use_annotator("sequence_diff"):
+        with varcode.use_annotator("protein_diff"):
             effects = variant_collection.effects()
 
     Accepts the same argument shape as the ``annotator=`` kwarg:
@@ -159,4 +159,4 @@ def use_annotator(name_or_instance):
 # Register built-in annotators at import time. Legacy is the default
 # until stage 3e flips it after the parity corpus passes clean.
 register_annotator(LegacyEffectAnnotator())
-register_annotator(SequenceDiffEffectAnnotator())
+register_annotator(ProteinDiffEffectAnnotator())

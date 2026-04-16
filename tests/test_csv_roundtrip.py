@@ -371,7 +371,7 @@ def test_effect_collection_from_csv_warns_on_annotator_mismatch():
         with open(path, "w") as f:
             for line in lines:
                 if line.startswith("# annotator="):
-                    f.write("# annotator=sequence_diff\n")
+                    f.write("# annotator=protein_diff\n")
                 else:
                     f.write(line)
         with warnings.catch_warnings(record=True) as caught:
@@ -382,7 +382,7 @@ def test_effect_collection_from_csv_warns_on_annotator_mismatch():
 
     messages = [str(w.message) for w in caught]
     assert any(
-        "sequence_diff" in m and "legacy" in m for m in messages), (
+        "protein_diff" in m and "legacy" in m for m in messages), (
         "Expected a warning about annotator mismatch, got: %r" % messages)
 
 
