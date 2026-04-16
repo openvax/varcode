@@ -19,7 +19,7 @@ from pyensembl import cached_release
 import varcode
 from varcode import (
     EffectAnnotator,
-    LegacyEffectAnnotator,
+    FastEffectAnnotator,
     UnsupportedVariantError,
     Variant,
     get_annotator,
@@ -37,11 +37,11 @@ ensembl_grch38 = cached_release(81)
 # ====================================================================
 
 
-def test_legacy_annotator_satisfies_protocol():
-    annotator = LegacyEffectAnnotator()
+def test_fast_annotator_annotator_satisfies_protocol():
+    annotator = FastEffectAnnotator()
     # @runtime_checkable Protocol — isinstance works structurally.
     assert isinstance(annotator, EffectAnnotator)
-    assert annotator.name == "legacy"
+    assert annotator.name == "fast"
     assert {"snv", "indel", "mnv"}.issubset(annotator.supports)
 
 
@@ -61,8 +61,15 @@ def test_duck_typed_annotator_satisfies_protocol():
 # ====================================================================
 
 
-def test_legacy_annotator_is_registered():
-    assert get_annotator("legacy").__class__ is LegacyEffectAnnotator
+def test_fast_annotator_annotator_is_registered():
+    assert get_annotator("fast").__class__ is FastEffectAnnotator
+
+
+def test_default_annotator_matches_active_configuration(request):
+    configured = request.config.getoption("--annotator") or "fast"
+    default = get_default_annotator()
+    assert default.name == configured
+    assert default is get_annotator(configured)
 
 
 def test_register_and_retrieve_custom_annotator():
@@ -100,7 +107,7 @@ def test_set_default_annotator_swaps_registry_default():
         set_default_annotator("test_swap_default")
         assert get_default_annotator().__class__ is Swap
     finally:
-        set_default_annotator("legacy")
+        set_default_annotator("fast")
         from varcode.annotators.registry import _REGISTRY
         _REGISTRY.pop("test_swap_default", None)
 
@@ -111,16 +118,16 @@ def test_set_default_annotator_rejects_unknown_name():
 
 
 # ====================================================================
-# LegacyEffectAnnotator end-to-end — byte-for-byte match with the
+# FastEffectAnnotator end-to-end — byte-for-byte match with the
 # existing Variant.effect_on_transcript API.
 # ====================================================================
 
 
-def test_legacy_annotator_matches_effect_on_transcript():
+def test_fast_annotator_annotator_matches_effect_on_transcript():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id("ENST00000003084")
     direct = variant.effect_on_transcript(transcript)
-    annotated = LegacyEffectAnnotator().annotate_on_transcript(
+    annotated = FastEffectAnnotator().annotate_on_transcript(
         variant, transcript)
     assert type(annotated) is type(direct)
     assert annotated.short_description == direct.short_description
@@ -149,7 +156,7 @@ def test_unsupported_variant_error_is_a_value_error():
 
 def test_annotator_types_exported_at_package_level():
     assert varcode.EffectAnnotator is EffectAnnotator
-    assert varcode.LegacyEffectAnnotator is LegacyEffectAnnotator
+    assert varcode.FastEffectAnnotator is FastEffectAnnotator
     assert varcode.UnsupportedVariantError is UnsupportedVariantError
     # Registry functions too
     assert varcode.get_annotator is get_annotator
@@ -164,25 +171,25 @@ def test_annotator_types_exported_at_package_level():
 # ====================================================================
 
 
-def test_variant_effects_default_uses_legacy():
+def test_variant_effects_default_uses_fast_annotator():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     # No annotator kwarg — should still produce the same output the
-    # legacy annotator produces, since legacy is the default.
+    # fast annotator produces, since fast is the default.
     default_effects = variant.effects()
-    explicit_legacy = variant.effects(annotator="legacy")
+    explicit_fast_annotator = variant.effects(annotator="fast")
     assert [type(e).__name__ for e in default_effects] == \
-           [type(e).__name__ for e in explicit_legacy]
+           [type(e).__name__ for e in explicit_fast_annotator]
 
 
 def test_variant_effects_accepts_annotator_name_string():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
-    effects = variant.effects(annotator="legacy")
+    effects = variant.effects(annotator="fast")
     assert len(effects) > 0
 
 
 def test_variant_effects_accepts_annotator_instance():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
-    effects = variant.effects(annotator=LegacyEffectAnnotator())
+    effects = variant.effects(annotator=FastEffectAnnotator())
     assert len(effects) > 0
 
 
@@ -191,7 +198,7 @@ def test_variant_effects_rejects_unknown_annotator_name():
     with pytest.raises(KeyError) as exc_info:
         variant.effects(annotator="nonexistent_annotator")
     # Error message lists known annotators so the caller can fix the typo.
-    assert "legacy" in str(exc_info.value)
+    assert "fast" in str(exc_info.value)
 
 
 def test_variant_collection_effects_accepts_annotator():
@@ -201,8 +208,21 @@ def test_variant_collection_effects_accepts_annotator():
         Variant("7", 117531114, "G", "T", ensembl_grch38),
     ])
     default_effects = vc.effects()
-    with_annotator = vc.effects(annotator="legacy")
+    with_annotator = vc.effects(annotator="fast")
     assert len(default_effects) == len(with_annotator)
+
+
+def test_variant_collection_effects_preserves_annotator_provenance():
+    from varcode import VariantCollection
+
+    vc = VariantCollection([
+        Variant("7", 117531115, "G", "A", ensembl_grch38),
+    ])
+
+    effects = vc.effects(annotator="protein_diff")
+    assert effects.annotator == "protein_diff"
+    assert effects.annotator_version is not None
+    assert effects.annotated_at is not None
 
 
 # ====================================================================
@@ -255,7 +275,7 @@ def test_use_annotator_affects_variant_effects_default():
     from varcode import use_annotator
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
 
-    # Capture legacy output inside the context via a wrapping annotator
+    # Capture fast output inside the context via a wrapping annotator
     # that records the calls.
     calls = []
     class Recording:
@@ -263,7 +283,7 @@ def test_use_annotator_affects_variant_effects_default():
         supports = frozenset({"snv", "indel", "mnv"})
         def annotate_on_transcript(self, variant, transcript):
             calls.append((variant, transcript))
-            return LegacyEffectAnnotator().annotate_on_transcript(
+            return FastEffectAnnotator().annotate_on_transcript(
                 variant, transcript)
     with use_annotator(Recording()):
         variant.effects()  # no annotator= kwarg → uses scoped default
@@ -285,7 +305,7 @@ def test_use_annotator_rejects_instance_without_name():
 
 def test_resolve_annotator_passes_through_instance():
     from varcode import resolve_annotator
-    instance = LegacyEffectAnnotator()
+    instance = FastEffectAnnotator()
     assert resolve_annotator(instance) is instance
 
 
@@ -319,10 +339,10 @@ def test_protein_diff_usable_via_kwarg():
 
 def test_protein_diff_parity_on_coding_snv():
     variant = Variant("7", 117531095, "T", "A", ensembl_grch38)
-    legacy = list(variant.effects(annotator="legacy"))
+    fast_effects = list(variant.effects(annotator="fast"))
     sdiff = list(variant.effects(annotator="protein_diff"))
-    assert len(legacy) == len(sdiff)
-    for le, se in zip(legacy, sdiff):
+    assert len(fast_effects) == len(sdiff)
+    for le, se in zip(fast_effects, sdiff):
         assert type(le).__name__ == type(se).__name__, (
             "Class mismatch: %s vs %s" % (type(le).__name__, type(se).__name__))
         assert le.short_description == se.short_description, (
@@ -331,18 +351,18 @@ def test_protein_diff_parity_on_coding_snv():
 
 
 def test_protein_diff_parity_on_splice_donor():
-    # SpliceDonor: pure-intronic → legacy-only path. Both annotators
-    # should agree because protein_diff delegates to legacy.
+    # SpliceDonor: pure-intronic → fast-only path. Both annotators
+    # should agree because protein_diff delegates to fast.
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
-    legacy = list(variant.effects(annotator="legacy"))
+    fast_effects = list(variant.effects(annotator="fast"))
     sdiff = list(variant.effects(annotator="protein_diff"))
-    for le, se in zip(legacy, sdiff):
+    for le, se in zip(fast_effects, sdiff):
         assert type(le).__name__ == type(se).__name__
         assert le.short_description == se.short_description
 
 
 def test_protein_diff_parity_on_exonic_splice_site():
-    # ExonicSpliceSite: dual-dispatch. Splice class from legacy,
+    # ExonicSpliceSite: dual-dispatch. Splice class from fast,
     # alternate_effect from protein-diff's protein diff.
     variant = Variant("7", 117531114, "G", "T", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id("ENST00000003084")
@@ -361,9 +381,9 @@ def test_protein_diff_parity_on_exonic_splice_site():
 def test_protein_diff_parity_on_reverse_strand_mnv():
     # BRCA1 reverse-strand MNV — exercises the strand-flip path.
     variant = Variant("17", 43082570, "CCT", "GGG", ensembl_grch38)
-    legacy = list(variant.effects(annotator="legacy"))
+    fast_effects = list(variant.effects(annotator="fast"))
     sdiff = list(variant.effects(annotator="protein_diff"))
-    for le, se in zip(legacy, sdiff):
+    for le, se in zip(fast_effects, sdiff):
         assert type(le).__name__ == type(se).__name__
         assert le.short_description == se.short_description
 
@@ -371,9 +391,9 @@ def test_protein_diff_parity_on_reverse_strand_mnv():
 def test_protein_diff_parity_on_mt_codon_table():
     # MT-CO1 TCA→TGA: Substitution to Trp under mt table.
     variant = Variant("MT", 6739, "C", "G", ensembl_grch38)
-    legacy = list(variant.effects(annotator="legacy"))
+    fast_effects = list(variant.effects(annotator="fast"))
     sdiff = list(variant.effects(annotator="protein_diff"))
-    for le, se in zip(legacy, sdiff):
+    for le, se in zip(fast_effects, sdiff):
         assert type(le).__name__ == type(se).__name__
         assert le.short_description == se.short_description
 
@@ -381,8 +401,38 @@ def test_protein_diff_parity_on_mt_codon_table():
 def test_protein_diff_parity_on_mt_premature_stop():
     # MT-CO1 CGA→AGA: PrematureStop under mt table.
     variant = Variant("MT", 6015, "C", "A", ensembl_grch38)
-    legacy = list(variant.effects(annotator="legacy"))
+    fast_effects = list(variant.effects(annotator="fast"))
     sdiff = list(variant.effects(annotator="protein_diff"))
-    for le, se in zip(legacy, sdiff):
+    for le, se in zip(fast_effects, sdiff):
         assert type(le).__name__ == type(se).__name__
         assert le.short_description == se.short_description
+
+
+@pytest.mark.parametrize(
+    ("variant", "expected_aa_ref", "expected_aa_alt", "expected_start", "expected_end"),
+    [
+        (Variant("chr1", 99772782, "A", "ATGA", "mm10"), "", "", 6, 6),
+        (Variant("chr1", 99772782, "A", "ACCCTGA", "mm10"), "", "P", 6, 7),
+    ],
+)
+def test_protein_diff_matches_fast_on_premature_stop_insertions(
+        variant,
+        expected_aa_ref,
+        expected_aa_alt,
+        expected_start,
+        expected_end):
+    fast_effect = variant.effects(annotator="fast").top_priority_effect()
+    protein_diff_effect = variant.effects(
+        annotator="protein_diff").top_priority_effect()
+
+    assert type(fast_effect).__name__ == "PrematureStop"
+    assert type(protein_diff_effect) is type(fast_effect)
+    assert fast_effect.aa_ref == protein_diff_effect.aa_ref == expected_aa_ref
+    assert fast_effect.aa_alt == protein_diff_effect.aa_alt == expected_aa_alt
+    assert (
+        fast_effect.aa_mutation_start_offset,
+        fast_effect.aa_mutation_end_offset,
+    ) == (
+        protein_diff_effect.aa_mutation_start_offset,
+        protein_diff_effect.aa_mutation_end_offset,
+    ) == (expected_start, expected_end)

@@ -49,7 +49,8 @@ def classify_from_protein_diff(
         transcript,
         ref_protein,
         mut_protein,
-        length_delta=0):
+        length_delta=0,
+        mutant_transcript=None):
     """Classify a :class:`MutationEffect` by diffing translated
     proteins.
 
@@ -68,6 +69,12 @@ def classify_from_protein_diff(
         for substitution). Used to detect frameshifts: when
         ``length_delta % 3 != 0`` AND the protein diff shows a
         changed tail, the effect is a :class:`FrameShift`.
+    mutant_transcript : MutantTranscript or None
+        Optional edit-level context for the already-materialized
+        mutant transcript. When present, the classifier can preserve
+        insertion semantics for premature-stop calls that would
+        otherwise look like a substitution-plus-truncation in a
+        whole-protein diff.
 
     Returns
     -------
@@ -116,15 +123,29 @@ def classify_from_protein_diff(
     # Premature stop: mutant protein shorter than reference and the
     # change is at the tail (the trimmed alt runs to the end of the
     # mutant protein). Use the single reference residue at the stop-
-    # creation point as aa_ref (matching legacy's convention, which
+    # creation point as aa_ref (matching fast's convention, which
     # shows the codon that became a stop rather than the entire
     # truncated tail).
     if len(mut_protein) < len(ref_protein) and aa_offset + n_alt == len(mut_protein):
+        aa_ref = ref_protein[aa_offset] if aa_offset < len(ref_protein) else ref_delta
+
+        # Whole-protein trimming can't distinguish a codon-aligned
+        # insertion that introduces an early stop from a substitution
+        # of the next reference residue followed by truncation. Use
+        # edit provenance when available so pure insertions keep
+        # aa_ref="" (matching the historical #174/#175 behaviour
+        # preserved by the fast annotator).
+        if mutant_transcript is not None and len(mutant_transcript.edits) == 1:
+            edit = mutant_transcript.edits[0]
+            cds_start = min(transcript.start_codon_spliced_offsets)
+            if edit.is_insertion and edit.cdna_start >= cds_start:
+                if (edit.cdna_start - cds_start) % 3 == 0:
+                    aa_ref = ""
         return PrematureStop(
             variant=variant,
             transcript=transcript,
             aa_mutation_start_offset=aa_offset,
-            aa_ref=ref_protein[aa_offset] if aa_offset < len(ref_protein) else ref_delta,
+            aa_ref=aa_ref,
             aa_alt=alt_delta)
 
     # Stop loss: mutant protein longer than reference, the change

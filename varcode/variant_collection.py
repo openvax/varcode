@@ -134,6 +134,11 @@ class VariantCollection(Collection):
             the collection. See :meth:`Variant.effects` and
             openvax/varcode#271.
         """
+        from datetime import datetime, timezone
+
+        from .annotators.registry import resolve_annotator
+
+        annotator_instance = resolve_annotator(annotator)
         return EffectCollection([
             effect
             for variant in self
@@ -142,7 +147,12 @@ class VariantCollection(Collection):
                 splice_outcomes=splice_outcomes,
                 annotator=annotator,
             )
-        ])
+        ],
+            annotator=getattr(annotator_instance, "name", None),
+            annotator_version=getattr(annotator_instance, "version", None),
+            annotated_at=datetime.now(timezone.utc).isoformat(
+                timespec="seconds"),
+        )
 
     @memoize
     def reference_names(self):
@@ -383,7 +393,7 @@ class VariantCollection(Collection):
             If True (default), prepend ``# key=value`` metadata lines
             with varcode version and reference genome so the file can
             be read back via ``from_csv`` without supplying a genome
-            explicitly. Pass ``include_header=False`` for legacy
+            explicitly. Pass ``include_header=False`` for fast
             consumers that don't tolerate comment lines.
         """
         df = self.to_dataframe()

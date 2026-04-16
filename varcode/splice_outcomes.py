@@ -508,6 +508,7 @@ def _build_exon_skipping_candidate(splice_effect, plausibility):
         ref_protein=ref_protein,
         mut_protein=mut_protein,
         length_delta=-exon_length,
+        mutant_transcript=mt,
     )
     predicted_class_name = type(coding_effect).__name__
 

@@ -13,7 +13,7 @@
 
 from .annotators import (
     EffectAnnotator,
-    LegacyEffectAnnotator,
+    FastEffectAnnotator,
     UnsupportedVariantError,
     get_annotator,
     get_default_annotator,
@@ -70,7 +70,7 @@ __all__ = [
     "TranscriptEdit",
     "apply_variant_to_transcript",
     "EffectAnnotator",
-    "LegacyEffectAnnotator",
+    "FastEffectAnnotator",
     "UnsupportedVariantError",
     "get_annotator",
     "get_default_annotator",

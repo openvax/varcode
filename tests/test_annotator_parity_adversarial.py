@@ -11,21 +11,21 @@
 # limitations under the License.
 
 """Adversarial parity tests targeting edge cases where the offset-based
-legacy annotator and the protein-diff annotator are most likely to
+fast annotator and the protein-diff annotator are most likely to
 diverge.
 
 Known divergences (documented, not bugs — different representations
 of the same biological change):
 
   * **FrameShift vs FrameShiftTruncation**: when a frameshift
-    immediately creates a stop, legacy may report FrameShift (with
+    immediately creates a stop, fast may report FrameShift (with
     a short shifted sequence) while protein_diff reports
     FrameShiftTruncation (empty shifted sequence). Both describe
     the same event; protein_diff's classification is more specific.
   * **Deletion offset by 1 near repeated residues**: when the
     deleted AA appears twice at adjacent positions, trim_shared_
     flanking_strings can canonicalize the deletion at either
-    position. Legacy uses codon-offset arithmetic which may pick
+    position. Fast uses codon-offset arithmetic which may pick
     a different position than the full-protein trim.
 
 These divergences are excluded from sweep assertions via
@@ -49,7 +49,7 @@ import pytest
 from pyensembl import cached_release
 
 from varcode import Variant
-from varcode.annotators.legacy import LegacyEffectAnnotator
+from varcode.annotators.fast import FastEffectAnnotator
 from varcode.annotators.protein_diff import ProteinDiffEffectAnnotator
 
 ensembl_grch38 = cached_release(81)
@@ -57,19 +57,19 @@ CFTR_ID = "ENST00000003084"  # chr7, + strand
 BRCA1_ID = "ENST00000357654"  # chr17, - strand
 MT_CO1_ID = "ENST00000361624"  # MT, + strand
 
-_legacy = LegacyEffectAnnotator()
+_fast_annotator = FastEffectAnnotator()
 _pdiff = ProteinDiffEffectAnnotator()
 
 
-def _is_known_divergence(legacy_class, legacy_desc, pdiff_class, pdiff_desc):
+def _is_known_divergence(fast_class, fast_desc, pdiff_class, pdiff_desc):
     """Return True if this mismatch is a documented divergence between
     the two approaches (not a bug)."""
     # FrameShift vs FrameShiftTruncation: protein_diff is more specific.
-    if ({legacy_class, pdiff_class} == {"FrameShift", "FrameShiftTruncation"}):
+    if ({fast_class, pdiff_class} == {"FrameShift", "FrameShiftTruncation"}):
         return True
     # Deletion offset by 1 near repeated residues: trim ambiguity.
-    if (legacy_class == pdiff_class == "Deletion"
-            and legacy_desc.endswith("del")
+    if (fast_class == pdiff_class == "Deletion"
+            and fast_desc.endswith("del")
             and pdiff_desc.endswith("del")):
         # Same class, same operation, just different offset.
         return True
@@ -80,30 +80,30 @@ def _assert_parity(variant, transcript_id, msg=""):
     """Assert both annotators produce the same effect class and
     short_description on the given transcript."""
     transcript = variant.ensembl.transcript_by_id(transcript_id)
-    leg = _legacy.annotate_on_transcript(variant, transcript)
+    leg = _fast_annotator.annotate_on_transcript(variant, transcript)
     pd = _pdiff.annotate_on_transcript(variant, transcript)
     lt = type(leg).__name__
     pt = type(pd).__name__
     assert lt == pt, (
-        "Class mismatch %s: legacy=%s, protein_diff=%s" % (msg, lt, pt))
+        "Class mismatch %s: fast=%s, protein_diff=%s" % (msg, lt, pt))
     assert leg.short_description == pd.short_description, (
-        "short_description mismatch %s: legacy=%r, protein_diff=%r"
+        "short_description mismatch %s: fast=%r, protein_diff=%r"
         % (msg, leg.short_description, pd.short_description))
 
 
 def _assert_parity_all_transcripts(variant, msg=""):
     """Assert parity across ALL overlapping transcripts."""
-    legacy_effects = list(variant.effects(annotator="legacy"))
+    fast_effects = list(variant.effects(annotator="fast"))
     pdiff_effects = list(variant.effects(annotator="protein_diff"))
-    assert len(legacy_effects) == len(pdiff_effects), (
-        "Effect count mismatch %s: legacy=%d, protein_diff=%d"
-        % (msg, len(legacy_effects), len(pdiff_effects)))
-    for le, pe in zip(legacy_effects, pdiff_effects):
+    assert len(fast_effects) == len(pdiff_effects), (
+        "Effect count mismatch %s: fast=%d, protein_diff=%d"
+        % (msg, len(fast_effects), len(pdiff_effects)))
+    for le, pe in zip(fast_effects, pdiff_effects):
         lt, pt = type(le).__name__, type(pe).__name__
         assert lt == pt, (
-            "Class mismatch %s: legacy=%s, protein_diff=%s" % (msg, lt, pt))
+            "Class mismatch %s: fast=%s, protein_diff=%s" % (msg, lt, pt))
         assert le.short_description == pe.short_description, (
-            "short_description mismatch %s: legacy=%r, protein_diff=%r"
+            "short_description mismatch %s: fast=%r, protein_diff=%r"
             % (msg, le.short_description, pe.short_description))
 
 
@@ -330,7 +330,7 @@ def test_exonic_splice_site_synonymous():
 
 
 def test_splice_donor_intronic():
-    # Canonical donor +1: SpliceDonor (legacy-only path).
+    # Canonical donor +1: SpliceDonor (fast-only path).
     _assert_parity(
         Variant("7", 117531115, "G", "A", ensembl_grch38),
         CFTR_ID, "SpliceDonor intronic")
@@ -406,16 +406,16 @@ def test_sweep_snvs_across_cftr_exon4():
             except Exception:
                 continue
             try:
-                legacy = list(v.effects(annotator="legacy"))
+                fast_effects = list(v.effects(annotator="fast"))
                 pdiff = list(v.effects(annotator="protein_diff"))
             except Exception as e:
                 # Both should either succeed or fail; if only one
                 # fails that's a separate issue.
                 continue
-            if len(legacy) != len(pdiff):
+            if len(fast_effects) != len(pdiff):
                 failures.append("count mismatch at %d %s" % (pos, alt))
                 continue
-            for le, pe in zip(legacy, pdiff):
+            for le, pe in zip(fast_effects, pdiff):
                 lt = type(le).__name__
                 pt = type(pe).__name__
                 if ((lt != pt or le.short_description != pe.short_description)
@@ -450,14 +450,14 @@ def test_sweep_insertions_across_cftr_exon4():
             except Exception:
                 continue
             try:
-                legacy = list(v.effects(annotator="legacy"))
+                fast_effects = list(v.effects(annotator="fast"))
                 pdiff = list(v.effects(annotator="protein_diff"))
             except Exception:
                 continue
-            if len(legacy) != len(pdiff):
+            if len(fast_effects) != len(pdiff):
                 failures.append("count mismatch at %d ins+%d" % (pos, len(alt_suffix)))
                 continue
-            for le, pe in zip(legacy, pdiff):
+            for le, pe in zip(fast_effects, pdiff):
                 lt = type(le).__name__
                 pt = type(pe).__name__
                 if ((lt != pt or le.short_description != pe.short_description)
@@ -492,14 +492,14 @@ def test_sweep_deletions_across_cftr_exon4():
             except Exception:
                 continue
             try:
-                legacy = list(v.effects(annotator="legacy"))
+                fast_effects = list(v.effects(annotator="fast"))
                 pdiff = list(v.effects(annotator="protein_diff"))
             except Exception:
                 continue
-            if len(legacy) != len(pdiff):
+            if len(fast_effects) != len(pdiff):
                 failures.append("count mismatch at %d del%d" % (pos, del_len))
                 continue
-            for le, pe in zip(legacy, pdiff):
+            for le, pe in zip(fast_effects, pdiff):
                 lt = type(le).__name__
                 pt = type(pe).__name__
                 if ((lt != pt or le.short_description != pe.short_description)

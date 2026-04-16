@@ -31,7 +31,7 @@ chr,start,ref,alt,gene_name,gene_id
 ...
 ```
 
-Pass `include_header=False` for legacy consumers that can't tolerate
+Pass `include_header=False` for fast consumers that can't tolerate
 comment lines:
 
 ```python
@@ -108,6 +108,6 @@ meta = read_metadata_header("variants.csv")
 # OrderedDict([('varcode_version', '2.3.0'), ('reference_name', 'GRCh38')])
 ```
 
-Future additions (`annotator`, `annotator_version`) will use the same
-`# key=value` convention (tracked in
+Annotator provenance fields (`annotator`, `annotator_version`) use
+the same `# key=value` convention (tracked in
 [#271](https://github.com/openvax/varcode/issues/271)).

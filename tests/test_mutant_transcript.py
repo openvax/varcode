@@ -209,7 +209,7 @@ def test_apply_returns_none_for_intronic_variant():
     variant = Variant("7", intronic_pos, "T", "A", ensembl_grch38)
     mt = apply_variant_to_transcript(variant, transcript)
     assert mt is None, (
-        "Intronic variant must return None so caller falls back to legacy")
+        "Intronic variant must return None so caller falls back to fast")
 
 
 def test_apply_returns_none_for_non_protein_coding_transcript():

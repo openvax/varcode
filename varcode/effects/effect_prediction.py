@@ -72,7 +72,7 @@ def predict_variant_effects(
         Which registered :class:`EffectAnnotator` to use per-transcript.
         ``None`` (default) picks up whatever is currently set via
         :func:`set_default_annotator` / :func:`use_annotator` — today
-        that's ``"legacy"``. A string is looked up in the registry;
+        that's ``"fast"``. A string is looked up in the registry;
         an instance is used directly. See openvax/varcode#271.
     """
     # Lazy import — varcode.annotators depends on varcode.effects at

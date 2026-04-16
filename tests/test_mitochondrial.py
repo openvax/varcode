@@ -219,7 +219,7 @@ def test_mt_ata_reference_is_met_not_ile():
 # ====================================================================
 
 
-def test_legacy_translate_module_constants_are_standard():
+def test_fast_annotator_translate_module_constants_are_standard():
     from varcode.effects.translate import (
         DNA_CODON_TABLE,
         START_CODONS,

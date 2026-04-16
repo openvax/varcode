@@ -390,7 +390,7 @@ class EffectCollection(Collection):
             If True (default), prepend ``# key=value`` metadata lines
             with varcode version and reference genome so the file can
             be read back via ``from_csv`` without supplying a genome
-            explicitly. Pass ``include_header=False`` for legacy
+            explicitly. Pass ``include_header=False`` for fast
             consumers that don't tolerate comment lines.
         """
         df = self.to_dataframe()

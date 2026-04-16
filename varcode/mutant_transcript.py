@@ -196,7 +196,7 @@ def apply_variant_to_transcript(variant, transcript):
     * Reference allele doesn't match the transcript's cDNA at the
       computed offset.
 
-    Callers that get ``None`` should fall back to the legacy
+    Callers that get ``None`` should fall back to the fast
     :class:`EffectAnnotator`. The forthcoming protein-diff annotator
     layers effect classification on top of this builder.
     """
@@ -300,7 +300,7 @@ def apply_variant_to_transcript(variant, transcript):
     # If cdna_offset < cds_start the variant is in the 5' UTR; we
     # don't attempt translation here since it might (depending on the
     # exact variant) preserve, lose, or shift the start codon — that
-    # interpretation is the legacy annotator's responsibility for now.
+    # interpretation is the fast annotator's responsibility for now.
 
     return MutantTranscript(
         reference_transcript=transcript,

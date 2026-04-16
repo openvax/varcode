@@ -14,7 +14,7 @@
 instead of offset arithmetic (openvax/varcode#271 stage 3d, #309).
 
 See :doc:`/effect_annotation` for the user-facing guide covering
-how legacy, protein-diff, splice outcomes, and the SV roadmap
+how fast, protein-diff, splice outcomes, and the SV roadmap
 fit together. This module docstring captures implementation
 detail relevant to reviewers of the classifier itself.
 
@@ -24,11 +24,11 @@ Algorithm
 1. **Gate**: non-coding / incomplete transcripts short-circuit to
    the standard wrappers.
 
-2. **Splice check**: run legacy first. If legacy classifies the
+2. **Splice check**: run fast first. If fast classifies the
    variant as a splice effect (SpliceDonor, SpliceAcceptor,
    IntronicSpliceSite), return that directly — protein-diff
    doesn't own splice classification. For ExonicSpliceSite, run
-   dual-dispatch: legacy provides the splice class, protein-diff
+   dual-dispatch: fast provides the splice class, protein-diff
    provides the ``alternate_effect`` via protein diff.
 
 3. **Slow path**: build a :class:`MutantTranscript` via
@@ -56,7 +56,7 @@ from ..effects.effect_classes import (
 )
 from ..mutant_transcript import apply_variant_to_transcript
 from ..version import __version__ as _varcode_version
-from .legacy import LegacyEffectAnnotator
+from .fast import FastEffectAnnotator
 
 
 class ProteinDiffEffectAnnotator:
@@ -64,7 +64,7 @@ class ProteinDiffEffectAnnotator:
     the reference protein.
 
     Produces byte-for-byte identical output to
-    :class:`LegacyEffectAnnotator` on the common case (trivial
+    :class:`FastEffectAnnotator` on the common case (trivial
     SNVs and simple indels) because both flow through the same
     :func:`classify_from_protein_diff` classifier. Diverges where
     protein-diff's approach is provably more accurate (boundary
@@ -83,8 +83,8 @@ class ProteinDiffEffectAnnotator:
     def annotate_on_transcript(self, variant, transcript):
         """Classify the effect of ``variant`` on ``transcript``.
 
-        Runs legacy first to detect splice-adjacent variants (which
-        stay legacy-classified); for everything else, builds a
+        Runs fast first to detect splice-adjacent variants (which
+        stay fast-classified); for everything else, builds a
         :class:`MutantTranscript` and diffs the translated protein.
         """
         from pyensembl import Transcript
@@ -99,22 +99,22 @@ class ProteinDiffEffectAnnotator:
         if not transcript.complete:
             return IncompleteTranscript(variant, transcript)
 
-        # Run legacy to get the splice classification.
-        legacy_effect = LegacyEffectAnnotator().annotate_on_transcript(
+        # Run fast to get the splice classification.
+        fast_effect = FastEffectAnnotator().annotate_on_transcript(
             variant, transcript)
 
-        # Pure-intronic splice effects: legacy only — no protein-
+        # Pure-intronic splice effects: fast only — no protein-
         # level diff to compute.
-        if isinstance(legacy_effect, (SpliceDonor, SpliceAcceptor)):
-            return legacy_effect
-        if (isinstance(legacy_effect, IntronicSpliceSite)
-                and not isinstance(legacy_effect, (SpliceDonor, SpliceAcceptor))):
-            return legacy_effect
+        if isinstance(fast_effect, (SpliceDonor, SpliceAcceptor)):
+            return fast_effect
+        if (isinstance(fast_effect, IntronicSpliceSite)
+                and not isinstance(fast_effect, (SpliceDonor, SpliceAcceptor))):
+            return fast_effect
 
-        # ExonicSpliceSite: dual-dispatch. Legacy provides the
+        # ExonicSpliceSite: dual-dispatch. Fast provides the
         # splice class; protein-diff provides the alternate_effect
         # via protein diff.
-        if isinstance(legacy_effect, ExonicSpliceSite):
+        if isinstance(fast_effect, ExonicSpliceSite):
             mt = apply_variant_to_transcript(variant, transcript)
             if mt is not None and mt.mutant_protein_sequence is not None:
                 alt = classify_from_protein_diff(
@@ -122,19 +122,20 @@ class ProteinDiffEffectAnnotator:
                     transcript=transcript,
                     ref_protein=str(transcript.protein_sequence),
                     mut_protein=mt.mutant_protein_sequence,
-                    length_delta=mt.total_length_delta)
+                    length_delta=mt.total_length_delta,
+                    mutant_transcript=mt)
                 return ExonicSpliceSite(
                     variant=variant,
                     transcript=transcript,
-                    exon=legacy_effect.exon,
+                    exon=fast_effect.exon,
                     alternate_effect=alt)
-            return legacy_effect
+            return fast_effect
 
         # Non-splice: protein-diff slow path.
         mt = apply_variant_to_transcript(variant, transcript)
         if mt is None or mt.mutant_protein_sequence is None:
             # UTR, ref-mismatch, splice-junction-spanning, etc.
-            return legacy_effect
+            return fast_effect
 
         ref_protein = str(transcript.protein_sequence)
         mut_protein = mt.mutant_protein_sequence
@@ -174,4 +175,5 @@ class ProteinDiffEffectAnnotator:
             transcript=transcript,
             ref_protein=ref_protein,
             mut_protein=mut_protein,
-            length_delta=mt.total_length_delta)
+            length_delta=mt.total_length_delta,
+            mutant_transcript=mt)
