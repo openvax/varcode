@@ -120,15 +120,34 @@ the same pattern:
 | 2 | `ExonicSpliceSite` with `alternate_effect` |
 | N (≥3) | `SpliceOutcomeSet` (opt-in via `splice_outcomes=True`) |
 
-After the planned `ExonicSpliceSite` retrofit in [#299][i299],
-all three will be `MultiOutcomeEffect` subclasses. Downstream
-code will be able to write `isinstance(e, MultiOutcomeEffect)`
-and iterate `.candidates` uniformly, regardless of richness
-level. `alternate_effect` becomes a derived property available
-on both `ExonicSpliceSite` (the 2-outcome case) and
-`SpliceOutcomeSet` (where it resolves to the
-`NORMAL_SPLICING` candidate's `coding_effect`). Same field,
-same meaning, works on both shapes — no parallel mechanism.
+`ExonicSpliceSite` is a `MultiOutcomeEffect` subclass since
+[#299][i299] Part 1. Downstream code can write
+`isinstance(e, MultiOutcomeEffect)` and iterate `.candidates`
+uniformly, regardless of richness level. `alternate_effect` is
+available on both `ExonicSpliceSite` (the 2-outcome case, as a
+first-class instance attribute) and `SpliceOutcomeSet` (where it
+resolves to the `NORMAL_SPLICING` candidate's `coding_effect`).
+Same field, same meaning, works on both shapes — no parallel
+mechanism.
+
+```python
+# Both now work:
+if isinstance(effect, MultiOutcomeEffect):
+    for candidate in effect.candidates:
+        ...
+if effect.alternate_effect is not None:
+    coding_consequence = effect.alternate_effect
+```
+
+The element types in `.candidates` differ by shape —
+`ExonicSpliceSite.candidates` yields `MutationEffect` instances
+directly (self + alternate_effect); `SpliceOutcomeSet.candidates`
+yields `SpliceCandidate` objects with `.outcome` / `.plausibility`
+/ `.coding_effect` fields. Downstream code that needs the richer
+per-candidate metadata can branch on element type; code that just
+wants "is there a coding consequence" reads `.alternate_effect`
+and gets a `MutationEffect`-or-None regardless of which class
+produced it.
 
 ### Variants in the CDS and in the splice window simultaneously
 
