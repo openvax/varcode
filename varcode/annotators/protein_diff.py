@@ -139,10 +139,9 @@ class ProteinDiffEffectAnnotator:
         ref_protein = str(transcript.protein_sequence)
         mut_protein = mt.mutant_protein_sequence
 
-        # AlternateStartCodon: non-diff special case (#304).
-        # Proteins match but the first codon changed to a non-ATG
-        # alternate start — informative for translation-efficiency
-        # analysis, so we emit it rather than collapsing into Silent.
+        # Proteins match → Silent or AlternateStartCodon. Handle
+        # both here because the shared classifier doesn't have
+        # access to the cDNA edit offset for the correct aa_pos.
         if ref_protein == mut_protein:
             cds_start = min(transcript.start_codon_spliced_offsets)
             ref_first_codon = str(
@@ -157,10 +156,43 @@ class ProteinDiffEffectAnnotator:
                         transcript=transcript,
                         ref_codon=ref_first_codon,
                         alt_codon=mut_first_codon)
+            from ..effects.effect_classes import Silent
+            edit = mt.edits[0] if mt.edits else None
+            aa_pos = (edit.cdna_start - cds_start) // 3 if edit else 0
+            aa_ref = (
+                ref_protein[aa_pos]
+                if 0 <= aa_pos < len(ref_protein)
+                else "")
+            return Silent(
+                variant=variant,
+                transcript=transcript,
+                aa_pos=aa_pos,
+                aa_ref=aa_ref)
 
-        return classify_from_protein_diff(
+        effect = classify_from_protein_diff(
             variant=variant,
             transcript=transcript,
             ref_protein=ref_protein,
             mut_protein=mut_protein,
             length_delta=mt.total_length_delta)
+
+        # For pure insertions that create a premature stop, legacy
+        # uses aa_ref="" (nothing was at the insertion point in the
+        # reference). The protein-diff classifier sees it as a
+        # substitution + truncation and uses the reference residue.
+        # Match legacy's convention for parity.
+        is_pure_insertion = (
+            len(variant.trimmed_ref) == 0
+            or (len(variant.trimmed_ref) == 1
+                and variant.trimmed_alt.startswith(variant.trimmed_ref)))
+        from ..effects.effect_classes import PrematureStop
+        if is_pure_insertion and isinstance(effect, PrematureStop):
+            if effect.aa_ref != "":
+                return PrematureStop(
+                    variant=variant,
+                    transcript=transcript,
+                    aa_mutation_start_offset=effect.aa_mutation_start_offset,
+                    aa_ref="",
+                    aa_alt=effect.aa_alt)
+
+        return effect

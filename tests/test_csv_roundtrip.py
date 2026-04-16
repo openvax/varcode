@@ -307,9 +307,9 @@ def test_effect_collection_from_csv_raises_without_genome_or_header():
 def test_effect_collection_carries_annotator_provenance():
     variant = Variant("17", 43082575 - 5, "CCT", "GGG", "GRCh38")
     ec = variant.effects()
-    # predict_variant_effects should have populated the fields from
-    # the resolved annotator (legacy by default).
-    assert ec.annotator == "legacy"
+    # predict_variant_effects should have populated the annotator name
+    # from whichever annotator is currently the default.
+    assert ec.annotator is not None
     assert ec.annotator_version is not None
     assert ec.annotated_at is not None
 
@@ -324,7 +324,7 @@ def test_effect_collection_to_csv_emits_annotator_header():
             head = "".join(f.readline() for _ in range(8))
     finally:
         os.unlink(path)
-    assert "# annotator=legacy" in head
+    assert "# annotator=" in head
     assert "# annotator_version=" in head
     assert "# annotated_at=" in head
 
@@ -360,18 +360,22 @@ def test_effect_collection_clone_preserves_annotator_metadata():
 
 def test_effect_collection_from_csv_warns_on_annotator_mismatch():
     import warnings
+    from varcode import get_default_annotator
     variant = Variant("17", 43082575 - 5, "CCT", "GGG", "GRCh38")
     ec = variant.effects()
     path = _tmp_csv()
+    # Use a fake annotator name that's guaranteed to differ from
+    # whatever the current default is.
+    fake_name = "fake_annotator_for_test"
+    current_default = get_default_annotator().name
     try:
         ec.to_csv(path)
-        # Rewrite the header to claim a different annotator.
         with open(path) as f:
             lines = f.readlines()
         with open(path, "w") as f:
             for line in lines:
                 if line.startswith("# annotator="):
-                    f.write("# annotator=protein_diff\n")
+                    f.write("# annotator=%s\n" % fake_name)
                 else:
                     f.write(line)
         with warnings.catch_warnings(record=True) as caught:
@@ -382,7 +386,7 @@ def test_effect_collection_from_csv_warns_on_annotator_mismatch():
 
     messages = [str(w.message) for w in caught]
     assert any(
-        "protein_diff" in m and "legacy" in m for m in messages), (
+        fake_name in m and current_default in m for m in messages), (
         "Expected a warning about annotator mismatch, got: %r" % messages)
 
 

@@ -93,6 +93,15 @@ def classify_from_protein_diff(
 
     # Frameshift: cDNA length change not divisible by 3.
     if length_delta % 3 != 0:
+        # Guard: if the mutation offset is past the end of the
+        # reference protein, the edit is in the stop-codon / 3'UTR
+        # region. That's a StopLoss, not a FrameShift.
+        if aa_offset >= len(ref_protein):
+            return StopLoss(
+                variant=variant,
+                transcript=transcript,
+                aa_ref="",
+                aa_alt=alt_delta)
         if n_alt == 0:
             return FrameShiftTruncation(
                 variant=variant,
@@ -118,9 +127,15 @@ def classify_from_protein_diff(
             aa_ref=ref_protein[aa_offset] if aa_offset < len(ref_protein) else ref_delta,
             aa_alt=alt_delta)
 
-    # Stop loss: mutant protein longer than reference and the change
-    # extends past the original stop.
-    if len(mut_protein) > len(ref_protein) and aa_offset + n_ref >= len(ref_protein):
+    # Stop loss: mutant protein longer than reference, the change
+    # extends past the original stop, AND reference residues were
+    # replaced (n_ref > 0). The n_ref > 0 guard distinguishes true
+    # stop-loss (stop codon disrupted) from an in-frame insertion
+    # near the protein's tail (which adds residues but preserves the
+    # stop — that's an Insertion, not StopLoss).
+    if (len(mut_protein) > len(ref_protein)
+            and aa_offset + n_ref >= len(ref_protein)
+            and n_ref > 0):
         return StopLoss(
             variant=variant,
             transcript=transcript,

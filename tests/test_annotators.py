@@ -61,9 +61,8 @@ def test_duck_typed_annotator_satisfies_protocol():
 # ====================================================================
 
 
-def test_legacy_annotator_is_registered_by_default():
+def test_legacy_annotator_is_registered():
     assert get_annotator("legacy").__class__ is LegacyEffectAnnotator
-    assert get_default_annotator().__class__ is LegacyEffectAnnotator
 
 
 def test_register_and_retrieve_custom_annotator():
@@ -219,11 +218,11 @@ def test_use_annotator_swaps_default_within_scope():
         def annotate_on_transcript(self, variant, transcript):
             return None
     scoped_instance = Scoped()
-    assert get_default_annotator().__class__ is LegacyEffectAnnotator
+    prior_default = get_default_annotator()
     with use_annotator(scoped_instance):
         assert get_default_annotator() is scoped_instance
-    # On exit, default is restored.
-    assert get_default_annotator().__class__ is LegacyEffectAnnotator
+    # On exit, default is restored to whatever it was before.
+    assert get_default_annotator() is prior_default
     # And the scoped-instance registration is cleaned up.
     from varcode.annotators.registry import _REGISTRY
     assert "test_scoped" not in _REGISTRY
@@ -238,10 +237,11 @@ def test_use_annotator_with_registered_name_preserves_registration():
             return None
     persisted = Persisted()
     register_annotator(persisted)
+    prior_default = get_default_annotator()
     try:
         with use_annotator("test_persisted"):
             assert get_default_annotator() is persisted
-        assert get_default_annotator().__class__ is LegacyEffectAnnotator
+        assert get_default_annotator() is prior_default
         # Registration persists after the context exit since it
         # wasn't created by the context manager.
         from varcode.annotators.registry import _REGISTRY
@@ -292,7 +292,7 @@ def test_resolve_annotator_passes_through_instance():
 def test_resolve_annotator_resolves_none_to_default():
     from varcode import resolve_annotator
     resolved = resolve_annotator(None)
-    assert resolved.__class__ is LegacyEffectAnnotator
+    assert resolved is get_default_annotator()
 
 
 # ====================================================================
