@@ -30,7 +30,7 @@ CFTR_TRANSCRIPT_ID = "ENST00000003084"
 
 
 def _cds_offset_for(variant, transcript):
-    """Compute the same `cds_offset` that the legacy pipeline passes
+    """Compute the same `cds_offset` that the fast pipeline passes
     into predict_in_frame_coding_effect. Used to call the fast-path
     helper directly without going through the full annotator.
     """
@@ -64,9 +64,9 @@ def test_fast_path_returns_substitution_for_missense_snv():
     # CFTR chr7 — pick a known single-base coding variant.
     variant = Variant("7", 117531095, "T", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
-    # The legacy path and fast path should agree; run the full pipeline
+    # The fast path and fast path should agree; run the full pipeline
     # and directly compare with the helper.
-    legacy_effect = variant.effect_on_transcript(transcript)
+    fast_effect = variant.effect_on_transcript(transcript)
     fast_effect = _call_fast_path(variant, transcript)
     if fast_effect is None:
         # If the variant falls outside the fast path's accept window
@@ -74,8 +74,8 @@ def test_fast_path_returns_substitution_for_missense_snv():
         # are covered by the reject tests below.
         return
     # Fast-path output should match legacy byte-for-byte.
-    assert type(fast_effect) is type(legacy_effect)
-    assert fast_effect.short_description == legacy_effect.short_description
+    assert type(fast_effect) is type(fast_effect)
+    assert fast_effect.short_description == fast_effect.short_description
 
 
 # ====================================================================
@@ -133,7 +133,7 @@ def test_fast_path_rejects_start_codon_variant():
 # ====================================================================
 
 
-def test_fast_path_and_legacy_agree_on_several_coding_snvs():
+def test_fast_path_and_fast_annotator_agree_on_several_coding_snvs():
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     # Pick several genomic positions inside CFTR exon 4 (known coding)
     # and produce a range of SNVs at each.

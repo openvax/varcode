@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""The legacy :class:`EffectAnnotator` — a thin wrapper around the
+"""The fast :class:`EffectAnnotator` — a thin wrapper around the
 offset-based effect prediction that varcode has shipped since 2.0.0.
 
 Exists as an :class:`EffectAnnotator` Protocol implementation so
@@ -23,10 +23,10 @@ identical output to ``Variant.effect_on_transcript(transcript)``.
 from ..version import __version__ as _varcode_version
 
 
-class LegacyEffectAnnotator:
+class FastEffectAnnotator:
     """Wraps :func:`varcode.effects.predict_variant_effect_on_transcript`."""
 
-    name = "legacy"
+    name = "fast"
 
     version = _varcode_version
     """Built-in annotators track varcode's own version. Third-party
@@ -37,7 +37,7 @@ class LegacyEffectAnnotator:
     supports = frozenset({"snv", "indel", "mnv"})
     """Variant kinds this annotator handles. Splice-possibility
     sets, structural variants, and phased haplotypes fall outside
-    the legacy offset-based path and will be handled by the
+    the fast offset-based path and will be handled by the
     protein-diff annotator."""
 
     def annotate_on_transcript(self, variant, transcript):

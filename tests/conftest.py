@@ -13,13 +13,13 @@
 """Shared pytest fixtures for the varcode test suite.
 
 The ``dual_annotator`` fixture parametrizes every test that uses it
-over both ``"legacy"`` and ``"protein_diff"`` annotators. Tests that
+over both ``"fast"`` and ``"protein_diff"`` annotators. Tests that
 call ``variant.effects()`` inside a ``use_annotator(annotator_name)``
 scope exercise both code paths automatically.
 
 The ``annotator_scope`` autouse fixture sets the default annotator
 for the entire test function based on the ``--annotator`` CLI option
-(default: ``"legacy"``). This lets CI run the full suite under
+(default: ``"fast"``). This lets CI run the full suite under
 ``protein_diff`` with ``pytest --annotator=protein_diff`` to catch
 parity regressions across ALL tests, not just the explicit parity
 harness.
@@ -38,7 +38,7 @@ def pytest_addoption(parser):
         help=(
             "Run the full test suite under a specific annotator "
             "(e.g. --annotator=protein_diff). Default: no override "
-            "(uses whatever each test sets, which is legacy unless "
+            "(uses whatever each test sets, which is fast unless "
             "the test explicitly picks something else)."
         ),
     )
@@ -57,7 +57,7 @@ def annotator_scope(request):
         yield
 
 
-@pytest.fixture(params=["legacy", "protein_diff"])
+@pytest.fixture(params=["fast", "protein_diff"])
 def dual_annotator(request):
     """Parametrize a test over both annotators. Use this on tests
     that exercise ``variant.effects()`` to get automatic dual-

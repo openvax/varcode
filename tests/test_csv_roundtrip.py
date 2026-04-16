@@ -390,8 +390,8 @@ def test_effect_collection_from_csv_warns_on_annotator_mismatch():
         "Expected a warning about annotator mismatch, got: %r" % messages)
 
 
-def test_csv_to_csv_without_header_is_opt_out_legacy_format():
-    # to_csv(include_header=False) produces a plain CSV for legacy
+def test_csv_to_csv_without_header_is_opt_out_fast_annotator_format():
+    # to_csv(include_header=False) produces a plain CSV for fast
     # consumers that don't tolerate comment lines.
     variants = [Variant("17", 43082404, "C", "T", "GRCh38")]
     path = _tmp_csv()

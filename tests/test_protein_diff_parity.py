@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Parity harness for ProteinDiffEffectAnnotator vs LegacyEffectAnnotator
+"""Parity harness for ProteinDiffEffectAnnotator vs FastEffectAnnotator
 (openvax/varcode#271 stage 3d, #309).
 
 **WIP — skipped in CI.** The harness skeleton is in place so the
@@ -19,7 +19,7 @@ classifier lands. The target gate for 3d merge is:
 
     for variant in CORPUS:
         for transcript in variant.transcripts:
-            legacy = LegacyEffectAnnotator().annotate_on_transcript(
+            legacy = FastEffectAnnotator().annotate_on_transcript(
                 variant, transcript)
             sdiff = ProteinDiffEffectAnnotator().annotate_on_transcript(
                 variant, transcript)
@@ -103,13 +103,13 @@ pytest.skip(
 # in the module docstring.
 CORPUS = []
 
-# Variants where protein_diff and legacy intentionally differ. Each
+# Variants where protein_diff and fast intentionally differ. Each
 # entry: (variant_key, reason_issue_url, reason_description).
 # Empty at merge time — any real disagreements must be triaged, not
 # silently accepted.
 EXPECTED_DIFFS = {}
 
 
-def test_protein_diff_matches_legacy_on_corpus():
+def test_protein_diff_matches_fast_annotator_on_corpus():
     """Byte-for-byte parity on the validation corpus. Gate for 3d merge."""
     pass  # filled in by #309

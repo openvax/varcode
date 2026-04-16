@@ -18,7 +18,7 @@ An :class:`EffectAnnotator` takes a :class:`Variant` and a
 implementation). Annotators coexist behind a shared Protocol so
 users can choose between:
 
-* ``legacy`` — the offset-based annotator that has shipped since
+* ``fast`` — the offset-based annotator that has shipped since
   2.0.0. Wraps :func:`varcode.effects.predict_variant_effect_on_transcript`.
 * ``protein_diff`` — the coming annotator that materializes a
   :class:`MutantTranscript` and diffs its translated protein
@@ -27,7 +27,7 @@ users can choose between:
 Third parties (Isovar, Exacto) can register their own annotators by
 implementing the Protocol and calling :func:`register_annotator`.
 
-This stage 1 PR ships only the Protocol + registry + legacy wrapper;
+This stage 1 PR ships only the Protocol + registry + fast wrapper;
 the protein-diff annotator, fast-path routing, per-call selection on
 ``Variant.effects()``, and ``EffectCollection`` provenance fields
 land in follow-up PRs as outlined in #271.
@@ -35,7 +35,7 @@ land in follow-up PRs as outlined in #271.
 
 from typing import Protocol, runtime_checkable
 
-from .legacy import LegacyEffectAnnotator
+from .fast import FastEffectAnnotator
 from .protein_diff import ProteinDiffEffectAnnotator
 from .registry import (
     UnsupportedVariantError,
@@ -55,7 +55,7 @@ class EffectAnnotator(Protocol):
 
     Conforming objects expose:
 
-    * ``name`` — short identifier (e.g. ``"legacy"``) used in the
+    * ``name`` — short identifier (e.g. ``"fast"``) used in the
       registry and in serialized provenance.
     * ``supports`` — set of variant-kind tags the annotator can
       handle (e.g. ``{"snv", "indel"}``). Callers that hand the
@@ -86,7 +86,7 @@ class EffectAnnotator(Protocol):
 
 __all__ = [
     "EffectAnnotator",
-    "LegacyEffectAnnotator",
+    "FastEffectAnnotator",
     "UnsupportedVariantError",
     "get_annotator",
     "get_default_annotator",

@@ -50,7 +50,7 @@ nonsilent = effects.drop_silent_and_noncoding()
 ```
 
 `variants.effects()` calls the current default annotator
-(`"legacy"`) on every `(variant, transcript)` pair and returns
+(`"fast"`) on every `(variant, transcript)` pair and returns
 an `EffectCollection`. Each element is a `MutationEffect`
 subclass — `Substitution`, `Silent`, `PrematureStop`, and so
 on.
@@ -195,7 +195,7 @@ Two annotators coexist behind the `EffectAnnotator` protocol:
 
 | Annotator | Algorithm | Status |
 |---|---|---|
-| `LegacyEffectAnnotator` | Offset arithmetic against the reference CDS | Default |
+| `FastEffectAnnotator` | Offset arithmetic against the reference CDS | Default |
 | `ProteinDiffEffectAnnotator` | Materializes `MutantTranscript`, translates, diffs against reference protein | [#309][i309] — WIP |
 
 Both emit the same `MutationEffect` classes, share a fast path
@@ -205,7 +205,7 @@ boundary-codon cases and frameshift realignments that offset
 arithmetic can miss.
 
 ```python
-# Default (legacy):
+# Default (fast):
 effects = variant.effects()
 
 # Opt into protein-diff (once available):
@@ -232,14 +232,14 @@ Any object exposing `name` / `supports` / `version` /
 Every `EffectCollection` produced by `predict_variant_effects`
 records:
 
-- `annotator` — name of the annotator that ran (`"legacy"`,
+- `annotator` — name of the annotator that ran (`"fast"`,
   `"protein_diff"`, etc.)
 - `annotator_version` — version string
 - `annotated_at` — ISO-8601 UTC timestamp
 
 Fields are preserved through `clone_with_new_elements`
 (so `filter` / `groupby` keep them), written to CSV headers
-(`# annotator=legacy`, etc.), and recovered by `from_csv`
+(`# annotator=fast`, etc.), and recovered by `from_csv`
 verbatim — restored collections remember *when* they were
 originally produced.
 

@@ -13,7 +13,7 @@
 """Process-global registry for :class:`EffectAnnotator` instances.
 
 Kept as a module-level dict (not a class) to match the flat registry
-pattern in the rest of varcode. Default selection is ``"legacy"``
+pattern in the rest of varcode. Default selection is ``"fast"``
 until the protein-diff annotator ships; callers that want a
 non-default annotator pass one explicitly or call
 :func:`set_default_annotator`. See #271.
@@ -21,7 +21,7 @@ non-default annotator pass one explicitly or call
 
 from contextlib import contextmanager
 
-from .legacy import LegacyEffectAnnotator
+from .fast import FastEffectAnnotator
 from .protein_diff import ProteinDiffEffectAnnotator
 
 
@@ -37,7 +37,7 @@ class UnsupportedVariantError(ValueError):
 
 
 _REGISTRY = {}
-_DEFAULT_NAME = "protein_diff"
+_DEFAULT_NAME = "fast"
 
 
 def register_annotator(annotator):
@@ -64,9 +64,9 @@ def get_annotator(name):
 def get_default_annotator():
     """Return the annotator currently configured as the default.
 
-    Stage-1 default is ``"legacy"``. After #271 stage 2 lands (the
+    Stage-1 default is ``"fast"``. After #271 stage 2 lands (the
     protein-diff annotator), that becomes the new default and
-    ``"legacy"`` stays available as an opt-in for users who need
+    ``"fast"`` stays available as an opt-in for users who need
     byte-for-byte compatibility with 2.x output.
     """
     return _REGISTRY[_DEFAULT_NAME]
@@ -156,7 +156,7 @@ def use_annotator(name_or_instance):
                 _REGISTRY[name] = prior_registration
 
 
-# Register built-in annotators at import time. Legacy is the default
+# Register built-in annotators at import time. Fast is the default
 # until stage 3e flips it after the parity corpus passes clean.
-register_annotator(LegacyEffectAnnotator())
+register_annotator(FastEffectAnnotator())
 register_annotator(ProteinDiffEffectAnnotator())

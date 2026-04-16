@@ -462,7 +462,7 @@ class Variant(Serializable):
 
         annotator : str, EffectAnnotator, or None
             Per-call annotator override. ``None`` uses the currently
-            configured default (``"legacy"`` today; swappable via
+            configured default (``"fast"`` today; swappable via
             :func:`varcode.set_default_annotator` or
             :func:`varcode.use_annotator`). String names are resolved
             against the registry. See openvax/varcode#271.
