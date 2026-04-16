@@ -106,13 +106,16 @@ def classify_from_protein_diff(
 
     # Premature stop: mutant protein shorter than reference and the
     # change is at the tail (the trimmed alt runs to the end of the
-    # mutant protein).
+    # mutant protein). Use the single reference residue at the stop-
+    # creation point as aa_ref (matching legacy's convention, which
+    # shows the codon that became a stop rather than the entire
+    # truncated tail).
     if len(mut_protein) < len(ref_protein) and aa_offset + n_alt == len(mut_protein):
         return PrematureStop(
             variant=variant,
             transcript=transcript,
             aa_mutation_start_offset=aa_offset,
-            aa_ref=ref_delta,
+            aa_ref=ref_protein[aa_offset] if aa_offset < len(ref_protein) else ref_delta,
             aa_alt=alt_delta)
 
     # Stop loss: mutant protein longer than reference and the change
