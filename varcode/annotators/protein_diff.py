@@ -169,30 +169,9 @@ class ProteinDiffEffectAnnotator:
                 aa_pos=aa_pos,
                 aa_ref=aa_ref)
 
-        effect = classify_from_protein_diff(
+        return classify_from_protein_diff(
             variant=variant,
             transcript=transcript,
             ref_protein=ref_protein,
             mut_protein=mut_protein,
             length_delta=mt.total_length_delta)
-
-        # For pure insertions that create a premature stop, legacy
-        # uses aa_ref="" (nothing was at the insertion point in the
-        # reference). The protein-diff classifier sees it as a
-        # substitution + truncation and uses the reference residue.
-        # Match legacy's convention for parity.
-        is_pure_insertion = (
-            len(variant.trimmed_ref) == 0
-            or (len(variant.trimmed_ref) == 1
-                and variant.trimmed_alt.startswith(variant.trimmed_ref)))
-        from ..effects.effect_classes import PrematureStop
-        if is_pure_insertion and isinstance(effect, PrematureStop):
-            if effect.aa_ref != "":
-                return PrematureStop(
-                    variant=variant,
-                    transcript=transcript,
-                    aa_mutation_start_offset=effect.aa_mutation_start_offset,
-                    aa_ref="",
-                    aa_alt=effect.aa_alt)
-
-        return effect
