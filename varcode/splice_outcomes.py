@@ -250,6 +250,28 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
         return self.candidates[0]
 
     @property
+    def alternate_effect(self):
+        """Back-compat shim matching :attr:`ExonicSpliceSite.alternate_effect`.
+
+        Resolves to the ``coding_effect`` of the ``NORMAL_SPLICING``
+        candidate — i.e. "the coding change that applies when
+        splicing proceeds normally." Returns ``None`` when the
+        ``NORMAL_SPLICING`` candidate has no coding_effect (e.g. the
+        variant is intronic and has no underlying coding change) or
+        when the outcome set doesn't include ``NORMAL_SPLICING``.
+
+        Added by #299 Part 1 so downstream code can read
+        ``effect.alternate_effect`` uniformly on both
+        :class:`ExonicSpliceSite` (2-outcome default) and
+        :class:`SpliceOutcomeSet` (N-outcome opt-in) without
+        branching on ``isinstance``.
+        """
+        for candidate in self.candidates:
+            if candidate.outcome is SpliceOutcome.NORMAL_SPLICING:
+                return candidate.coding_effect
+        return None
+
+    @property
     def candidate_proteins(self):
         """Mapping from each :class:`SpliceOutcome` to its computed
         mutant protein sequence (empty string when the protein is not

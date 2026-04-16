@@ -287,10 +287,24 @@ class ExonLoss(Exonic):
         return True
 
 
-class ExonicSpliceSite(Exonic, SpliceSite):
+class ExonicSpliceSite(Exonic, SpliceSite, MultiOutcomeEffect):
     """
     Mutation in the last three nucleotides before an intron
     or in the first nucleotide after an intron.
+
+    Expresses the two plausible outcomes of a splice-adjacent exonic
+    variant — splice-signal disruption vs. the underlying coding
+    change if splicing proceeds normally — via the
+    :class:`MultiOutcomeEffect` protocol (see #299). ``candidates``
+    yields ``(self, alternate_effect)`` (both :class:`MutationEffect`
+    instances), and ``alternate_effect`` stays on the instance as a
+    first-class field for back-compat with callers that depended on
+    the 2.x shape.
+
+    This is the **lightweight 2-outcome form**. Callers that want
+    the richer exon-skipping / intron-retention / cryptic-splice
+    candidate set opt into ``splice_outcomes=True`` and get a
+    :class:`~varcode.splice_outcomes.SpliceOutcomeSet` instead.
     """
     def __init__(self, variant, transcript, exon, alternate_effect):
         Exonic.__init__(self, variant, transcript)
@@ -321,6 +335,42 @@ class ExonicSpliceSite(Exonic, SpliceSite):
     @property
     def modifies_coding_sequence(self):
         return self.alternate_effect.modifies_coding_sequence
+
+    @property
+    def candidates(self):
+        """The two plausible outcomes, most-likely-first:
+
+        ``(self, alternate_effect)`` — position [0] is the
+        splice-disruption outcome (this effect itself), position [1]
+        is the coding change if splicing proceeds. Returns a
+        1-tuple ``(self,)`` when ``alternate_effect`` is None.
+
+        Elements are :class:`MutationEffect` instances directly,
+        not :class:`SpliceCandidate` objects — that's a different
+        (richer) shape used by :class:`SpliceOutcomeSet`. Downstream
+        code that iterates ``candidates`` here reads the effect
+        class / ``short_description`` / ``aa_ref`` etc. on each
+        element, same as on any ``MutationEffect``.
+        """
+        if self.alternate_effect is None:
+            return (self,)
+        return (self, self.alternate_effect)
+
+    @property
+    def most_likely(self):
+        """The splice-disruption outcome is the primary classification
+        (this effect itself). Follows the ``MultiOutcomeEffect``
+        contract of ``most_likely == candidates[0]``.
+        """
+        return self
+
+    @property
+    def priority_class(self):
+        """ExonicSpliceSite priority is used directly — no
+        delegation, since this class IS the splice-adjacent effect
+        rather than a wrapper around one.
+        """
+        return ExonicSpliceSite
 
 
 class CodingMutation(Exonic):
