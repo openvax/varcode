@@ -46,20 +46,17 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
+from .effects.classify import classify_from_protein_diff
 from .effects.codon_tables import codon_table_for_transcript, translate_sequence
 from .effects.effect_classes import (
-    ComplexSubstitution,
-    Deletion,
     ExonicSpliceSite,
     IntronicSpliceSite,
     MultiOutcomeEffect,
     MutationEffect,
     SpliceAcceptor,
     SpliceDonor,
-    StartLoss,
-    Substitution,
 )
-from .string_helpers import trim_shared_flanking_strings
+from .mutant_transcript import MutantTranscript, TranscriptEdit
 
 
 class SpliceOutcome(Enum):
@@ -468,10 +465,13 @@ def _build_normal_splicing_candidate(splice_effect, plausibility):
 def _build_exon_skipping_candidate(splice_effect, plausibility):
     """Exon skipping: the affected exon is excluded from the transcript.
 
-    Computes the resulting protein by removing the exon's amino acids
-    (in-frame skip) or by triggering a frameshift (out-of-frame skip).
-    Reports the change as a Deletion when in-frame and as a frameshift
-    label otherwise.
+    Builds a :class:`MutantTranscript` by deleting the exon's cDNA
+    range from the transcript sequence, translates, and classifies
+    the effect via :func:`classify_from_protein_diff`. This replaces
+    the three ad-hoc helpers from the original prototype (#305):
+    boundary-codon reconstruction, start-loss detection, and
+    in-frame vs. out-of-frame distinction all fall out of the diff
+    naturally.
     """
     transcript = getattr(splice_effect, "transcript", None)
     exon = _affected_exon(splice_effect)
@@ -484,39 +484,38 @@ def _build_exon_skipping_candidate(splice_effect, plausibility):
             predicted_class_name="ExonLoss",
         )
 
-    exon_contains_start_codon = _exon_contains_start_codon(transcript, exon)
+    mt = _build_exon_skip_mutant_transcript(
+        splice_effect.variant, transcript, exon)
     exon_length = exon.end - exon.start + 1
-    if exon_contains_start_codon:
-        # Losing the exon that contains the start codon means the
-        # protein as annotated can't be produced; label this as
-        # StartLoss. We can't easily construct the StartLoss effect
-        # here without more context, so return a stub with the right
-        # predicted class.
-        coding_effect = _build_start_loss_effect(
-            splice_effect.variant, transcript)
-        predicted_class_name = "StartLoss"
-        description = (
-            "Exon %s is skipped and contains the start codon; "
-            "annotated translation initiation is lost." % (
-                getattr(exon, "exon_id", "?"),))
-    elif exon_length % 3 == 0:
-        coding_effect = _build_in_frame_exon_skip_effect(
-            splice_effect.variant, transcript, exon)
-        # The in-frame-skip helper now returns Deletion, Substitution,
-        # or ComplexSubstitution depending on whether the skip touches
-        # a codon-straddling boundary (see #298). Derive the label
-        # from the actual effect class when available.
-        predicted_class_name = (
-            type(coding_effect).__name__
-            if coding_effect is not None
-            else "Deletion")
+
+    if mt is None or mt.mutant_protein_sequence is None:
+        # Couldn't compute protein (incomplete transcript, exon not
+        # found in transcript, etc.).
+        predicted = "FrameShift" if exon_length % 3 != 0 else "Deletion"
+        return SpliceCandidate(
+            outcome=SpliceOutcome.EXON_SKIPPING,
+            plausibility=plausibility,
+            description="Exon %s is skipped." % getattr(exon, "exon_id", "?"),
+            coding_effect=None,
+            predicted_class_name=predicted,
+        )
+
+    ref_protein = str(transcript.protein_sequence)
+    mut_protein = mt.mutant_protein_sequence
+    coding_effect = classify_from_protein_diff(
+        variant=splice_effect.variant,
+        transcript=transcript,
+        ref_protein=ref_protein,
+        mut_protein=mut_protein,
+        length_delta=-exon_length,
+    )
+    predicted_class_name = type(coding_effect).__name__
+
+    if exon_length % 3 == 0:
         description = (
             "Exon %s is skipped (in-frame, %d aa removed)." % (
                 getattr(exon, "exon_id", "?"), exon_length // 3))
     else:
-        coding_effect = _build_out_of_frame_exon_skip_effect(
-            splice_effect.variant, transcript, exon)
-        predicted_class_name = "FrameShift"
         description = (
             "Exon %s is skipped (out of frame, frameshift in the "
             "joined transcript)." % getattr(exon, "exon_id", "?"))
@@ -702,6 +701,71 @@ class _ExonSkipFrameshiftEffect(MutationEffect):
             self.aa_mutation_start_offset + 1,
             len(self.aa_alt),
         )
+
+
+def _build_exon_skip_mutant_transcript(variant, transcript, exon):
+    """Build a :class:`MutantTranscript` representing an exon skip.
+
+    Deletes the exon's cDNA range from the transcript sequence and
+    translates the result. Adjusts the CDS start offset when the
+    skipped exon precedes the coding region (5'UTR exon). When the
+    skipped exon contains the start codon, returns a MutantTranscript
+    with an empty protein so the classifier emits StartLoss.
+    """
+    if not transcript.complete:
+        return None
+    try:
+        exon_start_in_tx = _exon_start_offset_in_transcript(
+            transcript, exon)
+    except (StopIteration, ValueError):
+        return None
+
+    exon_length = exon.end - exon.start + 1
+    full_sequence = str(transcript.sequence)
+
+    post_skip_cdna = (
+        full_sequence[:exon_start_in_tx]
+        + full_sequence[exon_start_in_tx + exon_length:]
+    )
+
+    cds_start = min(transcript.start_codon_spliced_offsets)
+
+    # Adjust CDS start for the deletion.
+    if exon_start_in_tx + exon_length <= cds_start:
+        # Exon is entirely in the 5' UTR → shift CDS start left.
+        new_cds_start = cds_start - exon_length
+    elif exon_start_in_tx >= cds_start:
+        # Exon is entirely after the CDS start → no shift.
+        new_cds_start = cds_start
+    else:
+        # Exon overlaps the CDS start → start codon lost.
+        new_cds_start = None
+
+    mut_protein = ""
+    if new_cds_start is not None and new_cds_start < len(post_skip_cdna):
+        codon_table = codon_table_for_transcript(transcript)
+        coding = post_skip_cdna[new_cds_start:]
+        truncated = coding[:(len(coding) // 3) * 3]
+        try:
+            mut_protein = translate_sequence(
+                truncated, codon_table=codon_table, to_stop=True)
+        except ValueError:
+            mut_protein = ""
+
+    edit = TranscriptEdit(
+        cdna_start=exon_start_in_tx,
+        cdna_end=exon_start_in_tx + exon_length,
+        alt_bases="",
+        source_variant=variant,
+    )
+
+    return MutantTranscript(
+        reference_transcript=transcript,
+        edits=(edit,),
+        cdna_sequence=post_skip_cdna,
+        mutant_protein_sequence=mut_protein,
+        annotator_name="splice_outcomes",
+    )
 
 
 def _affected_exon(splice_effect):
