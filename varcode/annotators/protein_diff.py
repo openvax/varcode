@@ -10,11 +10,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""SequenceDiffEffectAnnotator — classify effects from protein diff
+"""ProteinDiffEffectAnnotator — classify effects from protein diff
 instead of offset arithmetic (openvax/varcode#271 stage 3d, #309).
 
 See :doc:`/effect_annotation` for the user-facing guide covering
-how legacy, sequence-diff, splice outcomes, and the SV roadmap
+how legacy, protein-diff, splice outcomes, and the SV roadmap
 fit together. This module docstring captures implementation
 detail relevant to reviewers of the classifier itself.
 
@@ -26,9 +26,9 @@ Algorithm
 
 2. **Splice check**: run legacy first. If legacy classifies the
    variant as a splice effect (SpliceDonor, SpliceAcceptor,
-   IntronicSpliceSite), return that directly — sequence-diff
+   IntronicSpliceSite), return that directly — protein-diff
    doesn't own splice classification. For ExonicSpliceSite, run
-   dual-dispatch: legacy provides the splice class, sequence-diff
+   dual-dispatch: legacy provides the splice class, protein-diff
    provides the ``alternate_effect`` via protein diff.
 
 3. **Slow path**: build a :class:`MutantTranscript` via
@@ -59,7 +59,7 @@ from ..version import __version__ as _varcode_version
 from .legacy import LegacyEffectAnnotator
 
 
-class SequenceDiffEffectAnnotator:
+class ProteinDiffEffectAnnotator:
     """Classify effects by diffing translated mutant protein against
     the reference protein.
 
@@ -67,17 +67,17 @@ class SequenceDiffEffectAnnotator:
     :class:`LegacyEffectAnnotator` on the common case (trivial
     SNVs and simple indels) because both flow through the same
     :func:`classify_from_protein_diff` classifier. Diverges where
-    sequence-diff's approach is provably more accurate (boundary
+    protein-diff's approach is provably more accurate (boundary
     codons, frameshift realignment). Any divergence must appear in
     the parity harness ``EXPECTED_DIFFS`` with an issue link.
     """
 
-    name = "sequence_diff"
+    name = "protein_diff"
     version = _varcode_version
     supports = frozenset({"snv", "indel", "mnv"})
 
     def __repr__(self):
-        return "SequenceDiffEffectAnnotator(name=%r, version=%r)" % (
+        return "ProteinDiffEffectAnnotator(name=%r, version=%r)" % (
             self.name, self.version)
 
     def annotate_on_transcript(self, variant, transcript):
@@ -112,7 +112,7 @@ class SequenceDiffEffectAnnotator:
             return legacy_effect
 
         # ExonicSpliceSite: dual-dispatch. Legacy provides the
-        # splice class; sequence-diff provides the alternate_effect
+        # splice class; protein-diff provides the alternate_effect
         # via protein diff.
         if isinstance(legacy_effect, ExonicSpliceSite):
             mt = apply_variant_to_transcript(variant, transcript)
@@ -130,7 +130,7 @@ class SequenceDiffEffectAnnotator:
                     alternate_effect=alt)
             return legacy_effect
 
-        # Non-splice: sequence-diff slow path.
+        # Non-splice: protein-diff slow path.
         mt = apply_variant_to_transcript(variant, transcript)
         if mt is None or mt.mutant_protein_sequence is None:
             # UTR, ref-mismatch, splice-junction-spanning, etc.

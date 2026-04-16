@@ -196,11 +196,11 @@ Two annotators coexist behind the `EffectAnnotator` protocol:
 | Annotator | Algorithm | Status |
 |---|---|---|
 | `LegacyEffectAnnotator` | Offset arithmetic against the reference CDS | Default |
-| `SequenceDiffEffectAnnotator` | Materializes `MutantTranscript`, translates, diffs against reference protein | [#309][i309] — WIP |
+| `ProteinDiffEffectAnnotator` | Materializes `MutantTranscript`, translates, diffs against reference protein | [#309][i309] — WIP |
 
 Both emit the same `MutationEffect` classes, share a fast path
 for trivial SNVs, and are interchangeable at the output level.
-The difference is internal: sequence-diff catches
+The difference is internal: protein-diff catches
 boundary-codon cases and frameshift realignments that offset
 arithmetic can miss.
 
@@ -208,11 +208,11 @@ arithmetic can miss.
 # Default (legacy):
 effects = variant.effects()
 
-# Opt into sequence-diff (once available):
-effects = variant.effects(annotator="sequence_diff")
+# Opt into protein-diff (once available):
+effects = variant.effects(annotator="protein_diff")
 
 # Scoped default swap:
-with varcode.use_annotator("sequence_diff"):
+with varcode.use_annotator("protein_diff"):
     effects = variant_collection.effects()
 ```
 
@@ -233,7 +233,7 @@ Every `EffectCollection` produced by `predict_variant_effects`
 records:
 
 - `annotator` — name of the annotator that ran (`"legacy"`,
-  `"sequence_diff"`, etc.)
+  `"protein_diff"`, etc.)
 - `annotator_version` — version string
 - `annotated_at` — ISO-8601 UTC timestamp
 

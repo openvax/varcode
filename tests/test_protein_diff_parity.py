@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Parity harness for SequenceDiffEffectAnnotator vs LegacyEffectAnnotator
+"""Parity harness for ProteinDiffEffectAnnotator vs LegacyEffectAnnotator
 (openvax/varcode#271 stage 3d, #309).
 
 **WIP — skipped in CI.** The harness skeleton is in place so the
@@ -21,7 +21,7 @@ classifier lands. The target gate for 3d merge is:
         for transcript in variant.transcripts:
             legacy = LegacyEffectAnnotator().annotate_on_transcript(
                 variant, transcript)
-            sdiff = SequenceDiffEffectAnnotator().annotate_on_transcript(
+            sdiff = ProteinDiffEffectAnnotator().annotate_on_transcript(
                 variant, transcript)
             assert type(legacy) is type(sdiff)
             assert legacy.short_description == sdiff.short_description
@@ -34,8 +34,8 @@ deltas are logged as INFO via ``logging.info`` rather than asserted.
 The goal at that stage is to **review the parity contract** — each
 delta is either:
 
-  (a) a sequence-diff bug that needs fixing before merge, or
-  (b) a legacy bug that sequence-diff corrects (pinned in
+  (a) a protein-diff bug that needs fixing before merge, or
+  (b) a legacy bug that protein-diff corrects (pinned in
       ``EXPECTED_DIFFS`` with an issue link).
 
 Only after every delta has been triaged does the harness flip to
@@ -77,7 +77,7 @@ edge cases from the PR #310 review:
       1 but represent a compound substitution.
     * Variant at last exonic base that also changes an amino
       acid — verifies the splice-adjacency gate's dual-dispatch
-      behaviour (see sequence_diff._variant_is_splice_adjacent
+      behaviour (see protein_diff._variant_is_splice_adjacent
       docstring for the contract).
     * A variant whose effect_type changed across varcode major
       versions (legacy ComplexSubstitution ↔ Substitution) —
@@ -93,7 +93,7 @@ import pytest
 pytestmark = pytest.mark.parity
 
 pytest.skip(
-    "SequenceDiffEffectAnnotator is scaffolding only; parity harness "
+    "ProteinDiffEffectAnnotator is scaffolding only; parity harness "
     "activates with #309's classifier PR.",
     allow_module_level=True,
 )
@@ -103,13 +103,13 @@ pytest.skip(
 # in the module docstring.
 CORPUS = []
 
-# Variants where sequence_diff and legacy intentionally differ. Each
+# Variants where protein_diff and legacy intentionally differ. Each
 # entry: (variant_key, reason_issue_url, reason_description).
 # Empty at merge time — any real disagreements must be triaged, not
 # silently accepted.
 EXPECTED_DIFFS = {}
 
 
-def test_sequence_diff_matches_legacy_on_corpus():
+def test_protein_diff_matches_legacy_on_corpus():
     """Byte-for-byte parity on the validation corpus. Gate for 3d merge."""
     pass  # filled in by #309

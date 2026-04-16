@@ -14,7 +14,7 @@
 offset-based effect prediction that varcode has shipped since 2.0.0.
 
 Exists as an :class:`EffectAnnotator` Protocol implementation so
-that the coming sequence-diff annotator can be introduced behind
+that the coming protein-diff annotator can be introduced behind
 the same interface without churning callers (#271, stage 2). Until
 then, this annotator is the default and produces byte-for-byte
 identical output to ``Variant.effect_on_transcript(transcript)``.
@@ -38,13 +38,13 @@ class LegacyEffectAnnotator:
     """Variant kinds this annotator handles. Splice-possibility
     sets, structural variants, and phased haplotypes fall outside
     the legacy offset-based path and will be handled by the
-    sequence-diff annotator."""
+    protein-diff annotator."""
 
     def annotate_on_transcript(self, variant, transcript):
         """Delegate to the existing per-transcript prediction.
 
         No fast-path / slow-path dispatch at this stage; that lives
-        on the sequence-diff annotator once it exists.
+        on the protein-diff annotator once it exists.
         """
         # Lazy import avoids a circular dep at package import time.
         from ..effects import predict_variant_effect_on_transcript
