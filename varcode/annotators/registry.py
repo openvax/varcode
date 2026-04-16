@@ -22,6 +22,7 @@ non-default annotator pass one explicitly or call
 from contextlib import contextmanager
 
 from .legacy import LegacyEffectAnnotator
+from .sequence_diff import SequenceDiffEffectAnnotator
 
 
 class UnsupportedVariantError(ValueError):
@@ -155,6 +156,7 @@ def use_annotator(name_or_instance):
                 _REGISTRY[name] = prior_registration
 
 
-# Register the legacy annotator at import time so there is always a
-# default available without the caller having to bootstrap.
+# Register built-in annotators at import time. Legacy is the default
+# until stage 3e flips it after the parity corpus passes clean.
 register_annotator(LegacyEffectAnnotator())
+register_annotator(SequenceDiffEffectAnnotator())

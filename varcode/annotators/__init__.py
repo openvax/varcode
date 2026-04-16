@@ -36,6 +36,7 @@ land in follow-up PRs as outlined in #271.
 from typing import Protocol, runtime_checkable
 
 from .legacy import LegacyEffectAnnotator
+from .sequence_diff import SequenceDiffEffectAnnotator
 from .registry import (
     UnsupportedVariantError,
     get_annotator,
