@@ -576,133 +576,6 @@ def _build_cryptic_splice_candidate(splice_effect, plausibility, outcome):
 # ---------------------------------------------------------------------
 
 
-def _exon_contains_start_codon(transcript, exon):
-    """True if the given exon contains the annotated start codon."""
-    if not transcript.complete:
-        return False
-    try:
-        start_offsets = transcript.start_codon_spliced_offsets
-    except Exception:
-        return False
-    if not start_offsets:
-        return False
-    exon_start = _exon_start_offset_in_transcript_or_none(transcript, exon)
-    if exon_start is None:
-        return False
-    exon_length = exon.end - exon.start + 1
-    exon_end = exon_start + exon_length - 1
-    first_start = min(start_offsets)
-    return exon_start <= first_start <= exon_end
-
-
-def _exon_start_offset_in_transcript_or_none(transcript, exon):
-    """Like :func:`_exon_start_offset_in_transcript` but returns None
-    on failure instead of raising."""
-    try:
-        return _exon_start_offset_in_transcript(transcript, exon)
-    except (StopIteration, ValueError):
-        return None
-
-
-def _build_start_loss_effect(variant, transcript):
-    """Build a StartLoss effect stub when the start-codon exon is
-    skipped. Returns None if the transcript can't accommodate it.
-    """
-    if not transcript.complete:
-        return None
-    try:
-        return StartLoss(variant=variant, transcript=transcript)
-    except Exception:
-        return None
-
-
-def _build_out_of_frame_exon_skip_effect(variant, transcript, skipped_exon):
-    """Compute the mutant protein for an out-of-frame exon skip.
-
-    Builds the post-skip cDNA by joining all exons except the skipped
-    one, translating from the original start codon, and following the
-    frameshift until the first stop. Returns a Deletion-style effect
-    with aa_ref set to the joined skipped region; leaves the mutant
-    protein accessible via a custom subclass-like shim.
-    """
-    if not transcript.complete:
-        return None
-    try:
-        exon_start_in_tx = _exon_start_offset_in_transcript(
-            transcript, skipped_exon)
-    except (StopIteration, ValueError):
-        return None
-    cds_start_offset = min(transcript.start_codon_spliced_offsets)
-    if exon_start_in_tx < cds_start_offset:
-        return None
-    exon_length = skipped_exon.end - skipped_exon.start + 1
-    # Construct the post-skip cDNA by excising the exon's nucleotides
-    # from the full transcript sequence.
-    full_sequence = str(transcript.sequence)
-    post_skip_cdna = (
-        full_sequence[:exon_start_in_tx]
-        + full_sequence[exon_start_in_tx + exon_length:]
-    )
-    # Translate from the start codon through the frameshift to first stop.
-    coding_from_start = post_skip_cdna[cds_start_offset:]
-    protein = _translate_to_first_stop(
-        coding_from_start, codon_table=codon_table_for_transcript(transcript))
-    if not protein:
-        return None
-    # Compute the aa position where the frameshift begins — this is
-    # where the exon used to start, in aa coordinates.
-    aa_frameshift_start = (exon_start_in_tx - cds_start_offset) // 3
-    if aa_frameshift_start >= len(transcript.protein_sequence):
-        return None
-    return _ExonSkipFrameshiftEffect(
-        variant=variant,
-        transcript=transcript,
-        aa_frameshift_start=aa_frameshift_start,
-        protein=protein,
-    )
-
-
-def _translate_to_first_stop(cdna, codon_table=None):
-    """Translate a cDNA string to protein, stopping at the first stop
-    codon. Returns the protein string without the stop symbol.
-
-    ``codon_table`` defaults to the standard nuclear table; pass the
-    vertebrate mitochondrial table for mt transcripts so AGA/AGG act
-    as stops and TGA codes for Trp.
-    """
-    if codon_table is None:
-        from .effects.codon_tables import STANDARD
-        codon_table = STANDARD
-    n_codons = len(cdna) // 3
-    truncated = str(cdna[:n_codons * 3])
-    return translate_sequence(truncated, codon_table=codon_table, to_stop=True)
-
-
-class _ExonSkipFrameshiftEffect(MutationEffect):
-    """Internal helper effect representing an exon-skip-induced
-    frameshift. Carries the computed mutant protein sequence but isn't
-    intended as a public effect class — it's wrapped inside the
-    SpliceCandidate.
-    """
-    def __init__(self, variant, transcript, aa_frameshift_start, protein):
-        MutationEffect.__init__(self, variant)
-        self.transcript = transcript
-        self.aa_mutation_start_offset = aa_frameshift_start
-        self.aa_ref = str(
-            transcript.protein_sequence[aa_frameshift_start:])
-        # aa_alt is the new amino acids after the frameshift point.
-        self.aa_alt = protein[aa_frameshift_start:]
-        self.mutant_protein_sequence = protein
-
-    @property
-    def short_description(self):
-        return "p.%s%dfs*%d" % (
-            self.aa_ref[:1] if self.aa_ref else "?",
-            self.aa_mutation_start_offset + 1,
-            len(self.aa_alt),
-        )
-
-
 def _build_exon_skip_mutant_transcript(variant, transcript, exon):
     """Build a :class:`MutantTranscript` representing an exon skip.
 
@@ -779,137 +652,6 @@ def _affected_exon(splice_effect):
     if hasattr(splice_effect, "nearest_exon"):
         return splice_effect.nearest_exon
     return None
-
-
-def _build_in_frame_exon_skip_effect(variant, transcript, skipped_exon):
-    """Construct the coding effect of an in-frame exon skip.
-
-    When the skipped exon's first base sits at a codon boundary, the
-    skip is a clean :class:`Deletion` of ``exon_length / 3`` amino
-    acids. When the exon starts mid-codon (phase 1 or 2), the boundary
-    codon is reshaped from flanking bases of the preceding and
-    following exons — so the skip touches ``exon_length / 3 + 1``
-    original codons and replaces them with one new codon. Depending
-    on whether that new codon's amino acid matches either flanking
-    residue, the effect is :class:`Deletion`, :class:`Substitution`,
-    or :class:`ComplexSubstitution` — we compute each candidate and
-    let :func:`trim_shared_flanking_strings` collapse it to the
-    minimal edit. See openvax/varcode#298.
-
-    Returns ``None`` when the math can't be completed (e.g. the
-    skipped exon overlaps the 5' UTR or extends past the reference
-    protein's end).
-    """
-    if not transcript.complete:
-        return None
-    try:
-        exon_start_in_tx = _exon_start_offset_in_transcript(
-            transcript, skipped_exon)
-    except (StopIteration, ValueError):
-        return None
-    cds_start_offset = min(transcript.start_codon_spliced_offsets)
-    if exon_start_in_tx < cds_start_offset:
-        # Exon overlaps the 5' UTR or start codon; the simple
-        # amino-acid math doesn't apply.
-        return None
-
-    aa_start = (exon_start_in_tx - cds_start_offset) // 3
-    cds_offset_in_exon = (exon_start_in_tx - cds_start_offset) % 3
-    exon_length = skipped_exon.end - skipped_exon.start + 1
-
-    if cds_offset_in_exon == 0:
-        # Codon-aligned skip: exon_length / 3 codons are cleanly
-        # removed with no boundary reshaping.
-        n_aa_removed = exon_length // 3
-        aa_end = aa_start + n_aa_removed
-        if aa_end > len(transcript.protein_sequence):
-            return None
-        aa_ref = str(transcript.protein_sequence[aa_start:aa_end])
-        if not aa_ref:
-            return None
-        return Deletion(
-            variant=variant,
-            transcript=transcript,
-            aa_mutation_start_offset=aa_start,
-            aa_ref=aa_ref,
-        )
-
-    # Mid-codon skip: exon starts at phase 1 or 2 of codon aa_start.
-    # The original codons touched are aa_start through aa_start + n,
-    # where n = exon_length / 3 (the two boundary codons plus the
-    # fully-internal ones; n + 1 codons total). After skipping, those
-    # n+1 codons are replaced by ONE reshaped codon composed of the
-    # preceding exon's trailing bases plus the following exon's
-    # leading bases.
-    n_aa_touched = exon_length // 3 + 1
-    aa_end = aa_start + n_aa_touched
-    if aa_end > len(transcript.protein_sequence):
-        return None
-
-    aa_ref = str(transcript.protein_sequence[aa_start:aa_end])
-    if not aa_ref:
-        return None
-
-    full_sequence = str(transcript.sequence)
-    pre_bases = cds_offset_in_exon                # 1 or 2
-    post_bases = 3 - cds_offset_in_exon           # 2 or 1
-    boundary_codon_start = exon_start_in_tx - pre_bases
-    post_exon_offset = exon_start_in_tx + exon_length
-    if (boundary_codon_start < 0
-            or post_exon_offset + post_bases > len(full_sequence)):
-        # Not enough flanking sequence to reconstruct the boundary
-        # codon (e.g. skipping the terminal exon).
-        return None
-    new_codon = (
-        full_sequence[boundary_codon_start:exon_start_in_tx]
-        + full_sequence[post_exon_offset:post_exon_offset + post_bases]
-    )
-    if len(new_codon) != 3:
-        return None
-    try:
-        aa_alt = translate_sequence(
-            new_codon,
-            codon_table=codon_table_for_transcript(transcript),
-            to_stop=False)
-    except ValueError:
-        return None
-    # aa_alt may contain '*' if the reshaped codon is a stop; leave
-    # that to the caller to interpret (the next candidate builder
-    # that specializes on premature stops can pick it up later).
-
-    trimmed_ref, trimmed_alt, shared_prefix, _ = trim_shared_flanking_strings(
-        aa_ref, aa_alt)
-    # Shared prefix shifts the effective mutation start forward.
-    aa_mutation_start_offset = aa_start + len(shared_prefix)
-
-    if not trimmed_alt and not trimmed_ref:
-        # Reshaped codon happens to match the boundary exactly — the
-        # skip is effectively silent at the protein level. Return None
-        # so the caller falls back to the predicted-class-name stub
-        # (exceedingly rare in practice).
-        return None
-    if not trimmed_alt:
-        return Deletion(
-            variant=variant,
-            transcript=transcript,
-            aa_mutation_start_offset=aa_mutation_start_offset,
-            aa_ref=trimmed_ref,
-        )
-    if len(trimmed_ref) == 1 and len(trimmed_alt) == 1:
-        return Substitution(
-            variant=variant,
-            transcript=transcript,
-            aa_mutation_start_offset=aa_mutation_start_offset,
-            aa_ref=trimmed_ref,
-            aa_alt=trimmed_alt,
-        )
-    return ComplexSubstitution(
-        variant=variant,
-        transcript=transcript,
-        aa_mutation_start_offset=aa_mutation_start_offset,
-        aa_ref=trimmed_ref,
-        aa_alt=trimmed_alt,
-    )
 
 
 def _exon_start_offset_in_transcript(transcript, exon):
@@ -1052,20 +794,23 @@ _SPLICE_SIGNAL_CLASS_REGISTRY = {
 
 def _rehydrate_coding_effect(state):
     """Resolve a coding-effect dict (with ``__effect_class__`` tag) to a
-    concrete instance. ``_ExonSkipFrameshiftEffect`` (the internal
-    shim from out-of-frame exon skip math) is handled separately
-    since it isn't in the public effect-class registry.
+    concrete instance.
     """
     state = dict(state)
     class_name = state.pop("__effect_class__", None)
     if class_name == "_ExonSkipFrameshiftEffect":
-        # Internal shim — reconstruct minimally via its __init__.
-        return _ExonSkipFrameshiftEffect(
-            variant=state["variant"],
-            transcript=state["transcript"],
-            aa_frameshift_start=state["aa_mutation_start_offset"],
-            protein=state["mutant_protein_sequence"],
-        )
+        # Migration from pre-#305 serialized data: the internal
+        # _ExonSkipFrameshiftEffect shim no longer exists. Construct
+        # a FrameShift from the stored fields instead.
+        from .effects.effect_classes import FrameShift
+        try:
+            return FrameShift(
+                variant=state["variant"],
+                transcript=state["transcript"],
+                aa_mutation_start_offset=state["aa_mutation_start_offset"],
+                shifted_sequence=state.get("aa_alt", ""))
+        except Exception:
+            return None
     registry = _coding_effect_class_registry()
     effect_cls = registry.get(class_name)
     if effect_cls is None:
