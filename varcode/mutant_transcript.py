@@ -248,18 +248,39 @@ def apply_variant_to_transcript(variant, transcript):
     if cdna_ref != expected_ref:
         return None
 
-    edit = TranscriptEdit(
-        cdna_start=cdna_offset,
-        cdna_end=cdna_offset + n_ref,
-        alt_bases=cdna_alt,
-        source_variant=variant,
-    )
-
-    mutant_cdna = (
-        full_sequence[:cdna_offset]
-        + cdna_alt
-        + full_sequence[cdna_offset + n_ref:]
-    )
+    # For pure insertions (n_ref == 0), VCF convention places the alt
+    # AFTER the anchor base in genomic coordinates. On the forward
+    # strand that's cdna_offset + 1; on the reverse strand, "after"
+    # in genomic coords is "before" in cDNA coords (the cDNA runs
+    # 3'→5' in genomic space), so the insertion goes AT cdna_offset.
+    if n_ref == 0:
+        if transcript.on_backward_strand:
+            insert_at = cdna_offset
+        else:
+            insert_at = cdna_offset + 1
+        edit = TranscriptEdit(
+            cdna_start=insert_at,
+            cdna_end=insert_at,
+            alt_bases=cdna_alt,
+            source_variant=variant,
+        )
+        mutant_cdna = (
+            full_sequence[:insert_at]
+            + cdna_alt
+            + full_sequence[insert_at:]
+        )
+    else:
+        edit = TranscriptEdit(
+            cdna_start=cdna_offset,
+            cdna_end=cdna_offset + n_ref,
+            alt_bases=cdna_alt,
+            source_variant=variant,
+        )
+        mutant_cdna = (
+            full_sequence[:cdna_offset]
+            + cdna_alt
+            + full_sequence[cdna_offset + n_ref:]
+        )
 
     mutant_protein = None
     cds_start = min(transcript.start_codon_spliced_offsets)

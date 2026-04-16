@@ -37,7 +37,7 @@ class UnsupportedVariantError(ValueError):
 
 
 _REGISTRY = {}
-_DEFAULT_NAME = "legacy"
+_DEFAULT_NAME = "protein_diff"
 
 
 def register_annotator(annotator):
