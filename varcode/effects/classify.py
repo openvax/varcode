@@ -149,14 +149,25 @@ def classify_from_protein_diff(
             aa_alt=alt_delta)
 
     # Stop loss: mutant protein longer than reference, the change
-    # extends past the original stop, AND reference residues were
-    # replaced (n_ref > 0). The n_ref > 0 guard distinguishes true
-    # stop-loss (stop codon disrupted) from an in-frame insertion
-    # near the protein's tail (which adds residues but preserves the
-    # stop — that's an Insertion, not StopLoss).
+    # extends past the original stop. Two routes into this branch:
+    #   1. Reference residues were replaced (n_ref > 0) — the
+    #      mutation clearly disrupted residues at/adjacent to the
+    #      stop codon.
+    #   2. n_ref == 0 after aa-level shared-flank trimming, but the
+    #      underlying cDNA edit is NOT a pure insertion — a
+    #      substitution or deletion of the stop codon itself
+    #      produces zero aa-level ref because the shared prefix
+    #      absorbs the entire reference protein. Fall back to the
+    #      cDNA edit kind via ``mutant_transcript`` to distinguish
+    #      "stop codon mutated → StopLoss" from "in-frame insertion
+    #      before stop → Insertion". Closes #319.
+    is_cdna_pure_insertion = (
+        mutant_transcript is not None
+        and len(mutant_transcript.edits) == 1
+        and mutant_transcript.edits[0].is_insertion)
     if (len(mut_protein) > len(ref_protein)
             and aa_offset + n_ref >= len(ref_protein)
-            and n_ref > 0):
+            and (n_ref > 0 or not is_cdna_pure_insertion)):
         return StopLoss(
             variant=variant,
             transcript=transcript,
