@@ -212,11 +212,14 @@ def predict_in_frame_coding_effect(
             # Substitution between start codons gets special treatment since,
             # though superficially synonymous, this could still potentially
             # cause a start loss / change in reading frame and might be worth
-            # closer scrutiny
+            # closer scrutiny. Use the actual start codon (not the first three
+            # bases of the transcript, which sits in the 5' UTR for most
+            # transcripts).
+            cds_start = transcript.first_start_codon_spliced_offset
             return AlternateStartCodon(
                 variant=variant,
                 transcript=transcript,
-                ref_codon=transcript.sequence[:3],
+                ref_codon=str(transcript.sequence)[cds_start:cds_start + 3],
                 alt_codon=mutant_codons[:3])
 
     n_ref_amino_acids_after_mutated_site = (

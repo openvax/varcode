@@ -315,31 +315,20 @@ def test_deletion_of_stop_codon_agrees_as_stoploss(dual_annotator):
               "p.*1481RAA (stop-loss)", dual_annotator)
 
 
-def test_divergence_alternate_start_codon_atg_to_ctg():
-    """ATG->CTG: fast returns AlternateStartCodon (CTG is in the
-    standard-table start codon set, so the ribosome would still
-    initiate at this position, producing Met). protein_diff instead
-    translates literally, sees 'L' at position 0, and returns
-    StartLoss.
-
-    Biologically, fast's interpretation is closer to correct: the
-    initiator tRNA loads Met regardless of the start codon's codon
-    identity (ATG, CTG, GTG, TTG). protein_diff's classifier doesn't
-    know about initiator-tRNA semantics and takes the pessimistic
-    StartLoss interpretation.
-
-    Tracked for protein_diff: either (a) add "mut starts with L/V/
-    but alt codon is a recognised alternate start" → AlternateStart
-    Codon rule, or (b) pre-rewrite the translated first residue to
-    'M' when the first codon is in the table's start_codons.
-    """
+def test_alternate_start_codon_atg_to_ctg_agrees(dual_annotator):
+    """ATG->CTG: both annotators report AlternateStartCodon after the
+    #320 fix. The initiator tRNA loads Met regardless of which codon
+    in the table's ``start_codons`` set is used (ATG, CTG, GTG, TTG);
+    protein_diff now rewrites its literal translation of the first
+    codon to 'M' before the diff so the classifier sees the
+    biologically correct protein."""
     start_pos = min(ensembl_grch38.transcript_by_id(
         CFTR_ID).start_codon_positions)
     variant = Variant("7", start_pos, "A", "C", ensembl_grch38)
-    _pin(variant, CFTR_ID, _FAST, AlternateStartCodon,
-         "alternate-start-codon (AAT>CTG)")
-    pdiff_effect = _annotate(variant, CFTR_ID, _PDIFF)
-    assert isinstance(pdiff_effect, StartLoss)
+    annotator = _FAST if dual_annotator == "fast" else _PDIFF
+    effect = _annotate(variant, CFTR_ID, annotator)
+    assert isinstance(effect, AlternateStartCodon)
+    assert effect.short_description == "alternate-start-codon (ATG>CTG)"
 
 
 def test_divergence_frameshift_immediate_stop():
@@ -605,22 +594,18 @@ def test_inframe_insertion_containing_new_stop_before_stop_agrees_silent(
 # ----- Pattern C: codon table semantics (family of #320) -----
 
 
-def test_divergence_mt_alternate_start_atg_to_gtg():
-    """Same family as #320: MT-CO1 start codon ATG->GTG. GTG is in
-    the NCBI table-2 (vertebrate mitochondrial) start-codon set, so
-    fast returns AlternateStartCodon. protein_diff translates GTG
-    literally as Val and returns StartLoss.
-
-    This test variant of #320 confirms the bug isn't confined to the
-    standard codon table — the alternate-start resolution must
-    consult ``codon_table_for_transcript(transcript).start_codons``
+def test_mt_alternate_start_atg_to_gtg_agrees(dual_annotator):
+    """MT-CO1 start codon ATG->GTG. GTG is in the NCBI table-2
+    (vertebrate mitochondrial) start-codon set, so both annotators
+    return AlternateStartCodon after the #320 fix. Confirms the
+    alt-start resolution consults
+    ``codon_table_for_transcript(transcript).start_codons``
     regardless of which codon table is in force."""
-    # MT-CO1 start codon at MT:5904-5906 (ATG). A->G at position 5904.
     variant = Variant("MT", 5904, "A", "G", ensembl_grch38)
-    _pin(variant, MT_CO1_ID, _FAST, AlternateStartCodon,
-         "alternate-start-codon (ATG>GTG)")
-    pe = _annotate(variant, MT_CO1_ID, _PDIFF)
-    assert isinstance(pe, StartLoss)
+    annotator = _FAST if dual_annotator == "fast" else _PDIFF
+    effect = _annotate(variant, MT_CO1_ID, annotator)
+    assert isinstance(effect, AlternateStartCodon)
+    assert effect.short_description == "alternate-start-codon (ATG>GTG)"
 
 
 # ----- Pattern D: trimming / offset conventions -----

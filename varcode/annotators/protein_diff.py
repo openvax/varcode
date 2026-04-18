@@ -150,15 +150,31 @@ class ProteinDiffEffectAnnotator:
         ref_protein = str(transcript.protein_sequence)
         mut_protein = mt.mutant_protein_sequence
 
+        # Alternate start codon rewrite: if the first codon changed to
+        # another recognised start codon in the transcript's codon
+        # table (e.g. ATG→CTG/GTG/TTG, or MT ATG→GTG under table 2),
+        # the initiator tRNA still loads Met regardless of what the
+        # codon would decode to internally. Rewrite the mutant
+        # protein's first residue to 'M' so the shared diff classifier
+        # sees the biologically correct protein. Closes #320.
+        cds_start = min(transcript.start_codon_spliced_offsets)
+        ref_first_codon = str(
+            transcript.sequence)[cds_start:cds_start + 3]
+        mut_first_codon = mt.cdna_sequence[
+            cds_start:cds_start + 3].upper()
+        if (mut_first_codon != ref_first_codon
+                and mut_protein
+                and mut_protein[0] != "M"
+                and ref_protein
+                and ref_protein[0] == "M"):
+            codon_table = codon_table_for_transcript(transcript)
+            if mut_first_codon in codon_table.start_codons:
+                mut_protein = "M" + mut_protein[1:]
+
         # Proteins match → Silent or AlternateStartCodon. Handle
         # both here because the shared classifier doesn't have
         # access to the cDNA edit offset for the correct aa_pos.
         if ref_protein == mut_protein:
-            cds_start = min(transcript.start_codon_spliced_offsets)
-            ref_first_codon = str(
-                transcript.sequence)[cds_start:cds_start + 3]
-            mut_first_codon = mt.cdna_sequence[
-                cds_start:cds_start + 3].upper()
             if ref_first_codon != mut_first_codon:
                 codon_table = codon_table_for_transcript(transcript)
                 if mut_first_codon in codon_table.start_codons:
