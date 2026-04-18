@@ -272,41 +272,28 @@ def test_frameshift_simple_agrees(dual_annotator):
 # ====================================================================
 
 
-def test_divergence_3utr_snv():
-    """3'UTR SNV: fast returns ThreePrimeUTR; protein_diff returns
-    Silent. Reason: protein_diff's ``apply_variant_to_transcript``
-    translates past the stop codon when ``cdna_offset >= cds_start``
-    and concludes the protein is unchanged (it is — the variant is
-    downstream of the stop) without recognising that "no protein
-    change" and "in 3' UTR" are different effect classes.
-
-    Fast is more informative here: ThreePrimeUTR carries location
-    semantics that Silent does not. protein_diff should defer to the
-    fast_effect when the fast_effect is ThreePrimeUTR / FivePrimeUTR
-    / Intronic — tracked separately (this test pins the current
-    behaviour so we notice when it changes).
-    """
+def test_3utr_snv_agrees_as_three_prime_utr(dual_annotator):
+    """3'UTR SNV: both annotators report ThreePrimeUTR. protein_diff
+    defers to fast for UTR/Intronic classification since #318 was
+    fixed — the protein may be unchanged but "outside the CDS"
+    carries location semantics a whole-protein diff doesn't."""
     variant = Variant("7", 117667200, "T", "A", ensembl_grch38)
-    _pin(variant, CFTR_ID, _FAST, ThreePrimeUTR, "3' UTR")
-    pdiff_effect = _annotate(variant, CFTR_ID, _PDIFF)
-    assert isinstance(pdiff_effect, Silent), (
-        "protein_diff expected to (incorrectly) return Silent for a "
-        "3'UTR SNV; got %s. If this starts returning ThreePrimeUTR, "
-        "the protein_diff gate was tightened — update the docstring."
-        % type(pdiff_effect).__name__)
+    annotator = _FAST if dual_annotator == "fast" else _PDIFF
+    effect = _annotate(variant, CFTR_ID, annotator)
+    assert isinstance(effect, ThreePrimeUTR)
+    assert effect.short_description == "3' UTR"
 
 
-def test_divergence_3utr_snv_reverse_strand():
-    """Same divergence as the CFTR case, on BRCA1 (- strand), to
-    confirm the bug isn't strand-specific."""
+def test_3utr_snv_reverse_strand_agrees(dual_annotator):
+    """Same scenario on BRCA1 (- strand) to confirm the #318 fix
+    isn't strand-specific."""
     # BRCA1 stop_codon_positions[0] == 43045678 (- strand, so 3'UTR is
     # at LOWER genomic coords). Pick 100 bp into the 3' UTR.
-    pos = 43045578
-    # cDNA base there is 'T' (we measured); genomic ref is complement.
-    variant = Variant("17", pos, "A", "T", ensembl_grch38)
-    _pin(variant, BRCA1_ID, _FAST, ThreePrimeUTR, "3' UTR")
-    pdiff_effect = _annotate(variant, BRCA1_ID, _PDIFF)
-    assert isinstance(pdiff_effect, Silent)
+    variant = Variant("17", 43045578, "A", "T", ensembl_grch38)
+    annotator = _FAST if dual_annotator == "fast" else _PDIFF
+    effect = _annotate(variant, BRCA1_ID, annotator)
+    assert isinstance(effect, ThreePrimeUTR)
+    assert effect.short_description == "3' UTR"
 
 
 def test_divergence_stop_codon_first_base_substitution():
