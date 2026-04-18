@@ -296,42 +296,23 @@ def test_3utr_snv_reverse_strand_agrees(dual_annotator):
     assert effect.short_description == "3' UTR"
 
 
-def test_divergence_stop_codon_first_base_substitution():
-    """TAG->CAG at the stop codon (first base): fast calls this
-    StopLoss; protein_diff calls it Insertion.
-
-    Reason: ``classify_from_protein_diff`` requires ``n_ref > 0`` to
-    produce StopLoss — it distinguishes "stop replaced by residues"
-    from "residues inserted near the stop." When the mutation
-    changes only the stop codon itself, the whole-protein diff sees
-    a pure insertion past the end of the reference protein, which
-    the classifier flags as Insertion rather than StopLoss.
-
-    Fast's classification is closer to the canonical HGVS
-    p.*NNNxxx notation. This is a real protein_diff bug — waiting
-    on a classify.py patch that recognises "insertion at or past
-    the reference-protein tail" as a stop-loss case.
-    """
-    # CFTR stop TAG at 117667106-108; change T->C to produce CAG.
+def test_stop_codon_first_base_substitution_agrees_as_stoploss(
+        dual_annotator):
+    """TAG->CAG at the stop codon (first base): both annotators report
+    StopLoss after the #319 fix — classify.py now consults the cDNA
+    edit kind to distinguish stop-codon substitution (StopLoss) from
+    an in-frame insertion before the stop (Insertion)."""
     variant = Variant("7", 117667106, "T", "C", ensembl_grch38)
-    _pin(variant, CFTR_ID, _FAST, StopLoss,
-         "p.*1481QRAA (stop-loss)")
-    pdiff_effect = _annotate(variant, CFTR_ID, _PDIFF)
-    assert isinstance(pdiff_effect, Insertion), (
-        "protein_diff expected to (incorrectly) return Insertion; "
-        "got %s" % type(pdiff_effect).__name__)
+    _run_dual(variant, CFTR_ID, StopLoss,
+              "p.*1481QRAA (stop-loss)", dual_annotator)
 
 
-def test_divergence_deletion_of_stop_codon():
-    """Deleting the entire stop codon (TAG) produces StopLoss in
-    fast but Insertion in protein_diff, for the same reason as the
-    substitution case above (n_ref == 0 in the protein diff)."""
-    # Delete TAG at 117667106-108 using anchor at 117667105.
+def test_deletion_of_stop_codon_agrees_as_stoploss(dual_annotator):
+    """Deleting the entire stop codon produces StopLoss on both
+    annotators after the #319 fix."""
     variant = Variant("7", 117667105, "TTAG", "T", ensembl_grch38)
-    _pin(variant, CFTR_ID, _FAST, StopLoss,
-         "p.*1481RAA (stop-loss)")
-    pdiff_effect = _annotate(variant, CFTR_ID, _PDIFF)
-    assert isinstance(pdiff_effect, Insertion)
+    _run_dual(variant, CFTR_ID, StopLoss,
+              "p.*1481RAA (stop-loss)", dual_annotator)
 
 
 def test_divergence_alternate_start_codon_atg_to_ctg():
@@ -558,29 +539,22 @@ def test_5utr_insertion_agrees_as_fiveprime_utr(dual_annotator):
 # ----- Pattern B: stop/start boundary (family of #319) -----
 
 
-def test_divergence_stop_codon_third_base_substitution():
-    """Same family as #319: TAG->TAC at the stop codon's third base.
-    Fast reports StopLoss; protein_diff reports Insertion because of
-    the ``n_ref > 0`` guard in classify.py. Tracked under issue
-    #319 — adding this as a second pin so the fix is verified for
-    both boundary positions (1st and 3rd stop-codon base)."""
+def test_stop_codon_third_base_substitution_agrees_as_stoploss(
+        dual_annotator):
+    """TAG->TAC at the stop codon's third base: StopLoss on both
+    annotators after the #319 fix."""
     variant = Variant("7", 117667108, "G", "C", ensembl_grch38)
-    _pin(variant, CFTR_ID, _FAST, StopLoss,
-         "p.*1481YRAA (stop-loss)")
-    pe = _annotate(variant, CFTR_ID, _PDIFF)
-    assert isinstance(pe, Insertion), (
-        "Same #319 root cause as 1st-base substitution: expected "
-        "Insertion from protein_diff, got %s" % type(pe).__name__)
+    _run_dual(variant, CFTR_ID, StopLoss,
+              "p.*1481YRAA (stop-loss)", dual_annotator)
 
 
-def test_divergence_stop_codon_second_base_substitution():
-    """Same family as #319: TAG->TCG at the stop codon's middle
-    base. Re-stated pin: fast=StopLoss, protein_diff=Insertion."""
+def test_stop_codon_second_base_substitution_agrees_as_stoploss(
+        dual_annotator):
+    """TAG->TCG at the stop codon's middle base: StopLoss on both
+    annotators after the #319 fix."""
     variant = Variant("7", 117667107, "A", "C", ensembl_grch38)
-    _pin(variant, CFTR_ID, _FAST, StopLoss,
-         "p.*1481SRAA (stop-loss)")
-    pe = _annotate(variant, CFTR_ID, _PDIFF)
-    assert isinstance(pe, Insertion)
+    _run_dual(variant, CFTR_ID, StopLoss,
+              "p.*1481SRAA (stop-loss)", dual_annotator)
 
 
 def test_single_base_deletion_in_stop_codon_agrees_as_stoploss(
