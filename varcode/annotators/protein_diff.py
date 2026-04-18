@@ -48,11 +48,14 @@ from ..effects.codon_tables import codon_table_for_transcript
 from ..effects.effect_classes import (
     AlternateStartCodon,
     ExonicSpliceSite,
+    FivePrimeUTR,
     IncompleteTranscript,
+    Intronic,
     IntronicSpliceSite,
     NoncodingTranscript,
     SpliceAcceptor,
     SpliceDonor,
+    ThreePrimeUTR,
 )
 from ..mutant_transcript import apply_variant_to_transcript
 from ..version import __version__ as _varcode_version
@@ -109,6 +112,13 @@ class ProteinDiffEffectAnnotator:
             return fast_effect
         if (isinstance(fast_effect, IntronicSpliceSite)
                 and not isinstance(fast_effect, (SpliceDonor, SpliceAcceptor))):
+            return fast_effect
+
+        # Non-splice location-based classes (UTR, deep intronic): fast's
+        # position-based classification is authoritative. The protein may
+        # be unchanged but "outside the CDS" carries location semantics a
+        # whole-protein diff doesn't. Closes #318.
+        if isinstance(fast_effect, (ThreePrimeUTR, FivePrimeUTR, Intronic)):
             return fast_effect
 
         # ExonicSpliceSite: dual-dispatch. Fast provides the
