@@ -272,21 +272,49 @@ def test_external_integrations_can_attach_scored_outcomes():
 
 
 def test_sv_annotator_honors_alt_assembly_hook():
-    """Variants carrying a long-read-derived ``alt_assembly`` still
-    classify cleanly. The annotator doesn't *use* the assembly yet
-    (that's a future refinement for computing fused-protein
-    sequences) but must not crash on it."""
+    """Variants carrying a long-read-derived ``alt_assembly`` flow
+    into :attr:`StructuralVariantEffect.mutant_transcript` as a
+    single-segment MutantTranscript whose ``cdna_sequence`` equals
+    the assembly, bypassing the inference-from-breakpoints path
+    (#338)."""
     transcript = _cftr()
+    assembled_allele = "ACGTACGTACGTACGT"
     sv = StructuralVariant(
         contig="7",
         start=transcript.start + 100,
         end=transcript.start + 5_000,
         sv_type="DEL",
-        alt_assembly="ACGTACGTACGTACGT",  # dummy assembled sequence
+        alt_assembly=assembled_allele,
         genome=ensembl_grch38,
     )
     effect = _ANNOTATOR.annotate_on_transcript(sv, transcript)
     assert isinstance(effect, LargeDeletion)
+    mt = effect.mutant_transcript
+    assert mt is not None
+    assert mt.cdna_sequence == assembled_allele
+    assert len(mt.reference_segments) == 1
+    segment = mt.reference_segments[0]
+    assert segment.label == "alt_assembly"
+    assert segment.source.sequence == assembled_allele
+    assert mt.evidence == {"source": "alt_assembly"}
+
+
+def test_alt_assembly_also_applies_to_fusion_and_inversion():
+    transcript = _cftr()
+    assembly = "AACCGGTT" * 4
+    for sv_type in ("DUP", "INV"):
+        sv = StructuralVariant(
+            contig="7",
+            start=transcript.start + 100,
+            end=transcript.start + 5_000,
+            sv_type=sv_type,
+            alt_assembly=assembly,
+            genome=ensembl_grch38)
+        effect = _ANNOTATOR.annotate_on_transcript(sv, transcript)
+        mt = effect.mutant_transcript
+        assert mt is not None, "alt_assembly ignored for %s" % sv_type
+        assert mt.cdna_sequence == assembly
+        assert len(mt.reference_segments) == 1
 
 
 # --------------------------------------------------------------------

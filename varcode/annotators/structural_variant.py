@@ -181,6 +181,54 @@ def _cdna_ranges_within_sv(variant, transcript):
     return _merge_adjacent_ranges(sorted(inside))
 
 
+class _AssembledAllele:
+    """Minimal :class:`ReferenceSegment.source` adapter for a
+    caller-supplied assembled allele (long-read resolution, targeted
+    local assembly, etc.). Exposes ``sequence`` so downstream segment
+    consumers can slice into it the same way they slice a pyensembl
+    ``Transcript``'s cDNA.
+    """
+
+    __slots__ = ("sequence",)
+
+    def __init__(self, sequence):
+        self.sequence = sequence
+
+    def __repr__(self):
+        length = len(self.sequence) if self.sequence else 0
+        return "_AssembledAllele(len=%d)" % length
+
+
+def _build_alt_assembly_mutant_transcript(variant, transcript):
+    """If ``variant.alt_assembly`` is populated, build a
+    single-:class:`ReferenceSegment` :class:`MutantTranscript` wrapping
+    the assembled allele (#338). Returns ``None`` otherwise.
+
+    The assembly is preferred over breakpoint-reconstructed cDNA
+    because it reflects the molecule actually observed rather than
+    the inference from reference + breakpoints. Downstream consumers
+    read ``mutant_transcript.cdna_sequence`` uniformly.
+    """
+    assembly = getattr(variant, "alt_assembly", None)
+    if not assembly:
+        return None
+    source = _AssembledAllele(assembly)
+    segments = (
+        ReferenceSegment(
+            source=source,
+            start=0,
+            end=len(assembly),
+            strand="+",
+            label="alt_assembly"),
+    )
+    return MutantTranscript(
+        reference_transcript=transcript,
+        reference_segments=segments,
+        cdna_sequence=assembly,
+        annotator_name="structural_variant",
+        evidence={"source": "alt_assembly"})
+
+
 def _build_deletion_mutant_transcript(variant, transcript):
     """Build a :class:`MutantTranscript` for a ``<DEL>`` SV.
 
@@ -424,7 +472,8 @@ class StructuralVariantAnnotator:
             variant=variant,
             transcript=transcript,
             affected_exons=affected,
-            mutant_transcript=_build_deletion_mutant_transcript(
+            mutant_transcript=_build_alt_assembly_mutant_transcript(
+                variant, transcript) or _build_deletion_mutant_transcript(
                 variant, transcript))
 
     def _annotate_duplication(self, variant, transcript):
@@ -435,7 +484,8 @@ class StructuralVariantAnnotator:
             variant=variant,
             transcript=transcript,
             affected_exons=affected,
-            mutant_transcript=_build_duplication_mutant_transcript(
+            mutant_transcript=_build_alt_assembly_mutant_transcript(
+                variant, transcript) or _build_duplication_mutant_transcript(
                 variant, transcript))
 
     def _annotate_inversion(self, variant, transcript):
@@ -445,7 +495,8 @@ class StructuralVariantAnnotator:
         return Inversion(
             variant=variant,
             transcript=transcript,
-            mutant_transcript=_build_inversion_mutant_transcript(
+            mutant_transcript=_build_alt_assembly_mutant_transcript(
+                variant, transcript) or _build_inversion_mutant_transcript(
                 variant, transcript))
 
     def _annotate_insertion(self, variant, transcript):
@@ -458,7 +509,8 @@ class StructuralVariantAnnotator:
             variant=variant,
             transcript=transcript,
             affected_exons=affected,
-            mutant_transcript=_build_duplication_mutant_transcript(
+            mutant_transcript=_build_alt_assembly_mutant_transcript(
+                variant, transcript) or _build_duplication_mutant_transcript(
                 variant, transcript))
 
     def _annotate_breakend(self, variant, transcript):
@@ -469,12 +521,15 @@ class StructuralVariantAnnotator:
         """
         mate_contig = getattr(variant, "mate_contig", None)
         mate_start = getattr(variant, "mate_start", None)
+        assembly_mt = _build_alt_assembly_mutant_transcript(
+            variant, transcript)
         if mate_contig is None or mate_start is None:
             return TranslocationToIntergenic(
                 variant=variant,
                 transcript=transcript,
-                mutant_transcript=_build_translocation_mutant_transcript(
-                    variant, transcript))
+                mutant_transcript=assembly_mt or (
+                    _build_translocation_mutant_transcript(
+                        variant, transcript)))
 
         partner = self._coding_transcript_at(
             variant, mate_contig, mate_start)
@@ -483,13 +538,15 @@ class StructuralVariantAnnotator:
                 variant=variant,
                 transcript=transcript,
                 partner_transcript=partner,
-                mutant_transcript=_build_fusion_mutant_transcript(
-                    variant, transcript, partner))
+                mutant_transcript=assembly_mt or (
+                    _build_fusion_mutant_transcript(
+                        variant, transcript, partner)))
         return TranslocationToIntergenic(
             variant=variant,
             transcript=transcript,
-            mutant_transcript=_build_translocation_mutant_transcript(
-                variant, transcript))
+            mutant_transcript=assembly_mt or (
+                _build_translocation_mutant_transcript(
+                    variant, transcript)))
 
     # -- utilities ------------------------------------------------------
 
