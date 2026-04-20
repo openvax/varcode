@@ -267,6 +267,58 @@ class SpliceAcceptor(IntronicSpliceSite):
     short_description = "splice-acceptor"
 
 
+# =====================================================================
+# Predicted-but-uncomputed placeholder effects (#339).
+#
+# Used by :class:`~varcode.splice_outcomes.SpliceOutcomeSet` and, later,
+# :class:`StructuralVariantEffect` to fill :attr:`Outcome.effect` with a
+# real :class:`MutationEffect` when the protein-level outcome cannot be
+# computed from cached transcript cDNA alone (intron retention requires
+# intron sequence; cryptic splice requires flanking genomic sequence).
+# These types carry no aa_ref / aa_alt / mutant_protein_sequence — they
+# are markers so that ``outcome.effect`` still satisfies the
+# MutationEffect interface and downstream iteration doesn't have to
+# branch on None.
+# =====================================================================
+
+
+class PredictedIntronRetention(TranscriptMutationEffect):
+    """Placeholder effect: intron retention predicted, exact protein
+    not computable from cached transcript cDNA.
+
+    Emitted as the :attr:`Outcome.effect` of a SpliceOutcomeSet's
+    ``INTRON_RETENTION`` outcome. The biologically expected outcome is
+    a premature stop codon inside the retained intron; consumers that
+    need the exact protein sequence require intron genomic sequence
+    (see #296).
+    """
+
+    short_description = "predicted-intron-retention"
+
+
+class PredictedCrypticSpliceSite(TranscriptMutationEffect):
+    """Placeholder effect: a cryptic donor or acceptor is expected to
+    be used in place of the disrupted canonical signal.
+
+    ``direction`` is ``"donor"`` or ``"acceptor"``. Exact protein
+    consequence requires flanking genomic sequence; emitted as the
+    :attr:`Outcome.effect` of a SpliceOutcomeSet's ``CRYPTIC_DONOR`` /
+    ``CRYPTIC_ACCEPTOR`` outcome.
+    """
+
+    def __init__(self, variant, transcript, direction):
+        TranscriptMutationEffect.__init__(self, variant, transcript)
+        if direction not in ("donor", "acceptor"):
+            raise ValueError(
+                "PredictedCrypticSpliceSite direction must be "
+                "'donor' or 'acceptor', got %r" % (direction,))
+        self.direction = direction
+
+    @property
+    def short_description(self):
+        return "predicted-cryptic-%s" % self.direction
+
+
 class Exonic(TranscriptMutationEffect):
     """
     Any mutation which affects the contents of an exon (coding region or UTRs)
@@ -900,6 +952,29 @@ class StructuralVariantEffect(TranscriptMutationEffect, MultiOutcomeEffect):
     @property
     def most_likely(self):
         return self._candidates[0]
+
+    @property
+    def outcomes(self):
+        """Unified :class:`~varcode.Outcome` view over
+        :attr:`candidates` (#339).
+
+        Each outcome's ``effect`` is always a :class:`MutationEffect`
+        (SV candidates are MutationEffect instances by construction —
+        the default ``(self,)`` is already correct). ``evidence``
+        carries the SV-type tag so consumers can filter by
+        ``DEL`` / ``DUP`` / ``INV`` / ``BND`` without re-reading the
+        variant.
+        """
+        from ..outcomes import Outcome
+        sv_type = getattr(self.variant, "sv_type", None)
+        evidence = {"sv_type": sv_type} if sv_type is not None else {}
+        return tuple(
+            Outcome(
+                effect=candidate,
+                source="varcode",
+                description=getattr(candidate, "short_description", None),
+                evidence=evidence)
+            for candidate in self._candidates)
 
 
 class LargeDeletion(StructuralVariantEffect):

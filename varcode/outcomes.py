@@ -64,9 +64,14 @@ class Outcome:
     Parameters
     ----------
     effect : MutationEffect
-        The effect this outcome represents. Carries the standard
-        varcode classification (class, short_description, aa_ref /
-        aa_alt, etc.).
+        The effect this outcome represents. Guaranteed to be a
+        :class:`~varcode.effects.MutationEffect` instance — producers
+        that can't compute a full coding effect use placeholder
+        subclasses (e.g.
+        :class:`~varcode.effects.effect_classes.PredictedIntronRetention`)
+        so consumers can iterate ``outcome.effect.short_description``
+        and ``outcome.effect.mutant_protein_sequence`` uniformly
+        across SV, splice, and point-variant outcomes (#339).
     probability : float or None
         Estimated likelihood this outcome actually happens, in
         ``[0, 1]``. ``None`` means "not scored" — the outcome is in
@@ -79,6 +84,13 @@ class Outcome:
         External integrations set their own (``"spliceai"``,
         ``"isovar"``, ``"longread_assembly"``, etc.) so downstream
         callers can filter by source.
+    description : str or None
+        Optional human-readable sentence describing this specific
+        outcome ("Exon 7 is skipped (in-frame, 15 aa removed)").
+        Distinct from ``effect.short_description``, which is the
+        effect's HGVS-style label. Producers that want a richer
+        narrative attach it here rather than nesting it in
+        ``evidence``.
     evidence : Mapping[str, Any]
         Open-ended provenance dict. Shape is source-specific; the
         convention is that keys match the source's native field names
@@ -91,6 +103,7 @@ class Outcome:
     effect: Any  # MutationEffect — typed loosely to avoid import cycle
     probability: Optional[float] = None
     source: str = "varcode"
+    description: Optional[str] = None
     evidence: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):

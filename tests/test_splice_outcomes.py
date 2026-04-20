@@ -383,6 +383,100 @@ def test_multi_outcome_effect_exported_at_package_level():
 
 
 # --------------------------------------------------------------------
+# Unified Outcome.effect contract (#339).
+#
+# After #339, ``outcome.effect`` is always a MutationEffect — never a
+# SpliceCandidate — and consumers can read
+# ``outcome.effect.mutant_protein_sequence`` and
+# ``outcome.effect.short_description`` uniformly across SV, splice,
+# and point-variant outcomes. The splice-outcome enum is carried as
+# ``evidence["splice_outcome"]``.
+# --------------------------------------------------------------------
+
+
+def test_outcomes_effect_is_always_a_mutation_effect():
+    """Every outcome's .effect is a :class:`MutationEffect`, including
+    the intron-retention and cryptic-splice placeholders (which used
+    to be represented by ``coding_effect=None`` in the candidate
+    shape). Consumers can call ``effect.short_description`` and
+    ``effect.mutant_protein_sequence`` without None-checking."""
+    from varcode.effects.effect_classes import MutationEffect
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    effects = variant.effects(splice_outcomes=True)
+    target = next(e for e in effects if e.transcript is transcript)
+    for outcome in target.outcomes:
+        assert isinstance(outcome.effect, MutationEffect), (
+            "Outcome.effect must be MutationEffect, got %s"
+            % type(outcome.effect).__name__)
+        # short_description is always present and a str.
+        assert isinstance(outcome.effect.short_description, str)
+
+
+def test_outcomes_carry_splice_outcome_in_evidence():
+    """Evidence dict carries the :class:`SpliceOutcome` enum so splice-
+    aware consumers can dispatch without re-reading
+    :attr:`candidates`."""
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    effects = variant.effects(splice_outcomes=True)
+    target = next(e for e in effects if e.transcript is transcript)
+    tags = {o.evidence["splice_outcome"] for o in target.outcomes}
+    assert SpliceOutcome.EXON_SKIPPING in tags
+    assert SpliceOutcome.INTRON_RETENTION in tags
+
+
+def test_outcomes_carry_plausibility_and_description():
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    effects = variant.effects(splice_outcomes=True)
+    target = next(e for e in effects if e.transcript is transcript)
+    for outcome in target.outcomes:
+        # plausibility moved from SpliceCandidate to Outcome.probability.
+        assert outcome.probability is not None
+        assert 0.0 <= outcome.probability <= 1.0
+        # Description carries the human sentence.
+        assert outcome.description is None or isinstance(
+            outcome.description, str)
+
+
+def test_intron_retention_outcome_effect_is_placeholder_class():
+    """INTRON_RETENTION outcomes used to hold ``coding_effect=None``;
+    after #339 they carry a :class:`PredictedIntronRetention` so
+    ``outcome.effect`` satisfies the MutationEffect contract even
+    though no protein is computable."""
+    from varcode.effects.effect_classes import PredictedIntronRetention
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    effects = variant.effects(splice_outcomes=True)
+    target = next(e for e in effects if e.transcript is transcript)
+    ir = next(
+        o for o in target.outcomes
+        if o.evidence["splice_outcome"] is SpliceOutcome.INTRON_RETENTION)
+    assert isinstance(ir.effect, PredictedIntronRetention)
+    assert ir.effect.mutant_protein_sequence is None
+    assert "intron-retention" in ir.effect.short_description
+
+
+def test_cryptic_donor_outcome_effect_is_placeholder_class():
+    from varcode.effects.effect_classes import PredictedCrypticSpliceSite
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    effects = variant.effects(splice_outcomes=True)
+    target = next(e for e in effects if e.transcript is transcript)
+    cryptic = next(
+        (o for o in target.outcomes
+         if o.evidence["splice_outcome"] is SpliceOutcome.CRYPTIC_DONOR),
+        None)
+    if cryptic is None:
+        pytest.skip("Plausibility table does not include CRYPTIC_DONOR for "
+                    "this splice-class combination.")
+    assert isinstance(cryptic.effect, PredictedCrypticSpliceSite)
+    assert cryptic.effect.direction == "donor"
+    assert cryptic.effect.mutant_protein_sequence is None
+
+
+# --------------------------------------------------------------------
 # Boundary-codon reconstruction when in-frame exon skip starts
 # mid-codon (see #298). CFTR exon 6 (cDNA 875-1000, length 126) is
 # in-frame but starts at codon phase 2, so the preceding exon
