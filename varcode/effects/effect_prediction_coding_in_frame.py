@@ -208,6 +208,22 @@ def predict_in_frame_coding_effect(
     if mutant_codons_contain_stop:
         mutant_stop_codon_index += n_aa_shared
 
+    # HGVS 3'-rule for ambiguous in-frame deletions: when the deleted
+    # residues can slide forward (i.e. the residue immediately after
+    # the deletion equals the first deleted residue), report the most
+    # 3' (C-terminal) equivalent representation. Example: deleting one
+    # L from PLLL (positions 99–101) is canonically p.L101del, not
+    # p.L99del. Closes #321.
+    if n_aa_ref > 0 and n_aa_alt == 0:
+        protein_seq = transcript.protein_sequence
+        while (aa_mutation_start_offset + n_aa_ref < len(protein_seq)
+                and protein_seq[aa_mutation_start_offset]
+                    == protein_seq[aa_mutation_start_offset + n_aa_ref]):
+            aa_mutation_start_offset += 1
+        aa_ref = protein_seq[
+            aa_mutation_start_offset:
+            aa_mutation_start_offset + n_aa_ref]
+
     if mutation_affects_start_codon and (aa_ref == aa_alt):
             # Substitution between start codons gets special treatment since,
             # though superficially synonymous, this could still potentially

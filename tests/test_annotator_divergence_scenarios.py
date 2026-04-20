@@ -611,26 +611,21 @@ def test_mt_alternate_start_atg_to_gtg_agrees(dual_annotator):
 # ----- Pattern D: trimming / offset conventions -----
 
 
-def test_divergence_deletion_in_repeat_residue_stretch():
+def test_deletion_in_repeat_residue_stretch_agrees_hgvs_canonical(
+        dual_annotator):
     """Deletion of one codon from a poly-residue stretch (CFTR
-    protein[98:102] == 'PLLL'). Classes agree (both Deletion), but
-    the reported ``aa_mutation_start_offset`` differs:
-
-    * fast    → p.L99del  (reports the codon that was deleted)
-    * pdiff   → p.L101del (reports the HGVS-3' canonical position)
-
-    Per HGVS 3'-rule for repeated sequences, protein_diff's p.L101del
-    is the canonical choice. Fast's p.L99del is the offset of the
-    deleted codon before whole-protein trimming disambiguates it. A
-    real bug in at least one annotator (probably fast) — tracked as
-    a new divergence issue."""
-    # Delete cDNA[429:432] (codon 99, the first L of LLL).
-    # Genomic position: codon 99 starts at chr7:117530923 (+ strand).
-    # Anchor at 117530922 (base 'C'), ref='CCTC', alt='C'.
-    # Using zero-ref insertion convention: ref='CTC', alt=''.
+    protein[98:102] == 'PLLL'). Both annotators report
+    ``Deletion('p.L101del')`` after the #321 fix — the HGVS 3'-rule
+    canonical position is the most C-terminal equivalent residue.
+    Fast applies the rule by sliding ``aa_mutation_start_offset``
+    forward while the deleted residue matches the next reference
+    residue; protein_diff already produced the canonical form via
+    whole-protein shared-flank trimming."""
     variant = Variant("7", 117530923, "CTC", "", ensembl_grch38)
-    _pin(variant, CFTR_ID, _FAST, Deletion, "p.L99del")
-    _pin(variant, CFTR_ID, _PDIFF, Deletion, "p.L101del")
+    annotator = _FAST if dual_annotator == "fast" else _PDIFF
+    effect = _annotate(variant, CFTR_ID, annotator)
+    assert isinstance(effect, Deletion)
+    assert effect.short_description == "p.L101del"
 
 
 def test_penultimate_codon_snv_agrees(dual_annotator):

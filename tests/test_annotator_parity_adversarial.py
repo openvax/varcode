@@ -67,12 +67,6 @@ def _is_known_divergence(fast_class, fast_desc, pdiff_class, pdiff_desc):
     # FrameShift vs FrameShiftTruncation: protein_diff is more specific.
     if ({fast_class, pdiff_class} == {"FrameShift", "FrameShiftTruncation"}):
         return True
-    # Deletion offset by 1 near repeated residues: trim ambiguity.
-    if (fast_class == pdiff_class == "Deletion"
-            and fast_desc.endswith("del")
-            and pdiff_desc.endswith("del")):
-        # Same class, same operation, just different offset.
-        return True
     return False
 
 
