@@ -64,9 +64,14 @@ class Outcome:
     Parameters
     ----------
     effect : MutationEffect
-        The effect this outcome represents. Carries the standard
-        varcode classification (class, short_description, aa_ref /
-        aa_alt, etc.).
+        The effect this outcome represents. Guaranteed to be a
+        :class:`~varcode.effects.MutationEffect` instance — producers
+        that can't compute a full coding effect use placeholder
+        subclasses (e.g.
+        :class:`~varcode.effects.effect_classes.PredictedIntronRetention`)
+        so consumers can iterate ``outcome.effect.short_description``
+        and ``outcome.effect.mutant_protein_sequence`` uniformly
+        across SV, splice, and point-variant outcomes (#339).
     probability : float or None
         Estimated likelihood this outcome actually happens, in
         ``[0, 1]``. ``None`` means "not scored" — the outcome is in
@@ -86,12 +91,22 @@ class Outcome:
         RNA read counts under ``{"junction_reads": 42}``). Consumers
         that need a particular shape should type-check at the call
         site rather than rely on a rigid schema here.
+    description : str or None
+        Optional human-readable sentence describing this specific
+        outcome ("Exon 7 is skipped (in-frame, 15 aa removed)").
+        Distinct from ``effect.short_description``, which is the
+        effect's HGVS-style label. Producers that want a richer
+        narrative attach it here rather than nesting it in
+        ``evidence``. Declared last so positional calls of the form
+        ``Outcome(effect, probability, source, evidence)`` continue
+        to route the dict to ``evidence``.
     """
 
     effect: Any  # MutationEffect — typed loosely to avoid import cycle
     probability: Optional[float] = None
     source: str = "varcode"
     evidence: Mapping[str, Any] = field(default_factory=dict)
+    description: Optional[str] = None
 
     def __post_init__(self):
         if self.probability is not None and not (

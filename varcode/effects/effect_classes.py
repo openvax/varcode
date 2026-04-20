@@ -17,6 +17,18 @@ from serializable import Serializable
 from .common import bio_seq_to_str
 
 
+def _cryptic_probability(candidate):
+    """Average of a cryptic-exon candidate's donor and acceptor motif
+    scores. Used by :attr:`StructuralVariantEffect.outcomes` to
+    populate ``Outcome.probability`` when no external scorer is
+    attached (#337). Both scores are match-ratios in ``[0, 1]`` so
+    their mean is already in range.
+    """
+    donor = candidate.donor_score or 0.0
+    acceptor = candidate.acceptor_score or 0.0
+    return (donor + acceptor) / 2.0
+
+
 class MutationEffect(Serializable):
     """
     Base class for mutation effects.
@@ -265,6 +277,58 @@ class SpliceAcceptor(IntronicSpliceSite):
     Mutation in the last two intron residues.
     """
     short_description = "splice-acceptor"
+
+
+# =====================================================================
+# Predicted-but-uncomputed placeholder effects (#339).
+#
+# Used by :class:`~varcode.splice_outcomes.SpliceOutcomeSet` and, later,
+# :class:`StructuralVariantEffect` to fill :attr:`Outcome.effect` with a
+# real :class:`MutationEffect` when the protein-level outcome cannot be
+# computed from cached transcript cDNA alone (intron retention requires
+# intron sequence; cryptic splice requires flanking genomic sequence).
+# These types carry no aa_ref / aa_alt / mutant_protein_sequence — they
+# are markers so that ``outcome.effect`` still satisfies the
+# MutationEffect interface and downstream iteration doesn't have to
+# branch on None.
+# =====================================================================
+
+
+class PredictedIntronRetention(TranscriptMutationEffect):
+    """Placeholder effect: intron retention predicted, exact protein
+    not computable from cached transcript cDNA.
+
+    Emitted as the :attr:`Outcome.effect` of a SpliceOutcomeSet's
+    ``INTRON_RETENTION`` outcome. The biologically expected outcome is
+    a premature stop codon inside the retained intron; consumers that
+    need the exact protein sequence require intron genomic sequence
+    (see #296).
+    """
+
+    short_description = "predicted-intron-retention"
+
+
+class PredictedCrypticSpliceSite(TranscriptMutationEffect):
+    """Placeholder effect: a cryptic donor or acceptor is expected to
+    be used in place of the disrupted canonical signal.
+
+    ``direction`` is ``"donor"`` or ``"acceptor"``. Exact protein
+    consequence requires flanking genomic sequence; emitted as the
+    :attr:`Outcome.effect` of a SpliceOutcomeSet's ``CRYPTIC_DONOR`` /
+    ``CRYPTIC_ACCEPTOR`` outcome.
+    """
+
+    def __init__(self, variant, transcript, direction):
+        TranscriptMutationEffect.__init__(self, variant, transcript)
+        if direction not in ("donor", "acceptor"):
+            raise ValueError(
+                "PredictedCrypticSpliceSite direction must be "
+                "'donor' or 'acceptor', got %r" % (direction,))
+        self.direction = direction
+
+    @property
+    def short_description(self):
+        return "predicted-cryptic-%s" % self.direction
 
 
 class Exonic(TranscriptMutationEffect):
@@ -888,10 +952,18 @@ class StructuralVariantEffect(TranscriptMutationEffect, MultiOutcomeEffect):
     unified :class:`Outcome` shape automatically.
     """
 
-    def __init__(self, variant, transcript, candidates=None):
+    def __init__(
+            self, variant, transcript, candidates=None, mutant_transcript=None):
         TranscriptMutationEffect.__init__(self, variant, transcript)
         self._candidates = (
             tuple(candidates) if candidates is not None else (self,))
+        self.mutant_transcript = mutant_transcript
+        # Cryptic-exon / cryptic-splice candidates nominated by
+        # :func:`varcode.cryptic_exons.enumerate_from_structural_variant`
+        # (#337). Kept separate from :attr:`_candidates` because their
+        # ``outcomes`` entries carry different source / probability /
+        # evidence than the primary SV classification.
+        self._cryptic_candidates = ()
 
     @property
     def candidates(self):
@@ -900,6 +972,53 @@ class StructuralVariantEffect(TranscriptMutationEffect, MultiOutcomeEffect):
     @property
     def most_likely(self):
         return self._candidates[0]
+
+    def _attach_cryptic_candidates(self, cryptic_candidates):
+        """Attach cryptic-exon candidates (#337). Called by the SV
+        annotator after effect construction so the candidates appear
+        as additional :class:`Outcome` entries on :attr:`outcomes`
+        without polluting :attr:`candidates` (which stays the primary
+        classification tuple for back-compat).
+        """
+        self._cryptic_candidates = tuple(cryptic_candidates)
+
+    @property
+    def outcomes(self):
+        """Unified :class:`~varcode.Outcome` view over
+        :attr:`candidates` and any attached cryptic candidates
+        (#339, #337).
+
+        Primary outcomes carry ``source="varcode"``; cryptic outcomes
+        carry ``source="varcode_motif"`` along with
+        ``evidence["donor_score"]`` and ``evidence["acceptor_score"]``
+        so external splice predictors (SpliceAI, Pangolin, RNA
+        evidence) can filter by source and rescore.
+        """
+        from ..outcomes import Outcome
+        sv_type = getattr(self.variant, "sv_type", None)
+        base_evidence = {"sv_type": sv_type} if sv_type is not None else {}
+        primary = tuple(
+            Outcome(
+                effect=candidate,
+                source="varcode",
+                description=getattr(candidate, "short_description", None),
+                evidence=base_evidence)
+            for candidate in self._candidates)
+        cryptic = tuple(
+            Outcome(
+                effect=c,
+                source="varcode_motif",
+                probability=_cryptic_probability(c),
+                description=c.short_description,
+                evidence={
+                    **base_evidence,
+                    "donor_score": c.donor_score,
+                    "acceptor_score": c.acceptor_score,
+                    "interval_start": c.interval_start,
+                    "interval_end": c.interval_end,
+                })
+            for c in self._cryptic_candidates)
+        return primary + cryptic
 
 
 class LargeDeletion(StructuralVariantEffect):
@@ -911,9 +1030,12 @@ class LargeDeletion(StructuralVariantEffect):
 
     short_description = "sv-deletion"
 
-    def __init__(self, variant, transcript, affected_exons, candidates=None):
+    def __init__(
+            self, variant, transcript, affected_exons,
+            candidates=None, mutant_transcript=None):
         StructuralVariantEffect.__init__(
-            self, variant, transcript, candidates=candidates)
+            self, variant, transcript,
+            candidates=candidates, mutant_transcript=mutant_transcript)
         self.affected_exons = tuple(affected_exons)
 
     def __str__(self):
@@ -932,9 +1054,12 @@ class LargeDuplication(StructuralVariantEffect):
 
     short_description = "sv-duplication"
 
-    def __init__(self, variant, transcript, affected_exons, candidates=None):
+    def __init__(
+            self, variant, transcript, affected_exons,
+            candidates=None, mutant_transcript=None):
         StructuralVariantEffect.__init__(
-            self, variant, transcript, candidates=candidates)
+            self, variant, transcript,
+            candidates=candidates, mutant_transcript=mutant_transcript)
         self.affected_exons = tuple(affected_exons)
 
 
@@ -969,9 +1094,9 @@ class GeneFusion(StructuralVariantEffect):
             self, variant, transcript, partner_transcript,
             mutant_transcript=None, candidates=None):
         StructuralVariantEffect.__init__(
-            self, variant, transcript, candidates=candidates)
+            self, variant, transcript,
+            candidates=candidates, mutant_transcript=mutant_transcript)
         self.partner_transcript = partner_transcript
-        self.mutant_transcript = mutant_transcript
 
 
 class TranslocationToIntergenic(StructuralVariantEffect):

@@ -21,7 +21,21 @@ effects up front.
 """
 
 from varcode import Variant
-from varcode.effects.effect_ordering import effect_priority
+from varcode.effects.effect_classes import (
+    ExonLoss,
+    FrameShift,
+    GeneFusion,
+    Inversion,
+    LargeDeletion,
+    LargeDuplication,
+    PrematureStop,
+    Substitution,
+    TranslocationToIntergenic,
+)
+from varcode.effects.effect_ordering import (
+    effect_priority,
+    transcript_effect_priority_list,
+)
 
 
 def test_effect_collection_is_sorted_by_priority_descending():
@@ -49,6 +63,32 @@ def test_effect_collection_top_priority_effect_matches_first_element():
     top = effects.top_priority_effect()
     assert effect_priority(effects[0]) == effect_priority(top), \
         "First effect should have the same priority as top_priority_effect()"
+
+
+def test_sv_effect_priorities_are_registered():
+    """Every :class:`StructuralVariantEffect` subclass has an entry in
+    the priority table; without one, ``effect_priority`` would return
+    -1 and SV effects would rank below Failure (#340)."""
+    for cls in (GeneFusion, LargeDeletion, LargeDuplication, Inversion,
+                TranslocationToIntergenic):
+        assert cls in transcript_effect_priority_list, (
+            "%s missing from transcript_effect_priority_list" % cls.__name__)
+
+
+def test_sv_priority_ordering_is_sensible():
+    """GeneFusion and LargeDeletion outrank plain coding changes;
+    TranslocationToIntergenic sorts above ComplexSubstitution but
+    below frame-disrupting coding effects (#340)."""
+    assert (
+        transcript_effect_priority_list.index(GeneFusion)
+        > transcript_effect_priority_list.index(LargeDeletion)
+        > transcript_effect_priority_list.index(ExonLoss)
+        > transcript_effect_priority_list.index(Inversion)
+        > transcript_effect_priority_list.index(LargeDuplication)
+        > transcript_effect_priority_list.index(FrameShift)
+        > transcript_effect_priority_list.index(PrematureStop)
+        > transcript_effect_priority_list.index(TranslocationToIntergenic)
+        > transcript_effect_priority_list.index(Substitution))
 
 
 def test_effect_collection_explicit_sort_key_still_works():

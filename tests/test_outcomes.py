@@ -35,6 +35,21 @@ def test_outcome_defaults():
     assert o.probability is None
     assert o.source == "varcode"
     assert o.evidence == {}
+    assert o.description is None
+
+
+def test_outcome_description_field():
+    """``Outcome`` carries a first-class human description distinct
+    from ``effect.short_description`` — the latter is the effect's
+    HGVS-style label, the former is an outcome-specific narrative
+    (#339)."""
+    class _FakeEffect:
+        short_description = "exon-loss"
+    o = Outcome(
+        effect=_FakeEffect(),
+        description="Exon 7 is skipped (in-frame, 15 aa removed).")
+    assert o.description.startswith("Exon 7")
+    assert o.short_description == "exon-loss"
 
 
 def test_outcome_probability_bounds():
@@ -94,6 +109,58 @@ def test_exonic_splice_site_exposes_outcomes():
     # Both default to varcode-source and unscored probability.
     assert all(o.source == "varcode" for o in outcomes)
     assert all(o.probability is None for o in outcomes)
+
+
+def test_sv_outcomes_carry_sv_type_in_evidence():
+    """:class:`StructuralVariantEffect.outcomes` attaches the
+    ``sv_type`` to each outcome's evidence so consumers iterating
+    outcomes can filter by SV kind uniformly (#339)."""
+    from varcode import StructuralVariant, StructuralVariantAnnotator
+    transcript = ensembl_grch38.transcript_by_id("ENST00000003084")
+    sv = StructuralVariant(
+        contig="7",
+        start=transcript.start + 100,
+        end=transcript.start + 5_000,
+        sv_type="DEL",
+        genome=ensembl_grch38)
+    effect = StructuralVariantAnnotator().annotate_on_transcript(sv, transcript)
+    outcomes = effect.outcomes
+    assert len(outcomes) >= 1
+    for o in outcomes:
+        assert o.evidence["sv_type"] == "DEL"
+
+
+def test_uniform_iteration_sv_and_splice_outcomes():
+    """The point of #339: downstream code iterating
+    ``outcome.effect.short_description`` works across SV and splice
+    outcomes without any ``isinstance`` branching."""
+    from varcode import StructuralVariant, StructuralVariantAnnotator
+    from varcode.effects.effect_classes import MutationEffect
+
+    transcript = ensembl_grch38.transcript_by_id("ENST00000003084")
+
+    sv = StructuralVariant(
+        contig="7",
+        start=transcript.start + 100,
+        end=transcript.start + 5_000,
+        sv_type="DEL",
+        genome=ensembl_grch38)
+    sv_effect = StructuralVariantAnnotator().annotate_on_transcript(
+        sv, transcript)
+
+    splice_variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    splice_effects = splice_variant.effects(splice_outcomes=True)
+    splice_effect = next(
+        e for e in splice_effects if e.transcript is transcript)
+
+    all_outcomes = list(sv_effect.outcomes) + list(splice_effect.outcomes)
+    # One-hop read across both outcome kinds:
+    for o in all_outcomes:
+        assert isinstance(o.effect, MutationEffect)
+        assert isinstance(o.effect.short_description, str)
+        # mutant_protein_sequence is the canonical access point; may
+        # be None for placeholder effects but the attribute exists.
+        _ = o.effect.mutant_protein_sequence
 
 
 def test_outcome_accepts_external_scorer_shape():

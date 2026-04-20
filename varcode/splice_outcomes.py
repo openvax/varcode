@@ -49,14 +49,19 @@ from typing import Optional
 from .effects.classify import classify_from_protein_diff
 from .effects.codon_tables import codon_table_for_transcript, translate_sequence
 from .effects.effect_classes import (
+    ExonLoss,
     ExonicSpliceSite,
+    Intronic,
     IntronicSpliceSite,
     MultiOutcomeEffect,
     MutationEffect,
+    PredictedCrypticSpliceSite,
+    PredictedIntronRetention,
     SpliceAcceptor,
     SpliceDonor,
 )
 from .mutant_transcript import MutantTranscript, TranscriptEdit
+from .outcomes import Outcome
 
 
 class SpliceOutcome(Enum):
@@ -247,6 +252,68 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
         return self.candidates[0]
 
     @property
+    def outcomes(self):
+        """Unified :class:`~varcode.Outcome` view over :attr:`candidates`
+        (#339).
+
+        Each outcome's ``effect`` is guaranteed to be a real
+        :class:`MutationEffect` — for candidates whose protein math
+        requires genomic sequence we don't cache (intron retention,
+        cryptic splice), the effect is a
+        :class:`PredictedIntronRetention` or
+        :class:`PredictedCrypticSpliceSite` placeholder with
+        ``mutant_protein_sequence = None`` instead of ``None`` itself.
+
+        ``evidence`` carries the :class:`SpliceOutcome` enum under key
+        ``"splice_outcome"`` so splice-aware consumers can still
+        dispatch on the biological outcome kind without reaching
+        back into :attr:`candidates`.
+        """
+        return tuple(
+            Outcome(
+                effect=self._outcome_effect(candidate),
+                probability=candidate.plausibility,
+                source="varcode",
+                description=candidate.description,
+                evidence={"splice_outcome": candidate.outcome})
+            for candidate in self.candidates)
+
+    def _outcome_effect(self, candidate):
+        """Return the :class:`MutationEffect` that backs ``candidate``
+        for :attr:`outcomes`. Falls back to placeholder classes when
+        the candidate has no computable ``coding_effect``.
+        """
+        if candidate.coding_effect is not None:
+            return candidate.coding_effect
+        transcript = self.transcript
+        if candidate.outcome is SpliceOutcome.INTRON_RETENTION:
+            return PredictedIntronRetention(self.variant, transcript)
+        if candidate.outcome is SpliceOutcome.CRYPTIC_DONOR:
+            return PredictedCrypticSpliceSite(
+                self.variant, transcript, direction="donor")
+        if candidate.outcome is SpliceOutcome.CRYPTIC_ACCEPTOR:
+            return PredictedCrypticSpliceSite(
+                self.variant, transcript, direction="acceptor")
+        if candidate.outcome is SpliceOutcome.EXON_SKIPPING:
+            # Exon-skipping without a computed protein — we know an
+            # exon is affected but the specific exon / skipped-protein
+            # math wasn't resolvable at build time. Emit ExonLoss with
+            # an empty exons tuple so ``.effect`` still satisfies the
+            # MutationEffect interface; consumers that need the
+            # specific exon should reach into ``candidates`` or
+            # construct a SpliceOutcomeSet with RNA evidence attached.
+            return ExonLoss(self.variant, transcript, exons=())
+        # NORMAL_SPLICING candidate with no coding_effect: the variant
+        # is intronic and has no coding change if splicing proceeds.
+        # Represent with Intronic so .effect still satisfies the
+        # MutationEffect contract.
+        return Intronic(
+            self.variant,
+            transcript,
+            nearest_exon=None,
+            distance_to_exon=None)
+
+    @property
     def alternate_effect(self):
         """Back-compat shim matching :attr:`ExonicSpliceSite.alternate_effect`.
 
@@ -256,12 +323,6 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
         ``NORMAL_SPLICING`` candidate has no coding_effect (e.g. the
         variant is intronic and has no underlying coding change) or
         when the outcome set doesn't include ``NORMAL_SPLICING``.
-
-        Added by #299 Part 1 so downstream code can read
-        ``effect.alternate_effect`` uniformly on both
-        :class:`ExonicSpliceSite` (2-outcome default) and
-        :class:`SpliceOutcomeSet` (N-outcome opt-in) without
-        branching on ``isinstance``.
         """
         for candidate in self.candidates:
             if candidate.outcome is SpliceOutcome.NORMAL_SPLICING:
@@ -274,33 +335,21 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
         mutant protein sequence (empty string when the protein is not
         computable from cDNA alone — i.e. intron retention and
         cryptic splice).
-
-        Returns
-        -------
-        dict[SpliceOutcome, str]
-            One entry per candidate. The string is empty for stubs.
         """
-        result = {}
-        for candidate in self.candidates:
-            coding = candidate.coding_effect
-            if coding is not None:
-                protein = getattr(coding, "mutant_protein_sequence", "")
-                result[candidate.outcome] = str(protein) if protein else ""
-            else:
-                result[candidate.outcome] = ""
-        return result
+        return {
+            outcome.evidence["splice_outcome"]: _protein_str(outcome.effect)
+            for outcome in self.outcomes
+        }
 
     @property
     def mutant_protein_sequences(self):
         """Set of distinct non-empty mutant protein sequences across
         all candidates.
-
-        Useful for downstream consumers (neoantigen prediction,
-        isovar/vaxrank) that want to enumerate every protein this
-        splice disruption might produce.
         """
         return {
-            p for p in self.candidate_proteins.values() if p
+            protein for protein in (
+                _protein_str(o.effect) for o in self.outcomes)
+            if protein
         }
 
     @property
@@ -653,6 +702,16 @@ def _affected_exon(splice_effect):
     if hasattr(splice_effect, "nearest_exon"):
         return splice_effect.nearest_exon
     return None
+
+
+def _protein_str(effect):
+    """Return ``effect.mutant_protein_sequence`` as a str, or ``""``
+    if the effect carries no protein (placeholder stubs, start-loss,
+    etc.). Centralizes the None/empty/str coercion that
+    :attr:`SpliceOutcomeSet.candidate_proteins` used to inline.
+    """
+    protein = getattr(effect, "mutant_protein_sequence", None)
+    return str(protein) if protein else ""
 
 
 def _exon_start_offset_in_transcript(transcript, exon):
