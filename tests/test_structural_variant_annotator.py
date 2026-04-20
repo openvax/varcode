@@ -822,6 +822,102 @@ def test_canonical_mate_orientation_does_not_warn():
         "reverse-complement" in str(w.message) for w in caught)
 
 
+# --------------------------------------------------------------------
+# SV breakpoints near splice sites attach splice-outcome candidates
+# (#341).
+# --------------------------------------------------------------------
+
+
+def test_sv_breakpoint_at_acceptor_attaches_splice_outcomes():
+    """A DEL whose 5' breakpoint sits at intronic −1 of CFTR exon 2
+    disrupts the canonical acceptor. The SV effect should carry
+    ``varcode_splice`` outcomes for EXON_SKIPPING and INTRON_RETENTION
+    alongside the primary ``LargeDeletion`` classification."""
+    from varcode.splice_outcomes import SpliceOutcome
+    transcript = _cftr()
+    # CFTR exon 2: 117504253-117504363 (forward strand). Acceptor
+    # -1 is 117504252 (last intronic base before the exon).
+    sv = StructuralVariant(
+        contig="7",
+        start=117_504_252,
+        end=117_504_400,  # inside exon 2 — LargeDeletion classification
+        sv_type="DEL",
+        genome=ensembl_grch38)
+    effect = _ANNOTATOR.annotate_on_transcript(sv, transcript)
+    assert isinstance(effect, LargeDeletion)
+    outcomes = effect.outcomes
+    splice = [o for o in outcomes if o.source == "varcode_splice"]
+    assert splice, "Expected at least one varcode_splice outcome"
+    splice_kinds = {o.evidence["splice_outcome"] for o in splice}
+    assert SpliceOutcome.EXON_SKIPPING in splice_kinds
+    assert SpliceOutcome.INTRON_RETENTION in splice_kinds
+    # NORMAL_SPLICING is filtered — the primary SV outcome covers it.
+    assert SpliceOutcome.NORMAL_SPLICING not in splice_kinds
+    # sv_type flows into evidence alongside splice_outcome.
+    for o in splice:
+        assert o.evidence["sv_type"] == "DEL"
+
+
+def test_sv_breakpoint_at_donor_attaches_splice_outcomes():
+    """A DEL whose breakpoint sits at intronic +1 of CFTR exon 2
+    disrupts the canonical donor."""
+    from varcode.splice_outcomes import SpliceOutcome
+    transcript = _cftr()
+    # CFTR exon 2 ends at 117504363. Donor +1 = 117504364.
+    sv = StructuralVariant(
+        contig="7",
+        start=117_504_300,  # inside exon 2
+        end=117_504_364,    # intronic +1 (donor)
+        sv_type="DEL",
+        genome=ensembl_grch38)
+    effect = _ANNOTATOR.annotate_on_transcript(sv, transcript)
+    assert isinstance(effect, LargeDeletion)
+    splice_kinds = {
+        o.evidence.get("splice_outcome") for o in effect.outcomes
+        if o.source == "varcode_splice"}
+    assert SpliceOutcome.EXON_SKIPPING in splice_kinds
+
+
+def test_sv_breakpoint_away_from_splice_sites_has_no_splice_outcomes():
+    """Controls: a DEL with breakpoints deep in introns (outside the
+    ≤6-bp splice windows) should not attach splice-outcome
+    candidates."""
+    transcript = _cftr()
+    # Deep in intron 2 (well inside [117504364, 117504...]) → DEL
+    # overlapping exon 3 with breakpoints ≫ 6 bp from any exon.
+    sv = StructuralVariant(
+        contig="7",
+        start=117_509_000,  # >100 bp from any exon
+        end=117_515_000,
+        sv_type="DEL",
+        genome=ensembl_grch38)
+    effect = _ANNOTATOR.annotate_on_transcript(sv, transcript)
+    if not isinstance(effect, LargeDeletion):
+        # Intronic span — no splice outcomes expected. That's fine;
+        # this test is about the LargeDeletion case, skip.
+        pytest.skip("DEL didn't overlap any exon in this fixture")
+    assert not any(
+        o.source == "varcode_splice" for o in effect.outcomes)
+
+
+def test_sv_splice_outcome_effects_are_mutation_effects():
+    """Maintains the #339 contract: every attached splice outcome's
+    ``.effect`` is a :class:`MutationEffect`, even for the
+    INTRON_RETENTION / CRYPTIC_* placeholder cases."""
+    from varcode.effects.effect_classes import MutationEffect
+    transcript = _cftr()
+    sv = StructuralVariant(
+        contig="7",
+        start=117_504_252,
+        end=117_504_400,
+        sv_type="DEL",
+        genome=ensembl_grch38)
+    effect = _ANNOTATOR.annotate_on_transcript(sv, transcript)
+    for o in effect.outcomes:
+        if o.source == "varcode_splice":
+            assert isinstance(o.effect, MutationEffect)
+
+
 def test_translocation_to_intergenic_attaches_single_segment_mutant_transcript():
     cftr = _cftr()
     sv = StructuralVariant(

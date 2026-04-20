@@ -181,6 +181,66 @@ def _cdna_ranges_within_sv(variant, transcript):
     return _merge_adjacent_ranges(sorted(inside))
 
 
+def _breakpoint_splice_window(transcript, breakpoint_pos):
+    """Return ``(splice_cls, nearest_exon, distance)`` if
+    ``breakpoint_pos`` falls within a canonical splice window on
+    ``transcript``; otherwise ``None`` (#341).
+
+    Splice windows (intronic, matching the point-variant classifier):
+
+    * ≤ 2 bp from exon boundary on the donor side (transcript-3' of
+      exon) → :class:`SpliceDonor`
+    * ≤ 2 bp from exon boundary on the acceptor side
+      (transcript-5' of exon) → :class:`SpliceAcceptor`
+    * 3-6 bp on the donor side → :class:`IntronicSpliceSite`
+    * 3 bp on the acceptor side → :class:`IntronicSpliceSite`
+
+    Returns distances in genomic-coord bases so downstream code can
+    construct the synthesized effect with matching ``distance_to_exon``.
+    Exonic-splice-site synthesis is deliberately out of scope here —
+    SV breakpoints rarely land strictly inside exons, and the
+    exonic-splice case has extra alternate-effect machinery that
+    doesn't apply to an SV's already-disruptive primary outcome.
+    """
+    from ..effects.effect_classes import (
+        IntronicSpliceSite,
+        SpliceAcceptor,
+        SpliceDonor,
+    )
+    if str(getattr(transcript, "contig", "")) == "":
+        return None
+    best_exon = None
+    best_distance = None
+    best_before = True
+    for exon in transcript.exons:
+        # Strictly intronic scope only — skip the exon itself.
+        if exon.start <= breakpoint_pos <= exon.end:
+            return None
+        dist_start = exon.start - breakpoint_pos  # >0 if breakpoint before exon
+        dist_end = breakpoint_pos - exon.end      # >0 if breakpoint after exon
+        distance = dist_start if dist_start > 0 else dist_end
+        if best_distance is None or distance < best_distance:
+            best_distance = distance
+            best_exon = exon
+            # "before_exon" in transcript direction:
+            #   forward strand: breakpoint_pos < exon.start
+            #   reverse strand: breakpoint_pos > exon.end
+            if exon.strand == "+":
+                best_before = breakpoint_pos < exon.start
+            else:
+                best_before = breakpoint_pos > exon.end
+    if best_exon is None or best_distance is None:
+        return None
+    if best_distance <= 2:
+        cls = SpliceAcceptor if best_before else SpliceDonor
+        return (cls, best_exon, best_distance)
+    if not best_before and best_distance <= 6:
+        return (IntronicSpliceSite, best_exon, best_distance)
+    if best_before and best_distance <= 3:
+        return (IntronicSpliceSite, best_exon, best_distance)
+    return None
+
+
 _REVERSE_COMPLEMENT_BND_ORIENTATIONS = frozenset({"[]", "]["})
 
 
@@ -600,7 +660,80 @@ class StructuralVariantAnnotator:
         # sequence / long-read assembly (#337). They show up as
         # additional Outcomes with source="varcode_motif".
         self._enumerate_and_attach_cryptics(variant, effect)
+        # Attach splice-outcome candidates when any SV breakpoint
+        # lands in a canonical splice window on the transcript
+        # (#341). They show up as additional Outcomes with
+        # source="varcode_splice".
+        self._enumerate_and_attach_splice_outcomes(variant, transcript, effect)
         return effect
+
+    def _enumerate_and_attach_splice_outcomes(self, variant, transcript, effect):
+        """If any breakpoint of ``variant`` lands in a canonical
+        splice window on ``transcript``, synthesize the matching
+        splice-disrupting effect, feed it to
+        :func:`~varcode.splice_outcomes.enumerate_splice_outcomes`,
+        and attach the returned outcomes (minus NORMAL_SPLICING,
+        which the SV primary classification already covers) to
+        ``effect`` (#341).
+
+        No-op when ``effect`` isn't an
+        :class:`StructuralVariantEffect` (Intronic/Intergenic
+        fall-throughs) or when no breakpoint falls in a splice
+        window.
+        """
+        from ..effects.effect_classes import StructuralVariantEffect
+        from ..outcomes import Outcome
+        from ..splice_outcomes import SpliceOutcome, enumerate_splice_outcomes
+        if not isinstance(effect, StructuralVariantEffect):
+            return
+        # Check both SV endpoints. For DEL/DUP/INV the start and end
+        # coordinates are the two breakpoints; for BND they're equal,
+        # so dedup via a set. Mate-position checks against the partner
+        # transcript aren't yet wired here — a follow-up can extend.
+        bp_positions = {variant.start}
+        end_pos = getattr(variant, "end", None)
+        if end_pos is not None:
+            bp_positions.add(end_pos)
+        sv_type = getattr(variant, "sv_type", None)
+        sv_evidence = {"sv_type": sv_type} if sv_type is not None else {}
+        attached = []
+        seen_exons = set()
+        for bp in bp_positions:
+            window = _breakpoint_splice_window(transcript, bp)
+            if window is None:
+                continue
+            splice_cls, exon, distance = window
+            # If two endpoints land in the same exon's splice window,
+            # only emit one set of splice candidates — the outcomes
+            # are identical.
+            exon_key = getattr(exon, "exon_id", None) or (
+                exon.start, exon.end, exon.strand)
+            if exon_key in seen_exons:
+                continue
+            seen_exons.add(exon_key)
+            try:
+                synthetic = splice_cls(
+                    variant=variant,
+                    transcript=transcript,
+                    nearest_exon=exon,
+                    distance_to_exon=distance)
+                splice_set = enumerate_splice_outcomes(synthetic)
+            except Exception:
+                continue
+            for outcome in getattr(splice_set, "outcomes", ()):
+                if outcome.evidence.get("splice_outcome") is (
+                        SpliceOutcome.NORMAL_SPLICING):
+                    # Primary SV classification already covers the
+                    # "splicing proceeds normally" interpretation.
+                    continue
+                attached.append(Outcome(
+                    effect=outcome.effect,
+                    probability=outcome.probability,
+                    source="varcode_splice",
+                    description=outcome.description,
+                    evidence={**dict(outcome.evidence), **sv_evidence}))
+        if attached:
+            effect._attach_splice_outcomes(attached)
 
     def _enumerate_and_attach_cryptics(self, variant, effect):
         """Enumerate cryptic-exon candidates around the SV and hand
