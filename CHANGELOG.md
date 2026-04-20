@@ -1,5 +1,23 @@
 # Change Log
 
+## [Unreleased]
+
+**Changed**
+- `SpliceCandidate` and `SpliceOutcomeSet` serialization migrated onto
+  `DataclassSerializable` from `serializable>=1.1.0`. The
+  `__effect_class__` tagging and hand-rolled class registries
+  (`_CODING_EFFECT_CLASS_REGISTRY`, `_SPLICE_SIGNAL_CLASS_REGISTRY`,
+  `_rehydrate_coding_effect`) are gone; JSON round-trip now flows
+  through `serializable.helpers`' standard `__class__` / `__module__`
+  stamping ([#343](https://github.com/openvax/varcode/issues/343)).
+  The JSON wire format is unchanged, but **the pre-#305 migration
+  shim for the internal `_ExonSkipFrameshiftEffect` class has been
+  removed**. JSON produced by varcode 2.4.x or earlier (which could
+  contain `"__effect_class__": "_ExonSkipFrameshiftEffect"` tags) will
+  no longer rehydrate; re-emit from the current annotator or hand-patch
+  those tags to `FrameShift` before loading. Anyone still reading such
+  payloads can pin `varcode<4.7` or resurrect the shim in user code.
+
 ## [v2.3.0](https://github.com/openvax/varcode/tree/v2.3.0) (2026-04-13)
 
 **Added**

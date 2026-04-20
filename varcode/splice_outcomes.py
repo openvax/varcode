@@ -150,9 +150,12 @@ class SpliceCandidate(DataclassSerializable):
         converted to its string value. ``python-serializable`` has no
         built-in enum branch in
         :func:`~serializable.helpers.to_serializable_repr`, so we
-        stringify here to keep the JSON round-trip stable (#343).
+        stringify here to keep the JSON round-trip stable. Any
+        future dataclass field typed as an :class:`Enum` will need
+        the same treatment until the upstream helper grows an
+        enum branch (#343).
         """
-        d = DataclassSerializable.to_dict(self)
+        d = super().to_dict()
         d["outcome"] = self.outcome.value
         return d
 
@@ -165,7 +168,7 @@ class SpliceCandidate(DataclassSerializable):
         outcome = state_dict.get("outcome")
         if isinstance(outcome, str):
             state_dict["outcome"] = SpliceOutcome(outcome)
-        return DataclassSerializable.from_dict.__func__(cls, state_dict)
+        return super().from_dict(state_dict)
 
 
 class SpliceOutcomeSet(MultiOutcomeEffect):
