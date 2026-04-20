@@ -346,32 +346,146 @@ def _build_inversion_mutant_transcript(variant, transcript):
         annotator_name="structural_variant")
 
 
+def _cdna_offset_at_5p_breakpoint(transcript, breakpoint_pos):
+    """Return the cDNA offset in the 5' partner at which fusion
+    splits the transcript (#336).
+
+    All cDNA bases at offsets ``[0, returned_offset)`` are retained
+    in the fused product. Handles forward and reverse strand
+    transcripts; for an intronic breakpoint the walker snaps to the
+    end of the last transcript-order exon upstream of the
+    breakpoint (the biologically expected behavior — the
+    spliceosome completes the preceding exon before the junction).
+    """
+    offset = 0
+    reverse = transcript.on_backward_strand
+    for exon in transcript.exons:
+        exon_len = exon.end - exon.start + 1
+        if reverse:
+            if exon.start > breakpoint_pos:
+                offset += exon_len
+            elif exon.end >= breakpoint_pos:
+                offset += exon.end - breakpoint_pos + 1
+                return offset
+            else:
+                return offset
+        else:
+            if exon.end < breakpoint_pos:
+                offset += exon_len
+            elif exon.start <= breakpoint_pos:
+                offset += breakpoint_pos - exon.start + 1
+                return offset
+            else:
+                return offset
+    return offset
+
+
+def _cdna_offset_at_3p_breakpoint(transcript, breakpoint_pos):
+    """Return the cDNA offset in the 3' partner at which the fusion
+    picks up (#336).
+
+    All cDNA bases at offsets ``[returned_offset, end)`` are
+    retained. For an intronic breakpoint the walker snaps to the
+    start of the first transcript-order exon downstream of the
+    breakpoint.
+    """
+    offset = 0
+    reverse = transcript.on_backward_strand
+    for exon in transcript.exons:
+        exon_len = exon.end - exon.start + 1
+        if reverse:
+            if exon.start > breakpoint_pos:
+                offset += exon_len
+            elif exon.end >= breakpoint_pos:
+                return offset + (exon.end - breakpoint_pos + 1)
+            else:
+                return offset
+        else:
+            if exon.end < breakpoint_pos:
+                offset += exon_len
+            elif exon.start <= breakpoint_pos:
+                return offset + (breakpoint_pos - exon.start + 1)
+            else:
+                return offset
+    return offset
+
+
+def _translate_fused_cdna(fused_cdna, five_prime_transcript, five_prime_len):
+    """Translate ``fused_cdna`` from the 5' partner's CDS start when
+    that start codon lies in the retained 5' portion (#336).
+
+    Returns the translated protein (stopping at the first stop
+    codon) or ``None`` when the CDS start is past the breakpoint or
+    translation otherwise fails.
+    """
+    from ..effects.codon_tables import (
+        codon_table_for_transcript,
+        translate_sequence,
+    )
+    if not five_prime_transcript.complete:
+        return None
+    try:
+        cds_start = min(five_prime_transcript.start_codon_spliced_offsets)
+    except (AttributeError, ValueError):
+        return None
+    if cds_start >= five_prime_len:
+        # Start codon is past the breakpoint — the fusion loses it.
+        return None
+    codon_table = codon_table_for_transcript(five_prime_transcript)
+    coding = fused_cdna[cds_start:]
+    truncated = coding[:(len(coding) // 3) * 3]
+    try:
+        return translate_sequence(
+            truncated, codon_table=codon_table, to_stop=True)
+    except ValueError:
+        return None
+
+
 def _build_fusion_mutant_transcript(variant, transcript, partner):
     """Build a :class:`MutantTranscript` for a BND classified as
-    :class:`GeneFusion`.
+    :class:`GeneFusion` (#336).
 
-    Two segments: the 5' partner transcript (this transcript, up to
-    its end) and the 3' partner transcript (from its start). The
-    exact breakpoint-within-cDNA mapping and the fused-protein
-    computation belong in #336 — here we fix the segment shape so
-    consumers know a fusion has a 2-segment MutantTranscript.
-    ``cdna_sequence`` is left None because the junction isn't
-    resolved yet.
+    The canonical case — intron:intron breakpoints joining a 5'
+    partner's N-terminal exons to a 3' partner's C-terminal exons —
+    yields a fused cDNA whose 5' portion is
+    ``transcript.sequence[0:5p_cdna_offset]`` and whose 3' portion
+    is ``partner.sequence[3p_cdna_offset:]``. When the 5' partner's
+    start codon lies in the retained region, the fused protein is
+    translated through the junction.
+
+    BND ``mate_orientation`` semantics (which side of each
+    breakpoint joins — ``]p]t`` vs ``t[p[`` etc.) are not yet
+    consulted here; the builder assumes the canonical "5p
+    N-terminus + 3p C-terminus" direction, which matches BRD4-NUTM1,
+    BCR-ABL1, EWSR1-FLI1, and similar oncogenic fusions. Callers
+    with reverse-complement breakend pairings can override by
+    passing a pre-resolved ``alt_assembly`` on the variant.
     """
-    full_5p = len(str(transcript.sequence))
-    full_3p = len(str(partner.sequence))
+    five_prime_cdna = str(transcript.sequence)
+    three_prime_cdna = str(partner.sequence)
+    five_prime_offset = _cdna_offset_at_5p_breakpoint(
+        transcript, variant.start)
+    three_prime_offset = _cdna_offset_at_3p_breakpoint(
+        partner, variant.mate_start)
+    five_prime_retained = five_prime_cdna[:five_prime_offset]
+    three_prime_retained = three_prime_cdna[three_prime_offset:]
+    fused_cdna = five_prime_retained + three_prime_retained
     segments = (
         ReferenceSegment(
-            source=transcript, start=0, end=full_5p,
+            source=transcript, start=0, end=five_prime_offset,
             strand="+", label="5p_partner"),
         ReferenceSegment(
-            source=partner, start=0, end=full_3p,
+            source=partner,
+            start=three_prime_offset, end=len(three_prime_cdna),
             strand="+", label="3p_partner"),
     )
+    mutant_protein = _translate_fused_cdna(
+        fused_cdna, transcript, len(five_prime_retained))
     return MutantTranscript(
         reference_transcript=transcript,
         reference_segments=segments,
-        cdna_sequence=None,
+        cdna_sequence=fused_cdna,
+        mutant_protein_sequence=mutant_protein,
         annotator_name="structural_variant")
 
 

@@ -463,8 +463,174 @@ def test_gene_fusion_attaches_two_segment_mutant_transcript():
     labels = {s.label for s in mt.reference_segments}
     assert "5p_partner" in labels
     assert "3p_partner" in labels
-    # Protein / cdna assembly is #336 — not populated here.
-    assert mt.cdna_sequence is None
+
+
+# --------------------------------------------------------------------
+# Real oncogenic fusions (#336).
+#
+# Intron:intron breakpoints that produce in-frame exon:exon fusions.
+# Each test pins the retained-cDNA boundaries to the expected exon
+# cumulative offsets and asserts the fused protein carries the 5'
+# partner's N-terminus.
+# --------------------------------------------------------------------
+
+
+def _sum_exon_lengths(transcript, indices):
+    """Sum the lengths of a subset of exons (1-indexed)."""
+    return sum(
+        t.end - t.start + 1
+        for i, t in enumerate(transcript.exons, start=1)
+        if i in indices)
+
+
+def test_brd4_nutm1_fusion_nut_midline_carcinoma():
+    """BRD4 (chr19, reverse strand) intron 11-12 joined to NUTM1
+    (chr15, forward strand) intron 1-2. This is the canonical NUT
+    midline carcinoma fusion — BRD4 exons 1-11 fused to NUTM1 exons
+    2-7 (in the NUTM1-002 transcript picked by the annotator)."""
+    brd4 = ensembl_grch38.transcript_by_id("ENST00000263377")
+    brd4_breakpoint = 15_250_000   # intron 11-12 (reverse strand)
+    nutm1_breakpoint = 34_347_000  # intron 1-2 (forward strand, on NUTM1-002)
+    sv = StructuralVariant(
+        contig="19",
+        start=brd4_breakpoint,
+        sv_type="BND",
+        alt="N]15:%d]" % nutm1_breakpoint,
+        mate_contig="15",
+        mate_start=nutm1_breakpoint,
+        mate_orientation="]]",
+        genome=ensembl_grch38)
+    effect = _ANNOTATOR.annotate_on_transcript(sv, brd4)
+    assert isinstance(effect, GeneFusion)
+    mt = effect.mutant_transcript
+    assert mt is not None
+    assert len(mt.reference_segments) == 2
+
+    # 5p BRD4 retains exons 1-11 (reverse-strand exons whose genomic
+    # start is upstream of the breakpoint in transcript order).
+    expected_5p_len = _sum_exon_lengths(brd4, set(range(1, 12)))
+    assert mt.reference_segments[0].end == expected_5p_len
+
+    # Fused protein starts with BRD4's N-terminus and extends
+    # through the junction into NUTM1's body.
+    assert mt.mutant_protein_sequence is not None
+    brd4_ref = str(brd4.protein_sequence)
+    assert mt.mutant_protein_sequence.startswith(brd4_ref[:40])
+    # The fusion should not be shorter than the retained 5p
+    # N-terminal portion — translation must continue through the
+    # junction without hitting an immediate stop.
+    retained_n_term_aa = (expected_5p_len - min(
+        brd4.start_codon_spliced_offsets)) // 3
+    assert len(mt.mutant_protein_sequence) > retained_n_term_aa // 2
+
+
+def test_bcr_abl1_fusion_philadelphia_chromosome():
+    """BCR (chr22, forward) intron 13-14 joined to ABL1 (chr9,
+    forward) intron 1-2 — Philadelphia chromosome, chronic myeloid
+    leukemia. Retains BCR exons 1-13 and ABL1 exons 2-11."""
+    bcr = ensembl_grch38.transcript_by_id("ENST00000305877")
+    bcr_breakpoint = 23_290_000      # intron 13-14
+    abl1_breakpoint = 130_840_000    # intron 1-2
+    sv = StructuralVariant(
+        contig="22",
+        start=bcr_breakpoint,
+        sv_type="BND",
+        alt="N]9:%d]" % abl1_breakpoint,
+        mate_contig="9",
+        mate_start=abl1_breakpoint,
+        mate_orientation="]]",
+        genome=ensembl_grch38)
+    effect = _ANNOTATOR.annotate_on_transcript(sv, bcr)
+    assert isinstance(effect, GeneFusion)
+    mt = effect.mutant_transcript
+
+    expected_5p_len = _sum_exon_lengths(bcr, set(range(1, 14)))
+    assert mt.reference_segments[0].end == expected_5p_len
+
+    # 3p starts from ABL1 exon 2 onward; exon 1 of ABL1-001 is 460 bp.
+    abl1 = ensembl_grch38.transcript_by_id("ENST00000318560")
+    expected_3p_offset = _sum_exon_lengths(abl1, {1})
+    assert mt.reference_segments[1].start == expected_3p_offset
+
+    assert mt.mutant_protein_sequence is not None
+    bcr_ref = str(bcr.protein_sequence)
+    assert mt.mutant_protein_sequence.startswith(bcr_ref[:40])
+
+
+def test_ewsr1_fli1_fusion_ewing_sarcoma_type1():
+    """EWSR1 (chr22, forward) intron 7-8 joined to FLI1 (chr11,
+    forward) intron 5-6 — Ewing sarcoma type-1 fusion. Retains
+    EWSR1 exons 1-7 and FLI1 exons 6-10 (in FLI1-201, the
+    transcript the annotator auto-picks at the breakpoint)."""
+    ewsr1 = ensembl_grch38.transcript_by_id("ENST00000414183")
+    ewsr1_breakpoint = 29_285_000    # intron 7-8
+    fli1_breakpoint = 128_800_000    # intron 5-6 in FLI1-201 coords
+    sv = StructuralVariant(
+        contig="22",
+        start=ewsr1_breakpoint,
+        sv_type="BND",
+        alt="N]11:%d]" % fli1_breakpoint,
+        mate_contig="11",
+        mate_start=fli1_breakpoint,
+        mate_orientation="]]",
+        genome=ensembl_grch38)
+    effect = _ANNOTATOR.annotate_on_transcript(sv, ewsr1)
+    assert isinstance(effect, GeneFusion)
+    mt = effect.mutant_transcript
+
+    expected_5p_len = _sum_exon_lengths(ewsr1, set(range(1, 8)))
+    assert mt.reference_segments[0].end == expected_5p_len
+
+    assert mt.mutant_protein_sequence is not None
+    ewsr1_ref = str(ewsr1.protein_sequence)
+    assert mt.mutant_protein_sequence.startswith(ewsr1_ref[:40])
+
+
+def test_fusion_cdna_equals_segment_concatenation():
+    """Assembled cDNA must match the concatenation of the two
+    ReferenceSegment slices — the segment layout and the sequence
+    can't drift."""
+    brd4 = ensembl_grch38.transcript_by_id("ENST00000263377")
+    sv = StructuralVariant(
+        contig="19",
+        start=15_250_000,
+        sv_type="BND",
+        alt="N]15:34347000]",
+        mate_contig="15",
+        mate_start=34_347_000,
+        mate_orientation="]]",
+        genome=ensembl_grch38)
+    effect = _ANNOTATOR.annotate_on_transcript(sv, brd4)
+    mt = effect.mutant_transcript
+    partner = effect.partner_transcript
+    fivep = str(brd4.sequence)
+    threep = str(partner.sequence)
+    s0, s1 = mt.reference_segments
+    assembled = fivep[s0.start:s0.end] + threep[s1.start:s1.end]
+    assert assembled == mt.cdna_sequence
+
+
+def test_fusion_protein_terminates_within_or_at_3p_partner_end():
+    """Translation stops at the first stop codon — which for a true
+    in-frame fusion lies inside the retained 3p cDNA. Assert we
+    don't overshoot the fused cDNA (the translator would return
+    whatever bases fit, without extending)."""
+    brd4 = ensembl_grch38.transcript_by_id("ENST00000263377")
+    sv = StructuralVariant(
+        contig="19",
+        start=15_250_000,
+        sv_type="BND",
+        alt="N]15:34347000]",
+        mate_contig="15",
+        mate_start=34_347_000,
+        mate_orientation="]]",
+        genome=ensembl_grch38)
+    effect = _ANNOTATOR.annotate_on_transcript(sv, brd4)
+    mt = effect.mutant_transcript
+    # Codon-level bound: protein aa count * 3 <= len(cdna) - cds_start.
+    cds_start = min(brd4.start_codon_spliced_offsets)
+    assert len(mt.mutant_protein_sequence) * 3 <= (
+        len(mt.cdna_sequence) - cds_start)
 
 
 def test_translocation_to_intergenic_attaches_single_segment_mutant_transcript():
