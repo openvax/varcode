@@ -11,30 +11,38 @@
 # limitations under the License.
 
 from .effect_classes import (
+    AlternateStartCodon,
+    ComplexSubstitution,
+    CrypticExonCandidate,
+    Deletion,
+    ExonLoss,
+    ExonicSpliceSite,
     Failure,
+    FivePrimeUTR,
+    FrameShift,
+    FrameShiftTruncation,
+    GeneFusion,
     IncompleteTranscript,
+    Insertion,
     Intergenic,
     Intragenic,
-    NoncodingTranscript,
     Intronic,
-    ThreePrimeUTR,
-    FivePrimeUTR,
-    Silent,
-    Substitution,
-    Insertion,
-    Deletion,
-    ComplexSubstitution,
-    AlternateStartCodon,
     IntronicSpliceSite,
-    ExonicSpliceSite,
-    StopLoss,
-    SpliceDonor,
-    SpliceAcceptor,
+    Inversion,
+    LargeDeletion,
+    LargeDuplication,
+    NoncodingTranscript,
     PrematureStop,
-    FrameShiftTruncation,
+    PredictedCrypticSpliceSite,
+    PredictedIntronRetention,
+    Silent,
+    SpliceAcceptor,
+    SpliceDonor,
     StartLoss,
-    FrameShift,
-    ExonLoss,
+    StopLoss,
+    Substitution,
+    ThreePrimeUTR,
+    TranslocationToIntergenic,
 )
 from ..common import apply_groupby
 
@@ -45,6 +53,13 @@ transcript_effect_priority_list = [
     Intragenic,
     NoncodingTranscript,
     Intronic,
+    # speculative intron-retention / cryptic-splice / cryptic-exon
+    # candidates — surface above plain Intronic but below any
+    # characterized coding effect, since they're placeholder outcomes
+    # that downstream scoring (SpliceAI, RNA evidence) refines (#340).
+    CrypticExonCandidate,
+    PredictedIntronRetention,
+    PredictedCrypticSpliceSite,
     ThreePrimeUTR,
     # mutations to the upstream 5' UTR may change the ORF (reading frame),
     # so give 5' UTR mutations higher prioriry
@@ -65,6 +80,11 @@ transcript_effect_priority_list = [
     Insertion,
     Deletion,
     ComplexSubstitution,
+    # BND whose mate lands in intergenic space — disruptive but
+    # without a characterized fusion partner; sort above
+    # ComplexSubstitution and below stop-codon / frame-shifting
+    # coding effects (#340).
+    TranslocationToIntergenic,
     # mutation which changes the start codon from e.g. ATG > TTG that can
     # be interpreted as silent but also has some chance of causing an
     # alternative ORF
@@ -79,7 +99,23 @@ transcript_effect_priority_list = [
     StartLoss,
     # out-of-frame insertion or deletion
     FrameShift,
+    # large tandem duplication of one or more exons — similar
+    # disruption profile as FrameShift at protein level (#340).
+    LargeDuplication,
+    # inversion of one or more exons — strand flip always disrupts
+    # the affected reading frame (#340).
+    Inversion,
+    # single-exon ExonLoss (from point variants or SV-like edits
+    # within a single transcript); below LargeDeletion because the
+    # multi-exon SV has broader impact.
     ExonLoss,
+    # large structural deletion covering one or more whole exons —
+    # ranks above point-level ExonLoss because it typically removes
+    # more of the coding sequence.
+    LargeDeletion,
+    # novel fused protein — highest transcript-level impact, since
+    # the product is a new chimera with no reference analog (#340).
+    GeneFusion,
 ]
 
 transcript_effect_priority_dict = {
