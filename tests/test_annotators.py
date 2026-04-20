@@ -66,7 +66,7 @@ def test_fast_annotator_annotator_is_registered():
 
 
 def test_default_annotator_matches_active_configuration(request):
-    configured = request.config.getoption("--annotator") or "fast"
+    configured = request.config.getoption("--annotator") or "protein_diff"
     default = get_default_annotator()
     assert default.name == configured
     assert default is get_annotator(configured)
@@ -107,7 +107,7 @@ def test_set_default_annotator_swaps_registry_default():
         set_default_annotator("test_swap_default")
         assert get_default_annotator().__class__ is Swap
     finally:
-        set_default_annotator("fast")
+        set_default_annotator("protein_diff")
         from varcode.annotators.registry import _REGISTRY
         _REGISTRY.pop("test_swap_default", None)
 
