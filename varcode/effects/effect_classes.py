@@ -113,24 +113,38 @@ class MultiOutcomeEffect(MutationEffect):
 
     Subclasses must expose:
 
-    * ``candidates`` — sequence of outcome objects, sorted
-      most-plausible-first.
+    * ``candidates`` — sequence of :class:`MutationEffect` instances,
+      sorted most-plausible-first. (Kept for back-compat with 2.x
+      callers.)
     * ``most_likely`` — the top candidate (i.e. ``candidates[0]``).
     * ``priority_class`` — effect class whose priority this set adopts
       (read by :func:`varcode.effects.effect_priority`).
 
-    Downstream consumers filter for multi-outcome results with
-    ``isinstance(effect, MultiOutcomeEffect)`` so new wrappers (RNA
-    evidence #259, germline-aware #268, etc.) can implement the same
-    protocol without downstream code churn.
+    **Harmonized interface (#299):** new code should read
+    :attr:`outcomes` instead of ``candidates``. Each entry is an
+    :class:`~varcode.outcomes.Outcome` carrying the effect plus
+    provenance (probability, source, evidence dict). The default
+    implementation wraps ``candidates`` with ``source="varcode"``
+    and no probability — external scorers (SpliceAI, Pangolin),
+    RNA-evidence callers (Isovar), and long-read assembly tools
+    override to attach their own scores without subclassing.
 
-    The contract above is documented but not enforced at runtime —
-    this is a deliberately minimal hedge. A subclass that passes
-    ``isinstance`` but omits ``candidates`` will ``AttributeError``
-    at first access. See #299 for the planned formalization into a
-    full protocol with a common ``Candidate`` type and runtime
-    enforcement.
+    Downstream consumers filter for multi-outcome results with
+    ``isinstance(effect, MultiOutcomeEffect)``, so new wrappers (RNA
+    evidence #259, germline-aware #268, SV-at-breakpoint) implement
+    the same protocol without downstream code churn.
     """
+
+    @property
+    def outcomes(self):
+        """Tuple of :class:`~varcode.outcomes.Outcome` objects,
+        most-plausible-first. Default implementation wraps
+        :attr:`candidates` under ``source="varcode"``; subclasses
+        (or external integrations) override to attach probabilities
+        and evidence.
+        """
+        from ..outcomes import outcomes_from_candidates
+        return outcomes_from_candidates(self.candidates)
 
 
 class Intergenic(MutationEffect):

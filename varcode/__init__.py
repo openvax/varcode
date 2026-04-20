@@ -29,6 +29,7 @@ from .mutant_transcript import (
     TranscriptEdit,
     apply_variant_to_transcript,
 )
+from .outcomes import Outcome, outcomes_from_candidates
 from .splice_outcomes import (
     SpliceCandidate,
     SpliceOutcome,
@@ -69,6 +70,11 @@ __all__ = [
     "MutantTranscript",
     "TranscriptEdit",
     "apply_variant_to_transcript",
+
+    # Unified multi-outcome type (openvax/varcode#299)
+    "Outcome",
+    "outcomes_from_candidates",
+
     "EffectAnnotator",
     "FastEffectAnnotator",
     "UnsupportedVariantError",
