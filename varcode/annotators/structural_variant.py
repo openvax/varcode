@@ -433,31 +433,57 @@ class StructuralVariantAnnotator:
         sv_type = getattr(variant, "sv_type", None)
 
         if sv_type == "DEL":
-            return self._annotate_deletion(variant, transcript)
-        if sv_type == "DUP":
-            return self._annotate_duplication(variant, transcript)
-        if sv_type == "INV":
-            return self._annotate_inversion(variant, transcript)
-        if sv_type in ("CNV",):
+            effect = self._annotate_deletion(variant, transcript)
+        elif sv_type == "DUP":
+            effect = self._annotate_duplication(variant, transcript)
+        elif sv_type == "INV":
+            effect = self._annotate_inversion(variant, transcript)
+        elif sv_type in ("CNV",):
             # CNVs are ambiguous at the protein level (gain vs loss
             # depends on direction). Treat as duplication in the CNV-
             # gain case; the CN0 subtype is routed to deletion logic
             # at parse time (see sv_allele_parser).
-            return self._annotate_duplication(variant, transcript)
-        if sv_type == "BND":
-            return self._annotate_breakend(variant, transcript)
-        if sv_type == "INS":
+            effect = self._annotate_duplication(variant, transcript)
+        elif sv_type == "BND":
+            effect = self._annotate_breakend(variant, transcript)
+        elif sv_type == "INS":
             # A large symbolic insertion is *structurally* an SV but
             # functionally resembles an in-frame-or-frameshift
             # insertion if the sequence is known. For now we defer
             # to the deletion shape (reporting the anchor codon) —
             # callers with ``alt_assembly`` populated get a richer
             # result once the SV annotator materializes segments.
-            return self._annotate_insertion(variant, transcript)
+            effect = self._annotate_insertion(variant, transcript)
+        else:
+            # Unknown SV type — fall back to intergenic so the call
+            # graph doesn't crash.
+            return Intergenic(variant)
 
-        # Unknown SV type — fall back to intergenic so the call
-        # graph doesn't crash.
-        return Intergenic(variant)
+        # Attach cryptic-exon candidates enumerated from flanking
+        # sequence / long-read assembly (#337). They show up as
+        # additional Outcomes with source="varcode_motif".
+        self._attach_cryptic_candidates(variant, effect)
+        return effect
+
+    def _attach_cryptic_candidates(self, variant, effect):
+        """Enumerate cryptic-exon candidates around the SV and attach
+        them to ``effect`` (#337). No-op when ``effect`` isn't an
+        :class:`StructuralVariantEffect` (e.g. intronic fall-through)
+        or when the enumerator returns nothing.
+        """
+        from ..cryptic_exons import enumerate_from_structural_variant
+        from ..effects.effect_classes import StructuralVariantEffect
+        if not isinstance(effect, StructuralVariantEffect):
+            return
+        try:
+            candidates = enumerate_from_structural_variant(variant)
+        except Exception:
+            # Genome sequence fetch failed (no FASTA cached, unknown
+            # contig, etc.) — silently skip; consumers still get the
+            # primary SV classification.
+            return
+        if candidates:
+            effect._attach_cryptic_candidates(candidates)
 
     # -- classification helpers -----------------------------------------
 

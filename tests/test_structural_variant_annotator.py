@@ -299,6 +299,57 @@ def test_sv_annotator_honors_alt_assembly_hook():
     assert mt.evidence == {"source": "alt_assembly"}
 
 
+def test_sv_annotator_attaches_cryptic_outcomes_from_assembly():
+    """When the SV's ``alt_assembly`` contains plausible donor +
+    acceptor motif pairs, :class:`CrypticExonCandidate` entries
+    attach to the effect's ``outcomes`` as ``source="varcode_motif"``
+    (#337). This exercises the wiring independently of whether the
+    ambient genome exposes a FASTA API."""
+    from varcode.effects.effect_classes import CrypticExonCandidate
+    transcript = _cftr()
+    # Synthetic assembly with an exact donor/acceptor consensus pair
+    # flanking a plausible exon: 3' acceptor (CAG|G) ... 5' donor
+    # (AAG|GTAAGT) with an intron-length spacer that satisfies the
+    # default 30-10000 range.
+    assembly = ("A" * 20 + "CAGG" + "C" * 100 + "AAGGTAAGT" + "A" * 20)
+    sv = StructuralVariant(
+        contig="7",
+        start=transcript.start + 100,
+        end=transcript.start + 5_000,
+        sv_type="DEL",
+        alt_assembly=assembly,
+        genome=ensembl_grch38)
+    effect = _ANNOTATOR.annotate_on_transcript(sv, transcript)
+    outcomes = effect.outcomes
+    # Primary outcome + at least one cryptic candidate.
+    assert len(outcomes) >= 2
+    cryptic = [o for o in outcomes if o.source == "varcode_motif"]
+    assert len(cryptic) >= 1
+    for o in cryptic:
+        assert isinstance(o.effect, CrypticExonCandidate)
+        assert 0.0 <= o.probability <= 1.0
+        assert "donor_score" in o.evidence
+        assert "acceptor_score" in o.evidence
+
+
+def test_sv_without_cryptic_motifs_has_single_outcome():
+    """An SV whose flanking / alt_assembly has no plausible motifs
+    should still produce a single primary outcome — the enumerator
+    invocation must not error on empty results."""
+    transcript = _cftr()
+    sv = StructuralVariant(
+        contig="7",
+        start=transcript.start + 100,
+        end=transcript.start + 5_000,
+        sv_type="DEL",
+        alt_assembly="A" * 200,  # uniform A — no donor/acceptor motifs
+        genome=ensembl_grch38)
+    effect = _ANNOTATOR.annotate_on_transcript(sv, transcript)
+    outcomes = effect.outcomes
+    # Only the primary varcode classification.
+    assert all(o.source == "varcode" for o in outcomes)
+
+
 def test_alt_assembly_also_applies_to_fusion_and_inversion():
     transcript = _cftr()
     assembly = "AACCGGTT" * 4

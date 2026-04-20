@@ -17,6 +17,18 @@ from serializable import Serializable
 from .common import bio_seq_to_str
 
 
+def _cryptic_probability(candidate):
+    """Average of a cryptic-exon candidate's donor and acceptor motif
+    scores, bounded to ``[0, 1]``. Used by
+    :attr:`StructuralVariantEffect.outcomes` to populate
+    ``Outcome.probability`` when no external scorer is attached
+    (#337).
+    """
+    donor = candidate.donor_score or 0.0
+    acceptor = candidate.acceptor_score or 0.0
+    return max(0.0, min(1.0, (donor + acceptor) / 2.0))
+
+
 class MutationEffect(Serializable):
     """
     Base class for mutation effects.
@@ -946,6 +958,12 @@ class StructuralVariantEffect(TranscriptMutationEffect, MultiOutcomeEffect):
         self._candidates = (
             tuple(candidates) if candidates is not None else (self,))
         self.mutant_transcript = mutant_transcript
+        # Cryptic-exon / cryptic-splice candidates nominated by
+        # :func:`varcode.cryptic_exons.enumerate_from_structural_variant`
+        # (#337). Kept separate from :attr:`_candidates` because their
+        # ``outcomes`` entries carry different source / probability /
+        # evidence than the primary SV classification.
+        self._cryptic_candidates = ()
 
     @property
     def candidates(self):
@@ -955,28 +973,52 @@ class StructuralVariantEffect(TranscriptMutationEffect, MultiOutcomeEffect):
     def most_likely(self):
         return self._candidates[0]
 
+    def _attach_cryptic_candidates(self, cryptic_candidates):
+        """Attach cryptic-exon candidates (#337). Called by the SV
+        annotator after effect construction so the candidates appear
+        as additional :class:`Outcome` entries on :attr:`outcomes`
+        without polluting :attr:`candidates` (which stays the primary
+        classification tuple for back-compat).
+        """
+        self._cryptic_candidates = tuple(cryptic_candidates)
+
     @property
     def outcomes(self):
         """Unified :class:`~varcode.Outcome` view over
-        :attr:`candidates` (#339).
+        :attr:`candidates` and any attached cryptic candidates
+        (#339, #337).
 
-        Each outcome's ``effect`` is always a :class:`MutationEffect`
-        (SV candidates are MutationEffect instances by construction —
-        the default ``(self,)`` is already correct). ``evidence``
-        carries the SV-type tag so consumers can filter by
-        ``DEL`` / ``DUP`` / ``INV`` / ``BND`` without re-reading the
-        variant.
+        Primary outcomes carry ``source="varcode"``; cryptic outcomes
+        carry ``source="varcode_motif"`` along with
+        ``evidence["donor_score"]`` and ``evidence["acceptor_score"]``
+        so external splice predictors (SpliceAI, Pangolin, RNA
+        evidence) can filter by source and rescore.
         """
         from ..outcomes import Outcome
         sv_type = getattr(self.variant, "sv_type", None)
-        evidence = {"sv_type": sv_type} if sv_type is not None else {}
-        return tuple(
+        base_evidence = {"sv_type": sv_type} if sv_type is not None else {}
+        primary = tuple(
             Outcome(
                 effect=candidate,
                 source="varcode",
                 description=getattr(candidate, "short_description", None),
-                evidence=evidence)
+                evidence=base_evidence)
             for candidate in self._candidates)
+        cryptic = tuple(
+            Outcome(
+                effect=c,
+                source="varcode_motif",
+                probability=_cryptic_probability(c),
+                description=c.short_description,
+                evidence={
+                    **base_evidence,
+                    "donor_score": c.donor_score,
+                    "acceptor_score": c.acceptor_score,
+                    "interval_start": c.interval_start,
+                    "interval_end": c.interval_end,
+                })
+            for c in self._cryptic_candidates)
+        return primary + cryptic
 
 
 class LargeDeletion(StructuralVariantEffect):
