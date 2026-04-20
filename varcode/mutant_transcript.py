@@ -76,49 +76,152 @@ class TranscriptEdit:
 
 
 @dataclass(frozen=True)
+class ReferenceSegment:
+    """A contiguous run of reference sequence used to assemble a
+    :class:`MutantTranscript` for a structural variant (#252).
+
+    A fusion is described by two segments — one from each transcript
+    involved, each spanning the contributing exons. A translocation
+    to intergenic space is one transcript segment plus a
+    ``GenomicInterval`` segment. A large inversion that inverts a
+    middle chunk of a single transcript is three segments
+    (upstream-forward, reverse-complement middle, downstream-forward).
+
+    The ``source`` is typed as :class:`object` rather than pinned to
+    :class:`pyensembl.Transcript` so callers can plug in any object
+    that exposes ``sequence`` / ``start`` / ``end`` / ``strand``. This
+    keeps the door open for:
+
+    * Personalized / full-genome assemblies — the source can be a
+      patient-specific contig object.
+    * Long-read-derived local assemblies — the source can be an
+      opaque wrapper around a FASTA fragment.
+    * In-memory ``GenomicInterval`` stand-ins for intergenic space.
+
+    Coordinates are 0-based, ``start`` inclusive, ``end`` exclusive,
+    matching Python slice semantics. The annotator that materializes
+    ``cdna_sequence`` concatenates ``source.sequence[start:end]``
+    across segments in order (applying reverse-complement when
+    ``strand == "-"``).
+    """
+
+    source: object
+    """Transcript, ``GenomicInterval``, or caller-supplied sequence
+    provider. The only contract is: the segment can be rendered into
+    a nucleotide string by the producer of the MutantTranscript."""
+
+    start: int
+    """0-based inclusive start offset in ``source``'s own coordinate
+    system. For a :class:`pyensembl.Transcript` source, this is a
+    cDNA offset; for a ``GenomicInterval`` source, this is a genomic
+    position."""
+
+    end: int
+    """0-based exclusive end offset. ``end - start`` is the segment's
+    length in nucleotides."""
+
+    strand: str = "+"
+    """``"+"`` = forward, ``"-"`` = reverse-complement. Inversions
+    flip strand; the rest of the segments stay ``"+"``."""
+
+    label: str = ""
+    """Optional human-readable tag (e.g. ``"5p_partner"``,
+    ``"3p_partner"``, ``"intergenic_readthrough"``). Carried through
+    in serialization; ignored by translation logic."""
+
+    def __post_init__(self):
+        if self.end < self.start:
+            raise ValueError(
+                "ReferenceSegment end (%d) must be >= start (%d)"
+                % (self.end, self.start))
+        if self.strand not in ("+", "-"):
+            raise ValueError(
+                "ReferenceSegment strand must be '+' or '-', got %r"
+                % (self.strand,))
+
+    @property
+    def length(self) -> int:
+        return self.end - self.start
+
+
+@dataclass(frozen=True)
 class MutantTranscript:
-    """A reference transcript with zero or more variant-derived edits
-    applied, optionally carrying the mutated cDNA and protein
-    sequences.
+    """A reference transcript (or assembled set of reference segments)
+    with zero or more variant-derived edits applied, optionally
+    carrying the mutated cDNA and protein sequences.
 
     Producers (the protein-diff annotator, RNA-evidence importers,
-    the splice-outcomes rewrite, germline-aware annotation) construct
-    this once per (transcript, variant-set, context) and hand it to
+    the splice-outcomes rewrite, germline-aware annotation,
+    structural-variant annotators) construct this once per
+    (transcript-or-segments, variant-set, context) and hand it to
     downstream consumers. Each consumer reads the fields it cares
     about — ``edits`` for provenance, ``cdna_sequence`` /
     ``mutant_protein_sequence`` for protein-level analysis.
 
-    Sequence fields are ``Optional[str]`` because not every producer
-    computes them eagerly (some stages just need the edit list; full
-    translation is lazy). Callers that require the protein must
-    check or compute it themselves for now — the protein-diff
-    annotator in stage 2 will guarantee it's populated.
+    **Two shapes:**
 
-    **Forward-looking — structural variants (SVs).** The single
-    ``reference_transcript`` field expresses point variants and
-    indels cleanly but doesn't fit fusions, translocations, or large
-    rearrangements. The planned generalization is a
-    ``reference_segments`` alternative — a sequence of
-    ``(transcript_or_interval, cdna_range)`` pairs, where a fusion is
-    two segments from two transcripts and a translocation-to-intergenic
-    is one transcript segment plus a genomic-interval segment. SV
-    annotators that don't have a unique mutant protein (e.g. a
-    translocation producing many candidate ORFs that only RNA can
-    resolve) should return ``List[MutantTranscript]`` or wrap it in a
-    :class:`MultiOutcomeEffect` per #299. See #252 / #257 / #259 /
-    #305 for the roadmap. The current dataclass shape is the
-    point-variant subset; the SV extension doesn't break it.
+    * **Point-variant shape** (``reference_transcript`` is set,
+      ``reference_segments`` is ``None``) — the mutant is derived
+      from a single reference transcript by applying zero or more
+      :class:`TranscriptEdit` objects. This is the shape used by
+      the protein-diff annotator for SNVs, MNVs, and simple indels.
+
+    * **Structural-variant shape** (``reference_segments`` is set,
+      ``reference_transcript`` may be ``None`` or the primary /
+      5'-partner transcript) — the mutant is assembled by
+      concatenating :class:`ReferenceSegment` slices in order. A
+      gene fusion is two segments from two transcripts; a
+      translocation to intergenic is one transcript segment plus a
+      genomic-interval segment; an inversion is three forward/
+      reverse/forward segments. ``edits`` may still be populated
+      for point-variant edits layered on top of the assembled
+      segments, but typically an SV carries no extra edits.
+
+    Sequence fields are ``Optional[str]`` because not every producer
+    computes them eagerly. Callers that require the protein check or
+    compute it themselves; the protein-diff annotator guarantees it
+    for point variants.
+
+    **Forward-looking hooks** (not implemented here; documented so
+    new integrations know where to plug in):
+
+    * Personalized / full-genome reference — pass a
+      :class:`ReferenceSegment` whose ``source`` is a patient-specific
+      contig object. varcode's translation logic reads
+      ``source.sequence``; it doesn't care whether that's GRCh38 or
+      a custom assembly.
+    * Long-read resolution — when an SV has an :attr:`alt_assembly`
+      on the :class:`StructuralVariant`, the SV annotator can wrap
+      that sequence as a single synthetic segment.
+    * SV outcomes ambiguity — a translocation producing many candidate
+      ORFs that only RNA can resolve should return
+      ``List[MutantTranscript]`` or wrap it in a
+      :class:`MultiOutcomeEffect` per #299, each with its own
+      ``evidence`` dict capturing the disambiguator.
     """
 
-    reference_transcript: object
-    """The :class:`pyensembl.Transcript` this mutant is derived from.
-    Not typed tightly here so :mod:`pyensembl` isn't a hard import
-    dependency for anyone who just wants the dataclass."""
+    reference_transcript: Optional[object] = None
+    """The :class:`pyensembl.Transcript` this mutant is derived from
+    (point-variant shape), or the primary / 5'-partner transcript
+    (SV shape). ``None`` when the SV has no canonical primary
+    transcript (e.g. intergenic-to-intergenic BNDs). Not typed
+    tightly here so :mod:`pyensembl` isn't a hard import dependency
+    for anyone who just wants the dataclass."""
 
     edits: Tuple[TranscriptEdit, ...] = field(default_factory=tuple)
     """Edits applied to produce this mutant, sorted by
     :attr:`TranscriptEdit.cdna_start`. Empty tuple means the mutant
-    is identical to the reference."""
+    is identical to the reference (or, for SV shape, the assembled
+    segments carry the rearrangement directly without further
+    point-level edits)."""
+
+    reference_segments: Optional[Tuple[ReferenceSegment, ...]] = None
+    """Ordered tuple of :class:`ReferenceSegment` objects that, when
+    concatenated in order (applying reverse-complement to ``-``
+    strand segments), produce the mutant cDNA. ``None`` for the
+    point-variant shape; a fusion's segments would be
+    ``(5p_partner_segment, 3p_partner_segment)``. Coordinates are
+    in each segment's own reference system."""
 
     cdna_sequence: Optional[str] = None
     """The mutated spliced mRNA, when computed. ``None`` if the
@@ -138,9 +241,10 @@ class MutantTranscript:
 
     evidence: Optional[dict] = None
     """Optional producer-specific evidence (RNA read counts, Isovar
-    fragment ids, SpliceAI scores). Shape is annotator-specific and
-    not part of the stable contract; consumers that care about a
-    particular evidence shape should type-check it at the call site."""
+    fragment ids, SpliceAI scores, long-read assembly metadata).
+    Shape is annotator-specific and not part of the stable contract;
+    consumers that care about a particular evidence shape should
+    type-check it at the call site."""
 
     def __post_init__(self):
         if self.edits:
@@ -148,19 +252,36 @@ class MutantTranscript:
             if any(starts[i] > starts[i + 1] for i in range(len(starts) - 1)):
                 raise ValueError(
                     "MutantTranscript.edits must be sorted by cdna_start")
+        if (self.reference_transcript is None
+                and self.reference_segments is None):
+            raise ValueError(
+                "MutantTranscript requires either reference_transcript "
+                "(point-variant shape) or reference_segments (SV shape).")
 
     @property
     def is_identical_to_reference(self) -> bool:
-        """True if no edits were applied. Does NOT check
+        """True if no edits were applied AND there are no
+        reference-rearranging segments. Does NOT check
         ``cdna_sequence`` / ``mutant_protein_sequence`` — a producer
-        can legitimately carry an identical sequence with zero edits."""
-        return len(self.edits) == 0
+        can legitimately carry an identical sequence with zero edits
+        and a single identity segment."""
+        return (len(self.edits) == 0
+                and self.reference_segments is None)
+
+    @property
+    def is_structural(self) -> bool:
+        """True when this mutant was assembled from
+        :attr:`reference_segments` (SV shape) rather than applying
+        :attr:`edits` to a single reference transcript."""
+        return self.reference_segments is not None
 
     @property
     def total_length_delta(self) -> int:
         """Sum of :attr:`TranscriptEdit.length_delta` across all
         edits — how much longer or shorter the mutant cDNA is than
-        the reference."""
+        the reference (point-variant shape). For SV shape, returns
+        0; the length of an assembled cDNA is the sum of segment
+        lengths, not a delta against a single reference."""
         return sum(e.length_delta for e in self.edits)
 
 
