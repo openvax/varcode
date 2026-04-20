@@ -207,8 +207,6 @@ def _breakpoint_splice_window(transcript, breakpoint_pos):
         SpliceAcceptor,
         SpliceDonor,
     )
-    if str(getattr(transcript, "contig", "")) == "":
-        return None
     best_exon = None
     best_distance = None
     best_before = True
@@ -706,11 +704,9 @@ class StructuralVariantAnnotator:
             # If two endpoints land in the same exon's splice window,
             # only emit one set of splice candidates — the outcomes
             # are identical.
-            exon_key = getattr(exon, "exon_id", None) or (
-                exon.start, exon.end, exon.strand)
-            if exon_key in seen_exons:
+            if exon.exon_id in seen_exons:
                 continue
-            seen_exons.add(exon_key)
+            seen_exons.add(exon.exon_id)
             try:
                 synthetic = splice_cls(
                     variant=variant,
@@ -718,9 +714,9 @@ class StructuralVariantAnnotator:
                     nearest_exon=exon,
                     distance_to_exon=distance)
                 splice_set = enumerate_splice_outcomes(synthetic)
-            except Exception:
+            except (AttributeError, KeyError, ValueError):
                 continue
-            for outcome in getattr(splice_set, "outcomes", ()):
+            for outcome in splice_set.outcomes:
                 if outcome.evidence.get("splice_outcome") is (
                         SpliceOutcome.NORMAL_SPLICING):
                     # Primary SV classification already covers the
