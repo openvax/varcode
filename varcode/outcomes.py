@@ -103,8 +103,8 @@ class Outcome:
     effect: Any  # MutationEffect — typed loosely to avoid import cycle
     probability: Optional[float] = None
     source: str = "varcode"
-    description: Optional[str] = None
     evidence: Mapping[str, Any] = field(default_factory=dict)
+    description: Optional[str] = None
 
     def __post_init__(self):
         if self.probability is not None and not (

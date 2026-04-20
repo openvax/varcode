@@ -633,6 +633,142 @@ def test_fusion_protein_terminates_within_or_at_3p_partner_end():
         len(mt.cdna_sequence) - cds_start)
 
 
+def test_fusion_with_reverse_strand_3p_partner():
+    """Exercises the reverse-strand branch of
+    :func:`_cdna_offset_at_3p_breakpoint` — CFTR (forward strand, 5p)
+    fused to BRCA1 (reverse strand, 3p). Not a biologically observed
+    fusion; the purpose is to pin the arithmetic for a forward-5p +
+    reverse-3p pair."""
+    cftr = _cftr()
+    brca1 = ensembl_grch38.transcript_by_id(BRCA1_ID)
+    # CFTR intron 1 (between exon 1 end 117480148 and exon 2 start
+    # 117504253). Forward strand.
+    cftr_breakpoint = 117_485_000
+    # BRCA1 intron 2-3 (between exon 3 end 43115779 and exon 2 start
+    # 43124017) on reverse strand. Pick 43120000, strictly in the
+    # intron.
+    brca1_breakpoint = 43_120_000
+    sv = StructuralVariant(
+        contig="7",
+        start=cftr_breakpoint,
+        sv_type="BND",
+        alt="N]17:%d]" % brca1_breakpoint,
+        mate_contig="17",
+        mate_start=brca1_breakpoint,
+        mate_orientation="]]",
+        genome=ensembl_grch38)
+    effect = _ANNOTATOR.annotate_on_transcript(sv, cftr)
+    assert isinstance(effect, GeneFusion)
+    mt = effect.mutant_transcript
+
+    # CFTR retains exon 1 only (185 bp).
+    expected_5p_len = _sum_exon_lengths(cftr, {1})
+    assert mt.reference_segments[0].end == expected_5p_len
+
+    # BRCA1 3p retains exons 3 onward; exons 1+2 sum to 199 bp in
+    # transcript order (reverse-strand).
+    assert mt.reference_segments[1].start == _sum_exon_lengths(
+        effect.partner_transcript, {1, 2})
+
+
+def test_fusion_protein_is_none_when_5p_cds_past_breakpoint():
+    """When the 5p partner's CDS start offset lies beyond the
+    retained cDNA, :func:`_translate_fused_cdna` returns None so the
+    effect carries no fused-protein sequence (documented branch of
+    #336)."""
+    from varcode.annotators.structural_variant import _translate_fused_cdna
+    cftr = _cftr()
+    cds_start = min(cftr.start_codon_spliced_offsets)
+    # Simulate a fused cDNA where the retained 5p portion is shorter
+    # than the CDS start.
+    fake_fused = "A" * (cds_start * 2)  # plenty of length overall
+    result = _translate_fused_cdna(
+        fake_fused, cftr, five_prime_len=cds_start - 1)
+    assert result is None
+
+
+def test_deletion_with_partial_exon_overlap():
+    """A DEL that cuts mid-exon must produce segments whose cDNA
+    concatenation equals the reference cDNA minus the deleted
+    exonic bases. Exercises the partial-exon branches of
+    :func:`_cdna_ranges_kept_after_deletion`."""
+    transcript = _cftr()
+    exon1 = transcript.exons[0]
+    # Deletion that starts 50 bp into CFTR exon 1 and extends 10 kb
+    # into the intron — partial exon overlap on the right side.
+    del_start = exon1.start + 50
+    del_end = exon1.end + 10_000
+    sv = StructuralVariant(
+        contig="7",
+        start=del_start,
+        end=del_end,
+        sv_type="DEL",
+        genome=ensembl_grch38)
+    effect = _ANNOTATOR.annotate_on_transcript(sv, transcript)
+    mt = effect.mutant_transcript
+    assert mt is not None
+    # 50 bp of exon 1 survive (the 5' portion before the cut).
+    assert mt.reference_segments[0].start == 0
+    assert mt.reference_segments[0].end == 50
+    # Subsequent segments start at exon 2's cDNA offset (exon 1 is
+    # 185 bp, all after cut position 50 is deleted).
+    later_starts = [s.start for s in mt.reference_segments[1:]]
+    assert all(s >= 185 for s in later_starts), (
+        "Expected post-deletion segments at or after cDNA offset 185, "
+        "got %r" % later_starts)
+    # Assembled cDNA matches segment concatenation.
+    cdna = str(transcript.sequence)
+    assembled = "".join(cdna[s.start:s.end] for s in mt.reference_segments)
+    assert assembled == mt.cdna_sequence
+
+
+def test_warns_on_reverse_complement_mate_orientation():
+    """Reverse-complement BND orientations (``[]`` / ``][``) trip a
+    warning so a caller doesn't silently get canonical-direction
+    output (#336)."""
+    import warnings
+    cftr = _cftr()
+    brca1 = ensembl_grch38.transcript_by_id(BRCA1_ID)
+    sv = StructuralVariant(
+        contig="7",
+        start=cftr.start + 500,
+        sv_type="BND",
+        alt="N[17:%d[" % (brca1.start + 1000),
+        mate_contig="17",
+        mate_start=brca1.start + 1000,
+        mate_orientation="[]",
+        genome=ensembl_grch38)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        _ANNOTATOR.annotate_on_transcript(sv, cftr)
+    msgs = [str(w.message) for w in caught]
+    assert any("reverse-complement" in m for m in msgs), (
+        "Expected reverse-complement orientation warning, got %r" % msgs)
+
+
+def test_canonical_mate_orientation_does_not_warn():
+    """Canonical ``]]`` / ``[[`` pairings — or a missing orientation
+    — pass silently. Guards against the reverse-complement warning
+    becoming noisy for the common case."""
+    import warnings
+    cftr = _cftr()
+    brca1 = ensembl_grch38.transcript_by_id(BRCA1_ID)
+    sv = StructuralVariant(
+        contig="7",
+        start=cftr.start + 500,
+        sv_type="BND",
+        alt="N]17:%d]" % (brca1.start + 1000),
+        mate_contig="17",
+        mate_start=brca1.start + 1000,
+        mate_orientation="]]",
+        genome=ensembl_grch38)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        _ANNOTATOR.annotate_on_transcript(sv, cftr)
+    assert not any(
+        "reverse-complement" in str(w.message) for w in caught)
+
+
 def test_translocation_to_intergenic_attaches_single_segment_mutant_transcript():
     cftr = _cftr()
     sv = StructuralVariant(

@@ -19,14 +19,14 @@ from .common import bio_seq_to_str
 
 def _cryptic_probability(candidate):
     """Average of a cryptic-exon candidate's donor and acceptor motif
-    scores, bounded to ``[0, 1]``. Used by
-    :attr:`StructuralVariantEffect.outcomes` to populate
-    ``Outcome.probability`` when no external scorer is attached
-    (#337).
+    scores. Used by :attr:`StructuralVariantEffect.outcomes` to
+    populate ``Outcome.probability`` when no external scorer is
+    attached (#337). Both scores are match-ratios in ``[0, 1]`` so
+    their mean is already in range.
     """
     donor = candidate.donor_score or 0.0
     acceptor = candidate.acceptor_score or 0.0
-    return max(0.0, min(1.0, (donor + acceptor) / 2.0))
+    return (donor + acceptor) / 2.0
 
 
 class MutationEffect(Serializable):

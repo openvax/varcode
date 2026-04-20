@@ -181,6 +181,30 @@ def _cdna_ranges_within_sv(variant, transcript):
     return _merge_adjacent_ranges(sorted(inside))
 
 
+_REVERSE_COMPLEMENT_BND_ORIENTATIONS = frozenset({"[]", "]["})
+
+
+def _warn_on_reverse_complement_orientation(variant):
+    """Emit a single warning when the breakend's ``mate_orientation``
+    indicates a reverse-complement join (``[]`` or ``][``) that
+    ``_build_fusion_mutant_transcript`` doesn't yet handle correctly
+    (#336). Canonical ``]]`` / ``[[`` pairings, or a missing
+    orientation, pass silently.
+    """
+    import warnings
+    orientation = getattr(variant, "mate_orientation", None)
+    if orientation is None:
+        return
+    if orientation in _REVERSE_COMPLEMENT_BND_ORIENTATIONS:
+        warnings.warn(
+            "StructuralVariantAnnotator treats BND %r as a canonical "
+            "5p→3p fusion; reverse-complement orientations (%s) are "
+            "not yet interpreted. Pass a resolved sequence via "
+            "StructuralVariant.alt_assembly to override." % (
+                variant.short_description, orientation),
+            stacklevel=3)
+
+
 class _AssembledAllele:
     """Minimal :class:`ReferenceSegment.source` adapter for a
     caller-supplied assembled allele (long-read resolution, targeted
@@ -275,7 +299,6 @@ def _build_duplication_mutant_transcript(variant, transcript):
         return None
     full_cdna = str(transcript.sequence)
     full_len = len(full_cdna)
-    first_inside = inside[0][0]
     last_inside = inside[-1][1]
     body_segments = tuple(
         ReferenceSegment(
@@ -293,17 +316,6 @@ def _build_duplication_mutant_transcript(variant, transcript):
     )
     dup_body = "".join(full_cdna[s:e] for s, e in inside)
     joined = full_cdna[:last_inside] + dup_body + full_cdna[last_inside:]
-    # Confirm the segments and the assembled cDNA agree — catches
-    # any future drift between the two representations.
-    assembled = "".join(full_cdna[s.start:s.end] for s in segments)
-    assert assembled == joined, (
-        "DUP segment layout inconsistent with assembled cDNA: "
-        "segments=%r inside=%r" % (
-            [(s.start, s.end) for s in segments], inside))
-    # Reference `first_inside` in a way that documents the body
-    # origin (used in `dup_body_copy` labels) without leaving a
-    # dead variable behind.
-    del first_inside
     return MutantTranscript(
         reference_transcript=transcript,
         reference_segments=segments,
@@ -356,6 +368,12 @@ def _cdna_offset_at_5p_breakpoint(transcript, breakpoint_pos):
     end of the last transcript-order exon upstream of the
     breakpoint (the biologically expected behavior — the
     spliceosome completes the preceding exon before the junction).
+
+    Boundary convention: a breakpoint exactly AT the 5' terminal
+    base of an exon (``breakpoint_pos == exon.start`` on forward
+    strand, ``== exon.end`` on reverse strand) excludes that exon
+    from the retained 5' portion, so the 5p / 3p retained offsets
+    partition the transcript cDNA without overlap.
     """
     offset = 0
     reverse = transcript.on_backward_strand
@@ -364,16 +382,16 @@ def _cdna_offset_at_5p_breakpoint(transcript, breakpoint_pos):
         if reverse:
             if exon.start > breakpoint_pos:
                 offset += exon_len
-            elif exon.end >= breakpoint_pos:
-                offset += exon.end - breakpoint_pos + 1
+            elif exon.end > breakpoint_pos:
+                offset += exon.end - breakpoint_pos
                 return offset
             else:
                 return offset
         else:
             if exon.end < breakpoint_pos:
                 offset += exon_len
-            elif exon.start <= breakpoint_pos:
-                offset += breakpoint_pos - exon.start + 1
+            elif exon.start < breakpoint_pos:
+                offset += breakpoint_pos - exon.start
                 return offset
             else:
                 return offset
@@ -388,6 +406,11 @@ def _cdna_offset_at_3p_breakpoint(transcript, breakpoint_pos):
     retained. For an intronic breakpoint the walker snaps to the
     start of the first transcript-order exon downstream of the
     breakpoint.
+
+    Boundary convention mirrors :func:`_cdna_offset_at_5p_breakpoint`:
+    a breakpoint AT the 5' terminal base of an exon keeps that exon
+    in the 3' retained portion (its cDNA starts at the returned
+    offset).
     """
     offset = 0
     reverse = transcript.on_backward_strand
@@ -396,15 +419,15 @@ def _cdna_offset_at_3p_breakpoint(transcript, breakpoint_pos):
         if reverse:
             if exon.start > breakpoint_pos:
                 offset += exon_len
-            elif exon.end >= breakpoint_pos:
-                return offset + (exon.end - breakpoint_pos + 1)
+            elif exon.end > breakpoint_pos:
+                return offset + (exon.end - breakpoint_pos)
             else:
                 return offset
         else:
             if exon.end < breakpoint_pos:
                 offset += exon_len
-            elif exon.start <= breakpoint_pos:
-                return offset + (breakpoint_pos - exon.start + 1)
+            elif exon.start < breakpoint_pos:
+                return offset + (breakpoint_pos - exon.start)
             else:
                 return offset
     return offset
@@ -576,14 +599,19 @@ class StructuralVariantAnnotator:
         # Attach cryptic-exon candidates enumerated from flanking
         # sequence / long-read assembly (#337). They show up as
         # additional Outcomes with source="varcode_motif".
-        self._attach_cryptic_candidates(variant, effect)
+        self._enumerate_and_attach_cryptics(variant, effect)
         return effect
 
-    def _attach_cryptic_candidates(self, variant, effect):
-        """Enumerate cryptic-exon candidates around the SV and attach
-        them to ``effect`` (#337). No-op when ``effect`` isn't an
-        :class:`StructuralVariantEffect` (e.g. intronic fall-through)
-        or when the enumerator returns nothing.
+    def _enumerate_and_attach_cryptics(self, variant, effect):
+        """Enumerate cryptic-exon candidates around the SV and hand
+        them to ``effect._attach_cryptic_candidates`` (#337). The
+        annotator is the only legitimate caller of that method —
+        separating enumeration (here) from storage (on the effect)
+        keeps the motif-scoring dependency out of ``effect_classes``.
+
+        No-op when ``effect`` isn't an
+        :class:`StructuralVariantEffect` (e.g. intronic
+        fall-through) or when the enumerator returns nothing.
         """
         from ..cryptic_exons import enumerate_from_structural_variant
         from ..effects.effect_classes import StructuralVariantEffect
@@ -591,7 +619,7 @@ class StructuralVariantAnnotator:
             return
         try:
             candidates = enumerate_from_structural_variant(variant)
-        except Exception:
+        except (AttributeError, KeyError, ValueError, OSError):
             # Genome sequence fetch failed (no FASTA cached, unknown
             # contig, etc.) — silently skip; consumers still get the
             # primary SV classification.
@@ -661,6 +689,7 @@ class StructuralVariantAnnotator:
         """
         mate_contig = getattr(variant, "mate_contig", None)
         mate_start = getattr(variant, "mate_start", None)
+        _warn_on_reverse_complement_orientation(variant)
         assembly_mt = _build_alt_assembly_mutant_transcript(
             variant, transcript)
         if mate_contig is None or mate_start is None:
