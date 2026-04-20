@@ -26,6 +26,7 @@ from .errors import ReferenceMismatchError, SampleNotFoundError
 from .genotype import Genotype, Zygosity
 from .mutant_transcript import (
     MutantTranscript,
+    ReferenceSegment,
     TranscriptEdit,
     apply_variant_to_transcript,
 )
@@ -70,6 +71,7 @@ __all__ = [
 
     # MutantTranscript data model + pluggable annotators (openvax/varcode#271)
     "MutantTranscript",
+    "ReferenceSegment",
     "TranscriptEdit",
     "apply_variant_to_transcript",
 
