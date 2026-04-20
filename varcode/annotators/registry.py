@@ -13,10 +13,11 @@
 """Process-global registry for :class:`EffectAnnotator` instances.
 
 Kept as a module-level dict (not a class) to match the flat registry
-pattern in the rest of varcode. Default selection is ``"fast"``
-until the protein-diff annotator ships; callers that want a
-non-default annotator pass one explicitly or call
-:func:`set_default_annotator`. See #271.
+pattern in the rest of varcode. Default selection is
+``"protein_diff"`` — the protein-diff annotator is self-consistent by
+construction and produces HGVS-canonical output everywhere. ``"fast"``
+remains available as an opt-in for performance-sensitive pipelines or
+byte-for-byte compatibility with 2.x output. See #271.
 """
 
 from contextlib import contextmanager
@@ -37,7 +38,7 @@ class UnsupportedVariantError(ValueError):
 
 
 _REGISTRY = {}
-_DEFAULT_NAME = "fast"
+_DEFAULT_NAME = "protein_diff"
 
 
 def register_annotator(annotator):
@@ -64,10 +65,9 @@ def get_annotator(name):
 def get_default_annotator():
     """Return the annotator currently configured as the default.
 
-    Stage-1 default is ``"fast"``. After #271 stage 2 lands (the
-    protein-diff annotator), that becomes the new default and
-    ``"fast"`` stays available as an opt-in for users who need
-    byte-for-byte compatibility with 2.x output.
+    Current default is ``"protein_diff"`` (#322–#327 closed the last
+    known correctness bugs between the two). ``"fast"`` stays
+    available as an opt-in.
     """
     return _REGISTRY[_DEFAULT_NAME]
 
@@ -156,7 +156,6 @@ def use_annotator(name_or_instance):
                 _REGISTRY[name] = prior_registration
 
 
-# Register built-in annotators at import time. Fast is the default
-# until stage 3e flips it after the parity corpus passes clean.
+# Register built-in annotators at import time.
 register_annotator(FastEffectAnnotator())
 register_annotator(ProteinDiffEffectAnnotator())

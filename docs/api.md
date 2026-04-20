@@ -47,7 +47,7 @@ Auto-generated from in-source docstrings via
 
 ### `varcode.load_vcf`
 
-::: varcode.load_vcf
+::: varcode.vcf.load_vcf
 
 ### `varcode.load_maf`
 
