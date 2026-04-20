@@ -633,6 +633,33 @@ def test_fusion_protein_terminates_within_or_at_3p_partner_end():
         len(mt.cdna_sequence) - cds_start)
 
 
+def test_5p_and_3p_offsets_partition_transcript_at_exon_boundary():
+    """Boundary convention (#336 review): a breakpoint at any exon
+    terminal base yields identical 5p and 3p cDNA offsets — 5p
+    retains ``[0, offset)`` and 3p retains ``[offset, full_len)``,
+    together partitioning the transcript cDNA exactly.
+
+    Walks every exon terminal base on CFTR (forward) and BRCA1
+    (reverse) and asserts the partition invariant.
+    """
+    from varcode.annotators.structural_variant import (
+        _cdna_offset_at_3p_breakpoint,
+        _cdna_offset_at_5p_breakpoint,
+    )
+    for transcript in (
+            _cftr(), ensembl_grch38.transcript_by_id(BRCA1_ID)):
+        full_len = len(str(transcript.sequence))
+        for exon in transcript.exons:
+            for breakpoint in (exon.start, exon.end):
+                five_p = _cdna_offset_at_5p_breakpoint(transcript, breakpoint)
+                three_p = _cdna_offset_at_3p_breakpoint(transcript, breakpoint)
+                assert five_p == three_p, (
+                    "5p/3p disagree at exon terminal for %s bp=%d: "
+                    "5p=%d 3p=%d" % (
+                        transcript.id, breakpoint, five_p, three_p))
+                assert 0 <= five_p <= full_len
+
+
 def test_fusion_with_reverse_strand_3p_partner():
     """Exercises the reverse-strand branch of
     :func:`_cdna_offset_at_3p_breakpoint` — CFTR (forward strand, 5p)
@@ -744,6 +771,32 @@ def test_warns_on_reverse_complement_mate_orientation():
     msgs = [str(w.message) for w in caught]
     assert any("reverse-complement" in m for m in msgs), (
         "Expected reverse-complement orientation warning, got %r" % msgs)
+
+
+def test_alt_assembly_suppresses_reverse_complement_warning():
+    """When the caller resolved the allele via ``alt_assembly`` the
+    canonical-direction inference is bypassed, so the
+    reverse-complement warning shouldn't fire even for ``[]`` / ``][``
+    orientations."""
+    import warnings
+    cftr = _cftr()
+    brca1 = ensembl_grch38.transcript_by_id(BRCA1_ID)
+    sv = StructuralVariant(
+        contig="7",
+        start=cftr.start + 500,
+        sv_type="BND",
+        alt="N[17:%d[" % (brca1.start + 1000),
+        mate_contig="17",
+        mate_start=brca1.start + 1000,
+        mate_orientation="[]",
+        alt_assembly="ACGT" * 50,
+        genome=ensembl_grch38)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        _ANNOTATOR.annotate_on_transcript(sv, cftr)
+    assert not any(
+        "reverse-complement" in str(w.message) for w in caught), (
+        "alt_assembly should suppress the orientation warning")
 
 
 def test_canonical_mate_orientation_does_not_warn():

@@ -689,9 +689,14 @@ class StructuralVariantAnnotator:
         """
         mate_contig = getattr(variant, "mate_contig", None)
         mate_start = getattr(variant, "mate_start", None)
-        _warn_on_reverse_complement_orientation(variant)
         assembly_mt = _build_alt_assembly_mutant_transcript(
             variant, transcript)
+        # The reverse-complement warning only applies when we're
+        # inferring the fused allele from reference + breakpoint; if
+        # the caller supplied ``alt_assembly`` they already resolved
+        # the orientation themselves.
+        if assembly_mt is None:
+            _warn_on_reverse_complement_orientation(variant)
         if mate_contig is None or mate_start is None:
             return TranslocationToIntergenic(
                 variant=variant,

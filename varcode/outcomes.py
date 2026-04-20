@@ -84,13 +84,6 @@ class Outcome:
         External integrations set their own (``"spliceai"``,
         ``"isovar"``, ``"longread_assembly"``, etc.) so downstream
         callers can filter by source.
-    description : str or None
-        Optional human-readable sentence describing this specific
-        outcome ("Exon 7 is skipped (in-frame, 15 aa removed)").
-        Distinct from ``effect.short_description``, which is the
-        effect's HGVS-style label. Producers that want a richer
-        narrative attach it here rather than nesting it in
-        ``evidence``.
     evidence : Mapping[str, Any]
         Open-ended provenance dict. Shape is source-specific; the
         convention is that keys match the source's native field names
@@ -98,6 +91,15 @@ class Outcome:
         RNA read counts under ``{"junction_reads": 42}``). Consumers
         that need a particular shape should type-check at the call
         site rather than rely on a rigid schema here.
+    description : str or None
+        Optional human-readable sentence describing this specific
+        outcome ("Exon 7 is skipped (in-frame, 15 aa removed)").
+        Distinct from ``effect.short_description``, which is the
+        effect's HGVS-style label. Producers that want a richer
+        narrative attach it here rather than nesting it in
+        ``evidence``. Declared last so positional calls of the form
+        ``Outcome(effect, probability, source, evidence)`` continue
+        to route the dict to ``evidence``.
     """
 
     effect: Any  # MutationEffect — typed loosely to avoid import cycle
