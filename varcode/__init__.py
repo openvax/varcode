@@ -32,6 +32,12 @@ from .mutant_transcript import (
     TranscriptEdit,
     apply_variant_to_transcript,
 )
+from .cryptic_exons import (
+    enumerate_candidates as enumerate_cryptic_exon_candidates,
+    enumerate_from_structural_variant,
+    score_acceptor,
+    score_donor,
+)
 from .outcomes import Outcome, outcomes_from_candidates
 from .splice_outcomes import (
     SpliceCandidate,
@@ -85,6 +91,12 @@ __all__ = [
     "StructuralVariant",
     "SV_TYPES",
     "parse_symbolic_alt",
+
+    # Cryptic-exon candidate enumerator (PR 11; pluggable scorer hook)
+    "enumerate_cryptic_exon_candidates",
+    "enumerate_from_structural_variant",
+    "score_donor",
+    "score_acceptor",
 
     "EffectAnnotator",
     "FastEffectAnnotator",
