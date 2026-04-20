@@ -163,6 +163,29 @@ def test_uniform_iteration_sv_and_splice_outcomes():
         _ = o.effect.mutant_protein_sequence
 
 
+def test_outcome_round_trips_via_json():
+    """``Outcome`` now inherits :class:`DataclassSerializable`, so
+    ``to_json`` / ``from_json`` round-trip the full outcome — including
+    a polymorphic :class:`MutationEffect` ``effect`` field — without
+    any custom serialization code (#343)."""
+    variant = Variant("7", 117531114, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id("ENST00000003084")
+    real_effect = variant.effect_on_transcript(transcript)
+    o = Outcome(
+        effect=real_effect,
+        probability=0.75,
+        source="spliceai",
+        evidence={"ds_ag": 0.12},
+        description="fake")
+    rt = Outcome.from_json(o.to_json())
+    assert rt.probability == 0.75
+    assert rt.source == "spliceai"
+    assert rt.evidence == {"ds_ag": 0.12}
+    assert rt.description == "fake"
+    # effect round-trips polymorphically — same class as the original.
+    assert type(rt.effect) is type(real_effect)
+
+
 def test_outcome_accepts_external_scorer_shape():
     """An external predictor (SpliceAI-style) can construct an
     ``Outcome`` with its own probability and evidence dict. This

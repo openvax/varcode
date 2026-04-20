@@ -29,9 +29,11 @@ annotation) reference a stable abstraction.
 from dataclasses import dataclass, field
 from typing import Optional, Tuple
 
+from serializable import DataclassSerializable
+
 
 @dataclass(frozen=True)
-class TranscriptEdit:
+class TranscriptEdit(DataclassSerializable):
     """A single edit applied to a transcript's spliced mRNA.
 
     Coordinates are zero-based and refer to positions in the reference
@@ -76,7 +78,7 @@ class TranscriptEdit:
 
 
 @dataclass(frozen=True)
-class ReferenceSegment:
+class ReferenceSegment(DataclassSerializable):
     """A contiguous run of reference sequence used to assemble a
     :class:`MutantTranscript` for a structural variant (#252).
 
@@ -145,7 +147,7 @@ class ReferenceSegment:
 
 
 @dataclass(frozen=True)
-class MutantTranscript:
+class MutantTranscript(DataclassSerializable):
     """A reference transcript (or assembled set of reference segments)
     with zero or more variant-derived edits applied, optionally
     carrying the mutated cDNA and protein sequences.
