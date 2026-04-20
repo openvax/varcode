@@ -859,3 +859,154 @@ class FrameShiftTruncation(PrematureStop, FrameShift):
         return "p.%s%dfs*" % (
             self.aa_ref,
             self.aa_mutation_start_offset + 1)
+
+
+# =====================================================================
+# Structural-variant effects (#252 / PR 10)
+#
+# These describe consequences of SVs at the transcript level. A single
+# SV commonly produces multiple plausible consequences (fusion vs exon
+# loss vs readthrough), so each of these is a ``MultiOutcomeEffect``
+# subclass exposing an ``outcomes`` tuple per #299.
+#
+# The classes are deliberately thin wrappers — the important interface
+# is ``outcomes``, which carries the ``Outcome`` objects with
+# probability / source / evidence so external tools (RNA evidence,
+# SpliceAI, long-read assembly) can score them without subclassing.
+# =====================================================================
+
+
+class StructuralVariantEffect(TranscriptMutationEffect, MultiOutcomeEffect):
+    """Base class for effects of a :class:`StructuralVariant` on a
+    specific transcript. Subclasses set ``short_description``; the
+    ``outcomes`` property is what downstream callers read.
+
+    The ``candidates`` tuple (back-compat 2.x shape) returns
+    ``(self,)`` when no specific alternates have been nominated, or
+    a richer tuple when the subclass carries explicit alternate
+    effects. ``MultiOutcomeEffect.outcomes`` lifts that to the
+    unified :class:`Outcome` shape automatically.
+    """
+
+    def __init__(self, variant, transcript, candidates=None):
+        TranscriptMutationEffect.__init__(self, variant, transcript)
+        self._candidates = (
+            tuple(candidates) if candidates is not None else (self,))
+
+    @property
+    def candidates(self):
+        return self._candidates
+
+    @property
+    def most_likely(self):
+        return self._candidates[0]
+
+
+class LargeDeletion(StructuralVariantEffect):
+    """A deletion (``<DEL>`` / ``<CN0>``) that removes one or more
+    exons — or an entire gene. Carries the list of affected exons
+    for downstream analysis; the single ``outcome`` is this effect
+    itself (callers that want to add RNA evidence or SpliceAI
+    scoring construct additional outcomes and wrap the result)."""
+
+    short_description = "sv-deletion"
+
+    def __init__(self, variant, transcript, affected_exons, candidates=None):
+        StructuralVariantEffect.__init__(
+            self, variant, transcript, candidates=candidates)
+        self.affected_exons = tuple(affected_exons)
+
+    def __str__(self):
+        return "LargeDeletion(%s, %s, exons=%d)" % (
+            self.variant.short_description,
+            self.transcript.id,
+            len(self.affected_exons))
+
+
+class LargeDuplication(StructuralVariantEffect):
+    """A tandem duplication (``<DUP>``) overlapping exons.
+    Biologically may produce a copy-number increase, a fused
+    reading frame if junctions land in-frame, or a regulatory
+    effect. Varcode reports the affected exons and leaves scoring
+    to downstream tools."""
+
+    short_description = "sv-duplication"
+
+    def __init__(self, variant, transcript, affected_exons, candidates=None):
+        StructuralVariantEffect.__init__(
+            self, variant, transcript, candidates=candidates)
+        self.affected_exons = tuple(affected_exons)
+
+
+class Inversion(StructuralVariantEffect):
+    """An inversion (``<INV>``) that flips a stretch of a transcript.
+    Depending on whether breakpoints fall in exons or introns, the
+    consequence is very different (exonic: likely disruptive; purely
+    intronic: may or may not affect splicing). Reported as a single
+    outcome here; subclasses / callers can enrich with cryptic-
+    splice candidates per PR 11."""
+
+    short_description = "sv-inversion"
+
+
+class GeneFusion(StructuralVariantEffect):
+    """A breakend (``<BND>``) whose mate lies in another
+    protein-coding gene — the canonical fusion shape.
+
+    Carries the two partner transcripts (5' and 3') and, when the
+    annotator has enough context, a :class:`MutantTranscript` built
+    from :class:`ReferenceSegment` entries describing the fused
+    allele. Predicting the exact fused-protein sequence requires
+    knowing which exons are retained, which typically needs RNA
+    evidence — outcomes beyond "this is a plausible fusion" are
+    left to downstream tools that attach :class:`Outcome` objects
+    with ``source="isovar"`` / ``"longread_assembly"`` / etc.
+    """
+
+    short_description = "sv-gene-fusion"
+
+    def __init__(
+            self, variant, transcript, partner_transcript,
+            mutant_transcript=None, candidates=None):
+        StructuralVariantEffect.__init__(
+            self, variant, transcript, candidates=candidates)
+        self.partner_transcript = partner_transcript
+        self.mutant_transcript = mutant_transcript
+
+
+class TranslocationToIntergenic(StructuralVariantEffect):
+    """A breakend whose mate lies in intergenic space. The
+    downstream consequence depends on whether the intergenic region
+    contains cryptic splice / ORF signals — reported as a single
+    outcome here, with PR 11's cryptic-exon enumerator adding
+    candidate outcomes when applicable."""
+
+    short_description = "sv-translocation-intergenic"
+
+
+class CrypticExonCandidate(MutationEffect):
+    """A region where an SV has brought novel sequence into range
+    of the transcript, and motif scoring flags a plausible new
+    splice acceptor / donor pair. Produced by PR 11's cryptic-exon
+    enumerator; attached as additional :class:`Outcome` entries on
+    SV effects rather than standalone.
+
+    Not a :class:`TranscriptMutationEffect` because the candidate
+    region may not overlap any existing transcript — it's a *new*
+    exon hypothesis. Carries the contig / interval and the motif
+    scores as plain fields; external predictors (SpliceAI,
+    Pangolin) attach their own scores via the enclosing
+    :class:`Outcome.evidence` dict.
+    """
+
+    short_description = "sv-cryptic-exon-candidate"
+
+    def __init__(
+            self, variant, contig, interval_start, interval_end,
+            donor_score=None, acceptor_score=None):
+        MutationEffect.__init__(self, variant)
+        self.contig = contig
+        self.interval_start = interval_start
+        self.interval_end = interval_end
+        self.donor_score = donor_score
+        self.acceptor_score = acceptor_score

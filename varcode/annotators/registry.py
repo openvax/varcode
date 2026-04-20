@@ -24,6 +24,7 @@ from contextlib import contextmanager
 
 from .fast import FastEffectAnnotator
 from .protein_diff import ProteinDiffEffectAnnotator
+from .structural_variant import StructuralVariantAnnotator
 
 
 class UnsupportedVariantError(ValueError):
@@ -159,3 +160,4 @@ def use_annotator(name_or_instance):
 # Register built-in annotators at import time.
 register_annotator(FastEffectAnnotator())
 register_annotator(ProteinDiffEffectAnnotator())
+register_annotator(StructuralVariantAnnotator())
