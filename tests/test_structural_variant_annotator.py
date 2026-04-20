@@ -287,3 +287,120 @@ def test_sv_annotator_honors_alt_assembly_hook():
     )
     effect = _ANNOTATOR.annotate_on_transcript(sv, transcript)
     assert isinstance(effect, LargeDeletion)
+
+
+# --------------------------------------------------------------------
+# MutantTranscript attachment (#335).
+#
+# Every SV effect carries a MutantTranscript with reference_segments
+# populated. For DEL/DUP, cdna_sequence is derivable from cached
+# pyensembl cDNA alone and is populated. For INV, the segment shape
+# lands but cdna_sequence assembly is deferred. For BND (fusion /
+# translocation) the segment shape lands; fused-protein math is #336.
+# --------------------------------------------------------------------
+
+
+def test_large_deletion_attaches_mutant_transcript_with_derivable_cdna():
+    transcript = _cftr()
+    sv = StructuralVariant(
+        contig="7",
+        start=transcript.start + 300,
+        end=transcript.start + 30_000,
+        sv_type="DEL",
+        genome=ensembl_grch38)
+    effect = _ANNOTATOR.annotate_on_transcript(sv, transcript)
+    mt = effect.mutant_transcript
+    assert mt is not None
+    assert mt.is_structural
+    assert len(mt.reference_segments) >= 2
+    # cdna is derivable purely from cached cDNA; must be strictly
+    # shorter than the reference (we deleted something).
+    assert mt.cdna_sequence is not None
+    assert 0 < len(mt.cdna_sequence) < len(str(transcript.sequence))
+    # Assembled cDNA matches segment concatenation.
+    assembled = "".join(
+        str(transcript.sequence)[s.start:s.end]
+        for s in mt.reference_segments)
+    assert assembled == mt.cdna_sequence
+
+
+def test_large_duplication_attaches_mutant_transcript_with_longer_cdna():
+    transcript = _cftr()
+    sv = StructuralVariant(
+        contig="7",
+        start=transcript.start + 300,
+        end=transcript.start + 30_000,
+        sv_type="DUP",
+        genome=ensembl_grch38)
+    effect = _ANNOTATOR.annotate_on_transcript(sv, transcript)
+    mt = effect.mutant_transcript
+    assert mt is not None
+    assert mt.is_structural
+    # DUP layout is pre + body(1+) + post — at least 3 segments.
+    assert len(mt.reference_segments) >= 3
+    # cdna is derivable; must be strictly longer than the reference.
+    assert mt.cdna_sequence is not None
+    assert len(mt.cdna_sequence) > len(str(transcript.sequence))
+
+
+def test_inversion_attaches_mutant_transcript_with_strand_flipped_body():
+    transcript = _cftr()
+    sv = StructuralVariant(
+        contig="7",
+        start=transcript.start + 300,
+        end=transcript.start + 30_000,
+        sv_type="INV",
+        genome=ensembl_grch38)
+    effect = _ANNOTATOR.annotate_on_transcript(sv, transcript)
+    mt = effect.mutant_transcript
+    assert mt is not None
+    # At least one segment is strand='-' — the inverted middle.
+    strands = {s.strand for s in mt.reference_segments}
+    assert "-" in strands
+    # cdna is intentionally not yet assembled here (#335 scope
+    # limits inversion to shape only; sequence assembly is a
+    # follow-up that requires careful junction handling).
+    assert mt.cdna_sequence is None
+
+
+def test_gene_fusion_attaches_two_segment_mutant_transcript():
+    cftr = _cftr()
+    brca1 = ensembl_grch38.transcript_by_id(BRCA1_ID)
+    mate_pos = brca1.start + 1_000
+    sv = StructuralVariant(
+        contig="7",
+        start=cftr.start + 500,
+        sv_type="BND",
+        alt="N]17:%d]" % mate_pos,
+        mate_contig="17",
+        mate_start=mate_pos,
+        mate_orientation="]]",
+        genome=ensembl_grch38)
+    effect = _ANNOTATOR.annotate_on_transcript(sv, cftr)
+    assert isinstance(effect, GeneFusion)
+    mt = effect.mutant_transcript
+    assert mt is not None
+    assert len(mt.reference_segments) == 2
+    labels = {s.label for s in mt.reference_segments}
+    assert "5p_partner" in labels
+    assert "3p_partner" in labels
+    # Protein / cdna assembly is #336 — not populated here.
+    assert mt.cdna_sequence is None
+
+
+def test_translocation_to_intergenic_attaches_single_segment_mutant_transcript():
+    cftr = _cftr()
+    sv = StructuralVariant(
+        contig="7",
+        start=cftr.start + 500,
+        sv_type="BND",
+        alt="N]22:15500000]",
+        mate_contig="22",
+        mate_start=15_500_000,
+        mate_orientation="]]",
+        genome=ensembl_grch38)
+    effect = _ANNOTATOR.annotate_on_transcript(sv, cftr)
+    assert isinstance(effect, TranslocationToIntergenic)
+    mt = effect.mutant_transcript
+    assert mt is not None
+    assert len(mt.reference_segments) == 1

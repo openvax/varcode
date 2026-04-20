@@ -940,10 +940,12 @@ class StructuralVariantEffect(TranscriptMutationEffect, MultiOutcomeEffect):
     unified :class:`Outcome` shape automatically.
     """
 
-    def __init__(self, variant, transcript, candidates=None):
+    def __init__(
+            self, variant, transcript, candidates=None, mutant_transcript=None):
         TranscriptMutationEffect.__init__(self, variant, transcript)
         self._candidates = (
             tuple(candidates) if candidates is not None else (self,))
+        self.mutant_transcript = mutant_transcript
 
     @property
     def candidates(self):
@@ -986,9 +988,12 @@ class LargeDeletion(StructuralVariantEffect):
 
     short_description = "sv-deletion"
 
-    def __init__(self, variant, transcript, affected_exons, candidates=None):
+    def __init__(
+            self, variant, transcript, affected_exons,
+            candidates=None, mutant_transcript=None):
         StructuralVariantEffect.__init__(
-            self, variant, transcript, candidates=candidates)
+            self, variant, transcript,
+            candidates=candidates, mutant_transcript=mutant_transcript)
         self.affected_exons = tuple(affected_exons)
 
     def __str__(self):
@@ -1007,9 +1012,12 @@ class LargeDuplication(StructuralVariantEffect):
 
     short_description = "sv-duplication"
 
-    def __init__(self, variant, transcript, affected_exons, candidates=None):
+    def __init__(
+            self, variant, transcript, affected_exons,
+            candidates=None, mutant_transcript=None):
         StructuralVariantEffect.__init__(
-            self, variant, transcript, candidates=candidates)
+            self, variant, transcript,
+            candidates=candidates, mutant_transcript=mutant_transcript)
         self.affected_exons = tuple(affected_exons)
 
 
@@ -1044,9 +1052,9 @@ class GeneFusion(StructuralVariantEffect):
             self, variant, transcript, partner_transcript,
             mutant_transcript=None, candidates=None):
         StructuralVariantEffect.__init__(
-            self, variant, transcript, candidates=candidates)
+            self, variant, transcript,
+            candidates=candidates, mutant_transcript=mutant_transcript)
         self.partner_transcript = partner_transcript
-        self.mutant_transcript = mutant_transcript
 
 
 class TranslocationToIntergenic(StructuralVariantEffect):

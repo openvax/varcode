@@ -71,7 +71,281 @@ from ..effects.effect_classes import (
     NoncodingTranscript,
     TranslocationToIntergenic,
 )
+from ..mutant_transcript import MutantTranscript, ReferenceSegment
 from ..version import __version__ as _varcode_version
+
+
+# --------------------------------------------------------------------
+# MutantTranscript builders (#335).
+#
+# Map each SV classification to a :class:`MutantTranscript` populated
+# with :class:`ReferenceSegment` entries that describe the
+# rearranged allele. ``cdna_sequence`` is filled in where it's
+# derivable from pyensembl-cached transcript cDNA alone (DEL, and
+# DUP / INV where only whole exons are rearranged); otherwise left
+# None and resolved by downstream helpers (#336, #338).
+# --------------------------------------------------------------------
+
+
+def _exon_cdna_ranges(transcript):
+    """Yield ``(exon, cdna_start, cdna_end)`` for each exon of
+    ``transcript`` in transcript order. ``cdna_start`` / ``cdna_end``
+    are offsets into ``transcript.sequence``.
+    """
+    offset = 0
+    for exon in transcript.exons:
+        length = exon.end - exon.start + 1
+        yield exon, offset, offset + length
+        offset += length
+
+
+def _merge_adjacent_ranges(ranges):
+    """Merge ``[(s, e), ...]`` pairs that abut (``e_i == s_{i+1}``)
+    so the resulting segment list doesn't contain redundant splits.
+    Assumes the input is already sorted by start.
+    """
+    merged = []
+    for s, e in ranges:
+        if s >= e:
+            continue
+        if merged and merged[-1][1] == s:
+            merged[-1] = (merged[-1][0], e)
+        else:
+            merged.append((s, e))
+    return merged
+
+
+def _cdna_ranges_kept_after_deletion(variant, transcript):
+    """Compute the cDNA ranges of ``transcript`` that survive after
+    the genomic deletion described by ``variant``.
+
+    Returns a merged list of ``(cdna_start, cdna_end)`` tuples in
+    transcript order. Handles both forward and reverse strand
+    transcripts and the case where the deletion cuts through the
+    middle of an exon.
+    """
+    del_start = min(variant.start, variant.end)
+    del_end = max(variant.start, variant.end)
+    kept = []
+    reverse = transcript.on_backward_strand
+    for exon, c_s, c_e in _exon_cdna_ranges(transcript):
+        ex_s, ex_e = exon.start, exon.end
+        # Exon entirely outside the deletion.
+        if ex_e < del_start or ex_s > del_end:
+            kept.append((c_s, c_e))
+            continue
+        # Exon fully covered by the deletion.
+        if del_start <= ex_s and del_end >= ex_e:
+            continue
+        # Partial overlap: preserve the genomic bases outside the
+        # deletion and map them to cDNA. The direction of the map
+        # depends on strand — on the forward strand cDNA position
+        # 0 of the exon corresponds to ``ex_s``; on the reverse
+        # strand it corresponds to ``ex_e``.
+        if reverse:
+            if del_end < ex_e:
+                kept.append((c_s, c_s + (ex_e - del_end)))
+            if del_start > ex_s:
+                kept.append((c_e - (del_start - ex_s), c_e))
+        else:
+            if del_start > ex_s:
+                kept.append((c_s, c_s + (del_start - ex_s)))
+            if del_end < ex_e:
+                kept.append((c_s + (del_end + 1 - ex_s), c_e))
+    return _merge_adjacent_ranges(sorted(kept))
+
+
+def _cdna_ranges_within_sv(variant, transcript):
+    """cDNA ranges that fall INSIDE the SV span (used for DUP to
+    derive the duplicated body and for INV to derive the flipped
+    middle)."""
+    sv_start = min(variant.start, variant.end)
+    sv_end = max(variant.start, variant.end)
+    inside = []
+    reverse = transcript.on_backward_strand
+    for exon, c_s, c_e in _exon_cdna_ranges(transcript):
+        ex_s, ex_e = exon.start, exon.end
+        if ex_e < sv_start or ex_s > sv_end:
+            continue
+        # Clip exon to [sv_start, sv_end].
+        clipped_s = max(ex_s, sv_start)
+        clipped_e = min(ex_e, sv_end)
+        if reverse:
+            # cDNA offsets within exon grow as genomic position falls.
+            cdna_lo = c_s + (ex_e - clipped_e)
+            cdna_hi = c_s + (ex_e - clipped_s + 1)
+        else:
+            cdna_lo = c_s + (clipped_s - ex_s)
+            cdna_hi = c_s + (clipped_e - ex_s + 1)
+        inside.append((cdna_lo, cdna_hi))
+    return _merge_adjacent_ranges(sorted(inside))
+
+
+def _build_deletion_mutant_transcript(variant, transcript):
+    """Build a :class:`MutantTranscript` for a ``<DEL>`` SV.
+
+    The cDNA of the surviving transcript is the concatenation of
+    cDNA ranges outside the deleted span. cDNA is derivable entirely
+    from pyensembl-cached transcript sequence — no genomic FASTA
+    needed. ``mutant_protein_sequence`` is left to downstream
+    consumers (translation requires knowing whether the CDS start
+    survives, frame preservation across the junction, etc.).
+    """
+    kept = _cdna_ranges_kept_after_deletion(variant, transcript)
+    if not kept:
+        # Whole transcript deleted — express as a single zero-length
+        # segment so the MutantTranscript still has a well-defined
+        # shape (consumers see reference_segments=() and cdna="").
+        return MutantTranscript(
+            reference_transcript=transcript,
+            reference_segments=(),
+            cdna_sequence="",
+            annotator_name="structural_variant")
+    segments = tuple(
+        ReferenceSegment(
+            source=transcript, start=s, end=e, strand="+", label="del_kept")
+        for s, e in kept)
+    cdna = str(transcript.sequence)
+    joined = "".join(cdna[s:e] for s, e in kept)
+    return MutantTranscript(
+        reference_transcript=transcript,
+        reference_segments=segments,
+        cdna_sequence=joined,
+        annotator_name="structural_variant")
+
+
+def _build_duplication_mutant_transcript(variant, transcript):
+    """Build a :class:`MutantTranscript` for a ``<DUP>`` SV.
+
+    Tandem-duplication interpretation: the duplicated body is
+    inserted once between the surviving pre- and post-duplication
+    transcript segments, yielding a transcript cDNA that carries an
+    additional copy of the exonic ranges inside the SV span.
+    """
+    inside = _cdna_ranges_within_sv(variant, transcript)
+    if not inside:
+        return None
+    full_cdna = str(transcript.sequence)
+    full_len = len(full_cdna)
+    first_inside = inside[0][0]
+    last_inside = inside[-1][1]
+    body_segments = tuple(
+        ReferenceSegment(
+            source=transcript, start=s, end=e,
+            strand="+", label="dup_body_copy")
+        for s, e in inside)
+    segments = (
+        ReferenceSegment(
+            source=transcript, start=0, end=last_inside,
+            strand="+", label="pre_dup_including_body"),
+    ) + body_segments + (
+        ReferenceSegment(
+            source=transcript, start=last_inside, end=full_len,
+            strand="+", label="post_dup"),
+    )
+    dup_body = "".join(full_cdna[s:e] for s, e in inside)
+    joined = full_cdna[:last_inside] + dup_body + full_cdna[last_inside:]
+    # Confirm the segments and the assembled cDNA agree — catches
+    # any future drift between the two representations.
+    assembled = "".join(full_cdna[s.start:s.end] for s in segments)
+    assert assembled == joined, (
+        "DUP segment layout inconsistent with assembled cDNA: "
+        "segments=%r inside=%r" % (
+            [(s.start, s.end) for s in segments], inside))
+    # Reference `first_inside` in a way that documents the body
+    # origin (used in `dup_body_copy` labels) without leaving a
+    # dead variable behind.
+    del first_inside
+    return MutantTranscript(
+        reference_transcript=transcript,
+        reference_segments=segments,
+        cdna_sequence=joined,
+        annotator_name="structural_variant")
+
+
+def _build_inversion_mutant_transcript(variant, transcript):
+    """Build a :class:`MutantTranscript` for an ``<INV>`` SV.
+
+    The inverted exonic body is represented as one or more
+    ``strand='-'`` :class:`ReferenceSegment` entries; consumers that
+    want the assembled cDNA apply reverse-complement per segment.
+    ``cdna_sequence`` is intentionally left None here — correctly
+    assembling an inversion across exon boundaries requires
+    care and is deferred to a follow-up (the shape lands here so
+    downstream tools can see the inverted segment layout).
+    """
+    inside = _cdna_ranges_within_sv(variant, transcript)
+    if not inside:
+        return None
+    first_inside_start = inside[0][0]
+    last_inside_end = inside[-1][1]
+    full_len = len(str(transcript.sequence))
+    segments = (
+        ReferenceSegment(
+            source=transcript, start=0, end=first_inside_start,
+            strand="+", label="pre_inv"),) + tuple(
+        ReferenceSegment(
+            source=transcript, start=s, end=e,
+            strand="-", label="inv_body")
+        for s, e in inside) + (
+        ReferenceSegment(
+            source=transcript, start=last_inside_end, end=full_len,
+            strand="+", label="post_inv"),)
+    return MutantTranscript(
+        reference_transcript=transcript,
+        reference_segments=segments,
+        cdna_sequence=None,
+        annotator_name="structural_variant")
+
+
+def _build_fusion_mutant_transcript(variant, transcript, partner):
+    """Build a :class:`MutantTranscript` for a BND classified as
+    :class:`GeneFusion`.
+
+    Two segments: the 5' partner transcript (this transcript, up to
+    its end) and the 3' partner transcript (from its start). The
+    exact breakpoint-within-cDNA mapping and the fused-protein
+    computation belong in #336 — here we fix the segment shape so
+    consumers know a fusion has a 2-segment MutantTranscript.
+    ``cdna_sequence`` is left None because the junction isn't
+    resolved yet.
+    """
+    full_5p = len(str(transcript.sequence))
+    full_3p = len(str(partner.sequence))
+    segments = (
+        ReferenceSegment(
+            source=transcript, start=0, end=full_5p,
+            strand="+", label="5p_partner"),
+        ReferenceSegment(
+            source=partner, start=0, end=full_3p,
+            strand="+", label="3p_partner"),
+    )
+    return MutantTranscript(
+        reference_transcript=transcript,
+        reference_segments=segments,
+        cdna_sequence=None,
+        annotator_name="structural_variant")
+
+
+def _build_translocation_mutant_transcript(variant, transcript):
+    """Build a :class:`MutantTranscript` for a BND classified as
+    :class:`TranslocationToIntergenic`.
+
+    One segment covering the (this-side) transcript up to the
+    breakpoint. Intergenic space beyond the breakpoint isn't
+    representable as a transcript source; #338 and #341 extend this
+    with caller-supplied genomic intervals / long-read assemblies.
+    """
+    full_len = len(str(transcript.sequence))
+    segments = (
+        ReferenceSegment(
+            source=transcript, start=0, end=full_len,
+            strand="+", label="translocation_5p"),)
+    return MutantTranscript(
+        reference_transcript=transcript,
+        reference_segments=segments,
+        cdna_sequence=None,
+        annotator_name="structural_variant")
 
 
 class StructuralVariantAnnotator:
@@ -145,15 +419,13 @@ class StructuralVariantAnnotator:
         intronic, report :class:`Intronic`."""
         affected = self._overlapping_exons(variant, transcript)
         if not affected:
-            # Purely intronic SV (or spans past transcript) —
-            # report as Intronic for now. A future refinement would
-            # add a cryptic-splice candidate outcome when the
-            # breakpoints are near a splice site.
             return self._intronic_or_intergenic(variant, transcript)
         return LargeDeletion(
             variant=variant,
             transcript=transcript,
-            affected_exons=affected)
+            affected_exons=affected,
+            mutant_transcript=_build_deletion_mutant_transcript(
+                variant, transcript))
 
     def _annotate_duplication(self, variant, transcript):
         affected = self._overlapping_exons(variant, transcript)
@@ -162,16 +434,19 @@ class StructuralVariantAnnotator:
         return LargeDuplication(
             variant=variant,
             transcript=transcript,
-            affected_exons=affected)
+            affected_exons=affected,
+            mutant_transcript=_build_duplication_mutant_transcript(
+                variant, transcript))
 
     def _annotate_inversion(self, variant, transcript):
         affected = self._overlapping_exons(variant, transcript)
         if not affected:
             return self._intronic_or_intergenic(variant, transcript)
-        # Inversion disrupts whichever exons it crosses; single
-        # outcome for now (cryptic-splice candidates layer on via
-        # PR 11).
-        return Inversion(variant=variant, transcript=transcript)
+        return Inversion(
+            variant=variant,
+            transcript=transcript,
+            mutant_transcript=_build_inversion_mutant_transcript(
+                variant, transcript))
 
     def _annotate_insertion(self, variant, transcript):
         # Large symbolic <INS>: treat like duplication-style disruption
@@ -182,7 +457,9 @@ class StructuralVariantAnnotator:
         return LargeDuplication(
             variant=variant,
             transcript=transcript,
-            affected_exons=affected)
+            affected_exons=affected,
+            mutant_transcript=_build_duplication_mutant_transcript(
+                variant, transcript))
 
     def _annotate_breakend(self, variant, transcript):
         """A breakend whose first breakpoint lies on ``transcript``.
@@ -194,7 +471,10 @@ class StructuralVariantAnnotator:
         mate_start = getattr(variant, "mate_start", None)
         if mate_contig is None or mate_start is None:
             return TranslocationToIntergenic(
-                variant=variant, transcript=transcript)
+                variant=variant,
+                transcript=transcript,
+                mutant_transcript=_build_translocation_mutant_transcript(
+                    variant, transcript))
 
         partner = self._coding_transcript_at(
             variant, mate_contig, mate_start)
@@ -202,9 +482,14 @@ class StructuralVariantAnnotator:
             return GeneFusion(
                 variant=variant,
                 transcript=transcript,
-                partner_transcript=partner)
+                partner_transcript=partner,
+                mutant_transcript=_build_fusion_mutant_transcript(
+                    variant, transcript, partner))
         return TranslocationToIntergenic(
-            variant=variant, transcript=transcript)
+            variant=variant,
+            transcript=transcript,
+            mutant_transcript=_build_translocation_mutant_transcript(
+                variant, transcript))
 
     # -- utilities ------------------------------------------------------
 
