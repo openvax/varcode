@@ -35,6 +35,8 @@ from .splice_outcomes import (
     SpliceOutcome,
     SpliceOutcomeSet,
 )
+from .structural_variant import SV_TYPES, StructuralVariant
+from .sv_allele_parser import parse_symbolic_alt
 from .variant import Variant
 from .variant_collection import VariantCollection
 from .maf import load_maf, load_maf_dataframe
@@ -74,6 +76,11 @@ __all__ = [
     # Unified multi-outcome type (openvax/varcode#299)
     "Outcome",
     "outcomes_from_candidates",
+
+    # Structural variants (openvax/varcode#252 / #264)
+    "StructuralVariant",
+    "SV_TYPES",
+    "parse_symbolic_alt",
 
     "EffectAnnotator",
     "FastEffectAnnotator",

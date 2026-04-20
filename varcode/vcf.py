@@ -66,7 +66,8 @@ def load_vcf(
         sort_key=variant_ascending_position_sort_key,
         distinct=True,
         normalize_contig_names=True,
-        convert_ucsc_contig_names=True):
+        convert_ucsc_contig_names=True,
+        parse_structural_variants=False):
     """
     Load reference name and Variant objects from the given VCF filename.
 
@@ -238,7 +239,8 @@ def load_vcf(
         sample_names=handle.vcf_reader.samples if include_info else None,
         sample_info_parser=sample_info_parser,
         variant_kwargs=variant_kwargs,
-        variant_collection_kwargs=variant_collection_kwargs)
+        variant_collection_kwargs=variant_collection_kwargs,
+        parse_structural_variants=parse_structural_variants)
 
 
 
@@ -271,7 +273,8 @@ def dataframes_to_variant_collection(
         sample_names=None,
         sample_info_parser=None,
         variant_kwargs={},
-        variant_collection_kwargs={}):
+        variant_collection_kwargs={},
+        parse_structural_variants=False):
     """
     Load a VariantCollection from an iterable of pandas dataframes.
 
@@ -353,13 +356,43 @@ def dataframes_to_variant_collection(
                 for alt in alts.split(","):
                     if alt != ".":
                         if _is_symbolic_allele(alt):
-                            # VCF symbolic alleles (e.g. "<CN0>",
-                            # "<INS:ME:ALU>") and breakend notation (e.g.
-                            # "G]17:198982]") represent structural variants
-                            # that varcode cannot currently represent as a
-                            # simple ref/alt Variant. Skip them so the
-                            # rest of the VCF still loads, but track the
-                            # count for a visible warning at the end.
+                            # Spanning-deletion placeholder (``*``) is
+                            # always skipped — it's a cross-row
+                            # reference, not an allele to annotate.
+                            if alt == "*":
+                                n_skipped_symbolic += 1
+                                alt_num += 1
+                                continue
+                            if parse_structural_variants:
+                                # Parse symbolic / breakend ALT into a
+                                # StructuralVariant (PR 8). Falls back
+                                # to skipping if the parser can't
+                                # recognize the ALT shape.
+                                from .sv_allele_parser import (
+                                    parse_symbolic_alt)
+                                if info_parser is not None and info is None:
+                                    info = info_parser(tpl[8])
+                                sv = parse_symbolic_alt(
+                                    contig=chrom,
+                                    start=int(pos),
+                                    ref=ref,
+                                    alt=alt,
+                                    info=info,
+                                    genome=variant_kwargs.get("ensembl"),
+                                )
+                                if sv is not None:
+                                    variants.append(sv)
+                                    metadata[sv] = {
+                                        "id": id_,
+                                        "qual": qual,
+                                        "filter": flter,
+                                        "info": info,
+                                        "sample_info": sample_info,
+                                    }
+                                    alt_num += 1
+                                    continue
+                            # Flag off or parser rejected the ALT:
+                            # preserve the legacy filter-and-warn path.
                             n_skipped_symbolic += 1
                             alt_num += 1
                             continue
