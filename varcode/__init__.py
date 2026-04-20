@@ -14,6 +14,8 @@
 from .annotators import (
     EffectAnnotator,
     FastEffectAnnotator,
+    ProteinDiffEffectAnnotator,
+    StructuralVariantAnnotator,
     UnsupportedVariantError,
     get_annotator,
     get_default_annotator,
@@ -86,6 +88,8 @@ __all__ = [
 
     "EffectAnnotator",
     "FastEffectAnnotator",
+    "ProteinDiffEffectAnnotator",
+    "StructuralVariantAnnotator",
     "UnsupportedVariantError",
     "get_annotator",
     "get_default_annotator",

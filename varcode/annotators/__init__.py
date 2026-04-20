@@ -37,6 +37,7 @@ from typing import Protocol, runtime_checkable
 
 from .fast import FastEffectAnnotator
 from .protein_diff import ProteinDiffEffectAnnotator
+from .structural_variant import StructuralVariantAnnotator
 from .registry import (
     UnsupportedVariantError,
     get_annotator,
@@ -87,6 +88,8 @@ class EffectAnnotator(Protocol):
 __all__ = [
     "EffectAnnotator",
     "FastEffectAnnotator",
+    "ProteinDiffEffectAnnotator",
+    "StructuralVariantAnnotator",
     "UnsupportedVariantError",
     "get_annotator",
     "get_default_annotator",
