@@ -48,6 +48,22 @@ EXTENDED_NUCLEOTIDES = {
 }
 
 
+_COMPLEMENT_TABLE = str.maketrans(
+    "ACGTURYSWKMBDHVNacgturyswkmbdhvn",
+    "TGCAAYRSWMKVHDBNtgcaayrswmkvhdbn",
+)
+
+
+def reverse_complement(sequence):
+    """Reverse-complement a nucleotide string.
+
+    Preserves case and handles IUPAC ambiguity codes (#293). Replaces
+    ``Bio.Seq.reverse_complement`` so varcode doesn't pull in
+    biopython just for this one-line helper.
+    """
+    return sequence.translate(_COMPLEMENT_TABLE)[::-1]
+
+
 def is_purine(nucleotide, allow_extended_nucleotides=False):
     """Is the nucleotide a purine"""
     if not allow_extended_nucleotides and nucleotide not in STANDARD_NUCLEOTIDES:

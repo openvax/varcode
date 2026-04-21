@@ -12,7 +12,7 @@
 
 import logging
 
-from Bio.Seq import reverse_complement
+from ..nucleotides import reverse_complement
 from pyensembl import Transcript
 
 from ..common import groupby_field
