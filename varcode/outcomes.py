@@ -56,9 +56,11 @@ back-compat. New code should read ``outcomes``.
 from dataclasses import dataclass, field
 from typing import Any, Mapping, Optional, Tuple
 
+from serializable import DataclassSerializable
+
 
 @dataclass(frozen=True)
-class Outcome:
+class Outcome(DataclassSerializable):
     """One plausible consequence of a variant.
 
     Parameters

@@ -252,3 +252,55 @@ def test_apply_variant_returns_none_on_reference_mismatch():
                       allow_extended_nucleotides=True)
     mt = apply_variant_to_transcript(variant, transcript)
     assert mt is None
+
+
+# --------------------------------------------------------------------
+# DataclassSerializable round-trip (#343).
+#
+# These types gained to_dict / from_dict / to_json / from_json via
+# the DataclassSerializable mixin. Round-trip primitives through JSON
+# so downstream consumers can persist and rehydrate MutantTranscripts
+# uniformly.
+# --------------------------------------------------------------------
+
+
+def test_transcript_edit_json_round_trip():
+    edit = TranscriptEdit(
+        cdna_start=10,
+        cdna_end=13,
+        alt_bases="ACG",
+        source_variant=None)
+    rt = TranscriptEdit.from_json(edit.to_json())
+    assert rt == edit
+
+
+def test_reference_segment_json_round_trip():
+    from varcode import ReferenceSegment
+    # Use a string as a lightweight stand-in for the source — the
+    # segment data class doesn't care about the source shape as long
+    # as it's serializable.
+    seg = ReferenceSegment(
+        source="ACGTACGTACGT",
+        start=0,
+        end=12,
+        strand="+",
+        label="test")
+    rt = ReferenceSegment.from_json(seg.to_json())
+    assert rt == seg
+
+
+def test_mutant_transcript_json_round_trip_point_shape():
+    """Point-variant MutantTranscript shape (edits + cdna sequence)
+    round-trips via the inherited DataclassSerializable (#343)."""
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    variant = Variant("7", 117531114, "G", "A", ensembl_grch38)
+    mt = apply_variant_to_transcript(variant, transcript)
+    assert mt is not None
+    rt = MutantTranscript.from_json(mt.to_json())
+    # Materialized sequences + edits round-trip.
+    assert rt.cdna_sequence == mt.cdna_sequence
+    assert rt.mutant_protein_sequence == mt.mutant_protein_sequence
+    assert rt.annotator_name == mt.annotator_name
+    assert len(rt.edits) == len(mt.edits)
+    assert rt.edits[0].cdna_start == mt.edits[0].cdna_start
+    assert rt.edits[0].alt_bases == mt.edits[0].alt_bases

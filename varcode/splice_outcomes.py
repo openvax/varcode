@@ -46,6 +46,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
+from serializable import DataclassSerializable
+
 from .effects.classify import classify_from_protein_diff
 from .effects.codon_tables import codon_table_for_transcript, translate_sequence
 from .effects.effect_classes import (
@@ -93,12 +95,18 @@ class SpliceOutcome(Enum):
 
 
 @dataclass(frozen=True)
-class SpliceCandidate:
+class SpliceCandidate(DataclassSerializable):
     """One possible outcome of a splice-disrupting variant.
 
     Plausibility is a rough hand-tuned score, not a probability.
     Use the relative ordering of candidates rather than the absolute
     values for downstream filtering.
+
+    Serialization is inherited from
+    :class:`~serializable.DataclassSerializable`; ``to_json`` /
+    ``from_json`` round-trip the ``coding_effect`` polymorphically
+    via the standard ``__class__`` / ``__module__`` stamping from
+    ``serializable.helpers``.
     """
 
     outcome: SpliceOutcome
@@ -138,41 +146,29 @@ class SpliceCandidate:
         )
 
     def to_dict(self):
-        """JSON-friendly dict for persistence and round-trip (see #295).
-
-        ``outcome`` is encoded as its enum value (string); the optional
-        ``coding_effect`` is nested via its own Serializable ``to_dict``
-        and tagged with ``__effect_class__`` (a bare effect class name
-        the registry knows how to resolve; using ``__class__`` would
-        collide with the ``python-serializable`` polymorphic-dispatch
-        key).
+        """Emit the dataclass fields with :class:`SpliceOutcome`
+        converted to its string value. ``python-serializable`` has no
+        built-in enum branch in
+        :func:`~serializable.helpers.to_serializable_repr`, so we
+        stringify here to keep the JSON round-trip stable. Any
+        future dataclass field typed as an :class:`Enum` will need
+        the same treatment until the upstream helper grows an
+        enum branch (#343).
         """
-        coding = None
-        if self.coding_effect is not None:
-            coding = self.coding_effect.to_dict()
-            coding["__effect_class__"] = type(self.coding_effect).__name__
-        return {
-            "outcome": self.outcome.value,
-            "plausibility": self.plausibility,
-            "description": self.description,
-            "coding_effect": coding,
-            "predicted_class_name": self.predicted_class_name,
-        }
+        d = super().to_dict()
+        d["outcome"] = self.outcome.value
+        return d
 
     @classmethod
-    def from_dict(cls, state):
-        """Rehydrate from the dict produced by :meth:`to_dict`."""
-        coding_effect = None
-        coding_state = state.get("coding_effect")
-        if coding_state is not None:
-            coding_effect = _rehydrate_coding_effect(coding_state)
-        return cls(
-            outcome=SpliceOutcome(state["outcome"]),
-            plausibility=state["plausibility"],
-            description=state["description"],
-            coding_effect=coding_effect,
-            predicted_class_name=state.get("predicted_class_name"),
-        )
+    def from_dict(cls, state_dict):
+        """Inverse of :meth:`to_dict`: reparse the string
+        ``outcome`` into the :class:`SpliceOutcome` enum before
+        delegating to the dataclass constructor (#343)."""
+        state_dict = dict(state_dict)
+        outcome = state_dict.get("outcome")
+        if isinstance(outcome, str):
+            state_dict["outcome"] = SpliceOutcome(outcome)
+        return super().from_dict(state_dict)
 
 
 class SpliceOutcomeSet(MultiOutcomeEffect):
@@ -205,38 +201,13 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
         # IntronicSpliceSite). Used for priority lookup.
         self.disrupted_signal_class = disrupted_signal_class
 
-    def to_dict(self):
-        """JSON-friendly dict for persistence and round-trip (see #295).
-
-        ``candidates`` serialize as a list of :class:`SpliceCandidate`
-        dicts. ``disrupted_signal_class`` encodes as a bare class name
-        string that :meth:`_reconstruct_nested_objects` resolves back
-        to the class object via the splice-class registry.
-        """
-        return {
-            "variant": self.variant,
-            "transcript": self.transcript,
-            "candidates": [c.to_dict() for c in self.candidates],
-            "disrupted_signal_class": (
-                self.disrupted_signal_class.__name__
-                if self.disrupted_signal_class is not None
-                else None),
-        }
-
-    @classmethod
-    def _reconstruct_nested_objects(cls, state_dict):
-        """Rehydrate candidates and disrupted_signal_class before
-        :meth:`Serializable.from_dict` expands kwargs.
-        """
-        state_dict = dict(state_dict)
-        if "candidates" in state_dict:
-            state_dict["candidates"] = tuple(
-                SpliceCandidate.from_dict(c) for c in state_dict["candidates"])
-        if "disrupted_signal_class" in state_dict:
-            name = state_dict["disrupted_signal_class"]
-            state_dict["disrupted_signal_class"] = (
-                _SPLICE_SIGNAL_CLASS_REGISTRY.get(name) if name else None)
-        return state_dict
+    # Serialization is inherited from Serializable (the base of
+    # MutationEffect). to_dict emits {variant, transcript, candidates,
+    # disrupted_signal_class} via introspection; to_serializable_repr
+    # recursively handles nested MutationEffects, SpliceCandidate
+    # dataclasses, and the disrupted_signal_class type object via
+    # serializable.helpers' standard __class__ / __module__ stamping
+    # (#343).
 
     @property
     def priority_class(self):
@@ -791,90 +762,10 @@ def wrap_splice_effects_in_collection(effect_collection):
 # Priority integration happens via the `priority_class` attribute on
 # SpliceOutcomeSet — see `effect_priority` in effects.effect_ordering.
 
-
-# ---------------------------------------------------------------------
-# Serialization helpers (see #295).
-#
-# to_dict on SpliceCandidate / SpliceOutcomeSet encodes the enum as
-# its string value, the coding_effect via its own Serializable
-# to_dict (tagged with __class__ name), and disrupted_signal_class
-# as a bare class name. Rehydration looks class names up in these
-# registries and calls from_dict on the resolved class.
-# ---------------------------------------------------------------------
-
-
-# Eagerly-populated registry of effect classes we might encounter as
-# the coding_effect of a SpliceCandidate. Built lazily on first use to
-# avoid import-time cycles with effect_classes.
-_CODING_EFFECT_CLASS_REGISTRY = None
-
-
-def _coding_effect_class_registry():
-    global _CODING_EFFECT_CLASS_REGISTRY
-    if _CODING_EFFECT_CLASS_REGISTRY is None:
-        from .effects import effect_classes as ec
-        _CODING_EFFECT_CLASS_REGISTRY = {
-            cls.__name__: cls
-            for cls in (
-                ec.Substitution,
-                ec.Silent,
-                ec.Insertion,
-                ec.Deletion,
-                ec.ComplexSubstitution,
-                ec.AlternateStartCodon,
-                ec.FrameShift,
-                ec.FrameShiftTruncation,
-                ec.PrematureStop,
-                ec.StartLoss,
-                ec.StopLoss,
-                ec.ExonLoss,
-                ec.IntronicSpliceSite,
-                ec.ExonicSpliceSite,
-                ec.SpliceDonor,
-                ec.SpliceAcceptor,
-                ec.Intronic,
-                ec.FivePrimeUTR,
-                ec.ThreePrimeUTR,
-                ec.NoncodingTranscript,
-                ec.IncompleteTranscript,
-                ec.Intragenic,
-                ec.Intergenic,
-            )
-        }
-    return _CODING_EFFECT_CLASS_REGISTRY
-
-
-_SPLICE_SIGNAL_CLASS_REGISTRY = {
-    "SpliceDonor": SpliceDonor,
-    "SpliceAcceptor": SpliceAcceptor,
-    "ExonicSpliceSite": ExonicSpliceSite,
-    "IntronicSpliceSite": IntronicSpliceSite,
-}
-
-
-def _rehydrate_coding_effect(state):
-    """Resolve a coding-effect dict (with ``__effect_class__`` tag) to a
-    concrete instance.
-    """
-    state = dict(state)
-    class_name = state.pop("__effect_class__", None)
-    if class_name == "_ExonSkipFrameshiftEffect":
-        # Migration from pre-#305 serialized data: the internal
-        # _ExonSkipFrameshiftEffect shim no longer exists. Construct
-        # a FrameShift from the stored fields instead.
-        from .effects.effect_classes import FrameShift
-        try:
-            return FrameShift(
-                variant=state["variant"],
-                transcript=state["transcript"],
-                aa_mutation_start_offset=state["aa_mutation_start_offset"],
-                shifted_sequence=state.get("aa_alt", ""))
-        except Exception:
-            return None
-    registry = _coding_effect_class_registry()
-    effect_cls = registry.get(class_name)
-    if effect_cls is None:
-        raise ValueError(
-            "Unknown coding_effect class %r when rehydrating "
-            "SpliceCandidate" % class_name)
-    return effect_cls.from_dict(state)
+# Serialization is inherited from Serializable / DataclassSerializable
+# (see #343). serializable.helpers.to_serializable_repr stamps each
+# nested object's {__module__, __name__} and from_serializable_dict
+# resolves them via _lookup_value, so SpliceCandidate.coding_effect
+# (polymorphic MutationEffect) and SpliceOutcomeSet.disrupted_signal_class
+# (a class object) both round-trip without the hand-rolled registries
+# this module used to carry.
