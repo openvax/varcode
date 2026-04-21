@@ -28,6 +28,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Optional, Tuple
 
+from serializable import DataclassSerializable
+
 
 class Zygosity(Enum):
     """Zygosity of a sample's genotype relative to a specific alt allele.
@@ -75,7 +77,7 @@ def parse_gt_string(gt_str):
 
 
 @dataclass(frozen=True)
-class Genotype:
+class Genotype(DataclassSerializable):
     """One sample's genotype at one variant locus.
 
     The ``alleles`` tuple encodes the observed alleles using VCF GT

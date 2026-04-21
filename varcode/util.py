@@ -12,10 +12,9 @@
 
 import random
 
-from Bio.Seq import reverse_complement
 from pyensembl import genome_for_reference_name
 
-from .nucleotides import STANDARD_NUCLEOTIDES
+from .nucleotides import STANDARD_NUCLEOTIDES, reverse_complement
 from .variant import Variant
 from .variant_collection import VariantCollection
 

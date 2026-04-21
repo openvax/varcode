@@ -264,3 +264,28 @@ def test_genotype_equality():
     assert a == b
     c = Genotype.from_sample_info({"GT": "1/1", "AD": [0, 15], "DP": 15})
     assert a != c
+
+
+# ------------------------------------------------------------------
+# DataclassSerializable round-trip (#272).
+# ------------------------------------------------------------------
+
+
+def test_genotype_json_round_trip():
+    """``Genotype`` now inherits :class:`DataclassSerializable`, so
+    ``to_json`` / ``from_json`` round-trip without any hand-rolled
+    serialization code."""
+    gt = Genotype.from_sample_info({
+        "GT": "0/1",
+        "AD": [10, 5],
+        "DP": 15,
+        "GQ": 99,
+        "PS": 12345,
+    })
+    rt = Genotype.from_json(gt.to_json())
+    assert rt == gt
+    assert rt.alleles == (0, 1)
+    assert rt.allele_depths == (10, 5)
+    assert rt.total_depth == 15
+    assert rt.genotype_quality == 99
+    assert rt.phase_set == 12345
