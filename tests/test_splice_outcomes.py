@@ -844,3 +844,49 @@ def test_has_protein_is_false_for_stub_candidates():
         if c.outcome is SpliceOutcome.INTRON_RETENTION
     )
     assert intron.has_protein is False
+
+
+# ------------------------------------------------------------------
+# SpliceCandidate.mutant_transcript exposure (#305).
+# ------------------------------------------------------------------
+
+
+def test_exon_skipping_candidate_exposes_mutant_transcript():
+    """EXON_SKIPPING candidates now carry the :class:`MutantTranscript`
+    they were built from. Consumers get the full cDNA + protein
+    without re-deriving from coding_effect fields (#305)."""
+    from varcode import MutantTranscript
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    effects = variant.effects(splice_outcomes=True)
+    target = next(e for e in effects if e.transcript is transcript)
+    exon_skip = next(
+        c for c in target.candidates
+        if c.outcome is SpliceOutcome.EXON_SKIPPING
+    )
+    assert isinstance(exon_skip.mutant_transcript, MutantTranscript)
+    # The MutantTranscript has a materialized cDNA and the expected
+    # edit shape (one deletion of the skipped exon).
+    assert exon_skip.mutant_transcript.cdna_sequence is not None
+    assert len(exon_skip.mutant_transcript.edits) == 1
+    edit = exon_skip.mutant_transcript.edits[0]
+    assert edit.alt_bases == ""
+    # The skipped-exon cDNA delta matches the exon length on the
+    # transcript.
+    assert edit.cdna_end > edit.cdna_start
+    assert exon_skip.mutant_transcript.annotator_name == "splice_outcomes"
+
+
+def test_stub_candidates_have_no_mutant_transcript():
+    """INTRON_RETENTION / CRYPTIC_* still have ``mutant_transcript=None``
+    since they need genomic FASTA (#296) to materialize the retained
+    intron or cryptic-junction cDNA."""
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    effects = variant.effects(splice_outcomes=True)
+    target = next(e for e in effects if e.transcript is transcript)
+    intron = next(
+        c for c in target.candidates
+        if c.outcome is SpliceOutcome.INTRON_RETENTION
+    )
+    assert intron.mutant_transcript is None

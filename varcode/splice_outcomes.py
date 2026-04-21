@@ -37,9 +37,13 @@ the scores mean):
   require intron / flanking genomic sequence that PyEnsembl does
   not cache by default. A future PR with genomic-FASTA support
   would fill these in.
-* This is a **prototype**. Once the foundational
-  :class:`MutantTranscript` abstraction (#271) lands, this code will
-  be re-expressed as a thin layer over it.
+* EXON_SKIPPING candidates expose the :class:`~varcode.MutantTranscript`
+  they were derived from via :attr:`SpliceCandidate.mutant_transcript`.
+  The stub candidates (INTRON_RETENTION, CRYPTIC_*) and NORMAL_SPLICING
+  carry ``None`` — the former until genomic-FASTA ingestion (#296)
+  wires in intron / flanking sequence, the latter because their
+  coding impact is already fully described by the underlying
+  coding effect on :attr:`~SpliceCandidate.coding_effect`.
 """
 
 from dataclasses import dataclass
@@ -124,6 +128,16 @@ class SpliceCandidate(DataclassSerializable):
     """When ``coding_effect`` is None, the predicted Effect class name
     (e.g. ``'PrematureStop'``) inferred from the outcome and exon
     properties. Useful for filtering downstream."""
+
+    mutant_transcript: Optional[MutantTranscript] = None
+    """The assembled mutant transcript for this outcome (#305). Populated
+    for candidates where varcode can materialize the post-splicing cDNA
+    from cached transcript sequence (EXON_SKIPPING); ``None`` for
+    candidates that need genomic intron / flanking sequence to resolve
+    (INTRON_RETENTION, CRYPTIC_*) — those become populated when
+    genomic-FASTA ingestion lands (#296). Downstream consumers that
+    want to reason about the full cDNA / protein read this directly
+    instead of re-deriving from ``coding_effect`` fields."""
 
     @property
     def has_protein(self) -> bool:
@@ -518,6 +532,7 @@ def _build_exon_skipping_candidate(splice_effect, plausibility):
             description="Exon %s is skipped." % getattr(exon, "exon_id", "?"),
             coding_effect=None,
             predicted_class_name=predicted,
+            mutant_transcript=mt,
         )
 
     ref_protein = str(transcript.protein_sequence)
@@ -547,6 +562,7 @@ def _build_exon_skipping_candidate(splice_effect, plausibility):
         description=description,
         coding_effect=coding_effect,
         predicted_class_name=predicted_class_name,
+        mutant_transcript=mt,
     )
 
 
