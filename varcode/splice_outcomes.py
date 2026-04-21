@@ -566,14 +566,190 @@ def _build_exon_skipping_candidate(splice_effect, plausibility):
     )
 
 
-def _build_intron_retention_candidate(splice_effect, plausibility):
-    """Intron retention: stub candidate without exact protein.
+def _adjacent_intron_coords(transcript, exon, side):
+    """Return ``(intron_start, intron_end)`` (1-based inclusive) of the
+    intron on ``side`` of ``exon`` within ``transcript``, or ``None``
+    if the exon has no intron on that side (e.g. first or last exon).
 
-    Concrete protein computation requires intron genomic sequence
-    that PyEnsembl does not cache by default. We label the predicted
-    class as PrematureStop (the typical outcome) but leave
-    coding_effect None.
+    ``side`` is ``"donor"`` (transcript-3' of exon → intron after it
+    in transcript order) or ``"acceptor"`` (transcript-5' of exon).
+    Handles forward + reverse strand transcripts.
     """
+    exons = list(transcript.exons)
+    try:
+        idx = next(
+            i for i, ex in enumerate(exons) if ex.exon_id == exon.exon_id)
+    except StopIteration:
+        return None
+    reverse = transcript.on_backward_strand
+    if side == "donor":
+        adjacent_idx = idx + 1
+    elif side == "acceptor":
+        adjacent_idx = idx - 1
+    else:
+        return None
+    if adjacent_idx < 0 or adjacent_idx >= len(exons):
+        return None
+    adjacent = exons[adjacent_idx]
+    # Intron genomic coords are between the two exons on the reference.
+    if reverse:
+        # Transcript order: higher genomic → lower. Intron on donor
+        # side sits below exon; acceptor side above.
+        if side == "donor":
+            intron_start = adjacent.end + 1
+            intron_end = exon.start - 1
+        else:
+            intron_start = exon.end + 1
+            intron_end = adjacent.start - 1
+    else:
+        if side == "donor":
+            intron_start = exon.end + 1
+            intron_end = adjacent.start - 1
+        else:
+            intron_start = adjacent.end + 1
+            intron_end = exon.start - 1
+    if intron_end < intron_start:
+        return None
+    return (intron_start, intron_end)
+
+
+def _build_intron_retention_mutant_transcript(
+        variant, transcript, exon, side, genomic_sequence):
+    """Construct a :class:`MutantTranscript` for an intron-retention
+    outcome using caller-supplied genomic sequence (#296).
+
+    Returns ``None`` if the intron can't be resolved (no adjacent
+    exon, provider raised, or transcript is incomplete).
+    """
+    if not transcript.complete:
+        return None
+    coords = _adjacent_intron_coords(transcript, exon, side)
+    if coords is None:
+        return None
+    intron_start, intron_end = coords
+    try:
+        intron_seq = genomic_sequence(
+            transcript.contig, intron_start, intron_end)
+    except Exception:
+        return None
+    if not intron_seq:
+        return None
+    intron_seq = intron_seq.upper()
+    if transcript.on_backward_strand:
+        # Caller returns forward-strand genomic bases; for a reverse
+        # strand transcript we need the reverse complement to get
+        # transcript-order cDNA.
+        from .nucleotides import reverse_complement
+        intron_seq = reverse_complement(intron_seq)
+    # Insertion point in the cDNA: immediately after the exon in
+    # transcript order when the donor side is retained; immediately
+    # before it when the acceptor side is retained.
+    try:
+        exon_start_offset = _exon_start_offset_in_transcript(transcript, exon)
+    except ValueError:
+        return None
+    exon_length = exon.end - exon.start + 1
+    if side == "donor":
+        insert_at = exon_start_offset + exon_length
+    else:
+        insert_at = exon_start_offset
+    full_cdna = str(transcript.sequence)
+    mutant_cdna = (
+        full_cdna[:insert_at] + intron_seq + full_cdna[insert_at:])
+    edit = TranscriptEdit(
+        cdna_start=insert_at,
+        cdna_end=insert_at,
+        alt_bases=intron_seq,
+        source_variant=variant,
+    )
+    # Translate from the canonical start codon; premature stop inside
+    # the retained intron terminates the ORF.
+    cds_start = min(transcript.start_codon_spliced_offsets)
+    mut_protein = None
+    if cds_start < len(mutant_cdna):
+        codon_table = codon_table_for_transcript(transcript)
+        coding = mutant_cdna[cds_start:]
+        truncated = coding[:(len(coding) // 3) * 3]
+        try:
+            mut_protein = translate_sequence(
+                truncated, codon_table=codon_table, to_stop=True)
+        except ValueError:
+            mut_protein = None
+    return MutantTranscript(
+        reference_transcript=transcript,
+        edits=(edit,),
+        cdna_sequence=mutant_cdna,
+        mutant_protein_sequence=mut_protein,
+        annotator_name="splice_outcomes",
+    )
+
+
+def _splice_side_for_effect(splice_effect):
+    """Return ``"donor"`` / ``"acceptor"`` for the disrupted side, or
+    ``None`` if the splice class doesn't distinguish (falls through
+    to a single-side default in the caller)."""
+    if isinstance(splice_effect, SpliceDonor):
+        return "donor"
+    if isinstance(splice_effect, SpliceAcceptor):
+        return "acceptor"
+    if isinstance(splice_effect, IntronicSpliceSite):
+        # The existing _intronic_splice_side_is_acceptor helper keys
+        # the side decision off the variant's position relative to
+        # the exon.
+        return "acceptor" if (
+            _intronic_splice_side_is_acceptor(splice_effect)) else "donor"
+    if isinstance(splice_effect, ExonicSpliceSite):
+        # ExonicSpliceSite sits at the end of an exon — default donor.
+        return "donor"
+    return None
+
+
+def _build_intron_retention_candidate(
+        splice_effect, plausibility, genomic_sequence=None):
+    """Intron retention: the spliceosome fails and the intron is
+    transcribed through to the mature mRNA.
+
+    When ``genomic_sequence`` is provided (callable
+    ``(contig, start, end) -> str`` returning 1-based-inclusive
+    forward-strand genomic bases), varcode materializes the real
+    retained-intron :class:`MutantTranscript` and classifies the
+    resulting effect via :func:`classify_from_protein_diff` (#296).
+
+    Without a provider we fall back to the pre-#296 stub: the
+    candidate carries ``coding_effect=None`` and the predicted class
+    label ``"PrematureStop"``.
+    """
+    if genomic_sequence is not None:
+        transcript = getattr(splice_effect, "transcript", None)
+        exon = _affected_exon(splice_effect)
+        side = _splice_side_for_effect(splice_effect)
+        if transcript is not None and exon is not None and side is not None:
+            mt = _build_intron_retention_mutant_transcript(
+                splice_effect.variant, transcript, exon, side, genomic_sequence)
+            if mt is not None and mt.mutant_protein_sequence is not None:
+                ref_protein = str(transcript.protein_sequence)
+                mut_protein = mt.mutant_protein_sequence
+                length_delta = len(mt.cdna_sequence) - len(
+                    str(transcript.sequence))
+                coding_effect = classify_from_protein_diff(
+                    variant=splice_effect.variant,
+                    transcript=transcript,
+                    ref_protein=ref_protein,
+                    mut_protein=mut_protein,
+                    length_delta=length_delta,
+                    mutant_transcript=mt,
+                )
+                return SpliceCandidate(
+                    outcome=SpliceOutcome.INTRON_RETENTION,
+                    plausibility=plausibility,
+                    description=(
+                        "Intron is retained in the mature transcript; "
+                        "translation from the canonical start hits a "
+                        "premature stop inside the retained intron."),
+                    coding_effect=coding_effect,
+                    predicted_class_name=type(coding_effect).__name__,
+                    mutant_transcript=mt,
+                )
     return SpliceCandidate(
         outcome=SpliceOutcome.INTRON_RETENTION,
         plausibility=plausibility,
@@ -581,7 +757,8 @@ def _build_intron_retention_candidate(splice_effect, plausibility):
             "Intron is retained in the mature transcript. Almost "
             "always produces a premature stop codon within the "
             "intronic sequence; exact mutant protein requires "
-            "intron genomic sequence not cached by PyEnsembl."),
+            "intron genomic sequence (pass a ``genomic_sequence`` "
+            "callable to ``enumerate_splice_outcomes``)."),
         coding_effect=None,
         predicted_class_name="PrematureStop",
     )
@@ -719,7 +896,7 @@ def _exon_start_offset_in_transcript(transcript, exon):
 # ---------------------------------------------------------------------
 
 
-def enumerate_splice_outcomes(splice_effect):
+def enumerate_splice_outcomes(splice_effect, genomic_sequence=None):
     """Wrap a splice-disrupting Effect in a SpliceOutcomeSet.
 
     Recognized splice effect classes are SpliceDonor, SpliceAcceptor,
@@ -730,6 +907,17 @@ def enumerate_splice_outcomes(splice_effect):
     ----------
     splice_effect : MutationEffect
         Output of varcode's existing splice classification.
+
+    genomic_sequence : Callable[[str, int, int], str], optional
+        Caller-supplied provider for genomic sequence, returning
+        forward-strand bases for ``(contig, start_1based_inclusive,
+        end_1based_inclusive)`` (#296). When present, the
+        INTRON_RETENTION candidate computes a real
+        :class:`MutantTranscript` (intron inserted, protein truncated
+        at first premature stop) instead of the stub with
+        ``coding_effect=None``. Cryptic-splice candidates still
+        fall back to stubs — their genomic-FASTA integration is a
+        follow-up.
 
     Returns
     -------
@@ -752,7 +940,8 @@ def enumerate_splice_outcomes(splice_effect):
                 splice_effect, plausibility))
         elif outcome is SpliceOutcome.INTRON_RETENTION:
             candidates.append(_build_intron_retention_candidate(
-                splice_effect, plausibility))
+                splice_effect, plausibility,
+                genomic_sequence=genomic_sequence))
         elif outcome in (
                 SpliceOutcome.CRYPTIC_DONOR,
                 SpliceOutcome.CRYPTIC_ACCEPTOR):

@@ -878,9 +878,10 @@ def test_exon_skipping_candidate_exposes_mutant_transcript():
 
 
 def test_stub_candidates_have_no_mutant_transcript():
-    """INTRON_RETENTION / CRYPTIC_* still have ``mutant_transcript=None``
-    since they need genomic FASTA (#296) to materialize the retained
-    intron or cryptic-junction cDNA."""
+    """INTRON_RETENTION / CRYPTIC_* have ``mutant_transcript=None``
+    when no ``genomic_sequence`` provider is passed. With a provider,
+    INTRON_RETENTION populates the transcript (see the #296 tests
+    below). CRYPTIC_* remain None until a future pass."""
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     effects = variant.effects(splice_outcomes=True)
@@ -890,3 +891,89 @@ def test_stub_candidates_have_no_mutant_transcript():
         if c.outcome is SpliceOutcome.INTRON_RETENTION
     )
     assert intron.mutant_transcript is None
+
+
+# ------------------------------------------------------------------
+# Intron-retention with a genomic_sequence provider (#296).
+# ------------------------------------------------------------------
+
+
+def _synthetic_intron_provider(stop_offset=30, pad_with="A"):
+    """Return a callable that acts as a ``genomic_sequence`` provider.
+
+    The returned sequence starts with ``pad_with * stop_offset`` then
+    ``TAA`` (a stop codon) then further ``pad_with`` padding — so any
+    ORF translating through the intron hits a premature stop at
+    roughly ``stop_offset`` bases in.
+    """
+    def provider(contig, start, end):
+        length = end - start + 1
+        core = (pad_with * stop_offset) + "TAA" + (pad_with * length)
+        return core[:length]
+    return provider
+
+
+def test_intron_retention_with_provider_populates_mutant_transcript():
+    """When a ``genomic_sequence`` provider is passed to
+    :func:`enumerate_splice_outcomes`, the INTRON_RETENTION candidate
+    stops being a stub — it carries a full :class:`MutantTranscript`
+    with the intron inserted and the protein truncated at the first
+    in-intron stop codon (#296)."""
+    from varcode import MutantTranscript
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    bare = variant.effect_on_transcript(transcript)
+    assert isinstance(bare, SpliceDonor)
+    splice_set = enumerate_splice_outcomes(
+        bare, genomic_sequence=_synthetic_intron_provider())
+    intron = next(
+        c for c in splice_set.candidates
+        if c.outcome is SpliceOutcome.INTRON_RETENTION
+    )
+    assert isinstance(intron.mutant_transcript, MutantTranscript)
+    mt = intron.mutant_transcript
+    # cDNA is strictly longer than the reference (intron inserted).
+    assert len(mt.cdna_sequence) > len(str(transcript.sequence))
+    # Protein is truncated — shorter than the reference protein.
+    assert mt.mutant_protein_sequence is not None
+    assert len(mt.mutant_protein_sequence) < len(
+        str(transcript.protein_sequence))
+    # coding_effect is populated (was None in the stub case).
+    assert intron.coding_effect is not None
+
+
+def test_intron_retention_without_provider_still_stub():
+    """Back-compat: no ``genomic_sequence`` kwarg → stub behavior
+    preserved."""
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    bare = variant.effect_on_transcript(transcript)
+    splice_set = enumerate_splice_outcomes(bare)  # no provider
+    intron = next(
+        c for c in splice_set.candidates
+        if c.outcome is SpliceOutcome.INTRON_RETENTION
+    )
+    assert intron.mutant_transcript is None
+    assert intron.coding_effect is None
+    assert intron.predicted_class_name == "PrematureStop"
+
+
+def test_intron_retention_provider_can_raise_without_crashing():
+    """If the provider raises (unknown contig, missing FASTA, etc.),
+    the builder falls back to the stub candidate rather than
+    propagating the error."""
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    bare = variant.effect_on_transcript(transcript)
+
+    def failing_provider(contig, start, end):
+        raise IOError("FASTA not available")
+    splice_set = enumerate_splice_outcomes(
+        bare, genomic_sequence=failing_provider)
+    intron = next(
+        c for c in splice_set.candidates
+        if c.outcome is SpliceOutcome.INTRON_RETENTION
+    )
+    # Falls back to stub.
+    assert intron.mutant_transcript is None
+    assert intron.coding_effect is None
