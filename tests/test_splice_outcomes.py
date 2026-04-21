@@ -958,6 +958,116 @@ def test_intron_retention_without_provider_still_stub():
     assert intron.predicted_class_name == "PrematureStop"
 
 
+def _synthetic_cryptic_donor_provider(motif_offset=65, motif="CAGGTAAGT"):
+    """Provider that embeds a full-consensus donor motif at the given
+    offset from scan-window start. Used to verify the cryptic donor
+    scan picks up the implanted site."""
+    def provider(contig, start, end):
+        length = end - start + 1
+        seq = bytearray(b"A" * length)
+        for i, c in enumerate(motif):
+            if motif_offset + i < length:
+                seq[motif_offset + i] = ord(c)
+        return seq.decode()
+    return provider
+
+
+def test_cryptic_donor_with_provider_picks_up_implanted_motif():
+    """With a genomic_sequence provider returning a strong donor
+    motif a fixed distance from the canonical boundary, the
+    CRYPTIC_DONOR candidate finds it, computes a MutantTranscript
+    with the new exon boundary, and classifies the resulting coding
+    effect (#296)."""
+    from varcode import MutantTranscript
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    bare = variant.effect_on_transcript(transcript)
+    # Place the motif 15 bp into the intron of the scan window
+    # (canonical sits at offset 50; 65 = canonical + 15).
+    splice_set = enumerate_splice_outcomes(
+        bare, genomic_sequence=_synthetic_cryptic_donor_provider(
+            motif_offset=65))
+    cryptic = next(
+        c for c in splice_set.candidates
+        if c.outcome is SpliceOutcome.CRYPTIC_DONOR
+    )
+    assert isinstance(cryptic.mutant_transcript, MutantTranscript)
+    mt = cryptic.mutant_transcript
+    # cDNA is longer (exon extended into intron).
+    delta = len(mt.cdna_sequence) - len(str(transcript.sequence))
+    assert delta > 0, "Cryptic donor should extend the exon"
+    assert cryptic.coding_effect is not None
+    # Description names the motif score and genomic position.
+    assert "motif score" in cryptic.description
+    assert "Cryptic donor" in cryptic.description
+
+
+def test_cryptic_acceptor_with_provider_picks_up_implanted_motif():
+    """Same as the donor test but for the acceptor side. Disrupted
+    canonical acceptor + embedded cryptic acceptor motif → the
+    CRYPTIC_ACCEPTOR candidate materializes."""
+    # CFTR exon 4 acceptor -1: variant at 117530898.
+    variant = Variant("7", 117530898, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    bare = variant.effect_on_transcript(transcript)
+    if not isinstance(bare, SpliceAcceptor):
+        pytest.skip("Variant didn't classify as SpliceAcceptor")
+
+    # Acceptor consensus is YAG|G (4 bp). Put "CAGG" (full-match) at
+    # offset 40 — 10 bp before the canonical boundary at 50.
+    def provider(contig, start, end):
+        length = end - start + 1
+        seq = bytearray(b"A" * length)
+        motif = b"CAGG"
+        pos = 40
+        for i, c in enumerate(motif):
+            if pos + i < length:
+                seq[pos + i] = c
+        return seq.decode()
+
+    splice_set = enumerate_splice_outcomes(bare, genomic_sequence=provider)
+    cryptic = next(
+        c for c in splice_set.candidates
+        if c.outcome is SpliceOutcome.CRYPTIC_ACCEPTOR
+    )
+    assert cryptic.mutant_transcript is not None
+    assert "Cryptic acceptor" in cryptic.description
+
+
+def test_cryptic_without_provider_still_stub():
+    """Back-compat: without a provider, cryptic candidates stay stubs."""
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    bare = variant.effect_on_transcript(transcript)
+    splice_set = enumerate_splice_outcomes(bare)
+    cryptic = next(
+        c for c in splice_set.candidates
+        if c.outcome is SpliceOutcome.CRYPTIC_DONOR
+    )
+    assert cryptic.mutant_transcript is None
+    assert cryptic.coding_effect is None
+
+
+def test_cryptic_with_no_motif_in_range_is_stub():
+    """If the scan window contains no above-threshold motif, the
+    cryptic candidate falls back to the stub (nothing to materialize)."""
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    bare = variant.effect_on_transcript(transcript)
+
+    # Provider returns nothing resembling a donor/acceptor motif.
+    def provider(contig, start, end):
+        return "N" * (end - start + 1)
+
+    splice_set = enumerate_splice_outcomes(bare, genomic_sequence=provider)
+    cryptic = next(
+        c for c in splice_set.candidates
+        if c.outcome is SpliceOutcome.CRYPTIC_DONOR
+    )
+    assert cryptic.mutant_transcript is None
+    assert cryptic.predicted_class_name == "ComplexSubstitution"
+
+
 def test_intron_retention_provider_can_raise_without_crashing():
     """If the provider raises (unknown contig, missing FASTA, etc.),
     the builder falls back to the stub candidate rather than

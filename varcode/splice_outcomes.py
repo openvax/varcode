@@ -764,14 +764,258 @@ def _build_intron_retention_candidate(
     )
 
 
-def _build_cryptic_splice_candidate(splice_effect, plausibility, outcome):
-    """Cryptic donor/acceptor: stub candidate without exact protein.
+_CRYPTIC_SCAN_FLANK = 50
+"""Default number of bases to scan on each side of the canonical
+splice boundary when looking for cryptic donor/acceptor sites.
+Cryptic activations within ~50 bp are the usual clinical observations;
+consumers wanting a wider scan pass ``cryptic_scan_flank`` through
+:func:`enumerate_splice_outcomes`."""
 
-    Detecting the cryptic site requires scanning flanking genomic
-    sequence. Stub for now; full implementation requires genomic
-    FASTA support.
+
+def _best_cryptic_site(sequence, canonical_offset, kind):
+    """Scan ``sequence`` for the highest-scoring cryptic splice site
+    of ``kind`` (``"donor"`` or ``"acceptor"``), ignoring the
+    canonical position itself (#296).
+
+    ``sequence`` is in transcript order (5'→3'); the canonical
+    boundary sits AFTER position ``canonical_offset`` for donor (the
+    exon/intron junction) and BEFORE for acceptor. Returns
+    ``(offset, score)`` — ``offset`` is the cryptic equivalent of the
+    canonical boundary in ``sequence`` coordinates — or ``None`` when
+    no above-threshold site is found.
+    """
+    from .cryptic_exons import (
+        ACCEPTOR_WINDOW,
+        DONOR_WINDOW,
+        score_acceptor,
+        score_donor,
+    )
+    scorer = score_donor if kind == "donor" else score_acceptor
+    window = DONOR_WINDOW if kind == "donor" else ACCEPTOR_WINDOW
+    # For donor: offset of returned candidate = position of
+    # exon/intron junction in sequence (= end of exonic portion).
+    # Donor window is 3 exonic + 6 intronic → junction sits at
+    # window_start + 3.
+    #
+    # For acceptor: window is 3 intronic + 1 exonic → junction
+    # (= start of new exon) sits at window_start + 3.
+    junction_offset_in_window = 3
+    best = None
+    for i in range(len(sequence) - window + 1):
+        sub = sequence[i:i + window]
+        score = scorer(sub)
+        if score <= 0:
+            continue
+        junction = i + junction_offset_in_window
+        # Skip the canonical site itself — we're looking for alternatives.
+        if junction == canonical_offset:
+            continue
+        if best is None or score > best[1]:
+            best = (junction, score)
+    return best
+
+
+def _build_cryptic_site_mutant_transcript(
+        variant, transcript, exon, side, genomic_sequence,
+        scan_flank=_CRYPTIC_SCAN_FLANK):
+    """Construct a :class:`MutantTranscript` where the canonical
+    splice boundary on ``side`` (``"donor"`` or ``"acceptor"``) is
+    replaced by the best-scoring cryptic site within ``scan_flank``
+    bp on either side (#296).
+
+    Returns ``(mt, score, cryptic_genomic_pos)`` or ``None`` when no
+    cryptic site is found or the transcript is incomplete.
+    """
+    if not transcript.complete:
+        return None
+    reverse = transcript.on_backward_strand
+    # Determine the scan region around the canonical boundary.
+    # Donor boundary = exon's transcript-3' end in genomic coords:
+    #   forward: exon.end; reverse: exon.start.
+    # Acceptor boundary = exon's transcript-5' start:
+    #   forward: exon.start; reverse: exon.end.
+    if side == "donor":
+        boundary_pos = exon.start if reverse else exon.end
+        # On forward strand, scan extends into the intron (higher coords)
+        # by scan_flank and into the exon (lower coords) by scan_flank.
+        # On reverse strand, intron is at LOWER coords.
+        if reverse:
+            scan_start = boundary_pos - scan_flank
+            scan_end = boundary_pos + scan_flank
+        else:
+            scan_start = boundary_pos - scan_flank
+            scan_end = boundary_pos + scan_flank
+    else:  # acceptor
+        boundary_pos = exon.end if reverse else exon.start
+        scan_start = boundary_pos - scan_flank
+        scan_end = boundary_pos + scan_flank
+    # Fetch forward-strand sequence.
+    try:
+        forward_seq = genomic_sequence(
+            transcript.contig, scan_start, scan_end).upper()
+    except Exception:
+        return None
+    if not forward_seq:
+        return None
+    # For reverse-strand transcript, transcript-order sequence is the
+    # reverse complement of the forward-strand region.
+    from .nucleotides import reverse_complement
+    if reverse:
+        scan_seq = reverse_complement(forward_seq)
+    else:
+        scan_seq = forward_seq
+    # Map genomic positions in the scan window → sequence offsets in
+    # transcript order.
+    region_length = scan_end - scan_start + 1
+    if reverse:
+        def genomic_to_seq_offset(g_pos):
+            return scan_end - g_pos
+    else:
+        def genomic_to_seq_offset(g_pos):
+            return g_pos - scan_start
+    canonical_offset = genomic_to_seq_offset(boundary_pos)
+    # Correction for donor/acceptor "junction" convention in
+    # _best_cryptic_site: donor's junction = last exonic base → on
+    # forward strand that's boundary_pos, offset (boundary_pos - scan_start).
+    # For acceptor: junction = first exonic base = boundary_pos, same
+    # offset calculation. Both map directly.
+    result = _best_cryptic_site(scan_seq, canonical_offset, kind=side)
+    if result is None:
+        return None
+    cryptic_offset_in_seq, score = result
+    # Translate back to genomic position.
+    if reverse:
+        cryptic_genomic_pos = scan_end - cryptic_offset_in_seq
+    else:
+        cryptic_genomic_pos = scan_start + cryptic_offset_in_seq
+    # Build the mutant cDNA by replacing the canonical exon boundary
+    # with the cryptic one.
+    #
+    # Delta in exon length (transcript-order bases):
+    #   donor:   cryptic - canonical (positive = extends exon)
+    #   acceptor: canonical - cryptic (positive = extends exon at 5' end)
+    if side == "donor":
+        exon_length_delta = cryptic_offset_in_seq - canonical_offset
+    else:
+        exon_length_delta = canonical_offset - cryptic_offset_in_seq
+    try:
+        exon_start_in_tx = _exon_start_offset_in_transcript(transcript, exon)
+    except ValueError:
+        return None
+    exon_len = exon.end - exon.start + 1
+    full_cdna = str(transcript.sequence)
+    if side == "donor":
+        # Donor change shifts the exon's 3' end. Junction in transcript
+        # cDNA is at exon_start_in_tx + exon_len.
+        junction_cdna = exon_start_in_tx + exon_len
+    else:
+        # Acceptor change shifts the exon's 5' start.
+        junction_cdna = exon_start_in_tx
+    if exon_length_delta >= 0:
+        # Exon is extended → insert intron bases from the scan window.
+        if side == "donor":
+            # Added bases sit immediately after the canonical junction.
+            # In transcript order they come from scan_seq between
+            # canonical_offset and cryptic_offset_in_seq.
+            added = scan_seq[canonical_offset:cryptic_offset_in_seq]
+            insert_at = junction_cdna
+        else:
+            # Acceptor extension: intron bases go before the canonical
+            # junction.
+            added = scan_seq[cryptic_offset_in_seq:canonical_offset]
+            insert_at = junction_cdna
+        mutant_cdna = (
+            full_cdna[:insert_at] + added + full_cdna[insert_at:])
+        edit = TranscriptEdit(
+            cdna_start=insert_at,
+            cdna_end=insert_at,
+            alt_bases=added,
+            source_variant=variant,
+        )
+    else:
+        # Exon is truncated → remove bases from the exon's end (donor)
+        # or start (acceptor).
+        removed = -exon_length_delta
+        if side == "donor":
+            remove_start = junction_cdna - removed
+            remove_end = junction_cdna
+        else:
+            remove_start = junction_cdna
+            remove_end = junction_cdna + removed
+        mutant_cdna = (
+            full_cdna[:remove_start] + full_cdna[remove_end:])
+        edit = TranscriptEdit(
+            cdna_start=remove_start,
+            cdna_end=remove_end,
+            alt_bases="",
+            source_variant=variant,
+        )
+    cds_start = min(transcript.start_codon_spliced_offsets)
+    mut_protein = None
+    if cds_start < len(mutant_cdna):
+        codon_table = codon_table_for_transcript(transcript)
+        coding = mutant_cdna[cds_start:]
+        truncated = coding[:(len(coding) // 3) * 3]
+        try:
+            mut_protein = translate_sequence(
+                truncated, codon_table=codon_table, to_stop=True)
+        except ValueError:
+            mut_protein = None
+    mt = MutantTranscript(
+        reference_transcript=transcript,
+        edits=(edit,),
+        cdna_sequence=mutant_cdna,
+        mutant_protein_sequence=mut_protein,
+        annotator_name="splice_outcomes",
+    )
+    return (mt, score, cryptic_genomic_pos)
+
+
+def _build_cryptic_splice_candidate(
+        splice_effect, plausibility, outcome, genomic_sequence=None,
+        scan_flank=_CRYPTIC_SCAN_FLANK):
+    """Cryptic donor/acceptor candidate. When ``genomic_sequence`` is
+    provided (#296), scan the canonical splice boundary's flanking
+    region on BOTH exon and intron sides for the best-scoring weak
+    motif and materialize a real :class:`MutantTranscript` that uses
+    the cryptic site in place of the disrupted canonical one.
+
+    Without a provider, falls back to the pre-#296 stub.
     """
     direction = "donor" if outcome is SpliceOutcome.CRYPTIC_DONOR else "acceptor"
+    if genomic_sequence is not None:
+        transcript = getattr(splice_effect, "transcript", None)
+        exon = _affected_exon(splice_effect)
+        if transcript is not None and exon is not None:
+            result = _build_cryptic_site_mutant_transcript(
+                splice_effect.variant, transcript, exon, direction,
+                genomic_sequence, scan_flank=scan_flank)
+            if result is not None:
+                mt, score, cryptic_pos = result
+                if mt.mutant_protein_sequence is not None:
+                    ref_protein = str(transcript.protein_sequence)
+                    length_delta = len(mt.cdna_sequence) - len(
+                        str(transcript.sequence))
+                    coding_effect = classify_from_protein_diff(
+                        variant=splice_effect.variant,
+                        transcript=transcript,
+                        ref_protein=ref_protein,
+                        mut_protein=mt.mutant_protein_sequence,
+                        length_delta=length_delta,
+                        mutant_transcript=mt,
+                    )
+                    return SpliceCandidate(
+                        outcome=outcome,
+                        plausibility=plausibility,
+                        description=(
+                            "Cryptic %s at genomic position %d "
+                            "(motif score %.2f) replaces the disrupted "
+                            "canonical signal." % (
+                                direction, cryptic_pos, score)),
+                        coding_effect=coding_effect,
+                        predicted_class_name=type(coding_effect).__name__,
+                        mutant_transcript=mt,
+                    )
     return SpliceCandidate(
         outcome=outcome,
         plausibility=plausibility,
@@ -779,7 +1023,8 @@ def _build_cryptic_splice_candidate(splice_effect, plausibility, outcome):
             "A cryptic %s site nearby may be used in place of the "
             "disrupted canonical signal. Truncates or extends the "
             "affected exon; exact mutant protein requires flanking "
-            "genomic sequence not cached by PyEnsembl." % direction),
+            "genomic sequence (pass a ``genomic_sequence`` callable "
+            "to ``enumerate_splice_outcomes``)." % direction),
         coding_effect=None,
         predicted_class_name="ComplexSubstitution",
     )
@@ -911,13 +1156,22 @@ def enumerate_splice_outcomes(splice_effect, genomic_sequence=None):
     genomic_sequence : Callable[[str, int, int], str], optional
         Caller-supplied provider for genomic sequence, returning
         forward-strand bases for ``(contig, start_1based_inclusive,
-        end_1based_inclusive)`` (#296). When present, the
-        INTRON_RETENTION candidate computes a real
-        :class:`MutantTranscript` (intron inserted, protein truncated
-        at first premature stop) instead of the stub with
-        ``coding_effect=None``. Cryptic-splice candidates still
-        fall back to stubs — their genomic-FASTA integration is a
-        follow-up.
+        end_1based_inclusive)`` (#296). When present:
+
+        * ``INTRON_RETENTION`` materializes a real
+          :class:`MutantTranscript` with the intron inserted and the
+          protein truncated at the first in-intron stop.
+        * ``CRYPTIC_DONOR`` / ``CRYPTIC_ACCEPTOR`` scan a ±50 bp
+          window around the canonical splice boundary (both exon
+          and intron sides) for the highest-scoring cryptic motif
+          using the same consensus tables as
+          :mod:`varcode.cryptic_exons`. The chosen cryptic site
+          replaces the canonical boundary and the resulting
+          truncation / extension is reflected in the
+          :class:`MutantTranscript`.
+
+        Providers that raise (missing FASTA, unknown contig, etc.)
+        fall back to the stub behavior transparently.
 
     Returns
     -------
@@ -946,7 +1200,8 @@ def enumerate_splice_outcomes(splice_effect, genomic_sequence=None):
                 SpliceOutcome.CRYPTIC_DONOR,
                 SpliceOutcome.CRYPTIC_ACCEPTOR):
             candidates.append(_build_cryptic_splice_candidate(
-                splice_effect, plausibility, outcome))
+                splice_effect, plausibility, outcome,
+                genomic_sequence=genomic_sequence))
 
     return SpliceOutcomeSet(
         variant=splice_effect.variant,
