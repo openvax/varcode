@@ -145,6 +145,149 @@ class IsovarPhaseResolver:
         return tuple(self.provider.variants_in_contig(variant, transcript))
 
 
+class VCFPhaseResolver:
+    """Phase resolver backed by VCF ``GT`` + ``PS`` FORMAT fields.
+
+    Reads the phase data that varcode's VCF loader already parses
+    into :class:`~varcode.Genotype` (via #267): whether the
+    ``GT`` delimiter was ``|`` (phased) or ``/`` (unphased), the
+    ``PS`` phase-set identifier, and the per-haplotype allele indices
+    in :attr:`Genotype.alleles`.
+
+    Two variants are **cis** when they sit in the same phase set on
+    the same haplotype slot, **trans** when they sit in the same
+    phase set on different slots, and the resolver returns ``None``
+    ("no evidence") for variants that aren't both phased, don't share
+    a phase set, or lack called alleles.
+
+    Compatible with any tool that writes standard-shaped VCF:
+    WhatsHap, HapCUT2, DeepVariant, GATK HaplotypeCaller, long-read
+    callers (PEPPER-DeepVariant, Clair3), population phasers
+    (SHAPEIT5, Eagle2). varcode doesn't care which one wrote the
+    file — it only reads ``GT`` and ``PS``.
+
+    Multi-allelic sites are handled: varcode splits those rows into
+    one :class:`~varcode.Variant` per ALT, each with an
+    ``alt_allele_index`` preserved on the
+    :class:`~varcode.VariantCollection` metadata. The resolver maps
+    each variant to its GT-encoded index and asks "which haplotype
+    slot carries this specific alt?".
+
+    Single-sample by construction. Phase is per-sample; multi-sample
+    VCFs need one resolver per sample.
+
+    Currently supplies the cis/trans query but does **not** attach a
+    :class:`~varcode.MutantTranscript` — DNA phasing alone doesn't
+    produce an assembled contig. The natural next step is a
+    ``HaplotypeEffect`` / multi-variant ``apply_variants_to_transcript``
+    helper that, when two or more cis variants overlap the same
+    transcript, builds a single joint :class:`MutantTranscript`
+    applying all edits at once. That's a separate PR — this
+    resolver already has the inputs it needs (``in_cis``) to drive
+    the grouping.
+    """
+
+    #: Provenance tag, matching :attr:`IsovarPhaseResolver.source`.
+    source = "vcf_ps"
+
+    def __init__(self, variant_collection, sample):
+        self._collection = variant_collection
+        self._sample = sample
+
+    def _genotype(self, variant):
+        try:
+            return self._collection.genotype(variant, self._sample)
+        except Exception:
+            return None
+
+    def _haplotype_slot(self, genotype, variant) -> Optional[int]:
+        """Index into ``genotype.alleles`` where this variant's alt
+        allele sits, or ``None`` when the sample doesn't carry the
+        alt on any called haplotype.
+
+        For a multi-allelic VCF row split into multiple Variants,
+        each Variant has its own ``alt_allele_index``; this function
+        honors that so ``GT=1|2`` correctly reports the first alt
+        on slot 0 and the second alt on slot 1.
+        """
+        if genotype is None:
+            return None
+        alt_idx = self._collection._alt_index_for(variant)
+        for i, allele in enumerate(genotype.alleles):
+            if allele == alt_idx:
+                return i
+        return None
+
+    @staticmethod
+    def _is_homozygous_alt(genotype, alt_idx: int) -> bool:
+        """True when every called haplotype carries ``alt_idx``. In
+        that case phase is deterministic regardless of the ``|``/``/``
+        delimiter — both copies carry the alt, so co-occurring
+        homozygous-alt variants are trivially cis on both haplotypes.
+        """
+        if genotype is None:
+            return False
+        called = [a for a in genotype.alleles if a is not None]
+        if not called:
+            return False
+        return all(a == alt_idx for a in called)
+
+    def in_cis(self, v1, v2, transcript=None) -> Optional[bool]:
+        """Return ``True`` if ``v1`` and ``v2`` are on the same
+        haplotype in the same phase set, ``False`` if they're on
+        different haplotypes in the same phase set, ``None`` when
+        the phase relationship can't be determined (unphased GT,
+        different phase sets, uncalled alleles).
+
+        ``transcript`` is accepted for interface symmetry with
+        :class:`IsovarPhaseResolver.in_cis` but isn't consulted —
+        DNA-level phase is isoform-agnostic.
+        """
+        g1 = self._genotype(v1)
+        g2 = self._genotype(v2)
+        if g1 is None or g2 is None:
+            return None
+        alt1 = self._collection._alt_index_for(v1)
+        alt2 = self._collection._alt_index_for(v2)
+        # Homozygous-alt on either side makes phase deterministic:
+        # every haplotype carries this alt, so it's cis with anything
+        # the OTHER variant sits on. Shortcut before requiring
+        # phased=True.
+        hom1 = self._is_homozygous_alt(g1, alt1)
+        hom2 = self._is_homozygous_alt(g2, alt2)
+        if hom1 and hom2:
+            return True
+        if hom1:
+            # v1 is on every haplotype → cis with v2 iff v2 is called.
+            return self._haplotype_slot(g2, v2) is not None
+        if hom2:
+            return self._haplotype_slot(g1, v1) is not None
+        # Otherwise both must be phased and in the same phase set.
+        if not g1.phased or not g2.phased:
+            return None
+        if g1.phase_set != g2.phase_set or g1.phase_set is None:
+            return None
+        s1 = self._haplotype_slot(g1, v1)
+        s2 = self._haplotype_slot(g2, v2)
+        if s1 is None or s2 is None:
+            return None
+        return s1 == s2
+
+    def phased_partners(self, variant, transcript=None):
+        """Variants in the collection that are cis with ``variant``
+        under this resolver — i.e. sit in the same phase set on the
+        same haplotype slot. Empty when ``variant`` isn't phased or
+        has no called alt in the sample.
+        """
+        partners = []
+        for other in self._collection:
+            if other == variant:
+                continue
+            if self.in_cis(variant, other) is True:
+                partners.append(other)
+        return tuple(partners)
+
+
 def apply_phase_resolver_to_effects(effects, phase_resolver):
     """Post-process an :class:`EffectCollection` (or any iterable of
     :class:`MutationEffect`) to attach contig-derived
