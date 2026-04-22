@@ -42,6 +42,7 @@ from .outcomes import Outcome, outcomes_from_candidates
 from .phasing import (
     IsovarAssemblyProvider,
     IsovarPhaseResolver,
+    VCFPhaseResolver,
     apply_phase_resolver_to_effects,
 )
 from .splice_outcomes import (
@@ -120,6 +121,7 @@ __all__ = [
     # Phase resolvers (openvax/varcode#269)
     "IsovarAssemblyProvider",
     "IsovarPhaseResolver",
+    "VCFPhaseResolver",
     "apply_phase_resolver_to_effects",
 
     "EffectAnnotator",
