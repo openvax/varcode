@@ -316,3 +316,105 @@ def apply_phase_resolver_to_effects(effects, phase_resolver):
             # assembly is higher-confidence evidence, so it wins.
             e.mutant_transcript = mt
     return effects
+
+
+def build_haplotype_effects(variant_collection, effects, phase_resolver):
+    """Enrich ``effects`` with :class:`HaplotypeEffect` entries when
+    ``phase_resolver`` groups two or more cis variants on the same
+    transcript (#269).
+
+    Additive — per-variant effects stay on the collection. Returns a
+    flat list of new :class:`HaplotypeEffect` objects the caller can
+    concatenate onto the existing :class:`EffectCollection`.
+
+    Groups variants by transcript first, then uses
+    ``phase_resolver.in_cis(v_i, v_j, transcript)`` to partition each
+    transcript's variants into cis sets. Any cis set with ≥ 2
+    resolvable edits becomes one HaplotypeEffect via
+    :func:`apply_variants_to_transcript`.
+
+    Edit conflicts (overlapping cDNA ranges) cause the joint build
+    to return ``None`` — the group is skipped silently (the
+    per-variant effects still describe each variant individually).
+    """
+    if phase_resolver is None or not hasattr(phase_resolver, "in_cis"):
+        return []
+    from .effects.effect_classes import HaplotypeEffect
+    from .mutant_transcript import apply_variants_to_transcript
+
+    # Group variants by transcript via existing per-variant effects —
+    # each effect already knows its transcript, which avoids
+    # re-running variant.transcripts for every variant.
+    by_transcript = {}
+    for e in effects:
+        t = getattr(e, "transcript", None)
+        v = getattr(e, "variant", None)
+        if t is None or v is None:
+            continue
+        by_transcript.setdefault(t.id, (t, []))[1].append(v)
+    # Dedup per transcript (a variant can appear in multiple effect
+    # rows if it has multiple outcomes, e.g. SpliceOutcomeSet).
+    haplotype_effects = []
+    for transcript_id, (transcript, variants) in by_transcript.items():
+        unique = []
+        seen = set()
+        for v in variants:
+            key = (v.contig, v.start, v.end, v.ref, v.alt)
+            if key not in seen:
+                seen.add(key)
+                unique.append(v)
+        if len(unique) < 2:
+            continue
+        # Partition variants into cis groups using the resolver.
+        # Greedy union-find: for each pair (i, j), if in_cis, merge
+        # their components.
+        parent = list(range(len(unique)))
+
+        def find(i):
+            while parent[i] != i:
+                parent[i] = parent[parent[i]]
+                i = parent[i]
+            return i
+
+        def union(i, j):
+            ri, rj = find(i), find(j)
+            if ri != rj:
+                parent[ri] = rj
+
+        for i in range(len(unique)):
+            for j in range(i + 1, len(unique)):
+                try:
+                    cis = phase_resolver.in_cis(
+                        unique[i], unique[j], transcript=transcript)
+                except Exception:
+                    cis = None
+                if cis is True:
+                    union(i, j)
+        groups = {}
+        for i in range(len(unique)):
+            groups.setdefault(find(i), []).append(unique[i])
+        for members in groups.values():
+            if len(members) < 2:
+                continue
+            # Prefer a resolver-provided MutantTranscript (Isovar /
+            # long-read assembly) when available — it's the actual
+            # observed molecule, not inferred from reference + edits.
+            # Members of a cis group share a contig by definition, so
+            # any member's contig covers the whole group.
+            mt = None
+            if hasattr(phase_resolver, "mutant_transcript"):
+                for v in members:
+                    mt = phase_resolver.mutant_transcript(v, transcript)
+                    if mt is not None:
+                        break
+            if mt is None:
+                mt = apply_variants_to_transcript(members, transcript)
+            if mt is None:
+                continue
+            haplotype_effects.append(HaplotypeEffect(
+                variants=members,
+                transcript=transcript,
+                mutant_transcript=mt,
+                phase_source=getattr(phase_resolver, "source", None),
+            ))
+    return haplotype_effects

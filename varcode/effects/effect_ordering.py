@@ -22,6 +22,7 @@ from .effect_classes import (
     FrameShift,
     FrameShiftTruncation,
     GeneFusion,
+    HaplotypeEffect,
     IncompleteTranscript,
     Insertion,
     Intergenic,
@@ -116,6 +117,11 @@ transcript_effect_priority_list = [
     # novel fused protein — highest transcript-level impact, since
     # the product is a new chimera with no reference analog (#340).
     GeneFusion,
+    # joint cis-variant effect on a single transcript (#269).
+    # Sits at the top because the haplotype IS the biological
+    # product; per-variant effects that motivated it coexist on the
+    # collection and take their own priorities individually.
+    HaplotypeEffect,
 ]
 
 transcript_effect_priority_dict = {

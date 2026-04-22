@@ -148,10 +148,13 @@ class VariantCollection(Collection):
         from datetime import datetime, timezone
 
         from .annotators.registry import resolve_annotator
-        from .phasing import apply_phase_resolver_to_effects
+        from .phasing import (
+            apply_phase_resolver_to_effects,
+            build_haplotype_effects,
+        )
 
         annotator_instance = resolve_annotator(annotator)
-        effects = EffectCollection([
+        per_variant = [
             effect
             for variant in self
             for effect in variant.effects(
@@ -159,15 +162,21 @@ class VariantCollection(Collection):
                 splice_outcomes=splice_outcomes,
                 annotator=annotator,
             )
-        ],
+        ]
+        if phase_resolver is not None:
+            apply_phase_resolver_to_effects(per_variant, phase_resolver)
+            # Joint cis-variant effects sit alongside the per-variant
+            # ones (#269). Consumers pick whichever granularity they
+            # need; top-priority sort still reflects the highest
+            # individual effect severity.
+            per_variant.extend(build_haplotype_effects(
+                self, per_variant, phase_resolver))
+        return EffectCollection(per_variant,
             annotator=getattr(annotator_instance, "name", None),
             annotator_version=getattr(annotator_instance, "version", None),
             annotated_at=datetime.now(timezone.utc).isoformat(
                 timespec="seconds"),
         )
-        if phase_resolver is not None:
-            apply_phase_resolver_to_effects(effects, phase_resolver)
-        return effects
 
     @memoize
     def reference_names(self):

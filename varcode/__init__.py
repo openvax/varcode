@@ -31,6 +31,7 @@ from .mutant_transcript import (
     ReferenceSegment,
     TranscriptEdit,
     apply_variant_to_transcript,
+    apply_variants_to_transcript,
 )
 from .cryptic_exons import (
     enumerate_candidates as enumerate_cryptic_exon_candidates,
@@ -102,6 +103,7 @@ __all__ = [
     "ReferenceSegment",
     "TranscriptEdit",
     "apply_variant_to_transcript",
+    "apply_variants_to_transcript",
 
     # Unified multi-outcome type (openvax/varcode#299)
     "Outcome",
