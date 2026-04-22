@@ -118,6 +118,15 @@ class MutationEffect(Serializable):
     aa_mutation_start_offset = None
     aa_mutation_end_offset = None
 
+    # Optional full :class:`~varcode.MutantTranscript` attached to
+    # this effect (#269 / #296 / #335). SV effects and splice
+    # exon-skip candidates populate this during construction. Other
+    # effect kinds (Substitution, FrameShift, etc.) leave it None by
+    # default; an Isovar-style :class:`PhaseResolver` can attach an
+    # assembled-contig MutantTranscript post-hoc via
+    # :func:`varcode.phasing.apply_phase_resolver_to_effects`.
+    mutant_transcript = None
+
 
 class MultiOutcomeEffect(MutationEffect):
     """Marker base class for effects that represent a set of plausible
