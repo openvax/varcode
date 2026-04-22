@@ -114,7 +114,9 @@ class VariantCollection(Collection):
         kwargs["variants"] = new_elements
         return self.from_dict(kwargs)
 
-    def effects(self, raise_on_error=True, splice_outcomes=False, annotator=None):
+    def effects(
+            self, raise_on_error=True, splice_outcomes=False,
+            annotator=None, phase_resolver=None):
         """
         Parameters
         ----------
@@ -133,13 +135,23 @@ class VariantCollection(Collection):
             Per-call annotator override applied to every variant in
             the collection. See :meth:`Variant.effects` and
             openvax/varcode#271.
+
+        phase_resolver : PhaseResolver or None
+            Optional phase-evidence source (e.g.
+            :class:`~varcode.phasing.IsovarPhaseResolver`). When
+            provided, any effect whose ``(variant, transcript)`` is
+            covered by an assembled contig has its
+            ``mutant_transcript`` populated with the contig-derived
+            :class:`~varcode.MutantTranscript`. See
+            openvax/varcode#269.
         """
         from datetime import datetime, timezone
 
         from .annotators.registry import resolve_annotator
+        from .phasing import apply_phase_resolver_to_effects
 
         annotator_instance = resolve_annotator(annotator)
-        return EffectCollection([
+        effects = EffectCollection([
             effect
             for variant in self
             for effect in variant.effects(
@@ -153,6 +165,9 @@ class VariantCollection(Collection):
             annotated_at=datetime.now(timezone.utc).isoformat(
                 timespec="seconds"),
         )
+        if phase_resolver is not None:
+            apply_phase_resolver_to_effects(effects, phase_resolver)
+        return effects
 
     @memoize
     def reference_names(self):

@@ -39,6 +39,11 @@ from .cryptic_exons import (
     score_donor,
 )
 from .outcomes import Outcome, outcomes_from_candidates
+from .phasing import (
+    IsovarAssemblyProvider,
+    IsovarPhaseResolver,
+    apply_phase_resolver_to_effects,
+)
 from .splice_outcomes import (
     SpliceCandidate,
     SpliceOutcome,
@@ -111,6 +116,11 @@ __all__ = [
     "enumerate_from_structural_variant",
     "score_donor",
     "score_acceptor",
+
+    # Phase resolvers (openvax/varcode#269)
+    "IsovarAssemblyProvider",
+    "IsovarPhaseResolver",
+    "apply_phase_resolver_to_effects",
 
     "EffectAnnotator",
     "FastEffectAnnotator",

@@ -443,7 +443,9 @@ class Variant(Serializable):
             if gene.is_protein_coding
         ]
 
-    def effects(self, raise_on_error=True, splice_outcomes=False, annotator=None):
+    def effects(
+            self, raise_on_error=True, splice_outcomes=False,
+            annotator=None, phase_resolver=None):
         """Predict the variant's effects on overlapping transcripts.
 
         Parameters
@@ -466,13 +468,28 @@ class Variant(Serializable):
             :func:`varcode.set_default_annotator` or
             :func:`varcode.use_annotator`). String names are resolved
             against the registry. See openvax/varcode#271.
+
+        phase_resolver : PhaseResolver or None
+            Optional phase-evidence source (typically an
+            :class:`~varcode.phasing.IsovarPhaseResolver`). When
+            provided and the resolver has an assembled contig for
+            ``(self, transcript)``, the returned effect's
+            ``mutant_transcript`` is populated with the
+            contig-derived :class:`~varcode.MutantTranscript` — the
+            protein is the protein actually observed in RNA rather
+            than one inferred from the reference. See
+            openvax/varcode#269.
         """
-        return predict_variant_effects(
+        effects = predict_variant_effects(
             variant=self,
             raise_on_error=raise_on_error,
             splice_outcomes=splice_outcomes,
             annotator=annotator,
         )
+        if phase_resolver is not None:
+            from .phasing import apply_phase_resolver_to_effects
+            apply_phase_resolver_to_effects(effects, phase_resolver)
+        return effects
 
     def effect_on_transcript(self, transcript):
         return predict_variant_effect_on_transcript(self, transcript)
