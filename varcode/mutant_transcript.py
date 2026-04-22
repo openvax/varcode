@@ -299,6 +299,91 @@ def _reverse_complement(seq: str) -> str:
     return "".join(_COMPLEMENT.get(b, b) for b in reversed(seq.upper()))
 
 
+def _resolve_variant_edit(variant, transcript, full_sequence):
+    """Resolve a single :class:`~varcode.Variant` to a
+    :class:`TranscriptEdit` against ``transcript``'s cDNA.
+
+    Returns a tuple ``(edit, cdna_anchor_offset)`` where
+    ``cdna_anchor_offset`` is the pre-edit cDNA offset used by
+    translation logic to decide whether the variant lands after
+    the CDS start. Returns ``None`` when the variant can't be
+    cleanly resolved (non-coding / incomplete / multi-exon span /
+    reference mismatch).
+    """
+    from .effects.transcript_helpers import interval_offset_on_transcript
+
+    variant_start = variant.trimmed_base1_start
+    variant_end = variant.trimmed_base1_end
+    # Variant must overlap exactly one exon — we don't handle
+    # splice-junction-spanning edits at this stage.
+    overlapping = [
+        ex for ex in transcript.exons
+        if variant_start >= ex.start and variant_end <= ex.end
+    ]
+    if len(overlapping) != 1:
+        return None
+    try:
+        cdna_offset = interval_offset_on_transcript(
+            variant_start, variant_end, transcript)
+    except (ValueError, KeyError):
+        return None
+    genome_ref = variant.trimmed_ref
+    genome_alt = variant.trimmed_alt
+    if transcript.on_backward_strand:
+        cdna_ref = _reverse_complement(genome_ref)
+        cdna_alt = _reverse_complement(genome_alt)
+    else:
+        cdna_ref = genome_ref
+        cdna_alt = genome_alt
+    n_ref = len(cdna_ref)
+    expected_ref = full_sequence[cdna_offset:cdna_offset + n_ref]
+    if cdna_ref != expected_ref:
+        return None
+    # Pure insertions: VCF convention places the alt AFTER the anchor
+    # base in genomic coordinates. Forward strand → insertion at
+    # cdna_offset + 1. Reverse strand → insertion at cdna_offset (the
+    # cDNA runs 3'→5' in genomic space, so "after" in genomic coords
+    # is "before" in cDNA coords).
+    if n_ref == 0:
+        insert_at = (
+            cdna_offset if transcript.on_backward_strand else cdna_offset + 1)
+        edit = TranscriptEdit(
+            cdna_start=insert_at,
+            cdna_end=insert_at,
+            alt_bases=cdna_alt,
+            source_variant=variant,
+        )
+    else:
+        edit = TranscriptEdit(
+            cdna_start=cdna_offset,
+            cdna_end=cdna_offset + n_ref,
+            alt_bases=cdna_alt,
+            source_variant=variant,
+        )
+    return (edit, cdna_offset)
+
+
+def _translate_from_cds(mutant_cdna, transcript):
+    """Translate ``mutant_cdna`` from the canonical CDS start to the
+    first stop. Returns ``None`` if the CDS start is past the cDNA
+    end or translation errors."""
+    from .effects.codon_tables import (
+        codon_table_for_transcript,
+        translate_sequence,
+    )
+    cds_start = min(transcript.start_codon_spliced_offsets)
+    if cds_start >= len(mutant_cdna):
+        return None
+    codon_table = codon_table_for_transcript(transcript)
+    coding = mutant_cdna[cds_start:]
+    truncated = coding[:(len(coding) // 3) * 3]
+    try:
+        return translate_sequence(
+            truncated, codon_table=codon_table, to_stop=True)
+    except ValueError:
+        return None
+
+
 def apply_variant_to_transcript(variant, transcript):
     """Construct a :class:`MutantTranscript` by applying ``variant``
     to ``transcript``'s spliced cDNA.
@@ -323,111 +408,100 @@ def apply_variant_to_transcript(variant, transcript):
     :class:`EffectAnnotator`. The forthcoming protein-diff annotator
     layers effect classification on top of this builder.
     """
-    # Lazy imports to keep module-level deps light.
     from pyensembl import Transcript
-    from .effects.codon_tables import (
-        codon_table_for_transcript,
-        translate_sequence,
-    )
-    from .effects.transcript_helpers import interval_offset_on_transcript
 
     if not isinstance(transcript, Transcript):
         return None
     if not transcript.is_protein_coding or not transcript.complete:
         return None
 
-    variant_start = variant.trimmed_base1_start
-    variant_end = variant.trimmed_base1_end
-
-    # Variant must overlap exactly one exon — we don't handle
-    # splice-junction-spanning edits at this stage.
-    overlapping = [
-        ex for ex in transcript.exons
-        if variant_start >= ex.start and variant_end <= ex.end
-    ]
-    if len(overlapping) != 1:
-        return None
-
-    try:
-        cdna_offset = interval_offset_on_transcript(
-            variant_start, variant_end, transcript)
-    except (ValueError, KeyError):
-        return None
-
-    # Strand-flip ref/alt for reverse-strand transcripts.
-    genome_ref = variant.trimmed_ref
-    genome_alt = variant.trimmed_alt
-    if transcript.on_backward_strand:
-        cdna_ref = _reverse_complement(genome_ref)
-        cdna_alt = _reverse_complement(genome_alt)
-    else:
-        cdna_ref = genome_ref
-        cdna_alt = genome_alt
-
-    # Validate reference matches.
     full_sequence = str(transcript.sequence)
-    n_ref = len(cdna_ref)
-    expected_ref = full_sequence[cdna_offset:cdna_offset + n_ref]
-    if cdna_ref != expected_ref:
+    resolved = _resolve_variant_edit(variant, transcript, full_sequence)
+    if resolved is None:
         return None
-
-    # For pure insertions (n_ref == 0), VCF convention places the alt
-    # AFTER the anchor base in genomic coordinates. On the forward
-    # strand that's cdna_offset + 1; on the reverse strand, "after"
-    # in genomic coords is "before" in cDNA coords (the cDNA runs
-    # 3'→5' in genomic space), so the insertion goes AT cdna_offset.
-    if n_ref == 0:
-        if transcript.on_backward_strand:
-            insert_at = cdna_offset
-        else:
-            insert_at = cdna_offset + 1
-        edit = TranscriptEdit(
-            cdna_start=insert_at,
-            cdna_end=insert_at,
-            alt_bases=cdna_alt,
-            source_variant=variant,
-        )
-        mutant_cdna = (
-            full_sequence[:insert_at]
-            + cdna_alt
-            + full_sequence[insert_at:]
-        )
-    else:
-        edit = TranscriptEdit(
-            cdna_start=cdna_offset,
-            cdna_end=cdna_offset + n_ref,
-            alt_bases=cdna_alt,
-            source_variant=variant,
-        )
-        mutant_cdna = (
-            full_sequence[:cdna_offset]
-            + cdna_alt
-            + full_sequence[cdna_offset + n_ref:]
-        )
-
+    edit, cdna_offset = resolved
+    mutant_cdna = (
+        full_sequence[:edit.cdna_start]
+        + edit.alt_bases
+        + full_sequence[edit.cdna_end:]
+    )
     mutant_protein = None
     cds_start = min(transcript.start_codon_spliced_offsets)
     if cdna_offset >= cds_start:
-        # Variant lands in or after the CDS — translate the new
-        # coding sequence from the canonical start to the first
-        # stop. The codon table is mt-aware via the transcript's
-        # contig.
-        codon_table = codon_table_for_transcript(transcript)
-        coding = mutant_cdna[cds_start:]
-        truncated = coding[:(len(coding) // 3) * 3]
-        try:
-            mutant_protein = translate_sequence(
-                truncated, codon_table=codon_table, to_stop=True)
-        except ValueError:
-            mutant_protein = None
-    # If cdna_offset < cds_start the variant is in the 5' UTR; we
-    # don't attempt translation here since it might (depending on the
-    # exact variant) preserve, lose, or shift the start codon — that
-    # interpretation is the fast annotator's responsibility for now.
-
+        mutant_protein = _translate_from_cds(mutant_cdna, transcript)
     return MutantTranscript(
         reference_transcript=transcript,
         edits=(edit,),
+        cdna_sequence=mutant_cdna,
+        mutant_protein_sequence=mutant_protein,
+        annotator_name="protein_diff",
+    )
+
+
+def apply_variants_to_transcript(variants, transcript):
+    """Apply a list of variants to a single transcript, yielding one
+    :class:`MutantTranscript` that carries all the resulting edits
+    (#269). Used for haplotype-aware joint effect prediction — cis
+    variants on the same transcript become one combined mutant
+    rather than N independent per-variant mutants.
+
+    Edits are applied in cDNA-coordinate order (highest offset
+    first, so earlier offsets aren't shifted) to ``transcript``'s
+    spliced cDNA. Returns ``None`` when any of the usual
+    single-variant preconditions fail (non-coding, incomplete, etc.),
+    or when the provided variants conflict — i.e. claim to edit
+    overlapping cDNA ranges. The caller is responsible for falling
+    back to per-variant effects in that case.
+
+    ``mutant_protein_sequence`` is populated when at least one edit
+    lands after the canonical CDS start; the joint cDNA is translated
+    from there to the first stop.
+
+    Order of ``variants`` doesn't matter — edits are sorted by cDNA
+    offset internally.
+    """
+    from pyensembl import Transcript
+
+    if not isinstance(transcript, Transcript):
+        return None
+    if not transcript.is_protein_coding or not transcript.complete:
+        return None
+
+    full_sequence = str(transcript.sequence)
+    resolved = []
+    for variant in variants:
+        r = _resolve_variant_edit(variant, transcript, full_sequence)
+        if r is None:
+            return None
+        resolved.append(r)
+    # Sort by cDNA start so overlap detection is a simple linear scan
+    # and we can apply high-to-low without shifting earlier edits.
+    resolved.sort(key=lambda pair: pair[0].cdna_start)
+    for i in range(len(resolved) - 1):
+        e1 = resolved[i][0]
+        e2 = resolved[i + 1][0]
+        # Insertions at the same offset don't "overlap" per se, but
+        # their order is ambiguous — treat as a conflict.
+        if e1.cdna_end > e2.cdna_start or (
+                e1.cdna_start == e2.cdna_start == e1.cdna_end == e2.cdna_end):
+            return None
+    # Apply edits from the highest cDNA offset down so earlier offsets
+    # aren't affected by upstream edits' length changes.
+    mutant_cdna = full_sequence
+    for edit, _ in sorted(
+            resolved, key=lambda pair: pair[0].cdna_start, reverse=True):
+        mutant_cdna = (
+            mutant_cdna[:edit.cdna_start]
+            + edit.alt_bases
+            + mutant_cdna[edit.cdna_end:]
+        )
+    mutant_protein = None
+    cds_start = min(transcript.start_codon_spliced_offsets)
+    if any(anchor >= cds_start for _, anchor in resolved):
+        mutant_protein = _translate_from_cds(mutant_cdna, transcript)
+    return MutantTranscript(
+        reference_transcript=transcript,
+        edits=tuple(edit for edit, _ in resolved),
         cdna_sequence=mutant_cdna,
         mutant_protein_sequence=mutant_protein,
         annotator_name="protein_diff",

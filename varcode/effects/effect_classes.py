@@ -1160,3 +1160,95 @@ class CrypticExonCandidate(MutationEffect):
         self.interval_end = interval_end
         self.donor_score = donor_score
         self.acceptor_score = acceptor_score
+
+
+# =====================================================================
+# Haplotype effects — joint consequence of multiple cis variants on
+# the same transcript (#269).
+#
+# When a phase resolver (VCF PS, Isovar assembly, long-read haplotype
+# caller) confirms two or more variants sit on the same physical copy
+# of a transcript, their combined effect on the protein isn't just the
+# sum of per-variant effects — they can share a codon, one can rescue
+# another's frameshift, etc. HaplotypeEffect carries the joint
+# MutantTranscript (via apply_variants_to_transcript) and coexists
+# with the per-variant effects on the same EffectCollection so
+# downstream consumers can pick the granularity they need.
+# =====================================================================
+
+
+class HaplotypeEffect(TranscriptMutationEffect, MultiOutcomeEffect):
+    """Joint effect of two or more cis variants on the same
+    transcript (#269).
+
+    Emitted by :meth:`VariantCollection.effects` when a
+    ``phase_resolver`` (VCF ``PS`` tag, Isovar assembly, or any
+    other :class:`PhaseResolver`) groups cis variants together and
+    :func:`varcode.mutant_transcript.apply_variants_to_transcript`
+    can build a combined mutant cDNA. The per-variant effects stay
+    on the collection — this is additive, not a replacement.
+
+    Downstream consumers that want haplotype-level context (peptide
+    prediction, ASE, compound het interpretation) read the
+    :attr:`mutant_transcript` here. Consumers that want per-variant
+    HGVS or annotation granularity iterate the per-variant effects
+    as before.
+    """
+
+    def __init__(
+            self, variants, transcript, mutant_transcript,
+            phase_source=None):
+        # The HaplotypeEffect is scoped to a set of variants — the
+        # :class:`MutationEffect.variant` slot takes the first one
+        # as a back-compat anchor so existing single-variant
+        # consumers don't blow up, but real consumers read
+        # :attr:`variants`.
+        assert len(variants) >= 2, (
+            "HaplotypeEffect requires ≥ 2 cis variants; got %d" % len(variants))
+        TranscriptMutationEffect.__init__(self, variants[0], transcript)
+        self.variants = tuple(variants)
+        self.mutant_transcript = mutant_transcript
+        # Which resolver produced the phase grouping (e.g. "vcf_ps",
+        # "isovar"). Useful for downstream filtering and for auditing
+        # whether the cis call came from DNA-only phasing or
+        # RNA-assembly evidence.
+        self.phase_source = phase_source
+        # Single-outcome wrapping: the haplotype IS the outcome.
+        # Kept to honor the MultiOutcomeEffect contract without
+        # forcing subclasses to reimplement the trivial case.
+        self._candidates = (self,)
+
+    @property
+    def candidates(self):
+        return self._candidates
+
+    @property
+    def most_likely(self):
+        return self
+
+    @property
+    def mutant_protein_sequence(self):
+        """Joint protein translated from the haplotype's cDNA, or
+        ``None`` if the edits don't land after the CDS start."""
+        return getattr(
+            self.mutant_transcript, "mutant_protein_sequence", None)
+
+    def __str__(self):
+        return "HaplotypeEffect(%d variants, transcript=%s, source=%s)" % (
+            len(self.variants),
+            self.transcript.name if self.transcript else "?",
+            self.phase_source or "unknown")
+
+    @property
+    def short_description(self):
+        """HGVS haplotype notation: ``[c.1A>T;c.5G>C]`` for cis.
+
+        Per-variant short descriptions are synthesized from each
+        variant's genomic coords when the per-variant effect isn't
+        available here — the transcript-level HGVS would require
+        re-running the per-variant classifier, which
+        ``HaplotypeEffect`` deliberately doesn't do (that work lives
+        on the per-variant effects that coexist in the collection).
+        """
+        parts = [v.short_description for v in self.variants]
+        return "[" + ";".join(parts) + "]"
