@@ -19,6 +19,12 @@ classifiers = [
 readme = "README.md"
 dynamic = ["version", "dependencies"]
 
+[project.optional-dependencies]
+# pyvcf3 is the oracle for tests/test_vcf_parsing.py — varcode no longer
+# imports it at runtime (#302) but the oracle tests pin our parser to
+# PyVCF3's behaviour for the existing fixture VCFs.
+test = ["pyvcf3>=1.0.0"]
+
 [tool.setuptools.dynamic]
 version = {attr = "varcode.version.__version__"}
 dependencies = {file = ["requirements.txt"]}
