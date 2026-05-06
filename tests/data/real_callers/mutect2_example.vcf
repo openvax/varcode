@@ -1,0 +1,48 @@
+##fileformat=VCFv4.2
+##FILTER=<ID=PASS,Description="Site contains at least one allele that passes filters">
+##FILTER=<ID=alt_allele_in_normal,Description="Evidence seen in the normal sample">
+##FILTER=<ID=clustered_events,Description="Clustered events observed in the tumor">
+##FILTER=<ID=germline_risk,Description="Evidence indicates this site is germline, not somatic">
+##FILTER=<ID=multiallelic,Description="Site filtered because too many alt alleles pass tumor LOD">
+##FILTER=<ID=panel_of_normals,Description="Blacklisted site in panel of normals">
+##FILTER=<ID=read_position,Description="Median distance of alt variants from end of reads">
+##FILTER=<ID=str_contraction,Description="Site filtered due to contraction of short tandem repeat region">
+##FILTER=<ID=t_lod,Description="Tumor does not meet likelihood threshold">
+##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Allelic depths for the ref and alt alleles in the order listed">
+##FORMAT=<ID=AF,Number=A,Type=Float,Description="Allele fractions of alternate alleles in the tumor">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Approximate read depth (reads with MQ=255 or with bad mates are filtered)">
+##FORMAT=<ID=F1R2,Number=R,Type=Integer,Description="Count of reads in F1R2 pair orientation supporting each allele">
+##FORMAT=<ID=F2R1,Number=R,Type=Integer,Description="Count of reads in F2R1 pair orientation supporting each allele">
+##FORMAT=<ID=GQ,Number=1,Type=Integer,Description="Genotype Quality">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=PGT,Number=1,Type=String,Description="Physical phasing haplotype information, describing how the alternate alleles are phased in relation to one another">
+##FORMAT=<ID=PID,Number=1,Type=String,Description="Physical phasing ID information, where each unique ID within a given sample (but not across samples) connects records within a phasing group">
+##FORMAT=<ID=PL,Number=G,Type=Integer,Description="Normalized, Phred-scaled likelihoods for genotypes as defined in the VCF specification">
+##INFO=<ID=DP,Number=1,Type=Integer,Description="Approximate read depth; some reads may have been filtered">
+##INFO=<ID=ECNT,Number=1,Type=Integer,Description="Number of events in this haplotype">
+##INFO=<ID=GERMQ,Number=1,Type=Integer,Description="Phred-scaled quality that alt alleles are not germline variants">
+##INFO=<ID=MBQ,Number=R,Type=Integer,Description="median base quality">
+##INFO=<ID=MFRL,Number=R,Type=Integer,Description="median fragment length">
+##INFO=<ID=MMQ,Number=R,Type=Integer,Description="median mapping quality">
+##INFO=<ID=MPOS,Number=A,Type=Integer,Description="median distance from end of read">
+##INFO=<ID=NALOD,Number=A,Type=Float,Description="Negative log 10 odds of artifact in normal with same allele fraction as tumor">
+##INFO=<ID=NLOD,Number=A,Type=Float,Description="Normal log 10 likelihood ratio of diploid het or hom alt genotypes">
+##INFO=<ID=POPAF,Number=A,Type=Float,Description="negative log 10 population allele frequencies of alt alleles">
+##INFO=<ID=ROQ,Number=1,Type=Float,Description="Phred-scaled qualities that alt allele are not due to read orientation artifact">
+##INFO=<ID=RPA,Number=.,Type=Integer,Description="Number of times tandem repeat unit is repeated, for each allele (including reference)">
+##INFO=<ID=RU,Number=1,Type=String,Description="Tandem repeat unit (bases)">
+##INFO=<ID=STR,Number=0,Type=Flag,Description="Variant is a short tandem repeat">
+##INFO=<ID=TLOD,Number=A,Type=Float,Description="Log 10 likelihood ratio score of variant existing versus not existing">
+##contig=<ID=chr1,length=248956422>
+##contig=<ID=chr2,length=242193529>
+##contig=<ID=chr17,length=83257441>
+##source=Mutect2
+##reference=file:///hg38.fa
+##tumor_sample=TUMOR
+##normal_sample=NORMAL
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	NORMAL	TUMOR
+chr1	1041196	.	C	A	.	PASS	DP=87;ECNT=1;GERMQ=89;MBQ=20,30;MFRL=183,200;MMQ=60,60;MPOS=24;NALOD=1.4;NLOD=12.31;POPAF=6.00;ROQ=93;TLOD=53.78	GT:AD:AF:DP:F1R2:F2R1:GQ:PL	0/0:42,0:0.023:42:18,0:24,0:99:0,120,1800	0/1:30,15:0.336:45:14,7:16,8:99:451,0,925
+chr1	1102328	.	G	A,T	.	t_lod;multiallelic	DP=64;ECNT=2;GERMQ=72;MBQ=29,28,29;MFRL=193,178,201;MMQ=60,60,60;MPOS=12,30;NALOD=1.32,1.32;NLOD=6.32,6.32;POPAF=6.00,6.00;ROQ=93;TLOD=4.31,3.85	GT:AD:AF:DP:F1R2:F2R1:GQ:PGT:PID:PL	0/0:21,0,0:0.045,0.045:21:8,0,0:13,0,0:60:.:.:0,63,945,63,945,945	0/1/2:14,5,4:0.245,0.214:23:8,2,2:6,3,2:54:0|1:1102328_G_A:54,0,389,141,182,498
+chr2	16092115	rs1234	C	G	.	PASS	DP=92;ECNT=1;GERMQ=93;MBQ=33,33;MFRL=192,189;MMQ=60,60;MPOS=22;NALOD=1.42;NLOD=13.21;POPAF=2.10;ROQ=93;TLOD=124.90	GT:AD:AF:DP:F1R2:F2R1:GQ:PL	0/0:46,0:0.020:46:22,0:24,0:99:0,135,1837	0/1:11,30:0.733:41:6,15:5,15:99:1018,0,309
+chr2	16092200	.	GCAA	G	.	str_contraction	DP=58;ECNT=1;GERMQ=70;MBQ=29,29;MFRL=180,182;MMQ=60,60;MPOS=29;NALOD=1.31;NLOD=6.32;POPAF=4.30;ROQ=93;RPA=4,3;RU=CAA;STR;TLOD=18.27	GT:AD:AF:DP:F1R2:F2R1:GQ:PL	0/0:21,0:0.045:21:9,0:12,0:60:0,63,945	0/1:18,7:0.281:25:9,3:9,4:99:191,0,541
+chr17	7674220	.	C	T	.	germline_risk;panel_of_normals	DP=72;ECNT=1;GERMQ=42;MBQ=30,30;MFRL=187,191;MMQ=60,60;MPOS=18;NALOD=-2.10;NLOD=4.81;POPAF=0.50;ROQ=88;TLOD=42.13	GT:AD:AF:DP:F1R2:F2R1:GQ:PL	0/1:18,2:0.094:20:9,1:9,1:14:14,0,541	0/1:25,18:0.428:43:11,9:14,9:99:587,0,755
