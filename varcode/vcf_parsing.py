@@ -86,45 +86,35 @@ _INFO_LINE = re.compile(r"^##INFO=<(.+)>\s*$")
 _FORMAT_LINE = re.compile(r"^##FORMAT=<(.+)>\s*$")
 _META_LINE = re.compile(r"^##(?P<key>.+?)=(?P<val>.*)$")
 
+# A single ``key=value`` pair from a structured header body, where ``value``
+# is either a double-quoted string (commas allowed inside) or a bare token.
+# We do *not* attempt to honor backslash-escaped quotes inside the quoted
+# form — neither does PyVCF3 (its regex is the same ``[^"]*``), and no
+# real-world VCF the project has encountered does that.
+_STRUCT_FIELD_RE = re.compile(
+    r"""
+    (?P<key>\w+)            # field name
+    \s*=\s*
+    (?:
+        "(?P<quoted>[^"]*)"   # double-quoted value (may contain commas)
+      |
+        (?P<plain>[^,]*)      # bare value, terminated by comma or end
+    )
+    """,
+    re.VERBOSE,
+)
+
 
 def _split_struct_fields(body: str) -> "OrderedDict[str, str]":
-    """
-    Split a ``key=val,key="quoted, with commas",...`` body into a dict.
+    """Split a ``key=val,key="quoted, with commas",...`` body into a dict.
 
-    Comma-splitting is quote-aware: commas inside double-quoted values don't
-    terminate a field. ``Description`` strings frequently embed commas, so a
-    naïve ``.split(",")`` would corrupt the parse.
+    Quote-aware: commas inside double-quoted values don't terminate a field.
     """
     fields: "OrderedDict[str, str]" = OrderedDict()
-    i = 0
-    n = len(body)
-    while i < n:
-        eq = body.find("=", i)
-        if eq == -1:
-            break
-        key = body[i:eq].strip()
-        i = eq + 1
-        if i < n and body[i] == '"':
-            i += 1
-            start = i
-            while i < n and body[i] != '"':
-                if body[i] == "\\" and i + 1 < n:
-                    i += 2
-                else:
-                    i += 1
-            val = body[start:i]
-            if i < n and body[i] == '"':
-                i += 1
-            while i < n and body[i] != ",":
-                i += 1
-        else:
-            start = i
-            while i < n and body[i] != ",":
-                i += 1
-            val = body[start:i].strip()
-        if i < n and body[i] == ",":
-            i += 1
-        fields[key] = val
+    for m in _STRUCT_FIELD_RE.finditer(body):
+        quoted = m.group("quoted")
+        fields[m.group("key")] = (
+            quoted if quoted is not None else m.group("plain").strip())
     return fields
 
 
@@ -241,6 +231,14 @@ class VCFHeader:
                 ftype = "String" if has_val else "Flag"
 
             if ftype == "Flag" or not has_val:
+                # Deliberate divergence from PyVCF3: when a key declared as a
+                # non-Flag type appears bare (no '='), PyVCF3 raises IndexError
+                # trying to split a missing value. We treat the bare key as a
+                # flag-like presence marker. Real VCFs always supply values for
+                # declared Integer/Float/String keys, so this only surfaces on
+                # malformed input — and "presence" is the more useful answer.
+                # Pinned by tests/test_vcf_parsing.py
+                # ::test_bare_declared_integer_diverges_from_pyvcf3.
                 out[key] = True
                 continue
 

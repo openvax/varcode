@@ -15,6 +15,7 @@ unit tests cover edge cases that the fixtures don't reach.
 from __future__ import annotations
 
 import glob
+import gzip
 import os
 from collections import OrderedDict
 
@@ -109,39 +110,27 @@ def test_header_format_fields_match_pyvcf(path):
             "FORMAT[%s].type: %r vs %r" % (key, our_def.type, their_def.type))
 
 
-@pytest.mark.parametrize("path", FIXTURES, ids=os.path.basename)
-def test_parse_info_matches_pyvcf_for_every_row(path):
-    ours = VCFHeader.from_path(path)
-    theirs = _pyvcf_reader(path)
-    # Iterate raw rows so we feed both parsers the exact same INFO string.
-    n = 0
-    for record in theirs:
-        n += 1
-        # Reconstruct the raw INFO string from PyVCF3's parsed dict by going
-        # back to the file? Easier: use PyVCF3's _parse_info as the oracle on
-        # whatever string we have. PyVCF3 exposes the raw line via _row_pattern,
-        # but cleanest path is to iterate the file ourselves.
-    # We re-iterate the raw file for INFO strings (PyVCF3 already advanced past
-    # the header); zip with another PyVCF3 pass for parsed expectations.
-    expected_iter = _pyvcf_reader(path)
-    raw_info_strings = []
-    open_fn = __import__("gzip").open if path.endswith(".gz") else open
+def _iter_data_rows(path):
+    """Yield non-header rows of a VCF as tab-split column lists."""
+    open_fn = gzip.open if path.endswith(".gz") else open
     with open_fn(path, "rt") as fh:
         for line in fh:
             if line.startswith("#"):
                 continue
-            cols = line.rstrip("\n").rstrip("\r").split("\t")
-            if len(cols) < 8:
-                continue
-            raw_info_strings.append(cols[7])
-    assert len(raw_info_strings) == n
-    expected_iter = _pyvcf_reader(path)
-    for raw, record in zip(raw_info_strings, expected_iter):
-        their_info = record.INFO
+            yield line.rstrip("\n").rstrip("\r").split("\t")
+
+
+@pytest.mark.parametrize("path", FIXTURES, ids=os.path.basename)
+def test_parse_info_matches_pyvcf_for_every_row(path):
+    ours = VCFHeader.from_path(path)
+    raw_info_strings = [cols[7] for cols in _iter_data_rows(path) if len(cols) >= 8]
+    expected = list(_pyvcf_reader(path))
+    assert len(raw_info_strings) == len(expected)
+    for raw, record in zip(raw_info_strings, expected):
         our_info = ours.parse_info(raw)
-        assert our_info == their_info, (
+        assert our_info == record.INFO, (
             "INFO mismatch on %s row %s: ours=%r theirs=%r" % (
-                path, raw, our_info, their_info))
+                path, raw, our_info, record.INFO))
 
 
 @pytest.mark.parametrize("path", FIXTURES, ids=os.path.basename)
@@ -149,22 +138,14 @@ def test_parse_samples_matches_pyvcf_for_every_row(path):
     ours = VCFHeader.from_path(path)
     if not ours.samples:
         pytest.skip("no samples in %s" % path)
-    expected_iter = _pyvcf_reader(path)
-    open_fn = __import__("gzip").open if path.endswith(".gz") else open
-    raw_rows = []
-    with open_fn(path, "rt") as fh:
-        for line in fh:
-            if line.startswith("#"):
-                continue
-            cols = line.rstrip("\n").rstrip("\r").split("\t")
-            if len(cols) < 10:
-                continue  # no FORMAT/sample columns
-            raw_rows.append((cols[8], cols[9:]))
-    for (fmt, sample_cells), record in zip(raw_rows, expected_iter):
+    raw_rows = [
+        (cols[8], cols[9:]) for cols in _iter_data_rows(path) if len(cols) >= 10
+    ]
+    expected = list(_pyvcf_reader(path))
+    for (fmt, sample_cells), record in zip(raw_rows, expected):
         if fmt == "." or fmt is None:
             continue
         ours_parsed = ours.parse_samples(sample_cells, fmt)
-        # Build the matching expected dict from PyVCF3's record.samples.
         theirs_parsed = OrderedDict(
             (call.sample, _pyvcf_call_to_dict(call))
             for call in record.samples)
@@ -320,6 +301,28 @@ class TestParseInfoEdgeCases:
         ours, theirs = self._both(header, "DB;DP=100;AF=0.1,0.2")
         assert ours == theirs
 
+    def test_bare_declared_integer_diverges_from_pyvcf3(self):
+        """Deliberate divergence: a key declared as Integer (or any non-Flag
+        type) that appears bare (no `=`) crashes PyVCF3 with IndexError but
+        we return ``{key: True}`` — flag-like presence. This only surfaces
+        on malformed input; the more useful answer is to keep parsing.
+        """
+        header = [
+            '##fileformat=VCFv4.2\n',
+            '##INFO=<ID=DP,Number=1,Type=Integer,Description="depth">\n',
+        ]
+        all_lines = list(header) + [
+            "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\n"]
+        ours = VCFHeader.from_lines(all_lines)
+        record_line = "1\t1\t.\tA\tT\t.\tPASS\tDP\tGT\t0/0\n"
+        import io
+        stream = io.StringIO("".join(all_lines + [record_line]))
+        theirs = pyvcf.Reader(fsock=stream, strict_whitespace=True)
+
+        assert ours.parse_info("DP") == {"DP": True}
+        with pytest.raises(IndexError):
+            theirs._parse_info("DP")
+
 
 class TestParseSamplesEdgeCases:
     def _make(self, header_lines, samples=("S1", "S2")):
@@ -399,9 +402,15 @@ class TestReservedTables:
             assert k in RESERVED_FORMAT
 
 
-class TestLazyImportPreserved:
-    """Importing varcode (not load_vcf) must not pull rpy2/PyVCF3 in. This is
-    the original motivation for #302; keep the guard test alive."""
+class TestNoRpy2OnImport:
+    """`import varcode` must never pull rpy2 or PyVCF3 into sys.modules.
+
+    This was the original motivation for #302. The earlier fix used a lazy
+    `__getattr__` shim in `varcode/__init__.py` to defer the import; the
+    runtime VCF parser rewrite removed PyVCF3 from the import graph entirely,
+    so the invariant is now upheld unconditionally — but it's load-bearing
+    enough that we still pin it.
+    """
 
     def test_bare_import_does_not_pull_pyvcf3_or_rpy2(self):
         import subprocess
