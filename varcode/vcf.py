@@ -12,8 +12,6 @@
 
 
 import os
-import requests
-import zlib
 import urllib
 import logging
 from collections import OrderedDict
@@ -21,7 +19,6 @@ from warnings import warn
 
 import pandas
 from typechecks import require_string
-import vcf as pyvcf
 
 from .reference import (
     infer_genome,
@@ -29,6 +26,7 @@ from .reference import (
 )
 from .variant import Variant, variant_ascending_position_sort_key
 from .variant_collection import VariantCollection
+from .vcf_parsing import VCFHeader
 
 
 logger = logging.getLogger(__name__)
@@ -164,13 +162,12 @@ def load_vcf(
             os.unlink(filename)
 
     # Loading a local file.
-    # The file will be opened twice: first to parse the header with pyvcf, then
-    # by pandas to read the data.
-
-    # PyVCF reads the metadata immediately and stops at the first line with
-    # data. We can close the file after that.
-    handle = PyVCFReaderFromPathOrURL(path)
-    handle.close()
+    # The file will be opened twice: first to parse the header, then by
+    # pandas to read the data. Normalize away any file:// scheme so the
+    # opener (and pandas, below) get a plain filesystem path.
+    if parsed_path.scheme and parsed_path.scheme.lower() == "file":
+        path = parsed_path.path
+    header = VCFHeader.from_path(path)
 
     ####
     # The following code looks a bit crazy because it's motivated by the
@@ -183,11 +180,9 @@ def load_vcf(
     # back to VCF will put the correct reference genome in the generated
     # header.
     if genome is None:
-        vcf_reader = handle.vcf_reader
-        if reference_vcf_key not in vcf_reader.metadata:
-            raise ValueError("Unable to infer reference genome for %s" % (
-                vcf_reader.filename,))
-        genome = vcf_reader.metadata[reference_vcf_key]
+        if reference_vcf_key not in header.metadata:
+            raise ValueError("Unable to infer reference genome for %s" % (path,))
+        genome = header.metadata[reference_vcf_key]
 
     genome, genome_was_ucsc = infer_genome(genome)
     if genome_was_ucsc:
@@ -199,20 +194,11 @@ def load_vcf(
     df_iterator = read_vcf_into_dataframe(
         path,
         include_info=include_info,
-        sample_names=handle.vcf_reader.samples if include_info else None,
+        sample_names=header.samples if include_info else None,
         chunk_size=chunk_size)
 
     if include_info:
-        def sample_info_parser(unparsed_sample_info_strings, format_string):
-            """
-            Given a format string like "GT:AD:ADP:DP:FS"
-            and a list of sample info strings where each entry is like
-            "0/1:3,22:T=3,G=22:25:33", return a dict that maps:
-            sample name -> field name -> value. Uses pyvcf to parse the fields.
-            """
-            return pyvcf_calls_to_sample_info_list(
-                handle.vcf_reader._parse_samples(
-                    unparsed_sample_info_strings, format_string, None))
+        sample_info_parser = header.parse_samples
     else:
         sample_info_parser = None
 
@@ -233,10 +219,10 @@ def load_vcf(
     return dataframes_to_variant_collection(
         df_iterator,
         source_path=path,
-        info_parser=handle.vcf_reader._parse_info if include_info else None,
+        info_parser=header.parse_info if include_info else None,
         only_passing=only_passing,
         max_variants=max_variants,
-        sample_names=handle.vcf_reader.samples if include_info else None,
+        sample_names=header.samples if include_info else None,
         sample_info_parser=sample_info_parser,
         variant_kwargs=variant_kwargs,
         variant_collection_kwargs=variant_collection_kwargs,
@@ -252,16 +238,6 @@ def load_vcf_fast(*args, **kwargs):
         "load_vcf_fast is deprecated and has been renamed to load_vcf",
         DeprecationWarning)
     return load_vcf(*args, **kwargs)
-
-
-def pyvcf_calls_to_sample_info_list(calls):
-    """
-    Given pyvcf.model._Call instances, return a dict mapping each sample
-    name to its per-sample info:
-        sample name -> field -> value
-    """
-    return OrderedDict(
-        (call.sample, call.data._asdict()) for call in calls)
 
 
 def dataframes_to_variant_collection(
@@ -509,86 +485,6 @@ def read_vcf_into_dataframe(
         names=list(vcf_field_types),
         usecols=range(len(vcf_field_types)))
     return reader
-
-
-class PyVCFReaderFromPathOrURL(object):
-    """
-    Thin wrapper over a PyVCF Reader object that supports loading over URLs,
-    and a close() function (pyvcf somehow doesn't have a close() funciton).
-
-    Attributes
-    ----------
-    path : string or None
-        path that was loaded, if available.
-
-    vcf_reader : pyvcf Reader instance
-    """
-    def __init__(self, path):
-        """
-        Construct a new wrapper.
-
-        Parameters
-        ----------
-        path : string or pyvcf Reader instance
-            Path or URL to load, or Reader instance.
-        """
-        self.path = None  # string path, if available.
-        self.vcf_reader = None  # vcf_reader. Will always be set.
-        self._to_close = None  # object to call close() on when we're done.
-
-        if isinstance(path, pyvcf.Reader):
-            self.vcf_reader = path
-        else:
-            require_string(path, "Path or URL to VCF")
-            self.path = path
-            parsed_path = parse_url_or_path(path)
-            if not parsed_path.scheme or parsed_path.scheme.lower() == 'file':
-                self.vcf_reader = pyvcf.Reader(
-                    filename=parsed_path.path,
-                    strict_whitespace=True)
-            elif parsed_path.scheme.lower() in ("http", "https", "ftp"):
-                self._to_close = response = requests.get(path, stream=True)
-                response.raise_for_status()  # raise error on 404, etc.
-                if path.endswith(".gz"):
-                    lines = stream_gzip_decompress_lines(
-                        response.iter_content())
-                else:
-                    lines = response.iter_lines(decode_unicode=True)
-                self.vcf_reader = pyvcf.Reader(
-                    fsock=lines,
-                    compressed=False,
-                    strict_whitespace=True)
-            else:
-                raise ValueError("Unsupported scheme: %s" % parsed_path.scheme)
-
-    def close(self):
-        if self._to_close is not None:
-            self._to_close.close()
-
-
-def stream_gzip_decompress_lines(stream):
-    """
-    Uncompress a gzip stream into lines of text.
-
-    Parameters
-    ----------
-    Generator of chunks of gzip compressed text.
-
-    Returns
-    -------
-    Generator of uncompressed lines.
-    """
-    dec = zlib.decompressobj(zlib.MAX_WBITS | 16)
-    previous = ""
-    for compressed_chunk in stream:
-        chunk = dec.decompress(compressed_chunk).decode()
-        if chunk:
-            lines = (previous + chunk).split("\n")
-            previous = lines.pop()
-            for line in lines:
-                yield line
-    yield previous
-
 
 
 def parse_url_or_path(s):
