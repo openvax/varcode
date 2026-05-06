@@ -86,19 +86,18 @@ _INFO_LINE = re.compile(r"^##INFO=<(.+)>\s*$")
 _FORMAT_LINE = re.compile(r"^##FORMAT=<(.+)>\s*$")
 _META_LINE = re.compile(r"^##(?P<key>.+?)=(?P<val>.*)$")
 
-# A single ``key=value`` pair from a structured header body, where ``value``
-# is either a double-quoted string (commas allowed inside) or a bare token.
-# We do *not* attempt to honor backslash-escaped quotes inside the quoted
-# form — neither does PyVCF3 (its regex is the same ``[^"]*``), and no
-# real-world VCF the project has encountered does that.
+# One ``key=value`` pair from a structured header body. ``value`` is either
+# a double-quoted string (commas allowed inside) or a bare token (terminated
+# by the next comma). The two named groups are mutually exclusive: exactly
+# one is non-None per match.
 _STRUCT_FIELD_RE = re.compile(
     r"""
-    (?P<key>\w+)            # field name
-    \s*=\s*
+    (?P<key>     \w+         )           # field name
+    \s* = \s*
     (?:
-        "(?P<quoted>[^"]*)"   # double-quoted value (may contain commas)
+        " (?P<quoted> [^"]* ) "          # quoted value — commas allowed inside
       |
-        (?P<plain>[^,]*)      # bare value, terminated by comma or end
+          (?P<plain>  [^,]* )            # bare value — terminated by comma / end
     )
     """,
     re.VERBOSE,
@@ -106,15 +105,37 @@ _STRUCT_FIELD_RE = re.compile(
 
 
 def _split_struct_fields(body: str) -> "OrderedDict[str, str]":
-    """Split a ``key=val,key="quoted, with commas",...`` body into a dict.
+    """Parse the body of a structured header line into an ordered dict.
 
-    Quote-aware: commas inside double-quoted values don't terminate a field.
+    The body is what's between ``<`` and ``>`` of an ``##INFO=<...>`` /
+    ``##FORMAT=<...>`` / ``##contig=<...>`` line — a comma-separated list of
+    ``key=value`` pairs where ``value`` may be a double-quoted string (so it
+    can contain commas) or a bare token.
+
+    Worked example::
+
+        body  = 'ID=DB,Number=0,Type=Flag,Description="dbSNP, build 129"'
+        result = OrderedDict([
+            ("ID", "DB"),
+            ("Number", "0"),
+            ("Type", "Flag"),
+            ("Description", "dbSNP, build 129"),  # comma preserved
+        ])
+
+    Limitations (matched against PyVCF3 for behavioural compatibility):
+
+    - Backslash-escaped quotes inside the quoted form are *not* honored;
+      the regex is ``[^"]*``, same as PyVCF3's. Real-world VCFs don't
+      embed quotes in Description fields.
+    - VCF 4.3 §1.2's percent-encoding for special characters
+      (``%22`` / ``%2C`` / ``%3B`` / ``%3D``) is *not* decoded. PyVCF3
+      doesn't decode either; if/when we want spec-compliant decoding,
+      it's a small post-processing step on the captured value.
     """
     fields: "OrderedDict[str, str]" = OrderedDict()
     for m in _STRUCT_FIELD_RE.finditer(body):
-        quoted = m.group("quoted")
-        fields[m.group("key")] = (
-            quoted if quoted is not None else m.group("plain").strip())
+        fields[m["key"]] = (
+            m["quoted"] if m["quoted"] is not None else m["plain"].strip())
     return fields
 
 
