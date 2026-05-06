@@ -42,8 +42,8 @@ _KNOWN_BROKEN_IN_PYVCF3 = {"mutect-example-headerless.vcf"}
 
 FIXTURES = [
     p for p in (
-        sorted(glob.glob(os.path.join(DATA_DIR, "*.vcf"))) +
-        sorted(glob.glob(os.path.join(DATA_DIR, "*.vcf.gz"))))
+        sorted(glob.glob(os.path.join(DATA_DIR, "**", "*.vcf"), recursive=True)) +
+        sorted(glob.glob(os.path.join(DATA_DIR, "**", "*.vcf.gz"), recursive=True)))
     if os.path.basename(p) not in _KNOWN_BROKEN_IN_PYVCF3]
 
 
