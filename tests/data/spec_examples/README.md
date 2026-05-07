@@ -16,7 +16,6 @@ diff against the published spec.
 | `vcf42_spec_trio.vcf` | VCFv4.2 §1.1 | Three samples, multiallelic ALTs, microsatellite indel, `Number=A`, `Number=2`, phased and unphased GTs, missing fields, quoted contig metadata, `ALT=.` row |
 | `vcf43_spec_sv.vcf` | VCFv4.3 §5.4 | Symbolic ALT alleles (`<DEL>`, `<DUP>`, `<INS>`, `<INV>`), `END=`, confidence intervals, `IMPRECISE` flag, structural-variant INFO fields |
 
-The oracle tests in `tests/test_vcf_parsing.py` automatically pick up any
-`*.vcf` placed under `tests/data/**` (it walks subdirectories), so adding more
-spec fixtures here extends both the oracle comparison and the dedicated
-spec-example assertions.
+Adding a new spec fixture here also requires extending
+`tests/test_vcf_spec_examples.py` with hand-verified assertions for it —
+there is no automatic per-fixture oracle.

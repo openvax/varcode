@@ -8,10 +8,9 @@
 Hard-coded expectations against the canonical VCF spec example fixtures
 under ``tests/data/spec_examples/``.
 
-The oracle tests in test_vcf_parsing.py already pin our parser to PyVCF3's
-behaviour for *every* fixture. These tests instead check that our parser
-returns exactly the values published in the VCF spec — so a regression
-shows up as a diff against the spec, not just against PyVCF3.
+The expected values here come straight from the VCF spec text — so a
+regression shows up as a diff against the spec, not just against another
+parser's behaviour.
 
 Sources (samtools/hts-specs, MIT):
 - VCFv4.2 §1.1 — three-sample trio example

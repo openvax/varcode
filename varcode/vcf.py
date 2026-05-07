@@ -69,8 +69,9 @@ def load_vcf(
     """
     Load reference name and Variant objects from the given VCF filename.
 
-    Currently only local files are supported by this function (no http). If you
-    call this on an HTTP URL, it will fall back to `load_vcf`.
+    Local files are parsed directly. HTTP/HTTPS URLs are downloaded to a
+    temporary file and ``load_vcf`` recurses on the local copy; pandas
+    doesn't reliably stream gzipped HTTP responses, so we materialize first.
 
     Parameters
     ----------

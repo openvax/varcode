@@ -2,9 +2,7 @@
 
 Tiny fixtures exercising what production cancer-pipeline callers actually
 emit. Tests in `tests/test_real_world_callers.py` pin our parser against
-hand-verified expected values; the parametrized oracle tests in
-`tests/test_vcf_parsing.py` additionally compare every row against PyVCF3
-element-by-element.
+hand-verified expected values captured from PyVCF3.
 
 | File | Provenance | What it exercises |
 |---|---|---|

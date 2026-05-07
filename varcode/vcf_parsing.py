@@ -16,9 +16,11 @@ VCF header / INFO / FORMAT parsing.
 Replaces the runtime PyVCF3 dependency that previously dragged rpy2/R into
 sys.modules just for header metadata and per-cell INFO/FORMAT decoding (#302).
 
-PyVCF3's behaviour is the reference implementation; tests in
-``tests/test_vcf_parsing.py`` pin this module's output to PyVCF3's for the
-existing fixture VCFs, so future regressions surface as test failures.
+PyVCF3's behaviour is the reference implementation. Expected values were
+captured from PyVCF3 once and hardcoded as literals across
+``tests/test_vcf_parsing.py``, ``tests/test_vcf_spec_examples.py``, and
+``tests/test_real_world_callers.py``; PyVCF3 is not a runtime or test
+dependency.
 """
 from __future__ import annotations
 
@@ -261,7 +263,8 @@ class VCFHeader:
         """
         Parse an INFO column string like ``"AF=0.5;DB;DP=100"`` into a typed dict.
 
-        Pinned to PyVCF3's `_parse_info` semantics; see oracle tests.
+        Pinned to PyVCF3's ``_parse_info`` semantics by hardcoded test cases
+        (see ``tests/test_vcf_parsing.py``, ``test_vcf_spec_examples.py``).
         """
         if info_str == ".":
             return {}
@@ -286,7 +289,7 @@ class VCFHeader:
                 # declared Integer/Float/String keys, so this only surfaces on
                 # malformed input — and "presence" is the more useful answer.
                 # Pinned by tests/test_vcf_parsing.py
-                # ::test_bare_declared_integer_diverges_from_pyvcf3.
+                # ::test_bare_declared_non_flag_returns_presence_marker.
                 out[key] = True
                 continue
 
@@ -318,9 +321,9 @@ class VCFHeader:
         """
         Parse colon-delimited per-sample strings using ``format_string``.
 
-        Returns ``OrderedDict[sample_name -> OrderedDict[field_name -> value]]``,
-        matching what `pyvcf_calls_to_sample_info_list` produced from PyVCF3's
-        ``_parse_samples`` output.
+        Returns ``OrderedDict[sample_name -> OrderedDict[field_name -> value]]``.
+        The shape matches what PyVCF3's ``_parse_samples`` returns when its
+        per-sample ``CallData`` namedtuples are converted via ``._asdict()``.
         """
         if len(sample_strings) != len(self.samples):
             raise ValueError(

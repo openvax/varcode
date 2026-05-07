@@ -7,10 +7,10 @@
 """
 Hand-verified expectations against fixtures from real somatic callers.
 
-These complement the parametrized PyVCF3 oracle tests by pinning specific
-field values that *should* survive parsing — so a regression on, say, MuTect2
-phasing or Strelka2 per-base tier counts shows up as a meaningful failure
-against the published format, not just "PyVCF3 says X."
+Expected values are pinned to specific field shapes that *should* survive
+parsing — so a regression on, say, MuTect2 phasing or Strelka2 per-base
+tier counts shows up as a meaningful failure against the published caller
+format.
 
 Fixtures live under ``tests/data/real_callers/``; see the README there for
 provenance (which fixtures are verbatim from public corpora vs. which are
