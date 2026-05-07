@@ -445,6 +445,49 @@ class TestReservedTables:
             assert k in RESERVED_FORMAT
 
 
+class TestGetMetadata:
+    """Convenience accessor that smooths over the str-vs-list[str] asymmetry
+    in the metadata dict. Lifted from the GATK MuTect2 fixture which has
+    examples of both shapes."""
+
+    @pytest.fixture(scope="class")
+    def header(self):
+        path = os.path.join(
+            DATA_DIR, "real_callers", "mutect2_example.vcf")
+        return VCFHeader.from_path(path)
+
+    def test_singular_key_returns_string(self, header):
+        # fileformat is in SINGULAR_METADATA -> stored as plain string.
+        assert header.get_metadata("fileformat") == "VCFv4.2"
+
+    def test_single_occurrence_list_unwraps(self, header):
+        # ##source=Mutect2 -> stored as ["Mutect2"], unwrapped to "Mutect2".
+        assert header.get_metadata("source") == "Mutect2"
+
+    def test_key_with_internal_whitespace(self, header):
+        # ##Mutect Version=2.1 — embedded space in key, unwrapped to scalar.
+        assert header.get_metadata("Mutect Version") == "2.1"
+
+    def test_missing_key_returns_default(self, header):
+        assert header.get_metadata("does_not_exist") is None
+        assert header.get_metadata("does_not_exist", "fallback") == "fallback"
+
+    def test_multi_valued_key_raises(self):
+        # Construct a header with a repeated non-singular key (real example:
+        # multi-contig VCFs).
+        h = VCFHeader.from_lines([
+            "##fileformat=VCFv4.2\n",
+            "##contig=<ID=1,length=10>\n",
+            "##contig=<ID=2,length=20>\n",
+            "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n",
+        ])
+        # The full list is still queryable via the underlying dict.
+        assert len(h.metadata["contig"]) == 2
+        # The accessor refuses to silently pick one.
+        with pytest.raises(ValueError, match="2 values"):
+            h.get_metadata("contig")
+
+
 class TestNoRpy2OnImport:
     """`import varcode` must never pull rpy2 or PyVCF3 into sys.modules.
 

@@ -192,6 +192,33 @@ class VCFHeader:
         with opener(path, "rt") as fh:
             return cls.from_lines(_iter_header_lines(fh))
 
+    def get_metadata(self, key: str, default: Optional[str] = None) -> Optional[str]:
+        """Return a metadata value as a string, unwrapping single-element lists.
+
+        ``self.metadata`` stores values as either ``str`` (for keys in
+        ``SINGULAR_METADATA``) or ``list[str]`` (so that repeated ``##key=val``
+        lines accumulate). This accessor smooths over that asymmetry for the
+        common single-occurrence case::
+
+            header.get_metadata("source")          # "Mutect2"
+            header.get_metadata("Mutect Version")  # "2.1"
+            header.get_metadata("missing", "n/a")  # "n/a"
+
+        Raises ``ValueError`` if the key has multiple values — for genuinely
+        list-valued keys like ``contig`` (one entry per chromosome) reach
+        through to ``self.metadata[key]`` directly.
+        """
+        val = self.metadata.get(key)
+        if val is None:
+            return default
+        if isinstance(val, str):
+            return val
+        if len(val) == 1:
+            return val[0]
+        raise ValueError(
+            "metadata[%r] has %d values; use header.metadata[%r] directly "
+            "to get the full list" % (key, len(val), key))
+
     @classmethod
     def from_lines(cls, lines: Iterable[str]) -> "VCFHeader":
         h = cls()
