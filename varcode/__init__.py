@@ -56,6 +56,7 @@ from .sv_allele_parser import parse_symbolic_alt
 from .variant import Variant
 from .variant_collection import VariantCollection
 from .maf import load_maf, load_maf_dataframe
+from .vcf import load_vcf, load_vcf_fast
 from .effects import (
     effect_priority,
     top_priority_effect,
@@ -65,20 +66,6 @@ from .effects import (
     NonsilentCodingMutation,
 )
 from .version import __version__
-
-
-def __getattr__(name):
-    # Lazy import for VCF loaders. Pulling in .vcf at package-import time
-    # drags PyVCF3 into sys.modules, which in turn triggers rpy2/R
-    # initialization if rpy2 happens to be installed in the environment
-    # — a hundreds-of-ms surprise that every `import varcode` eats even
-    # when no VCF is ever loaded. See #302.
-    if name in ("load_vcf", "load_vcf_fast"):
-        from . import vcf as _vcf
-        value = getattr(_vcf, name)
-        globals()[name] = value
-        return value
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 __all__ = [
