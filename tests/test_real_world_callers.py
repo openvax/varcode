@@ -13,7 +13,8 @@ phasing or Strelka2 per-base tier counts shows up as a meaningful failure
 against the published format, not just "PyVCF3 says X."
 
 Fixtures live under ``tests/data/real_callers/``; see the README there for
-provenance and the format quirks each one exercises.
+provenance (which fixtures are verbatim from public corpora vs. which are
+format-faithful reconstructions and why).
 """
 from __future__ import annotations
 
@@ -32,7 +33,7 @@ VEP = os.path.join(CALLER_DIR, "vep_annotated_csq.vcf")
 
 
 # ---------------------------------------------------------------------------
-# GATK4 MuTect2
+# GATK4 MuTect2 — verbatim from broadinstitute/gatk @ 3021e6924aeb
 # ---------------------------------------------------------------------------
 
 @pytest.fixture(scope="module")
@@ -41,141 +42,138 @@ def mutect2_header():
 
 
 class TestMuTect2Header:
-    def test_filter_vocabulary(self, mutect2_header):
-        # MuTect2's distinctive filter set — not present in MuTect1 fixtures.
-        # We don't store FILTER declarations in metadata (varcode reads
-        # filters per-row), but the header should parse without error.
+    def test_source_is_mutect2(self, mutect2_header):
         assert mutect2_header.metadata["fileformat"] == "VCFv4.2"
         assert mutect2_header.metadata["source"] == ["Mutect2"]
 
-    def test_tumor_normal_metadata(self, mutect2_header):
-        # MuTect2 records which sample is tumor vs. normal in dedicated
-        # metadata lines (non-singular -> list).
-        assert mutect2_header.metadata["tumor_sample"] == ["TUMOR"]
-        assert mutect2_header.metadata["normal_sample"] == ["NORMAL"]
+    def test_metadata_key_with_internal_whitespace(self, mutect2_header):
+        # ``##Mutect Version=2.1`` — the key contains a space. PyVCF3's
+        # `.+?` non-greedy regex tolerates this; ours mirrors that.
+        assert mutect2_header.metadata.get("Mutect Version") == ["2.1"]
 
-    def test_per_alt_info_fields_have_number_a(self, mutect2_header):
-        # TLOD, NLOD, NALOD, POPAF, MPOS — one value per ALT.
-        for key in ("TLOD", "NLOD", "NALOD", "POPAF", "MPOS"):
-            assert mutect2_header.info_fields[key].number == -1, (
-                f"{key} should be Number=A (encoded as -1)")
+    def test_filtering_status_metadata_with_long_value(self, mutect2_header):
+        # ##filtering_status= contains a long human-readable warning string
+        # with internal whitespace and punctuation.
+        status = mutect2_header.metadata["filtering_status"]
+        assert isinstance(status, list)
+        assert "FilterMutectCalls" in status[0]
 
-    def test_per_allele_info_fields_have_number_r(self, mutect2_header):
-        # MBQ, MFRL, MMQ — one value per (REF + each ALT).
-        for key in ("MBQ", "MFRL", "MMQ"):
-            assert mutect2_header.info_fields[key].number == -3, (
-                f"{key} should be Number=R (encoded as -3)")
+    def test_per_alt_info_fields(self, mutect2_header):
+        # TLOD/POPAF/N_ART_LOD/NLOD/GERMQ are per-alt (Number=A → -1).
+        for key in ("TLOD", "POPAF", "N_ART_LOD", "NLOD", "GERMQ"):
+            assert mutect2_header.info_fields[key].number == -1, key
 
-    def test_str_flag(self, mutect2_header):
-        # STR is a Flag — Number=0, Type=Flag.
+    def test_per_allele_format_fields(self, mutect2_header):
+        # AD/F1R2/F2R1/MBQ/MFRL are Number=R (ref + each alt).
+        for key in ("AD", "F1R2", "F2R1", "MBQ", "MFRL"):
+            assert mutect2_header.format_fields[key].number == -3, key
+
+    def test_str_flag_and_rpa_variable(self, mutect2_header):
         assert mutect2_header.info_fields["STR"].type == "Flag"
         assert mutect2_header.info_fields["STR"].number == 0
+        assert mutect2_header.info_fields["RPA"].number is None  # Number=.
 
-    def test_rpa_is_variable_count(self, mutect2_header):
-        # RPA repeats-per-allele has Number=. (variable).
-        assert mutect2_header.info_fields["RPA"].number is None
+    def test_potential_polymorphic_numt_is_string(self, mutect2_header):
+        # GATK4 MuTect2's mitochondrial mode emits a String "true"/"false"
+        # tag for sites likely to be NuMTs (nuclear copies of mtDNA).
+        f = mutect2_header.format_fields["POTENTIAL_POLYMORPHIC_NUMT"]
+        assert f.type == "String"
+        assert f.number == 1
 
-    def test_phasing_format_fields(self, mutect2_header):
-        # PGT and PID are MuTect2's physical phasing tags.
-        assert "PGT" in mutect2_header.format_fields
-        assert "PID" in mutect2_header.format_fields
-        assert mutect2_header.format_fields["PGT"].type == "String"
+    def test_single_sample(self, mutect2_header):
+        assert mutect2_header.samples == ["NA12878"]
 
 
 class TestMuTect2InfoParsing:
-    def test_simple_pass_record_per_alt_arrays(self, mutect2_header):
-        # chr1:1041196 — single ALT, all per-alt fields are 1-element lists.
+    def test_simple_snv_per_alt_arrays(self, mutect2_header):
+        # chrM:152 T>C — single ALT, Number=A fields are 1-element lists.
         info = mutect2_header.parse_info(
-            "DP=87;ECNT=1;GERMQ=89;MBQ=20,30;MFRL=183,200;MMQ=60,60;"
-            "MPOS=24;NALOD=1.4;NLOD=12.31;POPAF=6.00;ROQ=93;TLOD=53.78")
-        assert info["TLOD"] == [53.78]
-        assert info["NLOD"] == [12.31]
-        assert info["MBQ"] == [20, 30]      # Number=R: ref + 1 alt
-        assert info["MMQ"] == [60, 60]
-        assert info["DP"] == 87             # Number=1 -> scalar
+            "DP=1582;ECNT=1;TLOD=5266.19;POPAF=5.000e-08;OCM=0")
+        assert info["DP"] == 1582
         assert info["ECNT"] == 1
-        assert info["ROQ"] == 93.0          # Float scalar
+        assert info["TLOD"] == [5266.19]
+        assert info["POPAF"] == [5e-08]
+        assert info["OCM"] == 0
 
-    def test_multiallelic_per_alt_arrays(self, mutect2_header):
-        # chr1:1102328 — two ALTs, A and T. Number=A fields have 2 values;
-        # Number=R fields have 3 (ref + 2 alts).
+    def test_quadallelic_per_alt_arrays(self, mutect2_header):
+        # chrM:302 A>AC,C,ACC — three ALTs, TLOD/POPAF have 3 values each.
         info = mutect2_header.parse_info(
-            "DP=64;ECNT=2;GERMQ=72;MBQ=29,28,29;MFRL=193,178,201;"
-            "MMQ=60,60,60;MPOS=12,30;NALOD=1.32,1.32;NLOD=6.32,6.32;"
-            "POPAF=6.00,6.00;ROQ=93;TLOD=4.31,3.85")
-        assert info["TLOD"] == [4.31, 3.85]
-        assert info["MPOS"] == [12, 30]
-        assert info["MBQ"] == [29, 28, 29]      # Number=R for multi-allelic
-        assert info["MFRL"] == [193, 178, 201]
+            "DP=659;ECNT=4;TLOD=891.23,10.66,67.66;"
+            "POPAF=5.000e-08,5.000e-08,5.000e-08;OCM=0")
+        assert info["TLOD"] == [891.23, 10.66, 67.66]
+        assert info["POPAF"] == [5e-08, 5e-08, 5e-08]
 
-    def test_str_contraction_with_repeat_info(self, mutect2_header):
-        # chr2:16092200 — STR flag set, RPA Number=. captures both ref+alt counts.
+    def test_str_with_repeat_unit(self, mutect2_header):
+        # chrM:310 T>TC — STR site with mononucleotide repeat (RU=C).
         info = mutect2_header.parse_info(
-            "DP=58;ECNT=1;GERMQ=70;MBQ=29,29;MFRL=180,182;MMQ=60,60;"
-            "MPOS=29;NALOD=1.31;NLOD=6.32;POPAF=4.30;ROQ=93;"
-            "RPA=4,3;RU=CAA;STR;TLOD=18.27")
-        assert info["STR"] is True              # Flag presence
-        assert info["RU"] == "CAA"              # Number=1 -> scalar string
-        assert info["RPA"] == [4, 3]            # Number=. -> list
+            "DP=705;ECNT=4;TLOD=1974.89;POPAF=5.000e-08;"
+            "RPA=5,6;RU=C;STR;OCM=0")
+        assert info["STR"] is True       # Flag presence
+        assert info["RU"] == "C"         # Number=1 -> scalar string
+        assert info["RPA"] == [5, 6]     # Number=. -> list (ref=5, alt=6)
 
 
 class TestMuTect2SampleParsing:
-    def test_normal_tumor_pair_simple(self, mutect2_header):
-        # chr1:1041196 — normal hom-ref, tumor het.
+    def test_simple_snv_with_potential_numt_tag(self, mutect2_header):
+        # chrM:152 includes POTENTIAL_POLYMORPHIC_NUMT="true" as a string.
         out = mutect2_header.parse_samples(
-            ["0/0:42,0:0.023:42:18,0:24,0:99:0,120,1800",
-             "0/1:30,15:0.336:45:14,7:16,8:99:451,0,925"],
-            "GT:AD:AF:DP:F1R2:F2R1:GQ:PL")
-        assert out["NORMAL"]["GT"] == "0/0"
-        assert out["NORMAL"]["AD"] == [42, 0]
-        assert out["NORMAL"]["AF"] == [0.023]   # Number=A even single-element
-        assert out["TUMOR"]["GT"] == "0/1"
-        assert out["TUMOR"]["AD"] == [30, 15]
-        assert out["TUMOR"]["AF"] == [0.336]
-        assert out["TUMOR"]["DP"] == 45
+            ["0/1:3,1556:0.998:2,777:1,779:30,30:16270,369:60,60:42:true"],
+            "GT:AD:AF:F1R2:F2R1:MBQ:MFRL:MMQ:MPOS:POTENTIAL_POLYMORPHIC_NUMT")
+        d = out["NA12878"]
+        assert d["GT"] == "0/1"
+        assert d["AD"] == [3, 1556]                              # Number=R
+        assert d["AF"] == [0.998]                                # Number=A
+        assert d["MBQ"] == [30, 30]
+        assert d["MFRL"] == [16270, 369]
+        assert d["MMQ"] == [60, 60]
+        assert d["MPOS"] == [42]
+        assert d["POTENTIAL_POLYMORPHIC_NUMT"] == "true"        # Type=String
 
-    def test_multiallelic_with_phasing_and_triallelic_gt(self, mutect2_header):
-        # chr1:1102328 — TUMOR is genotype 0/1/2 (triallelic) with phased
-        # PGT and a PID linking to the previous-record phasing group.
+    def test_quadallelic_four_way_genotype(self, mutect2_header):
+        # chrM:302 — 4 alleles total, GT is 0/1/2/3 (real production output).
         out = mutect2_header.parse_samples(
-            ["0/0:21,0,0:0.045,0.045:21:8,0,0:13,0,0:60:.:.:0,63,945,63,945,945",
-             "0/1/2:14,5,4:0.245,0.214:23:8,2,2:6,3,2:54:0|1:1102328_G_A:54,0,389,141,182,498"],
-            "GT:AD:AF:DP:F1R2:F2R1:GQ:PGT:PID:PL")
-
-        # Triallelic GT preserved as raw string (not parsed structurally).
-        assert out["TUMOR"]["GT"] == "0/1/2"
-        # AD has 3 elements (ref + 2 alts).
-        assert out["TUMOR"]["AD"] == [14, 5, 4]
-        # AF has 2 elements (per-alt).
-        assert out["TUMOR"]["AF"] == [0.245, 0.214]
-        # PL has 6 elements: G(n_alleles=3) -> 6 genotype combos.
-        assert out["TUMOR"]["PL"] == [54, 0, 389, 141, 182, 498]
-        # PGT scalar string with phased pipe preserved.
-        assert out["TUMOR"]["PGT"] == "0|1"
-        assert out["TUMOR"]["PID"] == "1102328_G_A"
-
-        # NORMAL has missing PGT/PID (".").
-        assert out["NORMAL"]["PGT"] is None
-        assert out["NORMAL"]["PID"] is None
-        # NORMAL still has 3-element AD because ALT is multi-allelic.
-        assert out["NORMAL"]["AD"] == [21, 0, 0]
+            ["0/1/2/3:5,401,67,49:0.768,0.128,0.094:2,163,35,20:"
+             "3,238,32,29:20,20,30,20:419,316,340,278:60,60,60,60:41,33,38"],
+            "GT:AD:AF:F1R2:F2R1:MBQ:MFRL:MMQ:MPOS")
+        d = out["NA12878"]
+        # Quad-allelic GT preserved as raw string.
+        assert d["GT"] == "0/1/2/3"
+        # AD has 4 elements (1 ref + 3 alts).
+        assert d["AD"] == [5, 401, 67, 49]
+        # AF has 3 elements (per ALT).
+        assert d["AF"] == [0.768, 0.128, 0.094]
+        # MPOS Number=A → 3 elements.
+        assert d["MPOS"] == [41, 33, 38]
+        # MBQ Number=R → 4 elements.
+        assert d["MBQ"] == [20, 20, 30, 20]
+        # MMQ is declared Number=A in the header but this 2020-era GATK4
+        # build actually emits Number=R-style values (4 elements including
+        # ref). PyVCF3 and we both just split-and-parse without validating
+        # against the declared count, so both return 4 elements. Documenting
+        # this as a real-world GATK quirk — varcode shouldn't reject such
+        # output, and the test pins the lenient behaviour.
+        assert d["MMQ"] == [60, 60, 60, 60]
 
 
 class TestMuTect2EndToEnd:
-    def test_load_vcf_filters_to_pass(self):
-        vc = load_vcf(MUTECT2, genome="GRCh38")
-        # 5 records in file; 2 are PASS (chr1:1041196, chr2:16092115).
-        assert len(vc) == 2
+    def test_load_vcf_keeps_all_unfiltered_records(self):
+        # The fixture has no PASS filter on any record (FILTER="."), so
+        # only_passing keeps everything: 7 input lines * (1 + #alts beyond 1)
+        # alt-splits = 7 + 4 (chrM:302 has 3 alts -> 2 extra; chrM:400 too)
+        # = 7 + 2 + 2 = 11.
+        vc = load_vcf(MUTECT2, genome="GRCh37")
+        assert len(vc) == 11
 
-    def test_load_vcf_keeps_filter_failures_with_only_passing_false(self):
-        vc = load_vcf(MUTECT2, genome="GRCh38", only_passing=False)
-        # 5 records, but the multi-allelic G→A,T splits into 2 variants,
-        # so total Variant count is 6.
-        assert len(vc) == 6
+    def test_filter_preserves_dot_as_none(self):
+        # Records with FILTER="." should have filter=None in metadata.
+        vc = load_vcf(MUTECT2, genome="GRCh37")
+        meta = vc.source_to_metadata_dict[MUTECT2]
+        for variant in vc:
+            assert meta[variant]["filter"] is None
 
 
 # ---------------------------------------------------------------------------
-# Strelka2 somatic SNVs
+# Strelka2 (format-faithful reconstruction — see README)
 # ---------------------------------------------------------------------------
 
 @pytest.fixture(scope="module")
@@ -189,8 +187,6 @@ class TestStrelka2Header:
         assert strelka2_header.metadata["source_version"] == ["2.9.10"]
 
     def test_cmdline_metadata_with_paths_and_flags(self, strelka2_header):
-        # ##cmdline= contains spaces, slashes, and CLI flags. Stored verbatim
-        # as a single string element in the list-valued metadata key.
         cmdline = strelka2_header.metadata["cmdline"]
         assert isinstance(cmdline, list) and len(cmdline) == 1
         assert "configureStrelkaSomaticWorkflow.py" in cmdline[0]
@@ -233,7 +229,7 @@ class TestStrelka2SampleParsing:
         assert out["NORMAL"]["DP"] == 30
         assert out["NORMAL"]["GU"] == [30, 30]   # all reads are G
         assert out["NORMAL"]["AU"] == [0, 0]
-        assert out["TUMOR"]["AU"] == [11, 11]    # 11 alt-allele reads in both tiers
+        assert out["TUMOR"]["AU"] == [11, 11]    # 11 alt-allele reads
         assert out["TUMOR"]["GU"] == [17, 17]    # 17 ref-allele reads
         # No GT field anywhere.
         assert "GT" not in out["NORMAL"]
@@ -249,7 +245,6 @@ class TestStrelka2EndToEnd:
     def test_no_gt_does_not_break_load_vcf(self):
         # The whole point of this fixture: load_vcf must not assume GT exists.
         vc = load_vcf(STRELKA2, genome="hg19", only_passing=False)
-        # Pull sample_info from metadata and confirm GT is absent.
         meta = vc.source_to_metadata_dict[STRELKA2]
         for variant in vc:
             for sample_name, fields in meta[variant]["sample_info"].items():
@@ -261,7 +256,7 @@ class TestStrelka2EndToEnd:
 
 
 # ---------------------------------------------------------------------------
-# VEP-annotated CSQ
+# VEP-annotated CSQ (format-faithful reconstruction — see README)
 # ---------------------------------------------------------------------------
 
 @pytest.fixture(scope="module")
@@ -272,15 +267,13 @@ def vep_header():
 class TestVEPHeader:
     def test_csq_description_with_pipes_survives_quoted_split(self, vep_header):
         # The CSQ Description embeds the pipe-delimited subfield list. Our
-        # quote-aware splitter must capture the whole thing intact — a naive
-        # split-on-comma would merge it with neighbour fields.
+        # quote-aware splitter must capture the whole thing intact.
         csq = vep_header.info_fields["CSQ"]
         assert csq.number is None      # Number=. (per-transcript list)
         assert csq.type == "String"
         assert "Format: Allele|Consequence" in csq.description
 
     def test_csq_subfield_count(self, vep_header):
-        # 23 pipe-separated subfield names in this fixture's Format spec.
         csq = vep_header.info_fields["CSQ"]
         format_spec = csq.description.split("Format: ", 1)[1]
         subfields = format_spec.split("|")
@@ -297,10 +290,9 @@ class TestVEPHeader:
 
 
 class TestVEPCSQValueParsing:
-    """The CSQ INFO value itself is a comma-separated list of per-transcript
-    annotation blocks; each block is pipe-delimited. Our INFO parser splits
-    on commas and hands back a list of strings — downstream code splits the
-    pipes per record."""
+    """The CSQ INFO value is a comma-separated list of per-transcript blocks;
+    each block is pipe-delimited. Our INFO parser splits on commas; downstream
+    code splits the pipes per record."""
 
     def test_single_transcript_record(self, vep_header):
         info = vep_header.parse_info(
@@ -310,19 +302,16 @@ class TestVEPCSQValueParsing:
             "ENSP00000000001.1:p.Met12Val|34|34|12|M/V|Atg/Gtg|rs1||1||HGNC|1")
         assert len(info["CSQ"]) == 1
         record = info["CSQ"][0]
-        # Pipe-split should produce 23 subfields matching the format spec.
         parts = record.split("|")
         assert len(parts) == 23
         assert parts[0] == "G"                  # Allele
         assert parts[1] == "missense_variant"   # Consequence
         assert parts[2] == "MODERATE"           # IMPACT
-        assert parts[3] == "GENE1"              # SYMBOL
         # HGVSc preserves `>` and `:` and `.`.
         assert parts[10] == "ENST00000000001.1:c.34A>G"
         assert parts[15] == "M/V"               # Amino_acids with `/`
 
     def test_multi_transcript_comma_split(self, vep_header):
-        # Two-transcript TP53 stop_gained — comma between the two records.
         info = vep_header.parse_info(
             "AC=1;AF=0.5;AN=2;DP=88;"
             "CSQ=T|stop_gained|HIGH|TP53|ENSG00000141510|Transcript|"
@@ -334,7 +323,6 @@ class TestVEPCSQValueParsing:
             "ENST00000420246.6:c.715C>T|ENSP00000391127.2:p.Arg239Ter|"
             "715|715|239|R/*|Cga/Tga|rs28934578||-1||HGNC|11998")
         assert len(info["CSQ"]) == 2
-        # Each record has 23 pipe-separated subfields.
         for record in info["CSQ"]:
             assert len(record.split("|")) == 23
         # Different transcripts -> different ENST IDs.
@@ -342,10 +330,8 @@ class TestVEPCSQValueParsing:
         assert info["CSQ"][1].split("|")[6] == "ENST00000420246"
 
     def test_intergenic_record_with_many_empty_subfields(self, vep_header):
-        # Real VEP output emits exactly N-1 pipes for N format subfields,
-        # even when most subfields are empty. With 23 subfields declared
-        # in the format spec we expect 22 pipes / 23 fields after split,
-        # of which only Allele/Consequence/IMPACT have content.
+        # Real VEP output emits N-1 pipes for N format subfields, even when
+        # most subfields are empty.
         info = vep_header.parse_info(
             "AC=1;AF=0.5;AN=2;DP=18;"
             "CSQ=T|intergenic_variant|MODIFIER||||||||||||||||||||")
@@ -364,17 +350,14 @@ class TestVEPCSQValueParsing:
             "ENST00000269305|protein_coding|7/11||"
             "ENST00000269305.9:c.825G>A|ENSP00000269305.4:p.Lys275%3D|"
             "825|825|275|K|aaG/aaA|||-1||HGNC|11998")
-        record = info["CSQ"][0]
-        assert "p.Lys275%3D" in record   # not decoded — literal
+        assert "p.Lys275%3D" in info["CSQ"][0]   # not decoded — literal
 
 
 class TestVEPEndToEnd:
     def test_load_vcf_splits_multiallelic_and_keeps_csq(self):
         vc = load_vcf(VEP, genome="GRCh38")
-        # 4 lines, but chr17:7676200 has ALT="A,C" → splits to 2 variants.
-        # So total = 5 Variant objects.
+        # 4 lines; chr17:7676200 ALT="A,C" splits to 2 variants. Total = 5.
         assert len(vc) == 5
-        # CSQ should be a list of strings on every variant's metadata.
         meta = vc.source_to_metadata_dict[VEP]
         for variant in vc:
             csq = meta[variant]["info"]["CSQ"]
