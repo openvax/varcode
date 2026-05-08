@@ -492,6 +492,16 @@ class Variant(Serializable):
         return effects
 
     def effect_on_transcript(self, transcript):
+        # SV dispatch — point-variant offset arithmetic doesn't apply
+        # to an SV's placeholder ``ref="N"/alt="A"``. Routed here at
+        # the user-facing API rather than inside
+        # ``predict_variant_effect_on_transcript`` so that internal
+        # callers (FastEffectAnnotator, protein_diff via fast) keep
+        # the unrouted behaviour they already chose. See #264.
+        if getattr(self, "is_structural", False):
+            from .annotators.registry import get_annotator
+            return get_annotator("structural_variant").annotate_on_transcript(
+                self, transcript)
         return predict_variant_effect_on_transcript(self, transcript)
 
     @property

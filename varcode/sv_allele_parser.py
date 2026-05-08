@@ -68,7 +68,13 @@ def _extract_info_scalar(info, key):
     String fields as 1-element lists (no ``Number=1`` to unwrap on);
     most SV callers don't declare ``INSSEQ``/``SVINSSEQ`` even though
     each row carries exactly one inserted sequence — so the natural
-    consumer wants the bare string."""
+    consumer wants the bare string.
+
+    Multi-element lists pass through unchanged. INSSEQ/SVINSSEQ are
+    conventionally Number=1; a multi-value list is malformed input
+    and we'd rather surface the unexpected shape than silently coerce
+    (e.g. by joining) and confuse a downstream type-checker.
+    """
     val = _extract_info(info, key)
     if isinstance(val, list) and len(val) == 1:
         return val[0]

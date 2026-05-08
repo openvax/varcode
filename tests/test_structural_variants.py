@@ -237,6 +237,16 @@ def test_parse_symbolic_non_ins_ignores_insseq():
     assert sv.alt_assembly is None
 
 
+def test_parse_symbolic_insseq_takes_precedence_over_svinsseq():
+    """When both fields are present, INSSEQ wins (Manta canonical
+    name takes precedence over the Sniffles/PBSV alias). Pins the
+    short-circuit ordering in ``parse_symbolic_alt``."""
+    sv = parse_symbolic_alt(
+        contig="1", start=100, ref="A", alt="<INS>",
+        info={"INSSEQ": "AAAA", "SVINSSEQ": "GGGG"}, genome="GRCh38")
+    assert sv.alt_assembly == "AAAA"
+
+
 def test_parse_symbolic_svtype_info_overrides_alt():
     """When INFO/SVTYPE is present, it takes precedence over the
     ALT token. Useful for VCFs that use a non-canonical ALT but
@@ -374,7 +384,10 @@ def test_vcf_loader_parses_svs_when_opted_in():
 
 def test_vcf_loader_spanning_star_always_skipped():
     """``*`` is skipped regardless of the ``parse_structural_variants``
-    flag — it's not an SV to parse."""
+    flag — it's not an SV to parse, and the drop is silent (not
+    counted as a symbolic skip) because every consumer drops these
+    and warning would be noise."""
+    import warnings
     body = (
         "##fileformat=VCFv4.2\n"
         "##reference=GRCh38\n"
@@ -384,11 +397,53 @@ def test_vcf_loader_spanning_star_always_skipped():
     )
     path = _write_vcf(body)
     try:
-        vc = load_vcf(path, genome="GRCh38", parse_structural_variants=True)
+        with warnings.catch_warnings(record=True) as captured:
+            warnings.simplefilter("always")
+            vc = load_vcf(
+                path, genome="GRCh38", parse_structural_variants=True)
     finally:
         os.unlink(path)
     assert len(vc) == 1
     assert vc[0].ref == "C" and vc[0].alt == "T"
+    # No symbolic-skip warning — ``*`` doesn't go through the same
+    # counter as <DEL> etc., to keep the load path quiet on the
+    # common case where every consumer drops ``*``.
+    assert not any(
+        "symbolic/breakend" in str(w.message)
+        or "Could not parse" in str(w.message)
+        for w in captured), (
+            "Spanning ``*`` shouldn't trigger an SV-skip warning; "
+            "got %r" % [str(w.message) for w in captured])
+
+
+def test_vcf_loader_unparseable_breakend_warns_distinctly():
+    """A malformed breakend (``G[hello`` — open bracket, no mate) hits
+    ``_is_symbolic_allele`` but fails ``_BREAKEND_RE``. With the flag
+    on, this is the ``unparseable`` path: distinct warning text from
+    the ``flag_off`` case, since the user can't fix this by toggling
+    the flag — the ALT shape itself is unrecognized."""
+    import warnings
+    body = (
+        "##fileformat=VCFv4.2\n"
+        "##reference=GRCh38\n"
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
+        "22\t51179178\t.\tG\tG[hello\t100\tPASS\t.\n"
+    )
+    path = _write_vcf(body)
+    try:
+        with warnings.catch_warnings(record=True) as captured:
+            warnings.simplefilter("always")
+            vc = load_vcf(
+                path, genome="GRCh38", parse_structural_variants=True)
+    finally:
+        os.unlink(path)
+    assert len(vc) == 0
+    unparseable = [w for w in captured if "Could not parse" in str(w.message)]
+    assert len(unparseable) == 1
+    assert "breakend shape" in str(unparseable[0].message)
+    # Crucially, this is *not* the flag-off message — toggling the
+    # flag wouldn't help since the parser already ran.
+    assert "parse_structural_variants=True" not in str(unparseable[0].message)
 
 
 def test_vcf_loader_default_warning_mentions_flag():
@@ -484,3 +539,69 @@ def test_vcf_loader_sv_yields_structural_variant_effect():
     assert len(sv_effects) >= 1, (
         "Expected at least one StructuralVariantEffect from the loaded "
         "<DEL> row; got effect types %s" % [type(e).__name__ for e in effects])
+
+
+def test_sv_effect_on_transcript_routes_via_sv_annotator():
+    """Companion to the kind-dispatch fix in
+    :func:`predict_variant_effects`: the legacy
+    :meth:`Variant.effect_on_transcript` path also has to route SVs
+    through ``StructuralVariantAnnotator``. Otherwise ``predict_*_effects``
+    is correct but ``sv.effect_on_transcript(t)`` quietly does offset
+    arithmetic on the placeholder ``ref="N"/alt="A"`` and emits
+    nonsense — a footgun for anyone who learned the legacy API."""
+    from pyensembl import cached_release
+    from varcode.effects.effect_classes import StructuralVariantEffect
+    ensembl_grch38 = cached_release(81)
+    cftr = ensembl_grch38.transcript_by_id("ENST00000003084")
+    sv = StructuralVariant(
+        contig="7",
+        start=cftr.start + 100,
+        end=cftr.start + 50_000,
+        sv_type="DEL",
+        alt="<DEL>",
+        genome=ensembl_grch38,
+    )
+    effect = sv.effect_on_transcript(cftr)
+    assert isinstance(effect, StructuralVariantEffect), (
+        "SV.effect_on_transcript must dispatch to the SV annotator "
+        "and produce a StructuralVariantEffect — got %s" % type(effect).__name__)
+
+
+def test_vcf_loader_sv_explicit_protein_diff_passes_through():
+    """The dispatch only kicks in when ``annotator is None``. An
+    explicit override (``annotator="protein_diff"``, e.g. for parity
+    testing the SV against the point-variant path) must bypass the
+    SV-routing shim. We don't assert what comes back — just that
+    the routing didn't quietly substitute the SV annotator."""
+    from pyensembl import cached_release
+    from varcode.effects.effect_classes import StructuralVariantEffect
+    ensembl_grch38 = cached_release(81)
+    cftr = ensembl_grch38.transcript_by_id("ENST00000003084")
+    body = (
+        "##fileformat=VCFv4.2\n"
+        "##reference=GRCh38\n"
+        "##INFO=<ID=SVTYPE,Number=1,Type=String,Description=\"type\">\n"
+        "##INFO=<ID=END,Number=1,Type=Integer,Description=\"end\">\n"
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
+        "7\t%d\t.\tA\t<DEL>\t100\tPASS\tSVTYPE=DEL;END=%d\n"
+    ) % (cftr.start + 100, cftr.start + 50_000)
+    path = _write_vcf(body)
+    try:
+        vc = load_vcf(
+            path, genome=ensembl_grch38, parse_structural_variants=True)
+        effects = vc.effects(
+            annotator="protein_diff", raise_on_error=False)
+    finally:
+        os.unlink(path)
+    # protein_diff doesn't understand SVs; on the placeholder REF/ALT
+    # it should produce something, but specifically *not* a typed
+    # StructuralVariantEffect — that would mean the dispatch fired
+    # despite the explicit override.
+    sv_effects = [e for e in effects if isinstance(e, StructuralVariantEffect)]
+    assert len(sv_effects) == 0, (
+        "Explicit annotator='protein_diff' on an SV must bypass the "
+        "SV-routing shim; got %d StructuralVariantEffect instance(s)."
+        % len(sv_effects))
+    assert effects.annotator == "protein_diff", (
+        "Collection-level annotator metadata should reflect the "
+        "explicit override, not the SV annotator.")
