@@ -25,6 +25,11 @@ from .annotators import (
     use_annotator,
 )
 from .errors import ReferenceMismatchError, SampleNotFoundError
+from .germline import (
+    GenomeBuildMismatchError,
+    GermlineContext,
+    Sparseness,
+)
 from .genotype import Genotype, Zygosity
 from .mutant_transcript import (
     MutantTranscript,
@@ -147,6 +152,11 @@ __all__ = [
     # exceptions
     "ReferenceMismatchError",
     "SampleNotFoundError",
+    "GenomeBuildMismatchError",
+
+    # Germline-aware annotation input contract (openvax/varcode#268)
+    "GermlineContext",
+    "Sparseness",
 
     # file loading
     "load_maf",
