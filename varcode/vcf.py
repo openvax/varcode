@@ -308,7 +308,16 @@ def dataframes_to_variant_collection(
 
     variants = []
     metadata = {}
-    n_skipped_symbolic = 0
+    # Split the skip counters so the user-facing warning can name a fix.
+    # ``flag_off``: symbolic ALT seen with ``parse_structural_variants=False``
+    #   — the user can opt into SV loading by flipping the flag.
+    # ``unparseable``: flag is on but ``parse_symbolic_alt`` couldn't
+    #   recognize the ALT shape — typically a malformed or
+    #   caller-specific extension; the flag won't help.
+    # The spanning-deletion ``*`` placeholder is silent — every consumer
+    # drops it and warning every time would just be noise.
+    n_skipped_flag_off = 0
+    n_skipped_unparseable = 0
     try:
         for chunk in dataframes:
             assert chunk.columns.tolist() == expected_columns,\
@@ -333,44 +342,52 @@ def dataframes_to_variant_collection(
                 for alt in alts.split(","):
                     if alt != ".":
                         if _is_symbolic_allele(alt):
-                            # Spanning-deletion placeholder (``*``) is
-                            # always skipped — it's a cross-row
-                            # reference, not an allele to annotate.
+                            # Spanning-deletion placeholder is a cross-row
+                            # reference, not an allele to annotate. Drop
+                            # silently regardless of the flag.
                             if alt == "*":
-                                n_skipped_symbolic += 1
                                 alt_num += 1
                                 continue
-                            if parse_structural_variants:
-                                # Parse symbolic / breakend ALT into a
-                                # StructuralVariant (PR 8). Falls back
-                                # to skipping if the parser can't
-                                # recognize the ALT shape.
-                                from .sv_allele_parser import (
-                                    parse_symbolic_alt)
-                                if info_parser is not None and info is None:
-                                    info = info_parser(tpl[8])
-                                sv = parse_symbolic_alt(
-                                    contig=chrom,
-                                    start=int(pos),
-                                    ref=ref,
-                                    alt=alt,
-                                    info=info,
-                                    genome=variant_kwargs.get("ensembl"),
-                                )
-                                if sv is not None:
-                                    variants.append(sv)
-                                    metadata[sv] = {
-                                        "id": id_,
-                                        "qual": qual,
-                                        "filter": flter,
-                                        "info": info,
-                                        "sample_info": sample_info,
-                                    }
-                                    alt_num += 1
-                                    continue
-                            # Flag off or parser rejected the ALT:
-                            # preserve the legacy filter-and-warn path.
-                            n_skipped_symbolic += 1
+                            if not parse_structural_variants:
+                                n_skipped_flag_off += 1
+                                alt_num += 1
+                                continue
+                            # Parse symbolic / breakend ALT into a
+                            # StructuralVariant. Falls back to skipping if
+                            # the parser can't recognize the ALT shape.
+                            from .sv_allele_parser import (
+                                parse_symbolic_alt)
+                            if info_parser is not None and info is None:
+                                info = info_parser(tpl[8])
+                                if sample_names and sample_info is None:
+                                    # SV rows from somatic callers (Manta,
+                                    # DELLY, GRIDSS) ship FORMAT/sample
+                                    # data — parse it like the simple-ALT
+                                    # branch does so it isn't silently
+                                    # dropped from metadata.
+                                    sample_info = sample_info_parser(
+                                        list(tpl[10:]),
+                                        tpl[9])
+                            sv = parse_symbolic_alt(
+                                contig=chrom,
+                                start=int(pos),
+                                ref=ref,
+                                alt=alt,
+                                info=info,
+                                genome=variant_kwargs.get("ensembl"),
+                            )
+                            if sv is None:
+                                n_skipped_unparseable += 1
+                                alt_num += 1
+                                continue
+                            variants.append(sv)
+                            metadata[sv] = {
+                                "id": id_,
+                                "qual": qual,
+                                "filter": flter,
+                                "info": info,
+                                "sample_info": sample_info,
+                            }
                             alt_num += 1
                             continue
                         if info_parser is not None and info is None:
@@ -403,13 +420,20 @@ def dataframes_to_variant_collection(
     except StopIteration:
         pass
 
-    if n_skipped_symbolic > 0:
+    if n_skipped_flag_off > 0:
         warn(
-            "Skipped %d symbolic/breakend allele(s) in %s that varcode "
-            "cannot currently represent as simple ref/alt Variants "
+            "Skipped %d symbolic/breakend allele(s) in %s "
             "(e.g. <DEL>, <CN0>, <INS:ME:ALU>, breakends). "
-            "Tracked in openvax/varcode#264." % (
-                n_skipped_symbolic, source_path)
+            "Pass parse_structural_variants=True to load_vcf to "
+            "load these as StructuralVariant objects." % (
+                n_skipped_flag_off, source_path)
+        )
+    if n_skipped_unparseable > 0:
+        warn(
+            "Could not parse %d symbolic/breakend allele(s) in %s — "
+            "ALT did not match a recognized symbolic or VCF 4.1 "
+            "breakend shape. Tracked in openvax/varcode#264." % (
+                n_skipped_unparseable, source_path)
         )
 
     return VariantCollection(

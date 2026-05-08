@@ -62,6 +62,31 @@ def _extract_info(info, key):
     return None
 
 
+def _extract_info_scalar(info, key):
+    """Like :func:`_extract_info` but unwraps a single-element list
+    to its sole value. The header-driven INFO parser keeps undeclared
+    String fields as 1-element lists (no ``Number=1`` to unwrap on);
+    most SV callers don't declare ``INSSEQ``/``SVINSSEQ`` even though
+    each row carries exactly one inserted sequence — so the natural
+    consumer wants the bare string.
+
+    Multi-element lists pass through unchanged. INSSEQ/SVINSSEQ are
+    conventionally Number=1; a multi-value list is malformed input
+    and we'd rather surface the unexpected shape than silently coerce
+    (e.g. by joining) and confuse a downstream type-checker.
+    """
+    val = _extract_info(info, key)
+    if isinstance(val, list) and len(val) == 1:
+        return val[0]
+    return val
+
+
+# Copy-number ALT, captured separately from the generic symbolic regex
+# so we can pull the integer out of ``CN0`` / ``CN3`` etc. into a typed
+# field. ``<CNV>`` (no number) is matched here too with copy_number=None.
+_CN_TOKEN_RE = re.compile(r"^CN(?P<n>\d*)$")
+
+
 def parse_symbolic_alt(
         contig: str,
         start: int,
@@ -91,8 +116,16 @@ def parse_symbolic_alt(
         # the custom ``symbolic_subtype`` key.
         top, _, subtype = token.partition(":")
 
-        # CNV / copy-number: sometimes written <CN0>, <CN2>, <CNV>.
-        if top.startswith("CN"):
+        # Copy-number alleles: <CN0>, <CN1>, <CN2>, ..., <CNV>. We collapse
+        # to sv_type="CNV" but preserve the integer count separately so
+        # downstream code can distinguish a deletion (CN0 / CN1 in a
+        # diploid) from a duplication (CN3+) without re-parsing the ALT.
+        copy_number = None
+        cn_match = _CN_TOKEN_RE.match(top)
+        if cn_match:
+            cn_digits = cn_match.group("n")
+            if cn_digits:
+                copy_number = int(cn_digits)
             top = "CNV"
 
         if top not in SV_TYPES:
@@ -110,9 +143,23 @@ def parse_symbolic_alt(
         if svtype_from_info and svtype_from_info.upper() in SV_TYPES:
             top = svtype_from_info.upper()
 
+        # Inserted-sequence hint for INS rows. Long-read callers ship
+        # the assembled inserted sequence as INSSEQ (Manta) or
+        # SVINSSEQ (some Sniffles/PBSV variants). Both are accepted;
+        # the resolved sequence flows through StructuralVariant's
+        # ``alt_assembly`` slot, where the SV annotator already prefers
+        # it over inferring from breakpoint coordinates alone.
+        alt_assembly = None
+        if top == "INS":
+            alt_assembly = (
+                _extract_info_scalar(info, "INSSEQ")
+                or _extract_info_scalar(info, "SVINSSEQ"))
+
         sv_info = {}
         if subtype:
             sv_info["symbolic_subtype"] = subtype
+        if copy_number is not None:
+            sv_info["copy_number"] = copy_number
 
         return StructuralVariant(
             contig=contig,
@@ -121,6 +168,7 @@ def parse_symbolic_alt(
             sv_type=top,
             alt=alt,
             ref=ref or "N",
+            alt_assembly=alt_assembly,
             ci_start=tuple(ci_start) if ci_start else None,
             ci_end=tuple(ci_end) if ci_end else None,
             info=sv_info,
