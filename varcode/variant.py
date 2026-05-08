@@ -445,7 +445,7 @@ class Variant(Serializable):
 
     def effects(
             self, raise_on_error=True, splice_outcomes=False,
-            annotator=None, phase_resolver=None):
+            annotator=None, phase_resolver=None, rna_resolver=None):
         """Predict the variant's effects on overlapping transcripts.
 
         Parameters
@@ -479,6 +479,16 @@ class Variant(Serializable):
             protein is the protein actually observed in RNA rather
             than one inferred from the reference. See
             openvax/varcode#269.
+
+        rna_resolver : RNAEvidenceResolver or None
+            Optional RNA-observed-outcome source. When provided, any
+            :class:`~varcode.MultiOutcomeEffect` in the result has
+            observed outcomes from the resolver appended to its
+            ``outcomes`` view (DNA-predicted first, RNA-observed
+            after). Useful for refining SV / splice / haplotype
+            predictions with isoform-level evidence from Isovar,
+            Exacto, or a custom long-read pipeline. See
+            openvax/varcode#259.
         """
         effects = predict_variant_effects(
             variant=self,
@@ -489,6 +499,9 @@ class Variant(Serializable):
         if phase_resolver is not None:
             from .phasing import apply_phase_resolver_to_effects
             apply_phase_resolver_to_effects(effects, phase_resolver)
+        if rna_resolver is not None:
+            from .rna_evidence import apply_rna_evidence_to_effects
+            apply_rna_evidence_to_effects(effects, rna_resolver)
         return effects
 
     def effect_on_transcript(self, transcript):

@@ -163,9 +163,30 @@ class MultiOutcomeEffect(MutationEffect):
         :attr:`candidates` under ``source="varcode"``; subclasses
         (or external integrations) override to attach probabilities
         and evidence.
+
+        External integrations (RNA evidence, SpliceAI scoring, etc.)
+        attach extra outcomes via :meth:`_with_extra_outcomes` —
+        subclasses overriding this property must call that helper on
+        their derived tuple so the plug-in path remains uniform.
         """
         from ..outcomes import outcomes_from_candidates
-        return outcomes_from_candidates(self.candidates)
+        return self._with_extra_outcomes(
+            outcomes_from_candidates(self.candidates))
+
+    def _with_extra_outcomes(self, base_outcomes):
+        """Append externally-attached outcomes (#259) to a derived
+        ``outcomes`` tuple.
+
+        Subclasses that override :attr:`outcomes` should call this
+        helper on the tuple they construct so that
+        :func:`varcode.rna_evidence.apply_rna_evidence_to_effects`
+        and other post-hoc scorers can attach observed outcomes
+        without subclassing or monkey-patching.
+        """
+        extra = getattr(self, "_extra_outcomes", ())
+        if not extra:
+            return tuple(base_outcomes)
+        return tuple(base_outcomes) + tuple(extra)
 
 
 class Intergenic(MutationEffect):
@@ -1043,7 +1064,8 @@ class StructuralVariantEffect(TranscriptMutationEffect, MultiOutcomeEffect):
                     "interval_end": c.interval_end,
                 })
             for c in self._cryptic_candidates)
-        return primary + cryptic + tuple(self._splice_candidates)
+        return self._with_extra_outcomes(
+            primary + cryptic + tuple(self._splice_candidates))
 
 
 class LargeDeletion(StructuralVariantEffect):
