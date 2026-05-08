@@ -254,14 +254,15 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
         dispatch on the biological outcome kind without reaching
         back into :attr:`candidates`.
         """
-        return tuple(
-            Outcome(
-                effect=self._outcome_effect(candidate),
-                probability=candidate.plausibility,
-                source="varcode",
-                description=candidate.description,
-                evidence={"splice_outcome": candidate.outcome})
-            for candidate in self.candidates)
+        return self._with_extra_outcomes(
+            tuple(
+                Outcome(
+                    effect=self._outcome_effect(candidate),
+                    probability=candidate.plausibility,
+                    source="varcode",
+                    description=candidate.description,
+                    evidence={"splice_outcome": candidate.outcome})
+                for candidate in self.candidates))
 
     def _outcome_effect(self, candidate):
         """Return the :class:`MutationEffect` that backs ``candidate``

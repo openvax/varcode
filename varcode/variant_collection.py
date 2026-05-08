@@ -116,7 +116,7 @@ class VariantCollection(Collection):
 
     def effects(
             self, raise_on_error=True, splice_outcomes=False,
-            annotator=None, phase_resolver=None):
+            annotator=None, phase_resolver=None, rna_resolver=None):
         """
         Parameters
         ----------
@@ -144,6 +144,12 @@ class VariantCollection(Collection):
             ``mutant_transcript`` populated with the contig-derived
             :class:`~varcode.MutantTranscript`. See
             openvax/varcode#269.
+
+        rna_resolver : RNAEvidenceResolver or None
+            Optional RNA-observed-outcome source. When provided, any
+            :class:`~varcode.MultiOutcomeEffect` in the result has
+            observed outcomes from the resolver appended to its
+            ``outcomes`` view. See openvax/varcode#259.
         """
         from datetime import datetime, timezone
 
@@ -171,6 +177,9 @@ class VariantCollection(Collection):
             # individual effect severity.
             per_variant.extend(build_haplotype_effects(
                 self, per_variant, phase_resolver))
+        if rna_resolver is not None:
+            from .rna_evidence import apply_rna_evidence_to_effects
+            apply_rna_evidence_to_effects(per_variant, rna_resolver)
         return EffectCollection(per_variant,
             annotator=getattr(annotator_instance, "name", None),
             annotator_version=getattr(annotator_instance, "version", None),

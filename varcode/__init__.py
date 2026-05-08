@@ -46,6 +46,12 @@ from .phasing import (
     VCFPhaseResolver,
     apply_phase_resolver_to_effects,
 )
+from .rna_evidence import (
+    NullRNAEvidenceResolver,
+    RNAEvidenceResolver,
+    apply_rna_evidence_to_effects,
+    make_rna_outcome,
+)
 from .splice_outcomes import (
     SpliceCandidate,
     SpliceOutcome,
@@ -112,6 +118,12 @@ __all__ = [
     "IsovarPhaseResolver",
     "VCFPhaseResolver",
     "apply_phase_resolver_to_effects",
+
+    # RNA-evidence resolver (openvax/varcode#259)
+    "RNAEvidenceResolver",
+    "NullRNAEvidenceResolver",
+    "apply_rna_evidence_to_effects",
+    "make_rna_outcome",
 
     "EffectAnnotator",
     "FastEffectAnnotator",
