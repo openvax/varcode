@@ -77,8 +77,19 @@ def predict_variant_effects(
     """
     # Lazy import — varcode.annotators depends on varcode.effects at
     # load time, so we defer to break the cycle.
-    from ..annotators.registry import resolve_annotator
+    from ..annotators.registry import get_annotator, resolve_annotator
     annotator_instance = resolve_annotator(annotator)
+    # Kind dispatch for structural variants: ``fast``/``protein_diff``
+    # declare ``supports = {"snv","indel","mnv"}``, but that flag is
+    # metadata — nobody dispatches on it. Without this override an SV
+    # silently flows to the point-variant annotator, which annotates
+    # the placeholder ``ref="N"/alt="A"`` and emits nonsense. When
+    # the caller didn't explicitly pick an annotator, route SVs to
+    # the SV annotator regardless of the default. Explicit overrides
+    # (annotator="protein_diff" on an SV, e.g. for parity testing)
+    # still pass through. See #264.
+    if annotator is None and getattr(variant, "is_structural", False):
+        annotator_instance = get_annotator("structural_variant")
     annotator_name = getattr(annotator_instance, "name", None)
     annotator_version = getattr(annotator_instance, "version", None)
     # if this variant isn't overlapping any genes, return a

@@ -167,6 +167,74 @@ def test_parse_symbolic_cn0_maps_to_cnv():
         info={"END": 500}, genome="GRCh38")
     assert sv is not None
     assert sv.sv_type == "CNV"
+    # The integer is preserved so consumers can distinguish a
+    # zero-copy deletion from a higher-copy duplication.
+    assert sv.info["copy_number"] == 0
+
+
+def test_parse_symbolic_cn3_distinct_from_cn0():
+    """``<CN3>`` and ``<CN0>`` both map to ``sv_type="CNV"`` but
+    must remain distinguishable — one's a deletion, one's a
+    duplication. The integer rides along in ``info["copy_number"]``."""
+    cn0 = parse_symbolic_alt(
+        contig="1", start=100, ref="N", alt="<CN0>",
+        info={"END": 500}, genome="GRCh38")
+    cn3 = parse_symbolic_alt(
+        contig="1", start=100, ref="N", alt="<CN3>",
+        info={"END": 500}, genome="GRCh38")
+    assert cn0.info["copy_number"] == 0
+    assert cn3.info["copy_number"] == 3
+
+
+def test_parse_symbolic_cnv_no_number_omits_copy_number():
+    """``<CNV>`` (no integer) means "copy number altered, count
+    unspecified" — the parser shouldn't fabricate a number."""
+    sv = parse_symbolic_alt(
+        contig="1", start=100, ref="N", alt="<CNV>",
+        info={"END": 500}, genome="GRCh38")
+    assert sv.sv_type == "CNV"
+    assert "copy_number" not in sv.info
+
+
+def test_parse_symbolic_ins_extracts_insseq_into_alt_assembly():
+    """Long-read callers (Manta) ship the inserted sequence in
+    INFO/INSSEQ; the parser routes it into ``alt_assembly`` so the
+    SV annotator's assembly path picks it up."""
+    sv = parse_symbolic_alt(
+        contig="1", start=100, ref="A", alt="<INS>",
+        info={"INSSEQ": "ACGTACGT"}, genome="GRCh38")
+    assert sv is not None
+    assert sv.sv_type == "INS"
+    assert sv.alt_assembly == "ACGTACGT"
+
+
+def test_parse_symbolic_ins_extracts_svinsseq_alias():
+    """Some Sniffles/PBSV variants use SVINSSEQ instead of INSSEQ.
+    Both are accepted."""
+    sv = parse_symbolic_alt(
+        contig="1", start=100, ref="A", alt="<INS>",
+        info={"SVINSSEQ": "TTTTGGGG"}, genome="GRCh38")
+    assert sv.alt_assembly == "TTTTGGGG"
+
+
+def test_parse_symbolic_insseq_unwraps_single_element_list():
+    """Undeclared INFO Strings come back from the header parser as
+    1-element lists (no ``Number=1`` to unwrap on). The SV parser
+    unwraps those rather than passing the list through to
+    ``alt_assembly``."""
+    sv = parse_symbolic_alt(
+        contig="1", start=100, ref="A", alt="<INS>",
+        info={"INSSEQ": ["ACGT"]}, genome="GRCh38")
+    assert sv.alt_assembly == "ACGT"
+
+
+def test_parse_symbolic_non_ins_ignores_insseq():
+    """``INSSEQ`` only applies to INS — a DEL row that happens to
+    carry the field shouldn't have it land in ``alt_assembly``."""
+    sv = parse_symbolic_alt(
+        contig="1", start=100, ref="N", alt="<DEL>",
+        info={"INSSEQ": "ACGT", "END": 500}, genome="GRCh38")
+    assert sv.alt_assembly is None
 
 
 def test_parse_symbolic_svtype_info_overrides_alt():
@@ -321,3 +389,98 @@ def test_vcf_loader_spanning_star_always_skipped():
         os.unlink(path)
     assert len(vc) == 1
     assert vc[0].ref == "C" and vc[0].alt == "T"
+
+
+def test_vcf_loader_default_warning_mentions_flag():
+    """When SVs are dropped because ``parse_structural_variants=False``,
+    the warning should tell the user about the flag — not just point
+    at an issue tracker."""
+    import warnings
+    body = (
+        "##fileformat=VCFv4.2\n"
+        "##reference=GRCh38\n"
+        "##INFO=<ID=SVTYPE,Number=1,Type=String,Description=\"type\">\n"
+        "##INFO=<ID=END,Number=1,Type=Integer,Description=\"end\">\n"
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
+        "22\t51179178\t.\tA\t<DEL>\t100\tPASS\tSVTYPE=DEL;END=51179500\n"
+        "22\t51179700\t.\tC\tT\t100\tPASS\t.\n"
+    )
+    path = _write_vcf(body)
+    try:
+        with warnings.catch_warnings(record=True) as captured:
+            warnings.simplefilter("always")
+            load_vcf(path, genome="GRCh38")
+    finally:
+        os.unlink(path)
+    skip_warnings = [
+        w for w in captured if "symbolic/breakend" in str(w.message)]
+    assert len(skip_warnings) == 1
+    assert "parse_structural_variants=True" in str(skip_warnings[0].message)
+
+
+def test_vcf_loader_sv_carries_sample_info():
+    """SV rows from somatic callers (Manta, DELLY, GRIDSS) ship
+    FORMAT/sample data — the loader must parse it just like the
+    simple-ALT path, not stash ``None``."""
+    body = (
+        "##fileformat=VCFv4.2\n"
+        "##reference=GRCh38\n"
+        "##INFO=<ID=SVTYPE,Number=1,Type=String,Description=\"type\">\n"
+        "##INFO=<ID=END,Number=1,Type=Integer,Description=\"end\">\n"
+        "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"genotype\">\n"
+        "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"depth\">\n"
+        "##FORMAT=<ID=PR,Number=2,Type=Integer,Description=\"paired-read support\">\n"
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tNORMAL\tTUMOR\n"
+        "22\t51179178\tsv1\tA\t<DEL>\t100\tPASS\tSVTYPE=DEL;END=51179500"
+        "\tGT:DP:PR\t0/0:50:48,2\t0/1:55:30,25\n"
+    )
+    path = _write_vcf(body)
+    try:
+        vc = load_vcf(path, genome="GRCh38", parse_structural_variants=True)
+    finally:
+        os.unlink(path)
+    assert len(vc) == 1
+    sv = vc[0]
+    assert isinstance(sv, StructuralVariant)
+    sample_info = vc.metadata[sv]["sample_info"]
+    assert sample_info is not None, (
+        "SV rows must carry per-sample FORMAT data through to metadata; "
+        "previously sample_info was always None on the SV branch.")
+    assert list(sample_info) == ["NORMAL", "TUMOR"]
+    assert sample_info["TUMOR"]["GT"] == "0/1"
+    assert sample_info["TUMOR"]["DP"] == 55
+    assert sample_info["TUMOR"]["PR"] == [30, 25]
+
+
+def test_vcf_loader_sv_yields_structural_variant_effect():
+    """End-to-end: a VCF with an SV row, loaded with the flag on,
+    produces a typed :class:`StructuralVariantEffect` when annotated.
+
+    This is the gate that protects #257 / #252 / #261: if this test
+    works, downstream issues can build SV-typed pipelines on top of
+    ``load_vcf`` instead of constructing :class:`StructuralVariant`
+    objects by hand.
+    """
+    from pyensembl import cached_release
+    from varcode.effects.effect_classes import StructuralVariantEffect
+    ensembl_grch38 = cached_release(81)
+    cftr = ensembl_grch38.transcript_by_id("ENST00000003084")
+    body = (
+        "##fileformat=VCFv4.2\n"
+        "##reference=GRCh38\n"
+        "##INFO=<ID=SVTYPE,Number=1,Type=String,Description=\"type\">\n"
+        "##INFO=<ID=END,Number=1,Type=Integer,Description=\"end\">\n"
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
+        "7\t%d\t.\tA\t<DEL>\t100\tPASS\tSVTYPE=DEL;END=%d\n"
+    ) % (cftr.start + 100, cftr.start + 50_000)
+    path = _write_vcf(body)
+    try:
+        vc = load_vcf(
+            path, genome=ensembl_grch38, parse_structural_variants=True)
+        effects = vc.effects()
+    finally:
+        os.unlink(path)
+    sv_effects = [e for e in effects if isinstance(e, StructuralVariantEffect)]
+    assert len(sv_effects) >= 1, (
+        "Expected at least one StructuralVariantEffect from the loaded "
+        "<DEL> row; got effect types %s" % [type(e).__name__ for e in effects])
