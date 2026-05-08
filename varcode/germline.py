@@ -22,7 +22,7 @@ A :class:`GermlineContext` is the patient's germline plus enough
 metadata for the effect classifier to handle it correctly:
 
 * the variants themselves (as a :class:`~varcode.VariantCollection`);
-* a :class:`Sparseness` flag declaring whether the call set is a real
+* a :class:`Completeness` flag declaring whether the call set is a real
   germline (every position is implicitly ref/ref unless listed) or a
   sparser shape (somatic caller's "normal" column, hotspots-only,
   panel of normals) where absence does not imply ref/ref;
@@ -66,29 +66,88 @@ if TYPE_CHECKING:
     from .variant_collection import VariantCollection
 
 
-class Sparseness(enum.Enum):
-    """Completeness of a :class:`GermlineContext`'s call set.
+class Completeness(enum.Enum):
+    """How exhaustive the germline call set is — the load-bearing
+    flag that pins what *absence* of a call at a position means.
 
-    Determines how absence-of-a-call is interpreted at a given
-    genomic position:
+    The same data structure ("a list of germline variants") can come
+    from very different pipelines, and downstream effect prediction
+    cannot make the right call without knowing which:
 
-    * :attr:`COMPLETE` — full germline call set (e.g. DeepVariant /
-      HaplotypeCaller / Strelka2 germline output on the normal BAM).
-      Absence implies ref/ref. This is what users usually mean by
-      "the germline VCF" and the only shape that supports correct
-      possibility-set reasoning out of the box.
-    * :attr:`SPARSE` — calls only at positions the somatic caller
-      examined (e.g. the ``NORMAL`` column of a Mutect2 VCF). Absence
-      does *not* imply ref/ref; the position simply wasn't queried.
-      Effect prediction emits unknown-germline outcomes for somatic
-      variants in a window with sparse coverage.
-    * :attr:`HOTSPOTS_ONLY` — calls only at recurrently-mutated
-      positions (panel-of-normals filters, ClinVar pathogenic lists).
-      Absence definitely does not imply ref/ref. Strictly weaker
-      evidence than SPARSE.
-    * :attr:`EMPTY` — no germline data; equivalent to falling back to
-      reference-relative annotation, but explicit so users opt into it
-      rather than getting it by accident from a missing kwarg.
+    * If a position is **absent** from a real germline VCF emitted
+      by a germline caller that examined the entire normal BAM, the
+      patient is ref/ref there. Effect prediction proceeds
+      reference-relative at that codon.
+    * If a position is **absent** from the ``NORMAL`` column of a
+      somatic-caller VCF, it likely means the somatic caller didn't
+      emit a row — not that the position is ref/ref. The patient's
+      germline state at that codon is unknown. The honest output is
+      a possibility set including "unknown germline."
+    * If a position is **absent** from a panel-of-normals filter
+      list, it definitely doesn't imply ref/ref — the file only
+      lists curated hotspots.
+
+    Mis-treating "absent" as "ref/ref" silently produces wrong
+    germline-aware effects on somatic variants in long stretches of
+    the genome the somatic caller never touched. The flag exists so
+    that mistake fails loud (or at least produces an honest
+    possibility set) instead of silently corrupting clinical
+    annotation.
+
+    Values
+    ------
+
+    +-------------------+-----------------------------------+--------------------------+
+    | Value             | Typical pipeline of origin        | Absence at a position    |
+    +===================+===================================+==========================+
+    | :attr:`COMPLETE`  | Germline caller (DeepVariant,     | ⇒ ref/ref                |
+    |                   | HaplotypeCaller, Strelka2         |                          |
+    |                   | germline) on the normal BAM       |                          |
+    +-------------------+-----------------------------------+--------------------------+
+    | :attr:`SPARSE`    | ``NORMAL`` column of a somatic    | ⇒ unknown (probably      |
+    |                   | tumor-vs-normal VCF (Mutect2,     |   ref/ref but not        |
+    |                   | Strelka2 somatic, VarScan2        |   queried). Honest output|
+    |                   | somatic)                          |   is a possibility set.  |
+    +-------------------+-----------------------------------+--------------------------+
+    | :attr:`HOTSPOTS_  | Panel-of-normals filter list,     | ⇒ definitely unknown.    |
+    | ONLY`             | ClinVar pathogenic list, single-  |   Strictly weaker        |
+    |                   | hotspot allowlists                |   evidence than SPARSE.  |
+    +-------------------+-----------------------------------+--------------------------+
+    | :attr:`EMPTY`     | "I have no germline data" —       | n/a (no germline-aware   |
+    |                   | explicit fallback, used so users  | logic runs; equivalent to|
+    |                   | opt into reference-relative       | not passing germline= at |
+    |                   | annotation rather than getting it | all)                     |
+    |                   | by accident from a missing kwarg  |                          |
+    +-------------------+-----------------------------------+--------------------------+
+
+    What downstream slices do with this
+    -----------------------------------
+
+    Slice 3 of #268 wires ``germline=`` through annotator dispatch.
+    When a somatic variant lands in a transcript window that has no
+    germline calls, the annotator reads this flag to decide between:
+
+    * ``COMPLETE`` → patient is ref/ref in this window; emit a
+      single reference-relative effect.
+    * ``SPARSE`` / ``HOTSPOTS_ONLY`` → patient's germline is
+      unknown in this window; emit a possibility set including the
+      reference-relative effect plus "germline-unknown" outcomes
+      so the user sees the uncertainty.
+    * ``EMPTY`` → no germline-aware logic; reference-relative.
+
+    Constructors and defaults
+    -------------------------
+
+    :meth:`GermlineContext.from_germline_vcf` defaults to
+    ``COMPLETE`` because that's almost always what
+    a real germline VCF is.
+
+    :meth:`GermlineContext.from_multi_sample_vcf` requires the
+    caller to declare completeness explicitly (no default) — a
+    multi-sample VCF could be either, and silently defaulting
+    either direction is a correctness bug waiting to happen.
+
+    :meth:`GermlineContext.empty` always sets ``EMPTY``.
     """
     COMPLETE = "complete"
     SPARSE = "sparse"
@@ -135,7 +194,7 @@ class GermlineContext:
         The germline variants as a :class:`~varcode.VariantCollection`.
         Empty for :meth:`empty` contexts.
     completeness
-        How to interpret absence-of-a-call (see :class:`Sparseness`).
+        How to interpret absence-of-a-call (see :class:`Completeness`).
     reference_name
         The genome reference these variants were called against —
         ``"GRCh37"``, ``"GRCh38"``, ``"hg19"``, etc. ``None`` when the
@@ -159,12 +218,12 @@ class GermlineContext:
     sample column rarely means ref/ref::
 
         ctx = GermlineContext.from_multi_sample_vcf(
-            "merged.vcf", sample="NORMAL", completeness=Sparseness.SPARSE)
+            "merged.vcf", sample="NORMAL", completeness=Completeness.SPARSE)
 
     Direct construction (tests, custom pipelines)::
 
         ctx = GermlineContext.from_variants(
-            germline_variants, completeness=Sparseness.COMPLETE,
+            germline_variants, completeness=Completeness.COMPLETE,
             reference_name="GRCh38")
 
     Explicit empty context — opt-in to reference-relative fallback::
@@ -173,7 +232,7 @@ class GermlineContext:
     """
 
     variants: "VariantCollection"
-    completeness: Sparseness = Sparseness.COMPLETE
+    completeness: Completeness = Completeness.COMPLETE
     reference_name: Optional[str] = None
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
@@ -184,7 +243,7 @@ class GermlineContext:
             cls,
             path: str,
             *,
-            completeness: Sparseness = Sparseness.COMPLETE,
+            completeness: Completeness = Completeness.COMPLETE,
             metadata: Optional[Mapping[str, Any]] = None,
             **load_vcf_kwargs) -> "GermlineContext":
         """Load a full germline VCF into a context.
@@ -192,7 +251,7 @@ class GermlineContext:
         ``load_vcf_kwargs`` are passed through to
         :func:`varcode.load_vcf` — for example ``genome=`` or
         ``only_passing=False``. The returned context defaults to
-        ``Sparseness.COMPLETE``; pass ``completeness=`` only if the
+        ``Completeness.COMPLETE``; pass ``completeness=`` only if the
         VCF is something other than a real germline call set.
         """
         # Lazy import to avoid pulling vcf.py into the import graph
@@ -218,7 +277,7 @@ class GermlineContext:
             path: str,
             sample: str,
             *,
-            completeness: Sparseness,
+            completeness: Completeness,
             metadata: Optional[Mapping[str, Any]] = None,
             **load_vcf_kwargs) -> "GermlineContext":
         """Load a multi-sample VCF and extract one sample's calls as
@@ -262,7 +321,7 @@ class GermlineContext:
             cls,
             variants,
             *,
-            completeness: Sparseness = Sparseness.COMPLETE,
+            completeness: Completeness = Completeness.COMPLETE,
             reference_name: Optional[str] = None,
             metadata: Optional[Mapping[str, Any]] = None) -> "GermlineContext":
         """Construct from an already-built :class:`VariantCollection`
@@ -304,7 +363,7 @@ class GermlineContext:
         from .variant_collection import VariantCollection
         return cls(
             variants=VariantCollection([]),
-            completeness=Sparseness.EMPTY,
+            completeness=Completeness.EMPTY,
             reference_name=None,
             metadata={},
         )
@@ -314,7 +373,7 @@ class GermlineContext:
     def __bool__(self) -> bool:
         """Truthy when there's something to apply. ``EMPTY`` contexts
         are falsy so ``if germline_context:`` reads idiomatically."""
-        return self.completeness is not Sparseness.EMPTY and len(self.variants) > 0
+        return self.completeness is not Completeness.EMPTY and len(self.variants) > 0
 
     def __len__(self) -> int:
         return len(self.variants)
@@ -347,7 +406,7 @@ class GermlineContext:
                 raise GenomeBuildMismatchError(
                     somatic_reference=somatic_ref,
                     germline_reference=self.reference_name)
-        if (self.completeness is not Sparseness.EMPTY
+        if (self.completeness is not Completeness.EMPTY
                 and len(self.variants) == 0):
             warnings.warn(
                 "GermlineContext is non-empty by completeness flag (%s) "

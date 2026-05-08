@@ -28,7 +28,7 @@ from .errors import ReferenceMismatchError, SampleNotFoundError
 from .germline import (
     GenomeBuildMismatchError,
     GermlineContext,
-    Sparseness,
+    Completeness,
 )
 from .genotype import Genotype, Zygosity
 from .mutant_transcript import (
@@ -156,7 +156,7 @@ __all__ = [
 
     # Germline-aware annotation input contract (openvax/varcode#268)
     "GermlineContext",
-    "Sparseness",
+    "Completeness",
 
     # file loading
     "load_maf",

@@ -7,7 +7,7 @@
 """Tests for :class:`varcode.germline.GermlineContext` (#268, slice 1).
 
 Slice 1 ships the input contract — constructors, validation,
-sparseness flag, window-based lookup. No effect-side logic yet
+completeness flag, window-based lookup. No effect-side logic yet
 (annotator dispatch, transcript construction with germline applied,
 phase enumeration, LOH detection are subsequent slices).
 """
@@ -23,7 +23,7 @@ from varcode import (
     GenomeBuildMismatchError,
     GermlineContext,
     SampleNotFoundError,
-    Sparseness,
+    Completeness,
     Variant,
     load_vcf,
 )
@@ -31,11 +31,11 @@ from varcode.variant_collection import VariantCollection
 
 
 # --------------------------------------------------------------------
-# Sparseness enum
+# Completeness enum
 # --------------------------------------------------------------------
 
 
-class TestSparseness:
+class TestCompleteness:
     """The completeness flag is the load-bearing piece for correctness:
     a downstream caller deciding whether absence-of-a-call means
     ref/ref needs to read it, so its values must be stable and
@@ -43,14 +43,14 @@ class TestSparseness:
 
     def test_distinct_values(self):
         # All four states distinguishable.
-        assert len({Sparseness.COMPLETE, Sparseness.SPARSE,
-                    Sparseness.HOTSPOTS_ONLY, Sparseness.EMPTY}) == 4
+        assert len({Completeness.COMPLETE, Completeness.SPARSE,
+                    Completeness.HOTSPOTS_ONLY, Completeness.EMPTY}) == 4
 
     def test_round_trip_via_value(self):
         # Stable string identifiers — important for serialization
         # to CSVs / JSON evidence dicts in later slices.
-        for s in Sparseness:
-            assert Sparseness(s.value) is s
+        for s in Completeness:
+            assert Completeness(s.value) is s
 
 
 # --------------------------------------------------------------------
@@ -63,7 +63,7 @@ class TestEmptyContext:
         ctx = GermlineContext.empty()
         assert not ctx
         assert len(ctx) == 0
-        assert ctx.completeness is Sparseness.EMPTY
+        assert ctx.completeness is Completeness.EMPTY
 
     def test_empty_has_no_reference(self):
         # No claim about reference build for an empty context — we
@@ -105,14 +105,14 @@ class TestFromVariants:
     def test_default_completeness_is_complete(self):
         ctx = GermlineContext.from_variants(
             [self._v()], reference_name="GRCh38")
-        assert ctx.completeness is Sparseness.COMPLETE
+        assert ctx.completeness is Completeness.COMPLETE
 
     def test_completeness_override(self):
         ctx = GermlineContext.from_variants(
             [self._v()],
-            completeness=Sparseness.SPARSE,
+            completeness=Completeness.SPARSE,
             reference_name="GRCh38")
-        assert ctx.completeness is Sparseness.SPARSE
+        assert ctx.completeness is Completeness.SPARSE
 
     def test_metadata_passes_through(self):
         ctx = GermlineContext.from_variants(
@@ -254,7 +254,7 @@ class TestValidateAgainst:
         always a wrong-file or filter-too-aggressive bug. We don't
         want this to silently pass — warn so the user investigates."""
         germ = GermlineContext.from_variants(
-            [], completeness=Sparseness.COMPLETE,
+            [], completeness=Completeness.COMPLETE,
             reference_name="GRCh38")
         somatic = VariantCollection([self._v("GRCh38")])
         with warnings.catch_warnings(record=True) as captured:
@@ -307,7 +307,7 @@ class TestFromGermlineVCF:
         finally:
             os.unlink(path)
         assert len(ctx) == 2
-        assert ctx.completeness is Sparseness.COMPLETE
+        assert ctx.completeness is Completeness.COMPLETE
         assert ctx.reference_name == "GRCh38"
 
     def test_warns_on_zero_variant_load(self):
@@ -357,7 +357,7 @@ class TestFromMultiSampleVCF:
         try:
             ctx = GermlineContext.from_multi_sample_vcf(
                 path, sample="NORMAL",
-                completeness=Sparseness.SPARSE,
+                completeness=Completeness.SPARSE,
                 genome="GRCh38")
         finally:
             os.unlink(path)
@@ -384,7 +384,7 @@ class TestFromMultiSampleVCF:
             with pytest.raises(SampleNotFoundError) as exc_info:
                 GermlineContext.from_multi_sample_vcf(
                     path, sample="DOES_NOT_EXIST",
-                    completeness=Sparseness.COMPLETE,
+                    completeness=Completeness.COMPLETE,
                     genome="GRCh38")
             # Error message lists available samples so the user sees
             # what they could have asked for.
@@ -398,7 +398,7 @@ class TestFromMultiSampleVCF:
         try:
             ctx = GermlineContext.from_multi_sample_vcf(
                 path, sample="NORMAL",
-                completeness=Sparseness.SPARSE,
+                completeness=Completeness.SPARSE,
                 genome="GRCh38")
         finally:
             os.unlink(path)
@@ -431,13 +431,13 @@ class TestDunders:
         rare-call-set case where downstream code wants to know
         'they meant complete but couldn't load any.'"""
         ctx = GermlineContext.from_variants(
-            [], completeness=Sparseness.COMPLETE,
+            [], completeness=Completeness.COMPLETE,
             reference_name="GRCh38")
         assert bool(ctx) is False
 
     def test_bool_false_for_empty_sparse(self):
         ctx = GermlineContext.from_variants(
-            [], completeness=Sparseness.SPARSE,
+            [], completeness=Completeness.SPARSE,
             reference_name="GRCh38")
         assert bool(ctx) is False
 
@@ -453,4 +453,4 @@ class TestDunders:
         isn't accidentally relied on."""
         ctx = GermlineContext.empty()
         with pytest.raises(Exception):  # FrozenInstanceError or AttributeError
-            ctx.completeness = Sparseness.COMPLETE
+            ctx.completeness = Completeness.COMPLETE
