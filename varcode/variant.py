@@ -445,7 +445,8 @@ class Variant(Serializable):
 
     def effects(
             self, raise_on_error=True, splice_outcomes=False,
-            annotator=None, phase_resolver=None, rna_resolver=None):
+            annotator=None, phase_resolver=None, rna_resolver=None,
+            germline=None):
         """Predict the variant's effects on overlapping transcripts.
 
         Parameters
@@ -489,12 +490,27 @@ class Variant(Serializable):
             predictions with isoform-level evidence from Isovar,
             Exacto, or a custom long-read pipeline. See
             openvax/varcode#259.
+
+        germline : GermlineContext or None
+            Optional patient-germline context. When non-empty, every
+            per-transcript effect is computed against the patient's
+            germline-applied transcript instead of the reference.
+            Codons / splice signals where germline overlaps the
+            somatic and phase is unknown produce a
+            :class:`PhaseAmbiguousEffect` with one outcome per
+            haplotype hypothesis; LOH at germline het positions sets
+            ``effect.is_loh = True``. ``None`` or
+            :meth:`GermlineContext.empty` falls through to today's
+            reference-relative behaviour byte-identically. See
+            openvax/varcode#268.
         """
         effects = predict_variant_effects(
             variant=self,
             raise_on_error=raise_on_error,
             splice_outcomes=splice_outcomes,
             annotator=annotator,
+            germline=germline,
+            phase_resolver=phase_resolver,
         )
         if phase_resolver is not None:
             from .phasing import apply_phase_resolver_to_effects

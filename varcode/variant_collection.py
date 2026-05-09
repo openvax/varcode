@@ -116,7 +116,8 @@ class VariantCollection(Collection):
 
     def effects(
             self, raise_on_error=True, splice_outcomes=False,
-            annotator=None, phase_resolver=None, rna_resolver=None):
+            annotator=None, phase_resolver=None, rna_resolver=None,
+            germline=None, validate_reference=True):
         """
         Parameters
         ----------
@@ -150,6 +151,19 @@ class VariantCollection(Collection):
             :class:`~varcode.MultiOutcomeEffect` in the result has
             observed outcomes from the resolver appended to its
             ``outcomes`` view. See openvax/varcode#259.
+
+        germline : GermlineContext or None
+            Optional patient-germline context. When non-empty, every
+            per-transcript effect is computed against the patient's
+            germline-applied transcript instead of the reference.
+            See :meth:`Variant.effects` and openvax/varcode#268.
+
+        validate_reference : bool, default True
+            Cross-check that the germline context's reference build
+            matches this collection's reference build before running
+            annotation. Hard error on mismatch. Set to False if
+            you've already lifted over and know the builds agree.
+            Ignored when ``germline`` is ``None``.
         """
         from datetime import datetime, timezone
 
@@ -159,6 +173,13 @@ class VariantCollection(Collection):
             build_haplotype_effects,
         )
 
+        # Pre-flight: cross-VCF build mismatch surfaces here as one
+        # readable error rather than per-variant ReferenceMismatchError
+        # noise. The empty/None context is a no-op.
+        if germline:
+            germline.validate_against(
+                self, validate_reference=validate_reference)
+
         annotator_instance = resolve_annotator(annotator)
         per_variant = [
             effect
@@ -167,6 +188,8 @@ class VariantCollection(Collection):
                 raise_on_error=raise_on_error,
                 splice_outcomes=splice_outcomes,
                 annotator=annotator,
+                germline=germline,
+                phase_resolver=phase_resolver,
             )
         ]
         if phase_resolver is not None:

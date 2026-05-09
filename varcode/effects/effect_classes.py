@@ -1274,3 +1274,132 @@ class HaplotypeEffect(TranscriptMutationEffect, MultiOutcomeEffect):
         """
         parts = [v.short_description for v in self.variants]
         return "[" + ";".join(parts) + "]"
+
+
+# =====================================================================
+# Phase-ambiguous effects — possibility set when somatic + germline
+# share a window and phase between them is unknown (#268).
+#
+# Sibling of HaplotypeEffect: that one captures the *known-cis* case
+# (multiple variants composed on the same haplotype), this one
+# captures the *unknown-phase* case (multiple hypotheses, each with
+# its own resulting effect). Both inherit the same MultiOutcomeEffect
+# protocol so consumers iterate ``outcomes`` uniformly. This isn't a
+# wrapper around a reference-relative effect — it's the primary
+# effect class for the phase-ambiguous case, just like
+# SpliceOutcomeSet is for splice ambiguity.
+# =====================================================================
+
+
+class PhaseAmbiguousEffect(TranscriptMutationEffect, MultiOutcomeEffect):
+    """Possibility set across phase hypotheses when a somatic variant
+    and one or more germline variants share a window on a transcript
+    and phase between them is unknown.
+
+    The somatic effect at this locus depends on which haplotype the
+    somatic landed on, and without phase data we can't say which.
+    The honest output is the set of plausible effects, one per
+    hypothesis. ``most_likely`` returns the highest-priority
+    candidate; ``outcomes`` exposes the full set with per-haplotype
+    evidence keys (``phase_state``, ``haplotype``,
+    ``germline_variants``) so consumers — including RNA-evidence
+    integrations from #259 — can align across axes.
+
+    Emitted by :func:`varcode.germline.predict_germline_aware_effect`.
+    Sibling of :class:`HaplotypeEffect`: that one captures the
+    *known-cis* multi-variant case; this one captures the
+    *unknown-phase* possibility set.
+    """
+
+    def __init__(
+            self,
+            variant,
+            transcript,
+            candidates,
+            hypotheses,
+            germline_variants):
+        TranscriptMutationEffect.__init__(self, variant, transcript)
+        if len(candidates) != len(hypotheses):
+            raise ValueError(
+                "PhaseAmbiguousEffect needs one candidate per "
+                "hypothesis; got %d candidates and %d hypotheses." % (
+                    len(candidates), len(hypotheses)))
+        if not candidates:
+            raise ValueError(
+                "PhaseAmbiguousEffect requires at least one candidate.")
+        self._candidates_raw = tuple(candidates)
+        self._hypotheses = tuple(hypotheses)
+        self.germline_variants = tuple(germline_variants)
+
+    @property
+    def candidates(self):
+        """Per-hypothesis classified effects, sorted by effect
+        priority (most-severe first). Same shape as
+        :attr:`SpliceOutcomeSet.candidates`."""
+        # Lazy import — effect_priority lives in a sibling module.
+        from .effect_ordering import effect_priority
+        return tuple(sorted(
+            self._candidates_raw,
+            key=lambda e: -effect_priority(e)))
+
+    @property
+    def most_likely(self):
+        """Highest-priority candidate. Used for back-compat consumers
+        that read a single effect."""
+        return self.candidates[0]
+
+    @property
+    def outcomes(self):
+        """One :class:`Outcome` per hypothesis, carrying the phase
+        metadata needed to align with RNA-evidence outcomes (#259).
+
+        ``evidence`` keys: ``phase_state`` (``"phased"`` /
+        ``"implicit"`` / ``"unknown"`` / ``"too_many_hypotheses"``),
+        ``haplotype`` (opaque tag), ``germline_variants`` (tuple of
+        the cis germline variants on that hypothesis's haplotype).
+        """
+        from ..outcomes import Outcome
+        outs = []
+        for candidate, hypothesis in zip(
+                self._candidates_raw, self._hypotheses):
+            outs.append(Outcome(
+                effect=candidate,
+                source="varcode_germline",
+                description=getattr(candidate, "short_description", None),
+                evidence={
+                    "phase_state": hypothesis.phase_state,
+                    "haplotype": hypothesis.haplotype,
+                    "germline_variants": tuple(hypothesis.cis),
+                }))
+        return self._with_extra_outcomes(tuple(outs))
+
+    @property
+    def short_description(self):
+        """``"?<most_likely>"`` — the leading ``?`` flags the
+        ambiguity. Consumers wanting the full possibility set read
+        :attr:`outcomes`."""
+        return "?" + self.most_likely.short_description
+
+    @property
+    def mutant_protein_sequence(self):
+        """Most-likely candidate's mutant protein. Consumers iterating
+        over hypotheses pull per-candidate sequences from
+        :attr:`outcomes`."""
+        return getattr(self.most_likely, "mutant_protein_sequence", None)
+
+    @property
+    def modifies_protein_sequence(self):
+        return getattr(self.most_likely, "modifies_protein_sequence", False)
+
+    @property
+    def modifies_coding_sequence(self):
+        return getattr(self.most_likely, "modifies_coding_sequence", False)
+
+    def __str__(self):
+        return (
+            "PhaseAmbiguousEffect(variant=%s, transcript=%s, "
+            "%d hypotheses, germline=%s)" % (
+                self.variant,
+                self.transcript.name if self.transcript else "?",
+                len(self._hypotheses),
+                ",".join(g.short_description for g in self.germline_variants)))

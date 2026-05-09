@@ -544,3 +544,495 @@ class GermlineContext:
             if gt and gt not in ("./.", ".|.", "0/0", "0|0", "."):
                 keep.append(v)
         return VariantCollection(keep)
+
+
+# =====================================================================
+# Germline-aware effect prediction
+#
+# This is where the input contract from above flows through to actual
+# effect classification. The shape from the design pivot in #268:
+# germline isn't a wrapper around an effect, it's a transcript modifier
+# applied before classification. ``predict_germline_aware_effect`` is
+# the single entry point — ``predict_variant_effects`` calls it
+# whenever a non-empty ``GermlineContext`` is supplied; otherwise it
+# stays out of the way.
+#
+# Algorithm sketch (per-(somatic, transcript) call):
+#
+#   1. Look up germline variants whose coordinates overlap the somatic's
+#      "window" on the transcript (default: the same codon for coding
+#      variants — pluggable via ``window_fn``).
+#   2. If the window is empty, the patient transcript is identical to
+#      the reference at this locus. Annotate normally. (When the
+#      context is SPARSE / HOTSPOTS_ONLY, flag the resulting effect with
+#      ``germline_unknown=True`` so consumers see the uncertainty.)
+#   3. Detect LOH — ``somatic`` shares (position, alt) with a germline
+#      het call. Sets ``effect.is_loh = True`` and proceeds.
+#   4. Resolve phase between somatic and each germline-in-window via
+#      ``phase_resolver``. Hemizygous variants (chrX/Y/M) → automatic
+#      cis. PS-tagged variants → use the resolver's answer. Unknown
+#      phase → enumerate up to 2^n hypotheses (cap configurable).
+#   5. For each hypothesis, build the patient haplotype the somatic
+#      landed on (just the cis germline variants on that haplotype),
+#      then build the post-somatic haplotype (cis germline + somatic).
+#      Classify the diff between them using the protein-diff
+#      classifier — same machinery the protein_diff annotator uses.
+#   6. Single hypothesis → return the single classified effect.
+#      Multiple hypotheses → wrap in ``PhaseAmbiguousEffect`` (a
+#      ``MultiOutcomeEffect`` subclass; not a wrapper around a
+#      reference-relative effect).
+#
+# Out of scope for v1 (refinements that don't change this API):
+#   * Splice-signal recomputation when germline already disrupts a
+#     splice site varcode would otherwise classify against (#285).
+#     Falls out partially because the patient transcript carries the
+#     germline edits, but downgrade-by-already-broken needs targeted
+#     work.
+#   * Mitochondrial codon table (different from nuclear; chrM is
+#     skipped for now with a flag).
+#   * Coverage-track-aware "unknown" regions (for SPARSE contexts
+#     with explicit BedGraph coverage).
+# =====================================================================
+
+
+def apply_germline_to_transcript(transcript, germline_ctx, somatic_variant=None):
+    """Apply germline variants from ``germline_ctx`` to ``transcript``,
+    returning the patient's baseline :class:`MutantTranscript`.
+
+    Lower-level entry point for callers that want the patient
+    transcript directly without going through full effect prediction.
+    Used internally by :func:`predict_germline_aware_effect`; exposed
+    publicly for downstream tools (Isovar, Exacto) that want to
+    compute a custom analysis on the patient haplotype.
+
+    Behaviour:
+
+    * If ``germline_ctx`` is empty, returns ``None``.
+    * If ``somatic_variant`` is provided, restricts germline to the
+      somatic's window (per :func:`default_germline_window`); else
+      applies all germline variants overlapping any exon of the
+      transcript.
+    * If germline edits conflict (overlapping cDNA ranges) or land
+      outside the CDS, returns ``None`` and the caller falls back.
+
+    The returned object is the same shape that
+    :func:`varcode.mutant_transcript.apply_variants_to_transcript`
+    produces: a :class:`MutantTranscript` carrying the germline
+    edits with ``mutant_protein_sequence`` populated when the edits
+    land after the CDS start.
+    """
+    if not germline_ctx:
+        return None
+    from .mutant_transcript import apply_variants_to_transcript
+    if somatic_variant is not None:
+        contig, start, end = default_germline_window(
+            somatic_variant, transcript)
+        germline_in_window = germline_ctx.variants_in_window(
+            contig, start, end)
+    else:
+        # Whole-transcript window: cover every exon. Useful for
+        # callers building a single patient transcript independent of
+        # any specific somatic — e.g., to translate the patient
+        # protein for cohort-level analysis.
+        germline_in_window = []
+        try:
+            for exon in transcript.exons:
+                germline_in_window.extend(
+                    germline_ctx.variants_in_window(
+                        exon.contig, exon.start, exon.end))
+        except Exception:
+            return None
+    if not germline_in_window:
+        return None
+    return apply_variants_to_transcript(
+        list(germline_in_window), transcript)
+
+
+def default_germline_window(somatic_variant, transcript) -> Tuple[str, int, int]:
+    """Default window for looking up germline variants relevant to a
+    somatic variant on a transcript.
+
+    Returns ``(contig, start, end)`` covering the codon containing the
+    somatic variant — three reference bases on each side of
+    ``somatic_variant.start``. This is the window from #268's table
+    for in-exon coding variants.
+
+    Larger windows (splice signal region for splice-adjacent variants,
+    same exon for frameshift candidates) are useful refinements but
+    don't change the API. Callers that need them pass a custom
+    ``window_fn`` to :func:`predict_germline_aware_effect`.
+
+    Splice-adjacent: when the somatic is within 6bp of an exon-intron
+    boundary, expand to a 12bp window centered on the boundary so
+    germline edits to the donor / acceptor signal show up in the
+    lookup. This catches the "germline broke the splice site" case
+    without forcing the caller to wire up a separate window function.
+    """
+    contig = somatic_variant.contig
+    pos = somatic_variant.start
+    # Default: the codon containing the somatic. Three bases on either
+    # side — slightly wider than strictly necessary so overlapping
+    # frame-aware codon membership is conservative.
+    start = pos - 3
+    end = (getattr(somatic_variant, "end", None) or pos) + 3
+    # Splice-adjacent expansion: if any of this transcript's exon
+    # boundaries is within 6bp of the somatic, widen to capture the
+    # canonical splice signal region (MAG | GURAGU and YAG | R, ~12bp).
+    try:
+        for exon in transcript.exons:
+            for boundary in (exon.start, exon.end):
+                if abs(boundary - pos) <= 6:
+                    start = min(start, boundary - 6)
+                    end = max(end, boundary + 6)
+    except Exception:
+        # Hand-built transcripts in tests may not have exons; the
+        # default codon window is a fine fallback.
+        pass
+    return contig, max(1, start), end
+
+
+def detect_loh(somatic_variant, germline_in_window) -> bool:
+    """True when ``somatic_variant`` is identical at (position, alt)
+    to a germline variant in the window.
+
+    LOH is the most common "looks somatic but isn't really" case —
+    the patient was germline het at this position, and the tumor lost
+    the reference allele, so the variant call says "alt" in tumor and
+    "het" in normal but the alt itself is the germline allele. We
+    flag the resulting effect with ``is_loh=True`` so consumers can
+    distinguish a true somatic mutation from a zygosity change.
+
+    Only same-position-and-alt counts. A position where germline and
+    somatic disagree on alt is a different mutation, not LOH.
+    """
+    for g in germline_in_window:
+        if (g.contig == somatic_variant.contig
+                and g.start == somatic_variant.start
+                and g.ref == somatic_variant.ref
+                and g.alt == somatic_variant.alt):
+            return True
+    return False
+
+
+@dataclass(frozen=True)
+class PhaseHypothesis:
+    """One way the somatic variant might be phased relative to the
+    germline variants in its window.
+
+    ``cis`` are germline variants on the same haplotype as the
+    somatic; ``trans`` are on the other haplotype. The somatic's
+    effect at this locus is determined entirely by the cis set —
+    edits in trans live on the haplotype the somatic *didn't* hit and
+    don't change the codon the somatic edits.
+
+    ``haplotype`` is a stable opaque label (``"A"``, ``"B"``, etc.)
+    that callers use to align outcomes across axes — e.g. an RNA
+    resolver returning ``evidence={"haplotype": "B"}`` aligns with the
+    hypothesis whose ``haplotype == "B"``.
+
+    ``phase_state`` mirrors the table in #268: ``"phased"``,
+    ``"implicit"`` (hemizygous), or ``"unknown"`` (enumerated).
+    """
+    cis: Tuple = ()
+    trans: Tuple = ()
+    haplotype: str = "unknown"
+    phase_state: str = "unknown"
+
+
+def enumerate_phase_hypotheses(
+        somatic_variant,
+        germline_in_window,
+        phase_resolver=None,
+        max_hypotheses: int = 8) -> Tuple[PhaseHypothesis, ...]:
+    """Enumerate plausible phase configurations of ``somatic_variant``
+    relative to ``germline_in_window``.
+
+    Three regimes:
+
+    * **Hemizygous chromosome** (chrX/Y/M, male X) — single haplotype;
+      all germline-in-window is implicitly cis. One hypothesis.
+    * **Resolver answers for every pair** (``phase_resolver.in_cis``
+      returns True/False for each ``(somatic, germline_v)``) — a
+      single deterministic hypothesis with cis/trans assigned per
+      the resolver. ``phase_state="phased"``.
+    * **Phase unknown** — enumerate all 2^n cis/trans assignments
+      across n germline variants. Cap at ``max_hypotheses``; emit a
+      single ``"unknown"`` placeholder when the cap is exceeded
+      (consumers see a ``TooManyHypotheses`` evidence flag).
+
+    The cap is configurable so downstream pipelines that tolerate more
+    hypotheses (long-read with rich phasing, manual analyses) can
+    raise it. Default 8 = up to 3 germline variants in a window
+    fully unphased.
+    """
+    # Hemizygous: chrX (in males), chrY, chrM. Detection is
+    # heuristic since varcode doesn't carry sex info — the X
+    # chromosome detection conservatively requires the genome to
+    # claim hemizygosity. For v1 we treat chrM (mitochondrial) and
+    # chrY as definitely hemizygous; chrX is treated as diploid
+    # by default (the female case; the male case undergenerates
+    # but doesn't misgenerate).
+    contig = str(somatic_variant.contig).lstrip("chr").upper()
+    if contig in ("M", "MT", "Y"):
+        return (PhaseHypothesis(
+            cis=tuple(germline_in_window),
+            trans=(),
+            haplotype="A",
+            phase_state="implicit"),)
+
+    # Resolver-based phase: ask the resolver for each germline
+    # variant. If the resolver answers for all of them, single
+    # deterministic hypothesis.
+    if (phase_resolver is not None
+            and hasattr(phase_resolver, "in_cis")
+            and germline_in_window):
+        cis_list = []
+        trans_list = []
+        all_answered = True
+        for g in germline_in_window:
+            try:
+                answer = phase_resolver.in_cis(somatic_variant, g)
+            except Exception:
+                all_answered = False
+                break
+            if answer is True:
+                cis_list.append(g)
+            elif answer is False:
+                trans_list.append(g)
+            else:
+                all_answered = False
+                break
+        if all_answered:
+            return (PhaseHypothesis(
+                cis=tuple(cis_list),
+                trans=tuple(trans_list),
+                haplotype="A",
+                phase_state="phased"),)
+
+    # Phase unknown: enumerate 2^n cis/trans assignments across the
+    # n germline variants. Cap to avoid blow-up.
+    n = len(germline_in_window)
+    if n == 0:
+        # No germline in window — single trivial hypothesis (no
+        # germline edits). Caller usually short-circuits before
+        # reaching this branch, but it's a safe default.
+        return (PhaseHypothesis(
+            cis=(),
+            trans=(),
+            haplotype="A",
+            phase_state="phased"),)
+
+    if 2 ** n > max_hypotheses:
+        # Bail out cleanly — emit a single "too many" hypothesis with
+        # all germline marked cis (the conservative case where
+        # somatic effect is most strongly germline-modified).
+        return (PhaseHypothesis(
+            cis=tuple(germline_in_window),
+            trans=(),
+            haplotype="unknown",
+            phase_state="too_many_hypotheses"),)
+
+    hypotheses: List[PhaseHypothesis] = []
+    germline_tuple = tuple(germline_in_window)
+    for mask in range(2 ** n):
+        cis = []
+        trans = []
+        for i, g in enumerate(germline_tuple):
+            if mask & (1 << i):
+                cis.append(g)
+            else:
+                trans.append(g)
+        # Label haplotype "A" for the all-cis case, "B" for all-trans,
+        # "mixed" otherwise. These are opaque tags consumers use for
+        # cross-axis matching with RNA evidence.
+        if not trans:
+            hap = "A"
+        elif not cis:
+            hap = "B"
+        else:
+            hap = "A_mixed_%d" % mask
+        hypotheses.append(PhaseHypothesis(
+            cis=tuple(cis),
+            trans=tuple(trans),
+            haplotype=hap,
+            phase_state="unknown"))
+    return tuple(hypotheses)
+
+
+def _classify_against_patient_baseline(
+        somatic_variant, transcript, hypothesis: PhaseHypothesis):
+    """Build the patient-baseline and post-somatic haplotypes for a
+    single phase hypothesis, then classify the somatic effect via
+    the protein-diff classifier.
+
+    Returns a :class:`MutationEffect` instance. The effect's class
+    (Missense, FrameShift, etc.) reflects the diff against the
+    patient's baseline — not the reference's — when ``hypothesis.cis``
+    is non-empty.
+
+    For the all-trans case (``hypothesis.cis`` empty), the patient
+    baseline is identical to the reference, so the diff degenerates
+    to today's reference-relative classification. That's the
+    structural back-compat: when no germline lands on the somatic's
+    haplotype, this branch produces what the protein-diff annotator
+    would produce on its own.
+    """
+    from .effects.classify import classify_from_protein_diff
+    from .effects.effect_classes import (
+        IncompleteTranscript,
+        NoncodingTranscript,
+    )
+    from .mutant_transcript import apply_variants_to_transcript
+
+    if not transcript.is_protein_coding:
+        return NoncodingTranscript(somatic_variant, transcript)
+    if not transcript.complete:
+        return IncompleteTranscript(somatic_variant, transcript)
+
+    cis_germline = list(hypothesis.cis)
+
+    # Patient baseline: just the cis germline applied. Empty cis →
+    # baseline is the reference transcript (no edits).
+    if cis_germline:
+        baseline = apply_variants_to_transcript(cis_germline, transcript)
+        if baseline is None:
+            # The germline edits conflict (overlapping cDNA ranges) or
+            # land outside the CDS — fall back to reference-relative
+            # classification of the somatic alone. The caller still
+            # sees a per-hypothesis result; it just degenerates.
+            from .effects import predict_variant_effect_on_transcript
+            return predict_variant_effect_on_transcript(
+                somatic_variant, transcript)
+        baseline_protein = baseline.mutant_protein_sequence
+        baseline_length_delta = baseline.total_length_delta
+    else:
+        # No cis germline → patient haplotype == reference at this
+        # locus. Use the reference protein directly.
+        baseline_protein = str(transcript.protein_sequence) if (
+            getattr(transcript, "protein_sequence", None)) else None
+        baseline_length_delta = 0
+
+    # Post-somatic: cis germline + somatic on the same haplotype.
+    joint_variants = cis_germline + [somatic_variant]
+    joint = apply_variants_to_transcript(joint_variants, transcript)
+    if joint is None or joint.mutant_protein_sequence is None:
+        # Joint build failed (conflicting edits, or somatic lands
+        # before CDS start) — fall back to reference-relative
+        # classification of the somatic alone.
+        from .effects import predict_variant_effect_on_transcript
+        return predict_variant_effect_on_transcript(
+            somatic_variant, transcript)
+
+    if baseline_protein is None:
+        # Edge: transcript has no reference protein (incomplete or
+        # non-coding got past our gate); fall back.
+        from .effects import predict_variant_effect_on_transcript
+        return predict_variant_effect_on_transcript(
+            somatic_variant, transcript)
+
+    # Length delta of the somatic alone, after stripping the germline-
+    # only baseline shift. classify_from_protein_diff expects the diff
+    # delta, not the joint delta.
+    somatic_length_delta = joint.total_length_delta - baseline_length_delta
+
+    return classify_from_protein_diff(
+        variant=somatic_variant,
+        transcript=transcript,
+        ref_protein=baseline_protein,
+        mut_protein=joint.mutant_protein_sequence,
+        length_delta=somatic_length_delta,
+        mutant_transcript=joint)
+
+
+def predict_germline_aware_effect(
+        somatic_variant,
+        transcript,
+        germline_ctx: GermlineContext,
+        annotator,
+        phase_resolver=None,
+        window_fn=default_germline_window,
+        max_hypotheses: int = 8):
+    """Predict the effect of ``somatic_variant`` on ``transcript``
+    against the patient's germline-applied transcript.
+
+    Single entry point for germline-aware effect prediction.
+    :func:`varcode.effects.predict_variant_effects` calls this whenever
+    a non-empty :class:`GermlineContext` is supplied; otherwise it
+    bypasses the germline path entirely and the existing annotator
+    dispatch produces today's reference-relative output unchanged.
+
+    Behaviour by case:
+
+    * **No germline in the somatic's window** — patient transcript ≡
+      reference transcript at this locus; delegate to ``annotator``
+      directly. SPARSE / HOTSPOTS_ONLY contexts mark the result with
+      ``effect.germline_unknown = True`` so consumers can see the
+      uncertainty.
+    * **Germline in window, phase known** (resolver answers, or
+      hemizygous, or all-cis-by-zygosity) — single patient haplotype;
+      classify against it via :func:`_classify_against_patient_baseline`.
+    * **Germline in window, phase unknown** — enumerate hypotheses
+      (capped via ``max_hypotheses``), classify each, wrap in
+      :class:`~varcode.effects.effect_classes.PhaseAmbiguousEffect`.
+
+    LOH (``somatic`` matches germline at position+alt with het zygosity)
+    sets ``effect.is_loh = True`` regardless of which branch ran.
+
+    ``window_fn`` is the pluggable window selector — defaults to
+    :func:`default_germline_window` (codon-level, with splice-signal
+    expansion when the somatic is splice-adjacent). Callers that
+    need different windows pass their own.
+    """
+    from pyensembl import Transcript
+    if not isinstance(transcript, Transcript):
+        # Mirrors annotator entry: SVs and other non-Transcript
+        # consumers don't go through germline-aware prediction.
+        return annotator.annotate_on_transcript(somatic_variant, transcript)
+
+    contig, start, end = window_fn(somatic_variant, transcript)
+    germline_in_window = germline_ctx.variants_in_window(contig, start, end)
+    is_loh = detect_loh(somatic_variant, germline_in_window)
+
+    if not germline_in_window:
+        effect = annotator.annotate_on_transcript(
+            somatic_variant, transcript)
+        if germline_ctx.completeness in (
+                Completeness.SPARSE, Completeness.HOTSPOTS_ONLY):
+            effect.germline_unknown = True
+        if is_loh:
+            effect.is_loh = True
+        return effect
+
+    hypotheses = enumerate_phase_hypotheses(
+        somatic_variant,
+        germline_in_window,
+        phase_resolver=phase_resolver,
+        max_hypotheses=max_hypotheses)
+
+    if len(hypotheses) == 1:
+        effect = _classify_against_patient_baseline(
+            somatic_variant, transcript, hypotheses[0])
+        # Stash the phase metadata on the effect so consumers /
+        # serializers can recover it. Single-hypothesis effects don't
+        # need a possibility set, but the evidence is still useful.
+        effect.germline_phase_state = hypotheses[0].phase_state
+        effect.germline_variants_in_window = tuple(germline_in_window)
+        if is_loh:
+            effect.is_loh = True
+        return effect
+
+    # Multiple hypotheses → possibility set.
+    candidates = tuple(
+        _classify_against_patient_baseline(
+            somatic_variant, transcript, h)
+        for h in hypotheses)
+    from .effects.effect_classes import PhaseAmbiguousEffect
+    effect = PhaseAmbiguousEffect(
+        variant=somatic_variant,
+        transcript=transcript,
+        candidates=candidates,
+        hypotheses=hypotheses,
+        germline_variants=tuple(germline_in_window))
+    if is_loh:
+        effect.is_loh = True
+    return effect
