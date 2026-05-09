@@ -33,6 +33,8 @@ theme:
 nav:
   - Home: index.md
   - Feature guides:
+      - Effect annotation: effect_annotation.md
+      - Germline-aware annotation: germline.md
       - Genotypes & sample queries: genotype.md
       - CSV round-trip: csv.md
       - Error handling: errors.md
