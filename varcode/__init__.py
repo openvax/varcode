@@ -29,6 +29,12 @@ from .germline import (
     GenomeBuildMismatchError,
     GermlineContext,
     Completeness,
+    PhaseHypothesis,
+    apply_germline_to_transcript,
+    default_germline_window,
+    detect_loh,
+    enumerate_phase_hypotheses,
+    predict_germline_aware_effect,
 )
 from .genotype import Genotype, Zygosity
 from .mutant_transcript import (
@@ -154,9 +160,15 @@ __all__ = [
     "SampleNotFoundError",
     "GenomeBuildMismatchError",
 
-    # Germline-aware annotation input contract (openvax/varcode#268)
+    # Germline-aware annotation (openvax/varcode#268)
     "GermlineContext",
     "Completeness",
+    "PhaseHypothesis",
+    "apply_germline_to_transcript",
+    "default_germline_window",
+    "detect_loh",
+    "enumerate_phase_hypotheses",
+    "predict_germline_aware_effect",
 
     # file loading
     "load_maf",

@@ -47,7 +47,9 @@ def predict_variant_effects(
         variant,
         raise_on_error=False,
         splice_outcomes=False,
-        annotator=None):
+        annotator=None,
+        germline=None,
+        phase_resolver=None):
     """Determine the effects of a variant on any transcripts it overlaps.
     Returns an EffectCollection object.
 
@@ -74,11 +76,37 @@ def predict_variant_effects(
         :func:`set_default_annotator` / :func:`use_annotator` — today
         that's ``"fast"``. A string is looked up in the registry;
         an instance is used directly. See openvax/varcode#271.
+
+    germline : GermlineContext or None
+        Optional patient germline context. When non-empty, every per-
+        transcript effect is computed against the patient's germline-
+        applied transcript instead of the reference. Codons / splice
+        signals where germline overlaps the somatic produce per-
+        haplotype possibility sets when phase is unknown (a
+        :class:`PhaseAmbiguousEffect`); LOH at germline het positions
+        is flagged. ``None`` or :meth:`GermlineContext.empty` falls
+        through to today's reference-relative behaviour byte-
+        identically. See openvax/varcode#268.
+
+    phase_resolver : PhaseResolver or None
+        Optional phase-evidence source. Consumed two ways: by
+        germline-aware annotation to resolve cis/trans for
+        somatic-vs-germline pairs (collapses possibility sets when
+        phase is known), and by the post-annotation walk to attach
+        contig-derived ``mutant_transcript`` to per-variant effects.
+        See openvax/varcode#269.
     """
     # Lazy import — varcode.annotators depends on varcode.effects at
     # load time, so we defer to break the cycle.
     from ..annotators.registry import get_annotator, resolve_annotator
     annotator_instance = resolve_annotator(annotator)
+    # Germline-aware helper, lazily imported because varcode.germline
+    # imports from varcode.effects.classify (cycle if unconditional).
+    # Per-call validation lives on VariantCollection.effects (where
+    # we have the full somatic collection); this entry point trusts
+    # its inputs.
+    if germline:
+        from ..germline import predict_germline_aware_effect
     # Kind dispatch for structural variants: ``fast``/``protein_diff``
     # declare ``supports = {"snv","indel","mnv"}``, but that flag is
     # metadata — nobody dispatches on it. Without this override an SV
@@ -124,13 +152,25 @@ def predict_variant_effects(
             else:
                 # gene ID  has transcripts overlapped by this variant
                 for transcript in transcripts_grouped_by_gene[gene_id]:
+                    # Germline-aware path takes over when a non-empty
+                    # context is supplied — it owns window lookup,
+                    # phase enumeration, LOH detection, and packaging
+                    # into a PhaseAmbiguousEffect when phase is
+                    # unknown. Empty context delegates to the
+                    # annotator unchanged. See #268.
+                    annotate = (
+                        annotator_instance.annotate_on_transcript
+                        if not germline else
+                        lambda v, t: predict_germline_aware_effect(
+                            v, t,
+                            germline_ctx=germline,
+                            annotator=annotator_instance,
+                            phase_resolver=phase_resolver))
                     if raise_on_error:
-                        effect = annotator_instance.annotate_on_transcript(
-                            variant, transcript)
+                        effect = annotate(variant, transcript)
                     else:
                         try:
-                            effect = annotator_instance.annotate_on_transcript(
-                                variant, transcript)
+                            effect = annotate(variant, transcript)
                         except (AssertionError, ValueError) as error:
                             logger.warn(
                                 "Encountered error annotating %s for %s: %s",
