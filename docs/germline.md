@@ -34,35 +34,17 @@ output is the **possibility set** `{Val→Ile, Ala→Thr}`. With phase
 data, the set collapses to one. varcode produces both shapes
 automatically.
 
-## The pipeline
+## How it composes
 
-```
-Reference transcript
-       │
-       ▼
-GermlineContext applied (in window) ─► patient transcript
-       │                                       │
-       │                              (one or more — phase
-       │                               hypotheses when
-       │                               somatic + germline
-       │                               share a codon and
-       │                               phase is unknown)
-       ▼                                       │
-Somatic variant ──────────────────────────────►│
-                                               │
-                                  ┌────────────┴───────────┐
-                                  ▼                        ▼
-                            Single hypothesis       Multiple hypotheses
-                                  │                        │
-                                  ▼                        ▼
-                           MutationEffect        PhaseAmbiguousEffect
-                          (Substitution, etc.)   (one outcome per
-                                  │                hypothesis)
-                                  ▼                        │
-                            Optional: RNA evidence ────────┘
-                            (collapses set or adds
-                             observed isoforms)
-```
+Germline is a transcript modifier, applied before the somatic variant
+is classified. Effect prediction with `germline=ctx` builds the
+patient haplotype from any germline variants in the somatic's window,
+then asks the annotator how the somatic changes the patient protein.
+When phase between the somatic and one or more germline variants in
+the same codon is unknown, the result is a `PhaseAmbiguousEffect` —
+one classified `MutationEffect` per phase hypothesis, packaged
+together. A `phase_resolver=` collapses the set; an `rna_resolver=`
+collapses it further (or adds observed-isoform outcomes).
 
 ## Quickstart
 
@@ -338,69 +320,39 @@ effects = somatic.effects(germline=germline, validate_reference=False)
 
 ## Lower-level helpers
 
-For callers building custom pipelines, the components are all
-public:
+The high-level `effects(germline=...)` path delegates to
+`predict_germline_aware_effect`. Both that function and
+`apply_germline_to_transcript` (which returns a `MutantTranscript`
+with germline edits applied) are public — call them directly if you
+have a custom annotator or want to translate the patient protein
+without going through full effect prediction. See `varcode.germline`.
 
-```python
-from varcode import (
-    apply_germline_to_transcript,
-    default_germline_window,
-    detect_loh,
-    enumerate_phase_hypotheses,
-    predict_germline_aware_effect,
-)
-```
+## Limitations
 
-`apply_germline_to_transcript(transcript, germline_ctx, somatic=None)`
-returns a `MutantTranscript` with germline edits applied — useful
-if you want to translate the patient protein for cohort analysis
-without going through full effect prediction.
-
-`predict_germline_aware_effect(somatic, transcript, germline_ctx, annotator, phase_resolver=None)`
-is the single entry point that the high-level `effects(germline=)`
-kwarg dispatches to. Call it directly if you have a custom
-annotator or want per-(variant, transcript) control.
-
-## Limitations and what's deferred
-
-v1 ships the input contract, transcript modification, phase
-enumeration, LOH detection, and basic splice-signal handling. The
-following are documented limitations, not bugs:
-
-- **Splice-signal-disrupted germline downgrade**: when germline
-  already disrupts a splice site that the somatic also targets,
-  the patient transcript carries the germline edit so the simple
-  cases work — but an explicit "germline already broke this;
-  downgrade severity" path is not separately encoded.
-- **Mitochondrial codon table**: chrM is correctly identified as
-  hemizygous (single-haplotype) but uses the standard nuclear
-  codon table for translation. Mitochondrial variants in the
-  protein-coding region will produce mis-classified amino acid
-  changes.
-- **Tumor heterogeneity / subclonal somatic**: every somatic
-  variant is treated as if present in 100% of cells. Allele
-  frequencies in the somatic VCF are not used to weight effects.
-- **CNV-aware dosage**: copy number changes in the tumor affect
-  effective dosage of variants but not the per-haplotype protein
-  sequence varcode predicts.
-- **Compound interactions across more than 3 germline variants in a
-  window**: caps at 8 hypotheses by default (raise via
-  `max_hypotheses=` if your pipeline tolerates more).
-- **VCF normalization**: differences in left-alignment / MNV split
-  between the somatic and germline VCFs cause apparent
-  position mismatches. Normalize both with the same tool
-  (`bcftools norm`) before loading.
-- **Population-frequency-based germline**: gnomAD / ExAC as a
-  probabilistic germline substitute for tumor-only callers is a
-  future direction.
-- **Trio joint analysis**: pass one germline at a time.
-- **`docs/germline.md` is what you're reading; the edge-case test
-  corpus at scale (real trio data, multi-allelic, etc.) is still
-  to come.**
+- **Germline-disrupted splice sites get no explicit downgrade.** When
+  germline already breaks a splice signal that the somatic also
+  targets, the patient transcript carries the germline edit, so
+  classification runs against the patient signal — but there's no
+  separate "germline already broke this; downgrade severity" path.
+- **Mitochondrial variants use the nuclear codon table.** chrM is
+  correctly identified as hemizygous, but mitochondrial protein
+  translation uses a different codon table that varcode doesn't
+  apply. Amino-acid changes in chrM coding regions will be
+  mis-classified.
+- **Subclonal somatic and CNV dosage are not modeled.** Every somatic
+  variant is treated as present in 100% of cells; copy-number changes
+  don't affect per-haplotype protein prediction.
+- **Hypothesis cap of 8** by default when phase is unknown across
+  multiple germline variants in a window. Raise via `max_hypotheses=`
+  if your pipeline tolerates more.
+- **Normalization mismatch between germline and somatic VCFs** (left-
+  alignment, MNV split) causes apparent position mismatches.
+  Normalize both with the same tool before loading.
+- **Population-frequency germline (gnomAD/ExAC) as a substitute for
+  patient germline** is not in v1.
 
 ## See also
 
-- [#268](https://github.com/openvax/varcode/issues/268) — umbrella issue with full v1 acceptance criteria.
-- [#360](https://github.com/openvax/varcode/pull/360) — unified PR that landed germline-aware effect prediction.
+- [#268](https://github.com/openvax/varcode/issues/268) — umbrella issue with the v1 acceptance criteria.
 - [Effect annotation](effect_annotation.md) — pipeline overview.
-- [Genotypes & sample queries](genotype.md) — sample-aware filtering on `VariantCollection`.
+- [Genotypes & sample queries](genotype.md) — sample-aware filtering.

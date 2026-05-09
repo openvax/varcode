@@ -1,26 +1,18 @@
 # Effect annotation
 
-How varcode turns a variant into one or more `MutationEffect`
-objects, and how the pieces fit together across the basic case,
-splice-disrupting variants, and (eventually) structural variants.
+How varcode turns a variant into one or more `MutationEffect` objects.
 
-## The pipeline
+## How it composes
 
-```
-Variant ─(Annotator)─> MutantTranscript(s) ─(Classifier)─> Effect(s)
-                              │
-                              └── wrapped in MultiOutcomeEffect
-                                   when >1 plausible outcome
-                                       │
-                                       └── narrowed by RNA evidence
-                                           (isovar / Exacto plug-ins)
-```
-
-Single DNA event can produce one or more plausible mutant
-proteins. varcode represents each concrete mutant as a
-`MutantTranscript`. When the DNA alone is ambiguous, the
-possibility set is wrapped in a `MultiOutcomeEffect`. RNA
-evidence (when available) narrows the set.
+A single DNA event can produce one or more plausible mutant proteins.
+varcode represents each concrete mutant as a `MutantTranscript`. The
+annotator turns a variant into one or more of these; the classifier
+turns each `MutantTranscript` into a typed `MutationEffect`. When the
+DNA alone admits multiple plausible outcomes — splice ambiguity, SV
+breakpoint resolution, unphased germline-overlapping codons — the
+results are packaged in a `MultiOutcomeEffect` whose `outcomes`
+property exposes the set. An optional RNA-evidence resolver narrows
+the set to observed isoforms or appends observed-only outcomes.
 
 ## The four primitives
 
@@ -107,117 +99,61 @@ disrupting variant produces a `SpliceOutcomeSet`.
 
 ### Relationship between the two
 
-`SpliceOutcomeSet` is the N-outcome case of the same idea
-`alternate_effect` expresses with 2 outcomes. The
-`NORMAL_SPLICING` candidate is `alternate_effect` promoted to
-first-class; the other candidates express alternatives you
-don't see from the default form. Both are progressions of
-the same pattern:
-
 | # candidates | Class |
 |---|---|
 | 1 | plain `Substitution` / `Silent` / etc. — not wrapped |
 | 2 | `ExonicSpliceSite` with `alternate_effect` |
-| N (≥3) | `SpliceOutcomeSet` (opt-in via `splice_outcomes=True`) |
+| N | `SpliceOutcomeSet` (opt-in via `splice_outcomes=True`) |
 
-`ExonicSpliceSite` is a `MultiOutcomeEffect` subclass since
-[#299][i299] Part 1. Downstream code can write
-`isinstance(e, MultiOutcomeEffect)` and iterate `.candidates`
-uniformly, regardless of richness level. `alternate_effect` is
-available on both `ExonicSpliceSite` (the 2-outcome case, as a
-first-class instance attribute) and `SpliceOutcomeSet` (where it
-resolves to the `NORMAL_SPLICING` candidate's `coding_effect`).
-Same field, same meaning, works on both shapes — no parallel
-mechanism.
+Both `ExonicSpliceSite` and `SpliceOutcomeSet` are `MultiOutcomeEffect`
+subclasses, so consumers iterate `.outcomes` uniformly without caring
+about which form they're holding. `alternate_effect` works on both:
+on `ExonicSpliceSite` it's the splicing-proceeds outcome directly; on
+`SpliceOutcomeSet` it resolves to the `NORMAL_SPLICING` candidate's
+`coding_effect`. The element types inside `.outcomes` differ
+(`MutationEffect` vs `SpliceCandidate`), but `outcome.effect.short_description`
+is uniform.
 
-```python
-# Both now work:
-if isinstance(effect, MultiOutcomeEffect):
-    for candidate in effect.candidates:
-        ...
-if effect.alternate_effect is not None:
-    coding_consequence = effect.alternate_effect
-```
-
-The element types in `.candidates` differ by shape —
-`ExonicSpliceSite.candidates` yields `MutationEffect` instances
-directly (self + alternate_effect); `SpliceOutcomeSet.candidates`
-yields `SpliceCandidate` objects with `.outcome` / `.plausibility`
-/ `.coding_effect` fields. Downstream code that needs the richer
-per-candidate metadata can branch on element type; code that just
-wants "is there a coding consequence" reads `.alternate_effect`
-and gets a `MutationEffect`-or-None regardless of which class
-produced it.
-
-### Variants in the CDS and in the splice window simultaneously
-
-A missense at the last exonic base is biologically *both* a
-splice effect (disrupts the splice signal) AND a protein-level
-coding effect (changes a residue). This is exactly what
-`ExonicSpliceSite` exists for:
-
-```python
-# Default: 2 outcomes
-effect = ExonicSpliceSite
-effect.alternate_effect      # the coding change, if splicing proceeds
-
-# Opt-in: N outcomes including the coding change as NORMAL_SPLICING
-for c in SpliceOutcomeSet.candidates:
-    if c.outcome is SpliceOutcome.NORMAL_SPLICING:
-        coding_change = c.coding_effect
-```
-
-Both representations encode the "splice + coding" case; the
-richer `SpliceOutcomeSet` just adds the other candidates
-(exon skipping, intron retention, cryptic splice).
-
-### What varcode does NOT classify as splice-affecting today
+### Limitations
 
 The splice classifier is **position-based** — it fires on the
-canonical window and nothing else. Variants that affect
-splicing through *sequence-based* signals aren't flagged:
-
-- **Exonic splicing enhancer / silencer (ESE / ESS) disruption**
-  mid-exon: ~6–10 nt motifs that recruit or repel SR proteins.
-  A missense that disrupts an ESE can cause exon skipping but
-  gets classified as plain `Substitution` today.
-- **Branch points** ~20–50 nt upstream of the acceptor.
-- **Deep intronic cryptic splice sites** far from canonical
-  boundaries.
-
-Detecting these needs ML predictors (SpliceAI, Pangolin,
-MMSplice, SpliceTransformer) trained on RNA-seq, or direct RNA
-evidence. Tracked as [#297][i297].
+canonical window (last 3 exonic, first 3-6 intronic, donor/acceptor)
+and nothing else. Sequence-based signals are not flagged: exonic
+splicing enhancer/silencer disruption mid-exon (~6-10nt SR-protein
+motifs), branch points (~20-50nt upstream of the acceptor), deep
+intronic cryptic sites. Detecting these needs ML predictors (SpliceAI,
+Pangolin, MMSplice, SpliceTransformer) or direct RNA evidence;
+tracked in [#297][i297].
 
 ## Annotator selection
 
-Two annotators coexist behind the `EffectAnnotator` protocol:
+Three annotators ship behind the `EffectAnnotator` protocol:
 
-| Annotator | Algorithm | Status |
+| Annotator | Algorithm | Used for |
 |---|---|---|
-| `FastEffectAnnotator` | Offset arithmetic against the reference CDS | Default |
-| `ProteinDiffEffectAnnotator` | Materializes `MutantTranscript`, translates, diffs against reference protein | [#309][i309] — WIP |
+| `ProteinDiffEffectAnnotator` | Builds a `MutantTranscript`, translates, diffs against the reference protein | Default for SNVs / indels / MNVs |
+| `FastEffectAnnotator` | Offset arithmetic against the reference CDS | Opt-in for byte-for-byte 2.x parity or perf-sensitive paths |
+| `StructuralVariantAnnotator` | Reassembles SV outcomes (deletions, duplications, inversions, fusions, translocations) | Routed automatically when the variant is a `StructuralVariant` |
 
-Both emit the same `MutationEffect` classes, share a fast path
-for trivial SNVs, and are interchangeable at the output level.
-The difference is internal: protein-diff catches
-boundary-codon cases and frameshift realignments that offset
-arithmetic can miss.
+All three emit the same `MutationEffect` hierarchy. `protein_diff`
+catches boundary-codon and frameshift-realignment cases that
+offset-arithmetic can miss; for trivial SNVs the two produce
+identical output. The SV annotator dispatches on `variant.is_structural`
+and isn't user-selectable for point variants.
 
 ```python
-# Default (fast):
+# Default (protein_diff for point variants, structural_variant for SVs):
 effects = variant.effects()
 
-# Opt into protein-diff (once available):
-effects = variant.effects(annotator="protein_diff")
+# Opt into the legacy fast path:
+effects = variant.effects(annotator="fast")
 
-# Scoped default swap:
-with varcode.use_annotator("protein_diff"):
+# Scoped swap:
+with varcode.use_annotator("fast"):
     effects = variant_collection.effects()
 ```
 
-Third-party annotators (isovar, Exacto) register via the
-registry:
+Third-party annotators (isovar, Exacto) register via the registry:
 
 ```python
 varcode.register_annotator(my_annotator)
@@ -248,63 +184,50 @@ raises a warning on load; wrap `from_csv` in
 `use_annotator(<csv's annotator>)` if you need the original
 annotator's output specifically.
 
-## Structural variants (roadmap)
+## Structural variants
 
-The current `MutantTranscript` handles point variants and
-indels. Fusions, translocations, inversions, and large
-duplications need a multi-source generalization — a
-`reference_segments` alternative to the single
-`reference_transcript` field, where a fusion is two segments
-from two transcripts and a translocation-to-intergenic is one
-transcript segment plus a genomic-interval segment.
+`StructuralVariant` (a `Variant` subclass) carries SV-specific fields:
+`sv_type` (one of `DEL`, `DUP`, `INV`, `INS`, `CNV`, `BND`), `end`,
+breakend mate fields, confidence intervals, and an open-ended `info`
+dict. Pass `parse_structural_variants=True` to `load_vcf` to load
+symbolic ALTs (`<DEL>`, `<INS:ME:ALU>`, `<CN0>`, breakends) as
+`StructuralVariant` objects rather than dropping them.
 
-One DNA event can produce many candidate ORFs that only RNA
-evidence can resolve (long-read transcript assembly from
-Exacto, assembled contigs from isovar). SV annotators return
-`List[MutantTranscript]` wrapped in a `MultiOutcomeEffect`;
-each class gets a prior over outcomes so DNA-only callers can
-still read `.most_likely`:
+```python
+from varcode import load_vcf
 
-- Splice outcomes → existing plausibility tables.
-- Fusions → canonical-transcript preferred, known recurrent
-  junctions short-circuit to possibility-set size 1.
-- Translocations → rank by `(in-frame, ORF length,
-  canonical-transcript involvement)`.
+vc = load_vcf("manta.vcf", parse_structural_variants=True)
+sv_effects = [
+    e for e in vc.effects()
+    if e.variant.__class__.__name__ == "StructuralVariant"
+]
+```
 
-`classify_from_protein_diff` (the 3d classifier) is unchanged
-for SVs — once the mutant protein is materialized,
-classification is the same. The difference is upstream: how
-you build the `MutantTranscript`.
+SV effects (`LargeDeletion`, `LargeDuplication`, `Inversion`,
+`GeneFusion`, `TranslocationToIntergenic`) are `MultiOutcomeEffect`
+subclasses — `e.outcomes` exposes the candidate ORFs / cryptic-splice
+outcomes the annotator generated, ordered by a per-class prior.
+External scorers (RNA evidence, long-read assembly) plug in via
+`apply_rna_evidence_to_effects` to narrow the set or append observed
+outcomes; see [Germline-aware annotation](germline.md) for the same
+composition pattern applied to germline.
 
-Tracked across [#252][i252] (fusions), [#257][i257] (SV
-types), [#259][i259] (RNA evidence), [#299][i299]
-(MultiOutcomeEffect formalization), [#305][i305]
-(splice_outcomes rewrite on MutantTranscript).
+Limitations:
+
+- Mate breakend pairing (joining two `BND` rows that are halves of one
+  translocation) is deferred. Each `BND` row produces its own
+  `StructuralVariant`; consumers can match `MATEID` themselves.
+- `parse_structural_variants=False` is the default. Without the flag,
+  symbolic ALTs are dropped with a warning that names the flag.
 
 ## Downstream consumers
 
-- **topiary** consumes mutant proteins as `ProteinFragment`.
-  The `MutantTranscript` → `ProteinFragment` conversion is 1:1
-  at the prediction boundary: `fragment.sequence =
-  mt.mutant_protein_sequence`; provenance fields carry through
-  as fragment metadata. Use `MutantTranscript` for
-  transcript-level reasoning (splicing, UTR readthrough,
-  codon tables); convert at the prediction boundary.
-- **vaxrank** consumes the `EffectCollection` +
-  `ProteinFragment` pair to score neoantigens. After
-  [#305][i305], splice outcomes deliver `MutantTranscript`s
-  directly; after fusion support, SV events deliver
-  `MultiOutcomeEffect[List[MutantTranscript]]` consumable the
-  same way.
-- **isovar** / **Exacto** plug in as registered annotators,
-  producing `MutantTranscript`s from assembled RNA evidence
-  rather than inferred from DNA alone.
+`MutantTranscript` is the prediction-boundary type for downstream
+neoantigen pipelines (topiary reads `mt.mutant_protein_sequence`;
+vaxrank consumes the `EffectCollection` + protein pair to score
+neoantigens). RNA-evidence callers (isovar, Exacto) plug in either as
+registered annotators or via the `RNAEvidenceResolver` protocol —
+see [Germline-aware annotation](germline.md) for the resolver pattern,
+which the same evidence shape uses across germline / phase / RNA.
 
-[i252]: https://github.com/openvax/varcode/issues/252
-[i257]: https://github.com/openvax/varcode/issues/257
-[i259]: https://github.com/openvax/varcode/issues/259
-[i271]: https://github.com/openvax/varcode/issues/271
 [i297]: https://github.com/openvax/varcode/issues/297
-[i299]: https://github.com/openvax/varcode/issues/299
-[i305]: https://github.com/openvax/varcode/issues/305
-[i309]: https://github.com/openvax/varcode/issues/309

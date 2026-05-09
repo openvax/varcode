@@ -108,21 +108,21 @@ This means `vc.heterozygous_in("tumor")` on a row where tumor is `1/2`
 yields two entries, one per alt — the correct biological
 interpretation.
 
-## What this doesn't do yet
+## Beyond zygosity: phased and germline-aware effects
 
-Three capabilities are deliberately out of scope for 2.3.0:
+The Genotype API gives you the data; downstream effect prediction
+uses it via separate features that landed later:
 
-1. **Effect prediction that uses zygosity.** `variant.effects()` still
-   returns the same output regardless of zygosity. Compound-het
-   reasoning and germline-aware effect prediction depend on the
-   `Genotype` API landing first and will arrive in the personal-genome
-   work tracked under [#270](https://github.com/openvax/varcode/issues/270).
+- **Phased effects of cis variants** — when two variants share a
+  phase set, varcode builds a joint `HaplotypeEffect` via
+  `effects(phase_resolver=...)`. See
+  [#269](https://github.com/openvax/varcode/issues/269).
+- **Germline-aware somatic annotation** — pass a `GermlineContext` to
+  `effects(germline=...)` and somatic variants are classified against
+  the patient's germline-applied transcript. See
+  [Germline-aware annotation](germline.md).
 
-2. **Phased effects.** Phased GTs (`0|1`) and `PS` phase-set tags are
-   preserved on `Genotype` but not yet used to predict joint effects
-   of nearby variants on the same haplotype. Tracked in
-   [#269](https://github.com/openvax/varcode/issues/269).
-
-3. **Dedicated joint-analysis helpers** like `vc.de_novo_in(...)` or
-   `vc.somatic(...)`. The set-operation pattern above covers them;
-   built-in shortcuts will be added if a clear use case emerges.
+Dedicated joint-analysis helpers like `vc.de_novo_in(...)` or
+`vc.somatic(...)` aren't shipped — the set-operation pattern above
+covers them, and shortcuts get added only when a clear use case
+shows up.
