@@ -109,5 +109,4 @@ meta = read_metadata_header("variants.csv")
 ```
 
 Annotator provenance fields (`annotator`, `annotator_version`) use
-the same `# key=value` convention (tracked in
-[#271](https://github.com/openvax/varcode/issues/271)).
+the same `# key=value` convention.

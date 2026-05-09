@@ -31,16 +31,20 @@ for a longer walkthrough and the effect-class table.
 
 ## Feature guides
 
-- [**Effect annotation**](effect_annotation.md) — how variants
-  become effects, splice outcome representations, pluggable
-  annotators, possibility sets for ambiguous outcomes, and the
-  SV-extensibility roadmap. Start here.
+- [**Effect annotation**](effect_annotation.md) — how variants become
+  effects, splice outcome representations, pluggable annotators,
+  possibility sets for ambiguous outcomes, and structural variants.
+  Start here.
+- [**Germline-aware annotation**](germline.md) — classify somatic
+  variants against the patient's germline-applied transcript;
+  possibility sets when phase is unknown; LOH detection. New in 4.19.
 - [**Genotypes and sample-aware queries**](genotype.md) — per-sample
-  zygosity on multi-sample VCFs. New in 2.3.
+  zygosity on multi-sample VCFs.
 - [**CSV round-trip and metadata headers**](csv.md) — `to_csv` /
-  `from_csv`, genome recovered from the header. New in 2.1, refined in 2.2.
+  `from_csv` with genome recovered from the header.
 - [**Error handling**](errors.md) — `ReferenceMismatchError`,
-  `SampleNotFoundError`, and `raise_on_error=False`.
+  `GenomeBuildMismatchError`, `SampleNotFoundError`, and
+  `raise_on_error=False`.
 
 ## API reference
 

@@ -13,6 +13,18 @@ Auto-generated from in-source docstrings via
 
 ::: varcode.VariantCollection
 
+### `varcode.StructuralVariant`
+
+::: varcode.StructuralVariant
+
+### `varcode.parse_symbolic_alt`
+
+::: varcode.parse_symbolic_alt
+
+### `varcode.SV_TYPES`
+
+::: varcode.SV_TYPES
+
 ## Genotypes
 
 ### `varcode.Genotype`
@@ -33,15 +45,129 @@ Auto-generated from in-source docstrings via
 
 ::: varcode.NonsilentCodingMutation
 
+### `varcode.MultiOutcomeEffect`
+
+::: varcode.MultiOutcomeEffect
+
 ### `varcode.EffectCollection`
 
 ::: varcode.EffectCollection
+
+### `varcode.Outcome`
+
+::: varcode.Outcome
 
 ### Priority ordering
 
 ::: varcode.effect_priority
 
 ::: varcode.top_priority_effect
+
+## Mutant transcripts
+
+### `varcode.MutantTranscript`
+
+::: varcode.MutantTranscript
+
+### `varcode.apply_variant_to_transcript`
+
+::: varcode.apply_variant_to_transcript
+
+### `varcode.apply_variants_to_transcript`
+
+::: varcode.apply_variants_to_transcript
+
+## Annotators
+
+### `varcode.EffectAnnotator`
+
+::: varcode.EffectAnnotator
+
+### `varcode.FastEffectAnnotator`
+
+::: varcode.FastEffectAnnotator
+
+### `varcode.ProteinDiffEffectAnnotator`
+
+::: varcode.ProteinDiffEffectAnnotator
+
+### `varcode.StructuralVariantAnnotator`
+
+::: varcode.StructuralVariantAnnotator
+
+### Registry
+
+::: varcode.register_annotator
+
+::: varcode.get_annotator
+
+::: varcode.get_default_annotator
+
+::: varcode.set_default_annotator
+
+::: varcode.use_annotator
+
+## Phasing
+
+### `varcode.IsovarPhaseResolver`
+
+::: varcode.IsovarPhaseResolver
+
+### `varcode.VCFPhaseResolver`
+
+::: varcode.VCFPhaseResolver
+
+### `varcode.apply_phase_resolver_to_effects`
+
+::: varcode.apply_phase_resolver_to_effects
+
+## RNA evidence
+
+### `varcode.RNAEvidenceResolver`
+
+::: varcode.RNAEvidenceResolver
+
+### `varcode.NullRNAEvidenceResolver`
+
+::: varcode.NullRNAEvidenceResolver
+
+### `varcode.apply_rna_evidence_to_effects`
+
+::: varcode.apply_rna_evidence_to_effects
+
+### `varcode.make_rna_outcome`
+
+::: varcode.make_rna_outcome
+
+## Germline-aware annotation
+
+### `varcode.GermlineContext`
+
+::: varcode.GermlineContext
+
+### `varcode.Completeness`
+
+::: varcode.Completeness
+
+### `varcode.predict_germline_aware_effect`
+
+::: varcode.predict_germline_aware_effect
+
+### `varcode.apply_germline_to_transcript`
+
+::: varcode.apply_germline_to_transcript
+
+### `varcode.enumerate_phase_hypotheses`
+
+::: varcode.enumerate_phase_hypotheses
+
+### `varcode.detect_loh`
+
+::: varcode.detect_loh
+
+### `varcode.default_germline_window`
+
+::: varcode.default_germline_window
 
 ## File loading
 
@@ -64,3 +190,11 @@ Auto-generated from in-source docstrings via
 ### `varcode.SampleNotFoundError`
 
 ::: varcode.SampleNotFoundError
+
+### `varcode.GenomeBuildMismatchError`
+
+::: varcode.GenomeBuildMismatchError
+
+### `varcode.UnsupportedVariantError`
+
+::: varcode.UnsupportedVariantError

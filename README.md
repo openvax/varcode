@@ -1,10 +1,6 @@
 [![Tests](https://github.com/openvax/varcode/actions/workflows/tests.yml/badge.svg)](https://github.com/openvax/varcode/actions/workflows/tests.yml)
-<a href="https://coveralls.io/github/openvax/varcode?branch=master">
-<img src="https://coveralls.io/repos/openvax/varcode/badge.svg?branch=master&service=github" alt="Coverage Status" />
-</a>
-<a href="https://pypi.python.org/pypi/varcode/">
-<img src="https://img.shields.io/pypi/v/varcode.svg?maxAge=1000" alt="PyPI" />
-</a>
+[![Coverage Status](https://coveralls.io/repos/openvax/varcode/badge.svg?branch=main&service=github)](https://coveralls.io/github/openvax/varcode?branch=main)
+[![PyPI](https://img.shields.io/pypi/v/varcode.svg?maxAge=1000)](https://pypi.python.org/pypi/varcode/)
 [![PyPI downloads](https://img.shields.io/pypi/dm/varcode.svg)](https://pypistats.org/packages/varcode)
 
 # Varcode
@@ -83,16 +79,21 @@ If you are looking for a quick start guide, you can check out [this iPython book
 
 ## Further reading
 
-Feature guides live in [`docs/`](./docs/):
+Feature guides live in [`docs/`](./docs/) and on the [docs site](https://openvax.github.io/varcode/):
 
-- [**Genotypes and sample-aware queries**](./docs/genotype.md) — per-sample
-  zygosity on multi-sample VCFs (`Genotype`, `Zygosity`, `VariantCollection.for_sample`,
-  `.heterozygous_in`, `.homozygous_alt_in`). New in 2.3.
-- [**CSV round-trip and metadata headers**](./docs/csv.md) — `to_csv` /
-  `from_csv` on both collection types, with `#`-prefixed provenance
-  headers. New in 2.1, refined in 2.2.
+- [**Effect annotation**](./docs/effect_annotation.md) — how variants
+  become effects, splice outcome representations, pluggable annotators,
+  and structural variants.
+- [**Germline-aware annotation**](./docs/germline.md) — classify
+  somatic variants against the patient's germline-applied transcript;
+  possibility sets when phase is unknown; LOH detection.
+- [**Genotypes and sample-aware queries**](./docs/genotype.md) —
+  per-sample zygosity on multi-sample VCFs.
+- [**CSV round-trip and metadata headers**](./docs/csv.md) —
+  `to_csv` / `from_csv` with `#`-prefixed provenance headers.
 - [**Error handling**](./docs/errors.md) — `ReferenceMismatchError`,
-  `SampleNotFoundError`, and the `raise_on_error=False` escape hatch.
+  `GenomeBuildMismatchError`, `SampleNotFoundError`, and
+  `raise_on_error=False`.
 
 See [`CHANGELOG.md`](./CHANGELOG.md) for the release history.
 

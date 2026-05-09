@@ -79,6 +79,29 @@ assert any(isinstance(e, Failure) for e in effects)
 This is the right choice for batch pipelines that would rather log and
 skip a bad row than halt.
 
+## `GenomeBuildMismatchError`
+
+*New in varcode 4.19.0
+([#268](https://github.com/openvax/varcode/issues/268)).*
+
+Raised by `VariantCollection.effects(germline=...)` when the somatic
+collection and the germline context were called against different
+reference genome builds (e.g. GRCh37 vs GRCh38). Distinct from
+`ReferenceMismatchError`, which is per-variant: this is a top-level
+pre-flight that fails fast on the whole pair so you don't see N
+per-variant errors caused by a build mismatch.
+
+```python
+try:
+    effects = somatic.effects(germline=germline)
+except varcode.GenomeBuildMismatchError as e:
+    e.somatic_reference   # the somatic collection's reference (e.g. 'GRCh38')
+    e.germline_reference  # the germline context's reference (e.g. 'GRCh37')
+```
+
+Subclasses `ValueError`. Pass `validate_reference=False` if you've
+explicitly lifted over and know the builds agree.
+
 ## `SampleNotFoundError`
 
 *New in varcode 2.3.0
