@@ -198,7 +198,8 @@ def parse_symbolic_alt(
             mate_contig=mate_contig,
             mate_start=mate_pos,
             mate_orientation=orientation,
-            info={"mateid": _extract_info(info, "MATEID"),
+            info={"mateid": (_extract_info(info, "MATEID")
+                             or _extract_info(info, "PARID")),
                   "bnd_anchor": prefix or suffix},
             genome=genome,
         )

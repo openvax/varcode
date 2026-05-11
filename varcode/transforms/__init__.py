@@ -358,11 +358,8 @@ def pair_breakends(vc):
     """
     variant_to_id, id_to_variants = _build_id_indices(vc)
 
-    # Build candidate pairing groups: frozenset({id_a, id_b}) -> list of
-    # variants in this VC that participate in the group. Groups of size 2
-    # with symmetric MATEID references are paired; everything else is left
-    # alone with a warning.
-    candidate_groups = {}
+    # For each BND variant, what does it claim as its mate?
+    bnd_to_mateid = {}
     for variant in vc:
         if not _is_breakend(variant):
             continue
@@ -371,8 +368,58 @@ def pair_breakends(vc):
         mate_id = _mate_reference(variant)
         if mate_id is None:
             continue
+        bnd_to_mateid[variant] = mate_id
+
+    # How many rows reference each ID as their mate? An ID with
+    # in-degree > 1 indicates ambiguity — a clean pair requires the
+    # MATEID pointer to be 1:1.
+    mate_in_degree = {}
+    for mate_id in bnd_to_mateid.values():
+        mate_in_degree[mate_id] = mate_in_degree.get(mate_id, 0) + 1
+
+    # Walk BND variants and resolve each to one of: paired (with a
+    # specific mate variant), ambiguous (skip with warning naming the
+    # connected component), missing-mate (warn), asymmetric (warn).
+    replacement = {}     # original variant -> combined variant
+    processed = set()    # variants whose pairing decision is final
+    ambiguity_warned = set()   # connected-component ids already warned about
+
+    def _component_ids(seed_id):
+        """Connected component of mate references reachable from
+        ``seed_id``. Used to produce one warning per ambiguous group
+        rather than one per row."""
+        visited = set()
+        stack = [seed_id]
+        while stack:
+            node = stack.pop()
+            if node in visited:
+                continue
+            visited.add(node)
+            # Outgoing: variants whose ID is `node` -- find their mateids.
+            for v in id_to_variants.get(node, ()):
+                mid = bnd_to_mateid.get(v)
+                if mid is not None and mid not in visited:
+                    stack.append(mid)
+            # Incoming: any mateid pointing AT `node`.
+            for v, mid in bnd_to_mateid.items():
+                if mid == node:
+                    own = variant_to_id.get(v)
+                    if own is not None and own not in visited:
+                        stack.append(own)
+        return visited
+
+    for variant in vc:
+        if not _is_breakend(variant):
+            continue
+        if variant in processed:
+            continue
+        if getattr(variant, "source_variants", ()):
+            continue
         own_id = variant_to_id.get(variant)
         if own_id is None:
+            continue
+        mate_id = bnd_to_mateid.get(variant)
+        if mate_id is None:
             continue
         if mate_id not in id_to_variants:
             warnings.warn(
@@ -382,38 +429,65 @@ def pair_breakends(vc):
                 "or split across chunked loads."
                 % (own_id, mate_id),
                 stacklevel=2)
+            processed.add(variant)
             continue
-        key = frozenset({own_id, mate_id})
-        candidate_groups.setdefault(key, []).append(variant)
-
-    # Resolve groups -> paired/unpaired decisions.
-    replacement = {}  # original variant -> combined variant
-    for key, group in candidate_groups.items():
-        if len(group) > 2:
+        # Ambiguity: this variant or its claimed mate has incoming
+        # mate-degree > 1, meaning at least one other row also points
+        # at the same target. Whole connected component is unsafe.
+        if (mate_in_degree.get(own_id, 0) > 1
+                or mate_in_degree.get(mate_id, 0) > 1):
+            component = _component_ids(own_id)
+            component_key = frozenset(component)
+            if component_key not in ambiguity_warned:
+                ambiguity_warned.add(component_key)
+                warnings.warn(
+                    "pair_breakends: BND ID group %r has ambiguous "
+                    "MATEID/PARID references (at least one ID is "
+                    "referenced by more than one row); left unpaired. "
+                    "Each rearrangement should produce exactly two BND "
+                    "rows with 1:1 mate pointers."
+                    % sorted(component),
+                    stacklevel=2)
+            # Mark every variant in the component as processed so we
+            # don't re-warn from a different vantage point.
+            for cid in component:
+                for v in id_to_variants.get(cid, ()):
+                    processed.add(v)
+            continue
+        # Identify the specific mate variant. With in-degree 1 there's
+        # exactly one BND row at `mate_id`.
+        mate_candidates = [
+            v for v in id_to_variants[mate_id]
+            if _is_breakend(v)
+        ]
+        if not mate_candidates:
             warnings.warn(
-                "pair_breakends: MATEID group %r has %d members; "
-                "ambiguous, left unpaired. Each rearrangement should "
-                "produce exactly two BND rows linked by MATEID."
-                % (sorted(key), len(group)),
+                "pair_breakends: BND %r references MATEID %r but that "
+                "ID is held by a non-BND variant; left unpaired."
+                % (own_id, mate_id),
                 stacklevel=2)
+            processed.add(variant)
             continue
-        if len(group) != 2:
-            # Singleton — mate row is in id_to_variants but not in the
-            # candidate group, meaning the mate didn't reference back.
-            solo = group[0]
+        mate = mate_candidates[0]
+        # Symmetric check: mate must point back at us.
+        if bnd_to_mateid.get(mate) != own_id:
             warnings.warn(
                 "pair_breakends: BND %r mate reference is asymmetric "
-                "(this row -> %r but mate doesn't point back); "
-                "left unpaired."
-                % (variant_to_id[solo], _mate_reference(solo)),
+                "(this row -> %r but mate -> %r); left unpaired."
+                % (own_id, mate_id, bnd_to_mateid.get(mate)),
                 stacklevel=2)
+            processed.add(variant)
+            processed.add(mate)
             continue
-        a, b = sorted(group, key=lambda v: variant_to_id[v])
+        # Clean pair.
+        a, b = sorted([variant, mate], key=lambda v: variant_to_id[v])
         a_id = variant_to_id[a]
         b_id = variant_to_id[b]
         combined = _build_combined(a, b, a_id, b_id)
         replacement[a] = combined
         replacement[b] = combined
+        processed.add(a)
+        processed.add(b)
 
     # Build output VC. Pass-through variants land first-occurrence; paired
     # variants are replaced by their combined variant the first time either
