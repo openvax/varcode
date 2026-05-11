@@ -215,6 +215,41 @@ def test_mt_ata_reference_is_met_not_ile():
 
 
 # ====================================================================
+# Germline-aware effect prediction on MT
+# ====================================================================
+
+
+def test_germline_aware_mt_classification_uses_vertebrate_table():
+    """Germline-aware classification on chrM must route through the
+    vertebrate mitochondrial codon table — the patient-baseline
+    translation has to use table 2 just like reference-relative
+    translation does, otherwise the same TGA->stop / AGA->Arg
+    mis-classifications would resurface in the germline path.
+    """
+    from varcode import GermlineContext, predict_germline_aware_effect
+    from varcode.annotators.registry import get_annotator
+
+    transcript = ensembl_grch38.transcript_by_id(MT_CO1_TRANSCRIPT_ID)
+    annotator = get_annotator("protein_diff")
+
+    # Somatic TCA->TGA at aa 279: Ser->Trp under mt (would be
+    # PrematureStop under standard).
+    somatic = Variant("MT", 6739, "C", "G", ensembl_grch38)
+    # Unrelated germline far upstream so phase enumeration is trivial.
+    germline = Variant("MT", 6098, "A", "T", ensembl_grch38)
+    gctx = GermlineContext.from_variants([germline])
+
+    effect = predict_germline_aware_effect(
+        somatic, transcript, gctx, annotator)
+    assert type(effect).__name__ == "Substitution", (
+        "Germline-aware mt classification regressed to nuclear table: "
+        "got %s (%s). Expected Substitution S->W under mt table."
+        % (type(effect).__name__, effect.short_description))
+    assert effect.aa_ref == "S"
+    assert effect.aa_alt == "W"
+
+
+# ====================================================================
 # Back-compat: module-level constants still point at standard table
 # ====================================================================
 
