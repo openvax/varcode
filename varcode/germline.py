@@ -584,14 +584,15 @@ class GermlineContext:
 #
 # Out of scope for v1 (refinements that don't change this API):
 #   * Splice-signal recomputation when germline already disrupts a
-#     splice site varcode would otherwise classify against (#285).
+#     splice site varcode would otherwise classify against (#363).
 #     Falls out partially because the patient transcript carries the
 #     germline edits, but downgrade-by-already-broken needs targeted
 #     work.
-#   * Mitochondrial codon table (different from nuclear; chrM is
-#     skipped for now with a flag).
 #   * Coverage-track-aware "unknown" regions (for SPARSE contexts
 #     with explicit BedGraph coverage).
+# Mitochondrial codon table (NCBI table 2) is selected automatically
+# from the transcript's contig — see
+# ``varcode.effects.codon_tables.codon_table_for_transcript``.
 # =====================================================================
 
 

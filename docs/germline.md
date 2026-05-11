@@ -334,11 +334,6 @@ without going through full effect prediction. See `varcode.germline`.
   targets, the patient transcript carries the germline edit, so
   classification runs against the patient signal — but there's no
   separate "germline already broke this; downgrade severity" path.
-- **Mitochondrial variants use the nuclear codon table.** chrM is
-  correctly identified as hemizygous, but mitochondrial protein
-  translation uses a different codon table that varcode doesn't
-  apply. Amino-acid changes in chrM coding regions will be
-  mis-classified.
 - **Subclonal somatic and CNV dosage are not modeled.** Every somatic
   variant is treated as present in 100% of cells; copy-number changes
   don't affect per-haplotype protein prediction.
