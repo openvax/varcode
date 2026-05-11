@@ -40,6 +40,9 @@ for a longer walkthrough and the effect-class table.
   possibility sets when phase is unknown; LOH detection. New in 4.19.
 - [**Genotypes and sample-aware queries**](genotype.md) — per-sample
   zygosity on multi-sample VCFs.
+- [**VariantCollection transforms**](transforms.md) — pure
+  `VC -> VC` refinements; ships `pair_breakends` for collapsing
+  MATEID-paired BND rows into one combined variant.
 - [**CSV round-trip and metadata headers**](csv.md) — `to_csv` /
   `from_csv` with genome recovered from the header.
 - [**Error handling**](errors.md) — `ReferenceMismatchError`,

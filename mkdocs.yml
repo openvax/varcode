@@ -36,6 +36,7 @@ nav:
       - Effect annotation: effect_annotation.md
       - Germline-aware annotation: germline.md
       - Genotypes & sample queries: genotype.md
+      - VariantCollection transforms: transforms.md
       - CSV round-trip: csv.md
       - Error handling: errors.md
   - API reference: api.md

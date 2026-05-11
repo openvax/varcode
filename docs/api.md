@@ -169,6 +169,12 @@ Auto-generated from in-source docstrings via
 
 ::: varcode.default_germline_window
 
+## VariantCollection transforms
+
+### `varcode.transforms.pair_breakends`
+
+::: varcode.transforms.pair_breakends
+
 ## File loading
 
 ### `varcode.load_vcf`
