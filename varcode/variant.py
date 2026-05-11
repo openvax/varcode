@@ -118,6 +118,14 @@ class Variant(Serializable):
         self._gene_ids = None
         self._gene_names = None
 
+        # Provenance: when this variant was produced by a
+        # ``varcode.transforms`` operation (e.g. ``pair_breakends``,
+        # ``combine_cis_snvs``), the source rows are recorded here.
+        # Empty tuple for variants loaded directly from a VCF/MAF.
+        # Not part of hash/equality — identity is still
+        # (contig, start, ref, alt, reference_name).
+        self.source_variants: tuple = ()
+
         # store the options which affect how properties of this variant
         # may be changed/transformed
         self.normalize_contig_names = normalize_contig_names
