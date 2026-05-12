@@ -319,18 +319,19 @@ def enumerate_from_structural_variant(
     if mate_contig is not None and mate_start is not None:
         breakpoints.append((mate_contig, mate_start))
 
+    from .genome_sequence import reference_range
+
     for contig, pos in breakpoints:
         if genome is None:
             continue
-        try:
-            ref_seq = genome.genome.sequence(
-                contig, pos - flank, pos + flank)
-        except Exception:
-            try:
-                ref_seq = genome.genome.contig_sequence(contig)[
-                    max(0, pos - flank):pos + flank]
-            except Exception:
-                continue
+        ref_seq = reference_range(genome, contig, pos - flank, pos + flank)
+        if not ref_seq:
+            # Warn once per process — firing per-breakpoint creates noise
+            # in pipelines that annotate many SVs without an attached
+            # FASTA. The user gets one actionable signal; subsequent
+            # uncovered breakpoints are silent.
+            _warn_missing_reference_once(genome)
+            continue
         candidates.extend(enumerate_candidates(
             contig=contig,
             sequence=ref_seq,
@@ -342,3 +343,30 @@ def enumerate_from_structural_variant(
         key=lambda c: (c.donor_score or 0) + (c.acceptor_score or 0),
         reverse=True)
     return candidates
+
+
+_MISSING_REFERENCE_WARNED = set()
+
+
+def _warn_missing_reference_once(genome):
+    """Emit the no-FASTA warning at most once per process per genome.
+
+    Cryptic-exon scoring runs implicitly during SV effect prediction;
+    a pipeline annotating many SVs without an attached FASTA would
+    otherwise get one warning per breakpoint. One actionable warning
+    is enough; the rest are noise.
+    """
+    import warnings
+    key = id(genome)
+    if key in _MISSING_REFERENCE_WARNED:
+        return
+    _MISSING_REFERENCE_WARNED.add(key)
+    warnings.warn(
+        "cryptic_exons: no reference sequence available for one or "
+        "more breakpoints (positions outside any annotated transcript, "
+        "and no chromosome FASTA attached to this genome). Attach a "
+        "FASTA with varcode.attach_genome_fasta(genome, fasta) to "
+        "enable cryptic-exon scoring outside annotated transcripts. "
+        "This warning fires once per genome per process; subsequent "
+        "uncovered breakpoints are silent.",
+        stacklevel=3)
