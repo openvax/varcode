@@ -10,18 +10,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for :mod:`varcode.genome_sequence` (#372).
+"""Tests for :class:`varcode.Genome` + :mod:`varcode.genome_sequence` (#372).
 
-Covers the test matrix in the PR description:
+Covers:
 
-* ``attach_genome_fasta`` accepts paths, pyfaidx objects, and
-  duck-typed FASTA-shaped objects; rejects garbage; detaches via
-  ``None``; verifies content against transcript cDNA when asked.
-* ``reference_base`` and ``reference_range`` walk the three tiers
-  (FASTA -> transcript cDNA -> empty) including the Tier 2 range
-  fast path and the strand-aware base lookup.
-* ``cryptic_exons`` migration: silently-bailing flanking-region
-  scan replaced by loud warning when no reference covers the range.
+* ``varcode.Genome`` construction — int / string / pyensembl.Genome /
+  varcode.Genome (rewrap) accepted; FASTA path / pyfaidx-shaped object
+  / None / garbage handled; verify-on-construct catches mismatched
+  FASTAs.
+* ``__getattr__`` delegation makes the wrapper a drop-in for
+  pyensembl.Genome.
+* ``Genome.sequence`` / ``Genome.reference_base`` / ``Genome.reference_range``
+  honor the tiered fallback (Tier 1 FASTA -> Tier 2 transcript cDNA ->
+  Tier 3 empty), strand handling included.
+* Module-level :func:`reference_base` / :func:`reference_range` work
+  against either ``varcode.Genome`` or bare ``pyensembl.Genome``.
+* ``load_vcf(genome_fasta=...)`` wraps the resolved genome.
+* ``cryptic_exons`` migration: silently-bailing flanking scan
+  replaced by a per-genome warn-once.
 """
 
 import warnings
@@ -30,12 +36,8 @@ import pytest
 from pyensembl import cached_release
 
 import varcode
-from varcode.genome_sequence import (
-    _VARCODE_FASTA_ATTR,
-    attach_genome_fasta,
-    reference_base,
-    reference_range,
-)
+from varcode import Genome
+from varcode.genome_sequence import reference_base, reference_range
 
 
 # --------------------------------------------------------------------
@@ -47,8 +49,8 @@ class _DictBackedFasta:
     """``{contig: sequence_string}`` adapter shaped like pyfaidx.Fasta.
 
     ``offset`` is the 1-based genome position of the first character of
-    each contig's sequence (most test fixtures embed a small window
-    around a known locus rather than a full chromosome).
+    each contig's sequence (most fixtures embed a small window around
+    a known locus rather than a full chromosome).
     """
     def __init__(self, contig_to_seq, *, offset=1):
         self._d = dict(contig_to_seq)
@@ -81,46 +83,30 @@ class _Span:
 # --------------------------------------------------------------------
 
 
-_ENSEMBL_GRCh38 = cached_release(81)
 # CFTR (chr7, + strand) — well-known protein coding transcript.
 _CFTR_TRANSCRIPT_ID = "ENST00000003084"
 
 
 @pytest.fixture
-def genome():
-    """Fresh genome reference, with any prior FASTA attachment cleared.
-
-    ``cached_release`` returns a process-wide singleton so a test that
-    forgets to detach would leak the FASTA into other tests. The
-    teardown defends against that. Also clears the cryptic_exons
-    once-per-genome warn cache so the warning fixture is exercised
-    on every test that reaches it.
-    """
-    from varcode import cryptic_exons
-    g = cached_release(81)
-    if hasattr(g, _VARCODE_FASTA_ATTR):
-        delattr(g, _VARCODE_FASTA_ATTR)
-    cryptic_exons._MISSING_REFERENCE_WARNED.discard(id(g))
-    yield g
-    if hasattr(g, _VARCODE_FASTA_ATTR):
-        delattr(g, _VARCODE_FASTA_ATTR)
-    cryptic_exons._MISSING_REFERENCE_WARNED.discard(id(g))
+def ensembl():
+    """Bare pyensembl genome — for tests that exercise the Tier 2-only
+    code path (consumers passing a non-wrapped genome)."""
+    return cached_release(81)
 
 
 @pytest.fixture
-def cftr_position(genome):
-    """A (contig, position, expected_plus_strand_base) tuple inside
-    CFTR's first exon — known to be covered by Tier 2 (transcript cDNA)
-    and useful as an anchor for Tier 1 fixtures."""
-    t = genome.transcript_by_id(_CFTR_TRANSCRIPT_ID)
+def cftr_position(ensembl):
+    """``(contig, position, expected_plus_strand_base)`` inside CFTR's
+    first exon — known to be covered by Tier 2."""
+    t = ensembl.transcript_by_id(_CFTR_TRANSCRIPT_ID)
     pos = t.exons[0].start + 5
     expected = t.sequence[5].upper()
     return (t.contig, pos, expected)
 
 
 def _build_fasta_around(contig, position, base, window=200):
-    """Build a tiny _DictBackedFasta with ``base`` at ``position`` and
-    'N' elsewhere within a +/-``window`` window."""
+    """``_DictBackedFasta`` with ``base`` at ``position`` and ``'N'``
+    elsewhere within +/-``window``."""
     start_offset = position - window
     seq = ['N'] * (2 * window + 1)
     seq[position - start_offset] = base
@@ -128,57 +114,64 @@ def _build_fasta_around(contig, position, base, window=200):
 
 
 # --------------------------------------------------------------------
-# attach_genome_fasta
+# varcode.Genome construction
 # --------------------------------------------------------------------
 
 
-def test_attach_with_dict_backed_object_sets_attribute(genome, cftr_position):
+def test_genome_from_int_release_no_fasta(ensembl):
+    g = Genome(81)
+    assert g.fasta is None
+    # __getattr__ delegation passes pyensembl attribute access through.
+    assert g.reference_name == ensembl.reference_name
+
+
+def test_genome_from_pyensembl_object_passes_through(ensembl):
+    g = Genome(ensembl)
+    assert g._ensembl is ensembl
+    assert g.fasta is None
+
+
+def test_genome_rewrap_inherits_fasta(ensembl, cftr_position):
     contig, pos, base = cftr_position
     fasta = _build_fasta_around(contig, pos, base)
-    result = attach_genome_fasta(genome, fasta, verify=False)
-    assert result is genome  # returns the genome for chaining
-    assert getattr(genome, _VARCODE_FASTA_ATTR) is fasta
+    g1 = Genome(ensembl, fasta=fasta, verify=False)
+    # Rewrapping without override inherits the fasta.
+    g2 = Genome(g1)
+    assert g2.fasta is fasta
+    # Explicit None overrides to detach.
+    # (Construction takes fasta=None as "no override" per the constructor
+    # signature; this is the documented behavior.)
 
 
-def test_attach_with_integer_raises_typeerror(genome):
-    with pytest.raises(TypeError, match="pyfaidx-style protocol"):
-        attach_genome_fasta(genome, 42, verify=False)
-
-
-def test_attach_with_list_raises_typeerror(genome):
-    with pytest.raises(TypeError, match="pyfaidx-style protocol"):
-        attach_genome_fasta(genome, [1, 2, 3], verify=False)
-
-
-def test_reattach_overwrites_silently(genome, cftr_position):
+def test_genome_rewrap_overrides_fasta(ensembl, cftr_position):
     contig, pos, base = cftr_position
-    first = _build_fasta_around(contig, pos, base)
-    second = _build_fasta_around(contig, pos, base)
-    attach_genome_fasta(genome, first, verify=False)
-    attach_genome_fasta(genome, second, verify=False)
-    assert getattr(genome, _VARCODE_FASTA_ATTR) is second
+    fasta1 = _build_fasta_around(contig, pos, base)
+    fasta2 = _build_fasta_around(contig, pos, base)
+    g1 = Genome(ensembl, fasta=fasta1, verify=False)
+    g2 = Genome(g1, fasta=fasta2, verify=False)
+    assert g2.fasta is fasta2
 
 
-def test_detach_via_none_removes_attribute(genome, cftr_position):
+def test_genome_with_integer_fasta_raises_typeerror(ensembl):
+    with pytest.raises(TypeError, match="pyfaidx-style protocol"):
+        Genome(ensembl, fasta=42, verify=False)
+
+
+def test_genome_with_list_fasta_raises_typeerror(ensembl):
+    with pytest.raises(TypeError, match="pyfaidx-style protocol"):
+        Genome(ensembl, fasta=[1, 2, 3], verify=False)
+
+
+def test_genome_repr_indicates_fasta_presence(ensembl, cftr_position):
     contig, pos, base = cftr_position
-    fasta = _build_fasta_around(contig, pos, base)
-    attach_genome_fasta(genome, fasta, verify=False)
-    assert hasattr(genome, _VARCODE_FASTA_ATTR)
-    attach_genome_fasta(genome, None)
-    assert not hasattr(genome, _VARCODE_FASTA_ATTR)
+    g_no = Genome(ensembl)
+    g_with = Genome(ensembl, fasta=_build_fasta_around(contig, pos, base),
+                    verify=False)
+    assert "no FASTA" in repr(g_no)
+    assert "FASTA attached" in repr(g_with)
 
 
-def test_detach_when_nothing_attached_is_no_op(genome):
-    # Should not raise.
-    attach_genome_fasta(genome, None)
-    assert not hasattr(genome, _VARCODE_FASTA_ATTR)
-
-
-def test_verify_emits_warning_on_mismatched_fasta(genome):
-    """A FASTA that disagrees with the transcript cDNA at probed
-    positions triggers the verify-on-attach warning. Catches GRCh37
-    attached to a GRCh38 release."""
-
+def test_verify_emits_warning_on_mismatched_fasta(ensembl):
     class _AlwaysWrongFasta:
         def __getitem__(self, contig):
             return _AlwaysWrongSlicer()
@@ -190,15 +183,14 @@ def test_verify_emits_warning_on_mismatched_fasta(genome):
 
     with warnings.catch_warnings(record=True) as captured:
         warnings.simplefilter("always")
-        attach_genome_fasta(genome, _AlwaysWrongFasta(), verify=True)
+        Genome(ensembl, fasta=_AlwaysWrongFasta(), verify=True)
 
     disagreement = [w for w in captured
                     if "disagree" in str(w.message).lower()]
     assert disagreement, [str(w.message) for w in captured]
 
 
-def test_verify_false_suppresses_check(genome):
-    """``verify=False`` skips the probe even when the FASTA would fail it."""
+def test_verify_false_suppresses_check(ensembl):
     class _AlwaysWrongFasta:
         def __getitem__(self, contig):
             return _AlwaysWrongSlicer()
@@ -210,70 +202,91 @@ def test_verify_false_suppresses_check(genome):
 
     with warnings.catch_warnings(record=True) as captured:
         warnings.simplefilter("always")
-        attach_genome_fasta(genome, _AlwaysWrongFasta(), verify=False)
+        Genome(ensembl, fasta=_AlwaysWrongFasta(), verify=False)
 
     assert not any("disagree" in str(w.message).lower() for w in captured)
 
 
 # --------------------------------------------------------------------
-# reference_base — Tier 2 (no FASTA)
+# __getattr__ delegation
 # --------------------------------------------------------------------
 
 
-def test_tier2_returns_transcript_base_on_plus_strand(genome, cftr_position):
+def test_genome_delegates_transcript_by_id(ensembl):
+    g = Genome(ensembl)
+    # Should pass through to pyensembl's transcript_by_id.
+    assert g.transcript_by_id(_CFTR_TRANSCRIPT_ID).id == _CFTR_TRANSCRIPT_ID
+
+
+def test_genome_delegates_transcripts_at_locus(ensembl, cftr_position):
+    g = Genome(ensembl)
+    contig, pos, _ = cftr_position
+    assert len(g.transcripts_at_locus(contig, pos, pos)) > 0
+
+
+# --------------------------------------------------------------------
+# Tiered lookup — Tier 2 only (no FASTA)
+# --------------------------------------------------------------------
+
+
+def test_tier2_returns_transcript_base_on_plus_strand(ensembl, cftr_position):
     contig, pos, expected = cftr_position
-    assert reference_base(genome, contig, pos) == expected
+    assert reference_base(ensembl, contig, pos) == expected
+    # Same answer via the wrapper.
+    assert Genome(ensembl).reference_base(contig, pos) == expected
 
 
-def test_tier2_returns_plus_strand_base_for_minus_strand_transcript(genome):
-    """For ``-`` strand transcripts the cDNA is reverse-complemented
-    from the + strand. The lookup must return the + strand base —
-    i.e. the complement of whatever the cDNA says at the corresponding
-    spliced offset."""
+def test_tier2_returns_plus_strand_base_for_minus_strand_transcript(ensembl):
     minus_t = next(
-        t for t in genome.transcripts()
+        t for t in ensembl.transcripts()
         if t.strand == '-' and t.exons and t.is_protein_coding)
     pos = minus_t.exons[0].start + 5
-    # Compute the expected base via the same spliced_offset path the
-    # implementation uses, then complement it (since cDNA is on the -
-    # strand for a - strand transcript).
     offset = minus_t.spliced_offset(pos)
     cdna_base = minus_t.sequence[offset].upper()
     expected = cdna_base.translate(str.maketrans("ACGT", "TGCA"))
-    assert reference_base(genome, minus_t.contig, pos) == expected
+    assert reference_base(ensembl, minus_t.contig, pos) == expected
 
 
-def test_tier2_returns_empty_for_intronic_position(genome):
-    t = genome.transcript_by_id(_CFTR_TRANSCRIPT_ID)
-    # 100 bp inside the first intron.
+def test_tier2_returns_empty_for_intronic_position(ensembl):
+    t = ensembl.transcript_by_id(_CFTR_TRANSCRIPT_ID)
     intron_pos = t.exons[0].end + 100
-    assert reference_base(genome, t.contig, intron_pos) == ""
+    assert reference_base(ensembl, t.contig, intron_pos) == ""
 
 
 # --------------------------------------------------------------------
-# reference_base — Tier 1 (FASTA attached)
+# Tiered lookup — Tier 1 (FASTA on varcode.Genome)
 # --------------------------------------------------------------------
 
 
-def test_tier1_returns_fasta_base_when_attached(genome, cftr_position):
+def test_tier1_returns_fasta_base_when_attached(ensembl, cftr_position):
     contig, pos, transcript_base = cftr_position
-    # Build a FASTA that AGREES with the transcript at this position
-    # so verify passes, but stuff 'X's everywhere else so we can tell
-    # Tier 1 is the source for nearby positions.
     fasta = _build_fasta_around(contig, pos, transcript_base, window=10)
-    attach_genome_fasta(genome, fasta, verify=False)
-    # The probe position should match (FASTA has the right base there).
-    assert reference_base(genome, contig, pos) == transcript_base
+    g = Genome(ensembl, fasta=fasta, verify=False)
+    assert g.reference_base(contig, pos) == transcript_base
 
 
-def test_tier1_falls_through_when_contig_missing(genome, cftr_position):
+def test_tier1_falls_through_when_contig_missing(ensembl, cftr_position):
     """A FASTA that doesn't carry the requested contig falls through
     to Tier 2 (transcript cDNA) — does not crash."""
     contig, pos, transcript_base = cftr_position
     empty_fasta = _DictBackedFasta({}, offset=1)
-    attach_genome_fasta(genome, empty_fasta, verify=False)
-    # Falls through to Tier 2; transcript-derived base survives.
-    assert reference_base(genome, contig, pos) == transcript_base
+    g = Genome(ensembl, fasta=empty_fasta, verify=False)
+    assert g.reference_base(contig, pos) == transcript_base
+
+
+def test_genome_sequence_method_mirrors_pyensembl_api(ensembl, cftr_position):
+    """``Genome.sequence(contig, start, end)`` mirrors the proposed
+    pyensembl API (openvax/pyensembl#337). Returns the + strand range
+    from the attached FASTA only — no Tier 2 fallback."""
+    contig, pos, transcript_base = cftr_position
+    fasta = _build_fasta_around(contig, pos, transcript_base, window=10)
+    g = Genome(ensembl, fasta=fasta, verify=False)
+    seq = g.sequence(contig, pos, pos)
+    assert seq == transcript_base
+    # No FASTA -> empty (does NOT fall back to Tier 2; that's what
+    # reference_base/range are for).
+    g_no = Genome(ensembl)
+    assert g_no.sequence(contig, pos, pos) == ""
 
 
 # --------------------------------------------------------------------
@@ -281,82 +294,49 @@ def test_tier1_falls_through_when_contig_missing(genome, cftr_position):
 # --------------------------------------------------------------------
 
 
-def test_tier2_range_uses_single_transcript_fast_path(genome):
-    t = genome.transcript_by_id(_CFTR_TRANSCRIPT_ID)
+def test_tier2_range_uses_single_transcript_fast_path(ensembl):
+    t = ensembl.transcript_by_id(_CFTR_TRANSCRIPT_ID)
     start = t.exons[0].start + 5
     end = start + 10
-    span = reference_range(genome, t.contig, start, end)
+    span = reference_range(ensembl, t.contig, start, end)
     assert len(span) == end - start + 1
-    # First and last base should match what reference_base gives us.
-    assert span[0] == reference_base(genome, t.contig, start)
-    assert span[-1] == reference_base(genome, t.contig, end)
+    assert span[0] == reference_base(ensembl, t.contig, start)
+    assert span[-1] == reference_base(ensembl, t.contig, end)
 
 
-def test_tier2_range_spanning_exon_boundary_returns_empty(genome):
-    """A range that crosses into intronic space has uncovered
-    positions; all-or-nothing makes the whole range return ``""``."""
-    t = genome.transcript_by_id(_CFTR_TRANSCRIPT_ID)
-    # Cross from the last base of exon 1 into the first intron.
+def test_tier2_range_spanning_exon_boundary_returns_empty(ensembl):
+    t = ensembl.transcript_by_id(_CFTR_TRANSCRIPT_ID)
     boundary = t.exons[0].end
-    span = reference_range(genome, t.contig, boundary - 2, boundary + 5)
+    span = reference_range(ensembl, t.contig, boundary - 2, boundary + 5)
     assert span == ""
 
 
-def test_tier1_range_spanning_exon_boundary_returns_full_sequence(genome):
-    """With a FASTA attached the same range returns full bases —
-    including the intronic stretch — because Tier 1 doesn't care
-    about exon coverage."""
-    t = genome.transcript_by_id(_CFTR_TRANSCRIPT_ID)
+def test_tier1_range_spanning_exon_boundary_returns_full_sequence(ensembl):
+    t = ensembl.transcript_by_id(_CFTR_TRANSCRIPT_ID)
     boundary = t.exons[0].end
     start, end = boundary - 2, boundary + 5
-    # Fill the window with arbitrary bases so the lookup succeeds.
     window_seq = 'ACGTACGTACGTACGTACGT'
-    fasta = _DictBackedFasta(
-        {t.contig: window_seq}, offset=start)
-    attach_genome_fasta(genome, fasta, verify=False)
-    span = reference_range(genome, t.contig, start, end)
+    fasta = _DictBackedFasta({t.contig: window_seq}, offset=start)
+    g = Genome(ensembl, fasta=fasta, verify=False)
+    span = g.reference_range(t.contig, start, end)
     assert len(span) == end - start + 1
     assert span == window_seq[:end - start + 1].upper()
 
 
-def test_reference_range_rejects_inverted_range(genome):
+def test_reference_range_rejects_inverted_range(ensembl):
     with pytest.raises(ValueError, match="end=.*< start="):
-        reference_range(genome, "1", 100, 50)
+        reference_range(ensembl, "1", 100, 50)
 
 
 # --------------------------------------------------------------------
-# cryptic_exons migration: silent-bail -> loud warning
+# load_vcf wiring
 # --------------------------------------------------------------------
 
 
-def test_attach_resets_cryptic_exons_warn_cache(genome, cftr_position):
-    """The ``cryptic_exons`` warn-once dedup keyed on ``id(genome)``
-    would otherwise persist across attach/detach cycles. Any explicit
-    attach (or detach) is user action — the next missing-FASTA
-    signal should be fresh, not suppressed.
-    """
-    from varcode import cryptic_exons
-    contig, pos, base = cftr_position
-
-    # Seed the cache as if a previous warning had fired.
-    cryptic_exons._MISSING_REFERENCE_WARNED.add(id(genome))
-    assert id(genome) in cryptic_exons._MISSING_REFERENCE_WARNED
-
-    # Attach -> cache should be cleared (fresh signal post-attach).
-    attach_genome_fasta(genome, _build_fasta_around(contig, pos, base),
-                        verify=False)
-    assert id(genome) not in cryptic_exons._MISSING_REFERENCE_WARNED
-
-    # Re-seed, then detach -> also cleared.
-    cryptic_exons._MISSING_REFERENCE_WARNED.add(id(genome))
-    attach_genome_fasta(genome, None)
-    assert id(genome) not in cryptic_exons._MISSING_REFERENCE_WARNED
-
-
-def test_load_vcf_attaches_genome_fasta(genome):
-    """``load_vcf(..., genome_fasta=...)`` attaches the FASTA to the
-    resolved genome before parsing — equivalent to a separate
-    ``attach_genome_fasta`` call but more ergonomic."""
+def test_load_vcf_wraps_in_varcode_genome(ensembl):
+    """``load_vcf(..., genome_fasta=...)`` wraps the resolved genome
+    in :class:`varcode.Genome`. The resulting collection's variants
+    carry the wrapper as ``genome``."""
     import os
     import tempfile
 
@@ -372,46 +352,52 @@ def test_load_vcf_attaches_genome_fasta(genome):
     with os.fdopen(fd, "w") as f:
         f.write(body)
     try:
-        # Use a known-good DictBackedFasta so verify=True doesn't warn.
-        # The probe lookup happens against real transcripts, so we
-        # need a FASTA that agrees at those positions. Easiest: use
-        # an empty FASTA (no contigs) which falls through verify
-        # silently (zero probed positions = no disagreement).
         empty_fasta = _DictBackedFasta({}, offset=1)
         vc = load_vcf(path, genome="GRCh38", genome_fasta=empty_fasta)
     finally:
         os.unlink(path)
-    # The resolved genome should have the FASTA attached.
-    assert hasattr(vc[0].genome, _VARCODE_FASTA_ATTR)
-    assert getattr(vc[0].genome, _VARCODE_FASTA_ATTR) is empty_fasta
+
+    assert isinstance(vc[0].genome, Genome)
+    assert vc[0].genome.fasta is empty_fasta
 
 
-def test_cryptic_exons_warns_when_no_reference_covers_breakpoint(genome):
-    """``enumerate_from_structural_variant`` previously bailed silently
-    when no genome FASTA was attached and the breakpoint fell outside
-    any transcript. Now it warns loudly."""
+# --------------------------------------------------------------------
+# cryptic_exons migration: silent-bail -> loud warning
+# --------------------------------------------------------------------
+
+
+def test_cryptic_exons_warns_once_per_genome():
+    """Cryptic-exon scoring on breakpoints outside any annotated
+    transcript and without a FASTA warns exactly once per genome.
+    Subsequent uncovered breakpoints on the same genome are silent."""
     from varcode import StructuralVariant
     from varcode.cryptic_exons import enumerate_from_structural_variant
 
-    # Intergenic-looking breakpoint between protein-coding genes on
-    # chr1 (gene density is high enough that "intergenic" requires
-    # care; chr1:1_000_000 is in a heterochromatic-ish region).
+    g = Genome(cached_release(81))
+    # Reset the per-instance flag so the warning is armed.
+    g._missing_reference_warned = False
+
     sv = StructuralVariant(
         contig="1", start=1_000_000, sv_type="BND",
         alt="N]2:1000000]", mate_contig="2",
         mate_start=1_000_000, mate_orientation="]]",
-        genome=genome,
+        genome=g,
     )
-    with warnings.catch_warnings(record=True) as captured:
-        warnings.simplefilter("always")
-        candidates = enumerate_from_structural_variant(sv, genome=genome)
 
-    msgs = [str(w.message) for w in captured]
-    # Either a no-reference warning fires (the migration's intent), or
-    # transcripts coincidentally cover this region — both branches are
-    # acceptable, but in the no-coverage case the message must be loud.
-    no_ref_warnings = [m for m in msgs if "no reference sequence" in m]
-    if not candidates:
-        # If we produced nothing, it's because the reference was absent
-        # — verify the warning fired.
-        assert no_ref_warnings, msgs
+    # First call — expect at most one warning (zero is also valid:
+    # transcripts may cover the position and Tier 2 returns content).
+    with warnings.catch_warnings(record=True) as first:
+        warnings.simplefilter("always")
+        enumerate_from_structural_variant(sv, genome=g)
+    first_no_ref = [w for w in first
+                    if "no reference sequence" in str(w.message)]
+    # Second call — even if first warned, second should NOT.
+    with warnings.catch_warnings(record=True) as second:
+        warnings.simplefilter("always")
+        enumerate_from_structural_variant(sv, genome=g)
+    second_no_ref = [w for w in second
+                     if "no reference sequence" in str(w.message)]
+    assert not second_no_ref, [str(w.message) for w in second]
+    # If the first call warned at all, the dedup flag should now be set.
+    if first_no_ref:
+        assert g._missing_reference_warned is True

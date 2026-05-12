@@ -25,11 +25,8 @@ from .annotators import (
     use_annotator,
 )
 from .errors import ReferenceMismatchError, SampleNotFoundError
-from .genome_sequence import (
-    attach_genome_fasta,
-    reference_base,
-    reference_range,
-)
+from .genome import Genome
+from .genome_sequence import reference_base, reference_range
 from .germline import (
     GenomeBuildMismatchError,
     GermlineContext,
@@ -175,8 +172,8 @@ __all__ = [
     "enumerate_phase_hypotheses",
     "predict_germline_aware_effect",
 
-    # Genome FASTA attachment + raw reference lookup (openvax/varcode#372)
-    "attach_genome_fasta",
+    # Genome wrapper + tiered reference lookup (openvax/varcode#372)
+    "Genome",
     "reference_base",
     "reference_range",
 

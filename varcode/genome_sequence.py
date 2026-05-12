@@ -10,16 +10,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Reference sequence lookup against a pyensembl :class:`Genome`.
+"""Tiered reference sequence lookup against a pyensembl ``Genome`` or
+:class:`varcode.Genome`.
 
-varcode's reference is the pyensembl ``Genome`` object the user passes
-through ``genome=``. By default that genome ships transcript and
-protein FASTAs but not the chromosome FASTA — so any feature that
-needs raw bases at arbitrary genomic positions (intronic, intergenic,
-flanking) has to go through this module's tiered lookup:
+The genome object is the reference. varcode's :class:`Genome` wrapper
+adds an optional chromosome FASTA (the ``.fasta`` attribute);
+``pyensembl.Genome`` has only transcript and protein FASTAs. Both
+work here — the dispatch reads ``getattr(genome, 'fasta', None)``
+and falls through tiers:
 
-1. **Tier 1** — if the genome has an attached chromosome FASTA via
-   :func:`attach_genome_fasta`, read from it.
+1. **Tier 1** — if the genome has a ``.fasta`` attached, read from it.
 2. **Tier 2** — fall back to pyensembl transcript cDNA via
    ``transcript.spliced_offset()`` for any transcript covering the
    position. Reverse-complements for ``-`` strand transcripts so the
@@ -28,124 +28,22 @@ flanking) has to go through this module's tiered lookup:
    error or just "no shift possible / no candidates / etc."
 
 Internal API: feature code calls :func:`reference_base` or
-:func:`reference_range`. User-facing API: :func:`attach_genome_fasta`.
+:func:`reference_range`. User-facing API: :class:`varcode.Genome`'s
+methods (or its construction-time ``fasta=`` kwarg) and the same
+module-level functions for ad-hoc use.
 
-Tracked in openvax/varcode#372.
-
-Notes
------
-
-* Returned sequence is always uppercase. Soft-masked (lowercase) repeat
-  annotations from the FASTA are normalized away — varcode treats all
-  bases uniformly. Callers that need the soft-masking signal should
-  read the FASTA directly.
-* :func:`attach_genome_fasta` mutates the genome object in place.
-  Because pyensembl typically returns cached singletons
-  (``cached_release(N)`` is shared across the process), the attachment
-  is visible to every caller holding that genome reference. This is
-  usually what you want; if you need a FASTA-less view, construct a
-  separate :class:`pyensembl.Genome` instance for it.
+Tracked in openvax/varcode#372. Upstream pyensembl support for the
+chromosome FASTA itself is tracked in openvax/pyensembl#337.
 """
 
 import warnings
 
-_VARCODE_FASTA_ATTR = "_varcode_fasta"
 _COMPLEMENT = str.maketrans("ACGTNacgtn", "TGCANTGCAN")
 
 
 # --------------------------------------------------------------------
-# Public API
+# Public lookup helpers
 # --------------------------------------------------------------------
-
-
-def attach_genome_fasta(genome, fasta_or_path, *, verify=True):
-    """Attach a chromosome FASTA to a pyensembl ``Genome`` so varcode
-    can read raw reference bases at arbitrary positions.
-
-    The default ``pyensembl install`` ships transcript and protein
-    FASTAs only. Features that need intronic, intergenic, or flanking
-    bases (left-alignment, cryptic-exon scoring, sequence-aware
-    splice prediction) require this attachment.
-
-    Mutates ``genome`` in place. Returns it for use as a pseudo-
-    constructor:
-
-    >>> g = varcode.attach_genome_fasta(EnsemblRelease(81), fasta)  # doctest: +SKIP
-
-    Parameters
-    ----------
-    genome : pyensembl.Genome
-        The genome to extend. **Mutated in place** — see module docstring
-        re: pyensembl's cached singletons.
-    fasta_or_path : str, path-like, FASTA-shaped object, or None
-        One of:
-
-        * A path string (``"/path/to/GRCh38.fa"``) — opened with
-          pyfaidx internally. pyfaidx becomes a runtime dependency
-          *only* on this path.
-        * A ``pyfaidx.Fasta`` instance — used as-is.
-        * Any object supporting ``fa[contig][start:end]`` and
-          returning either a string or an object with ``.seq``.
-          Validated by a probe call (see notes).
-        * ``None`` — detach. Removes any previously attached FASTA.
-    verify : bool, optional
-        When True (default), spot-check the attached FASTA against an
-        exonic position varcode already knows (via Tier 2) and warn if
-        the bases disagree. Catches mislabeled FASTAs (GRCh37 attached
-        to a GRCh38 release). Set False to skip if you have an
-        intentionally-divergent setup, or if attaching very early in a
-        fresh process where iterating ``genome.transcripts()`` would
-        force lazy construction of pyensembl's transcript DB before
-        the first effect-prediction call would have done so anyway.
-
-    Returns
-    -------
-    pyensembl.Genome
-        The same ``genome`` object, for chaining.
-
-    Raises
-    ------
-    TypeError
-        If ``fasta_or_path`` is not a path, ``None``, or a FASTA-shaped
-        object that responds to a probe lookup.
-
-    Notes
-    -----
-
-    The "FASTA-shaped object" check is a probe, not a class check:
-    we attempt ``fasta[contig][0:1]`` against a contig the genome
-    reports. This rejects strings, lists, and bare dicts (which all
-    have ``__getitem__`` but don't honor the slice protocol pyfaidx
-    uses) and accepts pyfaidx, the in-tree ``_DictBackedFasta`` test
-    helper, and any custom mmap/S3-backed storage with the same shape.
-    """
-    if fasta_or_path is None:
-        # Detach.
-        if hasattr(genome, _VARCODE_FASTA_ATTR):
-            delattr(genome, _VARCODE_FASTA_ATTR)
-        _clear_attach_dedup_state(genome)
-        return genome
-
-    fasta = _resolve_fasta(fasta_or_path, genome=genome)
-    setattr(genome, _VARCODE_FASTA_ATTR, fasta)
-    _clear_attach_dedup_state(genome)
-
-    if verify:
-        _verify_fasta_against_transcripts(genome, fasta)
-
-    return genome
-
-
-def _clear_attach_dedup_state(genome):
-    """Reset warn-once caches that other modules keyed against this
-    genome. Any explicit attach or detach is user action — the next
-    "no reference available" warning should be a fresh signal, not
-    suppressed because we warned earlier in the same process.
-    """
-    # Lazy import: cryptic_exons imports from this module (for
-    # reference_range), so eager imports would cycle.
-    from . import cryptic_exons
-    cryptic_exons._MISSING_REFERENCE_WARNED.discard(id(genome))
 
 
 def reference_base(genome, contig, position):
@@ -154,9 +52,13 @@ def reference_base(genome, contig, position):
     1-based inclusive coordinates matching pyensembl. Returns ``""``
     when no tier of the lookup covers this position.
 
+    Works on any genome shape — :class:`varcode.Genome` (Tier 1
+    available via ``.fasta``), bare ``pyensembl.Genome`` (Tier 2
+    only), or anything duck-typed for ``transcripts_at_locus``.
+
     See module docstring for the tiered fallback rules.
     """
-    fasta = getattr(genome, _VARCODE_FASTA_ATTR, None)
+    fasta = getattr(genome, "fasta", None)
     if fasta is not None:
         tier1 = _tier1_range(fasta, contig, position, position)
         if tier1:
@@ -174,9 +76,8 @@ def reference_range(genome, contig, start, end):
     :func:`reference_base`.)
 
     Tier 2 first tries a single-transcript range lookup (cheap: one
-    locus query, one slice into ``transcript.sequence``). Falls back
-    to per-position scanning only when no single transcript spans the
-    whole range.
+    locus query, one slice). Falls back to per-position scanning only
+    when no single transcript spans the whole range.
 
     See module docstring for the tiered fallback rules.
     """
@@ -185,20 +86,16 @@ def reference_range(genome, contig, start, end):
             "reference_range: end=%d < start=%d on %r"
             % (end, start, contig))
 
-    fasta = getattr(genome, _VARCODE_FASTA_ATTR, None)
+    fasta = getattr(genome, "fasta", None)
     if fasta is not None:
         tier1 = _tier1_range(fasta, contig, start, end)
         if tier1 and len(tier1) == end - start + 1:
             return tier1
-        # Tier 1 returned partial or empty — fall through to Tier 2.
 
-    # Tier 2 fast path: a single transcript that fully covers the range.
     span = _tier2_range_via_single_transcript(genome, contig, start, end)
     if span is not None:
         return span
 
-    # Tier 2 slow path: walk each position. If any is uncovered,
-    # all-or-nothing returns empty.
     bases = []
     for pos in range(start, end + 1):
         base = _tier2_base(genome, contig, pos)
@@ -209,113 +106,8 @@ def reference_range(genome, contig, start, end):
 
 
 # --------------------------------------------------------------------
-# Internal helpers
+# Tier implementations (also consumed by varcode.Genome construction)
 # --------------------------------------------------------------------
-
-
-def _resolve_fasta(arg, genome):
-    """Validate and normalize a FASTA argument.
-
-    Path strings open via pyfaidx; objects are probed against a known
-    contig from the genome (we don't trust ``hasattr`` alone — strings
-    and dicts have ``__getitem__`` but don't honor the slice protocol).
-    """
-    import os
-    if isinstance(arg, (str, bytes, os.PathLike)):
-        try:
-            import pyfaidx
-        except ImportError as e:
-            raise ImportError(
-                "attach_genome_fasta needs pyfaidx to open a FASTA "
-                "path. Install with `pip install pyfaidx`, or pass a "
-                "pre-opened FASTA object that supports "
-                "fa[contig][start:end]."
-            ) from e
-        return pyfaidx.Fasta(os.fspath(arg))
-
-    # Probe duck-typed object: it must support fa[contig][slice].
-    probe_contig = _probe_contig_for_validation(genome)
-    if probe_contig is None:
-        # We can't validate — genome reports no contigs. Accept the
-        # object on faith; if it's wrong, the first real lookup fails.
-        return arg
-    try:
-        slicer = arg[probe_contig]
-        _ = slicer[0:1]
-    except Exception as e:
-        raise TypeError(
-            "attach_genome_fasta: object of type %s does not honor "
-            "the pyfaidx-style protocol fa[contig][start:end] "
-            "(probe against contig %r failed: %s). Pass a path, a "
-            "pyfaidx.Fasta, or an object with the same indexing shape."
-            % (type(arg).__name__, probe_contig, e))
-    return arg
-
-
-def _probe_contig_for_validation(genome):
-    """Pick a contig name from the genome for probing a candidate FASTA.
-    Returns ``None`` if the genome can't supply one."""
-    for accessor in ("contigs", "all_contigs"):
-        getter = getattr(genome, accessor, None)
-        if callable(getter):
-            try:
-                contigs = list(getter())
-            except Exception:
-                contigs = []
-            if contigs:
-                return contigs[0]
-    return None
-
-
-def _verify_fasta_against_transcripts(genome, fasta):
-    """Spot-check that the attached FASTA matches what pyensembl says
-    about a few exonic positions. Warns (does not raise) on mismatch
-    so users can override with ``verify=False`` if they know what
-    they're doing.
-
-    Picks up to three transcripts and reads their first CDS-start base
-    from both Tier 1 (FASTA) and Tier 2 (transcript cDNA). Mismatches
-    almost always mean the FASTA is for a different build than the
-    pyensembl release.
-    """
-    try:
-        # Reuse the genome's transcript iteration; bail quietly if
-        # pyensembl can't enumerate (no DB built yet, etc.).
-        transcripts = list(genome.transcripts())[:50]
-    except Exception:
-        return
-
-    checked = 0
-    mismatches = []
-    for t in transcripts:
-        if checked >= 3:
-            break
-        if not t.exons:
-            continue
-        try:
-            exon = t.exons[0]
-            position = exon.start + 1   # 1-based; safely inside the exon
-            tier2 = _tier2_base(genome, t.contig, position)
-            tier1 = _tier1_range(fasta, t.contig, position, position)
-        except Exception:
-            continue
-        if not tier1 or not tier2:
-            continue
-        checked += 1
-        if tier1 != tier2:
-            mismatches.append((t.contig, position, tier1, tier2))
-
-    if mismatches:
-        details = "; ".join(
-            "%s:%d FASTA=%r vs transcript=%r" % m for m in mismatches)
-        warnings.warn(
-            "attach_genome_fasta: FASTA contents disagree with "
-            "pyensembl transcript sequence at %d/%d probed positions "
-            "(%s). The attached FASTA may be for a different build "
-            "than the pyensembl release (e.g. GRCh37 vs GRCh38). "
-            "Pass verify=False to suppress this check."
-            % (len(mismatches), checked, details),
-            stacklevel=3)
 
 
 def _tier1_range(fasta, contig, start, end):
@@ -330,8 +122,6 @@ def _tier1_range(fasta, contig, start, end):
         span = slicer[start - 1:end]   # 1-based inclusive -> 0-based half-open
     except (IndexError, ValueError, Exception):
         return ""
-    # pyfaidx returns a Sequence with .seq; bare-string adapters return
-    # a string directly.
     raw = getattr(span, "seq", None)
     if raw is None:
         raw = span if isinstance(span, str) else str(span)
@@ -339,13 +129,11 @@ def _tier1_range(fasta, contig, start, end):
 
 
 def _tier2_base(genome, contig, position):
-    """Pyensembl-transcript fallback for a single + strand base.
+    """Pyensembl-transcript fallback for a single ``+`` strand base.
 
     Returns ``""`` when no transcript covers ``position``. When
     multiple transcripts cover it and disagree on the base, logs a
-    debug-level warning and returns the first one's answer (callers
-    that care about disagreement can intercept the warning).
-    """
+    warning and returns the first answer."""
     try:
         transcripts = genome.transcripts_at_locus(contig, position, position)
     except Exception:
@@ -371,24 +159,21 @@ def _tier2_base(genome, contig, position):
 
 
 def _plus_strand_slice(transcript, start, end):
-    """Return the + strand bases over ``[start, end]`` from one
+    """Return the ``+`` strand bases over ``[start, end]`` from one
     transcript's spliced cDNA, or ``""`` if the requested range isn't
-    fully on this transcript's exons.
-
-    1-based inclusive coordinates.
+    fully on this transcript's exons. 1-based inclusive.
 
     Strand handling lives here so callers don't have to reason about
     it. For ``+`` strand transcripts the slice maps directly. For
     ``-`` strand transcripts the cDNA is in transcript orientation
-    (the reverse-complement of the ``+`` strand), so the slice needs
-    to be complemented and then reversed to come back in
-    ``+`` strand 5'→3' order.
+    (the reverse-complement of the ``+`` strand), so the slice is
+    complemented and then reversed to come back in ``+`` strand
+    5'→3' order.
 
     Returns ``""`` rather than raising for any non-coverage condition
-    (intronic position, position past the end of the transcript,
-    range that spans an exon boundary, etc.) — callers loop over
-    multiple transcripts and need a uniform "this one didn't work"
-    signal.
+    (intronic, past the end of the transcript, range that spans an
+    exon boundary, etc.) — callers loop over multiple transcripts and
+    need a uniform "this one didn't work" signal.
     """
     try:
         start_offset = transcript.spliced_offset(start)
@@ -403,9 +188,6 @@ def _plus_strand_slice(transcript, start, end):
         return ""
     slice_seq = seq[lo:hi + 1].upper()
     if len(slice_seq) != end - start + 1:
-        # Guard against pyensembl returning a truncated sequence for a
-        # malformed annotation — shouldn't happen, but if it does,
-        # silently signal "no coverage from this transcript."
         return ""
     if transcript.strand == "-":
         slice_seq = slice_seq.translate(_COMPLEMENT)[::-1]
@@ -413,17 +195,15 @@ def _plus_strand_slice(transcript, start, end):
 
 
 def _read_transcript_base(transcript, position):
-    """Return the + strand base at ``position`` from one transcript,
-    or ``""`` if the position isn't on any exon of this transcript.
-    Single-position specialization of :func:`_plus_strand_slice`."""
+    """Single-position specialization of :func:`_plus_strand_slice`."""
     return _plus_strand_slice(transcript, position, position)
 
 
 def _tier2_range_via_single_transcript(genome, contig, start, end):
     """Try to satisfy a Tier 2 range from one transcript that fully
-    covers ``[start, end]``. Returns the + strand sequence on success,
-    or ``None`` if no single transcript spans the range (caller falls
-    back to per-position).
+    covers ``[start, end]``. Returns the ``+`` strand sequence on
+    success, or ``None`` if no single transcript spans the range
+    (caller falls back to per-position).
     """
     try:
         transcripts = genome.transcripts_at_locus(contig, start, end)

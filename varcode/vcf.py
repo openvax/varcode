@@ -126,13 +126,13 @@ def load_vcf(
 
     genome_fasta : str, path-like, or FASTA object, optional
         Optionally attach a chromosome FASTA to the resolved genome
-        before parsing. Shorthand for
-        ``varcode.attach_genome_fasta(genome, genome_fasta)``; see
-        that function for the accepted types and the rationale.
-        Without this, features that need raw genomic bases
-        (cryptic-exon scoring, indel left-alignment, sequence-aware
-        splice prediction) fall back to transcript-cDNA coverage
-        only.
+        before parsing. Equivalent to wrapping with
+        ``varcode.Genome(genome, fasta=genome_fasta)`` and passing the
+        wrapper; see :class:`varcode.Genome` for the accepted types
+        and verification behavior. Without this, features that need
+        raw genomic bases (cryptic-exon scoring, indel
+        left-alignment, sequence-aware splice prediction) fall back
+        to transcript-cDNA coverage only.
     """
 
     require_string(path, "Path or URL to VCF")
@@ -205,9 +205,11 @@ def load_vcf(
         convert_ucsc_contig_names = genome_was_ucsc
 
     if genome_fasta is not None:
-        # Late import: only paid by callers that opt in to FASTA attachment.
-        from .genome_sequence import attach_genome_fasta
-        attach_genome_fasta(genome, genome_fasta)
+        # Wrap the resolved genome in varcode.Genome so the FASTA is
+        # part of the genome object rather than a side-channel
+        # attachment. Late import keeps the cost on callers who opt in.
+        from .genome import Genome as VarcodeGenome
+        genome = VarcodeGenome(genome, fasta=genome_fasta)
 
     df_iterator = read_vcf_into_dataframe(
         path,

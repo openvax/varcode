@@ -326,9 +326,9 @@ def enumerate_from_structural_variant(
             continue
         ref_seq = reference_range(genome, contig, pos - flank, pos + flank)
         if not ref_seq:
-            # Warn once per process — firing per-breakpoint creates noise
-            # in pipelines that annotate many SVs without an attached
-            # FASTA. The user gets one actionable signal; subsequent
+            # Warn once per genome — firing per-breakpoint creates noise
+            # in pipelines that annotate many SVs without a FASTA. The
+            # user gets one actionable signal per genome; subsequent
             # uncovered breakpoints are silent.
             _warn_missing_reference_once(genome)
             continue
@@ -345,28 +345,46 @@ def enumerate_from_structural_variant(
     return candidates
 
 
-_MISSING_REFERENCE_WARNED = set()
+# Module-level dedup for raw pyensembl genomes that don't carry an
+# instance ``_missing_reference_warned`` flag (varcode.Genome does;
+# bare pyensembl.Genome doesn't). For the wrapped case, dedup lives
+# on the instance and is GC'd with it. For the bare case, this
+# process-wide set keyed on id(genome) is the next-best thing.
+_BARE_GENOME_MISSING_REFERENCE_WARNED = set()
 
 
 def _warn_missing_reference_once(genome):
-    """Emit the no-FASTA warning at most once per process per genome.
+    """Emit the no-FASTA warning at most once per genome.
 
     Cryptic-exon scoring runs implicitly during SV effect prediction;
-    a pipeline annotating many SVs without an attached FASTA would
-    otherwise get one warning per breakpoint. One actionable warning
-    is enough; the rest are noise.
+    a pipeline annotating many SVs without a FASTA would otherwise get
+    one warning per breakpoint. One actionable warning is enough.
+
+    Dedup state lives on the genome instance when possible
+    (``varcode.Genome`` carries ``_missing_reference_warned``); for
+    bare pyensembl genomes we fall back to a module-level set keyed
+    on ``id(genome)``.
     """
     import warnings
-    key = id(genome)
-    if key in _MISSING_REFERENCE_WARNED:
-        return
-    _MISSING_REFERENCE_WARNED.add(key)
+
+    # Per-instance state (varcode.Genome) — preferred.
+    if hasattr(genome, "_missing_reference_warned"):
+        if genome._missing_reference_warned:
+            return
+        genome._missing_reference_warned = True
+    else:
+        # Bare pyensembl.Genome — fall back to module-level dedup.
+        key = id(genome)
+        if key in _BARE_GENOME_MISSING_REFERENCE_WARNED:
+            return
+        _BARE_GENOME_MISSING_REFERENCE_WARNED.add(key)
+
     warnings.warn(
         "cryptic_exons: no reference sequence available for one or "
         "more breakpoints (positions outside any annotated transcript, "
-        "and no chromosome FASTA attached to this genome). Attach a "
-        "FASTA with varcode.attach_genome_fasta(genome, fasta) to "
-        "enable cryptic-exon scoring outside annotated transcripts. "
-        "This warning fires once per genome per process; subsequent "
-        "uncovered breakpoints are silent.",
+        "and no chromosome FASTA attached to this genome). Construct "
+        "the genome with varcode.Genome(release, fasta=...) to enable "
+        "cryptic-exon scoring outside annotated transcripts. This "
+        "warning fires once per genome; subsequent uncovered "
+        "breakpoints are silent.",
         stacklevel=3)
