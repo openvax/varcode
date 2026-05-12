@@ -192,6 +192,16 @@ class Genome:
         fasta_repr = "no FASTA" if self.fasta is None else "FASTA attached"
         return "varcode.Genome(reference_name=%r, %s)" % (ref, fasta_repr)
 
+    def __dir__(self):
+        """Include attributes of the wrapped pyensembl Genome so
+        ``dir(genome)`` and IDE auto-completion surface the full
+        delegated API, not just the wrapper's own attributes."""
+        own = set(super().__dir__())
+        ensembl = self.__dict__.get("_ensembl")
+        if ensembl is not None:
+            own.update(dir(ensembl))
+        return sorted(own)
+
     # -- chromosome FASTA API (mirrors openvax/pyensembl#337) ----------
 
     def sequence(self, contig: str, start: int, end: int) -> str:
@@ -250,7 +260,20 @@ def _resolve_fasta(arg: Any, ensembl_genome: Any) -> Any:
                 "with `pip install pyfaidx`, or pass a pre-opened FASTA "
                 "object that supports fa[contig][start:end]."
             ) from e
-        return pyfaidx.Fasta(os.fspath(arg))
+        path_str = os.fspath(arg)
+        try:
+            return pyfaidx.Fasta(path_str)
+        except (FileNotFoundError, OSError) as e:
+            # Frame the path error as a varcode problem so users see
+            # "the FASTA you passed to Genome" rather than a bare
+            # pyfaidx traceback that they have to translate back.
+            raise FileNotFoundError(
+                "varcode.Genome(fasta=%r): could not open FASTA at this "
+                "path (%s: %s). Check the path and that the file is "
+                "readable; pyfaidx needs the FASTA and a matching .fai "
+                "index alongside it (the index is created automatically "
+                "on first open if writable)."
+                % (path_str, type(e).__name__, e)) from e
 
     probe_contig = _probe_contig_for_validation(ensembl_genome)
     if probe_contig is None:

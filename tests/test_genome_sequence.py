@@ -162,6 +162,48 @@ def test_genome_with_list_fasta_raises_typeerror(ensembl):
         Genome(ensembl, fasta=[1, 2, 3], verify=False)
 
 
+def test_genome_with_nonexistent_path_raises_filenotfound(ensembl, monkeypatch):
+    """A bad path is wrapped in a varcode-framed ``FileNotFoundError``
+    naming the path, instead of surfacing the bare pyfaidx traceback.
+
+    Injects a fake ``pyfaidx`` module whose ``Fasta`` constructor
+    raises ``FileNotFoundError``, so the test runs whether or not
+    pyfaidx is installed in the environment.
+    """
+    import sys
+    import types
+
+    fake_pyfaidx = types.ModuleType("pyfaidx")
+
+    class _RaisingFasta:
+        def __init__(self, path):
+            raise FileNotFoundError(
+                "[Errno 2] No such file or directory: %r" % path)
+
+    fake_pyfaidx.Fasta = _RaisingFasta
+    monkeypatch.setitem(sys.modules, "pyfaidx", fake_pyfaidx)
+
+    with pytest.raises(
+            FileNotFoundError, match="varcode.Genome.*could not open"):
+        Genome(ensembl, fasta="/definitely/not/a/real/path.fa", verify=False)
+
+
+def test_genome_dir_includes_delegated_attributes(ensembl):
+    """``dir(genome)`` should surface the wrapped pyensembl Genome's
+    attributes so IDE auto-completion can find them through the
+    wrapper."""
+    g = Genome(ensembl)
+    names = dir(g)
+    # Wrapper's own.
+    assert "fasta" in names
+    assert "sequence" in names
+    assert "reference_base" in names
+    # Delegated from pyensembl.
+    assert "transcripts_at_locus" in names
+    assert "transcript_by_id" in names
+    assert "reference_name" in names
+
+
 def test_genome_with_path_string_raises_importerror_when_pyfaidx_missing(
         ensembl, monkeypatch):
     """When the user passes a FASTA path string and pyfaidx isn't

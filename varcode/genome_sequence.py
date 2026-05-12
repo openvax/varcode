@@ -86,6 +86,17 @@ def reference_range(genome: Any, contig: str, start: int, end: int) -> str:
     (cheap: one locus query, one slice). Falls back to per-position
     scanning only when no single transcript spans the whole range.
 
+    Complexity:
+
+    * Chromosome FASTA hit: one slice. O(end - start).
+    * Single-transcript span: one locus query, one slice. O(1) in
+      transcript lookups.
+    * Per-position fallback: one locus query per position, but
+      all-or-nothing makes the loop bail at the first uncovered
+      position. Worst case is O(covered prefix length), not the full
+      range — a range that's mostly intronic produces one transcript
+      query, not N.
+
     See module docstring for the full fallback order.
     """
     if end < start:
