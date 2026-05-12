@@ -45,6 +45,7 @@ Planned (separate PRs):
 
 import warnings
 
+from ..genome_sequence import reference_range as _reference_range
 from ..structural_variant import StructuralVariant
 from ..variant import Variant
 from ..variant_collection import VariantCollection
@@ -578,25 +579,9 @@ def left_align_indels(vc):
         ``source_variants=(original,)``; everything else passes through
         with ``source_variants=()``.
 
-    Behavior
-    --------
-
-    * **Cardinality**: preserves (1:1, position/payload may change).
-    * **Provenance**: shifted variants carry
-      ``source_variants=(original,)``; unchanged variants stay with
-      ``source_variants=()``.
-    * **Metadata**: per-source-path metadata is re-keyed under the
-      shifted variant; the original entry is no longer in the output
-      collection's metadata dict. ``info["original_start"]`` is added
-      so round-trip / debugging can recover the input position.
-    * **Idempotence**: a variant already at canonical position passes
-      through unchanged on every subsequent call.
-    * **Multi-base indels** (e.g. ``CCAGTC->C`` for a 5bp deletion in
-      a ``CAGTC``-repeat) shift the same way as single-base indels;
-      the shift uses the indel's payload as the unit.
-    * **Complex variants** (length-mismatched and content-mismatched,
-      e.g. ``ATG->GCC``) are not shifted — left-alignment isn't
-      well-defined for them. Pass-through.
+    See :doc:`/transforms` for the behavior table covering all
+    six (location × FASTA-attached) combinations and the metadata
+    fields the transform writes.
 
     Examples
     --------
@@ -604,39 +589,41 @@ def left_align_indels(vc):
     >>> from varcode.transforms import left_align_indels
     >>> normalized = left_align_indels(vc)  # doctest: +SKIP
     """
-    from ..genome_sequence import reference_range
-
-    replacement = {}        # original variant -> shifted variant
-    bounded_by_coverage = set()  # shifted variants whose shift hit a
-                                 # reference-coverage boundary (Tier 2 stop)
+    # original variant -> (shifted variant, bounded_by_coverage flag).
+    # The flag rides with the shifted variant so we don't need a
+    # second data structure keyed on id() — the lifecycle of the
+    # flag and the lifecycle of the shifted variant are identical.
+    replacement = {}
 
     for variant in vc:
         if not variant.is_indel:
             continue
-        shifted, partial = _left_align_one(variant, reference_range)
+        shifted, partial = _left_align_one(variant, _reference_range)
         if shifted is variant:
             continue
-        replacement[variant] = shifted
-        if partial:
-            bounded_by_coverage.add(id(shifted))
+        replacement[variant] = (shifted, partial)
 
     if not replacement:
         return vc
 
-    out_variants = [replacement.get(v, v) for v in vc]
+    out_variants = [
+        replacement[v][0] if v in replacement else v
+        for v in vc
+    ]
 
     out_metadata = {}
     for path, by_variant in vc.source_to_metadata_dict.items():
         out_by_variant = {}
         for variant, meta in by_variant.items():
-            shifted = replacement.get(variant)
-            if shifted is None:
+            entry = replacement.get(variant)
+            if entry is None:
                 out_by_variant[variant] = meta
             else:
+                shifted, partial = entry
                 new_meta = dict(meta) if meta else {}
                 info = dict(new_meta.get("info") or {})
                 info["original_start"] = variant.start
-                if id(shifted) in bounded_by_coverage:
+                if partial:
                     info["left_align_partial"] = True
                 new_meta["info"] = info
                 out_by_variant[shifted] = new_meta

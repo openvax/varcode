@@ -159,21 +159,16 @@ def test_deletion_in_homopolymer_shifts_to_leftmost():
 
 
 def test_insertion_in_homopolymer_shifts_to_leftmost():
-    """Reference AAAAA at pos 5-9, with non-A flanking. Insert 'A'
-    after pos 9 should shift to insertion at pos 5 (the leftmost
-    anchor where the inserted A is equivalent)."""
+    """Reference: pos 4='T', pos 5..9='A', pos 10='T'. An 'A'
+    insertion after pos 9 walks through the A-run and stops at the
+    'T' boundary — final anchor is at pos 4 (the last position where
+    ``reference[check_pos]`` was still 'A')."""
     g = _genome_with_fasta({"1": "T" + "A" * 5 + "T"}, offset=4)
-    # offset=4 means: pos 4='T', pos 5..9='A', pos 10='T'.
     v = Variant("1", 9, "A", "AA", genome=g)  # insert A after pos 9
     out = left_align_indels(VariantCollection([v]))
     o = out[0]
     assert o.ref == "" and o.alt == "A"
-    assert o.start == 4  # algorithm stops when reference[5]='A' but
-    # check at iter 6 is at reference[4]='T'; T != A; stop. Wait, let me
-    # trace: start=9, check reference[9]='A' (since pos 9 = seq[5] = 'A'),
-    # match, shift to start=8. check reference[8]='A', shift. ... shift
-    # to start=5. check reference[5]='A', shift to start=4. check
-    # reference[4]='T', T != A, stop. So final start=4. ✓
+    assert o.start == 4
 
 
 def test_str_repeat_deletion_shifts_to_first_unit():
@@ -193,23 +188,19 @@ def test_str_repeat_deletion_shifts_to_first_unit():
 
 
 def test_bounded_at_chromosome_start():
-    """Shift bounded by start > 1 — even in an infinite homopolymer,
-    the algorithm stops at pos 1."""
-    # Reference A at pos 1 only, then arbitrary.
-    g = _genome_with_fasta({"1": "A" + "T" * 100}, offset=1)
+    """Shift bounded by ``start > 1`` — even in a homopolymer that
+    runs to the chromosome start, the algorithm stops at pos 1
+    without underflowing."""
+    # Reference: 2-A homopolymer at the chromosome start, then T's.
+    # ``Variant("1", 1, "AA", "A", g)`` normalizes to ref='A', alt='',
+    # start=2 — delete the second A. Shift left would go to start=1.
+    g = _genome_with_fasta({"1": "AA" + "T" * 100}, offset=1)
     v = Variant("1", 1, "AA", "A", genome=g)
-    # Hmm — this normalizes to ref='A',alt='',start=2 (delete the second
-    # base which is T per our reference). That's not a valid call for
-    # left-alignment because there's no run.
-    # Use a 2-A homopolymer at start instead.
-    g2 = _genome_with_fasta({"1": "AA" + "T" * 100}, offset=1)
-    v2 = Variant("1", 1, "AA", "A", genome=g2)
-    # ref='A',alt='',start=2. Try to shift to 1.
-    out = left_align_indels(VariantCollection([v2]))
+    assert (v.ref, v.alt, v.start) == ("A", "", 2)
+    out = left_align_indels(VariantCollection([v]))
     o = out[0]
-    # Shifted from start=2 to start=1; can't go further (start > 1 false).
     assert o.start == 1
-    assert o.source_variants == (v2,)
+    assert o.source_variants == (v,)
 
 
 def test_multi_base_insertion_in_homopolymer():
@@ -368,6 +359,74 @@ def test_composes_with_pair_breakends():
 # --------------------------------------------------------------------
 
 
+def test_exonic_indel_on_minus_strand_transcript_uses_plus_strand_bases():
+    """Tier-2 coverage for an exonic indel on a ``-`` strand
+    transcript: the algorithm must read ``+`` strand bases (via the
+    transcript-cDNA reverse-complement helper) so the shift decision
+    matches what a FASTA would give.
+
+    Picks a real ``-`` strand protein-coding transcript from
+    pyensembl, finds a homopolymer run inside its first exon by
+    inspecting the spliced cDNA, and synthesizes a deletion in that
+    run. After ``left_align_indels``, the deletion should shift to
+    the leftmost position in the run.
+    """
+    g = cached_release(81)
+    # Find a - strand transcript with a coding sequence that contains
+    # a run of identical + strand bases at least 3 long, fully within
+    # the first exon.
+    target = None
+    for t in g.transcripts():
+        if t.strand != "-" or not t.is_protein_coding or not t.exons:
+            continue
+        exon = t.exons[0]
+        if exon.end - exon.start < 10:
+            continue
+        # Read the + strand sequence of the first exon via the
+        # transcript-cDNA helper used by reference_range.
+        from varcode.genome_sequence import _plus_strand_slice
+        plus_seq = _plus_strand_slice(t, exon.start, exon.end)
+        if not plus_seq:
+            continue
+        # Scan for a homopolymer run of length >= 3 with a non-matching
+        # base on the left flank (so the shift terminates inside the
+        # exon, not at the exon boundary — which would make this a
+        # partial-shift test, not a clean natural-stop test).
+        for i in range(1, len(plus_seq) - 3):
+            base = plus_seq[i]
+            if (plus_seq[i - 1] != base
+                    and plus_seq[i + 1] == base
+                    and plus_seq[i + 2] == base):
+                target = (t, exon, i, base, plus_seq)
+                break
+        if target is not None:
+            break
+
+    if target is None:
+        pytest.skip("could not find a suitable - strand transcript run")
+
+    t, exon, run_start_idx_in_exon, base, plus_seq = target
+    # Genomic position of the first base of the run on the + strand.
+    run_start_pos = exon.start + run_start_idx_in_exon
+    # Construct a deletion of the SECOND base of the run (so a one-step
+    # shift is possible and produces a different start).
+    del_pos = run_start_pos + 1
+    # VCF-anchored form: REF = anchor + del_base, ALT = anchor.
+    anchor = plus_seq[run_start_idx_in_exon - 1 + 1]  # base at del_pos - 1 on + strand
+    # Actually use a clearer construction: pre-normalized.
+    v = Variant(t.contig, del_pos, base, "", genome=g,
+                allow_extended_nucleotides=True)
+    # Sanity: post-normalization is a deletion with start == del_pos.
+    assert v.is_deletion and v.start == del_pos
+
+    out = left_align_indels(VariantCollection([v]))
+    o = out[0]
+    # Should have shifted left by exactly 1 (run starts at
+    # run_start_pos, del_pos is one in).
+    assert o.start == run_start_pos
+    assert o.source_variants == (v,)
+
+
 def test_intronic_indel_without_fasta_passes_through():
     """An indel in an intron without a FASTA has no reference
     coverage (Tier 2 returns empty); the algorithm exits immediately
@@ -384,6 +443,43 @@ def test_intronic_indel_without_fasta_passes_through():
     # No shift — variant passes through.
     assert out[0] is v
     assert out[0].source_variants == ()
+
+
+def test_partial_shift_flag_NOT_set_when_natural_stop():
+    """Negative test for the partial-shift flag: when the algorithm
+    stops because the reference *disagrees* (not because coverage ran
+    out), ``info["left_align_partial"]`` must NOT be set. The flag's
+    whole purpose is to distinguish "stopped at canonical position"
+    from "stopped at a coverage boundary."
+    """
+    # Reference: AAAA at pos 5-8 then C at pos 9. Deletion 'A' at pos
+    # 8 (so original start=9, ref='A', alt=''). Shifts left through
+    # the A-run and stops naturally when reference[4] is 'C' (not 'A')
+    # — wait, we need a setup where the run hits a different base.
+    #
+    # Layout: pos 5='C', pos 6..9='A', pos 10='T'. Deletion at
+    # original start=10 (varcode normalizes 'AA'->'A' at pos 9 to
+    # ref='A', alt='', start=10) shifts left through positions
+    # 10,9,8,7 (all checks succeed against the A-run), then check at
+    # pos 5 finds 'C' — natural stop, not coverage stop.
+    g = _genome_with_fasta(
+        {"1": "C" + "A" * 4 + "T" * 50}, offset=5)
+    v = Variant("1", 9, "AA", "A", genome=g)
+    assert (v.ref, v.alt, v.start) == ("A", "", 10)
+    metadata = {"synth": {v: {"id": "v1", "info": {}}}}
+    vc = VariantCollection(
+        variants=[v],
+        sources={"synth"},
+        source_to_metadata_dict=metadata)
+    out = left_align_indels(vc)
+    shifted = out[0]
+    # Shifted from start=10 to start=6 (leftmost A); reference[5]='C'
+    # disagrees -> natural stop.
+    assert shifted.start == 6
+    info = out.source_to_metadata_dict["synth"][shifted]["info"]
+    assert info["original_start"] == 10
+    # The key assertion: natural stop, so the partial flag is NOT set.
+    assert "left_align_partial" not in info
 
 
 def test_partial_shift_flag_set_when_coverage_runs_out():
