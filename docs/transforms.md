@@ -128,6 +128,74 @@ If you want both directions in the same effect collection without
 running `pair_breakends`, just don't run it — the parser already
 emits both halves.
 
+## `left_align_indels`
+
+Shifts indels to their canonical leftmost equivalent position.
+**Preserves cardinality** (1:1, value may change).
+
+Two pipelines that exchange variants need a canonical representation
+per indel. `CTT→T` at position 10 inside a `CT`-repeat means the
+same biological event as `CT→_` at position 8 — but tools that
+compare variants by `(contig, start, ref, alt)` see those
+representations as distinct. Left-alignment normalizes to the
+leftmost equivalent position.
+
+### Usage
+
+```python
+from varcode import load_vcf, Genome
+from varcode.transforms import left_align_indels
+
+# Default (transcript-cDNA coverage only) — exonic indels normalize,
+# intronic/intergenic pass through unchanged.
+vc = load_vcf("tumor.vcf", genome="GRCh38")
+vc = left_align_indels(vc)
+
+# Full coverage — every indel normalizes.
+g = Genome(81, fasta="/path/to/GRCh38.fa")
+vc = load_vcf("tumor.vcf", genome=g)
+vc = left_align_indels(vc)
+```
+
+No `reference` parameter — `left_align_indels` reads bases via the
+genome the variants already carry (see
+[varcode.Genome](api.md#varcodegenome)). Coverage depends on which
+genome shape was passed.
+
+### Behavior
+
+| Variant kind | Outcome |
+|---|---|
+| Pure SNV / MNV / complex (`ATG→GCC`) | Pass-through, `source_variants=()` |
+| Already-canonical indel (no equivalent leftward position) | Pass-through, `source_variants=()` |
+| Indel inside an exon, no FASTA | Shifts via transcript cDNA |
+| Indel in homopolymer / STR repeat | Shifts to leftmost equivalent position |
+| Indel in intron / intergenic, no FASTA | Pass-through (no reference coverage) |
+| Indel in intron / intergenic, FASTA attached | Shifts via FASTA |
+| Indel that starts exonic but would shift past the exon boundary, no FASTA | **Partial shift** — moves left until the boundary, sets `info["left_align_partial"] = True` |
+| Indel at chromosome start | Shift bounded by `start > 1` |
+
+### Metadata
+
+Shifted variants carry:
+
+- `source_variants = (original,)` — the pre-shift variant.
+- Source-path metadata re-keyed under the shifted variant; the
+  original key is removed.
+- `info["original_start"]` — the pre-shift start position, for
+  round-trip diagnostics.
+- `info["left_align_partial"] = True` — set only when the shift was
+  bounded by reference coverage (not by the reference disagreeing).
+  Tells downstream tools that a chromosome FASTA might have shifted
+  the variant further.
+
+### Idempotence
+
+Running `left_align_indels` twice produces the same result on the
+second call — every variant is already at its canonical leftmost
+position after the first call. Composes cleanly with `pair_breakends`
+in either order; SVs and BNDs are not indels and pass through.
+
 ## Roadmap
 
 Transforms planned for future PRs. Each lands as its own ticket; all
@@ -136,8 +204,7 @@ follow the contract above.
 | Transform | Cardinality | Brief |
 |---|---|---|
 | `combine_cis_snvs(vc, phase_resolver)` | reduces | Adjacent in-codon SNVs sharing a phase set merge into MNVs. |
-| `left_align_indels(vc, reference)` | preserves | Canonical-position indel normalization. |
-| `split_multiallelic(vc)` | increases | One variant per ALT for multi-ALT rows (today's implicit parse-time behavior, as an explicit transform). |
-| `decompose_mnvs(vc)` | increases | Inverse of `combine_cis_snvs`. Useful for cross-tool comparison. |
 
-See the [API reference](api.md) for `varcode.transforms.pair_breakends`.
+See the [API reference](api.md) for
+`varcode.transforms.pair_breakends` and
+`varcode.transforms.left_align_indels`.

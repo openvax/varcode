@@ -41,11 +41,6 @@ Planned (separate PRs):
 
 * ``combine_cis_snvs`` — combine adjacent in-codon SNVs into MNVs
   given phase. (reduces)
-* ``split_multiallelic`` — split a multi-ALT row into one variant
-  per ALT, making today's implicit parse-time behavior explicit.
-  (increases)
-* ``decompose_mnvs`` — inverse of ``combine_cis_snvs``: split MNVs
-  into constituent SNVs for cross-tool comparison. (increases)
 """
 
 import warnings
@@ -609,6 +604,125 @@ def left_align_indels(vc):
     >>> from varcode.transforms import left_align_indels
     >>> normalized = left_align_indels(vc)  # doctest: +SKIP
     """
-    raise NotImplementedError(
-        "varcode.transforms.left_align_indels — implementation in "
-        "progress, tracked in openvax/varcode#369")
+    from ..genome_sequence import reference_range
+
+    replacement = {}        # original variant -> shifted variant
+    bounded_by_coverage = set()  # shifted variants whose shift hit a
+                                 # reference-coverage boundary (Tier 2 stop)
+
+    for variant in vc:
+        if not variant.is_indel:
+            continue
+        shifted, partial = _left_align_one(variant, reference_range)
+        if shifted is variant:
+            continue
+        replacement[variant] = shifted
+        if partial:
+            bounded_by_coverage.add(id(shifted))
+
+    if not replacement:
+        return vc
+
+    out_variants = [replacement.get(v, v) for v in vc]
+
+    out_metadata = {}
+    for path, by_variant in vc.source_to_metadata_dict.items():
+        out_by_variant = {}
+        for variant, meta in by_variant.items():
+            shifted = replacement.get(variant)
+            if shifted is None:
+                out_by_variant[variant] = meta
+            else:
+                new_meta = dict(meta) if meta else {}
+                info = dict(new_meta.get("info") or {})
+                info["original_start"] = variant.start
+                if id(shifted) in bounded_by_coverage:
+                    info["left_align_partial"] = True
+                new_meta["info"] = info
+                out_by_variant[shifted] = new_meta
+        out_metadata[path] = out_by_variant
+
+    return VariantCollection(
+        variants=out_variants,
+        sources=vc.sources,
+        source_to_metadata_dict=out_metadata,
+    )
+
+
+def _left_align_one(variant, reference_range_fn):
+    """Shift one indel to its canonical leftmost position.
+
+    Returns ``(variant_or_shifted, partial_shift)``. ``partial_shift``
+    is True iff the loop exited because reference coverage ran out
+    (Tier 2 without a FASTA), not because the reference disagreed —
+    consumers can flag the result so downstream tools know a fuller
+    shift would have been possible with a chromosome FASTA.
+
+    varcode normalizes indels in :class:`Variant.__init__` so that
+    one side of (ref, alt) is empty after shared prefix/suffix
+    trimming — a deletion has ``ref != ''`` and ``alt == ''``, an
+    insertion has ``ref == ''`` and ``alt != ''``. The check
+    position differs between the two:
+
+    * **Deletion** ``ref=payload, alt='', start=N``: removes
+      ``payload`` from positions ``[N, N+len-1]``. Shift left valid
+      iff ``reference[N-1] == payload[-1]`` — the base entering on
+      the left equals the base leaving on the right.
+    * **Insertion** ``ref='', alt=payload, start=N``: inserts
+      ``payload`` after position ``N``. Shift left valid iff
+      ``reference[N] == payload[-1]`` — the anchor base equals the
+      last inserted base, allowing the payload to rotate around it.
+    """
+    if not variant.is_indel:
+        return variant, False
+
+    ref, alt = variant.ref, variant.alt
+    if ref and alt:
+        # Complex variant (both sides non-empty after normalization).
+        # Shouldn't happen for is_indel, but defensively pass through.
+        return variant, False
+
+    is_insertion = (not ref) and alt
+    payload = alt if is_insertion else ref
+    if not payload:
+        return variant, False
+
+    start = variant.start
+    new_start = start
+    new_payload = payload
+    partial = False
+
+    while new_start > 1:
+        # Insertion checks at new_start (the anchor); deletion checks
+        # at new_start - 1 (the base just before the deletion).
+        check_pos = new_start if is_insertion else (new_start - 1)
+        prev = reference_range_fn(
+            variant.genome, variant.contig, check_pos, check_pos)
+        if not prev:
+            # Reference coverage ran out at this position. If we
+            # already moved, this is a partial shift — a chromosome
+            # FASTA would have allowed continuing.
+            partial = (new_start != start)
+            break
+        if prev.upper() != new_payload[-1].upper():
+            break  # natural stop — reference disagrees
+        new_payload = prev.upper() + new_payload[:-1]
+        new_start -= 1
+
+    if new_start == start:
+        return variant, False
+
+    new_ref = new_payload if not is_insertion else ""
+    new_alt = new_payload if is_insertion else ""
+    shifted = Variant(
+        contig=variant.contig,
+        start=new_start,
+        ref=new_ref,
+        alt=new_alt,
+        genome=variant.genome,
+        allow_extended_nucleotides=getattr(
+            variant, "allow_extended_nucleotides", False),
+        normalize_contig_names=False,
+    )
+    shifted.source_variants = (variant,)
+    return shifted, partial
