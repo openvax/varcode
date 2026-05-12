@@ -39,8 +39,10 @@ Tracked in openvax/varcode#372. Upstream pyensembl support for the
 chromosome FASTA itself is tracked in openvax/pyensembl#337.
 """
 
-import warnings
+import logging
 from typing import Any, Optional
+
+logger = logging.getLogger(__name__)
 
 _COMPLEMENT = str.maketrans("ACGTNacgtn", "TGCANTGCAN")
 
@@ -144,8 +146,14 @@ def _base_from_genome_transcripts(
     first ``+`` strand base any of them yields.
 
     Returns ``""`` when no transcript covers ``position``. When
-    multiple transcripts cover it and disagree on the base, warns
-    once per ``(contig, position)`` and returns the first answer."""
+    multiple transcripts cover the same position they should agree
+    on the ``+`` strand base; a disagreement implies annotation skew,
+    an alt-locus position, or a pyensembl bug. We silently take the
+    first answer and log the disagreement at debug level — the case
+    is rare and not actionable for most users; debug logging keeps
+    the diagnostic available without flooding warnings or carrying
+    module-level dedup state.
+    """
     try:
         transcripts = genome.transcripts_at_locus(contig, position, position)
     except Exception:
@@ -157,7 +165,10 @@ def _base_from_genome_transcripts(
         if not base:
             continue
         if answer and base != answer:
-            _warn_transcript_disagreement(contig, position, answer, base)
+            logger.debug(
+                "transcripts overlapping %s:%d disagree on the + strand "
+                "base (%r vs %r); using the first answer",
+                contig, position, answer, base)
             break
         if not answer:
             answer = base
@@ -221,35 +232,3 @@ def _range_from_single_transcript(
         if span:
             return span
     return None
-
-
-# --------------------------------------------------------------------
-# Internal: transcript-disagreement warn-once
-# --------------------------------------------------------------------
-
-
-_DISAGREEMENT_WARNED = set()
-
-
-def _warn_transcript_disagreement(contig, position, first_base, other_base):
-    """Warn once per ``(contig, position)`` when transcripts overlapping
-    a single position disagree on the ``+`` strand base.
-
-    Range scans cross many positions; without dedup, an
-    annotation-skew region would emit a separate warning for every
-    base. The dedup is process-wide because the underlying transcript
-    annotations are too — re-warning across calls would still produce
-    duplicate signals for the same biological discrepancy.
-    """
-    key = (contig, position)
-    if key in _DISAGREEMENT_WARNED:
-        return
-    _DISAGREEMENT_WARNED.add(key)
-    warnings.warn(
-        "reference_base: transcripts overlapping %s:%d disagree on "
-        "the + strand base (%r vs %r). Returning the first answer; "
-        "the discrepancy may indicate annotation skew or an "
-        "alt-locus position. This warning fires at most once per "
-        "(contig, position)."
-        % (contig, position, first_base, other_base),
-        stacklevel=4)

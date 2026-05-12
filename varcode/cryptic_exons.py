@@ -58,10 +58,12 @@ argument directly, grounding the candidates in actual molecules
 rather than inferred reference+breakpoint reconstructions.
 """
 
+import warnings
 import weakref as _weakref
 from typing import Callable, List, Optional, Tuple
 
 from .effects.effect_classes import CrypticExonCandidate
+from .genome_sequence import reference_range
 
 
 # --------------------------------------------------------------------
@@ -320,8 +322,6 @@ def enumerate_from_structural_variant(
     if mate_contig is not None and mate_start is not None:
         breakpoints.append((mate_contig, mate_start))
 
-    from .genome_sequence import reference_range
-
     for contig, pos in breakpoints:
         if genome is None:
             continue
@@ -367,8 +367,6 @@ def _warn_missing_reference_once(genome):
     bare pyensembl genomes we fall back to a weakref-backed log so
     GC'd genomes' ids can't false-suppress warnings on later objects.
     """
-    import warnings
-
     # Per-instance state (varcode.Genome) — preferred.
     if hasattr(genome, "_missing_reference_warned"):
         if genome._missing_reference_warned:

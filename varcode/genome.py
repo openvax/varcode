@@ -48,6 +48,7 @@ from .genome_sequence import (
     reference_base as _reference_base_lookup,
     reference_range as _reference_range_lookup,
 )
+from .reference import infer_genome
 
 
 class Genome:
@@ -91,6 +92,11 @@ class Genome:
           a string or an object with ``.seq``.
         * ``None`` — no chromosome-level access; features fall back to
           transcript cDNA.
+
+        varcode does not take ownership of the FASTA object — when the
+        caller passes a pre-opened ``pyfaidx.Fasta``, the caller is
+        responsible for its lifetime. Closing the FASTA after passing
+        it to ``Genome`` will cause subsequent lookups to fail.
     verify :
         When True (default) and ``fasta`` is provided, spot-check a few
         exonic positions against pyensembl's transcript cDNA to catch
@@ -115,6 +121,12 @@ class Genome:
     repeat annotations from the FASTA are dropped — varcode treats all
     bases uniformly. Callers that need the soft-masking signal should
     read the FASTA directly.
+
+    Equality and hashing fall back to ``object`` identity — two
+    ``Genome`` instances wrapping the same pyensembl release compare
+    unequal. This is intentional: a wrapper with an attached FASTA
+    and one without are different objects in any sense that matters
+    for varcode features, even if they share the same ``reference_name``.
     """
 
     def __init__(
@@ -123,11 +135,6 @@ class Genome:
             *,
             fasta: Optional[Any] = None,
             verify: bool = True):
-        # Late import: reference.py imports pyensembl at the module top;
-        # importing it eagerly here would entrench the cycle that
-        # pyensembl already creates with varcode's top-level package.
-        from .reference import infer_genome
-
         fasta_was_provided = fasta is not None
         if isinstance(ensembl_release, Genome):
             # Idempotent rewrap. Inherits ._ensembl always; inherits
@@ -183,8 +190,7 @@ class Genome:
     def __repr__(self) -> str:
         ref = getattr(self._ensembl, "reference_name", "?")
         fasta_repr = "no FASTA" if self.fasta is None else "FASTA attached"
-        return "varcode.Genome(reference_name=%r, %s, id=%#x)" % (
-            ref, fasta_repr, id(self))
+        return "varcode.Genome(reference_name=%r, %s)" % (ref, fasta_repr)
 
     # -- chromosome FASTA API (mirrors openvax/pyensembl#337) ----------
 

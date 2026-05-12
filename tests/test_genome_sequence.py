@@ -162,6 +162,25 @@ def test_genome_with_list_fasta_raises_typeerror(ensembl):
         Genome(ensembl, fasta=[1, 2, 3], verify=False)
 
 
+def test_genome_with_path_string_raises_importerror_when_pyfaidx_missing(
+        ensembl, monkeypatch):
+    """When the user passes a FASTA path string and pyfaidx isn't
+    installed, the error should point at the install command rather
+    than a confusing ``ModuleNotFoundError``."""
+    import builtins
+    real_import = builtins.__import__
+
+    def _no_pyfaidx(name, *args, **kwargs):
+        if name == "pyfaidx" or name.startswith("pyfaidx."):
+            raise ImportError("simulated missing pyfaidx")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", _no_pyfaidx)
+
+    with pytest.raises(ImportError, match="pip install pyfaidx"):
+        Genome(ensembl, fasta="/nonexistent/path/to/GRCh38.fa", verify=False)
+
+
 def test_genome_without_release_raises(ensembl):
     """``Genome()`` with no release argument is an error — we don't
     silently construct a placeholder that fails later."""
