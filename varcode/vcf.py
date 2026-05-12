@@ -169,7 +169,8 @@ def load_vcf(
                 sort_key=sort_key,
                 distinct=distinct,
                 normalize_contig_names=normalize_contig_names,
-                convert_ucsc_contig_names=convert_ucsc_contig_names)
+                convert_ucsc_contig_names=convert_ucsc_contig_names,
+                parse_structural_variants=parse_structural_variants)
         finally:
             logger.info("Removing temporary file: %s", filename)
             os.unlink(filename)

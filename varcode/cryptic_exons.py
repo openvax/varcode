@@ -58,6 +58,7 @@ argument directly, grounding the candidates in actual molecules
 rather than inferred reference+breakpoint reconstructions.
 """
 
+import weakref as _weakref
 from typing import Callable, List, Optional, Tuple
 
 from .effects.effect_classes import CrypticExonCandidate
@@ -345,12 +346,13 @@ def enumerate_from_structural_variant(
     return candidates
 
 
-# Module-level dedup for raw pyensembl genomes that don't carry an
-# instance ``_missing_reference_warned`` flag (varcode.Genome does;
-# bare pyensembl.Genome doesn't). For the wrapped case, dedup lives
-# on the instance and is GC'd with it. For the bare case, this
-# process-wide set keyed on id(genome) is the next-best thing.
-_BARE_GENOME_MISSING_REFERENCE_WARNED = set()
+# Dedup for bare pyensembl genomes that don't carry an instance
+# ``_missing_reference_warned`` flag (varcode.Genome does; bare
+# pyensembl.Genome doesn't). WeakValueDictionary keyed on id(genome)
+# with the genome itself as the value: when the genome is GC'd the
+# entry self-clears, so we don't false-suppress a future warning for
+# a different genome that happens to land at the same id.
+_BARE_GENOME_WARN_LOG = _weakref.WeakValueDictionary()
 
 
 def _warn_missing_reference_once(genome):
@@ -362,8 +364,8 @@ def _warn_missing_reference_once(genome):
 
     Dedup state lives on the genome instance when possible
     (``varcode.Genome`` carries ``_missing_reference_warned``); for
-    bare pyensembl genomes we fall back to a module-level set keyed
-    on ``id(genome)``.
+    bare pyensembl genomes we fall back to a weakref-backed log so
+    GC'd genomes' ids can't false-suppress warnings on later objects.
     """
     import warnings
 
@@ -373,11 +375,16 @@ def _warn_missing_reference_once(genome):
             return
         genome._missing_reference_warned = True
     else:
-        # Bare pyensembl.Genome — fall back to module-level dedup.
+        # Bare pyensembl.Genome — weakref-keyed dedup.
         key = id(genome)
-        if key in _BARE_GENOME_MISSING_REFERENCE_WARNED:
+        if key in _BARE_GENOME_WARN_LOG:
             return
-        _BARE_GENOME_MISSING_REFERENCE_WARNED.add(key)
+        try:
+            _BARE_GENOME_WARN_LOG[key] = genome
+        except TypeError:
+            # Genome type can't be weakly referenced (rare). Emit the
+            # warning anyway — better to over-warn than miss a signal.
+            pass
 
     warnings.warn(
         "cryptic_exons: no reference sequence available for one or "

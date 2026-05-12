@@ -17,7 +17,7 @@ ships transcript and protein FASTAs but not the chromosome FASTA, so
 features needing raw genomic bases (intronic, intergenic, flanking)
 fall back to transcript-cDNA coverage only. :class:`Genome` is the
 construction-time composition point: pass a release identifier plus
-an optional ``fasta``, and downstream lookups see both tiers.
+an optional ``fasta``, and downstream lookups see both sources.
 
 Acts as a drop-in for ``pyensembl.Genome`` — every pyensembl attribute
 is accessible via :py:meth:`__getattr__` delegation, so existing code
@@ -35,20 +35,54 @@ pyensembl-native API.
 Tracked in openvax/varcode#372.
 """
 
+import os
 import warnings
+from typing import Any, Optional
+
+# Module-level imports of the lookup helpers. Functions in this file
+# call into them on hot paths; per-call imports would add measurable
+# overhead in tight loops (e.g. left-alignment shifts in #369).
+from .genome_sequence import (
+    _fasta_range,
+    _read_transcript_base,
+    reference_base as _reference_base_lookup,
+    reference_range as _reference_range_lookup,
+)
 
 
 class Genome:
     """Pyensembl ``Genome`` + optional chromosome FASTA.
 
+    Two source layers under one object:
+
+    * ``self.fasta`` — optional chromosome FASTA. When attached,
+      :meth:`sequence` reads from it directly; :meth:`reference_base`
+      and :meth:`reference_range` prefer it before falling back to
+      transcript cDNA.
+    * Wrapped pyensembl ``Genome`` — transcript annotations + cDNA.
+      Always present; provides the fallback for exonic positions
+      when no FASTA is attached.
+
+    The two methods have intentionally different fall-through semantics:
+
+    * :meth:`sequence` — chromosome FASTA *only*. Returns ``""`` when
+      no FASTA is attached. Mirrors the proposed
+      ``pyensembl.Genome.sequence()`` shape from
+      openvax/pyensembl#337 so the eventual upstream migration is
+      mechanical.
+    * :meth:`reference_base` / :meth:`reference_range` — tiered.
+      FASTA first when attached; otherwise transcript cDNA. Use these
+      when you want "whatever varcode can tell you" about a position.
+
     Parameters
     ----------
-    ensembl_release : int, str, pyensembl.Genome, or Genome
+    ensembl_release :
         Release identifier — passes through :func:`varcode.reference.infer_genome`,
-        so the same shapes accepted by ``load_vcf(genome=...)`` work here.
+        so the same shapes accepted by ``load_vcf(genome=...)`` work here
+        (int, reference-name string, ``pyensembl.Genome``).
         Passing another :class:`Genome` rewraps idempotently (inheriting
         ``fasta`` unless overridden).
-    fasta : str, path-like, FASTA-shaped object, or None, optional
+    fasta :
         Optional chromosome FASTA:
 
         * Path string — opened with pyfaidx (only required on this path).
@@ -56,8 +90,8 @@ class Genome:
         * Any object supporting ``fa[contig][start:end]`` and returning
           a string or an object with ``.seq``.
         * ``None`` — no chromosome-level access; features fall back to
-          transcript cDNA (Tier 2 only).
-    verify : bool, optional
+          transcript cDNA.
+    verify :
         When True (default) and ``fasta`` is provided, spot-check a few
         exonic positions against pyensembl's transcript cDNA to catch
         mislabeled FASTAs (e.g. GRCh37 attached to a GRCh38 release).
@@ -83,10 +117,15 @@ class Genome:
     read the FASTA directly.
     """
 
-    def __init__(self, ensembl_release=None, *, fasta=None, verify=True):
-        # Late imports break a circular dep: reference.py imports
-        # pyensembl; we don't want this module imported during varcode
-        # package construction in unusual orders.
+    def __init__(
+            self,
+            ensembl_release: Any = None,
+            *,
+            fasta: Optional[Any] = None,
+            verify: bool = True):
+        # Late import: reference.py imports pyensembl at the module top;
+        # importing it eagerly here would entrench the cycle that
+        # pyensembl already creates with varcode's top-level package.
         from .reference import infer_genome
 
         fasta_was_provided = fasta is not None
@@ -98,14 +137,12 @@ class Genome:
                 self.fasta = _resolve_fasta(fasta, self._ensembl)
             else:
                 self.fasta = ensembl_release.fasta
-        elif ensembl_release is None:
-            # Tests / placeholder use — no genome to delegate to.
-            # Most consumers will fail downstream when they try to
-            # look up transcripts; intentional, no silent surprise.
-            self._ensembl = None
-            self.fasta = (_resolve_fasta(fasta, None)
-                          if fasta_was_provided else None)
         else:
+            if ensembl_release is None:
+                raise ValueError(
+                    "varcode.Genome requires an ensembl_release argument "
+                    "(int release number, reference-name string, or a "
+                    "pyensembl.Genome / varcode.Genome instance).")
             self._ensembl, _ = infer_genome(ensembl_release)
             self.fasta = (_resolve_fasta(fasta, self._ensembl)
                           if fasta_was_provided else None)
@@ -127,9 +164,12 @@ class Genome:
 
         Called only when normal attribute lookup fails, so explicit
         attributes (``_ensembl``, ``fasta``, ``_missing_reference_warned``)
-        still win. Underscore-prefixed names are not delegated to keep
-        Python internals (pickling, copying) from accidentally pulling
-        private state from the wrapped object.
+        still win. Underscore-prefixed names are not delegated — this
+        prevents infinite recursion when Python's copy / pickle
+        machinery probes for ``__deepcopy__`` / ``__reduce__`` /
+        ``__getstate__`` etc., and keeps the wrapper's private state
+        from accidentally pulling private state from the wrapped
+        object.
         """
         if name.startswith("_"):
             raise AttributeError(name)
@@ -140,53 +180,54 @@ class Genome:
                 "cannot resolve attribute %r" % name)
         return getattr(ensembl, name)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         ref = getattr(self._ensembl, "reference_name", "?")
         fasta_repr = "no FASTA" if self.fasta is None else "FASTA attached"
-        return "varcode.Genome(reference_name=%r, %s)" % (ref, fasta_repr)
+        return "varcode.Genome(reference_name=%r, %s, id=%#x)" % (
+            ref, fasta_repr, id(self))
 
     # -- chromosome FASTA API (mirrors openvax/pyensembl#337) ----------
 
-    def sequence(self, contig, start, end):
+    def sequence(self, contig: str, start: int, end: int) -> str:
         """Chromosome FASTA sequence on the ``+`` strand.
 
         1-based inclusive coordinates. Returns ``""`` when no FASTA is
-        attached or the contig / range isn't covered. Mirrors the
-        ``pyensembl.Genome.sequence()`` shape proposed upstream so the
-        eventual migration is mechanical.
+        attached or the contig / range isn't covered.
+
+        FASTA-only — does **not** fall back to transcript cDNA. Use
+        :meth:`reference_base` / :meth:`reference_range` for the
+        tiered lookup. The split is deliberate: this method mirrors
+        the proposed ``pyensembl.Genome.sequence()`` API so callers
+        who want raw chromosome bases (and the upstream migration
+        path) can use it unambiguously.
         """
         if self.fasta is None:
             return ""
-        from .genome_sequence import _tier1_range
-        return _tier1_range(self.fasta, contig, start, end)
+        return _fasta_range(self.fasta, contig, start, end)
 
     # -- tiered lookup convenience -------------------------------------
 
-    def reference_base(self, contig, position):
+    def reference_base(self, contig: str, position: int) -> str:
         """Tiered ``+`` strand base lookup (FASTA → transcript cDNA → ``""``).
 
         Convenience method delegating to
         :func:`varcode.genome_sequence.reference_base`.
         """
-        from .genome_sequence import reference_base
-        return reference_base(self, contig, position)
+        return _reference_base_lookup(self, contig, position)
 
-    def reference_range(self, contig, start, end):
+    def reference_range(self, contig: str, start: int, end: int) -> str:
         """Tiered ``+`` strand range lookup. All-or-nothing — returns
         ``""`` if any position in the range is uncovered by the chosen
-        tier."""
-        from .genome_sequence import reference_range
-        return reference_range(self, contig, start, end)
+        source."""
+        return _reference_range_lookup(self, contig, start, end)
 
 
 # --------------------------------------------------------------------
-# Internal helpers (shared with varcode.genome_sequence). Centralized
-# here because Genome construction is the only public path that builds
-# them up.
+# Internal helpers
 # --------------------------------------------------------------------
 
 
-def _resolve_fasta(arg, ensembl_genome):
+def _resolve_fasta(arg: Any, ensembl_genome: Any) -> Any:
     """Validate and normalize a FASTA argument.
 
     Path strings open via pyfaidx; objects are probed against a known
@@ -194,7 +235,6 @@ def _resolve_fasta(arg, ensembl_genome):
     too permissive — strings, lists, etc. all have it but don't honor
     the slice protocol).
     """
-    import os
     if isinstance(arg, (str, bytes, os.PathLike)):
         try:
             import pyfaidx
@@ -208,9 +248,8 @@ def _resolve_fasta(arg, ensembl_genome):
 
     probe_contig = _probe_contig_for_validation(ensembl_genome)
     if probe_contig is None:
-        # Can't validate (no genome, or genome reports no contigs).
-        # Accept on faith; the first real lookup will fail loudly if
-        # the object is malformed.
+        # Can't validate (genome reports no contigs). Accept on faith;
+        # the first real lookup will fail loudly if the object is malformed.
         return arg
     try:
         slicer = arg[probe_contig]
@@ -225,9 +264,9 @@ def _resolve_fasta(arg, ensembl_genome):
     return arg
 
 
-def _probe_contig_for_validation(genome):
+def _probe_contig_for_validation(genome: Any) -> Optional[str]:
     """Pick a contig name from the genome for probing a candidate FASTA.
-    Returns ``None`` if no genome was attached or it can't enumerate."""
+    Returns ``None`` if the genome can't enumerate."""
     if genome is None:
         return None
     for accessor in ("contigs", "all_contigs"):
@@ -242,14 +281,12 @@ def _probe_contig_for_validation(genome):
     return None
 
 
-def _verify_fasta_against_transcripts(ensembl_genome, fasta):
+def _verify_fasta_against_transcripts(ensembl_genome: Any, fasta: Any) -> None:
     """Spot-check that the attached FASTA matches pyensembl's transcript
     cDNA at a few exonic positions. Warns (does not raise) on mismatch
     so users with intentionally-divergent setups can override with
     ``verify=False``.
     """
-    from .genome_sequence import _read_transcript_base, _tier1_range
-
     try:
         transcripts = list(ensembl_genome.transcripts())[:50]
     except Exception:
@@ -265,15 +302,15 @@ def _verify_fasta_against_transcripts(ensembl_genome, fasta):
         try:
             exon = t.exons[0]
             position = exon.start + 1
-            tier2 = _read_transcript_base(t, position)
-            tier1 = _tier1_range(fasta, t.contig, position, position)
+            transcript_base = _read_transcript_base(t, position)
+            fasta_base = _fasta_range(fasta, t.contig, position, position)
         except Exception:
             continue
-        if not tier1 or not tier2:
+        if not fasta_base or not transcript_base:
             continue
         checked += 1
-        if tier1 != tier2:
-            mismatches.append((t.contig, position, tier1, tier2))
+        if fasta_base != transcript_base:
+            mismatches.append((t.contig, position, fasta_base, transcript_base))
 
     if mismatches:
         details = "; ".join(

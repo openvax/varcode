@@ -30,12 +30,12 @@ Covers:
   replaced by a per-genome warn-once.
 """
 
+import copy
 import warnings
 
 import pytest
 from pyensembl import cached_release
 
-import varcode
 from varcode import Genome
 from varcode.genome_sequence import reference_base, reference_range
 
@@ -132,15 +132,15 @@ def test_genome_from_pyensembl_object_passes_through(ensembl):
 
 
 def test_genome_rewrap_inherits_fasta(ensembl, cftr_position):
+    """Rewrapping a Genome without an explicit ``fasta=`` inherits the
+    inner Genome's FASTA. ``fasta=None`` is treated as "no override"
+    rather than "detach" — to drop the FASTA, construct a fresh
+    ``Genome(ensembl_release)`` directly."""
     contig, pos, base = cftr_position
     fasta = _build_fasta_around(contig, pos, base)
     g1 = Genome(ensembl, fasta=fasta, verify=False)
-    # Rewrapping without override inherits the fasta.
     g2 = Genome(g1)
     assert g2.fasta is fasta
-    # Explicit None overrides to detach.
-    # (Construction takes fasta=None as "no override" per the constructor
-    # signature; this is the documented behavior.)
 
 
 def test_genome_rewrap_overrides_fasta(ensembl, cftr_position):
@@ -160,6 +160,24 @@ def test_genome_with_integer_fasta_raises_typeerror(ensembl):
 def test_genome_with_list_fasta_raises_typeerror(ensembl):
     with pytest.raises(TypeError, match="pyfaidx-style protocol"):
         Genome(ensembl, fasta=[1, 2, 3], verify=False)
+
+
+def test_genome_without_release_raises(ensembl):
+    """``Genome()`` with no release argument is an error — we don't
+    silently construct a placeholder that fails later."""
+    with pytest.raises(ValueError, match="requires an ensembl_release"):
+        Genome()
+
+
+def test_genome_deepcopy_does_not_infinite_loop(ensembl):
+    """``__getattr__`` delegation must not recurse on Python's
+    copy/pickle dunders. The underscore guard in ``__getattr__`` is
+    what prevents this; regression here would hang the test."""
+    g = Genome(ensembl)
+    clone = copy.deepcopy(g)
+    assert clone is not g
+    assert clone._ensembl is g._ensembl  # shallow share of wrapped genome
+    assert clone.fasta is g.fasta
 
 
 def test_genome_repr_indicates_fasta_presence(ensembl, cftr_position):
@@ -225,18 +243,18 @@ def test_genome_delegates_transcripts_at_locus(ensembl, cftr_position):
 
 
 # --------------------------------------------------------------------
-# Tiered lookup — Tier 2 only (no FASTA)
+# Lookup via transcript cDNA only (no FASTA attached)
 # --------------------------------------------------------------------
 
 
-def test_tier2_returns_transcript_base_on_plus_strand(ensembl, cftr_position):
+def test_transcript_cdna_lookup_plus_strand(ensembl, cftr_position):
     contig, pos, expected = cftr_position
     assert reference_base(ensembl, contig, pos) == expected
     # Same answer via the wrapper.
     assert Genome(ensembl).reference_base(contig, pos) == expected
 
 
-def test_tier2_returns_plus_strand_base_for_minus_strand_transcript(ensembl):
+def test_transcript_cdna_lookup_minus_strand(ensembl):
     minus_t = next(
         t for t in ensembl.transcripts()
         if t.strand == '-' and t.exons and t.is_protein_coding)
@@ -247,44 +265,46 @@ def test_tier2_returns_plus_strand_base_for_minus_strand_transcript(ensembl):
     assert reference_base(ensembl, minus_t.contig, pos) == expected
 
 
-def test_tier2_returns_empty_for_intronic_position(ensembl):
+def test_transcript_cdna_returns_empty_for_intronic_position(ensembl):
     t = ensembl.transcript_by_id(_CFTR_TRANSCRIPT_ID)
     intron_pos = t.exons[0].end + 100
     assert reference_base(ensembl, t.contig, intron_pos) == ""
 
 
 # --------------------------------------------------------------------
-# Tiered lookup — Tier 1 (FASTA on varcode.Genome)
+# Lookup via attached chromosome FASTA
 # --------------------------------------------------------------------
 
 
-def test_tier1_returns_fasta_base_when_attached(ensembl, cftr_position):
+def test_chromosome_fasta_lookup_when_attached(ensembl, cftr_position):
     contig, pos, transcript_base = cftr_position
     fasta = _build_fasta_around(contig, pos, transcript_base, window=10)
     g = Genome(ensembl, fasta=fasta, verify=False)
     assert g.reference_base(contig, pos) == transcript_base
 
 
-def test_tier1_falls_through_when_contig_missing(ensembl, cftr_position):
+def test_chromosome_fasta_falls_through_to_cdna_when_contig_missing(
+        ensembl, cftr_position):
     """A FASTA that doesn't carry the requested contig falls through
-    to Tier 2 (transcript cDNA) — does not crash."""
+    to transcript cDNA — does not crash."""
     contig, pos, transcript_base = cftr_position
     empty_fasta = _DictBackedFasta({}, offset=1)
     g = Genome(ensembl, fasta=empty_fasta, verify=False)
     assert g.reference_base(contig, pos) == transcript_base
 
 
-def test_genome_sequence_method_mirrors_pyensembl_api(ensembl, cftr_position):
+def test_genome_sequence_method_is_fasta_only(ensembl, cftr_position):
     """``Genome.sequence(contig, start, end)`` mirrors the proposed
     pyensembl API (openvax/pyensembl#337). Returns the + strand range
-    from the attached FASTA only — no Tier 2 fallback."""
+    from the attached FASTA only — does NOT fall back to transcript
+    cDNA. Callers wanting the tiered lookup use ``reference_base`` /
+    ``reference_range`` instead."""
     contig, pos, transcript_base = cftr_position
     fasta = _build_fasta_around(contig, pos, transcript_base, window=10)
     g = Genome(ensembl, fasta=fasta, verify=False)
     seq = g.sequence(contig, pos, pos)
     assert seq == transcript_base
-    # No FASTA -> empty (does NOT fall back to Tier 2; that's what
-    # reference_base/range are for).
+    # No FASTA -> empty.
     g_no = Genome(ensembl)
     assert g_no.sequence(contig, pos, pos) == ""
 
@@ -294,7 +314,7 @@ def test_genome_sequence_method_mirrors_pyensembl_api(ensembl, cftr_position):
 # --------------------------------------------------------------------
 
 
-def test_tier2_range_uses_single_transcript_fast_path(ensembl):
+def test_cdna_range_uses_single_transcript_fast_path(ensembl):
     t = ensembl.transcript_by_id(_CFTR_TRANSCRIPT_ID)
     start = t.exons[0].start + 5
     end = start + 10
@@ -304,14 +324,14 @@ def test_tier2_range_uses_single_transcript_fast_path(ensembl):
     assert span[-1] == reference_base(ensembl, t.contig, end)
 
 
-def test_tier2_range_spanning_exon_boundary_returns_empty(ensembl):
+def test_cdna_range_spanning_exon_boundary_returns_empty(ensembl):
     t = ensembl.transcript_by_id(_CFTR_TRANSCRIPT_ID)
     boundary = t.exons[0].end
     span = reference_range(ensembl, t.contig, boundary - 2, boundary + 5)
     assert span == ""
 
 
-def test_tier1_range_spanning_exon_boundary_returns_full_sequence(ensembl):
+def test_fasta_range_spanning_exon_boundary_returns_full_sequence(ensembl):
     t = ensembl.transcript_by_id(_CFTR_TRANSCRIPT_ID)
     boundary = t.exons[0].end
     start, end = boundary - 2, boundary + 5

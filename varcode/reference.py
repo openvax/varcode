@@ -338,7 +338,7 @@ def infer_genome(genome_object_string_or_int):
             and hasattr(genome_object_string_or_int, "fasta")):
         genome = genome_object_string_or_int
     elif isinstance(genome_object_string_or_int, Genome):
-        genome =  genome_object_string_or_int
+        genome = genome_object_string_or_int
     elif is_integer(genome_object_string_or_int):
         genome = cached_ensembl_release(genome_object_string_or_int)
     elif is_string(genome_object_string_or_int):
