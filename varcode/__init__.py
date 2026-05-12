@@ -25,6 +25,8 @@ from .annotators import (
     use_annotator,
 )
 from .errors import ReferenceMismatchError, SampleNotFoundError
+from .genome import Genome
+from .genome_sequence import reference_base, reference_range
 from .germline import (
     GenomeBuildMismatchError,
     GermlineContext,
@@ -169,6 +171,11 @@ __all__ = [
     "detect_loh",
     "enumerate_phase_hypotheses",
     "predict_germline_aware_effect",
+
+    # Genome wrapper + tiered reference lookup (openvax/varcode#372)
+    "Genome",
+    "reference_base",
+    "reference_range",
 
     # file loading
     "load_maf",

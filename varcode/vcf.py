@@ -65,7 +65,8 @@ def load_vcf(
         distinct=True,
         normalize_contig_names=True,
         convert_ucsc_contig_names=True,
-        parse_structural_variants=False):
+        parse_structural_variants=False,
+        genome_fasta=None):
     """
     Load reference name and Variant objects from the given VCF filename.
 
@@ -122,6 +123,16 @@ def load_vcf(
         Convert chromosome names from hg19 (e.g. "chr1") to equivalent names
         for GRCh37 (e.g. "1"). By default this is set to True. If None, it
         also evaluates to True if the genome of the VCF is a UCSC reference.
+
+    genome_fasta : str, path-like, or FASTA object, optional
+        Optionally attach a chromosome FASTA to the resolved genome
+        before parsing. Equivalent to wrapping with
+        ``varcode.Genome(genome, fasta=genome_fasta)`` and passing the
+        wrapper; see :class:`varcode.Genome` for the accepted types
+        and verification behavior. Without this, features that need
+        raw genomic bases (cryptic-exon scoring, indel
+        left-alignment, sequence-aware splice prediction) fall back
+        to transcript-cDNA coverage only.
     """
 
     require_string(path, "Path or URL to VCF")
@@ -152,12 +163,14 @@ def load_vcf(
                 only_passing=only_passing,
                 allow_extended_nucleotides=allow_extended_nucleotides,
                 include_info=include_info,
+                genome_fasta=genome_fasta,
                 chunk_size=chunk_size,
                 max_variants=max_variants,
                 sort_key=sort_key,
                 distinct=distinct,
                 normalize_contig_names=normalize_contig_names,
-                convert_ucsc_contig_names=convert_ucsc_contig_names)
+                convert_ucsc_contig_names=convert_ucsc_contig_names,
+                parse_structural_variants=parse_structural_variants)
         finally:
             logger.info("Removing temporary file: %s", filename)
             os.unlink(filename)
@@ -191,6 +204,13 @@ def load_vcf(
 
     if convert_ucsc_contig_names is None:
         convert_ucsc_contig_names = genome_was_ucsc
+
+    if genome_fasta is not None:
+        # Wrap the resolved genome in varcode.Genome so the FASTA is
+        # part of the genome object rather than a side-channel
+        # attachment. Late import keeps the cost on callers who opt in.
+        from .genome import Genome as VarcodeGenome
+        genome = VarcodeGenome(genome, fasta=genome_fasta)
 
     df_iterator = read_vcf_into_dataframe(
         path,

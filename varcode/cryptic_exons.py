@@ -58,9 +58,12 @@ argument directly, grounding the candidates in actual molecules
 rather than inferred reference+breakpoint reconstructions.
 """
 
+import warnings
+import weakref as _weakref
 from typing import Callable, List, Optional, Tuple
 
 from .effects.effect_classes import CrypticExonCandidate
+from .genome_sequence import reference_range
 
 
 # --------------------------------------------------------------------
@@ -322,15 +325,14 @@ def enumerate_from_structural_variant(
     for contig, pos in breakpoints:
         if genome is None:
             continue
-        try:
-            ref_seq = genome.genome.sequence(
-                contig, pos - flank, pos + flank)
-        except Exception:
-            try:
-                ref_seq = genome.genome.contig_sequence(contig)[
-                    max(0, pos - flank):pos + flank]
-            except Exception:
-                continue
+        ref_seq = reference_range(genome, contig, pos - flank, pos + flank)
+        if not ref_seq:
+            # Warn once per genome — firing per-breakpoint creates noise
+            # in pipelines that annotate many SVs without a FASTA. The
+            # user gets one actionable signal per genome; subsequent
+            # uncovered breakpoints are silent.
+            _warn_missing_reference_once(genome)
+            continue
         candidates.extend(enumerate_candidates(
             contig=contig,
             sequence=ref_seq,
@@ -342,3 +344,52 @@ def enumerate_from_structural_variant(
         key=lambda c: (c.donor_score or 0) + (c.acceptor_score or 0),
         reverse=True)
     return candidates
+
+
+# Dedup for bare pyensembl genomes that don't carry an instance
+# ``_missing_reference_warned`` flag (varcode.Genome does; bare
+# pyensembl.Genome doesn't). WeakValueDictionary keyed on id(genome)
+# with the genome itself as the value: when the genome is GC'd the
+# entry self-clears, so we don't false-suppress a future warning for
+# a different genome that happens to land at the same id.
+_BARE_GENOME_WARN_LOG = _weakref.WeakValueDictionary()
+
+
+def _warn_missing_reference_once(genome):
+    """Emit the no-FASTA warning at most once per genome.
+
+    Cryptic-exon scoring runs implicitly during SV effect prediction;
+    a pipeline annotating many SVs without a FASTA would otherwise get
+    one warning per breakpoint. One actionable warning is enough.
+
+    Dedup state lives on the genome instance when possible
+    (``varcode.Genome`` carries ``_missing_reference_warned``); for
+    bare pyensembl genomes we fall back to a weakref-backed log so
+    GC'd genomes' ids can't false-suppress warnings on later objects.
+    """
+    # Per-instance state (varcode.Genome) — preferred.
+    if hasattr(genome, "_missing_reference_warned"):
+        if genome._missing_reference_warned:
+            return
+        genome._missing_reference_warned = True
+    else:
+        # Bare pyensembl.Genome — weakref-keyed dedup.
+        key = id(genome)
+        if key in _BARE_GENOME_WARN_LOG:
+            return
+        try:
+            _BARE_GENOME_WARN_LOG[key] = genome
+        except TypeError:
+            # Genome type can't be weakly referenced (rare). Emit the
+            # warning anyway — better to over-warn than miss a signal.
+            pass
+
+    warnings.warn(
+        "cryptic_exons: no reference sequence available for one or "
+        "more breakpoints (positions outside any annotated transcript, "
+        "and no chromosome FASTA attached to this genome). Construct "
+        "the genome with varcode.Genome(release, fasta=...) to enable "
+        "cryptic-exon scoring outside annotated transcripts. This "
+        "warning fires once per genome; subsequent uncovered "
+        "breakpoints are silent.",
+        stacklevel=3)
