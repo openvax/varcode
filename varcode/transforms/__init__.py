@@ -34,13 +34,13 @@ Shipped transforms:
 
 * :func:`pair_breakends` — merges MATEID-paired BND rows into a
   single combined ``StructuralVariant``. (reduces)
+* :func:`left_align_indels` — shifts indels to their canonical
+  leftmost equivalent position. (preserves)
 
 Planned (separate PRs):
 
 * ``combine_cis_snvs`` — combine adjacent in-codon SNVs into MNVs
   given phase. (reduces)
-* ``left_align_indels`` — canonical-position indel normalization.
-  (preserves)
 * ``split_multiallelic`` — split a multi-ALT row into one variant
   per ALT, making today's implicit parse-time behavior explicit.
   (increases)
@@ -51,10 +51,11 @@ Planned (separate PRs):
 import warnings
 
 from ..structural_variant import StructuralVariant
+from ..variant import Variant
 from ..variant_collection import VariantCollection
 
 
-__all__ = ["pair_breakends"]
+__all__ = ["pair_breakends", "left_align_indels"]
 
 
 def _is_breakend(variant):
@@ -530,3 +531,84 @@ def pair_breakends(vc):
         sources=vc.sources,
         source_to_metadata_dict=out_metadata,
     )
+
+
+# ====================================================================
+# left_align_indels
+# ====================================================================
+
+
+def left_align_indels(vc):
+    """Shift indels to their canonical leftmost equivalent position. (preserves)
+
+    Indels in homopolymer or short-tandem-repeat regions can be
+    represented at any of several equivalent positions — ``CTT->T``
+    inside a ``CT``-repeat means the same biological event as
+    ``CT->_`` two positions to the left. Tools that compare variants
+    by ``(contig, start, ref, alt)`` see those representations as
+    distinct calls. Left-alignment normalizes to a single canonical
+    representation per indel: the leftmost equivalent position.
+
+    The algorithm is the standard variant-normalization left-shift
+    used by ``bcftools norm`` and GATK ``LeftAlignAndTrimVariants``,
+    applied as an opt-in ``VariantCollection -> VariantCollection``
+    transform rather than baked into VCF load.
+
+    Reference sequence is read via the genome the variants carry —
+    no explicit ``reference`` parameter. Coverage tiers (see
+    :mod:`varcode.genome_sequence`):
+
+    * **Chromosome FASTA attached** (via :class:`varcode.Genome`'s
+      ``fasta`` slot): indels everywhere shift to canonical
+      positions, including in introns and intergenic regions.
+    * **No FASTA** (default pyensembl install): indels fully within
+      an exon shift via the transcript cDNA fallback. Intronic and
+      intergenic indels pass through unchanged. Indels that *start*
+      exonic but would shift across an exon boundary stop at the
+      boundary and carry ``info["left_align_partial"] = True``.
+
+    Parameters
+    ----------
+    vc : VariantCollection
+        Input collection. May contain a mix of SNVs, MNVs, indels,
+        complex variants, and SVs — only pure indels (length-different
+        REF/ALT with one side empty after suffix trimming) are
+        considered for shifting. Everything else passes through.
+
+    Returns
+    -------
+    VariantCollection
+        A new collection with indels at their canonical leftmost
+        positions. Variants that shifted carry
+        ``source_variants=(original,)``; everything else passes through
+        with ``source_variants=()``.
+
+    Behavior
+    --------
+
+    * **Cardinality**: preserves (1:1, position/payload may change).
+    * **Provenance**: shifted variants carry
+      ``source_variants=(original,)``; unchanged variants stay with
+      ``source_variants=()``.
+    * **Metadata**: per-source-path metadata is re-keyed under the
+      shifted variant; the original entry is no longer in the output
+      collection's metadata dict. ``info["original_start"]`` is added
+      so round-trip / debugging can recover the input position.
+    * **Idempotence**: a variant already at canonical position passes
+      through unchanged on every subsequent call.
+    * **Multi-base indels** (e.g. ``CCAGTC->C`` for a 5bp deletion in
+      a ``CAGTC``-repeat) shift the same way as single-base indels;
+      the shift uses the indel's payload as the unit.
+    * **Complex variants** (length-mismatched and content-mismatched,
+      e.g. ``ATG->GCC``) are not shifted — left-alignment isn't
+      well-defined for them. Pass-through.
+
+    Examples
+    --------
+
+    >>> from varcode.transforms import left_align_indels
+    >>> normalized = left_align_indels(vc)  # doctest: +SKIP
+    """
+    raise NotImplementedError(
+        "varcode.transforms.left_align_indels — implementation in "
+        "progress, tracked in openvax/varcode#369")
