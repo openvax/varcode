@@ -175,6 +175,10 @@ Auto-generated from in-source docstrings via
 
 ::: varcode.transforms.pair_breakends
 
+### `varcode.transforms.left_align_indels`
+
+::: varcode.transforms.left_align_indels
+
 ## File loading
 
 ### `varcode.load_vcf`
