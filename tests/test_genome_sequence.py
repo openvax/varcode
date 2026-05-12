@@ -329,6 +329,30 @@ def test_reference_range_rejects_inverted_range(genome):
 # --------------------------------------------------------------------
 
 
+def test_attach_resets_cryptic_exons_warn_cache(genome, cftr_position):
+    """The ``cryptic_exons`` warn-once dedup keyed on ``id(genome)``
+    would otherwise persist across attach/detach cycles. Any explicit
+    attach (or detach) is user action — the next missing-FASTA
+    signal should be fresh, not suppressed.
+    """
+    from varcode import cryptic_exons
+    contig, pos, base = cftr_position
+
+    # Seed the cache as if a previous warning had fired.
+    cryptic_exons._MISSING_REFERENCE_WARNED.add(id(genome))
+    assert id(genome) in cryptic_exons._MISSING_REFERENCE_WARNED
+
+    # Attach -> cache should be cleared (fresh signal post-attach).
+    attach_genome_fasta(genome, _build_fasta_around(contig, pos, base),
+                        verify=False)
+    assert id(genome) not in cryptic_exons._MISSING_REFERENCE_WARNED
+
+    # Re-seed, then detach -> also cleared.
+    cryptic_exons._MISSING_REFERENCE_WARNED.add(id(genome))
+    attach_genome_fasta(genome, None)
+    assert id(genome) not in cryptic_exons._MISSING_REFERENCE_WARNED
+
+
 def test_load_vcf_attaches_genome_fasta(genome):
     """``load_vcf(..., genome_fasta=...)`` attaches the FASTA to the
     resolved genome before parsing — equivalent to a separate

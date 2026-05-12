@@ -93,7 +93,10 @@ def attach_genome_fasta(genome, fasta_or_path, *, verify=True):
         exonic position varcode already knows (via Tier 2) and warn if
         the bases disagree. Catches mislabeled FASTAs (GRCh37 attached
         to a GRCh38 release). Set False to skip if you have an
-        intentionally-divergent setup.
+        intentionally-divergent setup, or if attaching very early in a
+        fresh process where iterating ``genome.transcripts()`` would
+        force lazy construction of pyensembl's transcript DB before
+        the first effect-prediction call would have done so anyway.
 
     Returns
     -------
@@ -120,15 +123,29 @@ def attach_genome_fasta(genome, fasta_or_path, *, verify=True):
         # Detach.
         if hasattr(genome, _VARCODE_FASTA_ATTR):
             delattr(genome, _VARCODE_FASTA_ATTR)
+        _clear_attach_dedup_state(genome)
         return genome
 
     fasta = _resolve_fasta(fasta_or_path, genome=genome)
     setattr(genome, _VARCODE_FASTA_ATTR, fasta)
+    _clear_attach_dedup_state(genome)
 
     if verify:
         _verify_fasta_against_transcripts(genome, fasta)
 
     return genome
+
+
+def _clear_attach_dedup_state(genome):
+    """Reset warn-once caches that other modules keyed against this
+    genome. Any explicit attach or detach is user action — the next
+    "no reference available" warning should be a fresh signal, not
+    suppressed because we warned earlier in the same process.
+    """
+    # Lazy import: cryptic_exons imports from this module (for
+    # reference_range), so eager imports would cycle.
+    from . import cryptic_exons
+    cryptic_exons._MISSING_REFERENCE_WARNED.discard(id(genome))
 
 
 def reference_base(genome, contig, position):
@@ -353,21 +370,53 @@ def _tier2_base(genome, contig, position):
     return answer
 
 
-def _read_transcript_base(transcript, position):
-    """Return the + strand base at ``position`` from one transcript's
-    spliced cDNA, or ``""`` if the position isn't on any exon of this
-    transcript."""
+def _plus_strand_slice(transcript, start, end):
+    """Return the + strand bases over ``[start, end]`` from one
+    transcript's spliced cDNA, or ``""`` if the requested range isn't
+    fully on this transcript's exons.
+
+    1-based inclusive coordinates.
+
+    Strand handling lives here so callers don't have to reason about
+    it. For ``+`` strand transcripts the slice maps directly. For
+    ``-`` strand transcripts the cDNA is in transcript orientation
+    (the reverse-complement of the ``+`` strand), so the slice needs
+    to be complemented and then reversed to come back in
+    ``+`` strand 5'→3' order.
+
+    Returns ``""`` rather than raising for any non-coverage condition
+    (intronic position, position past the end of the transcript,
+    range that spans an exon boundary, etc.) — callers loop over
+    multiple transcripts and need a uniform "this one didn't work"
+    signal.
+    """
     try:
-        offset = transcript.spliced_offset(position)
+        start_offset = transcript.spliced_offset(start)
+        end_offset = transcript.spliced_offset(end)
     except (ValueError, KeyError):
         return ""
     seq = transcript.sequence
-    if seq is None or offset >= len(seq):
+    if seq is None:
         return ""
-    base = seq[offset].upper()
+    lo, hi = sorted((start_offset, end_offset))
+    if hi >= len(seq):
+        return ""
+    slice_seq = seq[lo:hi + 1].upper()
+    if len(slice_seq) != end - start + 1:
+        # Guard against pyensembl returning a truncated sequence for a
+        # malformed annotation — shouldn't happen, but if it does,
+        # silently signal "no coverage from this transcript."
+        return ""
     if transcript.strand == "-":
-        base = base.translate(_COMPLEMENT)
-    return base
+        slice_seq = slice_seq.translate(_COMPLEMENT)[::-1]
+    return slice_seq
+
+
+def _read_transcript_base(transcript, position):
+    """Return the + strand base at ``position`` from one transcript,
+    or ``""`` if the position isn't on any exon of this transcript.
+    Single-position specialization of :func:`_plus_strand_slice`."""
+    return _plus_strand_slice(transcript, position, position)
 
 
 def _tier2_range_via_single_transcript(genome, contig, start, end):
@@ -380,25 +429,8 @@ def _tier2_range_via_single_transcript(genome, contig, start, end):
         transcripts = genome.transcripts_at_locus(contig, start, end)
     except Exception:
         return None
-
     for t in transcripts:
-        try:
-            start_offset = t.spliced_offset(start)
-            end_offset = t.spliced_offset(end)
-        except (ValueError, KeyError):
-            continue
-        seq = t.sequence
-        if seq is None:
-            continue
-        lo, hi = sorted((start_offset, end_offset))
-        if hi >= len(seq):
-            continue
-        slice_seq = seq[lo:hi + 1].upper()
-        if len(slice_seq) != end - start + 1:
-            # Shouldn't happen for a well-formed transcript, but guard
-            # against pyensembl returning a truncated sequence.
-            continue
-        if t.strand == "-":
-            slice_seq = slice_seq.translate(_COMPLEMENT)[::-1]
-        return slice_seq
+        span = _plus_strand_slice(t, start, end)
+        if span:
+            return span
     return None
