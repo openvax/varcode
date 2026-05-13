@@ -416,6 +416,15 @@ class VariantCollection(Collection):
             variant_collections=(self,) + others,
             kwargs=kwargs)
 
+    def difference(self, *others, **kwargs):
+        """
+        Returns variants present in this collection but not in any of the others.
+        """
+        return self._combine_variant_collections(
+            combine_fn=set.difference,
+            variant_collections=(self,) + others,
+            kwargs=kwargs)
+
     _DATAFRAME_COLUMNS = (
         "chr", "start", "ref", "alt", "gene_name", "gene_id",
     )
