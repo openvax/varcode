@@ -130,7 +130,7 @@ class TestSameCodonOverlap:
         return GermlineContext.from_variants(
             [_same_codon_germline()], reference_name="GRCh38")
 
-    def test_produces_phase_ambiguous_effect(self):
+    def test_produces_phase_candidate_set(self):
         ann = get_default_annotator()
         e = predict_germline_aware_effect(
             _somatic(), _cftr(), self._ctx(), ann)

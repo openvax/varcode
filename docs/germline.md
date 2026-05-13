@@ -83,6 +83,11 @@ A real pipeline gets the cis/trans answer from a phased VCF or an
 RNA assembly. For this demo, a hand-rolled resolver makes the
 collapse visible:
 
+These stubs only implement `in_cis(...)`, which is all the
+codon-collapse path consults. Richer pipelines implement more of
+the `varcode.phasing.PhaseResolver` protocol (`has_contig`,
+`mutant_transcript`, `phased_partners`, ...).
+
 ```python
 class ForceCis:
     source = "demo"
