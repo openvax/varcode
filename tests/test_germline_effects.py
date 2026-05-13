@@ -7,7 +7,7 @@
 """End-to-end tests for germline-aware effect prediction (#268).
 
 Covers the wiring of ``germline=`` through ``Variant.effects`` and
-``VariantCollection.effects``, the ``PhaseAmbiguousEffect`` output
+``VariantCollection.effects``, the ``PhaseCandidateSet`` output
 shape when phase is unknown, LOH detection, sparseness propagation,
 hemizygous handling, and cross-VCF build-mismatch validation.
 
@@ -41,7 +41,7 @@ from varcode import (
 )
 from varcode.annotators.registry import get_default_annotator
 from varcode.effects.effect_classes import (
-    PhaseAmbiguousEffect,
+    PhaseCandidateSet,
     Substitution,
 )
 
@@ -118,7 +118,7 @@ class TestBackCompat:
 
 
 # --------------------------------------------------------------------
-# Same-codon overlap, unknown phase → PhaseAmbiguousEffect
+# Same-codon overlap, unknown phase → PhaseCandidateSet
 # --------------------------------------------------------------------
 
 
@@ -134,7 +134,7 @@ class TestSameCodonOverlap:
         ann = get_default_annotator()
         e = predict_germline_aware_effect(
             _somatic(), _cftr(), self._ctx(), ann)
-        assert isinstance(e, PhaseAmbiguousEffect)
+        assert isinstance(e, PhaseCandidateSet)
 
     def test_two_hypotheses_for_one_germline_variant(self):
         ann = get_default_annotator()
@@ -217,9 +217,9 @@ class TestNoOverlap:
                     ref="C", alt="T", genome=ensembl_grch38),
         ], reference_name="GRCh38")
         e = predict_germline_aware_effect(_somatic(), _cftr(), ctx, ann)
-        # Single Substitution effect (not PhaseAmbiguousEffect) —
+        # Single Substitution effect (not PhaseCandidateSet) —
         # patient transcript == reference transcript at this locus.
-        assert not isinstance(e, PhaseAmbiguousEffect)
+        assert not isinstance(e, PhaseCandidateSet)
         assert isinstance(e, Substitution)
 
 
@@ -248,9 +248,9 @@ class TestPhaseResolverCollapses:
         e = predict_germline_aware_effect(
             _somatic(), _cftr(), ctx, ann,
             phase_resolver=_StubPhaseResolver(in_cis_answer=True))
-        # Single resolved hypothesis → not a PhaseAmbiguousEffect; the
+        # Single resolved hypothesis → not a PhaseCandidateSet; the
         # cis-applied classification surfaces as the primary effect.
-        assert not isinstance(e, PhaseAmbiguousEffect)
+        assert not isinstance(e, PhaseCandidateSet)
         # Phase metadata still attached for downstream filtering.
         assert getattr(e, "germline_phase_state", None) == "phased"
 
@@ -479,16 +479,16 @@ class TestEffectsKwargWiring:
         ctx = GermlineContext.from_variants(
             [_same_codon_germline()], reference_name="GRCh38")
         effects = list(v.effects(raise_on_error=False, germline=ctx))
-        # At least one PhaseAmbiguousEffect among the per-transcript
+        # At least one PhaseCandidateSet among the per-transcript
         # outputs (CFTR has multiple transcripts).
-        assert any(isinstance(e, PhaseAmbiguousEffect) for e in effects)
+        assert any(isinstance(e, PhaseCandidateSet) for e in effects)
 
     def test_collection_effects_with_germline(self):
         somatic = VariantCollection([_somatic()])
         ctx = GermlineContext.from_variants(
             [_same_codon_germline()], reference_name="GRCh38")
         effects = somatic.effects(germline=ctx, raise_on_error=False)
-        assert any(isinstance(e, PhaseAmbiguousEffect) for e in effects)
+        assert any(isinstance(e, PhaseCandidateSet) for e in effects)
         # Annotator metadata still tracks the underlying annotator,
         # not "germline" (germline is a transcript modifier, not an
         # annotator). The collection-level annotator name is

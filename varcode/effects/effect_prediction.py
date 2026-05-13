@@ -83,7 +83,7 @@ def predict_variant_effects(
         applied transcript instead of the reference. Codons / splice
         signals where germline overlaps the somatic produce per-
         haplotype possibility sets when phase is unknown (a
-        :class:`PhaseAmbiguousEffect`); LOH at germline het positions
+        :class:`PhaseCandidateSet`); LOH at germline het positions
         is flagged. ``None`` or :meth:`GermlineContext.empty` falls
         through to today's reference-relative behaviour byte-
         identically. See openvax/varcode#268.
@@ -155,7 +155,7 @@ def predict_variant_effects(
                     # Germline-aware path takes over when a non-empty
                     # context is supplied — it owns window lookup,
                     # phase enumeration, LOH detection, and packaging
-                    # into a PhaseAmbiguousEffect when phase is
+                    # into a PhaseCandidateSet when phase is
                     # unknown. Empty context delegates to the
                     # annotator unchanged. See #268.
                     annotate = (
