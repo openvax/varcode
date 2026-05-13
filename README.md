@@ -84,16 +84,18 @@ Feature guides live in [`docs/`](https://github.com/openvax/varcode/tree/main/do
 - [**Effect annotation**](https://openvax.github.io/varcode/effect_annotation/) — how variants
   become effects, splice outcome representations, pluggable annotators,
   and structural variants.
-- [**Germline-aware annotation**](https://openvax.github.io/varcode/germline/) — classify
-  somatic variants against the patient's germline-applied transcript;
-  possibility sets when phase is unknown; LOH detection.
 - [**Genotypes and sample-aware queries**](https://openvax.github.io/varcode/genotype/) —
   per-sample zygosity on multi-sample VCFs.
+- [**VariantCollection transforms**](https://openvax.github.io/varcode/transforms/) —
+  `pair_breakends`, `left_align_indels`, and the transform contract.
 - [**CSV round-trip and metadata headers**](https://openvax.github.io/varcode/csv/) —
   `to_csv` / `from_csv` with `#`-prefixed provenance headers.
 - [**Error handling**](https://openvax.github.io/varcode/errors/) — `ReferenceMismatchError`,
   `GenomeBuildMismatchError`, `SampleNotFoundError`, and
   `raise_on_error=False`.
+- [**Germline-aware annotation**](https://openvax.github.io/varcode/germline/) — niche.
+  Classify somatic variants against the patient's germline-applied
+  transcript when somatic and germline share a codon.
 
 See [`CHANGELOG.md`](https://github.com/openvax/varcode/blob/main/CHANGELOG.md) for the release history.
 
