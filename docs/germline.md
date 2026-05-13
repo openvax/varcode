@@ -11,12 +11,27 @@ of somatic variants. Read this page only if you have a tumor/normal
 pipeline and care about cases where germline shares a codon with
 the somatic call.
 
-## Effects without vs. with germline — concrete example
+## How varcode handles unknown phase
 
-CFTR has a somatic variant at GRCh38 7:117531100 `T→A`. The
-neighbouring germline variant at 7:117531101 `T→C` lands in the
-same codon. Codon at this position is `CTG` (Leucine, L159); the
-somatic alone produces `ATG` (Met).
+Varcode does no phasing itself. When somatic and germline share a
+codon and the relative phase is unknown, varcode **enumerates the
+possibility set** — one classified effect per haplotype hypothesis
+— and returns a `PhaseCandidateSet`. To collapse the set, pass a
+`phase_resolver=` that knows the answer:
+
+- `VCFPhaseResolver(merged_phased.vcf)` — reads `PS` tags from a
+  WhatsHap- or HapCUT2-phased merged VCF.
+- `IsovarPhaseResolver(provider)` — checks which haplotype the
+  somatic was observed on in RNA reads.
+- Anything implementing `in_cis(v1, v2, transcript) -> bool | None`.
+
+Phase known → single `MutationEffect`. Phase unknown →
+`PhaseCandidateSet` with `.candidates` for the full set.
+
+## Concrete example: same codon, three scenarios
+
+CFTR has a somatic at GRCh38 7:117531100 `T→A`. A neighbouring
+germline at 7:117531101 `T→C` lands in the same codon.
 
 ```python
 from pyensembl import cached_release
@@ -28,9 +43,11 @@ cftr = g.transcript_by_id("ENST00000003084")
 ann = get_default_annotator()
 
 somatic = Variant("7", 117_531_100, "T", "A", genome=g)
+germline = Variant("7", 117_531_101, "T", "C", genome=g)
+ctx = GermlineContext.from_variants([germline], reference_name="GRCh38")
 ```
 
-### Without germline (reference-relative)
+### Scenario 1 — no germline (reference-relative, the default)
 
 ```python
 eff = somatic.effect_on_transcript(cftr)
@@ -38,54 +55,61 @@ print(type(eff).__name__, eff.short_description)
 # Substitution p.L159M
 ```
 
-The reference codon is `CTG` → somatic changes it to `ATG` → L→M.
-
-### With same-codon germline, phase unknown
+### Scenario 2 — germline passed, phase unknown → possibility set
 
 ```python
-germline = Variant("7", 117_531_101, "T", "C", genome=g)
-ctx = GermlineContext.from_variants([germline], reference_name="GRCh38")
-
 eff = predict_germline_aware_effect(somatic, cftr, ctx, ann)
 print(type(eff).__name__, eff.short_description)
-# PhaseAmbiguousEffect ?p.L159M
+# PhaseCandidateSet ?p.L159M
 
-for o in eff.outcomes:
-    ev = o.evidence
-    print(f"  haplotype={ev['haplotype']:<10} "
+for c in eff.outcomes:
+    ev = c.evidence
+    print(f"  haplotype={ev['haplotype']:<2} "
           f"germline_in_cis={[v.short_description for v in ev['germline_variants']]} "
-          f"=> {o.effect.short_description}")
-# haplotype=B          germline_in_cis=[]                              => p.L159M
-# haplotype=A          germline_in_cis=['chr7 g.117531101T>C']         => p.S159T
+          f"=> {c.effect.short_description}")
+# haplotype=B  germline_in_cis=[]                            => p.L159M
+# haplotype=A  germline_in_cis=['chr7 g.117531101T>C']       => p.S159T
 ```
 
-Two haplotypes, two predictions:
+The `?` prefix on `?p.L159M` flags the description as the
+most-likely candidate of a `PhaseCandidateSet`. Real consumers
+should `isinstance(eff, PhaseCandidateSet)` and iterate
+`eff.candidates` (full classified effects) or `eff.outcomes`
+(candidates plus per-haplotype evidence keys).
 
-- **Trans** (germline on the other allele, A): patient codon was
-  `CTG` → somatic produces `ATG` → **L→M**. Identical to the
-  reference-relative case.
-- **Cis** (germline already on this allele, A): patient codon was
-  already `CCG` (Pro, but we started from a Ser-pair — see below);
-  in this CFTR example the cis path lands on **S→T**.
+### Scenario 3 — force phasing → single effect
 
-The `?` prefix on `?p.L159M` marks the description as the
-most-likely candidate of a possibility set. The full set lives on
-`.outcomes`.
+A real pipeline gets the cis/trans answer from a phased VCF or an
+RNA assembly. For this demo, a hand-rolled resolver makes the
+collapse visible:
 
-### With phase resolved → set collapses
+These stubs only implement `in_cis(...)`, which is all the
+codon-collapse path consults. Richer pipelines implement more of
+the `varcode.phasing.PhaseResolver` protocol (`has_contig`,
+`mutant_transcript`, `phased_partners`, ...).
 
 ```python
-from varcode import VCFPhaseResolver
+class ForceCis:
+    source = "demo"
+    def in_cis(self, v1, v2, transcript=None): return True
 
-# Hypothetical phased.vcf with PS tags spanning both rows.
-phaser = VCFPhaseResolver(merged_vcf_path="phased.vcf")
-eff = somatic.effects(germline=ctx, phase_resolver=phaser)
-# Regular MutationEffect, not PhaseAmbiguousEffect.
+class ForceTrans:
+    source = "demo"
+    def in_cis(self, v1, v2, transcript=None): return False
+
+eff_cis = predict_germline_aware_effect(somatic, cftr, ctx, ann,
+                                         phase_resolver=ForceCis())
+print("cis   ->", type(eff_cis).__name__, eff_cis.short_description)
+# cis   -> Substitution p.S159T
+
+eff_trans = predict_germline_aware_effect(somatic, cftr, ctx, ann,
+                                           phase_resolver=ForceTrans())
+print("trans ->", type(eff_trans).__name__, eff_trans.short_description)
+# trans -> Substitution p.L159M
 ```
 
-When the resolver answers cis/trans for each (somatic, germline)
-pair, the set collapses to one hypothesis and the output is a
-regular `MutationEffect`.
+In real code use `VCFPhaseResolver(merged_phased.vcf)` or
+`IsovarPhaseResolver(provider)` — same `phase_resolver=` slot.
 
 ## When does this matter?
 
@@ -97,12 +121,12 @@ is a no-op.
 Cross-VCF phase is structurally unknown by default: `PS` tags
 describe phase *within* a VCF, so a tumor VCF and a separate normal
 VCF can't be phased against each other without a resolver. For
-tumor/normal short-read pipelines, possibility sets are the
-**guaranteed** case when somatic + germline share a codon — not the
-exception. To collapse them you need WhatsHap or HapCUT2 on a
-merged VCF, fed in via `VCFPhaseResolver`. Long-read pipelines
-(PacBio HiFi, ONT) typically phase entire genes, so possibility
-sets are rare.
+tumor/normal short-read pipelines, `PhaseCandidateSet` is the
+**guaranteed** output when somatic + germline share a codon — not
+the exception. To collapse to a single effect you need WhatsHap or
+HapCUT2 on a merged VCF, fed in via `VCFPhaseResolver`. Long-read
+pipelines (PacBio HiFi, ONT) typically phase entire genes, so
+candidate sets are rare there.
 
 ## Constructing a `GermlineContext`
 
@@ -169,10 +193,10 @@ effects = somatic.effects(
 ```
 
 Order: germline modifies the transcript first, phase collapses the
-possibility set next, RNA collapses further (or appends observed-
-only outcomes). Cross-axis key is `Outcome.evidence["haplotype"]`,
-so an RNA observation tagged with the same haplotype tag aligns
-with the right germline-aware outcome.
+candidate set next, RNA collapses further (or appends observed-only
+outcomes). Cross-axis key is `Outcome.evidence["haplotype"]`, so an
+RNA observation tagged with the same haplotype tag aligns with the
+right germline-aware outcome.
 
 ## Cross-VCF build mismatch
 

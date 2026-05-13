@@ -505,7 +505,7 @@ class Variant(Serializable):
             germline-applied transcript instead of the reference.
             Codons / splice signals where germline overlaps the
             somatic and phase is unknown produce a
-            :class:`PhaseAmbiguousEffect` with one outcome per
+            :class:`PhaseCandidateSet` with one outcome per
             haplotype hypothesis; LOH at germline het positions sets
             ``effect.is_loh = True``. ``None`` or
             :meth:`GermlineContext.empty` falls through to today's

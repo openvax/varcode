@@ -578,7 +578,7 @@ class GermlineContext:
 #      Classify the diff between them using the protein-diff
 #      classifier — same machinery the protein_diff annotator uses.
 #   6. Single hypothesis → return the single classified effect.
-#      Multiple hypotheses → wrap in ``PhaseAmbiguousEffect`` (a
+#      Multiple hypotheses → wrap in ``PhaseCandidateSet`` (a
 #      ``MultiOutcomeEffect`` subclass; not a wrapper around a
 #      reference-relative effect).
 #
@@ -974,7 +974,7 @@ def predict_germline_aware_effect(
       classify against it via :func:`_classify_against_patient_baseline`.
     * **Germline in window, phase unknown** — enumerate hypotheses
       (capped via ``max_hypotheses``), classify each, wrap in
-      :class:`~varcode.effects.effect_classes.PhaseAmbiguousEffect`.
+      :class:`~varcode.effects.effect_classes.PhaseCandidateSet`.
 
     LOH (``somatic`` matches germline at position+alt with het zygosity)
     sets ``effect.is_loh = True`` regardless of which branch ran.
@@ -1027,8 +1027,8 @@ def predict_germline_aware_effect(
         _classify_against_patient_baseline(
             somatic_variant, transcript, h)
         for h in hypotheses)
-    from .effects.effect_classes import PhaseAmbiguousEffect
-    effect = PhaseAmbiguousEffect(
+    from .effects.effect_classes import PhaseCandidateSet
+    effect = PhaseCandidateSet(
         variant=somatic_variant,
         transcript=transcript,
         candidates=candidates,

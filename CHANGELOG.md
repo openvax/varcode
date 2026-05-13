@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+**Breaking**
+- `varcode.effects.effect_classes.PhaseAmbiguousEffect` renamed to
+  `PhaseCandidateSet`. No deprecation alias — update imports.
+  Public surface (`.candidates`, `.outcomes`, `.most_likely`,
+  `.short_description`, etc.) is unchanged
+  ([#376](https://github.com/openvax/varcode/pull/376)).
+
 **Changed**
 - `SpliceCandidate` and `SpliceOutcomeSet` serialization migrated onto
   `DataclassSerializable` from `serializable>=1.1.0`. The

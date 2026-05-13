@@ -1277,7 +1277,7 @@ class HaplotypeEffect(TranscriptMutationEffect, MultiOutcomeEffect):
 
 
 # =====================================================================
-# Phase-ambiguous effects — possibility set when somatic + germline
+# Phase candidate set — possibility set when somatic + germline
 # share a window and phase between them is unknown (#268).
 #
 # Sibling of HaplotypeEffect: that one captures the *known-cis* case
@@ -1286,12 +1286,12 @@ class HaplotypeEffect(TranscriptMutationEffect, MultiOutcomeEffect):
 # its own resulting effect). Both inherit the same MultiOutcomeEffect
 # protocol so consumers iterate ``outcomes`` uniformly. This isn't a
 # wrapper around a reference-relative effect — it's the primary
-# effect class for the phase-ambiguous case, just like
+# effect class for the unknown-phase case, just like
 # SpliceOutcomeSet is for splice ambiguity.
 # =====================================================================
 
 
-class PhaseAmbiguousEffect(TranscriptMutationEffect, MultiOutcomeEffect):
+class PhaseCandidateSet(TranscriptMutationEffect, MultiOutcomeEffect):
     """Possibility set across phase hypotheses when a somatic variant
     and one or more germline variants share a window on a transcript
     and phase between them is unknown.
@@ -1321,12 +1321,12 @@ class PhaseAmbiguousEffect(TranscriptMutationEffect, MultiOutcomeEffect):
         TranscriptMutationEffect.__init__(self, variant, transcript)
         if len(candidates) != len(hypotheses):
             raise ValueError(
-                "PhaseAmbiguousEffect needs one candidate per "
+                "PhaseCandidateSet needs one candidate per "
                 "hypothesis; got %d candidates and %d hypotheses." % (
                     len(candidates), len(hypotheses)))
         if not candidates:
             raise ValueError(
-                "PhaseAmbiguousEffect requires at least one candidate.")
+                "PhaseCandidateSet requires at least one candidate.")
         self._candidates_raw = tuple(candidates)
         self._hypotheses = tuple(hypotheses)
         self.germline_variants = tuple(germline_variants)
@@ -1397,7 +1397,7 @@ class PhaseAmbiguousEffect(TranscriptMutationEffect, MultiOutcomeEffect):
 
     def __str__(self):
         return (
-            "PhaseAmbiguousEffect(variant=%s, transcript=%s, "
+            "PhaseCandidateSet(variant=%s, transcript=%s, "
             "%d hypotheses, germline=%s)" % (
                 self.variant,
                 self.transcript.name if self.transcript else "?",
