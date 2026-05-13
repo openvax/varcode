@@ -31,6 +31,36 @@ def test_variant_collection_intersection():
     eq_(set(combined.sources), {ov_wustle_variants.source, tcga_ov_variants.source})
     eq_(len(combined), 0)
 
+def test_variant_collection_difference_disjoint():
+    diff = ov_wustle_variants.difference(tcga_ov_variants)
+    eq_(set(diff.sources), {ov_wustle_variants.source, tcga_ov_variants.source})
+    eq_(len(diff), len(ov_wustle_variants))
+    eq_(set(diff), set(ov_wustle_variants))
+
+def test_variant_collection_difference_with_self():
+    diff = ov_wustle_variants.difference(ov_wustle_variants)
+    eq_(len(diff), 0)
+
+def test_variant_collection_difference_partial_overlap():
+    v1 = Variant("1", 100, "A", "T", genome="GRCh38")
+    v2 = Variant("1", 200, "C", "G", genome="GRCh38")
+    v3 = Variant("1", 300, "G", "A", genome="GRCh38")
+    a = VariantCollection([v1, v2, v3])
+    b = VariantCollection([v2])
+    diff = a.difference(b)
+    eq_(len(diff), 2)
+    eq_(set(diff), {v1, v3})
+
+def test_variant_collection_difference_multiple_args():
+    v1 = Variant("1", 100, "A", "T", genome="GRCh38")
+    v2 = Variant("1", 200, "C", "G", genome="GRCh38")
+    v3 = Variant("1", 300, "G", "A", genome="GRCh38")
+    a = VariantCollection([v1, v2, v3])
+    b = VariantCollection([v1])
+    c = VariantCollection([v3])
+    diff = a.difference(b, c)
+    eq_(set(diff), {v2})
+
 def test_variant_collection_gene_counts():
     gene_counts = ov_wustle_variants.gene_counts()
     # test that each gene is counted just once
