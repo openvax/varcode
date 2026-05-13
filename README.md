@@ -75,27 +75,27 @@ print(premature_stop_effect.gene.name)
 ### 'TP53'
 ```
 
-If you are looking for a quick start guide, you can check out [this iPython book](./examples/varcode-quick_start.ipynb) that demonstrates simple use cases of Varcode.
+If you are looking for a quick start guide, you can check out [this iPython book](https://github.com/openvax/varcode/blob/main/examples/varcode-quick_start.ipynb) that demonstrates simple use cases of Varcode.
 
 ## Further reading
 
-Feature guides live in [`docs/`](./docs/) and on the [docs site](https://openvax.github.io/varcode/):
+Feature guides live in [`docs/`](https://github.com/openvax/varcode/tree/main/docs) and on the [docs site](https://openvax.github.io/varcode/):
 
-- [**Effect annotation**](./docs/effect_annotation.md) — how variants
+- [**Effect annotation**](https://openvax.github.io/varcode/effect_annotation/) — how variants
   become effects, splice outcome representations, pluggable annotators,
   and structural variants.
-- [**Germline-aware annotation**](./docs/germline.md) — classify
+- [**Germline-aware annotation**](https://openvax.github.io/varcode/germline/) — classify
   somatic variants against the patient's germline-applied transcript;
   possibility sets when phase is unknown; LOH detection.
-- [**Genotypes and sample-aware queries**](./docs/genotype.md) —
+- [**Genotypes and sample-aware queries**](https://openvax.github.io/varcode/genotype/) —
   per-sample zygosity on multi-sample VCFs.
-- [**CSV round-trip and metadata headers**](./docs/csv.md) —
+- [**CSV round-trip and metadata headers**](https://openvax.github.io/varcode/csv/) —
   `to_csv` / `from_csv` with `#`-prefixed provenance headers.
-- [**Error handling**](./docs/errors.md) — `ReferenceMismatchError`,
+- [**Error handling**](https://openvax.github.io/varcode/errors/) — `ReferenceMismatchError`,
   `GenomeBuildMismatchError`, `SampleNotFoundError`, and
   `raise_on_error=False`.
 
-See [`CHANGELOG.md`](./CHANGELOG.md) for the release history.
+See [`CHANGELOG.md`](https://github.com/openvax/varcode/blob/main/CHANGELOG.md) for the release history.
 
 ## Effect Types
 
