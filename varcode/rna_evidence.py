@@ -62,11 +62,11 @@ class RNAEvidenceResolver(Protocol):
     alone.
 
     Returned outcomes should set ``source`` to a producer-specific
-    string (``"isovar"``, ``"exacto"``, ``"longread_assembly"``, ...)
-    and populate ``evidence`` with whatever shape that producer
-    natively emits (transcript model IDs, junction read counts, etc.).
-    See :func:`make_rna_outcome` for a convenience factory that fills
-    the common fields.
+    string (the name of the RNA assembler, long-read caller, fusion
+    detector, etc.) and populate ``evidence`` with whatever shape that
+    producer natively emits (transcript model IDs, junction read
+    counts, etc.). See :func:`make_rna_outcome` for a convenience
+    factory that fills the common fields.
     """
 
     def observed_outcomes(self, variant, transcript) -> Sequence[Outcome]:
@@ -113,8 +113,9 @@ def make_rna_outcome(
         Estimated frequency of this isoform (e.g. expression-supported
         fraction). ``None`` means "not scored".
     source : str
-        Producer name; defaults to ``"rna"``. Set to ``"isovar"`` /
-        ``"exacto"`` / etc. for tool-specific filtering.
+        Producer name; defaults to ``"rna"``. Set to a tool-specific
+        string (RNA assembler, long-read caller, etc.) for downstream
+        filtering. Opaque to varcode.
     transcript_model_id : str or None
         Stable ID of the observed transcript model from the producer.
         Stored under ``evidence["transcript_model_id"]``.

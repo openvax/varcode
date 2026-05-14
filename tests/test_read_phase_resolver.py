@@ -79,9 +79,9 @@ def _cftr():
     return ensembl_grch38.transcript_by_id(CFTR_ID)
 
 
-def test_resolver_default_source_tag():
+def test_resolver_default_phase_source_tag():
     resolver = ReadPhaseResolver(StubReadPhasingSource())
-    assert resolver.source == "read_phasing"
+    assert resolver.phase_source == "read_phasing"
 
 
 def test_in_cis_true_when_both_observed_together():

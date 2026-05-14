@@ -92,24 +92,25 @@ class ReadPhaseResolver:
     the observed mutant transcript.
     """
 
-    #: Provenance string for downstream consumers that filter by
-    #: phase source. Matches the pattern established by the
-    #: :class:`Outcome.source` field.
-    source = "read_phasing"
+    #: Provenance tag flowing into :attr:`HaplotypeEffect.phase_source`
+    #: when this resolver produced the cis grouping. Distinct from
+    #: :attr:`Outcome.source` (an unrelated producer tag on RNA-evidence
+    #: outcomes).
+    phase_source = "read_phasing"
 
-    def __init__(self, source: ReadPhasingSource):
-        self._source = source
+    def __init__(self, phasing_source: ReadPhasingSource):
+        self.phasing_source = phasing_source
 
     def has_evidence(self, variant) -> bool:
         """Convenience passthrough to the wrapped source."""
-        return self._source.has_evidence(variant)
+        return self.phasing_source.has_evidence(variant)
 
     def mutant_transcript(self, variant, transcript):
         """Return the observed :class:`MutantTranscript` for
         ``(variant, transcript)``, or ``None`` when the wrapped source
         doesn't implement :class:`MutantTranscriptSource` or has no
         transcript for that pair."""
-        get = getattr(self._source, "mutant_transcript", None)
+        get = getattr(self.phasing_source, "mutant_transcript", None)
         if get is None:
             return None
         return get(variant, transcript)
@@ -126,20 +127,20 @@ class ReadPhaseResolver:
         first-class concern. Reintroducible later as an optional
         Protocol extension.
         """
-        v1_has = self._source.has_evidence(v1)
-        v2_has = self._source.has_evidence(v2)
+        v1_has = self.phasing_source.has_evidence(v1)
+        v2_has = self.phasing_source.has_evidence(v2)
         if not v1_has and not v2_has:
             return None
         if v1_has:
-            return v2 in self._source.partners_in_cis(v1)
-        return v1 in self._source.partners_in_cis(v2)
+            return v2 in self.phasing_source.partners_in_cis(v1)
+        return v1 in self.phasing_source.partners_in_cis(v2)
 
     def phased_partners(self, variant, transcript=None) -> Sequence:
         """Variants co-observed with ``variant`` — i.e. the cis set.
         Empty when the source has no evidence for ``variant``."""
-        if not self._source.has_evidence(variant):
+        if not self.phasing_source.has_evidence(variant):
             return ()
-        return tuple(self._source.partners_in_cis(variant))
+        return tuple(self.phasing_source.partners_in_cis(variant))
 
 
 class VCFPhaseResolver:
@@ -184,8 +185,8 @@ class VCFPhaseResolver:
     the grouping.
     """
 
-    #: Provenance tag, matching :attr:`ReadPhaseResolver.source`.
-    source = "vcf_ps"
+    #: Provenance tag, matching :attr:`ReadPhaseResolver.phase_source`.
+    phase_source = "vcf_ps"
 
     def __init__(self, variant_collection, sample):
         self._collection = variant_collection
@@ -413,6 +414,6 @@ def build_haplotype_effects(variant_collection, effects, phase_resolver):
                 variants=members,
                 transcript=transcript,
                 mutant_transcript=mt,
-                phase_source=getattr(phase_resolver, "source", None),
+                phase_source=getattr(phase_resolver, "phase_source", None),
             ))
     return haplotype_effects

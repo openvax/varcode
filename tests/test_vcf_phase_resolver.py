@@ -179,10 +179,10 @@ def test_phased_partners_returns_cis_variants_only(phased_vcf):
 # ------------------------------------------------------------------
 
 
-def test_vcf_resolver_source_tag():
+def test_vcf_resolver_phase_source_tag():
     from varcode import VariantCollection
     resolver = VCFPhaseResolver(VariantCollection([]), sample="x")
-    assert resolver.source == "vcf_ps"
+    assert resolver.phase_source == "vcf_ps"
 
 
 # ------------------------------------------------------------------
@@ -193,7 +193,7 @@ def test_vcf_resolver_source_tag():
 def test_vcf_resolver_has_same_phase_api_as_read_resolver():
     from varcode import VariantCollection
     from varcode.phasing import ReadPhaseResolver
-    required = {"in_cis", "phased_partners", "source"}
+    required = {"in_cis", "phased_partners", "phase_source"}
     vcf_r = VCFPhaseResolver(VariantCollection([]), sample="x")
     # Can't instantiate ReadPhaseResolver without a source; check
     # class attrs instead.
