@@ -43,7 +43,7 @@ from varcode.effects.effect_classes import (
     StructuralVariantEffect,
     Substitution,
 )
-from varcode.outcomes import Outcome
+from varcode.outcomes import EffectCandidate
 
 
 ensembl_grch38 = cached_release(81)
@@ -199,8 +199,7 @@ class TestApplyAttaches:
             source="isovar",
             transcript_model_id="ISOFORM_A",
             read_count=42,
-            probability=0.78,
-            description="In-frame loss of CFTR exons 2-4 observed in tumor RNA")
+            probability=0.78)
         apply_rna_evidence_to_effects(
             [effect], _StubResolver([observed]))
 
@@ -364,7 +363,7 @@ class TestEffectsKwargWiring:
 
 
 # --------------------------------------------------------------------
-# Outcome ordering: DNA-predicted preserved at the front
+# EffectCandidate ordering: DNA-predicted preserved at the front
 # --------------------------------------------------------------------
 
 

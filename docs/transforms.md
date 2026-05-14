@@ -164,7 +164,7 @@ genome shape was passed.
 
 ### Behavior
 
-| Variant kind | Outcome |
+| Variant kind | Behavior |
 |---|---|
 | Pure SNV / MNV / complex (`ATG→GCC`) | Pass-through, `source_variants=()` |
 | Already-canonical indel (no equivalent leftward position) | Pass-through, `source_variants=()` |

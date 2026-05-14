@@ -53,9 +53,9 @@ Auto-generated from in-source docstrings via
 
 ::: varcode.EffectCollection
 
-### `varcode.Outcome`
+### `varcode.EffectCandidate`
 
-::: varcode.Outcome
+::: varcode.EffectCandidate
 
 ### Priority ordering
 

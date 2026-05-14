@@ -47,7 +47,7 @@ downstream integrations without forcing them into the core class:
 
 * **Short-read RNA evidence** — evidence from RNA-seq (Isovar-style
   junction reads, exon-skipping counts) attaches through the
-  :class:`~varcode.outcomes.Outcome` ``evidence`` dict rather than
+  :class:`~varcode.outcomes.EffectCandidate` ``evidence`` dict rather than
   fields on the variant itself. This keeps variants immutable and
   lets multiple pieces of evidence accumulate per outcome.
 

@@ -383,7 +383,7 @@ def test_multi_outcome_effect_exported_at_package_level():
 
 
 # --------------------------------------------------------------------
-# Unified Outcome.effect contract (#339).
+# Unified EffectCandidate.effect contract (#339).
 #
 # After #339, ``outcome.effect`` is always a MutationEffect — never a
 # SpliceCandidate — and consumers can read
@@ -407,7 +407,7 @@ def test_outcomes_effect_is_always_a_mutation_effect():
     target = next(e for e in effects if e.transcript is transcript)
     for outcome in target.outcomes:
         assert isinstance(outcome.effect, MutationEffect), (
-            "Outcome.effect must be MutationEffect, got %s"
+            "EffectCandidate.effect must be MutationEffect, got %s"
             % type(outcome.effect).__name__)
         # short_description is always present and a str.
         assert isinstance(outcome.effect.short_description, str)
@@ -426,18 +426,15 @@ def test_outcomes_carry_splice_outcome_in_evidence():
     assert SpliceOutcome.INTRON_RETENTION in tags
 
 
-def test_outcomes_carry_plausibility_and_description():
+def test_outcomes_carry_plausibility():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     effects = variant.effects(splice_outcomes=True)
     target = next(e for e in effects if e.transcript is transcript)
     for outcome in target.outcomes:
-        # plausibility moved from SpliceCandidate to Outcome.probability.
+        # plausibility moved from SpliceCandidate to EffectCandidate.probability.
         assert outcome.probability is not None
         assert 0.0 <= outcome.probability <= 1.0
-        # Description carries the human sentence.
-        assert outcome.description is None or isinstance(
-            outcome.description, str)
 
 
 def test_intron_retention_outcome_effect_is_placeholder_class():

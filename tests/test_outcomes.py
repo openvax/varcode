@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for the unified :class:`Outcome` type (openvax/varcode#299).
+"""Tests for the unified :class:`EffectCandidate` type (openvax/varcode#299).
 
 The type is deliberately minimal (dataclass + one helper), so tests
 focus on (a) the contract — probability bounds, defaults, frozen
@@ -21,7 +21,7 @@ accessor lifting existing ``candidates`` into the new shape.
 import pytest
 from pyensembl import cached_release
 
-from varcode import Outcome, Variant, outcomes_from_candidates
+from varcode import EffectCandidate, Variant, candidates_from_effects
 from varcode.effects.effect_classes import (
     ExonicSpliceSite,
     MultiOutcomeEffect,
@@ -31,39 +31,24 @@ ensembl_grch38 = cached_release(81)
 
 
 def test_outcome_defaults():
-    o = Outcome(effect=object())
+    o = EffectCandidate(effect=object())
     assert o.probability is None
     assert o.source == "varcode"
     assert o.evidence == {}
-    assert o.description is None
-
-
-def test_outcome_description_field():
-    """``Outcome`` carries a first-class human description distinct
-    from ``effect.short_description`` — the latter is the effect's
-    HGVS-style label, the former is an outcome-specific narrative
-    (#339)."""
-    class _FakeEffect:
-        short_description = "exon-loss"
-    o = Outcome(
-        effect=_FakeEffect(),
-        description="Exon 7 is skipped (in-frame, 15 aa removed).")
-    assert o.description.startswith("Exon 7")
-    assert o.short_description == "exon-loss"
 
 
 def test_outcome_probability_bounds():
-    Outcome(effect=object(), probability=0.0)
-    Outcome(effect=object(), probability=1.0)
-    Outcome(effect=object(), probability=None)
+    EffectCandidate(effect=object(), probability=0.0)
+    EffectCandidate(effect=object(), probability=1.0)
+    EffectCandidate(effect=object(), probability=None)
     with pytest.raises(ValueError):
-        Outcome(effect=object(), probability=-0.1)
+        EffectCandidate(effect=object(), probability=-0.1)
     with pytest.raises(ValueError):
-        Outcome(effect=object(), probability=1.5)
+        EffectCandidate(effect=object(), probability=1.5)
 
 
 def test_outcome_is_frozen():
-    o = Outcome(effect=object(), source="test")
+    o = EffectCandidate(effect=object(), source="test")
     with pytest.raises(Exception):
         # dataclasses.FrozenInstanceError is a subclass of AttributeError
         # in some Python versions — catch the broad shape.
@@ -73,14 +58,14 @@ def test_outcome_is_frozen():
 def test_outcome_short_description_passthrough():
     class _FakeEffect:
         short_description = "p.L101del"
-    o = Outcome(effect=_FakeEffect())
+    o = EffectCandidate(effect=_FakeEffect())
     assert o.short_description == "p.L101del"
 
 
-def test_outcomes_from_candidates_tags_source():
+def test_candidates_from_effects_tags_source():
     class _C:
         short_description = "c1"
-    outcomes = outcomes_from_candidates((_C(), _C()), source="test_source")
+    outcomes = candidates_from_effects((_C(), _C()), source="test_source")
     assert len(outcomes) == 2
     assert all(o.source == "test_source" for o in outcomes)
     assert all(o.probability is None for o in outcomes)
@@ -89,7 +74,7 @@ def test_outcomes_from_candidates_tags_source():
 def test_exonic_splice_site_exposes_outcomes():
     """Real integration: an SNV at the last base of an exon yields
     ``ExonicSpliceSite``, which is a ``MultiOutcomeEffect``. Its
-    ``.outcomes`` should return two :class:`Outcome` entries (the
+    ``.outcomes`` should return two :class:`EffectCandidate` entries (the
     splice-disruption outcome and the coding-change alternate)."""
     # CFTR exon 3 ends at 117531114 (last exon base).
     variant = Variant("7", 117531114, "G", "A", ensembl_grch38)
@@ -100,7 +85,7 @@ def test_exonic_splice_site_exposes_outcomes():
 
     outcomes = effect.outcomes
     assert len(outcomes) == 2
-    assert all(isinstance(o, Outcome) for o in outcomes)
+    assert all(isinstance(o, EffectCandidate) for o in outcomes)
     # First outcome: the splice-disruption classification (the
     # ExonicSpliceSite itself).
     assert outcomes[0].effect is effect
@@ -164,36 +149,34 @@ def test_uniform_iteration_sv_and_splice_outcomes():
 
 
 def test_outcome_round_trips_via_json():
-    """``Outcome`` now inherits :class:`DataclassSerializable`, so
+    """``EffectCandidate`` now inherits :class:`DataclassSerializable`, so
     ``to_json`` / ``from_json`` round-trip the full outcome — including
     a polymorphic :class:`MutationEffect` ``effect`` field — without
     any custom serialization code (#343)."""
     variant = Variant("7", 117531114, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id("ENST00000003084")
     real_effect = variant.effect_on_transcript(transcript)
-    o = Outcome(
+    o = EffectCandidate(
         effect=real_effect,
         probability=0.75,
         source="spliceai",
-        evidence={"ds_ag": 0.12},
-        description="fake")
-    rt = Outcome.from_json(o.to_json())
+        evidence={"ds_ag": 0.12})
+    rt = EffectCandidate.from_json(o.to_json())
     assert rt.probability == 0.75
     assert rt.source == "spliceai"
     assert rt.evidence == {"ds_ag": 0.12}
-    assert rt.description == "fake"
     # effect round-trips polymorphically — same class as the original.
     assert type(rt.effect) is type(real_effect)
 
 
 def test_outcome_accepts_external_scorer_shape():
     """An external predictor (SpliceAI-style) can construct an
-    ``Outcome`` with its own probability and evidence dict. This
+    ``EffectCandidate`` with its own probability and evidence dict. This
     pins the interchange contract — varcode doesn't ship a scorer,
     but the type stays usable by one."""
     class _FakeEffect:
         short_description = "splice-donor"
-    scored = Outcome(
+    scored = EffectCandidate(
         effect=_FakeEffect(),
         probability=0.87,
         source="spliceai",

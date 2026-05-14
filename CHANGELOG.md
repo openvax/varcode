@@ -3,6 +3,15 @@
 ## [Unreleased]
 
 **Breaking**
+- `varcode.Outcome` renamed to `varcode.EffectCandidate`; the helper
+  `outcomes_from_candidates` renamed to `candidates_from_effects`.
+  The `description` field is removed — use `candidate.effect.short_description`
+  (it was always a passthrough). No deprecation alias; update imports.
+  The class now ships with a module docstring explaining *why* the
+  wrapper exists (per-context metadata over shared Effect objects),
+  and `MultiOutcomeEffect` documents `candidates` and `outcomes` as
+  two complementary first-class accessors rather than treating
+  `candidates` as back-compat ([#378 follow-up]).
 - Phasing API generalized; Isovar-named identifiers removed from the
   varcode public surface ([#378](https://github.com/openvax/varcode/issues/378)).
   Varcode no longer imports or names any upstream tool — implementations

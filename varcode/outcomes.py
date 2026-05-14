@@ -10,47 +10,56 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Unified ``Outcome`` type for multi-outcome effects (#299).
+"""``EffectCandidate``: one plausible effect with per-context provenance.
 
-An ``Outcome`` is "one possible consequence of a variant" with
-provenance attached. A single variant can have multiple outcomes —
-splice disruption vs normal splicing (SNV at exon boundary), fusion
-vs exon loss vs readthrough (translocation), missense vs UTR (variant
-that spans a stop codon). Each outcome carries:
+An :class:`EffectCandidate` pairs a :class:`MutationEffect` with a
+``source`` / ``probability`` / ``evidence`` triple describing **how
+this particular candidate came to be**. The point of the wrapper is
+that the same :class:`MutationEffect` instance can appear in multiple
+candidate sets with different provenance per context — the wrapper
+carries the context-specific labels without forcing a copy of the
+Effect itself.
 
-* the :class:`~varcode.effects.MutationEffect` it represents
-* a probability / confidence score (or ``None`` if unscored)
-* a string naming the source that produced the outcome
-* an open-ended ``evidence`` dict for provenance
+Concrete example: a splice candidate produced by varcode's splice
+classifier gets surfaced once inside its parent
+:class:`SpliceOutcomeSet` (tagged ``source="varcode"`` with a
+``splice_outcome`` enum in evidence). When an SV breakpoint sits in
+the same splice window, the SV annotator re-uses that same Effect
+object as an attached candidate on the SV's own
+:class:`StructuralVariantEffect` — but tagged ``source="varcode_splice"``
+and with the SV's ``sv_type`` merged into evidence. The Effect is
+shared; the metadata diverges. That's what the wrapper exists for.
 
-This shape is deliberately minimal. It's the interchange format
-between:
+Without ``EffectCandidate``, the alternatives are:
 
-* varcode's built-in classifiers (nominate candidates)
-* external splice predictors (SpliceAI, Pangolin — score candidates)
-* RNA-seq evidence callers (Isovar-style — upgrade / downgrade
-  candidates with read support)
-* long-read / assembly-based tools (resolve breakpoint ambiguity)
+* Copy the Effect at every re-tag site (breaks identity, adds
+  overhead, has to be deep enough to detach evidence dicts).
+* Put metadata on the Effect itself (forces all contexts to share
+  one labeling — wrong).
+* Carry parallel sidecar dicts keyed by ``id(effect)`` (fragile,
+  awkward to serialize).
 
-None of those integrations are wired up yet; the type exists so they
-can plug in without churning the core classes.
+The wrapper is the cheapest answer.
 
-Harmonization across effect kinds
+Where ``EffectCandidate`` appears
 ---------------------------------
 
-Today varcode has three overlapping multi-outcome shapes:
+The :attr:`MultiOutcomeEffect.outcomes` property returns
+``tuple[EffectCandidate, ...]``. ``candidates`` returns the raw
+``tuple[MutationEffect, ...]`` — both accessors are first-class:
 
-* :class:`~varcode.effects.effect_classes.ExonicSpliceSite` —
-  ``alternate_effect`` is a single fallback.
-* :mod:`varcode.splice_outcomes` — ``SpliceOutcomeSet`` is a richer
-  list of splice-aware candidates.
-* :class:`~varcode.effects.effect_classes.MultiOutcomeEffect` —
-  marker base class with a ``candidates`` tuple.
+* Use ``outcomes`` when you need per-candidate provenance (filter by
+  source, read evidence, score by probability).
+* Use ``candidates`` when you only need the underlying Effects (e.g.
+  iterate to render short descriptions, dispatch on effect type).
 
-All three converge on a single surface via the
-:meth:`MultiOutcomeEffect.outcomes` property: ``tuple[Outcome, ...]``.
-Existing ``candidates`` / ``alternate_effect`` accessors stay for
-back-compat. New code should read ``outcomes``.
+External integrations (SpliceAI/Pangolin scorers, RNA-evidence
+callers, long-read assembly tools) construct
+:class:`EffectCandidate` instances when they want to surface scored
+or annotated effects through the same surface as varcode's
+built-ins. None of those external integrations are wired up yet;
+the type ships ahead of them so they can plug in without churning
+core classes.
 """
 
 from dataclasses import dataclass, field
@@ -60,56 +69,43 @@ from serializable import DataclassSerializable
 
 
 @dataclass(frozen=True)
-class Outcome(DataclassSerializable):
-    """One plausible consequence of a variant.
+class EffectCandidate(DataclassSerializable):
+    """One plausible effect for a variant, paired with provenance.
 
     Parameters
     ----------
     effect : MutationEffect
-        The effect this outcome represents. Guaranteed to be a
+        The effect this candidate represents. Guaranteed to be a
         :class:`~varcode.effects.MutationEffect` instance — producers
         that can't compute a full coding effect use placeholder
         subclasses (e.g.
         :class:`~varcode.effects.effect_classes.PredictedIntronRetention`)
-        so consumers can iterate ``outcome.effect.short_description``
-        and ``outcome.effect.mutant_protein_sequence`` uniformly
-        across SV, splice, and point-variant outcomes (#339).
+        so consumers can read
+        ``candidate.effect.short_description`` and
+        ``candidate.effect.mutant_protein_sequence`` uniformly across
+        SV, splice, and point-variant candidates.
     probability : float or None
-        Estimated likelihood this outcome actually happens, in
-        ``[0, 1]``. ``None`` means "not scored" — the outcome is in
-        the candidate set but no tool has assigned a probability.
-        Callers that treat ``None`` as "unknown" rather than "zero"
-        will be robust to new outcomes added over time.
+        Estimated likelihood this candidate actually happens, in
+        ``[0, 1]``. ``None`` means "not scored" — the candidate is in
+        the set but no tool has assigned a probability. Callers that
+        treat ``None`` as "unknown" rather than "zero" will be robust
+        to new candidates added over time.
     source : str
-        Name of the tool or annotator that produced this outcome.
+        Name of the tool or annotator that produced this candidate.
         Defaults to ``"varcode"`` for built-in classifications.
-        External integrations set their own (a splice predictor, an
-        RNA assembler, a long-read caller, ...) so downstream callers
-        can filter by source. The string is opaque to varcode; pick
-        whatever your pipeline prefers.
+        External integrations set their own opaque string. Varcode
+        does not interpret this field beyond exact-string equality.
     evidence : Mapping[str, Any]
         Open-ended provenance dict. Shape is source-specific; the
-        convention is that keys match the source's native field names
-        (e.g. SpliceAI scores under ``{"ds_ag": 0.12, "ds_al": ...}``,
-        RNA read counts under ``{"junction_reads": 42}``). Consumers
-        that need a particular shape should type-check at the call
-        site rather than rely on a rigid schema here.
-    description : str or None
-        Optional human-readable sentence describing this specific
-        outcome ("Exon 7 is skipped (in-frame, 15 aa removed)").
-        Distinct from ``effect.short_description``, which is the
-        effect's HGVS-style label. Producers that want a richer
-        narrative attach it here rather than nesting it in
-        ``evidence``. Declared last so positional calls of the form
-        ``Outcome(effect, probability, source, evidence)`` continue
-        to route the dict to ``evidence``.
+        convention is that keys match the source's native field names.
+        Consumers that need a particular shape should type-check at
+        the call site rather than rely on a rigid schema here.
     """
 
     effect: Any  # MutationEffect — typed loosely to avoid import cycle
     probability: Optional[float] = None
     source: str = "varcode"
     evidence: Mapping[str, Any] = field(default_factory=dict)
-    description: Optional[str] = None
 
     def __post_init__(self):
         if self.probability is not None and not (
@@ -120,22 +116,22 @@ class Outcome(DataclassSerializable):
 
     @property
     def short_description(self) -> str:
-        """Convenience passthrough to the wrapped effect's
-        ``short_description``. Lets callers build tables of outcomes
-        without unpacking ``outcome.effect.short_description``
-        everywhere."""
+        """Convenience passthrough to ``self.effect.short_description``.
+        Lets callers build tables without unpacking
+        ``candidate.effect.short_description`` everywhere."""
         return self.effect.short_description
 
 
-def outcomes_from_candidates(
-        candidates: Tuple[Any, ...],
-        source: str = "varcode") -> Tuple[Outcome, ...]:
+def candidates_from_effects(
+        effects: Tuple[Any, ...],
+        source: str = "varcode") -> Tuple[EffectCandidate, ...]:
     """Wrap a tuple of :class:`MutationEffect` instances as
-    :class:`Outcome` objects with a shared ``source`` string.
+    :class:`EffectCandidate` objects with a shared ``source`` string.
 
-    Used by the default ``MultiOutcomeEffect.outcomes`` implementation
-    to lift the existing ``candidates`` tuple into the new type without
-    churning every subclass. No probabilities are assigned — callers
-    that want scored outcomes construct :class:`Outcome` directly.
+    Used by the default :attr:`MultiOutcomeEffect.outcomes`
+    implementation to lift a raw ``candidates`` tuple into the wrapped
+    form without churning every subclass. No probabilities are
+    assigned — callers that want scored candidates construct
+    :class:`EffectCandidate` directly.
     """
-    return tuple(Outcome(effect=c, source=source) for c in candidates)
+    return tuple(EffectCandidate(effect=c, source=source) for c in effects)
