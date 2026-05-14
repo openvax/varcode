@@ -67,7 +67,7 @@ from .effects.effect_classes import (
     SpliceDonor,
 )
 from .mutant_transcript import MutantTranscript, TranscriptEdit
-from .outcomes import EffectCandidate
+from .effect_candidates import EffectCandidate
 
 
 class SpliceOutcome(Enum):

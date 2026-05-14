@@ -18,12 +18,12 @@ coordinates alone — for many variants, especially structural ones,
 the actual protein consequence depends on what's transcribed and
 spliced. This module defines the contract that lets RNA-aware tools
 (Isovar, Exacto, custom long-read pipelines) attach observed
-:class:`~varcode.outcomes.EffectCandidate` objects to existing effects
+:class:`~varcode.effect_candidates.EffectCandidate` objects to existing effects
 without subclassing or churning the core classes.
 
 The shape mirrors :mod:`varcode.phasing`: a runtime-checkable
 :class:`Protocol`, an :func:`apply_rna_evidence_to_effects` walk that
-mutates effects in place, and a small :func:`make_rna_outcome` factory
+mutates effects in place, and a small :func:`make_rna_candidate` factory
 for the common provenance fields. Like :mod:`varcode.phasing`,
 nothing here imports Isovar — implementers duck-type the protocol.
 
@@ -47,7 +47,7 @@ from __future__ import annotations
 
 from typing import Any, Iterable, Mapping, Optional, Protocol, Sequence, runtime_checkable
 
-from .outcomes import EffectCandidate
+from .effect_candidates import EffectCandidate
 
 
 @runtime_checkable
@@ -55,7 +55,7 @@ class RNAEvidenceResolver(Protocol):
     """Source of RNA-observed outcomes for a ``(variant, transcript)``
     pair.
 
-    Implementers return zero or more :class:`~varcode.outcomes.EffectCandidate`
+    Implementers return zero or more :class:`~varcode.effect_candidates.EffectCandidate`
     objects describing isoforms, fusions, or RNA-level events that were
     actually observed in reads. An empty sequence means "no evidence
     for this pair" — the existing DNA-predicted outcomes are left
@@ -65,7 +65,7 @@ class RNAEvidenceResolver(Protocol):
     string (the name of the RNA assembler, long-read caller, fusion
     detector, etc.) and populate ``evidence`` with whatever shape that
     producer natively emits (transcript model IDs, junction read
-    counts, etc.). See :func:`make_rna_outcome` for a convenience
+    counts, etc.). See :func:`make_rna_candidate` for a convenience
     factory that fills the common fields.
     """
 
@@ -88,7 +88,7 @@ class NullRNAEvidenceResolver:
         return ()
 
 
-def make_rna_outcome(
+def make_rna_candidate(
         effect,
         *,
         probability: Optional[float] = None,
@@ -96,7 +96,7 @@ def make_rna_outcome(
         transcript_model_id: Optional[str] = None,
         read_count: Optional[int] = None,
         extra_evidence: Optional[Mapping[str, Any]] = None) -> EffectCandidate:
-    """Construct an :class:`~varcode.outcomes.EffectCandidate` carrying
+    """Construct an :class:`~varcode.effect_candidates.EffectCandidate` carrying
     RNA-derived provenance.
 
     Convenience factory for the common fields a reads-based or
@@ -176,7 +176,7 @@ def apply_rna_evidence_to_effects(effects: Iterable, resolver) -> Iterable:
         return effects
 
     # Lazy import to avoid an import cycle (effect_classes imports
-    # from varcode.outcomes, which sits below us).
+    # from varcode.effect_candidates, which sits below us).
     from .effects.effect_classes import MultiOutcomeEffect
 
     for effect in effects:

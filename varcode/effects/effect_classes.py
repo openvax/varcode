@@ -162,7 +162,7 @@ class MultiOutcomeEffect(MutationEffect):
     annotator with a different ``source`` tag and ``sv_type``
     evidence). Putting the metadata on the wrapper instead of the
     Effect lets the Effect stay shared while the labels diverge. See
-    :mod:`varcode.outcomes` for the design rationale.
+    :mod:`varcode.effect_candidates` for the design rationale.
 
     External integrations (post-hoc scorers, RNA-evidence callers)
     attach extra outcomes via :meth:`_with_extra_outcomes`.
@@ -178,7 +178,7 @@ class MultiOutcomeEffect(MutationEffect):
         to attach the metadata they have (splice plausibility, phase
         hypothesis tags, motif scores, etc.).
         """
-        from ..outcomes import candidates_from_effects
+        from ..effect_candidates import candidates_from_effects
         return self._with_extra_outcomes(
             candidates_from_effects(self.candidates))
 
@@ -1049,7 +1049,7 @@ class StructuralVariantEffect(TranscriptMutationEffect, MultiOutcomeEffect):
         marks provenance so external scorers (SpliceAI, Pangolin,
         RNA evidence) can filter before rescoring.
         """
-        from ..outcomes import EffectCandidate
+        from ..effect_candidates import EffectCandidate
         sv_type = getattr(self.variant, "sv_type", None)
         base_evidence = {"sv_type": sv_type} if sv_type is not None else {}
         primary = tuple(
@@ -1366,7 +1366,7 @@ class PhaseCandidateSet(TranscriptMutationEffect, MultiOutcomeEffect):
         ``haplotype`` (opaque tag), ``germline_variants`` (tuple of
         the cis germline variants on that hypothesis's haplotype).
         """
-        from ..outcomes import EffectCandidate
+        from ..effect_candidates import EffectCandidate
         outs = []
         for candidate, hypothesis in zip(
                 self._candidates_raw, self._hypotheses):

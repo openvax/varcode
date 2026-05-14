@@ -52,7 +52,7 @@ from .cryptic_exons import (
     score_acceptor,
     score_donor,
 )
-from .outcomes import EffectCandidate, candidates_from_effects
+from .effect_candidates import EffectCandidate, candidates_from_effects
 from .phasing import (
     MutantTranscriptSource,
     ReadPhaseResolver,
@@ -64,7 +64,7 @@ from .rna_evidence import (
     NullRNAEvidenceResolver,
     RNAEvidenceResolver,
     apply_rna_evidence_to_effects,
-    make_rna_outcome,
+    make_rna_candidate,
 )
 from .splice_outcomes import (
     SpliceCandidate,
@@ -138,7 +138,7 @@ __all__ = [
     "RNAEvidenceResolver",
     "NullRNAEvidenceResolver",
     "apply_rna_evidence_to_effects",
-    "make_rna_outcome",
+    "make_rna_candidate",
 
     "EffectAnnotator",
     "FastEffectAnnotator",

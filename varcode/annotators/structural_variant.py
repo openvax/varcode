@@ -21,7 +21,7 @@ Output: one of the SV effect classes from
 ``LargeDuplication``, ``Inversion``, ``GeneFusion``,
 ``TranslocationToIntergenic``), each of which is a
 :class:`~varcode.effects.MultiOutcomeEffect` exposing
-:attr:`outcomes` — a tuple of :class:`~varcode.outcomes.EffectCandidate`
+:attr:`outcomes` — a tuple of :class:`~varcode.effect_candidates.EffectCandidate`
 entries each carrying an effect + probability + source + evidence.
 
 Scope
@@ -680,7 +680,7 @@ class StructuralVariantAnnotator:
         window.
         """
         from ..effects.effect_classes import StructuralVariantEffect
-        from ..outcomes import EffectCandidate
+        from ..effect_candidates import EffectCandidate
         from ..splice_outcomes import SpliceOutcome, enumerate_splice_outcomes
         if not isinstance(effect, StructuralVariantEffect):
             return

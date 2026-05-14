@@ -30,14 +30,23 @@ from varcode.effects.effect_classes import (
 ensembl_grch38 = cached_release(81)
 
 
-def test_outcome_defaults():
+def test_effect_candidate_defaults():
     o = EffectCandidate(effect=object())
     assert o.probability is None
     assert o.source == "varcode"
     assert o.evidence == {}
 
 
-def test_outcome_probability_bounds():
+def test_effect_candidate_rejects_removed_description_kwarg():
+    """The pre-rename ``Outcome`` carried a ``description`` field that
+    was a pure passthrough to ``effect.short_description``. The rename
+    dropped it; lock that in by pinning the TypeError for any caller
+    still using the old kwarg."""
+    with pytest.raises(TypeError):
+        EffectCandidate(effect=object(), description="old kwarg")
+
+
+def test_effect_candidate_probability_bounds():
     EffectCandidate(effect=object(), probability=0.0)
     EffectCandidate(effect=object(), probability=1.0)
     EffectCandidate(effect=object(), probability=None)
@@ -47,7 +56,7 @@ def test_outcome_probability_bounds():
         EffectCandidate(effect=object(), probability=1.5)
 
 
-def test_outcome_is_frozen():
+def test_effect_candidate_is_frozen():
     o = EffectCandidate(effect=object(), source="test")
     with pytest.raises(Exception):
         # dataclasses.FrozenInstanceError is a subclass of AttributeError
@@ -55,7 +64,7 @@ def test_outcome_is_frozen():
         o.source = "mutated"
 
 
-def test_outcome_short_description_passthrough():
+def test_effect_candidate_short_description_passthrough():
     class _FakeEffect:
         short_description = "p.L101del"
     o = EffectCandidate(effect=_FakeEffect())
@@ -148,7 +157,7 @@ def test_uniform_iteration_sv_and_splice_outcomes():
         _ = o.effect.mutant_protein_sequence
 
 
-def test_outcome_round_trips_via_json():
+def test_effect_candidate_round_trips_via_json():
     """``EffectCandidate`` now inherits :class:`DataclassSerializable`, so
     ``to_json`` / ``from_json`` round-trip the full outcome — including
     a polymorphic :class:`MutationEffect` ``effect`` field — without
@@ -169,7 +178,7 @@ def test_outcome_round_trips_via_json():
     assert type(rt.effect) is type(real_effect)
 
 
-def test_outcome_accepts_external_scorer_shape():
+def test_effect_candidate_accepts_external_scorer_shape():
     """An external predictor (SpliceAI-style) can construct an
     ``EffectCandidate`` with its own probability and evidence dict. This
     pins the interchange contract — varcode doesn't ship a scorer,
