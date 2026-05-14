@@ -52,7 +52,7 @@ from .cryptic_exons import (
     score_acceptor,
     score_donor,
 )
-from .outcomes import Outcome, outcomes_from_candidates
+from .effect_candidates import EffectCandidate, candidates_from_effects
 from .phasing import (
     MutantTranscriptSource,
     ReadPhaseResolver,
@@ -113,8 +113,8 @@ __all__ = [
     "apply_variants_to_transcript",
 
     # Unified multi-outcome type (openvax/varcode#299)
-    "Outcome",
-    "outcomes_from_candidates",
+    "EffectCandidate",
+    "candidates_from_effects",
 
     # Structural variants (openvax/varcode#252 / #264)
     "StructuralVariant",

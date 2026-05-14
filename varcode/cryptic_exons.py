@@ -41,16 +41,17 @@ tools to score properly.
 / SQUIRLS outputs can bypass the motif scorer entirely. Pass a
 custom ``score_fn`` to :func:`enumerate_candidates`, or take the
 output of :func:`enumerate_candidates` and re-score each
-:class:`CrypticExonCandidate` — the :class:`~varcode.Outcome`
+:class:`CrypticExonCandidate` — the :class:`~varcode.EffectCandidate`
 shape from #299 carries both the effect and the external
 ``probability`` / ``evidence`` without needing varcode to understand
 the scorer.
 
 **RNA evidence** (optional): if the pipeline has RNA-seq, the
 correct discriminator is "are there split reads that span the
-candidate junction." Isovar-style tools add
-``Outcome(source="isovar", evidence={"junction_reads": N})``
-on top of the varcode-nominated candidate.
+candidate junction." Read-evidence tools attach an
+``EffectCandidate`` carrying their own ``source`` tag and a
+``junction_reads`` field in ``evidence`` on top of the varcode-
+nominated candidate.
 
 **Long-read assembly** (optional): a resolved rearranged allele
 assembled from HiFi / ONT reads can be passed as the ``sequence``

@@ -555,7 +555,7 @@ class TestComposesWithRNAEvidence:
         """The germline-aware Outcomes carry ``haplotype`` keys with
         opaque tags ("A", "B"); the RNA-evidence Outcomes from #259
         use the same key. Cross-axis matching is just a dict lookup
-        — pin that the keys are present and match the Outcome
+        — pin that the keys are present and match the EffectCandidate
         evidence-dict convention."""
         ann = get_default_annotator()
         ctx = GermlineContext.from_variants(
