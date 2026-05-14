@@ -3,22 +3,18 @@
 ## [Unreleased]
 
 **Breaking**
-- `varcode.Outcome` renamed to `varcode.EffectOutcome`. The helper
-  `outcomes_from_candidates` renamed to `outcomes_from_effects`. The
-  module `varcode.outcomes` renamed to `varcode.effect_outcomes`. The
+- `varcode.Outcome` renamed to `varcode.EffectCandidate`. The helper
+  `outcomes_from_candidates` renamed to `candidates_from_effects`. The
+  module `varcode.outcomes` renamed to `varcode.effect_candidates`. The
   test file `tests/test_outcomes.py` renamed to
-  `tests/test_effect_outcomes.py`. The `description` field on the
+  `tests/test_effect_candidates.py`. The `description` field on the
   wrapper class is removed — use `candidate.effect.short_description`
   (it was always a passthrough). No deprecation alias; update imports.
-  Naming is now consistent throughout: "candidates" everywhere means
-  raw `MutationEffect` objects (subclass internal storage and the
-  `.candidates` accessor); "outcomes" everywhere means the wrapped
-  form (`EffectOutcome` class, `.outcomes` accessor, `_extra_outcomes`
-  slot). The class ships with a module docstring explaining *why* the
-  wrapper exists (per-context metadata over shared Effect objects),
-  and `MultiOutcomeEffect` documents `candidates` and `outcomes` as
-  two complementary first-class accessors rather than treating
-  `candidates` as back-compat
+  The class ships with a module docstring explaining *why* the
+  wrapper exists (per-context metadata over shared Effect objects).
+  `MultiOutcomeEffect` keeps two complementary accessors:
+  `.candidates` returns the raw `tuple[MutationEffect, ...]`;
+  `.outcomes` returns the wrapped `tuple[EffectCandidate, ...]`.
   ([#380](https://github.com/openvax/varcode/pull/380)).
 - Phasing API generalized; Isovar-named identifiers removed from the
   varcode public surface ([#378](https://github.com/openvax/varcode/issues/378)).

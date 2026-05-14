@@ -22,7 +22,7 @@ long-read resolution.
 import pytest
 
 from varcode import (
-    EffectOutcome,
+    EffectCandidate,
     StructuralVariant,
     enumerate_cryptic_exon_candidates,
     score_acceptor,
@@ -153,7 +153,7 @@ def test_enumerate_respects_external_score_fn():
 
 def test_cryptic_exon_candidate_wraps_as_outcome():
     """A :class:`CrypticExonCandidate` can be wrapped in an
-    :class:`EffectOutcome` for the harmonized multi-outcome interface.
+    :class:`EffectCandidate` for the harmonized multi-outcome interface.
     This is how an SV annotator attaches a cryptic-exon outcome
     alongside its varcode-nominated `LargeDeletion` / `GeneFusion`
     outcome."""
@@ -164,7 +164,7 @@ def test_cryptic_exon_candidate_wraps_as_outcome():
         interval_end=1_000_120,
         donor_score=0.85,
         acceptor_score=0.90)
-    outcome = EffectOutcome(
+    outcome = EffectCandidate(
         effect=cand,
         probability=0.87,
         source="varcode-motif",
@@ -173,7 +173,7 @@ def test_cryptic_exon_candidate_wraps_as_outcome():
     assert outcome.probability == 0.87
     # An external rescore (SpliceAI-style) wraps the same candidate
     # with its own probability — downstream consumers filter by source.
-    rescored = EffectOutcome(
+    rescored = EffectCandidate(
         effect=cand,
         probability=0.98,
         source="spliceai",

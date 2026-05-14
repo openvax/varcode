@@ -383,7 +383,7 @@ def test_multi_outcome_effect_exported_at_package_level():
 
 
 # --------------------------------------------------------------------
-# Unified EffectOutcome.effect contract (#339).
+# Unified EffectCandidate.effect contract (#339).
 #
 # After #339, ``outcome.effect`` is always a MutationEffect — never a
 # SpliceCandidate — and consumers can read
@@ -407,7 +407,7 @@ def test_outcomes_effect_is_always_a_mutation_effect():
     target = next(e for e in effects if e.transcript is transcript)
     for outcome in target.outcomes:
         assert isinstance(outcome.effect, MutationEffect), (
-            "EffectOutcome.effect must be MutationEffect, got %s"
+            "EffectCandidate.effect must be MutationEffect, got %s"
             % type(outcome.effect).__name__)
         # short_description is always present and a str.
         assert isinstance(outcome.effect.short_description, str)
@@ -432,7 +432,7 @@ def test_outcomes_carry_plausibility():
     effects = variant.effects(splice_outcomes=True)
     target = next(e for e in effects if e.transcript is transcript)
     for outcome in target.outcomes:
-        # plausibility moved from SpliceCandidate to EffectOutcome.probability.
+        # plausibility moved from SpliceCandidate to EffectCandidate.probability.
         assert outcome.probability is not None
         assert 0.0 <= outcome.probability <= 1.0
 

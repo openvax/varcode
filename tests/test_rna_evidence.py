@@ -43,7 +43,7 @@ from varcode.effects.effect_classes import (
     StructuralVariantEffect,
     Substitution,
 )
-from varcode.effect_outcomes import EffectOutcome
+from varcode.effect_candidates import EffectCandidate
 
 
 ensembl_grch38 = cached_release(81)
@@ -363,7 +363,7 @@ class TestEffectsKwargWiring:
 
 
 # --------------------------------------------------------------------
-# EffectOutcome ordering: DNA-predicted preserved at the front
+# EffectCandidate ordering: DNA-predicted preserved at the front
 # --------------------------------------------------------------------
 
 

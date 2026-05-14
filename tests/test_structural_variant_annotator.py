@@ -15,7 +15,7 @@
 These cover the minimal dispatch shape — SV type + overlap pattern
 routed to the right effect class — and the ``MultiOutcomeEffect``
 harmonized interface (``effect.outcomes`` tuple, each carrying
-``EffectOutcome`` with ``source="varcode"``).
+``EffectCandidate`` with ``source="varcode"``).
 
 Downstream integrations (external splice predictors, RNA evidence,
 long-read assembly) layer additional outcomes on top; those aren't
@@ -27,7 +27,7 @@ import pytest
 from pyensembl import cached_release
 
 from varcode import (
-    EffectOutcome,
+    EffectCandidate,
     StructuralVariant,
     StructuralVariantAnnotator,
     get_annotator,
@@ -98,7 +98,7 @@ def test_sv_large_deletion_spans_cftr_exons():
 
 def test_sv_large_deletion_outcomes_shape():
     """The harmonized interface: ``effect.outcomes`` is a tuple of
-    :class:`EffectOutcome` entries with ``source="varcode"``."""
+    :class:`EffectCandidate` entries with ``source="varcode"``."""
     transcript = _cftr()
     sv = StructuralVariant(
         contig="7",
@@ -112,7 +112,7 @@ def test_sv_large_deletion_outcomes_shape():
     assert isinstance(outcomes, tuple)
     assert len(outcomes) >= 1
     for o in outcomes:
-        assert isinstance(o, EffectOutcome)
+        assert isinstance(o, EffectCandidate)
         assert o.source == "varcode"
         assert o.probability is None  # varcode doesn't assign; integrations do
 
@@ -232,14 +232,14 @@ def test_sv_breakend_mate_intergenic_is_translocation():
 
 
 # --------------------------------------------------------------------
-# EffectOutcome extensibility
+# EffectCandidate extensibility
 # --------------------------------------------------------------------
 
 
 def test_external_integrations_can_attach_scored_outcomes():
     """Smoke test: an external tool wraps a varcode-nominated
-    effect in an EffectOutcome with source/probability/evidence, and
-    that EffectOutcome works as the interchange format PR 7 defined."""
+    effect in an EffectCandidate with source/probability/evidence, and
+    that EffectCandidate works as the interchange format PR 7 defined."""
     transcript = _cftr()
     sv = StructuralVariant(
         contig="7",
@@ -252,7 +252,7 @@ def test_external_integrations_can_attach_scored_outcomes():
 
     # An RNA-evidence tool (Isovar-style) would score the varcode
     # outcome with junction read support.
-    rna_scored = EffectOutcome(
+    rna_scored = EffectCandidate(
         effect=effect,
         probability=0.94,
         source="isovar",
@@ -262,7 +262,7 @@ def test_external_integrations_can_attach_scored_outcomes():
     assert rna_scored.evidence["junction_reads"] == 87
 
     # A long-read assembly tool would attach its own resolution.
-    lr_scored = EffectOutcome(
+    lr_scored = EffectCandidate(
         effect=effect,
         probability=0.99,
         source="longread_assembly",

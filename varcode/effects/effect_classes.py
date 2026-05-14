@@ -20,7 +20,7 @@ from .common import bio_seq_to_str
 def _cryptic_probability(candidate):
     """Average of a cryptic-exon candidate's donor and acceptor motif
     scores. Used by :attr:`StructuralVariantEffect.outcomes` to
-    populate ``EffectOutcome.probability`` when no external scorer is
+    populate ``EffectCandidate.probability`` when no external scorer is
     attached (#337). Both scores are match-ratios in ``[0, 1]`` so
     their mean is already in range.
     """
@@ -149,7 +149,7 @@ class MultiOutcomeEffect(MutationEffect):
       you only need the effects themselves (iterate to render short
       descriptions, dispatch by ``isinstance``, build a flat
       :class:`EffectCollection`).
-    * **``outcomes``** — ``tuple[EffectOutcome, ...]``. Each entry
+    * **``outcomes``** — ``tuple[EffectCandidate, ...]``. Each entry
       wraps the same Effect plus per-context provenance
       (``source`` / ``probability`` / ``evidence``). Use when you
       need that provenance — typically to filter by producer or read
@@ -162,7 +162,7 @@ class MultiOutcomeEffect(MutationEffect):
     annotator with a different ``source`` tag and ``sv_type``
     evidence). Putting the metadata on the wrapper instead of the
     Effect lets the Effect stay shared while the labels diverge. See
-    :mod:`varcode.effect_outcomes` for the design rationale.
+    :mod:`varcode.effect_candidates` for the design rationale.
 
     External integrations (post-hoc scorers, RNA-evidence callers)
     attach extra outcomes via :meth:`_with_extra_outcomes`.
@@ -172,15 +172,15 @@ class MultiOutcomeEffect(MutationEffect):
 
     @property
     def outcomes(self):
-        """Tuple of :class:`EffectOutcome` objects, most-plausible-
+        """Tuple of :class:`EffectCandidate` objects, most-plausible-
         first. Default implementation wraps :attr:`candidates` under
         ``source="varcode"`` with no probability; subclasses override
         to attach the metadata they have (splice plausibility, phase
         hypothesis tags, motif scores, etc.).
         """
-        from ..effect_outcomes import outcomes_from_effects
+        from ..effect_candidates import candidates_from_effects
         return self._with_extra_outcomes(
-            outcomes_from_effects(self.candidates))
+            candidates_from_effects(self.candidates))
 
     def _with_extra_outcomes(self, base_outcomes):
         """Append externally-attached outcomes to a derived
@@ -322,7 +322,7 @@ class SpliceAcceptor(IntronicSpliceSite):
 # Predicted-but-uncomputed placeholder effects (#339).
 #
 # Used by :class:`~varcode.splice_outcomes.SpliceOutcomeSet` and, later,
-# :class:`StructuralVariantEffect` to fill :attr:`EffectOutcome.effect` with a
+# :class:`StructuralVariantEffect` to fill :attr:`EffectCandidate.effect` with a
 # real :class:`MutationEffect` when the protein-level outcome cannot be
 # computed from cached transcript cDNA alone (intron retention requires
 # intron sequence; cryptic splice requires flanking genomic sequence).
@@ -337,7 +337,7 @@ class PredictedIntronRetention(TranscriptMutationEffect):
     """Placeholder effect: intron retention predicted, exact protein
     not computable from cached transcript cDNA.
 
-    Emitted as the :attr:`EffectOutcome.effect` of a SpliceOutcomeSet's
+    Emitted as the :attr:`EffectCandidate.effect` of a SpliceOutcomeSet's
     ``INTRON_RETENTION`` outcome. The biologically expected outcome is
     a premature stop codon inside the retained intron; consumers that
     need the exact protein sequence require intron genomic sequence
@@ -353,7 +353,7 @@ class PredictedCrypticSpliceSite(TranscriptMutationEffect):
 
     ``direction`` is ``"donor"`` or ``"acceptor"``. Exact protein
     consequence requires flanking genomic sequence; emitted as the
-    :attr:`EffectOutcome.effect` of a SpliceOutcomeSet's ``CRYPTIC_DONOR`` /
+    :attr:`EffectCandidate.effect` of a SpliceOutcomeSet's ``CRYPTIC_DONOR`` /
     ``CRYPTIC_ACCEPTOR`` outcome.
     """
 
@@ -973,7 +973,7 @@ class FrameShiftTruncation(PrematureStop, FrameShift):
 # subclass exposing an ``outcomes`` tuple per #299.
 #
 # The classes are deliberately thin wrappers — the important interface
-# is ``outcomes``, which carries the ``EffectOutcome`` objects with
+# is ``outcomes``, which carries the ``EffectCandidate`` objects with
 # probability / source / evidence so external tools (RNA evidence,
 # SpliceAI, long-read assembly) can score them without subclassing.
 # =====================================================================
@@ -988,7 +988,7 @@ class StructuralVariantEffect(TranscriptMutationEffect, MultiOutcomeEffect):
     ``(self,)`` when no specific alternates have been nominated, or
     a richer tuple when the subclass carries explicit alternate
     effects. ``MultiOutcomeEffect.outcomes`` lifts that to the
-    unified :class:`EffectOutcome` shape automatically.
+    unified :class:`EffectCandidate` shape automatically.
     """
 
     def __init__(
@@ -1005,7 +1005,7 @@ class StructuralVariantEffect(TranscriptMutationEffect, MultiOutcomeEffect):
         self._cryptic_candidates = ()
         # Splice-outcome candidates attached by the SV annotator when
         # an SV breakpoint lands in a canonical splice window (#341).
-        # Pre-constructed :class:`~varcode.EffectOutcome` tuples; the
+        # Pre-constructed :class:`~varcode.EffectCandidate` tuples; the
         # annotator re-sources them as ``"varcode_splice"`` and
         # enriches evidence with ``sv_type`` before attaching.
         self._splice_candidates = ()
@@ -1021,7 +1021,7 @@ class StructuralVariantEffect(TranscriptMutationEffect, MultiOutcomeEffect):
     def _attach_cryptic_candidates(self, cryptic_candidates):
         """Attach cryptic-exon candidates (#337). Called by the SV
         annotator after effect construction so the candidates appear
-        as additional :class:`EffectOutcome` entries on :attr:`outcomes`
+        as additional :class:`EffectCandidate` entries on :attr:`outcomes`
         without polluting :attr:`candidates` (which stays the primary
         classification tuple for back-compat).
         """
@@ -1031,7 +1031,7 @@ class StructuralVariantEffect(TranscriptMutationEffect, MultiOutcomeEffect):
         """Attach splice-outcome candidates that the SV annotator
         generated by feeding a synthesized splice-disrupting effect
         into :func:`enumerate_splice_outcomes` (#341). Each entry is
-        a pre-constructed :class:`~varcode.EffectOutcome`; the annotator
+        a pre-constructed :class:`~varcode.EffectCandidate`; the annotator
         has already re-sourced them as ``"varcode_splice"`` and
         enriched evidence with the SV type.
         """
@@ -1039,7 +1039,7 @@ class StructuralVariantEffect(TranscriptMutationEffect, MultiOutcomeEffect):
 
     @property
     def outcomes(self):
-        """Unified :class:`~varcode.EffectOutcome` view over
+        """Unified :class:`~varcode.EffectCandidate` view over
         :attr:`candidates`, attached cryptic candidates, and any
         splice-outcome candidates (#339, #337, #341).
 
@@ -1049,17 +1049,17 @@ class StructuralVariantEffect(TranscriptMutationEffect, MultiOutcomeEffect):
         marks provenance so external scorers (SpliceAI, Pangolin,
         RNA evidence) can filter before rescoring.
         """
-        from ..effect_outcomes import EffectOutcome
+        from ..effect_candidates import EffectCandidate
         sv_type = getattr(self.variant, "sv_type", None)
         base_evidence = {"sv_type": sv_type} if sv_type is not None else {}
         primary = tuple(
-            EffectOutcome(
+            EffectCandidate(
                 effect=candidate,
                 source="varcode",
                 evidence=base_evidence)
             for candidate in self._candidates)
         cryptic = tuple(
-            EffectOutcome(
+            EffectCandidate(
                 effect=c,
                 source="varcode_motif",
                 probability=_cryptic_probability(c),
@@ -1138,7 +1138,7 @@ class GeneFusion(StructuralVariantEffect):
     allele. Predicting the exact fused-protein sequence requires
     knowing which exons are retained, which typically needs RNA
     evidence — outcomes beyond "this is a plausible fusion" are
-    left to downstream tools that attach :class:`EffectOutcome`
+    left to downstream tools that attach :class:`EffectCandidate`
     objects with their own producer ``source`` tag.
     """
 
@@ -1167,7 +1167,7 @@ class CrypticExonCandidate(MutationEffect):
     """A region where an SV has brought novel sequence into range
     of the transcript, and motif scoring flags a plausible new
     splice acceptor / donor pair. Produced by PR 11's cryptic-exon
-    enumerator; attached as additional :class:`EffectOutcome` entries on
+    enumerator; attached as additional :class:`EffectCandidate` entries on
     SV effects rather than standalone.
 
     Not a :class:`TranscriptMutationEffect` because the candidate
@@ -1175,7 +1175,7 @@ class CrypticExonCandidate(MutationEffect):
     exon hypothesis. Carries the contig / interval and the motif
     scores as plain fields; external predictors (SpliceAI,
     Pangolin) attach their own scores via the enclosing
-    :class:`EffectOutcome.evidence` dict.
+    :class:`EffectCandidate.evidence` dict.
     """
 
     short_description = "sv-cryptic-exon-candidate"
@@ -1358,7 +1358,7 @@ class PhaseCandidateSet(TranscriptMutationEffect, MultiOutcomeEffect):
 
     @property
     def outcomes(self):
-        """One :class:`EffectOutcome` per hypothesis, carrying the phase
+        """One :class:`EffectCandidate` per hypothesis, carrying the phase
         metadata needed to align with RNA-evidence outcomes (#259).
 
         ``evidence`` keys: ``phase_state`` (``"phased"`` /
@@ -1366,11 +1366,11 @@ class PhaseCandidateSet(TranscriptMutationEffect, MultiOutcomeEffect):
         ``haplotype`` (opaque tag), ``germline_variants`` (tuple of
         the cis germline variants on that hypothesis's haplotype).
         """
-        from ..effect_outcomes import EffectOutcome
+        from ..effect_candidates import EffectCandidate
         outs = []
         for candidate, hypothesis in zip(
                 self._candidates_raw, self._hypotheses):
-            outs.append(EffectOutcome(
+            outs.append(EffectCandidate(
                 effect=candidate,
                 source="varcode_germline",
                 evidence={

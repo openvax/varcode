@@ -18,7 +18,7 @@ coordinates alone — for many variants, especially structural ones,
 the actual protein consequence depends on what's transcribed and
 spliced. This module defines the contract that lets RNA-aware tools
 (Isovar, Exacto, custom long-read pipelines) attach observed
-:class:`~varcode.effect_outcomes.EffectOutcome` objects to existing effects
+:class:`~varcode.effect_candidates.EffectCandidate` objects to existing effects
 without subclassing or churning the core classes.
 
 The shape mirrors :mod:`varcode.phasing`: a runtime-checkable
@@ -47,7 +47,7 @@ from __future__ import annotations
 
 from typing import Any, Iterable, Mapping, Optional, Protocol, Sequence, runtime_checkable
 
-from .effect_outcomes import EffectOutcome
+from .effect_candidates import EffectCandidate
 
 
 @runtime_checkable
@@ -55,7 +55,7 @@ class RNAEvidenceResolver(Protocol):
     """Source of RNA-observed outcomes for a ``(variant, transcript)``
     pair.
 
-    Implementers return zero or more :class:`~varcode.effect_outcomes.EffectOutcome`
+    Implementers return zero or more :class:`~varcode.effect_candidates.EffectCandidate`
     objects describing isoforms, fusions, or RNA-level events that were
     actually observed in reads. An empty sequence means "no evidence
     for this pair" — the existing DNA-predicted outcomes are left
@@ -69,7 +69,7 @@ class RNAEvidenceResolver(Protocol):
     factory that fills the common fields.
     """
 
-    def observed_outcomes(self, variant, transcript) -> Sequence[EffectOutcome]:
+    def observed_outcomes(self, variant, transcript) -> Sequence[EffectCandidate]:
         """Return RNA-observed outcomes for ``variant`` on
         ``transcript``, or an empty sequence when no evidence is
         available. Must not raise on unknown ``(variant, transcript)``
@@ -84,7 +84,7 @@ class NullRNAEvidenceResolver:
     and as a baseline in tests. ``apply_rna_evidence_to_effects`` is
     safe to call with this resolver — it's a no-op walk."""
 
-    def observed_outcomes(self, variant, transcript) -> Sequence[EffectOutcome]:
+    def observed_outcomes(self, variant, transcript) -> Sequence[EffectCandidate]:
         return ()
 
 
@@ -95,8 +95,8 @@ def make_rna_outcome(
         source: str = "rna",
         transcript_model_id: Optional[str] = None,
         read_count: Optional[int] = None,
-        extra_evidence: Optional[Mapping[str, Any]] = None) -> EffectOutcome:
-    """Construct an :class:`~varcode.effect_outcomes.EffectOutcome` carrying
+        extra_evidence: Optional[Mapping[str, Any]] = None) -> EffectCandidate:
+    """Construct an :class:`~varcode.effect_candidates.EffectCandidate` carrying
     RNA-derived provenance.
 
     Convenience factory for the common fields a reads-based or
@@ -133,7 +133,7 @@ def make_rna_outcome(
         evidence["read_count"] = read_count
     if extra_evidence:
         evidence.update(extra_evidence)
-    return EffectOutcome(
+    return EffectCandidate(
         effect=effect,
         probability=probability,
         source=source,
@@ -176,7 +176,7 @@ def apply_rna_evidence_to_effects(effects: Iterable, resolver) -> Iterable:
         return effects
 
     # Lazy import to avoid an import cycle (effect_classes imports
-    # from varcode.effect_outcomes, which sits below us).
+    # from varcode.effect_candidates, which sits below us).
     from .effects.effect_classes import MultiOutcomeEffect
 
     for effect in effects:

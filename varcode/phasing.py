@@ -94,7 +94,7 @@ class ReadPhaseResolver:
 
     #: Provenance tag flowing into :attr:`HaplotypeEffect.phase_source`
     #: when this resolver produced the cis grouping. Distinct from
-    #: :attr:`EffectOutcome.source` (an unrelated producer tag on RNA-evidence
+    #: :attr:`EffectCandidate.source` (an unrelated producer tag on RNA-evidence
     #: outcomes).
     phase_source = "read_phasing"
 
