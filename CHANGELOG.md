@@ -3,14 +3,18 @@
 ## [Unreleased]
 
 **Breaking**
-- `varcode.Outcome` renamed to `varcode.EffectCandidate`; the helper
-  `outcomes_from_candidates` renamed to `candidates_from_effects`;
-  `varcode.make_rna_outcome` renamed to `varcode.make_rna_candidate`;
-  the module `varcode.outcomes` renamed to `varcode.effect_candidates`.
-  The `description` field is removed — use
-  `candidate.effect.short_description` (it was always a passthrough).
-  No deprecation alias; update imports.
-  The class now ships with a module docstring explaining *why* the
+- `varcode.Outcome` renamed to `varcode.EffectOutcome`. The helper
+  `outcomes_from_candidates` renamed to `outcomes_from_effects`. The
+  module `varcode.outcomes` renamed to `varcode.effect_outcomes`. The
+  test file `tests/test_outcomes.py` renamed to
+  `tests/test_effect_outcomes.py`. The `description` field on the
+  wrapper class is removed — use `candidate.effect.short_description`
+  (it was always a passthrough). No deprecation alias; update imports.
+  Naming is now consistent throughout: "candidates" everywhere means
+  raw `MutationEffect` objects (subclass internal storage and the
+  `.candidates` accessor); "outcomes" everywhere means the wrapped
+  form (`EffectOutcome` class, `.outcomes` accessor, `_extra_outcomes`
+  slot). The class ships with a module docstring explaining *why* the
   wrapper exists (per-context metadata over shared Effect objects),
   and `MultiOutcomeEffect` documents `candidates` and `outcomes` as
   two complementary first-class accessors rather than treating

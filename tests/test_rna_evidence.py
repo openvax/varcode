@@ -34,7 +34,7 @@ from varcode import (
     RNAEvidenceResolver,
     StructuralVariant,
     apply_rna_evidence_to_effects,
-    make_rna_candidate,
+    make_rna_outcome,
     load_vcf,
 )
 from varcode.effects.effect_classes import (
@@ -43,7 +43,7 @@ from varcode.effects.effect_classes import (
     StructuralVariantEffect,
     Substitution,
 )
-from varcode.effect_candidates import EffectCandidate
+from varcode.effect_outcomes import EffectOutcome
 
 
 ensembl_grch38 = cached_release(81)
@@ -88,7 +88,7 @@ class TestProtocol:
 
 
 # --------------------------------------------------------------------
-# make_rna_candidate helper
+# make_rna_outcome helper
 # --------------------------------------------------------------------
 
 
@@ -98,13 +98,13 @@ class TestMakeRNAOutcome:
     in extra_evidence."""
 
     def test_minimal_call_marks_source_rna(self):
-        o = make_rna_candidate(effect=Substitution)  # placeholder effect
+        o = make_rna_outcome(effect=Substitution)  # placeholder effect
         assert o.source == "rna"
         assert o.evidence == {}
         assert o.probability is None
 
     def test_well_known_fields_land_in_evidence(self):
-        o = make_rna_candidate(
+        o = make_rna_outcome(
             effect=Substitution,
             transcript_model_id="ISOFORM_42",
             read_count=314,
@@ -114,7 +114,7 @@ class TestMakeRNAOutcome:
         assert o.probability == 0.91
 
     def test_extra_evidence_merges_alongside_well_known(self):
-        o = make_rna_candidate(
+        o = make_rna_outcome(
             effect=Substitution,
             read_count=10,
             extra_evidence={"tpm": 4.2, "junction_id": "JUNC_1"})
@@ -125,7 +125,7 @@ class TestMakeRNAOutcome:
     def test_source_override_for_tool_specific_filtering(self):
         # Isovar / Exacto / longread_assembly producers set their own
         # source string so consumers can filter by tool.
-        o = make_rna_candidate(effect=Substitution, source="isovar")
+        o = make_rna_outcome(effect=Substitution, source="isovar")
         assert o.source == "isovar"
 
 
@@ -194,7 +194,7 @@ class TestApplyAttaches:
         # whatever — for this test we recycle the LargeDeletion's own
         # most-likely candidate, since we just need a MutationEffect
         # to wrap).
-        observed = make_rna_candidate(
+        observed = make_rna_outcome(
             effect=baseline[0].effect,
             source="isovar",
             transcript_model_id="ISOFORM_A",
@@ -221,7 +221,7 @@ class TestApplyAttaches:
         future refactors don't silently change to dedup."""
         effect = self._sv_effect()
         baseline_len = len(tuple(effect.outcomes))
-        observed = make_rna_candidate(
+        observed = make_rna_outcome(
             effect=tuple(effect.outcomes)[0].effect, source="isovar")
         resolver = _StubResolver([observed])
         apply_rna_evidence_to_effects([effect], resolver)
@@ -233,9 +233,9 @@ class TestApplyAttaches:
         adds long-read disambiguation second. Consumers see both
         sources alongside the original DNA-predicted outcomes."""
         effect = self._sv_effect()
-        first = make_rna_candidate(
+        first = make_rna_outcome(
             effect=tuple(effect.outcomes)[0].effect, source="isovar")
-        second = make_rna_candidate(
+        second = make_rna_outcome(
             effect=tuple(effect.outcomes)[0].effect, source="exacto",
             extra_evidence={"long_read_support": True})
         apply_rna_evidence_to_effects([effect], _StubResolver([first]))
@@ -265,7 +265,7 @@ class TestNonMultiOutcomeNotMutated:
         assert effects, "BRAF locus should produce at least one effect"
         # Pretend we have RNA evidence for this — apply shouldn't
         # crash and should not mutate non-MultiOutcomeEffect entries.
-        observed = make_rna_candidate(
+        observed = make_rna_outcome(
             effect=effects[0], source="isovar")
         apply_rna_evidence_to_effects(effects, _StubResolver([observed]))
         for e in effects:
@@ -319,7 +319,7 @@ class TestEffectsKwargWiring:
         # Stub resolver returns one observed outcome per call. Use the
         # baseline's primary outcome's effect as the wrapper target.
         observed_effect = tuple(baseline_sv_effects[0].outcomes)[0].effect
-        observed = make_rna_candidate(
+        observed = make_rna_outcome(
             effect=observed_effect, source="isovar",
             transcript_model_id="ISO_1", read_count=11)
         resolver = _StubResolver([observed])
@@ -348,7 +348,7 @@ class TestEffectsKwargWiring:
         assert sv_effects_baseline
 
         observed_effect = tuple(sv_effects_baseline[0].outcomes)[0].effect
-        observed = make_rna_candidate(
+        observed = make_rna_outcome(
             effect=observed_effect, source="exacto", read_count=7)
         with_evidence = list(
             sv.effects(
@@ -363,7 +363,7 @@ class TestEffectsKwargWiring:
 
 
 # --------------------------------------------------------------------
-# EffectCandidate ordering: DNA-predicted preserved at the front
+# EffectOutcome ordering: DNA-predicted preserved at the front
 # --------------------------------------------------------------------
 
 
@@ -382,7 +382,7 @@ class TestOrderingContract:
             genome=ensembl_grch38)
         effect = sv.effect_on_transcript(_cftr())
         dna_predicted = tuple(effect.outcomes)
-        observed = make_rna_candidate(
+        observed = make_rna_outcome(
             effect=dna_predicted[0].effect, source="isovar")
         apply_rna_evidence_to_effects([effect], _StubResolver([observed]))
         new = tuple(effect.outcomes)

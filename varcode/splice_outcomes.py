@@ -67,7 +67,7 @@ from .effects.effect_classes import (
     SpliceDonor,
 )
 from .mutant_transcript import MutantTranscript, TranscriptEdit
-from .effect_candidates import EffectCandidate
+from .effect_outcomes import EffectOutcome
 
 
 class SpliceOutcome(Enum):
@@ -238,7 +238,7 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
 
     @property
     def outcomes(self):
-        """Unified :class:`~varcode.EffectCandidate` view over :attr:`candidates`
+        """Unified :class:`~varcode.EffectOutcome` view over :attr:`candidates`
         (#339).
 
         Each outcome's ``effect`` is guaranteed to be a real
@@ -256,7 +256,7 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
         """
         return self._with_extra_outcomes(
             tuple(
-                EffectCandidate(
+                EffectOutcome(
                     effect=self._outcome_effect(candidate),
                     probability=candidate.plausibility,
                     source="varcode",
@@ -461,7 +461,7 @@ def _plausibility_table_for(splice_effect):
 
 
 # ---------------------------------------------------------------------
-# EffectCandidate construction
+# EffectOutcome construction
 # ---------------------------------------------------------------------
 
 

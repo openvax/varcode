@@ -10,9 +10,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""``EffectCandidate``: one plausible effect with per-context provenance.
+"""``EffectOutcome``: one plausible effect with per-context provenance.
 
-An :class:`EffectCandidate` pairs a :class:`MutationEffect` with a
+An :class:`EffectOutcome` pairs a :class:`MutationEffect` with a
 ``source`` / ``probability`` / ``evidence`` triple describing **how
 this particular candidate came to be**. The point of the wrapper is
 that the same :class:`MutationEffect` instance can appear in multiple
@@ -30,7 +30,7 @@ object as an attached candidate on the SV's own
 and with the SV's ``sv_type`` merged into evidence. The Effect is
 shared; the metadata diverges. That's what the wrapper exists for.
 
-Without ``EffectCandidate``, the alternatives are:
+Without ``EffectOutcome``, the alternatives are:
 
 * Copy the Effect at every re-tag site (breaks identity, adds
   overhead, has to be deep enough to detach evidence dicts).
@@ -41,11 +41,11 @@ Without ``EffectCandidate``, the alternatives are:
 
 The wrapper is the cheapest answer.
 
-Where ``EffectCandidate`` appears
+Where ``EffectOutcome`` appears
 ---------------------------------
 
 The :attr:`MultiOutcomeEffect.outcomes` property returns
-``tuple[EffectCandidate, ...]``. ``candidates`` returns the raw
+``tuple[EffectOutcome, ...]``. ``candidates`` returns the raw
 ``tuple[MutationEffect, ...]`` — both accessors are first-class:
 
 * Use ``outcomes`` when you need per-candidate provenance (filter by
@@ -55,7 +55,7 @@ The :attr:`MultiOutcomeEffect.outcomes` property returns
 
 External integrations (SpliceAI/Pangolin scorers, RNA-evidence
 callers, long-read assembly tools) construct
-:class:`EffectCandidate` instances when they want to surface scored
+:class:`EffectOutcome` instances when they want to surface scored
 or annotated effects through the same surface as varcode's
 built-ins. None of those external integrations are wired up yet;
 the type ships ahead of them so they can plug in without churning
@@ -69,7 +69,7 @@ from serializable import DataclassSerializable
 
 
 @dataclass(frozen=True)
-class EffectCandidate(DataclassSerializable):
+class EffectOutcome(DataclassSerializable):
     """One plausible effect for a variant, paired with provenance.
 
     Parameters
@@ -122,16 +122,16 @@ class EffectCandidate(DataclassSerializable):
         return self.effect.short_description
 
 
-def candidates_from_effects(
+def outcomes_from_effects(
         effects: Tuple[Any, ...],
-        source: str = "varcode") -> Tuple[EffectCandidate, ...]:
+        source: str = "varcode") -> Tuple[EffectOutcome, ...]:
     """Wrap a tuple of :class:`MutationEffect` instances as
-    :class:`EffectCandidate` objects with a shared ``source`` string.
+    :class:`EffectOutcome` objects with a shared ``source`` string.
 
     Used by the default :attr:`MultiOutcomeEffect.outcomes`
     implementation to lift a raw ``candidates`` tuple into the wrapped
     form without churning every subclass. No probabilities are
     assigned — callers that want scored candidates construct
-    :class:`EffectCandidate` directly.
+    :class:`EffectOutcome` directly.
     """
-    return tuple(EffectCandidate(effect=c, source=source) for c in effects)
+    return tuple(EffectOutcome(effect=c, source=source) for c in effects)

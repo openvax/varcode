@@ -52,7 +52,7 @@ from .cryptic_exons import (
     score_acceptor,
     score_donor,
 )
-from .effect_candidates import EffectCandidate, candidates_from_effects
+from .effect_outcomes import EffectOutcome, outcomes_from_effects
 from .phasing import (
     MutantTranscriptSource,
     ReadPhaseResolver,
@@ -64,7 +64,7 @@ from .rna_evidence import (
     NullRNAEvidenceResolver,
     RNAEvidenceResolver,
     apply_rna_evidence_to_effects,
-    make_rna_candidate,
+    make_rna_outcome,
 )
 from .splice_outcomes import (
     SpliceCandidate,
@@ -113,8 +113,8 @@ __all__ = [
     "apply_variants_to_transcript",
 
     # Unified multi-outcome type (openvax/varcode#299)
-    "EffectCandidate",
-    "candidates_from_effects",
+    "EffectOutcome",
+    "outcomes_from_effects",
 
     # Structural variants (openvax/varcode#252 / #264)
     "StructuralVariant",
@@ -138,7 +138,7 @@ __all__ = [
     "RNAEvidenceResolver",
     "NullRNAEvidenceResolver",
     "apply_rna_evidence_to_effects",
-    "make_rna_candidate",
+    "make_rna_outcome",
 
     "EffectAnnotator",
     "FastEffectAnnotator",

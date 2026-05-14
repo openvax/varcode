@@ -21,7 +21,7 @@ Output: one of the SV effect classes from
 ``LargeDuplication``, ``Inversion``, ``GeneFusion``,
 ``TranslocationToIntergenic``), each of which is a
 :class:`~varcode.effects.MultiOutcomeEffect` exposing
-:attr:`outcomes` — a tuple of :class:`~varcode.effect_candidates.EffectCandidate`
+:attr:`outcomes` — a tuple of :class:`~varcode.effect_outcomes.EffectOutcome`
 entries each carrying an effect + probability + source + evidence.
 
 Scope
@@ -36,11 +36,11 @@ This annotator is deliberately shallow:
   whether a cryptic exon will be retained, or rank outcomes by
   likelihood. Those require external tools (SpliceAI, RNA evidence
   via Isovar, or long-read assembly) that attach additional
-  :class:`EffectCandidate` entries with their own ``source`` and ``evidence``.
+  :class:`EffectOutcome` entries with their own ``source`` and ``evidence``.
 
 The point of shipping this annotator now, even with thin logic, is
 to make the *shape* of SV output available to the rest of the
-ecosystem: the ``MultiOutcomeEffect`` + ``EffectCandidate`` contract is
+ecosystem: the ``MultiOutcomeEffect`` + ``EffectOutcome`` contract is
 what lets RNA and assembly tools integrate cleanly.
 
 Integration hooks
@@ -53,10 +53,10 @@ Integration hooks
   sequences have a concrete assembled cDNA to read.
 * **External splice predictor**: call the annotator, then wrap each
   returned effect in a new :class:`MultiOutcomeEffect` whose
-  ``outcomes`` tuple includes a fresh ``EffectCandidate(effect=cryptic,
+  ``outcomes`` tuple includes a fresh ``EffectOutcome(effect=cryptic,
   source="spliceai", probability=...)`` entry.
 * **Short-read RNA evidence**: same pattern. Attach an
-  ``EffectCandidate`` carrying the read-evidence tool's ``source``
+  ``EffectOutcome`` carrying the read-evidence tool's ``source``
   and a ``junction_reads`` field in ``evidence`` alongside the
   varcode-nominated outcome.
 """
@@ -680,7 +680,7 @@ class StructuralVariantAnnotator:
         window.
         """
         from ..effects.effect_classes import StructuralVariantEffect
-        from ..effect_candidates import EffectCandidate
+        from ..effect_outcomes import EffectOutcome
         from ..splice_outcomes import SpliceOutcome, enumerate_splice_outcomes
         if not isinstance(effect, StructuralVariantEffect):
             return
@@ -722,7 +722,7 @@ class StructuralVariantAnnotator:
                     # Primary SV classification already covers the
                     # "splicing proceeds normally" interpretation.
                     continue
-                attached.append(EffectCandidate(
+                attached.append(EffectOutcome(
                     effect=outcome.effect,
                     probability=outcome.probability,
                     source="varcode_splice",

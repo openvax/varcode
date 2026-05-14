@@ -53,9 +53,9 @@ Auto-generated from in-source docstrings via
 
 ::: varcode.EffectCollection
 
-### `varcode.EffectCandidate`
+### `varcode.EffectOutcome`
 
-::: varcode.EffectCandidate
+::: varcode.EffectOutcome
 
 ### Priority ordering
 
@@ -143,9 +143,9 @@ Auto-generated from in-source docstrings via
 
 ::: varcode.apply_rna_evidence_to_effects
 
-### `varcode.make_rna_candidate`
+### `varcode.make_rna_outcome`
 
-::: varcode.make_rna_candidate
+::: varcode.make_rna_outcome
 
 ## Germline-aware annotation
 
