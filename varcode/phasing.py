@@ -13,136 +13,134 @@
 """Phase-resolver interfaces for cis/trans-aware effect prediction
 (openvax/varcode#269).
 
-A :class:`PhaseResolver` answers "are these two variants on the same
+A *phase resolver* answers "are these two variants on the same
 haplotype?" from some evidence source — DNA ``PS`` tags, RNA
-read co-occurrence, or an assembled-contig tool like
-`Isovar <https://github.com/openvax/isovar>`_.
+read co-occurrence, an assembled contig from a long-read pipeline,
+or anything else that can express variant co-occurrence.
 
-Varcode defines the protocol here; the resolvers plug into
+Varcode defines two narrow Protocols here and plugs the resolvers into
 :meth:`Variant.effects` / :meth:`VariantCollection.effects` via the
-``phase_resolver`` kwarg. Concrete DNA-based and read-based resolvers
-can live here too or be shipped by downstream tools.
-
-This module deliberately imports nothing from Isovar. An
-:class:`IsovarAssemblyProvider` is a duck-typed interface — Isovar
-(or any contig assembly tool) implements it; varcode consumes it.
+``phase_resolver`` kwarg. Varcode does **not** import or name any
+specific upstream tool — implementations live in whatever package
+produces the evidence (Isovar, long-read callers, custom assemblers,
+test stubs).
 """
 
 from typing import Optional, Protocol, Sequence, runtime_checkable
 
 
 @runtime_checkable
-class IsovarAssemblyProvider(Protocol):
-    """Minimal interface for a source of per-locus RNA assemblies
-    with phased variants (#269, #259).
+class ReadPhasingSource(Protocol):
+    """Reports per-variant read-level evidence and co-occurring partners.
 
-    An "assembly" is a consensus contig built from RNA reads spanning
-    a somatic variant. Variants co-occurring on the same contig are
-    in cis — they came from the same physical molecule, so
-    co-occurrence is direct evidence, not inference. The contig's
-    translated protein IS the observed mutant product, not something
-    inferred from reference + edits.
-
-    Isovar is the reference implementation, but varcode intentionally
-    does not import it. Any tool exposing this shape plugs in — a
-    long-read haplotype caller, a custom assembler, or a mock in
-    tests.
-
-    Implementers need to be consistent about ``transcript`` — if the
-    tool returns different contigs per isoform, the methods must key
-    on ``(variant, transcript)``. If the tool is isoform-agnostic,
-    all ``transcript`` arguments may be ignored (the provider just
-    returns the same contig for any).
+    The minimum interface needed to answer ``in_cis(v1, v2)`` from
+    read-level data — co-observation on the same supporting reads,
+    same long-read fragment, same assembled contig, etc. Implementations
+    decide how strong the evidence is; consumers only see a boolean
+    membership question.
     """
 
-    def has_contig(self, variant, transcript) -> bool:
-        """True if this provider has an assembled contig covering
-        ``variant`` on ``transcript``."""
+    def has_evidence(self, variant) -> bool:
+        """True if this source has any alt-supporting evidence for
+        ``variant``."""
         ...
 
-    def variants_in_contig(self, variant, transcript) -> Sequence:
-        """Variants observed on the same contig as ``variant``.
-
-        May include germline SNPs, nearby somatic variants, or
-        ``variant`` itself (implementations pick their convention).
-        Empty sequence when no contig covers ``variant``.
-        """
+    def partners_in_cis(self, variant) -> Sequence:
+        """Variants observed in cis with ``variant`` — i.e. on the
+        same supporting reads / fragment / contig. May include
+        germline SNPs, nearby somatic variants, or ``variant`` itself
+        (implementations pick their convention). Empty sequence when
+        no evidence covers ``variant``."""
         ...
+
+
+@runtime_checkable
+class MutantTranscriptSource(Protocol):
+    """Reports an observed mutant transcript for ``(variant, transcript)``.
+
+    Independent of phasing. A source can implement just
+    :class:`ReadPhasingSource`, just :class:`MutantTranscriptSource`,
+    or both. Consumers iterating effects use this channel to substitute
+    the observed mutant protein (from RNA assembly, long-read calling,
+    etc.) for the reference-inferred one.
+    """
 
     def mutant_transcript(self, variant, transcript):
-        """The :class:`~varcode.MutantTranscript` assembled from the
-        contig. ``None`` when no contig covers
-        ``(variant, transcript)``.
-        """
+        """The :class:`~varcode.MutantTranscript` for
+        ``(variant, transcript)``, or ``None`` when this source has
+        no observed transcript for that pair."""
         ...
 
 
-class IsovarPhaseResolver:
-    """Phase resolver backed by an :class:`IsovarAssemblyProvider`
-    (#269, #259).
+class ReadPhaseResolver:
+    """Phase resolver backed by a :class:`ReadPhasingSource` (#269, #259).
 
-    Two variants are cis if they appear on the same assembled contig.
+    Two variants are cis if the source reports them as co-observed.
     That's direct molecular evidence — not a probabilistic call.
 
     Usage::
 
-        isovar_results = run_isovar(bam, vcf)
-        resolver = IsovarPhaseResolver(isovar_results)
+        # Any object satisfying ReadPhasingSource works. Common
+        # implementation: an Isovar adapter shipped by openvax/isovar.
+        resolver = ReadPhaseResolver(source)
         effects = variants.effects(phase_resolver=resolver)
 
-    Any effect whose ``(variant, transcript)`` is covered by an
-    assembled contig gets its :attr:`~MutationEffect.mutant_transcript`
-    populated with the contig-derived :class:`MutantTranscript` —
-    the protein attached to the effect is the protein actually
-    observed in RNA, not one inferred from the reference.
+    If ``source`` also satisfies :class:`MutantTranscriptSource`, the
+    resolver routes :meth:`mutant_transcript` calls to it — so any
+    effect whose ``(variant, transcript)`` is covered by the source
+    gets its :attr:`~MutationEffect.mutant_transcript` populated with
+    the observed mutant transcript.
     """
 
-    #: Provenance string for downstream consumers that filter by
-    #: phase source. Matches the pattern established by the
-    #: :class:`Outcome.source` field.
-    source = "isovar"
+    #: Provenance tag flowing into :attr:`HaplotypeEffect.phase_source`
+    #: when this resolver produced the cis grouping. Distinct from
+    #: :attr:`Outcome.source` (an unrelated producer tag on RNA-evidence
+    #: outcomes).
+    phase_source = "read_phasing"
 
-    def __init__(self, provider: IsovarAssemblyProvider):
-        self.provider = provider
+    def __init__(self, phasing_source: ReadPhasingSource):
+        self.phasing_source = phasing_source
 
-    def has_contig(self, variant, transcript) -> bool:
-        """Convenience passthrough to the provider."""
-        return self.provider.has_contig(variant, transcript)
+    def has_evidence(self, variant) -> bool:
+        """Convenience passthrough to the wrapped source."""
+        return self.phasing_source.has_evidence(variant)
 
     def mutant_transcript(self, variant, transcript):
-        """Return the assembled :class:`MutantTranscript`, or ``None``
-        when this provider has no contig for ``(variant, transcript)``.
-        """
-        if not self.provider.has_contig(variant, transcript):
+        """Return the observed :class:`MutantTranscript` for
+        ``(variant, transcript)``, or ``None`` when the wrapped source
+        doesn't implement :class:`MutantTranscriptSource` or has no
+        transcript for that pair."""
+        get = getattr(self.phasing_source, "mutant_transcript", None)
+        if get is None:
             return None
-        return self.provider.mutant_transcript(variant, transcript)
+        return get(variant, transcript)
 
     def in_cis(self, v1, v2, transcript=None) -> Optional[bool]:
-        """Return ``True`` if ``v1`` and ``v2`` appear on the same
-        Isovar contig, ``False`` if they're each on a different
-        contig (distinct physical molecules — trans), ``None`` when
-        neither variant has a contig (no evidence).
+        """Return ``True`` if ``v1`` and ``v2`` are co-observed by the
+        wrapped source, ``False`` if exactly one has evidence (so they
+        are on distinct physical molecules — trans), ``None`` when
+        neither has evidence.
 
-        ``transcript`` is required because assemblies may be
-        isoform-specific; pass ``None`` only if the provider is
-        isoform-agnostic (the protocol allows this).
+        ``transcript`` is accepted for interface symmetry with
+        :class:`VCFPhaseResolver.in_cis` but isn't consulted at the
+        Protocol layer — isoform-specific sources are not yet a
+        first-class concern. Reintroducible later as an optional
+        Protocol extension.
         """
-        if transcript is None:
-            return None
-        v1_has = self.provider.has_contig(v1, transcript)
-        v2_has = self.provider.has_contig(v2, transcript)
+        v1_has = self.phasing_source.has_evidence(v1)
+        v2_has = self.phasing_source.has_evidence(v2)
         if not v1_has and not v2_has:
             return None
         if v1_has:
-            return v2 in self.provider.variants_in_contig(v1, transcript)
-        return v1 in self.provider.variants_in_contig(v2, transcript)
+            return v2 in self.phasing_source.partners_in_cis(v1)
+        return v1 in self.phasing_source.partners_in_cis(v2)
 
-    def phased_partners(self, variant, transcript) -> Sequence:
-        """Variants observed on the same contig as ``variant`` on
-        ``transcript`` — i.e. the cis set. Empty if no contig."""
-        if not self.provider.has_contig(variant, transcript):
+    def phased_partners(self, variant, transcript=None) -> Sequence:
+        """Variants co-observed with ``variant`` — i.e. the cis set.
+        Empty when the source has no evidence for ``variant``."""
+        if not self.phasing_source.has_evidence(variant):
             return ()
-        return tuple(self.provider.variants_in_contig(variant, transcript))
+        return tuple(self.phasing_source.partners_in_cis(variant))
 
 
 class VCFPhaseResolver:
@@ -187,8 +185,8 @@ class VCFPhaseResolver:
     the grouping.
     """
 
-    #: Provenance tag, matching :attr:`IsovarPhaseResolver.source`.
-    source = "vcf_ps"
+    #: Provenance tag, matching :attr:`ReadPhaseResolver.phase_source`.
+    phase_source = "vcf_ps"
 
     def __init__(self, variant_collection, sample):
         self._collection = variant_collection
@@ -240,7 +238,7 @@ class VCFPhaseResolver:
         different phase sets, uncalled alleles).
 
         ``transcript`` is accepted for interface symmetry with
-        :class:`IsovarPhaseResolver.in_cis` but isn't consulted —
+        :class:`ReadPhaseResolver.in_cis` but isn't consulted —
         DNA-level phase is isoform-agnostic.
         """
         g1 = self._genotype(v1)
@@ -290,14 +288,14 @@ class VCFPhaseResolver:
 
 def apply_phase_resolver_to_effects(effects, phase_resolver):
     """Post-process an :class:`EffectCollection` (or any iterable of
-    :class:`MutationEffect`) to attach contig-derived
+    :class:`MutationEffect`) to attach observed
     :class:`MutantTranscript` objects when the resolver has evidence.
 
     Mutates each effect in place by setting
     ``effect.mutant_transcript``. Effects whose transcript isn't
-    resolvable or whose ``(variant, transcript)`` has no contig are
-    left untouched — so this is safe to call on a mixed collection
-    where only some variants have RNA evidence.
+    resolvable or whose ``(variant, transcript)`` has no observed
+    transcript are left untouched — so this is safe to call on a mixed
+    collection where only some variants have RNA evidence.
     """
     if phase_resolver is None:
         return effects
@@ -312,8 +310,9 @@ def apply_phase_resolver_to_effects(effects, phase_resolver):
         if mt is not None:
             # Intentional mutation: the effect's mutant_transcript
             # slot was either None (point variants, cryptic stubs,
-            # etc.) or populated from DNA-only inference. Isovar's
-            # assembly is higher-confidence evidence, so it wins.
+            # etc.) or populated from DNA-only inference. An observed
+            # mutant transcript is higher-confidence evidence, so it
+            # wins.
             e.mutant_transcript = mt
     return effects
 
@@ -396,8 +395,8 @@ def build_haplotype_effects(variant_collection, effects, phase_resolver):
         for members in groups.values():
             if len(members) < 2:
                 continue
-            # Prefer a resolver-provided MutantTranscript (Isovar /
-            # long-read assembly) when available — it's the actual
+            # Prefer a resolver-provided MutantTranscript (RNA assembly,
+            # long-read, etc.) when available — it's the actual
             # observed molecule, not inferred from reference + edits.
             # Members of a cis group share a contig by definition, so
             # any member's contig covers the whole group.
@@ -415,6 +414,6 @@ def build_haplotype_effects(variant_collection, effects, phase_resolver):
                 variants=members,
                 transcript=transcript,
                 mutant_transcript=mt,
-                phase_source=getattr(phase_resolver, "source", None),
+                phase_source=getattr(phase_resolver, "phase_source", None),
             ))
     return haplotype_effects

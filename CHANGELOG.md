@@ -3,6 +3,23 @@
 ## [Unreleased]
 
 **Breaking**
+- Phasing API generalized; Isovar-named identifiers removed from the
+  varcode public surface ([#378](https://github.com/openvax/varcode/issues/378)).
+  Varcode no longer imports or names any upstream tool — implementations
+  of the new generic Protocols live in their respective packages
+  (e.g. `isovar.IsovarReadPhasing`, openvax/isovar#183).
+  - `IsovarAssemblyProvider` (Protocol) **removed**, split into:
+    - `ReadPhasingSource` with `has_evidence(variant) -> bool` and
+      `partners_in_cis(variant) -> Sequence[Variant]`.
+    - `MutantTranscriptSource` with
+      `mutant_transcript(variant, transcript) -> Optional[MutantTranscript]`.
+  - `IsovarPhaseResolver` renamed to `ReadPhaseResolver`. Constructor
+    accepts any `ReadPhasingSource`; routes `mutant_transcript(...)`
+    to the wrapped source when it also satisfies `MutantTranscriptSource`.
+    Returns `None` otherwise instead of raising.
+  - Resolver `source` tag changed from `"isovar"` to `"read_phasing"`
+    on `ReadPhaseResolver`. Consumers filtering effects by phase
+    source need to update their filter values.
 - `varcode.effects.effect_classes.PhaseAmbiguousEffect` renamed to
   `PhaseCandidateSet`. No deprecation alias — update imports.
   Public surface (`.candidates`, `.outcomes`, `.most_likely`,

@@ -83,9 +83,10 @@ class Outcome(DataclassSerializable):
     source : str
         Name of the tool or annotator that produced this outcome.
         Defaults to ``"varcode"`` for built-in classifications.
-        External integrations set their own (``"spliceai"``,
-        ``"isovar"``, ``"longread_assembly"``, etc.) so downstream
-        callers can filter by source.
+        External integrations set their own (a splice predictor, an
+        RNA assembler, a long-read caller, ...) so downstream callers
+        can filter by source. The string is opaque to varcode; pick
+        whatever your pipeline prefers.
     evidence : Mapping[str, Any]
         Open-ended provenance dict. Shape is source-specific; the
         convention is that keys match the source's native field names

@@ -479,14 +479,15 @@ class Variant(Serializable):
             against the registry. See openvax/varcode#271.
 
         phase_resolver : PhaseResolver or None
-            Optional phase-evidence source (typically an
-            :class:`~varcode.phasing.IsovarPhaseResolver`). When
-            provided and the resolver has an assembled contig for
+            Optional phase-evidence source (typically a
+            :class:`~varcode.phasing.ReadPhaseResolver` wrapping an
+            upstream RNA-phasing tool, or
+            :class:`~varcode.phasing.VCFPhaseResolver`). When provided
+            and the resolver has an observed mutant transcript for
             ``(self, transcript)``, the returned effect's
-            ``mutant_transcript`` is populated with the
-            contig-derived :class:`~varcode.MutantTranscript` — the
-            protein is the protein actually observed in RNA rather
-            than one inferred from the reference. See
+            ``mutant_transcript`` is populated with that observed
+            transcript — the protein is the protein actually observed
+            in RNA rather than one inferred from the reference. See
             openvax/varcode#269.
 
         rna_resolver : RNAEvidenceResolver or None

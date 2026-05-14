@@ -21,8 +21,9 @@ possibility set** — one classified effect per haplotype hypothesis
 
 - `VCFPhaseResolver(merged_phased.vcf)` — reads `PS` tags from a
   WhatsHap- or HapCUT2-phased merged VCF.
-- `IsovarPhaseResolver(provider)` — checks which haplotype the
-  somatic was observed on in RNA reads.
+- `ReadPhaseResolver(source)` — wraps any RNA-phasing source
+  (typically an Isovar adapter shipped by `openvax/isovar`) to check
+  which haplotype the somatic was observed on in RNA reads.
 - Anything implementing `in_cis(v1, v2, transcript) -> bool | None`.
 
 Phase known → single `MutationEffect`. Phase unknown →
@@ -109,7 +110,7 @@ print("trans ->", type(eff_trans).__name__, eff_trans.short_description)
 ```
 
 In real code use `VCFPhaseResolver(merged_phased.vcf)` or
-`IsovarPhaseResolver(provider)` — same `phase_resolver=` slot.
+`ReadPhaseResolver(source)` — same `phase_resolver=` slot.
 
 ## When does this matter?
 
