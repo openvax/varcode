@@ -109,9 +109,17 @@ Auto-generated from in-source docstrings via
 
 ## Phasing
 
-### `varcode.IsovarPhaseResolver`
+### `varcode.ReadPhasingSource`
 
-::: varcode.IsovarPhaseResolver
+::: varcode.ReadPhasingSource
+
+### `varcode.MutantTranscriptSource`
+
+::: varcode.MutantTranscriptSource
+
+### `varcode.ReadPhaseResolver`
+
+::: varcode.ReadPhaseResolver
 
 ### `varcode.VCFPhaseResolver`
 

@@ -186,17 +186,17 @@ def test_vcf_resolver_source_tag():
 
 
 # ------------------------------------------------------------------
-# Interface symmetry with IsovarPhaseResolver — same method set
+# Interface symmetry with ReadPhaseResolver — same method set
 # ------------------------------------------------------------------
 
 
-def test_vcf_resolver_has_same_phase_api_as_isovar_resolver():
+def test_vcf_resolver_has_same_phase_api_as_read_resolver():
     from varcode import VariantCollection
-    from varcode.phasing import IsovarPhaseResolver
+    from varcode.phasing import ReadPhaseResolver
     required = {"in_cis", "phased_partners", "source"}
     vcf_r = VCFPhaseResolver(VariantCollection([]), sample="x")
-    # Can't instantiate IsovarPhaseResolver without a provider; check
+    # Can't instantiate ReadPhaseResolver without a source; check
     # class attrs instead.
     for attr in required:
         assert hasattr(vcf_r, attr)
-        assert hasattr(IsovarPhaseResolver, attr)
+        assert hasattr(ReadPhaseResolver, attr)

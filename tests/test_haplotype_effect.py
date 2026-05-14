@@ -16,7 +16,7 @@ HaplotypeEffect + apply_variants_to_transcript: when two or more
 variants are in cis according to a phase resolver, varcode builds a
 single joint :class:`MutantTranscript` rather than computing
 per-variant effects independently. Tests exercise both the
-:class:`IsovarPhaseResolver` and :class:`VCFPhaseResolver` backends.
+:class:`ReadPhaseResolver` and :class:`VCFPhaseResolver` backends.
 """
 
 import os
@@ -25,8 +25,8 @@ import tempfile
 import pytest
 
 from varcode import (
-    IsovarPhaseResolver,
     MutantTranscript,
+    ReadPhaseResolver,
     VCFPhaseResolver,
     Variant,
     VariantCollection,
@@ -86,29 +86,28 @@ def test_apply_variants_order_independent():
 
 
 # -----------------------------------------------------------------
-# Isovar-resolver-driven joint effect
+# Read-phasing-resolver-driven joint effect
 # -----------------------------------------------------------------
 
 
-class _StubAssemblyProvider:
-    def __init__(self, contigs):
-        self._contigs = contigs
+class _StubReadPhasingSource:
+    def __init__(self, phasing=None, mutant_transcripts=None):
+        self._phasing = dict(phasing) if phasing else {}
+        self._mts = dict(mutant_transcripts) if mutant_transcripts else {}
 
-    def has_contig(self, variant, transcript):
-        return (variant, transcript.id) in self._contigs
+    def has_evidence(self, variant):
+        return variant in self._phasing
 
-    def variants_in_contig(self, variant, transcript):
-        entry = self._contigs.get((variant, transcript.id))
-        return entry[0] if entry is not None else ()
+    def partners_in_cis(self, variant):
+        return self._phasing.get(variant, ())
 
     def mutant_transcript(self, variant, transcript):
-        entry = self._contigs.get((variant, transcript.id))
-        return entry[1] if entry is not None else None
+        return self._mts.get((variant, transcript.id))
 
 
-def test_isovar_resolver_produces_haplotype_effect():
-    """Two cis variants via Isovar stub → collection contains a
-    HaplotypeEffect with both variants and the contig-derived
+def test_read_resolver_produces_haplotype_effect():
+    """Two cis variants via read-phasing stub → collection contains a
+    HaplotypeEffect with both variants and the resolver-provided
     MutantTranscript (not DNA inference)."""
     from pyensembl import cached_release
     g = cached_release(81)
@@ -118,14 +117,17 @@ def test_isovar_resolver_produces_haplotype_effect():
     stub_mt = MutantTranscript(
         reference_transcript=transcript,
         cdna_sequence="ACGT" * 50,
-        mutant_protein_sequence="MISOVAR" + "A" * 100,
-        annotator_name="isovar",
+        mutant_protein_sequence="MOBSERVED" + "A" * 100,
+        annotator_name="upstream_rna_tool",
     )
-    contigs = {
-        (v1, transcript.id): ((v1, v2), stub_mt),
-        (v2, transcript.id): ((v1, v2), stub_mt),
-    }
-    resolver = IsovarPhaseResolver(_StubAssemblyProvider(contigs))
+    source = _StubReadPhasingSource(
+        phasing={v1: (v1, v2), v2: (v1, v2)},
+        mutant_transcripts={
+            (v1, transcript.id): stub_mt,
+            (v2, transcript.id): stub_mt,
+        },
+    )
+    resolver = ReadPhaseResolver(source)
     collection = VariantCollection([v1, v2])
     effects = collection.effects(phase_resolver=resolver)
     haplotype_effects = [e for e in effects if isinstance(e, HaplotypeEffect)]
@@ -133,14 +135,13 @@ def test_isovar_resolver_produces_haplotype_effect():
     he = haplotype_effects[0]
     assert set(he.variants) == {v1, v2}
     assert he.transcript is transcript
-    assert he.phase_source == "isovar"
-    # Prefers the Isovar contig over DNA inference.
+    assert he.phase_source == "read_phasing"
+    # Prefers the resolver-provided contig over DNA inference.
     assert he.mutant_transcript is stub_mt
-    # Protein passes through.
-    assert he.mutant_protein_sequence.startswith("MISOVAR")
+    assert he.mutant_protein_sequence.startswith("MOBSERVED")
 
 
-def test_isovar_resolver_haplotype_and_per_variant_coexist():
+def test_read_resolver_haplotype_and_per_variant_coexist():
     """Per-variant effects stay on the collection alongside the
     HaplotypeEffect — additive, not replacement."""
     from pyensembl import cached_release
@@ -152,13 +153,15 @@ def test_isovar_resolver_haplotype_and_per_variant_coexist():
         reference_transcript=transcript,
         cdna_sequence="ACGT" * 50,
         mutant_protein_sequence="M" + "A" * 99,
-        annotator_name="isovar",
+        annotator_name="upstream_rna_tool",
     )
-    contigs = {(v1, transcript.id): ((v1, v2), stub_mt)}
-    resolver = IsovarPhaseResolver(_StubAssemblyProvider(contigs))
+    source = _StubReadPhasingSource(
+        phasing={v1: (v1, v2)},
+        mutant_transcripts={(v1, transcript.id): stub_mt},
+    )
+    resolver = ReadPhaseResolver(source)
     collection = VariantCollection([v1, v2])
     effects = collection.effects(phase_resolver=resolver)
-    # Per-variant Substitution for v1 AND v2 are still present.
     per_variant_for_v1 = [
         e for e in effects
         if e.variant == v1 and not isinstance(e, HaplotypeEffect)]
@@ -169,9 +172,7 @@ def test_isovar_resolver_haplotype_and_per_variant_coexist():
     assert per_variant_for_v2
 
 
-def test_isovar_resolver_no_haplotype_when_only_one_variant():
-    """Single variant with a contig → no HaplotypeEffect (minimum
-    group size is 2)."""
+def test_read_resolver_no_haplotype_when_only_one_variant():
     from pyensembl import cached_release
     g = cached_release(81)
     transcript = g.transcript_by_id("ENST00000003084")
@@ -180,16 +181,18 @@ def test_isovar_resolver_no_haplotype_when_only_one_variant():
         reference_transcript=transcript,
         cdna_sequence="ACGT" * 50,
         mutant_protein_sequence="M" + "A" * 99,
-        annotator_name="isovar",
+        annotator_name="upstream_rna_tool",
     )
-    contigs = {(v1, transcript.id): ((v1,), stub_mt)}
-    resolver = IsovarPhaseResolver(_StubAssemblyProvider(contigs))
+    source = _StubReadPhasingSource(
+        phasing={v1: (v1,)},
+        mutant_transcripts={(v1, transcript.id): stub_mt},
+    )
+    resolver = ReadPhaseResolver(source)
     effects = VariantCollection([v1]).effects(phase_resolver=resolver)
     assert not any(isinstance(e, HaplotypeEffect) for e in effects)
 
 
-def test_isovar_resolver_no_haplotype_when_variants_trans():
-    """Two variants with separate contigs → no HaplotypeEffect."""
+def test_read_resolver_no_haplotype_when_variants_trans():
     from pyensembl import cached_release
     g = cached_release(81)
     transcript = g.transcript_by_id("ENST00000003084")
@@ -198,17 +201,20 @@ def test_isovar_resolver_no_haplotype_when_variants_trans():
     mt1 = MutantTranscript(
         reference_transcript=transcript,
         cdna_sequence="ACGT" * 50,
-        annotator_name="isovar")
+        annotator_name="upstream_rna_tool")
     mt2 = MutantTranscript(
         reference_transcript=transcript,
         cdna_sequence="TGCA" * 50,
-        annotator_name="isovar")
-    # Each variant is on its own contig — they're trans.
-    contigs = {
-        (v1, transcript.id): ((v1,), mt1),
-        (v2, transcript.id): ((v2,), mt2),
-    }
-    resolver = IsovarPhaseResolver(_StubAssemblyProvider(contigs))
+        annotator_name="upstream_rna_tool")
+    # Each variant has evidence only of itself — they're trans.
+    source = _StubReadPhasingSource(
+        phasing={v1: (v1,), v2: (v2,)},
+        mutant_transcripts={
+            (v1, transcript.id): mt1,
+            (v2, transcript.id): mt2,
+        },
+    )
+    resolver = ReadPhaseResolver(source)
     effects = VariantCollection([v1, v2]).effects(phase_resolver=resolver)
     assert not any(isinstance(e, HaplotypeEffect) for e in effects)
 

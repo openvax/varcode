@@ -54,8 +54,9 @@ from .cryptic_exons import (
 )
 from .outcomes import Outcome, outcomes_from_candidates
 from .phasing import (
-    IsovarAssemblyProvider,
-    IsovarPhaseResolver,
+    MutantTranscriptSource,
+    ReadPhaseResolver,
+    ReadPhasingSource,
     VCFPhaseResolver,
     apply_phase_resolver_to_effects,
 )
@@ -127,8 +128,9 @@ __all__ = [
     "score_acceptor",
 
     # Phase resolvers (openvax/varcode#269)
-    "IsovarAssemblyProvider",
-    "IsovarPhaseResolver",
+    "MutantTranscriptSource",
+    "ReadPhaseResolver",
+    "ReadPhasingSource",
     "VCFPhaseResolver",
     "apply_phase_resolver_to_effects",
 

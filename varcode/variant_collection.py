@@ -138,12 +138,13 @@ class VariantCollection(Collection):
             openvax/varcode#271.
 
         phase_resolver : PhaseResolver or None
-            Optional phase-evidence source (e.g.
-            :class:`~varcode.phasing.IsovarPhaseResolver`). When
-            provided, any effect whose ``(variant, transcript)`` is
-            covered by an assembled contig has its
-            ``mutant_transcript`` populated with the contig-derived
-            :class:`~varcode.MutantTranscript`. See
+            Optional phase-evidence source (e.g. a
+            :class:`~varcode.phasing.ReadPhaseResolver` wrapping an
+            upstream RNA-phasing tool, or
+            :class:`~varcode.phasing.VCFPhaseResolver`). When provided,
+            any effect whose ``(variant, transcript)`` is covered by an
+            observed mutant transcript has its ``mutant_transcript``
+            populated with that observed transcript. See
             openvax/varcode#269.
 
         rna_resolver : RNAEvidenceResolver or None
