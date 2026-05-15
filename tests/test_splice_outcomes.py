@@ -14,7 +14,7 @@
 Tests for the splice-mechanism Effect classes
 (openvax/varcode#262, #382).
 
-Each candidate inside a ``SpliceOutcomeSet`` carries an
+Each candidate inside a ``SpliceMechanismSet`` carries an
 :class:`EffectCandidate` whose ``.effect`` is one of:
 :class:`NormalSplicing`, :class:`ExonSkipping`,
 :class:`IntronRetention`, :class:`CrypticDonor`, or
@@ -34,9 +34,12 @@ from varcode import (
     ExonSkipping,
     IntronRetention,
     NormalSplicing,
+    SpliceMechanismSet,
     SpliceMechanismEffect,
     SpliceOutcomeSet,
     Variant,
+    apply_rna_evidence_to_effects,
+    make_rna_outcome,
 )
 from varcode.effects import (
     ExonicSpliceSite,
@@ -409,7 +412,9 @@ def test_enumerate_passes_through_non_splice():
 
 
 def test_package_level_exports():
-    assert varcode.SpliceOutcomeSet is SpliceOutcomeSet
+    assert varcode.SpliceMechanismSet is SpliceMechanismSet
+    assert varcode.SpliceOutcomeSet is SpliceMechanismSet
+    assert SpliceOutcomeSet is SpliceMechanismSet
     assert varcode.SpliceMechanismEffect is SpliceMechanismEffect
     assert varcode.NormalSplicing is NormalSplicing
     assert varcode.ExonSkipping is ExonSkipping
@@ -560,7 +565,7 @@ def test_splice_outcome_set_top_priority_works():
     effects = variant.effects(splice_outcomes=True)
     top = effects.top_priority_effect()
     top_class_name = type(top).__name__
-    assert top_class_name in ("SpliceOutcomeSet", "SpliceDonor")
+    assert top_class_name in ("SpliceMechanismSet", "SpliceOutcomeSet", "SpliceDonor")
 
 
 # --------------------------------------------------------------------
@@ -666,6 +671,21 @@ def test_highest_priority_candidate_returns_most_disruptive():
     assert effect_priority(top.effect) == expected
 
 
+def test_resolved_splice_mechanism_delegates_priority_to_protein_effect():
+    from varcode.effects import Deletion, effect_priority
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    splice_set = next(
+        e for e in variant.effects(splice_outcomes=True)
+        if e.transcript is transcript)
+    skip = _candidate_of_type(splice_set, ExonSkipping)
+    assert isinstance(skip.effect.protein_effect, Deletion)
+    assert skip.effect.modifies_protein_sequence
+    assert skip.effect.modifies_coding_sequence
+    assert effect_priority(skip.effect) == effect_priority(skip.effect.protein_effect)
+    assert splice_set.highest_priority_candidate is skip
+
+
 def test_effects_unwraps_candidate_tuple():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
@@ -675,6 +695,74 @@ def test_effects_unwraps_candidate_tuple():
     inner = splice_set.effects
     assert all(isinstance(e, SpliceMechanismEffect) for e in inner)
     assert inner == tuple(c.effect for c in splice_set.candidates)
+
+
+# --------------------------------------------------------------------
+# RNA evidence reconciliation
+# --------------------------------------------------------------------
+
+
+def test_rna_evidence_reconciles_splice_set_by_excluding_unobserved_mechanisms():
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    original = next(
+        e for e in variant.effects(splice_outcomes=True)
+        if e.transcript is transcript)
+    skip = _candidate_of_type(original, ExonSkipping)
+    observed = make_rna_outcome(
+        effect=skip.effect,
+        source="junction_reads",
+        read_count=18,
+        probability=0.91)
+
+    class Resolver:
+        def observed_outcomes(self, variant, transcript):
+            return (observed,)
+
+    effects = [original]
+    result = apply_rna_evidence_to_effects(effects, Resolver())
+    reconciled = effects[0]
+
+    assert result is effects
+    assert reconciled is not original
+    assert isinstance(reconciled, SpliceMechanismSet)
+    assert tuple(reconciled.dna_candidates) == tuple(original.candidates)
+    assert reconciled.rna_evidence == (observed,)
+    assert reconciled.added_candidates == ()
+    assert reconciled.candidates == (observed,)
+    assert reconciled.rna_evidence_for(observed) == (observed,)
+    excluded_mechanisms = {type(c.effect) for c in reconciled.excluded_candidates}
+    assert excluded_mechanisms == {NormalSplicing, IntronRetention, CrypticDonor}
+
+
+def test_rna_evidence_records_added_splice_mechanisms():
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    original = next(
+        e for e in variant.effects(splice_outcomes=True)
+        if e.transcript is transcript)
+    skip = _candidate_of_type(original, ExonSkipping)
+    added_effect = CrypticAcceptor(
+        variant=variant,
+        transcript=transcript,
+        splice_signal=skip.effect.splice_signal,
+        affected_exon=skip.effect.affected_exon,
+        cryptic_genomic_position=117530930,
+        motif_score=4.2,
+        exon_length_delta=-12)
+    observed = make_rna_outcome(
+        effect=added_effect,
+        source="long_reads",
+        read_count=6,
+        extra_evidence={"junction_id": "cryptic_acceptor_1"})
+
+    reconciled = original.with_rna_evidence((observed,))
+
+    assert reconciled is not original
+    assert reconciled.added_candidates == (observed,)
+    assert observed in reconciled.candidates
+    assert reconciled.rna_evidence_for(observed) == (observed,)
+    assert CrypticAcceptor not in {type(c.effect) for c in original.dna_candidates}
 
 
 # --------------------------------------------------------------------

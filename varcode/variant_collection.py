@@ -128,7 +128,7 @@ class VariantCollection(Collection):
 
         splice_outcomes : bool, optional
             If True, splice-disrupting effects are wrapped in a
-            :class:`varcode.splice_outcomes.SpliceOutcomeSet` carrying
+            :class:`varcode.splice_outcomes.SpliceMechanismSet` carrying
             multiple plausible outcomes. Opt-in; default False
             preserves existing behaviour. See openvax/varcode#262.
 
@@ -149,9 +149,11 @@ class VariantCollection(Collection):
 
         rna_resolver : RNAEvidenceResolver or None
             Optional RNA-observed-outcome source. When provided, any
-            :class:`~varcode.MultiOutcomeEffect` in the result has
-            observed candidates from the resolver appended to its
-            ``candidates`` view. See openvax/varcode#259.
+            :class:`~varcode.MultiOutcomeEffect` in the result is
+            refined with observed candidates from the resolver. Splice
+            mechanism sets are reconciled into replacement sets; other
+            multi-outcome effects keep the additive candidate behavior.
+            See openvax/varcode#259.
 
         germline : GermlineContext or None
             Optional patient-germline context. When non-empty, every

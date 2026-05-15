@@ -406,7 +406,7 @@ class SpliceAcceptor(IntronicSpliceSite):
 # the transcript the splice signal was hit. The mechanism Effect
 # describes *what* happens downstream of that disruption.
 #
-# Used by :class:`~varcode.splice_outcomes.SpliceOutcomeSet` to
+# Used by :class:`~varcode.splice_outcomes.SpliceMechanismSet` to
 # fill :attr:`EffectCandidate.effect` for each plausible mechanism a
 # splice disruption could produce. Class identity = mechanism — no
 # parallel enum.
@@ -440,6 +440,12 @@ class SpliceMechanismEffect(TranscriptMutationEffect):
         ``effect.splice_signal.nearest_exon``,
         ``effect.splice_signal.distance_to_exon``, etc. without
         carrying those fields redundantly on every mechanism subclass.
+    protein_effect : MutationEffect or None
+        Classified protein-level consequence of this splice mechanism
+        (e.g. ``Deletion``, ``FrameShift``, ``PrematureStop``) when the
+        protein sequence was resolved. The mechanism object keeps its
+        own class identity while delegating severity metadata to this
+        classified consequence.
     mutant_transcript : MutantTranscript or None
     aa_ref, aa_alt : str or None
     aa_mutation_start_offset, aa_mutation_end_offset : int or None
@@ -448,6 +454,7 @@ class SpliceMechanismEffect(TranscriptMutationEffect):
 
     def __init__(
             self, variant, transcript, splice_signal,
+            protein_effect=None,
             mutant_transcript=None,
             aa_ref=None, aa_alt=None,
             aa_mutation_start_offset=None,
@@ -455,6 +462,7 @@ class SpliceMechanismEffect(TranscriptMutationEffect):
             mutant_protein_sequence=None):
         TranscriptMutationEffect.__init__(self, variant, transcript)
         self.splice_signal = splice_signal
+        self.protein_effect = protein_effect
         self.mutant_transcript = mutant_transcript
         self.aa_ref = aa_ref
         self.aa_alt = aa_alt
@@ -470,6 +478,20 @@ class SpliceMechanismEffect(TranscriptMutationEffect):
         protein for this mechanism?"
         """
         return self.mutant_protein_sequence is not None
+
+    @property
+    def priority_class(self):
+        if self.protein_effect is None:
+            return None
+        return self.protein_effect.__class__
+
+    @property
+    def modifies_coding_sequence(self):
+        return getattr(self.protein_effect, "modifies_coding_sequence", False)
+
+    @property
+    def modifies_protein_sequence(self):
+        return getattr(self.protein_effect, "modifies_protein_sequence", False)
 
 
 class NormalSplicing(SpliceMechanismEffect):
@@ -533,6 +555,20 @@ class NormalSplicing(SpliceMechanismEffect):
         return getattr(self.coding_effect, "mutant_transcript", None)
 
     @property
+    def priority_class(self):
+        if self.coding_effect is None:
+            return None
+        return self.coding_effect.__class__
+
+    @property
+    def modifies_coding_sequence(self):
+        return getattr(self.coding_effect, "modifies_coding_sequence", False)
+
+    @property
+    def modifies_protein_sequence(self):
+        return getattr(self.coding_effect, "modifies_protein_sequence", False)
+
+    @property
     def short_description(self):
         if self.coding_effect is None:
             return "normal-splicing"
@@ -577,12 +613,14 @@ class ExonSkipping(SpliceMechanismEffect):
 
     def __init__(self, variant, transcript, splice_signal, affected_exon,
                  in_frame, mutant_transcript=None,
+                 protein_effect=None,
                  aa_ref=None, aa_alt=None,
                  aa_mutation_start_offset=None,
                  aa_mutation_end_offset=None,
                  mutant_protein_sequence=None):
         SpliceMechanismEffect.__init__(
             self, variant, transcript, splice_signal,
+            protein_effect=protein_effect,
             mutant_transcript=mutant_transcript,
             aa_ref=aa_ref, aa_alt=aa_alt,
             aa_mutation_start_offset=aa_mutation_start_offset,
@@ -633,12 +671,14 @@ class IntronRetention(SpliceMechanismEffect):
                  retained_intron_start=None, retained_intron_end=None,
                  side=None,
                  mutant_transcript=None,
+                 protein_effect=None,
                  aa_ref=None, aa_alt=None,
                  aa_mutation_start_offset=None,
                  aa_mutation_end_offset=None,
                  mutant_protein_sequence=None):
         SpliceMechanismEffect.__init__(
             self, variant, transcript, splice_signal,
+            protein_effect=protein_effect,
             mutant_transcript=mutant_transcript,
             aa_ref=aa_ref, aa_alt=aa_alt,
             aa_mutation_start_offset=aa_mutation_start_offset,
@@ -670,12 +710,14 @@ class CrypticSpliceSiteEffect(SpliceMechanismEffect):
                  cryptic_genomic_position=None, motif_score=None,
                  exon_length_delta=None,
                  mutant_transcript=None,
+                 protein_effect=None,
                  aa_ref=None, aa_alt=None,
                  aa_mutation_start_offset=None,
                  aa_mutation_end_offset=None,
                  mutant_protein_sequence=None):
         SpliceMechanismEffect.__init__(
             self, variant, transcript, splice_signal,
+            protein_effect=protein_effect,
             mutant_transcript=mutant_transcript,
             aa_ref=aa_ref, aa_alt=aa_alt,
             aa_mutation_start_offset=aa_mutation_start_offset,
@@ -761,7 +803,7 @@ class ExonicSpliceSite(Exonic, SpliceSite, MultiOutcomeEffect):
     This is the **lightweight 2-outcome form**. Callers that want
     the richer exon-skipping / intron-retention / cryptic-splice
     candidate set opt into ``splice_outcomes=True`` and get a
-    :class:`~varcode.splice_outcomes.SpliceOutcomeSet` instead.
+    :class:`~varcode.splice_outcomes.SpliceMechanismSet` instead.
     """
     def __init__(self, variant, transcript, exon, alternate_effect):
         Exonic.__init__(self, variant, transcript)
@@ -1630,7 +1672,7 @@ class HaplotypeEffect(TranscriptMutationEffect, MultiOutcomeEffect):
 # protocol so consumers iterate ``outcomes`` uniformly. This isn't a
 # wrapper around a reference-relative effect — it's the primary
 # effect class for the unknown-phase case, just like
-# SpliceOutcomeSet is for splice ambiguity.
+# SpliceMechanismSet is for splice ambiguity.
 # =====================================================================
 
 

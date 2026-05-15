@@ -16,7 +16,7 @@ openvax/varcode#262, #382.
 
 When a variant disrupts a splice signal, the downstream protein
 outcome is not deterministic from DNA alone. This module wraps the
-splice classification in a :class:`SpliceOutcomeSet` carrying one
+splice classification in a :class:`SpliceMechanismSet` carrying one
 :class:`EffectCandidate` per plausible mechanism. Each candidate's
 ``effect`` is a :class:`SpliceMechanismEffect` subclass —
 :class:`NormalSplicing`, :class:`ExonSkipping`,
@@ -55,6 +55,10 @@ the scores mean):
   ``candidate.effect.mutant_transcript``. Unresolved candidates
   carry ``mutant_transcript=None``.
 """
+from dataclasses import dataclass, field
+from typing import Tuple
+
+from serializable import DataclassSerializable
 
 from .effects.classify import classify_from_protein_diff
 from .effects.codon_tables import codon_table_for_transcript, translate_sequence
@@ -69,12 +73,21 @@ from .effects.effect_classes import (
     NormalSplicing,
     SpliceAcceptor,
     SpliceDonor,
+    SpliceMechanismEffect,
 )
 from .mutant_transcript import MutantTranscript, TranscriptEdit
 from .effect_candidates import EffectCandidate
 
 
-class SpliceOutcomeSet(MultiOutcomeEffect):
+@dataclass(frozen=True)
+class SpliceCandidateRNAEvidence(DataclassSerializable):
+    """RNA observations supporting one visible splice candidate."""
+
+    candidate: EffectCandidate
+    rna_evidence: Tuple[EffectCandidate, ...] = field(default_factory=tuple)
+
+
+class SpliceMechanismSet(MultiOutcomeEffect):
     """A splice-disrupting variant's effect, expressed as a set of
     plausible mechanisms rather than a single Effect.
 
@@ -98,11 +111,24 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
     ``splice_outcomes=True`` to ``Variant.effects()`` or
     ``VariantCollection.effects()``.
 
+    RNA evidence reconciliation
+    ---------------------------
+    :meth:`with_rna_evidence` returns a new set rather than mutating this
+    one. The new set keeps ``dna_candidates`` for audit, narrows
+    ``candidates`` to RNA-observed mechanisms, records DNA predictions
+    absent from RNA as ``excluded_candidates``, records observed
+    mechanisms absent from the DNA prior as ``added_candidates``, and
+    exposes per-candidate support through ``candidate_rna_evidence`` /
+    :meth:`rna_evidence_for`.
+
     Serialization is inherited from :class:`Serializable` — no
     overrides needed now that there's no enum to stringify.
     """
 
-    def __init__(self, variant, transcript, candidates, disrupted_signal_class=None):
+    def __init__(
+            self, variant, transcript, candidates, disrupted_signal_class=None,
+            dna_candidates=None, rna_evidence=(), added_candidates=(),
+            excluded_candidates=(), candidate_rna_evidence=()):
         MultiOutcomeEffect.__init__(self, variant)
         self.transcript = transcript
         # Sort candidates by probability descending so .candidates[0]
@@ -115,15 +141,105 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
         # replaced (SpliceDonor, SpliceAcceptor, ExonicSpliceSite, or
         # IntronicSpliceSite). Used for priority lookup.
         self.disrupted_signal_class = disrupted_signal_class
+        self.dna_candidates = tuple(
+            self._candidates if dna_candidates is None else dna_candidates)
+        self.rna_evidence = tuple(rna_evidence)
+        self.added_candidates = tuple(added_candidates)
+        self.excluded_candidates = tuple(excluded_candidates)
+        self.candidate_rna_evidence = tuple(candidate_rna_evidence)
 
     @property
     def candidates(self):
-        return self._candidates
+        return self._combine_with_extra_candidates(self._candidates)
+
+    def with_rna_evidence(self, observed_candidates):
+        """Return a new set reconciled with RNA-observed splice evidence.
+
+        RNA evidence is treated as a refinement of the DNA-predicted
+        mechanism set: observed mechanisms replace their broad DNA
+        predictions, unobserved DNA-predicted mechanisms are recorded as
+        excluded, and observed mechanisms absent from the DNA prediction
+        are recorded as added. The original set is left untouched.
+        """
+        observed = tuple(observed_candidates)
+        if not observed:
+            return self
+
+        combined_evidence = self.rna_evidence + observed
+        splice_evidence = tuple(
+            c for c in combined_evidence
+            if isinstance(c.effect, SpliceMechanismEffect))
+        if not splice_evidence:
+            return SpliceMechanismSet(
+                variant=self.variant,
+                transcript=self.transcript,
+                candidates=self.candidates + observed,
+                disrupted_signal_class=self.disrupted_signal_class,
+                dna_candidates=self.dna_candidates,
+                rna_evidence=combined_evidence,
+                added_candidates=observed,
+                excluded_candidates=self.excluded_candidates,
+                candidate_rna_evidence=self.candidate_rna_evidence,
+            )
+
+        dna_by_mechanism = {
+            type(candidate.effect): candidate
+            for candidate in self.dna_candidates
+        }
+        evidence_by_mechanism = {}
+        for candidate in splice_evidence:
+            mechanism = type(candidate.effect)
+            evidence_by_mechanism.setdefault(mechanism, []).append(candidate)
+
+        current = []
+        excluded = []
+        added = []
+        for dna_candidate in self.dna_candidates:
+            mechanism = type(dna_candidate.effect)
+            observed_for_mechanism = tuple(
+                evidence_by_mechanism.get(mechanism, ()))
+            if observed_for_mechanism:
+                current.extend(observed_for_mechanism)
+            else:
+                excluded.append(dna_candidate)
+
+        for candidate in splice_evidence:
+            mechanism = type(candidate.effect)
+            if mechanism not in dna_by_mechanism:
+                current.append(candidate)
+                added.append(candidate)
+
+        support = tuple(
+            SpliceCandidateRNAEvidence(
+                candidate=candidate,
+                rna_evidence=tuple(evidence_by_mechanism.get(
+                    type(candidate.effect), ())))
+            for candidate in current
+        )
+
+        return SpliceMechanismSet(
+            variant=self.variant,
+            transcript=self.transcript,
+            candidates=current,
+            disrupted_signal_class=self.disrupted_signal_class,
+            dna_candidates=self.dna_candidates,
+            rna_evidence=combined_evidence,
+            added_candidates=added,
+            excluded_candidates=excluded,
+            candidate_rna_evidence=support,
+        )
+
+    def rna_evidence_for(self, candidate):
+        """RNA-observed candidates supporting ``candidate``."""
+        for entry in self.candidate_rna_evidence:
+            if entry.candidate is candidate or entry.candidate == candidate:
+                return entry.rna_evidence
+        return ()
 
     @property
     def priority_class(self):
         """Delegate priority lookup to the disrupted-signal class so a
-        SpliceOutcomeSet sorts as if it were the original splice effect.
+        SpliceMechanismSet sorts as if it were the original splice effect.
 
         Read by :func:`varcode.effects.effect_priority`.
         """
@@ -158,7 +274,7 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
         """
         return {
             type(c.effect): _protein_str(c.effect)
-            for c in self._candidates
+            for c in self.candidates
         }
 
     @property
@@ -168,7 +284,7 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
         """
         return {
             protein for protein in (
-                _protein_str(c.effect) for c in self._candidates)
+                _protein_str(c.effect) for c in self.candidates)
             if protein
         }
 
@@ -177,14 +293,14 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
         return "splice-set:%s" % self.most_likely_candidate.effect.short_description
 
     def __str__(self) -> str:
-        return "SpliceOutcomeSet(variant=%s, transcript=%s, candidates=[%s])" % (
+        return "SpliceMechanismSet(variant=%s, transcript=%s, candidates=[%s])" % (
             self.variant,
             getattr(self.transcript, "name", None),
             ", ".join(
                 "%s (p=%.2f)" % (
                     c.effect.short_description,
                     c.probability if c.probability is not None else 0.0)
-                for c in self._candidates),
+                for c in self.candidates),
         )
 
     def __repr__(self) -> str:
@@ -348,15 +464,11 @@ def _aa_fields_from_protein_diff(
         variant, transcript, mutant_transcript, length_delta):
     """Run :func:`classify_from_protein_diff` against the resolved
     mutant transcript and return its ``aa_ref`` / ``aa_alt`` /
-    offset fields as a dict — the splice-mechanism Effect builders
-    copy those onto their own instance.
-
-    The classified Effect's *class* (``Deletion`` / ``Substitution``
-    / ``FrameShift`` / etc.) is intentionally not preserved: the
-    splice-mechanism class identity (``ExonSkipping`` /
-    ``IntronRetention`` / ...) is what consumers dispatch on. The
-    AA-level vocab is the part that's universal across both shapes
-    and that consumers actually read for protein-level queries.
+    offset fields as a dict, plus the classified protein effect. The
+    splice-mechanism Effect builders copy the AA vocab onto the
+    mechanism instance and retain the classified effect under
+    ``protein_effect`` so severity queries can delegate to it while
+    class identity remains the splice mechanism.
     """
     ref_protein = str(transcript.protein_sequence)
     mut_protein = mutant_transcript.mutant_protein_sequence
@@ -376,6 +488,7 @@ def _aa_fields_from_protein_diff(
         "aa_mutation_end_offset": getattr(
             classified, "aa_mutation_end_offset", None),
         "mutant_protein_sequence": mut_protein,
+        "protein_effect": classified,
     }
 
 
@@ -999,7 +1112,7 @@ def _protein_str(effect):
     """Return ``effect.mutant_protein_sequence`` as a str, or ``""``
     if the effect carries no protein (placeholder stubs, start-loss,
     etc.). Centralizes the None/empty/str coercion that
-    :attr:`SpliceOutcomeSet.candidate_proteins` used to inline.
+    :attr:`SpliceMechanismSet.candidate_proteins` used to inline.
     """
     protein = getattr(effect, "mutant_protein_sequence", None)
     return str(protein) if protein else ""
@@ -1024,7 +1137,7 @@ def _exon_start_offset_in_transcript(transcript, exon):
 
 
 def enumerate_splice_outcomes(splice_effect, genomic_sequence=None):
-    """Wrap a splice-disrupting Effect in a SpliceOutcomeSet.
+    """Wrap a splice-disrupting Effect in a SpliceMechanismSet.
 
     Recognized splice effect classes are SpliceDonor, SpliceAcceptor,
     ExonicSpliceSite, and IntronicSpliceSite. Unrecognized classes
@@ -1057,8 +1170,8 @@ def enumerate_splice_outcomes(splice_effect, genomic_sequence=None):
 
     Returns
     -------
-    SpliceOutcomeSet or the original effect
-        SpliceOutcomeSet wrapping the candidate mechanisms when the
+    SpliceMechanismSet or the original effect
+        SpliceMechanismSet wrapping the candidate mechanisms when the
         input is a splice-disrupting effect; otherwise the input
         unchanged.
     """
@@ -1083,7 +1196,7 @@ def enumerate_splice_outcomes(splice_effect, genomic_sequence=None):
                 splice_effect, plausibility, mechanism_cls,
                 genomic_sequence=genomic_sequence))
 
-    return SpliceOutcomeSet(
+    return SpliceMechanismSet(
         variant=splice_effect.variant,
         transcript=getattr(splice_effect, "transcript", None),
         candidates=candidates,
@@ -1100,11 +1213,17 @@ def wrap_splice_effects_in_collection(effect_collection):
 
 
 # Priority integration happens via the `priority_class` attribute on
-# SpliceOutcomeSet — see `effect_priority` in effects.effect_ordering.
+# SpliceMechanismSet — see `effect_priority` in effects.effect_ordering.
 
 # Serialization is inherited from Serializable (the base of
 # MutationEffect). to_serializable_repr stamps each nested object's
 # {__module__, __name__} and from_serializable_dict resolves them via
 # _lookup_value, so the polymorphic EffectCandidate.effect (any
-# SpliceMechanismEffect subclass) and SpliceOutcomeSet.disrupted_signal_class
+# SpliceMechanismEffect subclass) and SpliceMechanismSet.disrupted_signal_class
 # (a class object) both round-trip without hand-rolled registries.
+
+
+# Backwards-compatible public name. The primary name avoids the stale
+# "Outcome" vocabulary now that candidates are explicit EffectCandidate
+# entries rather than SpliceOutcome enum values.
+SpliceOutcomeSet = SpliceMechanismSet

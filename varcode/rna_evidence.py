@@ -23,8 +23,8 @@ without subclassing or churning the core classes.
 
 The shape mirrors :mod:`varcode.phasing`: a runtime-checkable
 :class:`Protocol`, an :func:`apply_rna_evidence_to_effects` walk that
-mutates effects in place, and a small :func:`make_rna_outcome` factory
-for the common provenance fields. Like :mod:`varcode.phasing`,
+refines multi-candidate effects, and a small :func:`make_rna_outcome`
+factory for the common provenance fields. Like :mod:`varcode.phasing`,
 nothing here imports Isovar — implementers duck-type the protocol.
 
 Usage::
@@ -141,18 +141,31 @@ def make_rna_outcome(
     )
 
 
+def _replace_effects(effects, replacements):
+    if hasattr(effects, "elements") and hasattr(effects, "effects"):
+        effects.elements = replacements
+        effects.effects = replacements
+        return effects
+    try:
+        effects[:] = replacements
+        return effects
+    except TypeError:
+        return tuple(replacements)
+
+
 def apply_rna_evidence_to_effects(effects: Iterable, resolver) -> Iterable:
-    """Attach RNA-observed candidates from ``resolver`` to each effect
-    in place.
+    """Attach RNA-observed candidates from ``resolver`` to each effect.
 
     Walks ``effects`` and, for any effect with a resolvable
     ``(variant, transcript)``, asks ``resolver.observed_outcomes``
-    for any RNA-observed candidates and stashes them on the effect's
-    ``_extra_candidates`` slot. :attr:`MultiOutcomeEffect.candidates`
-    overrides consult that slot via
-    :meth:`MultiOutcomeEffect._combine_with_extra_candidates` so
-    callers see DNA-predicted candidates followed by RNA-observed
-    ones.
+    for RNA-observed candidates.
+
+    Splice mechanism sets use RNA evidence as a reconciliation signal:
+    a new set replaces the old one, retaining an audit trail of raw RNA
+    evidence, added candidates, excluded DNA-predicted candidates, and
+    per-current-candidate RNA support. Other multi-outcome effects keep
+    the additive side-channel behavior: observed candidates are stashed
+    on ``_extra_candidates`` and exposed through ``.candidates``.
 
     Single-outcome effects (Missense, FrameShift, etc.) are left
     untouched even when the resolver has evidence — those classes
@@ -164,10 +177,9 @@ def apply_rna_evidence_to_effects(effects: Iterable, resolver) -> Iterable:
     diff is generally already correct from DNA, so this is rarely an
     issue in practice.)
 
-    Mirrors :func:`varcode.phasing.apply_phase_resolver_to_effects`:
-    in-place mutation, safe to call on a mixed collection where only
-    some variants have RNA evidence, no-op when ``resolver`` is None
-    or doesn't implement the protocol.
+    Safe to call on a mixed collection where only some variants have
+    RNA evidence; no-op when ``resolver`` is None or doesn't implement
+    the protocol.
 
     Returns ``effects`` for chaining convenience.
     """
@@ -180,21 +192,35 @@ def apply_rna_evidence_to_effects(effects: Iterable, resolver) -> Iterable:
     # from varcode.effect_candidates, which sits below us).
     from .effects.effect_classes import MultiOutcomeEffect
 
+    replacements = []
+    changed = False
     for effect in effects:
         if not isinstance(effect, MultiOutcomeEffect):
+            replacements.append(effect)
             continue
         variant = getattr(effect, "variant", None)
         transcript = getattr(effect, "transcript", None)
         if variant is None or transcript is None:
+            replacements.append(effect)
             continue
         observed = resolver.observed_outcomes(variant, transcript)
         if not observed:
+            replacements.append(effect)
             continue
         # Coerce to tuple eagerly so we don't keep a generator that
         # would silently exhaust on a second candidates() read.
         observed_tuple = tuple(observed)
         if not observed_tuple:
+            replacements.append(effect)
             continue
-        existing = getattr(effect, "_extra_candidates", ())
-        effect._extra_candidates = tuple(existing) + observed_tuple
+        if hasattr(effect, "with_rna_evidence"):
+            refined = effect.with_rna_evidence(observed_tuple)
+            replacements.append(refined)
+            changed = changed or refined is not effect
+        else:
+            existing = getattr(effect, "_extra_candidates", ())
+            effect._extra_candidates = tuple(existing) + observed_tuple
+            replacements.append(effect)
+    if changed:
+        return _replace_effects(effects, replacements)
     return effects

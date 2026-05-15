@@ -195,8 +195,10 @@ effects = somatic.effects(
 ```
 
 Order: germline modifies the transcript first, phase collapses the
-candidate set next, RNA collapses further (or appends observed-only
-outcomes). Cross-axis key is `EffectCandidate.evidence["haplotype"]`, so an
+candidate set next, and RNA refines multi-candidate effects. Splice
+mechanism sets are reconciled to observed mechanisms; other
+multi-outcome effects append observed-only candidates. Cross-axis key is
+`EffectCandidate.evidence["haplotype"]`, so an
 RNA observation tagged with the same haplotype tag aligns with the
 right germline-aware outcome.
 

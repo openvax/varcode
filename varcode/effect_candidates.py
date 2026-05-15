@@ -22,13 +22,12 @@ Effect itself.
 
 Concrete example: a splice candidate produced by varcode's splice
 classifier surfaces inside its parent
-:class:`SpliceOutcomeSet` tagged ``source="varcode"`` with a
-``splice_outcome`` enum in evidence. When an SV breakpoint sits in
-the same splice window, the SV annotator re-uses that same Effect
-on the SV's own :class:`StructuralVariantEffect` — but tagged
-``source="varcode_splice"`` with the SV's ``sv_type`` merged into
-evidence. The Effect is shared; the metadata diverges. That's why
-the wrapper exists.
+:class:`SpliceMechanismSet` tagged ``source="varcode"`` with a
+mechanism Effect. When an SV breakpoint sits in the same splice
+window, the SV annotator re-uses that same Effect on the SV's own
+:class:`StructuralVariantEffect` — but tagged ``source="varcode_splice"``
+with the SV's ``sv_type`` merged into evidence. The Effect is shared;
+the metadata diverges. That's why the wrapper exists.
 
 Without ``EffectCandidate``, the alternatives are:
 

@@ -9,11 +9,10 @@
 The protocol + apply hook should:
 
 * Be a no-op when no resolver is supplied (existing pipelines unchanged).
-* Append RNA-observed outcomes to ``MultiOutcomeEffect.candidates`` in
-  the agreed-upon ordering (DNA-predicted first, RNA-observed after)
-  and via the back-compat ``_with_extra_candidates`` hook so subclass
-  overrides of ``outcomes`` (SpliceOutcomeSet, StructuralVariantEffect)
-  pick up evidence uniformly.
+* Attach RNA-observed candidates to ``MultiOutcomeEffect.candidates``.
+  Splice mechanism sets reconcile evidence into a replacement set;
+  other multi-outcome effects append evidence through
+  ``_extra_candidates``.
 * Leave non-multi-outcome effects untouched even when the resolver
   has evidence — the contract is "refinement of a possibility set",
   not "replacement of a deterministic call".

@@ -10,7 +10,7 @@ annotator turns a variant into one or more of these; the classifier
 turns each `MutantTranscript` into a typed `MutationEffect`. When the
 DNA alone admits multiple plausible outcomes — splice ambiguity, SV
 breakpoint resolution, unphased germline-overlapping codons — the
-results are packaged in a `MultiOutcomeEffect` whose `outcomes`
+results are packaged in a `MultiOutcomeEffect` whose `candidates`
 property exposes the set. An optional RNA-evidence resolver narrows
 the set to observed isoforms or appends observed-only outcomes.
 
@@ -76,7 +76,7 @@ is intronic — there's no coding consequence to attach.
 
 ```python
 effects = variant.effects(splice_outcomes=True)
-# SpliceOutcomeSet(...) replaces the splice effect.
+# SpliceMechanismSet(...) replaces the splice effect.
 # .candidates is a tuple[EffectCandidate, ...], ordered most-plausible-first.
 # Each candidate's .effect is a SpliceMechanismEffect subclass:
 #   EffectCandidate(effect=ExonSkipping(affected_exon=..., in_frame=True,
@@ -91,7 +91,7 @@ effects = variant.effects(splice_outcomes=True)
 #                   probability=0.1)
 ```
 
-`SpliceOutcomeSet` replaces the splice effect with a set of
+`SpliceMechanismSet` replaces the splice effect with a set of
 candidate mechanisms. Class identity = mechanism — `NormalSplicing`,
 `ExonSkipping`, `IntronRetention`, `CrypticDonor`, `CrypticAcceptor`.
 Each is a `SpliceMechanismEffect` subclass that carries its own
@@ -115,7 +115,7 @@ for c in splice_set.candidates:
 
 When you opt in, `SpliceDonor` / `SpliceAcceptor` /
 `IntronicSpliceSite` also get wrapped, so every splice-
-disrupting variant produces a `SpliceOutcomeSet`.
+disrupting variant produces a `SpliceMechanismSet`.
 
 ### Relationship between the two
 
@@ -123,17 +123,25 @@ disrupting variant produces a `SpliceOutcomeSet`.
 |---|---|
 | 1 | plain `Substitution` / `Silent` / etc. — not wrapped |
 | 2 | `ExonicSpliceSite` with `alternate_effect` |
-| N | `SpliceOutcomeSet` (opt-in via `splice_outcomes=True`) |
+| N | `SpliceMechanismSet` (opt-in via `splice_outcomes=True`) |
 
-Both `ExonicSpliceSite` and `SpliceOutcomeSet` are `MultiOutcomeEffect`
+Both `ExonicSpliceSite` and `SpliceMechanismSet` are `MultiOutcomeEffect`
 subclasses, so consumers iterate `.candidates` (a tuple of
 `EffectCandidate` objects) uniformly without caring about which form
 they're holding. `alternate_effect` works on both: on
 `ExonicSpliceSite` it's the splicing-proceeds outcome directly; on
-`SpliceOutcomeSet` it resolves to the inner effect of the
+`SpliceMechanismSet` it resolves to the inner effect of the
 `NORMAL_SPLICING` candidate (or `None` when that candidate is just
 a placeholder). `candidate.effect.short_description` is uniform
 across both forms.
+
+With RNA evidence, splice sets are reconciled rather than merely
+extended. `SpliceMechanismSet.with_rna_evidence(...)` returns a new set
+whose `candidates` are the RNA-observed mechanisms, while
+`dna_candidates`, `rna_evidence`, `excluded_candidates`,
+`added_candidates`, and `candidate_rna_evidence` preserve the audit
+trail. Use `splice_set.rna_evidence_for(candidate)` to inspect the
+observations supporting one current candidate.
 
 ### Picking a single candidate
 
@@ -249,8 +257,8 @@ SV effects (`LargeDeletion`, `LargeDuplication`, `Inversion`,
 subclasses — `e.candidates` exposes the candidate ORFs / cryptic-splice
 outcomes as a tuple of `EffectCandidate` objects, ordered by a
 per-class prior. External scorers (RNA evidence, long-read assembly)
-plug in via `apply_rna_evidence_to_effects` to narrow the set or
-append observed candidates; see [Germline-aware annotation](germline.md)
+plug in via `apply_rna_evidence_to_effects` to append observed
+candidates; see [Germline-aware annotation](germline.md)
 for the same composition pattern applied to germline.
 
 Limitations:

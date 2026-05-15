@@ -7,15 +7,17 @@
   `MultiOutcomeEffect.outcomes` accessor + `_with_extra_outcomes`
   helper + `_extra_outcomes` slot removed
   ([#382](https://github.com/openvax/varcode/issues/382)).
-  - `SpliceOutcomeSet.candidates` now returns
+  - `SpliceMechanismSet` is the primary splice possibility-set name
+    (`SpliceOutcomeSet` remains as a compatibility alias). Its
+    `.candidates` now returns
     `tuple[EffectCandidate, ...]` — the same shape every other
     `MultiOutcomeEffect` subclass exposes. Each entry wraps an
-    inner `MutationEffect` (concrete coding effect or placeholder:
-    `PredictedIntronRetention`, `PredictedCrypticSpliceSite`,
-    `ExonLoss`, `Intronic`). The biological outcome lives on
-    `candidate.evidence["splice_outcome"]` (the `SpliceOutcome`
-    enum); the human-readable summary lives on
-    `candidate.evidence["description"]`. The previous
+    inner `SpliceMechanismEffect` (`NormalSplicing`,
+    `ExonSkipping`, `IntronRetention`, `CrypticDonor`, or
+    `CrypticAcceptor`). Mechanism identity now lives on
+    `type(candidate.effect)`, and the mechanism object carries
+    fields like `affected_exon`, `side`, `cryptic_genomic_position`,
+    `aa_ref`, `aa_alt`, and `mutant_transcript`. The previous
     `candidate.outcome` / `candidate.plausibility` /
     `candidate.coding_effect` / `candidate.predicted_class_name` /
     `candidate.mutant_transcript` / `candidate.has_protein`
@@ -23,7 +25,7 @@
     (`.probability`, `.source`, `.evidence`) or the inner effect
     (`candidate.effect`, `candidate.effect.mutant_transcript`).
   - `MultiOutcomeEffect.candidates` is the single accessor on every
-    subclass (`SpliceOutcomeSet`, `StructuralVariantEffect`,
+    subclass (`SpliceMechanismSet`, `StructuralVariantEffect`,
     `PhaseCandidateSet`, `ExonicSpliceSite`, `HaplotypeEffect`).
     A new `MultiOutcomeEffect.effects` convenience property unwraps
     to `tuple(c.effect for c in self.candidates)` for callers that
@@ -31,9 +33,12 @@
   - The post-hoc attachment slot renamed `_extra_outcomes` →
     `_extra_candidates`; the merge helper renamed
     `_with_extra_outcomes` → `_combine_with_extra_candidates`.
-    `apply_rna_evidence_to_effects` now writes to
-    `_extra_candidates`. External integrations that touched these
-    private names must rename.
+    `apply_rna_evidence_to_effects` still uses `_extra_candidates`
+    for non-splice multi-outcome effects; splice mechanism sets now
+    reconcile RNA evidence into a replacement set with
+    `rna_evidence`, `added_candidates`, `excluded_candidates`, and
+    `candidate_rna_evidence` audit fields. External integrations
+    that touched these private names must rename.
   - `StructuralVariantEffect.__init__` parameter renamed
     `candidates=` → `primary_effects=` (carries the inner
     `MutationEffect` tuple; the `candidates` accessor now lifts
@@ -78,7 +83,11 @@
     Unresolved state is "protein fields are `None`" — no parallel
     placeholder class hierarchy. Class identity = mechanism;
     consumers dispatch on `isinstance(candidate.effect,
-    ExonSkipping)` instead of evidence-key checks.
+    ExonSkipping)` instead of evidence-key checks. Resolved
+    mechanisms retain their classified protein consequence as
+    `protein_effect` so severity queries (`effect_priority`,
+    `modifies_protein_sequence`) behave like ordinary coding effects
+    while preserving mechanism identity.
   - **Deleted**: `SpliceOutcome` enum (replaced by class identity),
     `PredictedIntronRetention` (subsumed by `IntronRetention`),
     `PredictedCrypticSpliceSite` (split into `CrypticDonor` +
@@ -90,7 +99,7 @@
     `candidate.effect.resolved`, `candidate.effect.short_description`),
     `_placeholder_effect_for_outcome` and `_make_splice_candidate`
     helpers.
-  - **`SpliceOutcomeSet.candidate_proteins`** now keys by mechanism
+  - **`SpliceMechanismSet.candidate_proteins`** now keys by mechanism
     class (e.g. `proteins[ExonSkipping]`) instead of `SpliceOutcome`
     enum value.
 - `varcode.Outcome` renamed to `varcode.EffectCandidate`. The helper
