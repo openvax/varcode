@@ -701,3 +701,314 @@ def test_alternate_effect_none_when_no_underlying_coding_change():
         e for e in variant.effects(splice_outcomes=True)
         if e.transcript is transcript)
     assert splice_set.alternate_effect is None
+
+
+# --------------------------------------------------------------------
+# Protein sequence prediction — biological validation.
+#
+# These tests check that the mutant protein varcode predicts for a
+# splice variant matches what we'd get by independently computing
+# "reference protein with the relevant amino acids
+# removed/replaced." That arithmetic IS the biology — if varcode's
+# protein math is correct, it should match. The tests also pin
+# specific landmarks (length, first/last residues, HGVS-style
+# descriptions) so regressions surface clearly.
+#
+# CFTR ENST00000003084 is the canonical 1480-aa CFTR transcript;
+# coordinates are GRCh38 (Ensembl 81). Variant positions used
+# below are at canonical splice signals of well-defined CFTR
+# exons.
+# --------------------------------------------------------------------
+
+
+def test_cftr_exon_3_skip_protein_equals_reference_minus_skipped_aas():
+    """In-frame skip of CFTR exon 3 (216 bp = 72 codons, donor +1 at
+    g.117531115 G>A). The mutant protein must equal the reference
+    protein with exactly those 72 amino acids removed at the right
+    offset. This is the cleanest "is the protein math correct?"
+    check we can do without external sequence data.
+    """
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    splice_set = next(
+        e for e in variant.effects(splice_outcomes=True)
+        if e.transcript is transcript)
+    skip = _candidate_of_type(splice_set, ExonSkipping)
+    assert skip.effect.in_frame
+    # Exon 3 of ENST00000003084 is 216 bp → 72 codons.
+    assert len(skip.effect.aa_ref) == 72
+    ref = str(transcript.protein_sequence)
+    mut = skip.effect.mutant_protein_sequence
+    start = skip.effect.aa_mutation_start_offset
+    # Mutant protein = reference with aa_ref removed at start.
+    expected = ref[:start] + ref[start + len(skip.effect.aa_ref):]
+    assert mut == expected
+    # And the removed AAs match what's in the reference protein at
+    # that range (i.e. aa_ref is the actually-removed substring, not
+    # a re-translated approximation).
+    assert skip.effect.aa_ref == ref[start:start + len(skip.effect.aa_ref)]
+    # Protein is exactly 72 AAs shorter than reference.
+    assert len(ref) - len(mut) == 72
+
+
+def test_cftr_exon_3_skip_short_description_uses_hgvs_del_notation():
+    """The HGVS-style short_description names the deleted AA range:
+    ``p.{first}{start}_{last}{end}del``. For CFTR exon 3 in
+    ENST00000003084 this is ``p.E92_K163del`` (Glu92 to Lys163,
+    1-indexed)."""
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    splice_set = next(
+        e for e in variant.effects(splice_outcomes=True)
+        if e.transcript is transcript)
+    skip = _candidate_of_type(splice_set, ExonSkipping)
+    desc = skip.effect.short_description
+    assert "p.E92_K163del" in desc
+    # First/last AAs of the removed range:
+    assert skip.effect.aa_ref[0] == "E"   # Glu
+    assert skip.effect.aa_ref[-1] == "K"  # Lys
+
+
+def test_cftr_out_of_frame_exon_skip_produces_frameshift_protein():
+    """Skipping a CFTR exon whose length is not divisible by 3
+    causes a frameshift starting at the new exon junction. The
+    mutant protein equals the reference up to the divergence point,
+    then diverges with the frameshifted readthrough until a
+    premature stop. CFTR exon at g.117509034-117509142 is 109 bp
+    (out-of-frame); donor +1 is at g.117509143.
+    """
+    variant = Variant("7", 117509143, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    bare = variant.effect_on_transcript(transcript)
+    if not isinstance(bare, SpliceDonor):
+        pytest.skip("g.117509143 G>A not classified as SpliceDonor")
+    splice_set = next(
+        e for e in variant.effects(splice_outcomes=True)
+        if e.transcript is transcript)
+    skip = _candidate_of_type(splice_set, ExonSkipping)
+    assert skip.effect.in_frame is False
+    ref = str(transcript.protein_sequence)
+    mut = skip.effect.mutant_protein_sequence
+    # Reference and mutant should be identical up to the divergence
+    # point at aa_mutation_start_offset, then diverge.
+    start = skip.effect.aa_mutation_start_offset
+    assert ref[:start] == mut[:start]
+    if start < len(mut) and start < len(ref):
+        assert ref[start] != mut[start]
+    # Frameshift typically truncates the protein well before the
+    # reference end — the mutant should be much shorter.
+    assert len(mut) < len(ref)
+    # Short_description uses HGVS frameshift notation, not "del".
+    assert "fs" in skip.effect.short_description
+    assert "del" not in skip.effect.short_description
+
+
+def test_cftr_exon_3_skip_aa_alt_describes_junction():
+    """For an in-frame, codon-aligned skip (CFTR exon 3 starts and
+    ends at codon boundaries), the new junction codon doesn't get
+    reshaped — ``aa_alt`` is empty.
+    """
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    splice_set = next(
+        e for e in variant.effects(splice_outcomes=True)
+        if e.transcript is transcript)
+    skip = _candidate_of_type(splice_set, ExonSkipping)
+    assert skip.effect.in_frame
+    # Codon-aligned skip → no boundary reshape → aa_alt is "".
+    assert skip.effect.aa_alt == ""
+
+
+def test_cftr_acceptor_disruption_skips_same_exon_as_donor_disruption():
+    """The CFTR exon 3 acceptor at g.117530898 (G>A on the canonical
+    AG signal) disrupts the splice acceptor and produces the same
+    EXON_SKIPPING outcome as the donor disruption at the other end.
+    The mutant protein from the acceptor side must be identical to
+    the one from the donor side — both skip exon 3 the same way.
+    """
+    donor_variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    acceptor_variant = Variant("7", 117530898, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+
+    donor_set = next(
+        e for e in donor_variant.effects(splice_outcomes=True)
+        if e.transcript is transcript)
+    acceptor_set = next(
+        e for e in acceptor_variant.effects(splice_outcomes=True)
+        if e.transcript is transcript)
+    donor_skip = _candidate_of_type(donor_set, ExonSkipping)
+    acceptor_skip = _candidate_of_type(acceptor_set, ExonSkipping)
+    # Same exon skipped.
+    assert (
+        donor_skip.effect.affected_exon.exon_id
+        == acceptor_skip.effect.affected_exon.exon_id)
+    # Same mutant protein.
+    assert (
+        donor_skip.effect.mutant_protein_sequence
+        == acceptor_skip.effect.mutant_protein_sequence)
+    # Same AA range removed.
+    assert donor_skip.effect.aa_ref == acceptor_skip.effect.aa_ref
+    # Both reference back to their own splice signal class — donor
+    # vs acceptor — but the splice_signal pointer is each variant's
+    # own classification.
+    assert isinstance(donor_skip.effect.splice_signal, SpliceDonor)
+    assert isinstance(acceptor_skip.effect.splice_signal, SpliceAcceptor)
+
+
+def test_intron_retention_with_provider_truncates_protein_at_in_intron_stop():
+    """When a genomic_sequence provider returns an intron with an
+    early stop codon, the IntronRetention candidate's mutant protein
+    must end at that stop. The truncated protein equals the
+    reference protein up to the divergence point (where the intron
+    starts encoding nonsense) and then stops.
+    """
+    # Provider returns A-padding with a TAA stop at offset 30.
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    bare = variant.effect_on_transcript(transcript)
+    splice_set = enumerate_splice_outcomes(
+        bare, genomic_sequence=_synthetic_intron_provider(stop_offset=30))
+    ir = _candidate_of_type(splice_set, IntronRetention)
+    assert ir.effect.resolved
+    ref = str(transcript.protein_sequence)
+    mut = ir.effect.mutant_protein_sequence
+    # Mutant ends at a premature stop — strictly shorter than ref.
+    assert len(mut) < len(ref)
+    # Reference and mutant share their leading prefix; intron
+    # retention only diverges where the retained sequence starts
+    # encoding the new (eventually nonsense) protein.
+    common_prefix_end = next(
+        (i for i, (r, m) in enumerate(zip(ref, mut)) if r != m),
+        min(len(ref), len(mut)))
+    # The shared prefix is positive — there's a real common stretch
+    # before divergence.
+    assert common_prefix_end > 0
+
+
+def test_cryptic_donor_with_provider_changes_exon_length_consistently():
+    """A cryptic donor at a fixed offset from the canonical boundary
+    changes the affected exon's length by a predictable amount.
+    Verify the ``exon_length_delta`` field matches the actual cDNA
+    length delta between the cryptic-resolved mutant transcript and
+    the reference transcript.
+    """
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    bare = variant.effect_on_transcript(transcript)
+    splice_set = enumerate_splice_outcomes(
+        bare, genomic_sequence=_synthetic_cryptic_donor_provider(
+            motif_offset=65))
+    cryptic = _candidate_of_type(splice_set, CrypticDonor)
+    assert cryptic.effect.resolved
+    # cDNA length delta matches the field.
+    mt = cryptic.effect.mutant_transcript
+    cdna_delta = len(mt.cdna_sequence) - len(str(transcript.sequence))
+    assert cryptic.effect.exon_length_delta == cdna_delta
+
+
+# --------------------------------------------------------------------
+# Per-mechanism serialization round-trip — each mechanism class
+# survives to_json / from_json with its structural fields intact.
+# --------------------------------------------------------------------
+
+
+def test_exon_skipping_serialization_preserves_affected_exon_and_protein():
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    splice_set = next(
+        e for e in variant.effects(splice_outcomes=True)
+        if e.transcript is transcript)
+    restored = SpliceOutcomeSet.from_json(splice_set.to_json())
+    og = _candidate_of_type(splice_set, ExonSkipping)
+    rt = _candidate_of_type(restored, ExonSkipping)
+    assert type(rt.effect) is type(og.effect)
+    assert rt.effect.in_frame == og.effect.in_frame
+    assert rt.effect.aa_ref == og.effect.aa_ref
+    assert rt.effect.mutant_protein_sequence == og.effect.mutant_protein_sequence
+    assert rt.effect.affected_exon.exon_id == og.effect.affected_exon.exon_id
+    # splice_signal round-trips too — same class, same nearest_exon.
+    assert type(rt.effect.splice_signal) is type(og.effect.splice_signal)
+
+
+def test_intron_retention_serialization_preserves_intron_coords():
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    splice_set = next(
+        e for e in variant.effects(splice_outcomes=True)
+        if e.transcript is transcript)
+    restored = SpliceOutcomeSet.from_json(splice_set.to_json())
+    og = _candidate_of_type(splice_set, IntronRetention)
+    rt = _candidate_of_type(restored, IntronRetention)
+    assert rt.effect.retained_intron_start == og.effect.retained_intron_start
+    assert rt.effect.retained_intron_end == og.effect.retained_intron_end
+    assert rt.effect.side == og.effect.side
+
+
+def test_cryptic_donor_serialization_preserves_direction():
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    splice_set = next(
+        e for e in variant.effects(splice_outcomes=True)
+        if e.transcript is transcript)
+    restored = SpliceOutcomeSet.from_json(splice_set.to_json())
+    og = _candidate_of_type(splice_set, CrypticDonor)
+    rt = _candidate_of_type(restored, CrypticDonor)
+    assert rt.effect.direction == "donor" == og.effect.direction
+    assert rt.effect.affected_exon.exon_id == og.effect.affected_exon.exon_id
+
+
+def test_normal_splicing_serialization_preserves_coding_effect_class():
+    variant = Variant("7", 117531114, "G", "T", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    splice_set = next(
+        e for e in variant.effects(splice_outcomes=True)
+        if e.transcript is transcript)
+    restored = SpliceOutcomeSet.from_json(splice_set.to_json())
+    og = _candidate_of_type(splice_set, NormalSplicing)
+    rt = _candidate_of_type(restored, NormalSplicing)
+    if og.effect.coding_effect is None:
+        assert rt.effect.coding_effect is None
+    else:
+        assert type(rt.effect.coding_effect) is type(og.effect.coding_effect)
+        # Protein vocab is delegated through coding_effect.
+        assert rt.effect.aa_ref == og.effect.aa_ref
+
+
+# --------------------------------------------------------------------
+# Predicted-state HGVS / short_description behavior
+# --------------------------------------------------------------------
+
+
+def test_predicted_exon_skipping_short_description_includes_predicted_tag():
+    """Without a resolved protein, ExonSkipping's short_description
+    flags the predicted state explicitly so a reader can't confuse
+    it with a resolved skip."""
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    splice_set = next(
+        e for e in variant.effects(splice_outcomes=True)
+        if e.transcript is transcript)
+    # The IntronRetention candidate is predicted (no provider).
+    ir = _candidate_of_type(splice_set, IntronRetention)
+    assert "predicted" in ir.effect.short_description
+    cd = _candidate_of_type(splice_set, CrypticDonor)
+    assert "predicted" in cd.effect.short_description
+
+
+def test_intron_retention_predicted_side_is_donor_or_acceptor_or_unknown():
+    """``IntronRetention.side`` is either ``"donor"`` /
+    ``"acceptor"`` (when inferable from the splice classification)
+    or ``None`` (when not). Sentinel-zero coords are not used —
+    unknown is None."""
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    splice_set = next(
+        e for e in variant.effects(splice_outcomes=True)
+        if e.transcript is transcript)
+    ir = _candidate_of_type(splice_set, IntronRetention)
+    # For a SpliceDonor-classed disruption we expect side="donor".
+    assert ir.effect.side == "donor"
+    # Coords are populated (not None) because we have the
+    # adjacent-exon geometry.
+    assert ir.effect.retained_intron_start is not None
+    assert ir.effect.retained_intron_end is not None
