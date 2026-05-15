@@ -764,6 +764,68 @@ def test_rna_evidence_records_added_splice_mechanisms():
     assert CrypticAcceptor not in {type(c.effect) for c in original.dna_candidates}
 
 
+def test_rna_evidence_support_is_tracked_per_splice_candidate():
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    original = next(
+        e for e in variant.effects(splice_outcomes=True)
+        if e.transcript is transcript)
+    skip = _candidate_of_type(original, ExonSkipping)
+
+    donor_1 = CrypticDonor(
+        variant=variant,
+        transcript=transcript,
+        splice_signal=skip.effect.splice_signal,
+        affected_exon=skip.effect.affected_exon,
+        cryptic_genomic_position=117531130,
+        motif_score=0.91,
+        exon_length_delta=15)
+    donor_2 = CrypticDonor(
+        variant=variant,
+        transcript=transcript,
+        splice_signal=skip.effect.splice_signal,
+        affected_exon=skip.effect.affected_exon,
+        cryptic_genomic_position=117531145,
+        motif_score=0.87,
+        exon_length_delta=30)
+
+    donor_1_junction = make_rna_outcome(
+        effect=donor_1,
+        source="junction_reads",
+        read_count=12,
+        extra_evidence={"junction_id": "cryptic_donor_1"})
+    donor_1_long_read = make_rna_outcome(
+        effect=donor_1,
+        source="long_reads",
+        read_count=3,
+        extra_evidence={"read_id": "lr_1"})
+    donor_2_junction = make_rna_outcome(
+        effect=donor_2,
+        source="junction_reads",
+        read_count=9,
+        extra_evidence={"junction_id": "cryptic_donor_2"})
+
+    reconciled = original.with_rna_evidence((
+        donor_1_junction,
+        donor_1_long_read,
+        donor_2_junction,
+    ))
+
+    assert reconciled.candidates == (donor_1_junction, donor_2_junction)
+    assert reconciled.added_candidates == ()
+    assert reconciled.rna_evidence_for(donor_1_junction) == (
+        donor_1_junction,
+        donor_1_long_read,
+    )
+    assert reconciled.rna_evidence_for(donor_1_long_read) == (
+        donor_1_junction,
+        donor_1_long_read,
+    )
+    assert reconciled.rna_evidence_for(donor_2_junction) == (donor_2_junction,)
+    assert donor_2_junction not in reconciled.rna_evidence_for(donor_1_junction)
+    assert donor_1_junction not in reconciled.rna_evidence_for(donor_2_junction)
+
+
 # --------------------------------------------------------------------
 # alternate_effect back-compat shim
 # --------------------------------------------------------------------

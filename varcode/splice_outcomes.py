@@ -84,6 +84,46 @@ class SpliceCandidateRNAEvidence(DataclassSerializable):
     rna_evidence: Tuple[EffectCandidate, ...] = field(default_factory=tuple)
 
 
+def _exon_signature(exon):
+    """Stable value key for exon identity in RNA-evidence audits."""
+    if exon is None:
+        return None
+    return (
+        getattr(exon, "exon_id", None),
+        getattr(exon, "contig", None),
+        getattr(exon, "start", None),
+        getattr(exon, "end", None),
+        getattr(exon, "strand", None),
+    )
+
+
+def _splice_candidate_signature(candidate):
+    """Candidate-specific key for grouping RNA support.
+
+    Mechanism class alone is too coarse: two distinct cryptic donors
+    have the same class but different junctions. This key captures the
+    mechanism-specific coordinates that make one observed splice
+    candidate distinct from another, while ignoring source/evidence so
+    multiple observations can support the same visible candidate.
+    """
+    effect = candidate.effect
+    return (
+        type(effect),
+        _exon_signature(getattr(effect, "affected_exon", None)),
+        getattr(effect, "in_frame", None),
+        getattr(effect, "retained_intron_start", None),
+        getattr(effect, "retained_intron_end", None),
+        getattr(effect, "side", None),
+        getattr(effect, "cryptic_genomic_position", None),
+        getattr(effect, "exon_length_delta", None),
+        getattr(effect, "aa_mutation_start_offset", None),
+        getattr(effect, "aa_mutation_end_offset", None),
+        getattr(effect, "aa_ref", None),
+        getattr(effect, "aa_alt", None),
+        getattr(effect, "mutant_protein_sequence", None),
+    )
+
+
 class SpliceOutcomeSet(MultiOutcomeEffect):
     """A splice-disrupting variant's effect, expressed as a set of
     plausible mechanisms rather than a single Effect.
@@ -179,33 +219,51 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
             for candidate in self.dna_candidates
         }
         evidence_by_mechanism = {}
+        evidence_by_signature = {}
+        representative_by_signature = {}
         for candidate in splice_evidence:
             mechanism = type(candidate.effect)
             evidence_by_mechanism.setdefault(mechanism, []).append(candidate)
+            signature = _splice_candidate_signature(candidate)
+            evidence_by_signature.setdefault(signature, []).append(candidate)
+            representative_by_signature.setdefault(signature, candidate)
 
         current = []
         excluded = []
         added = []
+        seen_signatures = set()
+
+        def add_current_observed(candidate):
+            signature = _splice_candidate_signature(candidate)
+            if signature in seen_signatures:
+                return None
+            seen_signatures.add(signature)
+            representative = representative_by_signature[signature]
+            current.append(representative)
+            return representative
+
         for dna_candidate in self.dna_candidates:
             mechanism = type(dna_candidate.effect)
             observed_for_mechanism = tuple(
                 evidence_by_mechanism.get(mechanism, ()))
             if observed_for_mechanism:
-                current.extend(observed_for_mechanism)
+                for candidate in observed_for_mechanism:
+                    add_current_observed(candidate)
             else:
                 excluded.append(dna_candidate)
 
         for candidate in splice_evidence:
             mechanism = type(candidate.effect)
             if mechanism not in dna_by_mechanism:
-                current.append(candidate)
-                added.append(candidate)
+                representative = add_current_observed(candidate)
+                if representative is not None:
+                    added.append(representative)
 
         support = tuple(
             SpliceCandidateRNAEvidence(
                 candidate=candidate,
-                rna_evidence=tuple(evidence_by_mechanism.get(
-                    type(candidate.effect), ())))
+                rna_evidence=tuple(evidence_by_signature.get(
+                    _splice_candidate_signature(candidate), ())))
             for candidate in current
         )
 
@@ -223,8 +281,11 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
 
     def rna_evidence_for(self, candidate):
         """RNA-observed candidates supporting ``candidate``."""
+        candidate_signature = _splice_candidate_signature(candidate)
         for entry in self.candidate_rna_evidence:
             if entry.candidate is candidate or entry.candidate == candidate:
+                return entry.rna_evidence
+            if _splice_candidate_signature(entry.candidate) == candidate_signature:
                 return entry.rna_evidence
         return ()
 
