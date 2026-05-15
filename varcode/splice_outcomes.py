@@ -11,217 +11,283 @@
 # limitations under the License.
 
 """
-Multi-effect candidate model for splice-disrupting variants — see
-openvax/varcode#262.
+Multi-mechanism candidate model for splice-disrupting variants — see
+openvax/varcode#262, #382.
 
 When a variant disrupts a splice signal, the downstream protein
-outcome is not deterministic from DNA alone. Instead of forcing a
-single Effect, this module wraps splice effects in a
-:class:`SpliceOutcomeSet` carrying multiple :class:`SpliceCandidate`
-outcomes with rough plausibility scores.
+outcome is not deterministic from DNA alone. This module wraps the
+splice classification in a :class:`SpliceOutcomeSet` carrying one
+:class:`EffectCandidate` per plausible mechanism. Each candidate's
+``effect`` is a :class:`SpliceMechanismEffect` subclass —
+:class:`NormalSplicing`, :class:`ExonSkipping`,
+:class:`IntronRetention`, :class:`CrypticDonor`, or
+:class:`CrypticAcceptor` — describing what the splice machinery
+does and (when computable) the resulting protein change.
+
+Class identity = mechanism. Each mechanism Effect carries its own
+protein vocab as instance fields (``aa_ref``, ``aa_alt``,
+``mutant_protein_sequence``, ``mutant_transcript``), with ``None``
+denoting "predicted mechanism, exact protein not computable from
+cached cDNA alone." No parallel enum, no placeholder class
+hierarchy.
 
 Limitations of this prototype (documented openly so callers know what
-the scores mean):
+the candidate ordering means):
 
-* Plausibility values are **hand-tuned heuristics**, not real
-  probabilities. They are derived from rough literature consensus
-  about which outcomes dominate at canonical donor/acceptor positions
-  vs exonic splice sites vs flanking signals. Real scoring requires
-  models like SpliceAI/SpliceTransformer or RNA evidence.
-* :class:`SpliceOutcome.EXON_SKIPPING` and :class:`SpliceOutcome.NORMAL_SPLICING`
-  produce concrete mutant protein sequences using the cDNA already
-  available from PyEnsembl.
-* :class:`SpliceOutcome.INTRON_RETENTION` and the cryptic-splice outcomes
-  produce candidates with a predicted-class label
-  (e.g. "likely PrematureStop") but no exact mutant protein. They
-  require intron / flanking genomic sequence that PyEnsembl does
-  not cache by default. A future PR with genomic-FASTA support
-  would fill these in.
-* EXON_SKIPPING candidates expose the :class:`~varcode.MutantTranscript`
-  they were derived from via :attr:`SpliceCandidate.mutant_transcript`.
-  The stub candidates (INTRON_RETENTION, CRYPTIC_*) and NORMAL_SPLICING
-  carry ``None`` — the former until genomic-FASTA ingestion (#296)
-  wires in intron / flanking sequence, the latter because their
-  coding impact is already fully described by the underlying
-  coding effect on :attr:`~SpliceCandidate.coding_effect`.
+* Varcode-generated splice candidates are ordered by a hard-coded,
+  DNA-only mechanism preference. The ordering is intentionally not
+  exported as a score or probability.
+* :class:`ExonSkipping` and :class:`NormalSplicing` produce concrete
+  protein sequences using the cDNA already available from PyEnsembl.
+* :class:`IntronRetention` and the cryptic-splice mechanisms
+  (:class:`CrypticDonor` / :class:`CrypticAcceptor`) need intron /
+  flanking genomic sequence to resolve the protein. Without a
+  ``genomic_sequence`` provider they're returned in their
+  "predicted" state with protein fields ``None``; consumers can
+  still read ``effect.affected_exon`` / ``effect.side`` /
+  ``effect.retained_intron_*`` etc. to know what mechanism is
+  predicted.
+* Candidates whose protein math resolved expose the
+  :class:`~varcode.MutantTranscript` they were derived from via
+  ``candidate.effect.mutant_transcript``. Unresolved candidates
+  carry ``mutant_transcript=None``.
 """
-
-from dataclasses import dataclass
-from enum import Enum
-from typing import Optional
+from dataclasses import dataclass, field
+from typing import Tuple
 
 from serializable import DataclassSerializable
 
 from .effects.classify import classify_from_protein_diff
 from .effects.codon_tables import codon_table_for_transcript, translate_sequence
 from .effects.effect_classes import (
-    ExonLoss,
+    CrypticAcceptor,
+    CrypticDonor,
+    ExonSkipping,
     ExonicSpliceSite,
-    Intronic,
+    IntronRetention,
     IntronicSpliceSite,
     MultiOutcomeEffect,
-    MutationEffect,
-    PredictedCrypticSpliceSite,
-    PredictedIntronRetention,
+    NormalSplicing,
     SpliceAcceptor,
     SpliceDonor,
+    SpliceMechanismEffect,
 )
 from .mutant_transcript import MutantTranscript, TranscriptEdit
 from .effect_candidates import EffectCandidate
 
 
-class SpliceOutcome(Enum):
-    """Possible biological outcome when a splice signal is disrupted."""
-
-    NORMAL_SPLICING = "normal_splicing"
-    """The disruption is partial or leaky; canonical splicing still
-    occurs and the variant's effect is whatever the underlying
-    nucleotide change produces (substitution, frameshift, etc.)."""
-
-    EXON_SKIPPING = "exon_skipping"
-    """The spliceosome can't recognize the disrupted donor/acceptor
-    and skips the entire affected exon. The flanking exons join
-    directly. If the skipped exon is divisible by 3, the result is
-    an in-frame deletion of those amino acids; otherwise a frameshift."""
-
-    INTRON_RETENTION = "intron_retention"
-    """The spliceosome fails entirely; the intron stays in the
-    transcript. Almost always produces a premature stop codon
-    within the intronic sequence."""
-
-    CRYPTIC_DONOR = "cryptic_donor"
-    """A nearby weak GT donor site is used instead of the disrupted
-    canonical one. Truncates or extends the affected exon."""
-
-    CRYPTIC_ACCEPTOR = "cryptic_acceptor"
-    """A nearby weak AG acceptor site is used instead of the
-    disrupted canonical one. Truncates or extends the affected exon."""
-
-
 @dataclass(frozen=True)
-class SpliceCandidate(DataclassSerializable):
-    """One possible outcome of a splice-disrupting variant.
+class SpliceCandidateRNAEvidence(DataclassSerializable):
+    """RNA observations supporting one visible splice candidate."""
 
-    Plausibility is a rough hand-tuned score, not a probability.
-    Use the relative ordering of candidates rather than the absolute
-    values for downstream filtering.
+    candidate: EffectCandidate
+    rna_evidence: Tuple[EffectCandidate, ...] = field(default_factory=tuple)
 
-    Serialization is inherited from
-    :class:`~serializable.DataclassSerializable`; ``to_json`` /
-    ``from_json`` round-trip the ``coding_effect`` polymorphically
-    via the standard ``__class__`` / ``__module__`` stamping from
-    ``serializable.helpers``.
+
+def _exon_signature(exon):
+    """Stable value key for exon identity in RNA-evidence audits."""
+    if exon is None:
+        return None
+    return (
+        getattr(exon, "exon_id", None),
+        getattr(exon, "contig", None),
+        getattr(exon, "start", None),
+        getattr(exon, "end", None),
+        getattr(exon, "strand", None),
+    )
+
+
+def _splice_candidate_signature(candidate):
+    """Candidate-specific key for grouping RNA support.
+
+    Mechanism class alone is too coarse: two distinct cryptic donors
+    have the same class but different junctions. This key captures the
+    mechanism-specific coordinates that make one observed splice
+    candidate distinct from another, while ignoring source/evidence so
+    multiple observations can support the same visible candidate.
     """
-
-    outcome: SpliceOutcome
-    plausibility: float
-    description: str
-    """Human-readable summary of the outcome."""
-
-    coding_effect: Optional[MutationEffect] = None
-    """Concrete coding effect (Substitution, Deletion, FrameShift,
-    PrematureStop, etc.) when computable. None for candidates whose
-    protein math requires intron/flanking sequence we don't have
-    cached (intron retention, cryptic splice)."""
-
-    predicted_class_name: Optional[str] = None
-    """When ``coding_effect`` is None, the predicted Effect class name
-    (e.g. ``'PrematureStop'``) inferred from the outcome and exon
-    properties. Useful for filtering downstream."""
-
-    mutant_transcript: Optional[MutantTranscript] = None
-    """The assembled mutant transcript for this outcome (#305). Populated
-    for candidates where varcode can materialize the post-splicing cDNA
-    from cached transcript sequence (EXON_SKIPPING); ``None`` for
-    candidates that need genomic intron / flanking sequence to resolve
-    (INTRON_RETENTION, CRYPTIC_*) — those become populated when
-    genomic-FASTA ingestion lands (#296). Downstream consumers that
-    want to reason about the full cDNA / protein read this directly
-    instead of re-deriving from ``coding_effect`` fields."""
-
-    @property
-    def has_protein(self) -> bool:
-        return self.coding_effect is not None and getattr(
-            self.coding_effect, "mutant_protein_sequence", None
-        ) is not None
-
-    @property
-    def short_description(self) -> str:
-        if self.coding_effect is not None:
-            return "%s (%s, p=%.2f)" % (
-                self.coding_effect.short_description,
-                self.outcome.value,
-                self.plausibility,
-            )
-        return "%s (%s, p=%.2f)" % (
-            self.predicted_class_name or "?",
-            self.outcome.value,
-            self.plausibility,
-        )
-
-    def to_dict(self):
-        """Emit the dataclass fields with :class:`SpliceOutcome`
-        converted to its string value. ``python-serializable`` has no
-        built-in enum branch in
-        :func:`~serializable.helpers.to_serializable_repr`, so we
-        stringify here to keep the JSON round-trip stable. Any
-        future dataclass field typed as an :class:`Enum` will need
-        the same treatment until the upstream helper grows an
-        enum branch (#343).
-        """
-        d = super().to_dict()
-        d["outcome"] = self.outcome.value
-        return d
-
-    @classmethod
-    def from_dict(cls, state_dict):
-        """Inverse of :meth:`to_dict`: reparse the string
-        ``outcome`` into the :class:`SpliceOutcome` enum before
-        delegating to the dataclass constructor (#343)."""
-        state_dict = dict(state_dict)
-        outcome = state_dict.get("outcome")
-        if isinstance(outcome, str):
-            state_dict["outcome"] = SpliceOutcome(outcome)
-        return super().from_dict(state_dict)
+    effect = candidate.effect
+    return (
+        type(effect),
+        _exon_signature(getattr(effect, "affected_exon", None)),
+        getattr(effect, "in_frame", None),
+        getattr(effect, "retained_intron_start", None),
+        getattr(effect, "retained_intron_end", None),
+        getattr(effect, "side", None),
+        getattr(effect, "cryptic_genomic_position", None),
+        getattr(effect, "exon_length_delta", None),
+        getattr(effect, "aa_mutation_start_offset", None),
+        getattr(effect, "aa_mutation_end_offset", None),
+        getattr(effect, "aa_ref", None),
+        getattr(effect, "aa_alt", None),
+        getattr(effect, "mutant_protein_sequence", None),
+    )
 
 
 class SpliceOutcomeSet(MultiOutcomeEffect):
     """A splice-disrupting variant's effect, expressed as a set of
-    plausible outcomes rather than a single Effect.
+    plausible mechanisms rather than a single Effect.
 
     Implements the :class:`MultiOutcomeEffect` protocol: downstream
     consumers can write ``isinstance(effect, MultiOutcomeEffect)`` to
     catch this and any future multi-outcome wrapper (RNA evidence,
-    germline-aware, etc.) uniformly — see #299.
+    germline-aware, etc.) uniformly.
+
+    :attr:`candidates` is a ``tuple[EffectCandidate, ...]``. Each
+    candidate's ``effect`` is a :class:`SpliceMechanismEffect`
+    subclass — :class:`NormalSplicing`, :class:`ExonSkipping`,
+    :class:`IntronRetention`, :class:`CrypticDonor`, or
+    :class:`CrypticAcceptor`. Class identity = mechanism. Each
+    mechanism Effect carries its own protein vocab (``aa_ref`` /
+    ``aa_alt`` / ``mutant_protein_sequence`` / ``mutant_transcript``)
+    populated when the protein math resolved, ``None`` when not.
 
     For back-compat, :attr:`short_description` delegates to the most
-    plausible candidate. Callers that want all candidates iterate
-    :attr:`candidates`.
-
-    Constructed by :func:`enumerate_splice_outcomes` when a caller
-    passes ``splice_outcomes=True`` to ``Variant.effects()`` or
+    likely candidate. Constructed by
+    :func:`enumerate_splice_outcomes` when a caller passes
+    ``splice_outcomes=True`` to ``Variant.effects()`` or
     ``VariantCollection.effects()``.
+
+    RNA evidence reconciliation
+    ---------------------------
+    :meth:`with_rna_evidence` returns a new set rather than mutating this
+    one. The new set keeps ``dna_candidates`` for audit, narrows
+    ``candidates`` to RNA-observed mechanisms, records DNA predictions
+    absent from RNA as ``excluded_candidates``, records observed
+    mechanisms absent from the DNA prior as ``added_candidates``, and
+    exposes per-candidate support through ``candidate_rna_evidence`` /
+    :meth:`rna_evidence_for`.
+
+    Serialization is inherited from :class:`Serializable` — no
+    overrides needed now that there's no enum to stringify.
     """
 
-    def __init__(self, variant, transcript, candidates, disrupted_signal_class=None):
+    def __init__(
+            self, variant, transcript, candidates, disrupted_signal_class=None,
+            dna_candidates=None, rna_evidence=(), added_candidates=(),
+            excluded_candidates=(), candidate_rna_evidence=()):
         MultiOutcomeEffect.__init__(self, variant)
         self.transcript = transcript
-        # Sort candidates by plausibility descending so .candidates[0]
-        # is always the most likely.
-        self.candidates = tuple(sorted(
-            candidates, key=lambda c: c.plausibility, reverse=True))
+        self._candidates = tuple(candidates)
         # Class of the original splice-disrupting effect this set
         # replaced (SpliceDonor, SpliceAcceptor, ExonicSpliceSite, or
         # IntronicSpliceSite). Used for priority lookup.
         self.disrupted_signal_class = disrupted_signal_class
+        self.dna_candidates = tuple(
+            self._candidates if dna_candidates is None else dna_candidates)
+        self.rna_evidence = tuple(rna_evidence)
+        self.added_candidates = tuple(added_candidates)
+        self.excluded_candidates = tuple(excluded_candidates)
+        self.candidate_rna_evidence = tuple(candidate_rna_evidence)
 
-    # Serialization is inherited from Serializable (the base of
-    # MutationEffect). to_dict emits {variant, transcript, candidates,
-    # disrupted_signal_class} via introspection; to_serializable_repr
-    # recursively handles nested MutationEffects, SpliceCandidate
-    # dataclasses, and the disrupted_signal_class type object via
-    # serializable.helpers' standard __class__ / __module__ stamping
-    # (#343).
+    @property
+    def candidates(self):
+        return self._combine_with_extra_candidates(self._candidates)
+
+    def with_rna_evidence(self, observed_candidates):
+        """Return a new set reconciled with RNA-observed splice evidence.
+
+        RNA evidence is treated as a refinement of the DNA-predicted
+        mechanism set: observed mechanisms replace their broad DNA
+        predictions, unobserved DNA-predicted mechanisms are recorded as
+        excluded, and observed mechanisms absent from the DNA prediction
+        are recorded as added. The original set is left untouched.
+        """
+        observed = tuple(observed_candidates)
+        if not observed:
+            return self
+
+        combined_evidence = self.rna_evidence + observed
+        splice_evidence = tuple(
+            c for c in combined_evidence
+            if isinstance(c.effect, SpliceMechanismEffect))
+        if not splice_evidence:
+            return SpliceOutcomeSet(
+                variant=self.variant,
+                transcript=self.transcript,
+                candidates=self.candidates + observed,
+                disrupted_signal_class=self.disrupted_signal_class,
+                dna_candidates=self.dna_candidates,
+                rna_evidence=combined_evidence,
+                added_candidates=observed,
+                excluded_candidates=self.excluded_candidates,
+                candidate_rna_evidence=self.candidate_rna_evidence,
+            )
+
+        dna_by_mechanism = {
+            type(candidate.effect): candidate
+            for candidate in self.dna_candidates
+        }
+        evidence_by_mechanism = {}
+        evidence_by_signature = {}
+        representative_by_signature = {}
+        for candidate in splice_evidence:
+            mechanism = type(candidate.effect)
+            evidence_by_mechanism.setdefault(mechanism, []).append(candidate)
+            signature = _splice_candidate_signature(candidate)
+            evidence_by_signature.setdefault(signature, []).append(candidate)
+            representative_by_signature.setdefault(signature, candidate)
+
+        current = []
+        excluded = []
+        added = []
+        seen_signatures = set()
+
+        def add_current_observed(candidate):
+            signature = _splice_candidate_signature(candidate)
+            if signature in seen_signatures:
+                return None
+            seen_signatures.add(signature)
+            representative = representative_by_signature[signature]
+            current.append(representative)
+            return representative
+
+        for dna_candidate in self.dna_candidates:
+            mechanism = type(dna_candidate.effect)
+            observed_for_mechanism = tuple(
+                evidence_by_mechanism.get(mechanism, ()))
+            if observed_for_mechanism:
+                for candidate in observed_for_mechanism:
+                    add_current_observed(candidate)
+            else:
+                excluded.append(dna_candidate)
+
+        for candidate in splice_evidence:
+            mechanism = type(candidate.effect)
+            if mechanism not in dna_by_mechanism:
+                representative = add_current_observed(candidate)
+                if representative is not None:
+                    added.append(representative)
+
+        support = tuple(
+            SpliceCandidateRNAEvidence(
+                candidate=candidate,
+                rna_evidence=tuple(evidence_by_signature.get(
+                    _splice_candidate_signature(candidate), ())))
+            for candidate in current
+        )
+
+        return SpliceOutcomeSet(
+            variant=self.variant,
+            transcript=self.transcript,
+            candidates=current,
+            disrupted_signal_class=self.disrupted_signal_class,
+            dna_candidates=self.dna_candidates,
+            rna_evidence=combined_evidence,
+            added_candidates=added,
+            excluded_candidates=excluded,
+            candidate_rna_evidence=support,
+        )
+
+    def rna_evidence_for(self, candidate):
+        """RNA-observed candidates supporting ``candidate``."""
+        candidate_signature = _splice_candidate_signature(candidate)
+        for entry in self.candidate_rna_evidence:
+            if entry.candidate is candidate or entry.candidate == candidate:
+                return entry.rna_evidence
+            if _splice_candidate_signature(entry.candidate) == candidate_signature:
+                return entry.rna_evidence
+        return ()
 
     @property
     def priority_class(self):
@@ -233,97 +299,35 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
         return self.disrupted_signal_class
 
     @property
-    def most_likely(self) -> SpliceCandidate:
-        return self.candidates[0]
-
-    @property
-    def outcomes(self):
-        """Unified :class:`~varcode.EffectCandidate` view over :attr:`candidates`
-        (#339).
-
-        Each outcome's ``effect`` is guaranteed to be a real
-        :class:`MutationEffect` — for candidates whose protein math
-        requires genomic sequence we don't cache (intron retention,
-        cryptic splice), the effect is a
-        :class:`PredictedIntronRetention` or
-        :class:`PredictedCrypticSpliceSite` placeholder with
-        ``mutant_protein_sequence = None`` instead of ``None`` itself.
-
-        ``evidence`` carries the :class:`SpliceOutcome` enum under key
-        ``"splice_outcome"`` so splice-aware consumers can still
-        dispatch on the biological outcome kind without reaching
-        back into :attr:`candidates`.
-        """
-        return self._with_extra_outcomes(
-            tuple(
-                EffectCandidate(
-                    effect=self._outcome_effect(candidate),
-                    probability=candidate.plausibility,
-                    source="varcode",
-                    evidence={"splice_outcome": candidate.outcome})
-                for candidate in self.candidates))
-
-    def _outcome_effect(self, candidate):
-        """Return the :class:`MutationEffect` that backs ``candidate``
-        for :attr:`outcomes`. Falls back to placeholder classes when
-        the candidate has no computable ``coding_effect``.
-        """
-        if candidate.coding_effect is not None:
-            return candidate.coding_effect
-        transcript = self.transcript
-        if candidate.outcome is SpliceOutcome.INTRON_RETENTION:
-            return PredictedIntronRetention(self.variant, transcript)
-        if candidate.outcome is SpliceOutcome.CRYPTIC_DONOR:
-            return PredictedCrypticSpliceSite(
-                self.variant, transcript, direction="donor")
-        if candidate.outcome is SpliceOutcome.CRYPTIC_ACCEPTOR:
-            return PredictedCrypticSpliceSite(
-                self.variant, transcript, direction="acceptor")
-        if candidate.outcome is SpliceOutcome.EXON_SKIPPING:
-            # Exon-skipping without a computed protein — we know an
-            # exon is affected but the specific exon / skipped-protein
-            # math wasn't resolvable at build time. Emit ExonLoss with
-            # an empty exons tuple so ``.effect`` still satisfies the
-            # MutationEffect interface; consumers that need the
-            # specific exon should reach into ``candidates`` or
-            # construct a SpliceOutcomeSet with RNA evidence attached.
-            return ExonLoss(self.variant, transcript, exons=())
-        # NORMAL_SPLICING candidate with no coding_effect: the variant
-        # is intronic and has no coding change if splicing proceeds.
-        # Represent with Intronic so .effect still satisfies the
-        # MutationEffect contract.
-        return Intronic(
-            self.variant,
-            transcript,
-            nearest_exon=None,
-            distance_to_exon=None)
-
-    @property
     def alternate_effect(self):
         """Back-compat shim matching :attr:`ExonicSpliceSite.alternate_effect`.
 
-        Resolves to the ``coding_effect`` of the ``NORMAL_SPLICING``
-        candidate — i.e. "the coding change that applies when
-        splicing proceeds normally." Returns ``None`` when the
-        ``NORMAL_SPLICING`` candidate has no coding_effect (e.g. the
-        variant is intronic and has no underlying coding change) or
-        when the outcome set doesn't include ``NORMAL_SPLICING``.
+        Resolves to the underlying coding change carried by the
+        :class:`NormalSplicing` candidate (its
+        :attr:`NormalSplicing.coding_effect`) — i.e. "the coding
+        change that applies when splicing proceeds normally."
+        Returns ``None`` when there is no :class:`NormalSplicing`
+        candidate or when it carries ``coding_effect=None`` (e.g.
+        the variant is purely intronic).
         """
-        for candidate in self.candidates:
-            if candidate.outcome is SpliceOutcome.NORMAL_SPLICING:
-                return candidate.coding_effect
+        for candidate in self._candidates:
+            if isinstance(candidate.effect, NormalSplicing):
+                return candidate.effect.coding_effect
         return None
 
     @property
     def candidate_proteins(self):
-        """Mapping from each :class:`SpliceOutcome` to its computed
-        mutant protein sequence (empty string when the protein is not
+        """Mapping from each mechanism class to its computed mutant
+        protein sequence (empty string when the protein is not
         computable from cDNA alone — i.e. intron retention and
-        cryptic splice).
+        cryptic splice without a ``genomic_sequence`` provider).
+
+        Keyed by class object (e.g. ``ExonSkipping``) rather than by
+        enum string — match the candidate-iteration shape.
         """
         return {
-            outcome.evidence["splice_outcome"]: _protein_str(outcome.effect)
-            for outcome in self.outcomes
+            type(c.effect): _protein_str(c.effect)
+            for c in self.candidates
         }
 
     @property
@@ -333,19 +337,21 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
         """
         return {
             protein for protein in (
-                _protein_str(o.effect) for o in self.outcomes)
+                _protein_str(c.effect) for c in self.candidates)
             if protein
         }
 
     @property
     def short_description(self) -> str:
-        return "splice-set:%s" % self.most_likely.short_description
+        return "splice-set:%s" % self.most_likely_candidate.effect.short_description
 
     def __str__(self) -> str:
         return "SpliceOutcomeSet(variant=%s, transcript=%s, candidates=[%s])" % (
             self.variant,
             getattr(self.transcript, "name", None),
-            ", ".join(c.short_description for c in self.candidates),
+            ", ".join(
+                c.effect.short_description
+                for c in self.candidates),
         )
 
     def __repr__(self) -> str:
@@ -353,71 +359,74 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
 
 
 # ---------------------------------------------------------------------
-# Plausibility tables.
+# DNA-only mechanism order.
 #
-# Hand-tuned heuristics. The numbers don't need to be precise — what
-# matters is the relative ordering. Documented openly so reviewers and
-# callers know what to expect. See module docstring for the limitation.
+# Hand-tuned heuristic ordering. These are not probabilities. The order
+# only gives varcode a deterministic leading candidate when DNA alone
+# leaves several splice mechanisms possible.
 # ---------------------------------------------------------------------
 
 
+# Mechanism orders are tuples of :class:`SpliceMechanismEffect`
+# subclasses — class identity IS the mechanism, no parallel enum.
+
 # Disrupted canonical donor (intronic +1/+2): exon skipping dominates,
 # intron retention common, leaky normal splicing rare.
-_PLAUSIBILITY_SPLICE_DONOR = {
-    SpliceOutcome.EXON_SKIPPING: 0.50,
-    SpliceOutcome.INTRON_RETENTION: 0.30,
-    SpliceOutcome.CRYPTIC_DONOR: 0.10,
-    SpliceOutcome.NORMAL_SPLICING: 0.10,
-}
+_MECHANISM_ORDER_SPLICE_DONOR = (
+    ExonSkipping,
+    IntronRetention,
+    CrypticDonor,
+    NormalSplicing,
+)
 
 # Disrupted canonical acceptor (intronic -1/-2): same rough
 # distribution as donor.
-_PLAUSIBILITY_SPLICE_ACCEPTOR = {
-    SpliceOutcome.EXON_SKIPPING: 0.50,
-    SpliceOutcome.INTRON_RETENTION: 0.30,
-    SpliceOutcome.CRYPTIC_ACCEPTOR: 0.10,
-    SpliceOutcome.NORMAL_SPLICING: 0.10,
-}
+_MECHANISM_ORDER_SPLICE_ACCEPTOR = (
+    ExonSkipping,
+    IntronRetention,
+    CrypticAcceptor,
+    NormalSplicing,
+)
 
 # Disrupted exonic splice site (last 3 of exon): often splicing still
 # proceeds (the disruption is in the exon, where the spliceosome can
 # tolerate more variation), so normal splicing is more competitive.
-_PLAUSIBILITY_EXONIC_SPLICE_SITE = {
-    SpliceOutcome.NORMAL_SPLICING: 0.50,
-    SpliceOutcome.EXON_SKIPPING: 0.30,
-    SpliceOutcome.CRYPTIC_DONOR: 0.15,
-    SpliceOutcome.INTRON_RETENTION: 0.05,
-}
+_MECHANISM_ORDER_EXONIC_SPLICE_SITE = (
+    NormalSplicing,
+    ExonSkipping,
+    CrypticDonor,
+    IntronRetention,
+)
 
 # Intronic splice site (positions +3 to +6 or -3): less critical
 # region; normal splicing dominates. Two variants — donor-side (+3 to +6)
 # and acceptor-side (-3) — which differ only in the cryptic direction.
-_PLAUSIBILITY_INTRONIC_SPLICE_SITE_DONOR = {
-    SpliceOutcome.NORMAL_SPLICING: 0.70,
-    SpliceOutcome.EXON_SKIPPING: 0.20,
-    SpliceOutcome.INTRON_RETENTION: 0.05,
-    SpliceOutcome.CRYPTIC_DONOR: 0.05,
-}
+_MECHANISM_ORDER_INTRONIC_SPLICE_SITE_DONOR = (
+    NormalSplicing,
+    ExonSkipping,
+    IntronRetention,
+    CrypticDonor,
+)
 
-_PLAUSIBILITY_INTRONIC_SPLICE_SITE_ACCEPTOR = {
-    SpliceOutcome.NORMAL_SPLICING: 0.70,
-    SpliceOutcome.EXON_SKIPPING: 0.20,
-    SpliceOutcome.INTRON_RETENTION: 0.05,
-    SpliceOutcome.CRYPTIC_ACCEPTOR: 0.05,
-}
+_MECHANISM_ORDER_INTRONIC_SPLICE_SITE_ACCEPTOR = (
+    NormalSplicing,
+    ExonSkipping,
+    IntronRetention,
+    CrypticAcceptor,
+)
 
 # Order matters for isinstance matching: more specific classes first.
 # SpliceDonor and SpliceAcceptor are subclasses of IntronicSpliceSite
 # (see effect_classes.py), so they must be checked before the
-# IntronicSpliceSite fallback in _plausibility_table_for — otherwise
+# IntronicSpliceSite fallback in _mechanism_order_for — otherwise
 # a SpliceDonor would incorrectly fall into the intronic-window table.
 # IntronicSpliceSite itself is deliberately held out of this tuple and
 # dispatched separately so side detection can pick the right cryptic
 # direction.
-_PLAUSIBILITY_TABLES = (
-    (SpliceDonor, _PLAUSIBILITY_SPLICE_DONOR),
-    (SpliceAcceptor, _PLAUSIBILITY_SPLICE_ACCEPTOR),
-    (ExonicSpliceSite, _PLAUSIBILITY_EXONIC_SPLICE_SITE),
+_MECHANISM_ORDER_TABLES = (
+    (SpliceDonor, _MECHANISM_ORDER_SPLICE_DONOR),
+    (SpliceAcceptor, _MECHANISM_ORDER_SPLICE_ACCEPTOR),
+    (ExonicSpliceSite, _MECHANISM_ORDER_EXONIC_SPLICE_SITE),
 )
 
 
@@ -431,7 +440,7 @@ def _intronic_splice_side_is_acceptor(splice_effect):
     cryptic donor or cryptic acceptor is the relevant alternative.
 
     Caller contract: ``splice_effect`` must be an ``IntronicSpliceSite``
-    (guaranteed by :func:`_plausibility_table_for`), so ``variant`` and
+    (guaranteed by :func:`_mechanism_order_for`), so ``variant`` and
     ``nearest_exon`` are always present.
     """
     exon = splice_effect.nearest_exon
@@ -443,126 +452,147 @@ def _intronic_splice_side_is_acceptor(splice_effect):
     return variant.trimmed_base1_end > exon.end
 
 
-def _plausibility_table_for(splice_effect):
-    """Return the plausibility table that applies to this splice
+def _mechanism_order_for(splice_effect):
+    """Return the DNA-only mechanism order for this splice
     effect, or None for effects we don't wrap.
 
     Uses :func:`isinstance` rather than exact-class dispatch so
     subclasses are handled correctly.
     """
-    for cls, table in _PLAUSIBILITY_TABLES:
+    for cls, order in _MECHANISM_ORDER_TABLES:
         if isinstance(splice_effect, cls):
-            return table
+            return order
     if isinstance(splice_effect, IntronicSpliceSite):
         if _intronic_splice_side_is_acceptor(splice_effect):
-            return _PLAUSIBILITY_INTRONIC_SPLICE_SITE_ACCEPTOR
-        return _PLAUSIBILITY_INTRONIC_SPLICE_SITE_DONOR
+            return _MECHANISM_ORDER_INTRONIC_SPLICE_SITE_ACCEPTOR
+        return _MECHANISM_ORDER_INTRONIC_SPLICE_SITE_DONOR
     return None
 
 
 # ---------------------------------------------------------------------
-# EffectCandidate construction
+# Splice-mechanism Effect construction
 # ---------------------------------------------------------------------
 
 
-def _build_normal_splicing_candidate(splice_effect, plausibility):
-    """Normal splicing: the underlying coding effect.
+def _wrap_in_candidate(mechanism_effect):
+    """Lift a :class:`SpliceMechanismEffect` into an
+    unscored :class:`EffectCandidate` with ``source="varcode"``.
 
-    For ExonicSpliceSite this is the .alternate_effect. For other
-    splice classes there is no underlying coding effect (the variant
-    is intronic) — return a candidate with no protein but the same
-    plausibility for completeness.
+    Trivial wrapper kept as a named helper for symmetry with how
+    other annotators construct ``EffectCandidate`` objects.
     """
-    underlying = getattr(splice_effect, "alternate_effect", None)
-    if underlying is not None:
-        return SpliceCandidate(
-            outcome=SpliceOutcome.NORMAL_SPLICING,
-            plausibility=plausibility,
-            description=(
-                "Disruption is partial or leaky; canonical splicing "
-                "occurs and the underlying coding change applies."),
-            coding_effect=underlying,
-            predicted_class_name=type(underlying).__name__,
-        )
-    return SpliceCandidate(
-        outcome=SpliceOutcome.NORMAL_SPLICING,
-        plausibility=plausibility,
-        description=(
-            "Disruption is partial or leaky; canonical splicing "
-            "occurs. Variant is intronic and has no coding impact "
-            "if splicing proceeds normally."),
-        coding_effect=None,
-        predicted_class_name="Intronic",
+    return EffectCandidate(
+        effect=mechanism_effect,
+        source="varcode",
     )
 
 
-def _build_exon_skipping_candidate(splice_effect, plausibility):
-    """Exon skipping: the affected exon is excluded from the transcript.
+def _build_normal_splicing_candidate(splice_effect):
+    """Normal splicing: the splice signal was hit but the spliceosome
+    handles it; the protein consequence (if any) is whatever the
+    underlying coding change normally produces.
+
+    For :class:`ExonicSpliceSite`, ``alternate_effect`` is the
+    underlying coding change (a :class:`Substitution` etc.). For
+    intronic splice classes there is no underlying coding change —
+    the variant is in/near an intron — so ``coding_effect=None``.
+    """
+    transcript = getattr(splice_effect, "transcript", None)
+    coding_effect = getattr(splice_effect, "alternate_effect", None)
+    return _wrap_in_candidate(
+        NormalSplicing(
+            variant=splice_effect.variant,
+            transcript=transcript,
+            splice_signal=splice_effect,
+            coding_effect=coding_effect),
+    )
+
+
+def _aa_fields_from_protein_diff(
+        variant, transcript, mutant_transcript, length_delta):
+    """Run :func:`classify_from_protein_diff` against the resolved
+    mutant transcript and return its ``aa_ref`` / ``aa_alt`` /
+    offset fields as a dict, plus the classified protein effect. The
+    splice-mechanism Effect builders copy the AA vocab onto the
+    mechanism instance and retain the classified effect under
+    ``protein_effect`` so severity queries can delegate to it while
+    class identity remains the splice mechanism.
+    """
+    ref_protein = str(transcript.protein_sequence)
+    mut_protein = mutant_transcript.mutant_protein_sequence
+    classified = classify_from_protein_diff(
+        variant=variant,
+        transcript=transcript,
+        ref_protein=ref_protein,
+        mut_protein=mut_protein,
+        length_delta=length_delta,
+        mutant_transcript=mutant_transcript,
+    )
+    return {
+        "aa_ref": getattr(classified, "aa_ref", None),
+        "aa_alt": getattr(classified, "aa_alt", None),
+        "aa_mutation_start_offset": getattr(
+            classified, "aa_mutation_start_offset", None),
+        "aa_mutation_end_offset": getattr(
+            classified, "aa_mutation_end_offset", None),
+        "mutant_protein_sequence": mut_protein,
+        "protein_effect": classified,
+    }
+
+
+def _build_exon_skipping_candidate(splice_effect):
+    """Exon skipping: the affected exon is excluded from the mature
+    transcript.
 
     Builds a :class:`MutantTranscript` by deleting the exon's cDNA
-    range from the transcript sequence, translates, and classifies
-    the effect via :func:`classify_from_protein_diff`. This replaces
-    the three ad-hoc helpers from the original prototype (#305):
-    boundary-codon reconstruction, start-loss detection, and
-    in-frame vs. out-of-frame distinction all fall out of the diff
-    naturally.
+    range, translates, runs :func:`classify_from_protein_diff` to
+    extract the protein-level AA vocab, and copies those fields onto
+    a fresh :class:`ExonSkipping` instance. Returns the
+    :class:`ExonSkipping` in its "predicted" state (protein fields
+    ``None``) when the protein math couldn't resolve.
     """
     transcript = getattr(splice_effect, "transcript", None)
     exon = _affected_exon(splice_effect)
     if transcript is None or exon is None:
-        return SpliceCandidate(
-            outcome=SpliceOutcome.EXON_SKIPPING,
-            plausibility=plausibility,
-            description="Affected exon is skipped from the transcript.",
-            coding_effect=None,
-            predicted_class_name="ExonLoss",
+        # We can't even compute frame without the exon.
+        return _wrap_in_candidate(
+            ExonSkipping(
+                variant=splice_effect.variant,
+                transcript=transcript,
+                splice_signal=splice_effect,
+                affected_exon=exon,
+                in_frame=False),
         )
 
+    exon_length = exon.end - exon.start + 1
+    in_frame = (exon_length % 3 == 0)
     mt = _build_exon_skip_mutant_transcript(
         splice_effect.variant, transcript, exon)
-    exon_length = exon.end - exon.start + 1
 
     if mt is None or mt.mutant_protein_sequence is None:
         # Couldn't compute protein (incomplete transcript, exon not
-        # found in transcript, etc.).
-        predicted = "FrameShift" if exon_length % 3 != 0 else "Deletion"
-        return SpliceCandidate(
-            outcome=SpliceOutcome.EXON_SKIPPING,
-            plausibility=plausibility,
-            description="Exon %s is skipped." % getattr(exon, "exon_id", "?"),
-            coding_effect=None,
-            predicted_class_name=predicted,
-            mutant_transcript=mt,
+        # found, etc.) — return predicted-state ExonSkipping.
+        return _wrap_in_candidate(
+            ExonSkipping(
+                variant=splice_effect.variant,
+                transcript=transcript,
+                splice_signal=splice_effect,
+                affected_exon=exon,
+                in_frame=in_frame,
+                mutant_transcript=mt),
         )
 
-    ref_protein = str(transcript.protein_sequence)
-    mut_protein = mt.mutant_protein_sequence
-    coding_effect = classify_from_protein_diff(
-        variant=splice_effect.variant,
-        transcript=transcript,
-        ref_protein=ref_protein,
-        mut_protein=mut_protein,
-        length_delta=-exon_length,
-        mutant_transcript=mt,
-    )
-    predicted_class_name = type(coding_effect).__name__
-
-    if exon_length % 3 == 0:
-        description = (
-            "Exon %s is skipped (in-frame, %d aa removed)." % (
-                getattr(exon, "exon_id", "?"), exon_length // 3))
-    else:
-        description = (
-            "Exon %s is skipped (out of frame, frameshift in the "
-            "joined transcript)." % getattr(exon, "exon_id", "?"))
-
-    return SpliceCandidate(
-        outcome=SpliceOutcome.EXON_SKIPPING,
-        plausibility=plausibility,
-        description=description,
-        coding_effect=coding_effect,
-        predicted_class_name=predicted_class_name,
-        mutant_transcript=mt,
+    aa_fields = _aa_fields_from_protein_diff(
+        splice_effect.variant, transcript, mt, length_delta=-exon_length)
+    return _wrap_in_candidate(
+        ExonSkipping(
+            variant=splice_effect.variant,
+            transcript=transcript,
+            splice_signal=splice_effect,
+            affected_exon=exon,
+            in_frame=in_frame,
+            mutant_transcript=mt,
+            **aa_fields),
     )
 
 
@@ -704,63 +734,59 @@ def _splice_side_for_effect(splice_effect):
     return None
 
 
-def _build_intron_retention_candidate(
-        splice_effect, plausibility, genomic_sequence=None):
+def _build_intron_retention_candidate(splice_effect, genomic_sequence=None):
     """Intron retention: the spliceosome fails and the intron is
     transcribed through to the mature mRNA.
 
-    When ``genomic_sequence`` is provided (callable
-    ``(contig, start, end) -> str`` returning 1-based-inclusive
-    forward-strand genomic bases), varcode materializes the real
-    retained-intron :class:`MutantTranscript` and classifies the
-    resulting effect via :func:`classify_from_protein_diff` (#296).
-
-    Without a provider we fall back to the pre-#296 stub: the
-    candidate carries ``coding_effect=None`` and the predicted class
-    label ``"PrematureStop"``.
+    With a ``genomic_sequence`` provider, materializes the retained-
+    intron :class:`MutantTranscript` and fills in the protein vocab
+    (#296). Without a provider, the :class:`IntronRetention` is
+    returned in its "predicted" state — ``retained_intron_start`` /
+    ``retained_intron_end`` / ``side`` are still populated (from the
+    adjacent-exon geometry) so consumers know *which* intron, but
+    the protein fields are ``None``.
     """
-    if genomic_sequence is not None:
-        transcript = getattr(splice_effect, "transcript", None)
-        exon = _affected_exon(splice_effect)
-        side = _splice_side_for_effect(splice_effect)
-        if transcript is not None and exon is not None and side is not None:
-            mt = _build_intron_retention_mutant_transcript(
-                splice_effect.variant, transcript, exon, side, genomic_sequence)
-            if mt is not None and mt.mutant_protein_sequence is not None:
-                ref_protein = str(transcript.protein_sequence)
-                mut_protein = mt.mutant_protein_sequence
-                length_delta = len(mt.cdna_sequence) - len(
-                    str(transcript.sequence))
-                coding_effect = classify_from_protein_diff(
-                    variant=splice_effect.variant,
-                    transcript=transcript,
-                    ref_protein=ref_protein,
-                    mut_protein=mut_protein,
-                    length_delta=length_delta,
-                    mutant_transcript=mt,
-                )
-                return SpliceCandidate(
-                    outcome=SpliceOutcome.INTRON_RETENTION,
-                    plausibility=plausibility,
-                    description=(
-                        "Intron is retained in the mature transcript; "
-                        "translation from the canonical start hits a "
-                        "premature stop inside the retained intron."),
-                    coding_effect=coding_effect,
-                    predicted_class_name=type(coding_effect).__name__,
-                    mutant_transcript=mt,
-                )
-    return SpliceCandidate(
-        outcome=SpliceOutcome.INTRON_RETENTION,
-        plausibility=plausibility,
-        description=(
-            "Intron is retained in the mature transcript. Almost "
-            "always produces a premature stop codon within the "
-            "intronic sequence; exact mutant protein requires "
-            "intron genomic sequence (pass a ``genomic_sequence`` "
-            "callable to ``enumerate_splice_outcomes``)."),
-        coding_effect=None,
-        predicted_class_name="PrematureStop",
+    transcript = getattr(splice_effect, "transcript", None)
+    exon = _affected_exon(splice_effect)
+    side = _splice_side_for_effect(splice_effect)
+
+    # Compute the retained-intron coords from the adjacent-exon
+    # geometry, independent of provider availability. When the
+    # geometry isn't resolvable (e.g. first/last exon, transcript
+    # missing the adjacent exon), pass None — the IntronRetention
+    # instance carries None rather than a sentinel zero so consumers
+    # can tell "unknown" from "actually coord 0".
+    coords = None
+    if transcript is not None and exon is not None and side is not None:
+        coords = _adjacent_intron_coords(transcript, exon, side)
+    intron_start = coords[0] if coords is not None else None
+    intron_end = coords[1] if coords is not None else None
+
+    common = dict(
+        variant=splice_effect.variant,
+        transcript=transcript,
+        splice_signal=splice_effect,
+        retained_intron_start=intron_start,
+        retained_intron_end=intron_end,
+        side=side,
+    )
+
+    if (genomic_sequence is not None and transcript is not None
+            and exon is not None and side is not None):
+        mt = _build_intron_retention_mutant_transcript(
+            splice_effect.variant, transcript, exon, side, genomic_sequence)
+        if mt is not None and mt.mutant_protein_sequence is not None:
+            length_delta = len(mt.cdna_sequence) - len(
+                str(transcript.sequence))
+            aa_fields = _aa_fields_from_protein_diff(
+                splice_effect.variant, transcript, mt, length_delta)
+            return _wrap_in_candidate(
+                IntronRetention(mutant_transcript=mt, **common, **aa_fields),
+            )
+
+    # Predicted state: no protein math.
+    return _wrap_in_candidate(
+        IntronRetention(**common),
     )
 
 
@@ -972,7 +998,7 @@ def _build_cryptic_site_mutant_transcript(
 
 
 def _build_cryptic_splice_candidate(
-        splice_effect, plausibility, outcome, genomic_sequence=None,
+        splice_effect, mechanism_cls, genomic_sequence=None,
         scan_flank=_CRYPTIC_SCAN_FLANK):
     """Cryptic donor/acceptor candidate. When ``genomic_sequence`` is
     provided (#296), scan the canonical splice boundary's flanking
@@ -980,53 +1006,61 @@ def _build_cryptic_splice_candidate(
     motif and materialize a real :class:`MutantTranscript` that uses
     the cryptic site in place of the disrupted canonical one.
 
-    Without a provider, falls back to the pre-#296 stub.
+    Without a provider (or when no motif scores above threshold),
+    falls back to the predicted state — :class:`CrypticDonor` /
+    :class:`CrypticAcceptor` with protein fields ``None`` and the
+    cryptic-site fields (``cryptic_genomic_position``,
+    ``motif_score``, ``exon_length_delta``) also ``None``.
+
+    ``mechanism_cls`` is :class:`CrypticDonor` or
+    :class:`CrypticAcceptor`; ``direction`` is derived from the
+    class.
     """
-    direction = "donor" if outcome is SpliceOutcome.CRYPTIC_DONOR else "acceptor"
-    if genomic_sequence is not None:
-        transcript = getattr(splice_effect, "transcript", None)
-        exon = _affected_exon(splice_effect)
-        if transcript is not None and exon is not None:
-            result = _build_cryptic_site_mutant_transcript(
-                splice_effect.variant, transcript, exon, direction,
-                genomic_sequence, scan_flank=scan_flank)
-            if result is not None:
-                mt, score, cryptic_pos = result
-                if mt.mutant_protein_sequence is not None:
-                    ref_protein = str(transcript.protein_sequence)
-                    length_delta = len(mt.cdna_sequence) - len(
-                        str(transcript.sequence))
-                    coding_effect = classify_from_protein_diff(
-                        variant=splice_effect.variant,
-                        transcript=transcript,
-                        ref_protein=ref_protein,
-                        mut_protein=mt.mutant_protein_sequence,
-                        length_delta=length_delta,
+    direction = mechanism_cls.direction
+    transcript = getattr(splice_effect, "transcript", None)
+    exon = _affected_exon(splice_effect)
+
+    common = dict(
+        variant=splice_effect.variant,
+        transcript=transcript,
+        splice_signal=splice_effect,
+        affected_exon=exon,
+    )
+
+    if (genomic_sequence is not None and transcript is not None
+            and exon is not None):
+        result = _build_cryptic_site_mutant_transcript(
+            splice_effect.variant, transcript, exon, direction,
+            genomic_sequence, scan_flank=scan_flank)
+        if result is not None:
+            mt, score, cryptic_pos = result
+            length_delta = len(mt.cdna_sequence) - len(
+                str(transcript.sequence))
+            if mt.mutant_protein_sequence is not None:
+                aa_fields = _aa_fields_from_protein_diff(
+                    splice_effect.variant, transcript, mt, length_delta)
+                return _wrap_in_candidate(
+                    mechanism_cls(
+                        cryptic_genomic_position=cryptic_pos,
+                        motif_score=score,
+                        exon_length_delta=length_delta,
                         mutant_transcript=mt,
-                    )
-                    return SpliceCandidate(
-                        outcome=outcome,
-                        plausibility=plausibility,
-                        description=(
-                            "Cryptic %s at genomic position %d "
-                            "(motif score %.2f) replaces the disrupted "
-                            "canonical signal." % (
-                                direction, cryptic_pos, score)),
-                        coding_effect=coding_effect,
-                        predicted_class_name=type(coding_effect).__name__,
-                        mutant_transcript=mt,
-                    )
-    return SpliceCandidate(
-        outcome=outcome,
-        plausibility=plausibility,
-        description=(
-            "A cryptic %s site nearby may be used in place of the "
-            "disrupted canonical signal. Truncates or extends the "
-            "affected exon; exact mutant protein requires flanking "
-            "genomic sequence (pass a ``genomic_sequence`` callable "
-            "to ``enumerate_splice_outcomes``)." % direction),
-        coding_effect=None,
-        predicted_class_name="ComplexSubstitution",
+                        **common,
+                        **aa_fields),
+                )
+            # MT built but protein didn't translate — partial info.
+            return _wrap_in_candidate(
+                mechanism_cls(
+                    cryptic_genomic_position=cryptic_pos,
+                    motif_score=score,
+                    exon_length_delta=length_delta,
+                    mutant_transcript=mt,
+                    **common),
+            )
+
+    # Predicted state.
+    return _wrap_in_candidate(
+        mechanism_cls(**common),
     )
 
 
@@ -1158,49 +1192,47 @@ def enumerate_splice_outcomes(splice_effect, genomic_sequence=None):
         forward-strand bases for ``(contig, start_1based_inclusive,
         end_1based_inclusive)`` (#296). When present:
 
-        * ``INTRON_RETENTION`` materializes a real
+        * :class:`IntronRetention` materializes a real
           :class:`MutantTranscript` with the intron inserted and the
           protein truncated at the first in-intron stop.
-        * ``CRYPTIC_DONOR`` / ``CRYPTIC_ACCEPTOR`` scan a ±50 bp
-          window around the canonical splice boundary (both exon
-          and intron sides) for the highest-scoring cryptic motif
-          using the same consensus tables as
+        * :class:`CrypticDonor` / :class:`CrypticAcceptor` scan a
+          ±50 bp window around the canonical splice boundary (both
+          exon and intron sides) for the highest-scoring cryptic
+          motif using the same consensus tables as
           :mod:`varcode.cryptic_exons`. The chosen cryptic site
           replaces the canonical boundary and the resulting
           truncation / extension is reflected in the
           :class:`MutantTranscript`.
 
         Providers that raise (missing FASTA, unknown contig, etc.)
-        fall back to the stub behavior transparently.
+        fall back to the predicted state transparently.
 
     Returns
     -------
     SpliceOutcomeSet or the original effect
-        SpliceOutcomeSet wrapping the candidate outcomes when the
+        SpliceOutcomeSet wrapping the candidate mechanisms when the
         input is a splice-disrupting effect; otherwise the input
         unchanged.
     """
-    table = _plausibility_table_for(splice_effect)
-    if table is None:
+    mechanism_order = _mechanism_order_for(splice_effect)
+    if mechanism_order is None:
         return splice_effect
 
     candidates = []
-    for outcome, plausibility in table.items():
-        if outcome is SpliceOutcome.NORMAL_SPLICING:
+    for mechanism_cls in mechanism_order:
+        if mechanism_cls is NormalSplicing:
             candidates.append(_build_normal_splicing_candidate(
-                splice_effect, plausibility))
-        elif outcome is SpliceOutcome.EXON_SKIPPING:
+                splice_effect))
+        elif mechanism_cls is ExonSkipping:
             candidates.append(_build_exon_skipping_candidate(
-                splice_effect, plausibility))
-        elif outcome is SpliceOutcome.INTRON_RETENTION:
+                splice_effect))
+        elif mechanism_cls is IntronRetention:
             candidates.append(_build_intron_retention_candidate(
-                splice_effect, plausibility,
+                splice_effect,
                 genomic_sequence=genomic_sequence))
-        elif outcome in (
-                SpliceOutcome.CRYPTIC_DONOR,
-                SpliceOutcome.CRYPTIC_ACCEPTOR):
+        elif mechanism_cls in (CrypticDonor, CrypticAcceptor):
             candidates.append(_build_cryptic_splice_candidate(
-                splice_effect, plausibility, outcome,
+                splice_effect, mechanism_cls,
                 genomic_sequence=genomic_sequence))
 
     return SpliceOutcomeSet(
@@ -1222,10 +1254,9 @@ def wrap_splice_effects_in_collection(effect_collection):
 # Priority integration happens via the `priority_class` attribute on
 # SpliceOutcomeSet — see `effect_priority` in effects.effect_ordering.
 
-# Serialization is inherited from Serializable / DataclassSerializable
-# (see #343). serializable.helpers.to_serializable_repr stamps each
-# nested object's {__module__, __name__} and from_serializable_dict
-# resolves them via _lookup_value, so SpliceCandidate.coding_effect
-# (polymorphic MutationEffect) and SpliceOutcomeSet.disrupted_signal_class
-# (a class object) both round-trip without the hand-rolled registries
-# this module used to carry.
+# Serialization is inherited from Serializable (the base of
+# MutationEffect). to_serializable_repr stamps each nested object's
+# {__module__, __name__} and from_serializable_dict resolves them via
+# _lookup_value, so the polymorphic EffectCandidate.effect (any
+# SpliceMechanismEffect subclass) and SpliceOutcomeSet.disrupted_signal_class
+# (a class object) both round-trip without hand-rolled registries.

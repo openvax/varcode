@@ -122,7 +122,7 @@ def test_enumerate_short_candidates_filtered_by_min_intron():
 def test_enumerate_respects_external_score_fn():
     """An external scorer (e.g. SpliceAI wrapper) overrides the
     motif-based default. Contract: the scorer gets the window and
-    kind, returns a probability. This is how the pluggable external-
+    kind, returns a score. This is how the pluggable external-
     predictor integration works without varcode depending on the
     scorer's model."""
     call_log = []
@@ -166,16 +166,13 @@ def test_cryptic_exon_candidate_wraps_as_outcome():
         acceptor_score=0.90)
     outcome = EffectCandidate(
         effect=cand,
-        probability=0.87,
         source="varcode-motif",
         evidence={"donor_score": 0.85, "acceptor_score": 0.90})
     assert outcome.source == "varcode-motif"
-    assert outcome.probability == 0.87
     # An external rescore (SpliceAI-style) wraps the same candidate
-    # with its own probability — downstream consumers filter by source.
+    # with its own evidence — downstream consumers filter by source.
     rescored = EffectCandidate(
         effect=cand,
-        probability=0.98,
         source="spliceai",
         evidence={"ds_dg": 0.98, "ds_al": 0.02})
     assert rescored.source == "spliceai"

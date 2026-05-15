@@ -43,8 +43,7 @@ custom ``score_fn`` to :func:`enumerate_candidates`, or take the
 output of :func:`enumerate_candidates` and re-score each
 :class:`CrypticExonCandidate` — the :class:`~varcode.EffectCandidate`
 shape from #299 carries both the effect and the external
-``probability`` / ``evidence`` without needing varcode to understand
-the scorer.
+``evidence`` without needing varcode to understand the scorer.
 
 **RNA evidence** (optional): if the pipeline has RNA-seq, the
 correct discriminator is "are there split reads that span the
@@ -155,8 +154,8 @@ def score_acceptor(window: str) -> float:
 
 
 # Callable interface for an alternative scorer. Gets (window_sequence,
-# kind) where kind is "donor" or "acceptor", returns a probability in
-# [0, 1]. The default is (score_donor, score_acceptor); an integration
+# kind) where kind is "donor" or "acceptor", returns a score in [0, 1].
+# The default is (score_donor, score_acceptor); an integration
 # can pass a SpliceAI / Pangolin wrapper.
 ScoreFn = Callable[[str, str], float]
 
@@ -214,7 +213,7 @@ def enumerate_candidates(
         everything pass ``min=0, max=None``.
     score_fn : callable or None
         Override the default motif scorer. Signature
-        ``(window_sequence, kind) -> probability in [0, 1]``, with
+        ``(window_sequence, kind) -> score in [0, 1]``, with
         ``kind`` one of ``"donor"``, ``"acceptor"``. Plug in a
         SpliceAI / Pangolin wrapper here.
 

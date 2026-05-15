@@ -17,12 +17,9 @@ from serializable import Serializable
 from .common import bio_seq_to_str
 
 
-def _cryptic_probability(candidate):
+def _cryptic_motif_score(candidate):
     """Average of a cryptic-exon candidate's donor and acceptor motif
-    scores. Used by :attr:`StructuralVariantEffect.outcomes` to
-    populate ``EffectCandidate.probability`` when no external scorer is
-    attached (#337). Both scores are match-ratios in ``[0, 1]`` so
-    their mean is already in range.
+    scores. Stored in evidence as a motif score, not a probability.
     """
     donor = candidate.donor_score or 0.0
     acceptor = candidate.acceptor_score or 0.0
@@ -134,59 +131,129 @@ class MultiOutcomeEffect(MutationEffect):
 
     Subclasses must expose:
 
-    * ``candidates`` — sequence of :class:`MutationEffect` instances,
-      sorted most-plausible-first. (Kept for back-compat with 2.x
-      callers.)
-    * ``most_likely`` — the top candidate (i.e. ``candidates[0]``).
-    * ``priority_class`` — effect class whose priority this set adopts
-      (read by :func:`varcode.effects.effect_priority`).
-
-    **Harmonized interface (#299):** new code should read
-    :attr:`outcomes` instead of ``candidates``. Each entry is an
-    :class:`~varcode.effect_candidates.EffectCandidate` carrying the effect plus
-    provenance (probability, source, evidence dict). The default
-    implementation wraps ``candidates`` with ``source="varcode"``
-    and no probability — external scorers (SpliceAI, Pangolin),
-    RNA-evidence callers (Isovar), and long-read assembly tools
-    override to attach their own scores without subclassing.
+    * :attr:`candidates` — tuple of :class:`~varcode.effect_candidates.EffectCandidate`
+      objects in producer order. Each entry pairs an
+      inner :class:`MutationEffect` (concrete or placeholder) with
+      its provenance — ``source`` (producer) and ``evidence`` dict.
+      The :attr:`effects` helper unwraps to the
+      inner Effects when callers don't need provenance.
+    * :attr:`priority_class` — effect class whose priority this set
+      adopts (read by :func:`varcode.effects.effect_priority`).
 
     Downstream consumers filter for multi-outcome results with
     ``isinstance(effect, MultiOutcomeEffect)``, so new wrappers (RNA
     evidence #259, germline-aware #268, SV-at-breakpoint) implement
-    the same protocol without downstream code churn.
+    the same protocol uniformly (#382).
+
+    External integrations (RNA evidence, SpliceAI scoring, etc.)
+    attach extra candidates post-hoc via the ``_extra_candidates``
+    slot — subclasses that override :attr:`candidates` must include
+    those extras in their returned tuple. The
+    :meth:`_combine_with_extra_candidates` helper does the right
+    thing.
+
+    Picking *the* candidate
+    -----------------------
+
+    Two orthogonal "best candidate" notions are available; pick the
+    one that matches your question:
+
+    * **Most likely**: the first candidate after producer ordering.
+      Producers preserve their own deterministic order.
+      :attr:`most_likely_candidate` returns the wrapped
+      :class:`EffectCandidate` (provenance + inner effect);
+      :attr:`most_likely_effect` returns just the inner
+      :class:`MutationEffect`. Always equal to ``candidates[0]`` /
+      ``effects[0]``.
+
+    * **Highest priority**: top by varcode's effect-priority ordering
+      (see :func:`~varcode.effects.effect_priority`) — the
+      most protein-disruptive candidate regardless of producer order.
+      :attr:`highest_priority_candidate` and
+      :attr:`highest_priority_effect` are the analogous accessors.
+      Use this for clinical / functional filtering ("flag if any
+      candidate is at least a frameshift"), since a disruptive
+      candidate sitting behind a less-disruptive primary candidate
+      should still light up.
+
+    The two coincide when producer order and priority ranking agree,
+    which is common but not guaranteed. Pick consciously.
     """
 
     @property
-    def outcomes(self):
-        """Tuple of :class:`~varcode.effect_candidates.EffectCandidate` objects,
-        most-plausible-first. Default implementation wraps
-        :attr:`candidates` under ``source="varcode"``; subclasses
-        (or external integrations) override to attach probabilities
-        and evidence.
-
-        External integrations (RNA evidence, SpliceAI scoring, etc.)
-        attach extra outcomes via :meth:`_with_extra_outcomes` —
-        subclasses overriding this property must call that helper on
-        their derived tuple so the plug-in path remains uniform.
+    def effects(self):
+        """Tuple of inner :class:`MutationEffect` objects, in
+        :attr:`candidates` order. Convenience for callers that don't
+        need per-candidate provenance — equivalent to
+        ``tuple(c.effect for c in self.candidates)``.
         """
-        from ..effect_candidates import candidates_from_effects
-        return self._with_extra_outcomes(
-            candidates_from_effects(self.candidates))
+        return tuple(c.effect for c in self.candidates)
 
-    def _with_extra_outcomes(self, base_outcomes):
-        """Append externally-attached outcomes (#259) to a derived
-        ``outcomes`` tuple.
+    @property
+    def most_likely_candidate(self):
+        """The first :class:`EffectCandidate` in producer order.
+        Pairs the inner effect with its ``source`` / ``evidence``
+        provenance.
 
-        Subclasses that override :attr:`outcomes` should call this
-        helper on the tuple they construct so that
+        For just the inner :class:`MutationEffect`, use
+        :attr:`most_likely_effect`. For the most protein-disruptive
+        candidate (independent of producer order), use
+        :attr:`highest_priority_candidate`.
+        """
+        return self.candidates[0]
+
+    @property
+    def most_likely_effect(self):
+        """The :class:`MutationEffect` of :attr:`most_likely_candidate`.
+        Equivalent to ``most_likely_candidate.effect`` /
+        ``effects[0]`` — given here so callers that don't need
+        provenance don't have to reach through the wrapper.
+        """
+        return self.candidates[0].effect
+
+    @property
+    def highest_priority_candidate(self):
+        """The :class:`EffectCandidate` whose inner effect has the
+        highest :func:`~varcode.effects.effect_priority` (most
+        protein-disruptive). Pure priority ranking — producer order
+        deliberately doesn't factor in, so a frameshift sitting
+        behind a less-disruptive primary candidate still surfaces
+        here.
+
+        Ties on priority resolve to the first matching entry of
+        :attr:`candidates`, preserving the subclass's candidate order.
+
+        Behavior is deterministic.
+        """
+        from .effect_ordering import effect_priority
+        return max(
+            self.candidates,
+            key=lambda c: effect_priority(c.effect),
+        )
+
+    @property
+    def highest_priority_effect(self):
+        """The inner :class:`MutationEffect` of
+        :attr:`highest_priority_candidate`. Use when you want the
+        worst-case effect for clinical / functional filtering and
+        don't need provenance.
+        """
+        return self.highest_priority_candidate.effect
+
+    def _combine_with_extra_candidates(self, base_candidates):
+        """Append externally-attached candidates (#259) to a derived
+        ``candidates`` tuple.
+
+        Subclasses that compute :attr:`candidates` dynamically call
+        this helper on the tuple they construct so that
         :func:`varcode.rna_evidence.apply_rna_evidence_to_effects`
-        and other post-hoc scorers can attach observed outcomes
+        and other post-hoc evidence producers can attach observed candidates
         without subclassing or monkey-patching.
         """
-        extra = getattr(self, "_extra_outcomes", ())
+        extra = getattr(self, "_extra_candidates", ())
         if not extra:
-            return tuple(base_outcomes)
-        return tuple(base_outcomes) + tuple(extra)
+            return tuple(base_candidates)
+        return tuple(base_candidates) + tuple(extra)
 
 
 class Intergenic(MutationEffect):
@@ -310,55 +377,366 @@ class SpliceAcceptor(IntronicSpliceSite):
 
 
 # =====================================================================
-# Predicted-but-uncomputed placeholder effects (#339).
+# Splice-mechanism effects (#382).
 #
-# Used by :class:`~varcode.splice_outcomes.SpliceOutcomeSet` and, later,
-# :class:`StructuralVariantEffect` to fill :attr:`EffectCandidate.effect` with a
-# real :class:`MutationEffect` when the protein-level outcome cannot be
-# computed from cached transcript cDNA alone (intron retention requires
-# intron sequence; cryptic splice requires flanking genomic sequence).
-# These types carry no aa_ref / aa_alt / mutant_protein_sequence — they
-# are markers so that ``outcome.effect`` still satisfies the
-# MutationEffect interface and downstream iteration doesn't have to
-# branch on None.
+# What the splice machinery does when a disrupted splice signal forces
+# a choice. Each subclass represents one mechanism and carries the
+# protein-level consequence of that mechanism in its own vocab —
+# ``aa_ref`` / ``aa_alt`` / ``mutant_protein_sequence`` /
+# ``mutant_transcript``, populated when varcode can resolve the protein
+# math, ``None`` otherwise. The "unresolved" state is "protein fields
+# are None"; no parallel placeholder class hierarchy.
+#
+# Every subclass references back to the underlying splice-signal
+# disruption via :attr:`splice_signal` — a SpliceDonor / SpliceAcceptor /
+# IntronicSpliceSite / ExonicSpliceSite Effect describing *where* in
+# the transcript the splice signal was hit. The mechanism Effect
+# describes *what* happens downstream of that disruption.
+#
+# Used by :class:`~varcode.splice_outcomes.SpliceOutcomeSet` to
+# fill :attr:`EffectCandidate.effect` for each plausible mechanism a
+# splice disruption could produce. Class identity = mechanism — no
+# parallel enum.
 # =====================================================================
 
 
-class PredictedIntronRetention(TranscriptMutationEffect):
-    """Placeholder effect: intron retention predicted, exact protein
-    not computable from cached transcript cDNA.
+class SpliceMechanismEffect(TranscriptMutationEffect):
+    """Base for effects describing what the splice machinery does
+    downstream of a disrupted splice signal.
 
-    Emitted as the :attr:`EffectCandidate.effect` of a SpliceOutcomeSet's
-    ``INTRON_RETENTION`` outcome. The biologically expected outcome is
-    a premature stop codon inside the retained intron; consumers that
-    need the exact protein sequence require intron genomic sequence
-    (see #296).
+    Concrete subclasses: :class:`NormalSplicing`, :class:`ExonSkipping`,
+    :class:`IntronRetention`, :class:`CrypticDonor`,
+    :class:`CrypticAcceptor`. Class identity is the mechanism;
+    instances of this base are not constructed directly.
+
+    Protein vocab fields are optional — ``None`` means "predicted
+    mechanism, exact protein not computable from cached cDNA alone."
+    When resolved, the fields follow the same conventions as
+    :class:`KnownAminoAcidChange` so consumers can read them
+    uniformly.
+
+    Parameters
+    ----------
+    variant : Variant
+    transcript : pyensembl.Transcript
+    splice_signal : MutationEffect
+        The splice-signal-disruption Effect (``SpliceDonor`` /
+        ``SpliceAcceptor`` / ``IntronicSpliceSite`` /
+        ``ExonicSpliceSite``) describing *where* the disruption was
+        in the transcript. Lets consumers reach
+        ``effect.splice_signal.nearest_exon``,
+        ``effect.splice_signal.distance_to_exon``, etc. without
+        carrying those fields redundantly on every mechanism subclass.
+    protein_effect : MutationEffect or None
+        Classified protein-level consequence of this splice mechanism
+        (e.g. ``Deletion``, ``FrameShift``, ``PrematureStop``) when the
+        protein sequence was resolved. The mechanism object keeps its
+        own class identity while delegating severity metadata to this
+        classified consequence.
+    mutant_transcript : MutantTranscript or None
+    aa_ref, aa_alt : str or None
+    aa_mutation_start_offset, aa_mutation_end_offset : int or None
+    mutant_protein_sequence : str or None
     """
 
-    short_description = "predicted-intron-retention"
-
-
-class PredictedCrypticSpliceSite(TranscriptMutationEffect):
-    """Placeholder effect: a cryptic donor or acceptor is expected to
-    be used in place of the disrupted canonical signal.
-
-    ``direction`` is ``"donor"`` or ``"acceptor"``. Exact protein
-    consequence requires flanking genomic sequence; emitted as the
-    :attr:`EffectCandidate.effect` of a SpliceOutcomeSet's ``CRYPTIC_DONOR`` /
-    ``CRYPTIC_ACCEPTOR`` outcome.
-    """
-
-    def __init__(self, variant, transcript, direction):
+    def __init__(
+            self, variant, transcript, splice_signal,
+            protein_effect=None,
+            mutant_transcript=None,
+            aa_ref=None, aa_alt=None,
+            aa_mutation_start_offset=None,
+            aa_mutation_end_offset=None,
+            mutant_protein_sequence=None):
         TranscriptMutationEffect.__init__(self, variant, transcript)
-        if direction not in ("donor", "acceptor"):
-            raise ValueError(
-                "PredictedCrypticSpliceSite direction must be "
-                "'donor' or 'acceptor', got %r" % (direction,))
-        self.direction = direction
+        self.splice_signal = splice_signal
+        self.protein_effect = protein_effect
+        self.mutant_transcript = mutant_transcript
+        self.aa_ref = aa_ref
+        self.aa_alt = aa_alt
+        self.aa_mutation_start_offset = aa_mutation_start_offset
+        self.aa_mutation_end_offset = aa_mutation_end_offset
+        self.mutant_protein_sequence = mutant_protein_sequence
+
+    @property
+    def resolved(self) -> bool:
+        """True when the protein math succeeded for this mechanism —
+        i.e. :attr:`mutant_protein_sequence` is populated. Convenience
+        for consumers that want to branch on "do we have a concrete
+        protein for this mechanism?"
+        """
+        return self.mutant_protein_sequence is not None
+
+    @property
+    def priority_class(self):
+        if self.protein_effect is None:
+            return None
+        return self.protein_effect.__class__
+
+    @property
+    def modifies_coding_sequence(self):
+        return getattr(self.protein_effect, "modifies_coding_sequence", False)
+
+    @property
+    def modifies_protein_sequence(self):
+        return getattr(self.protein_effect, "modifies_protein_sequence", False)
+
+
+class NormalSplicing(SpliceMechanismEffect):
+    """Canonical splicing proceeds despite the disruption.
+
+    The splice signal was hit, but the spliceosome handles it; the
+    protein consequence (if any) is whatever the underlying
+    nucleotide change normally produces — a :class:`Substitution`
+    for an :class:`ExonicSpliceSite`, no protein change for a
+    purely intronic disruption. The underlying coding change is
+    carried as :attr:`coding_effect`; when there isn't one (intronic
+    variant), it's ``None``.
+
+    Note: this class is special among :class:`SpliceMechanismEffect`
+    subclasses — it doesn't itself transform the protein, so all the
+    protein-vocab attributes (``aa_ref``, ``aa_alt``,
+    ``mutant_protein_sequence``, ``mutant_transcript``,
+    ``aa_mutation_*_offset``) are *delegating descriptors* that read
+    through to ``coding_effect``. Construction therefore calls
+    :class:`TranscriptMutationEffect`'s ``__init__`` directly rather
+    than :class:`SpliceMechanismEffect`'s — the latter would set
+    those names as plain instance attributes and shadow the
+    descriptors. The other four mechanisms (skipping, retention,
+    cryptic donor/acceptor) actually transform the protein and
+    carry their own protein vocab as instance state.
+    """
+
+    def __init__(self, variant, transcript, splice_signal,
+                 coding_effect=None):
+        TranscriptMutationEffect.__init__(self, variant, transcript)
+        self.splice_signal = splice_signal
+        self.coding_effect = coding_effect
+
+    # Delegating descriptors. Read-only by construction (no setters)
+    # — NormalSplicing never owns these fields directly; they're a
+    # view onto ``coding_effect``. Attempting to assign to one is a
+    # programming error and rightly raises AttributeError.
+
+    @property
+    def aa_ref(self):
+        return getattr(self.coding_effect, "aa_ref", None)
+
+    @property
+    def aa_alt(self):
+        return getattr(self.coding_effect, "aa_alt", None)
+
+    @property
+    def mutant_protein_sequence(self):
+        return getattr(self.coding_effect, "mutant_protein_sequence", None)
+
+    @property
+    def aa_mutation_start_offset(self):
+        return getattr(self.coding_effect, "aa_mutation_start_offset", None)
+
+    @property
+    def aa_mutation_end_offset(self):
+        return getattr(self.coding_effect, "aa_mutation_end_offset", None)
+
+    @property
+    def mutant_transcript(self):
+        return getattr(self.coding_effect, "mutant_transcript", None)
+
+    @property
+    def priority_class(self):
+        if self.coding_effect is None:
+            return None
+        return self.coding_effect.__class__
+
+    @property
+    def modifies_coding_sequence(self):
+        return getattr(self.coding_effect, "modifies_coding_sequence", False)
+
+    @property
+    def modifies_protein_sequence(self):
+        return getattr(self.coding_effect, "modifies_protein_sequence", False)
 
     @property
     def short_description(self):
-        return "predicted-cryptic-%s" % self.direction
+        if self.coding_effect is None:
+            return "normal-splicing"
+        return "normal-splicing (%s)" % self.coding_effect.short_description
+
+
+class ExonSkipping(SpliceMechanismEffect):
+    """The affected exon is excluded from the mature transcript.
+
+    When in-frame (the exon's length is divisible by 3), the result
+    is a clean amino-acid deletion plus an optional boundary-codon
+    reshape. When out-of-frame, a frameshift propagates from the
+    new exon junction through the rest of the transcript.
+
+    Parameters beyond the base class
+    --------------------------------
+    affected_exon : pyensembl.Exon
+        The skipped exon.
+    in_frame : bool
+        ``True`` when ``len(affected_exon) % 3 == 0`` — the
+        exon-skip is codon-aligned and the downstream sequence
+        keeps its frame.
+
+    Note on ``aa_ref`` / ``aa_alt`` semantics
+    -----------------------------------------
+    The AA-level fields come from
+    :func:`~varcode.effects.classify.classify_from_protein_diff`,
+    so what they mean depends on ``in_frame``:
+
+    * **In-frame skip** (``in_frame=True``): ``aa_ref`` is the
+      contiguous run of amino acids removed from the reference
+      protein (including the boundary-codon reshape when the exon
+      boundary lands mid-codon). ``aa_alt`` is the reshaped boundary
+      codon's translation (or ``""`` for a clean codon-aligned skip).
+    * **Out-of-frame skip** (``in_frame=False``): ``aa_ref`` is the
+      reference AA at the divergence point (where the frame breaks
+      after the new exon junction); ``aa_alt`` is the first
+      frameshifted AA. The downstream protein continues in the new
+      frame until a premature stop — read the full sequence from
+      :attr:`mutant_protein_sequence`, not from ``aa_alt``.
+    """
+
+    def __init__(self, variant, transcript, splice_signal, affected_exon,
+                 in_frame, mutant_transcript=None,
+                 protein_effect=None,
+                 aa_ref=None, aa_alt=None,
+                 aa_mutation_start_offset=None,
+                 aa_mutation_end_offset=None,
+                 mutant_protein_sequence=None):
+        SpliceMechanismEffect.__init__(
+            self, variant, transcript, splice_signal,
+            protein_effect=protein_effect,
+            mutant_transcript=mutant_transcript,
+            aa_ref=aa_ref, aa_alt=aa_alt,
+            aa_mutation_start_offset=aa_mutation_start_offset,
+            aa_mutation_end_offset=aa_mutation_end_offset,
+            mutant_protein_sequence=mutant_protein_sequence)
+        self.affected_exon = affected_exon
+        self.in_frame = in_frame
+
+    @property
+    def short_description(self):
+        exon_id = getattr(self.affected_exon, "exon_id", "?")
+        if not self.resolved:
+            suffix = "" if self.in_frame else ", out-of-frame"
+            return "exon-skip %s (predicted%s)" % (exon_id, suffix)
+        if not self.aa_ref or self.aa_mutation_start_offset is None:
+            # Resolved but no usable AA range — fall back to a bare label.
+            return "exon-skip %s" % exon_id
+        pos = self.aa_mutation_start_offset + 1
+        if self.in_frame:
+            # HGVS deletion: p.{first}{start}_{last}{end}del
+            end = self.aa_mutation_start_offset + len(self.aa_ref)
+            return "exon-skip %s (p.%s%d_%s%ddel)" % (
+                exon_id, self.aa_ref[0], pos, self.aa_ref[-1], end)
+        # HGVS frameshift: p.{aa}{pos}fs — distinct notation from del,
+        # not concatenated with it.
+        return "exon-skip %s (p.%s%dfs)" % (exon_id, self.aa_ref[0], pos)
+
+
+class IntronRetention(SpliceMechanismEffect):
+    """The intron stays in the mature transcript; translation
+    typically hits a premature stop inside the retained intron.
+
+    Parameters beyond the base class
+    --------------------------------
+    retained_intron_start, retained_intron_end : int or None
+        Genomic coordinates of the retained intron (1-based
+        inclusive). Populated when the adjacent-exon geometry
+        identifies which intron is being retained; ``None`` when
+        that can't be determined (e.g. transcript missing the
+        adjacent exon, splice boundary ambiguous).
+    side : str or None
+        ``"donor"`` or ``"acceptor"`` — which splice boundary failed,
+        causing the intron to be retained. ``None`` when the side
+        can't be inferred from the splice classification.
+    """
+
+    def __init__(self, variant, transcript, splice_signal,
+                 retained_intron_start=None, retained_intron_end=None,
+                 side=None,
+                 mutant_transcript=None,
+                 protein_effect=None,
+                 aa_ref=None, aa_alt=None,
+                 aa_mutation_start_offset=None,
+                 aa_mutation_end_offset=None,
+                 mutant_protein_sequence=None):
+        SpliceMechanismEffect.__init__(
+            self, variant, transcript, splice_signal,
+            protein_effect=protein_effect,
+            mutant_transcript=mutant_transcript,
+            aa_ref=aa_ref, aa_alt=aa_alt,
+            aa_mutation_start_offset=aa_mutation_start_offset,
+            aa_mutation_end_offset=aa_mutation_end_offset,
+            mutant_protein_sequence=mutant_protein_sequence)
+        self.retained_intron_start = retained_intron_start
+        self.retained_intron_end = retained_intron_end
+        self.side = side
+
+    @property
+    def short_description(self):
+        side = self.side or "?"
+        if not self.resolved:
+            return "intron-retention (%s side, predicted)" % side
+        if self.aa_mutation_start_offset is None or not self.aa_ref:
+            return "intron-retention (%s side)" % side
+        return "intron-retention (%s side, p.%s%dfs*)" % (
+            side, self.aa_ref[0], self.aa_mutation_start_offset + 1)
+
+
+class CrypticSpliceSiteEffect(SpliceMechanismEffect):
+    """Base for cryptic donor / acceptor effects. Carries the
+    cryptic motif's position and score, plus the resulting exon
+    length delta."""
+
+    direction = None  # "donor" / "acceptor", set by subclass
+
+    def __init__(self, variant, transcript, splice_signal, affected_exon,
+                 cryptic_genomic_position=None, motif_score=None,
+                 exon_length_delta=None,
+                 mutant_transcript=None,
+                 protein_effect=None,
+                 aa_ref=None, aa_alt=None,
+                 aa_mutation_start_offset=None,
+                 aa_mutation_end_offset=None,
+                 mutant_protein_sequence=None):
+        SpliceMechanismEffect.__init__(
+            self, variant, transcript, splice_signal,
+            protein_effect=protein_effect,
+            mutant_transcript=mutant_transcript,
+            aa_ref=aa_ref, aa_alt=aa_alt,
+            aa_mutation_start_offset=aa_mutation_start_offset,
+            aa_mutation_end_offset=aa_mutation_end_offset,
+            mutant_protein_sequence=mutant_protein_sequence)
+        self.affected_exon = affected_exon
+        self.cryptic_genomic_position = cryptic_genomic_position
+        self.motif_score = motif_score
+        self.exon_length_delta = exon_length_delta
+
+    @property
+    def short_description(self):
+        if not self.resolved:
+            return "cryptic-%s (predicted)" % self.direction
+        delta = self.exon_length_delta or 0
+        kind = "ext" if delta > 0 else "trunc" if delta < 0 else "shift"
+        return "cryptic-%s %s%dbp" % (
+            self.direction, kind, abs(delta))
+
+
+class CrypticDonor(CrypticSpliceSiteEffect):
+    """A cryptic GT donor is used instead of the disrupted canonical
+    donor; the exon is extended (cryptic site downstream) or
+    truncated (cryptic site upstream)."""
+    direction = "donor"
+
+
+class CrypticAcceptor(CrypticSpliceSiteEffect):
+    """A cryptic AG acceptor is used instead of the disrupted
+    canonical acceptor; the exon is extended (cryptic site upstream)
+    or truncated (cryptic site downstream)."""
+    direction = "acceptor"
 
 
 class Exonic(TranscriptMutationEffect):
@@ -403,11 +781,11 @@ class ExonicSpliceSite(Exonic, SpliceSite, MultiOutcomeEffect):
     Expresses the two plausible outcomes of a splice-adjacent exonic
     variant — splice-signal disruption vs. the underlying coding
     change if splicing proceeds normally — via the
-    :class:`MultiOutcomeEffect` protocol (see #299). ``candidates``
-    yields ``(self, alternate_effect)`` (both :class:`MutationEffect`
-    instances), and ``alternate_effect`` stays on the instance as a
-    first-class field for back-compat with callers that depended on
-    the 2.x shape.
+    :class:`MultiOutcomeEffect` protocol (#299, #382).
+    :attr:`candidates` yields a 2-tuple of
+    :class:`~varcode.effect_candidates.EffectCandidate` objects;
+    ``alternate_effect`` stays on the instance as a first-class field
+    for back-compat with callers that depended on it.
 
     This is the **lightweight 2-outcome form**. Callers that want
     the richer exon-skipping / intron-retention / cryptic-splice
@@ -446,31 +824,21 @@ class ExonicSpliceSite(Exonic, SpliceSite, MultiOutcomeEffect):
 
     @property
     def candidates(self):
-        """The two plausible outcomes, most-likely-first:
+        """The two plausible outcomes wrapped as
+        :class:`~varcode.effect_candidates.EffectCandidate`:
 
-        ``(self, alternate_effect)`` — position [0] is the
-        splice-disruption outcome (this effect itself), position [1]
-        is the coding change if splicing proceeds. Returns a
-        1-tuple ``(self,)`` when ``alternate_effect`` is None.
-
-        Elements are :class:`MutationEffect` instances directly,
-        not :class:`SpliceCandidate` objects — that's a different
-        (richer) shape used by :class:`SpliceOutcomeSet`. Downstream
-        code that iterates ``candidates`` here reads the effect
-        class / ``short_description`` / ``aa_ref`` etc. on each
-        element, same as on any ``MutationEffect``.
+        Position [0] is the splice-disruption outcome (this effect
+        itself); position [1] is the coding change if splicing
+        proceeds. Returns a 1-tuple when ``alternate_effect`` is None.
+        Extra candidates attached via :meth:`_combine_with_extra_candidates`
+        (e.g. from RNA evidence) come after.
         """
-        if self.alternate_effect is None:
-            return (self,)
-        return (self, self.alternate_effect)
-
-    @property
-    def most_likely(self):
-        """The splice-disruption outcome is the primary classification
-        (this effect itself). Follows the ``MultiOutcomeEffect``
-        contract of ``most_likely == candidates[0]``.
-        """
-        return self
+        from ..effect_candidates import EffectCandidate
+        base = [EffectCandidate(effect=self, source="varcode")]
+        if self.alternate_effect is not None:
+            base.append(EffectCandidate(
+                effect=self.alternate_effect, source="varcode"))
+        return self._combine_with_extra_candidates(tuple(base))
 
     @property
     def priority_class(self):
@@ -961,38 +1329,44 @@ class FrameShiftTruncation(PrematureStop, FrameShift):
 # These describe consequences of SVs at the transcript level. A single
 # SV commonly produces multiple plausible consequences (fusion vs exon
 # loss vs readthrough), so each of these is a ``MultiOutcomeEffect``
-# subclass exposing an ``outcomes`` tuple per #299.
+# subclass exposing a :attr:`candidates` tuple per #299 / #382.
 #
 # The classes are deliberately thin wrappers — the important interface
-# is ``outcomes``, which carries the ``EffectCandidate`` objects with
-# probability / source / evidence so external tools (RNA evidence,
-# SpliceAI, long-read assembly) can score them without subclassing.
+# is :attr:`candidates`, which carries :class:`EffectCandidate` objects
+# with source / evidence provenance so external tools (RNA evidence,
+# SpliceAI, long-read assembly) can annotate them without subclassing.
 # =====================================================================
 
 
 class StructuralVariantEffect(TranscriptMutationEffect, MultiOutcomeEffect):
     """Base class for effects of a :class:`StructuralVariant` on a
     specific transcript. Subclasses set ``short_description``; the
-    ``outcomes`` property is what downstream callers read.
+    :attr:`candidates` tuple is what downstream callers read.
 
-    The ``candidates`` tuple (back-compat 2.x shape) returns
-    ``(self,)`` when no specific alternates have been nominated, or
-    a richer tuple when the subclass carries explicit alternate
-    effects. ``MultiOutcomeEffect.outcomes`` lifts that to the
-    unified :class:`EffectCandidate` shape automatically.
+    :attr:`candidates` always returns a tuple of
+    :class:`~varcode.effect_candidates.EffectCandidate` objects.
+    Primary candidates carry ``source="varcode"``; cryptic-exon
+    candidates attached via :meth:`_attach_cryptic_candidates` carry
+    ``source="varcode_motif"``; splice-outcome candidates attached
+    via :meth:`_attach_splice_outcomes` carry ``source="varcode_splice"``.
     """
 
     def __init__(
-            self, variant, transcript, candidates=None, mutant_transcript=None):
+            self, variant, transcript,
+            primary_effects=None, mutant_transcript=None):
         TranscriptMutationEffect.__init__(self, variant, transcript)
-        self._candidates = (
-            tuple(candidates) if candidates is not None else (self,))
+        # Primary classifications: either the subclass's own effect
+        # (``self``) or a caller-supplied tuple of
+        # :class:`MutationEffect` instances. Lifted into
+        # :class:`EffectCandidate` shape on access.
+        self._primary_effects = (
+            tuple(primary_effects) if primary_effects is not None
+            else (self,))
         self.mutant_transcript = mutant_transcript
-        # Cryptic-exon / cryptic-splice candidates nominated by
+        # Cryptic-exon candidates nominated by
         # :func:`varcode.cryptic_exons.enumerate_from_structural_variant`
-        # (#337). Kept separate from :attr:`_candidates` because their
-        # ``outcomes`` entries carry different source / probability /
-        # evidence than the primary SV classification.
+        # (#337). Kept separate from primary effects because their
+        # entries carry different source / evidence.
         self._cryptic_candidates = ()
         # Splice-outcome candidates attached by the SV annotator when
         # an SV breakpoint lands in a canonical splice window (#341).
@@ -1003,18 +1377,46 @@ class StructuralVariantEffect(TranscriptMutationEffect, MultiOutcomeEffect):
 
     @property
     def candidates(self):
-        return self._candidates
+        """Unified :class:`~varcode.EffectCandidate` view over primary
+        SV classifications, attached cryptic candidates, and any
+        splice-outcome candidates (#339, #337, #341, #382).
 
-    @property
-    def most_likely(self):
-        return self._candidates[0]
+        Primary candidates carry ``source="varcode"``; cryptic-exon
+        candidates carry ``source="varcode_motif"``; splice-outcome
+        candidates carry ``source="varcode_splice"``. Each source
+        marks provenance so external scorers (SpliceAI, Pangolin,
+        RNA evidence) can filter before rescoring.
+        """
+        from ..effect_candidates import EffectCandidate
+        sv_type = getattr(self.variant, "sv_type", None)
+        base_evidence = {"sv_type": sv_type} if sv_type is not None else {}
+        primary = tuple(
+            EffectCandidate(
+                effect=effect,
+                source="varcode",
+                evidence=base_evidence)
+            for effect in self._primary_effects)
+        cryptic = tuple(
+            EffectCandidate(
+                effect=c,
+                source="varcode_motif",
+                evidence={
+                    **base_evidence,
+                    "donor_score": c.donor_score,
+                    "acceptor_score": c.acceptor_score,
+                    "motif_score": _cryptic_motif_score(c),
+                    "interval_start": c.interval_start,
+                    "interval_end": c.interval_end,
+                })
+            for c in self._cryptic_candidates)
+        return self._combine_with_extra_candidates(
+            primary + cryptic + tuple(self._splice_candidates))
 
     def _attach_cryptic_candidates(self, cryptic_candidates):
         """Attach cryptic-exon candidates (#337). Called by the SV
         annotator after effect construction so the candidates appear
-        as additional :class:`EffectCandidate` entries on :attr:`outcomes`
-        without polluting :attr:`candidates` (which stays the primary
-        classification tuple for back-compat).
+        as additional :class:`EffectCandidate` entries on
+        :attr:`candidates` without changing the primary classification.
         """
         self._cryptic_candidates = tuple(cryptic_candidates)
 
@@ -1028,43 +1430,6 @@ class StructuralVariantEffect(TranscriptMutationEffect, MultiOutcomeEffect):
         """
         self._splice_candidates = tuple(splice_outcomes)
 
-    @property
-    def outcomes(self):
-        """Unified :class:`~varcode.EffectCandidate` view over
-        :attr:`candidates`, attached cryptic candidates, and any
-        splice-outcome candidates (#339, #337, #341).
-
-        Primary outcomes carry ``source="varcode"``; cryptic-exon
-        outcomes carry ``source="varcode_motif"``; splice-outcome
-        candidates carry ``source="varcode_splice"``. Each source
-        marks provenance so external scorers (SpliceAI, Pangolin,
-        RNA evidence) can filter before rescoring.
-        """
-        from ..effect_candidates import EffectCandidate
-        sv_type = getattr(self.variant, "sv_type", None)
-        base_evidence = {"sv_type": sv_type} if sv_type is not None else {}
-        primary = tuple(
-            EffectCandidate(
-                effect=candidate,
-                source="varcode",
-                evidence=base_evidence)
-            for candidate in self._candidates)
-        cryptic = tuple(
-            EffectCandidate(
-                effect=c,
-                source="varcode_motif",
-                probability=_cryptic_probability(c),
-                evidence={
-                    **base_evidence,
-                    "donor_score": c.donor_score,
-                    "acceptor_score": c.acceptor_score,
-                    "interval_start": c.interval_start,
-                    "interval_end": c.interval_end,
-                })
-            for c in self._cryptic_candidates)
-        return self._with_extra_outcomes(
-            primary + cryptic + tuple(self._splice_candidates))
-
 
 class LargeDeletion(StructuralVariantEffect):
     """A deletion (``<DEL>`` / ``<CN0>``) that removes one or more
@@ -1077,10 +1442,11 @@ class LargeDeletion(StructuralVariantEffect):
 
     def __init__(
             self, variant, transcript, affected_exons,
-            candidates=None, mutant_transcript=None):
+            primary_effects=None, mutant_transcript=None):
         StructuralVariantEffect.__init__(
             self, variant, transcript,
-            candidates=candidates, mutant_transcript=mutant_transcript)
+            primary_effects=primary_effects,
+            mutant_transcript=mutant_transcript)
         self.affected_exons = tuple(affected_exons)
 
     def __str__(self):
@@ -1101,10 +1467,11 @@ class LargeDuplication(StructuralVariantEffect):
 
     def __init__(
             self, variant, transcript, affected_exons,
-            candidates=None, mutant_transcript=None):
+            primary_effects=None, mutant_transcript=None):
         StructuralVariantEffect.__init__(
             self, variant, transcript,
-            candidates=candidates, mutant_transcript=mutant_transcript)
+            primary_effects=primary_effects,
+            mutant_transcript=mutant_transcript)
         self.affected_exons = tuple(affected_exons)
 
 
@@ -1137,10 +1504,11 @@ class GeneFusion(StructuralVariantEffect):
 
     def __init__(
             self, variant, transcript, partner_transcript,
-            mutant_transcript=None, candidates=None):
+            mutant_transcript=None, primary_effects=None):
         StructuralVariantEffect.__init__(
             self, variant, transcript,
-            candidates=candidates, mutant_transcript=mutant_transcript)
+            primary_effects=primary_effects,
+            mutant_transcript=mutant_transcript)
         self.partner_transcript = partner_transcript
 
 
@@ -1234,18 +1602,23 @@ class HaplotypeEffect(TranscriptMutationEffect, MultiOutcomeEffect):
         # auditing whether the cis call came from DNA-only phasing
         # or RNA-assembly evidence.
         self.phase_source = phase_source
-        # Single-outcome wrapping: the haplotype IS the outcome.
-        # Kept to honor the MultiOutcomeEffect contract without
-        # forcing subclasses to reimplement the trivial case.
-        self._candidates = (self,)
 
     @property
     def candidates(self):
-        return self._candidates
-
-    @property
-    def most_likely(self):
-        return self
+        """Single-outcome wrapping: the haplotype IS the outcome,
+        lifted into the uniform :class:`EffectCandidate` shape so
+        consumers iterate :attr:`candidates` the same way across all
+        :class:`MultiOutcomeEffect` subclasses (#382). Extra
+        candidates attached via :meth:`_combine_with_extra_candidates`
+        (e.g. from RNA evidence) come after.
+        """
+        from ..effect_candidates import EffectCandidate
+        evidence = {}
+        if self.phase_source is not None:
+            evidence["phase_source"] = self.phase_source
+        base = (EffectCandidate(
+            effect=self, source="varcode", evidence=evidence),)
+        return self._combine_with_extra_candidates(base)
 
     @property
     def mutant_protein_sequence(self):
@@ -1299,8 +1672,8 @@ class PhaseCandidateSet(TranscriptMutationEffect, MultiOutcomeEffect):
     somatic landed on, and without phase data we can't say which.
     The honest output is the set of plausible effects, one per
     hypothesis. ``most_likely`` returns the highest-priority
-    candidate; ``outcomes`` exposes the full set with per-haplotype
-    evidence keys (``phase_state``, ``haplotype``,
+    candidate; :attr:`candidates` exposes the full set with
+    per-hypothesis evidence keys (``phase_state``, ``haplotype``,
     ``germline_variants``) so consumers — including RNA-evidence
     integrations from #259 — can align across axes.
 
@@ -1332,25 +1705,10 @@ class PhaseCandidateSet(TranscriptMutationEffect, MultiOutcomeEffect):
 
     @property
     def candidates(self):
-        """Per-hypothesis classified effects, sorted by effect
-        priority (most-severe first). Same shape as
-        :attr:`SpliceOutcomeSet.candidates`."""
-        # Lazy import — effect_priority lives in a sibling module.
-        from .effect_ordering import effect_priority
-        return tuple(sorted(
-            self._candidates_raw,
-            key=lambda e: -effect_priority(e)))
-
-    @property
-    def most_likely(self):
-        """Highest-priority candidate. Used for back-compat consumers
-        that read a single effect."""
-        return self.candidates[0]
-
-    @property
-    def outcomes(self):
-        """One :class:`EffectCandidate` per hypothesis, carrying the phase
-        metadata needed to align with RNA-evidence outcomes (#259).
+        """One :class:`EffectCandidate` per hypothesis, sorted by
+        underlying effect priority (most-severe first), carrying the
+        phase metadata needed to align with RNA-evidence outcomes
+        (#259, #382).
 
         ``evidence`` keys: ``phase_state`` (``"phased"`` /
         ``"implicit"`` / ``"unknown"`` / ``"too_many_hypotheses"``),
@@ -1358,40 +1716,55 @@ class PhaseCandidateSet(TranscriptMutationEffect, MultiOutcomeEffect):
         the cis germline variants on that hypothesis's haplotype).
         """
         from ..effect_candidates import EffectCandidate
-        outs = []
-        for candidate, hypothesis in zip(
-                self._candidates_raw, self._hypotheses):
-            outs.append(EffectCandidate(
+        from .effect_ordering import effect_priority
+        paired = sorted(
+            zip(self._candidates_raw, self._hypotheses),
+            key=lambda pair: -effect_priority(pair[0]))
+        base = tuple(
+            EffectCandidate(
                 effect=candidate,
                 source="varcode_germline",
                 evidence={
                     "phase_state": hypothesis.phase_state,
                     "haplotype": hypothesis.haplotype,
                     "germline_variants": tuple(hypothesis.cis),
-                }))
-        return self._with_extra_outcomes(tuple(outs))
+                })
+            for candidate, hypothesis in paired)
+        return self._combine_with_extra_candidates(base)
+
+    # Note on accessor semantics for this class: the base-class
+    # "producer order" contract is replaced here by
+    # "sorted highest-impact-first" via
+    # :func:`effect_priority`. Consequently
+    # :attr:`most_likely_candidate` (== ``candidates[0]``) and
+    # :attr:`highest_priority_candidate` coincide for this class —
+    # both return the most protein-disruptive hypothesis, which is
+    # also the conservative single-effect representation downstream
+    # consumers see in ``short_description`` etc.
 
     @property
     def short_description(self):
-        """``"?<most_likely>"`` — the leading ``?`` flags the
+        """``"?<most_likely_effect>"`` — the leading ``?`` flags the
         ambiguity. Consumers wanting the full possibility set read
-        :attr:`outcomes`."""
-        return "?" + self.most_likely.short_description
+        :attr:`candidates`."""
+        return "?" + self.most_likely_effect.short_description
 
     @property
     def mutant_protein_sequence(self):
         """Most-likely candidate's mutant protein. Consumers iterating
         over hypotheses pull per-candidate sequences from
-        :attr:`outcomes`."""
-        return getattr(self.most_likely, "mutant_protein_sequence", None)
+        :attr:`candidates`."""
+        return getattr(self.most_likely_effect, "mutant_protein_sequence", None)
 
     @property
     def modifies_protein_sequence(self):
-        return getattr(self.most_likely, "modifies_protein_sequence", False)
+        return getattr(
+            self.most_likely_effect, "modifies_protein_sequence", False)
 
     @property
     def modifies_coding_sequence(self):
-        return getattr(self.most_likely, "modifies_coding_sequence", False)
+        return getattr(
+            self.most_likely_effect, "modifies_coding_sequence", False)
 
     def __str__(self):
         return (

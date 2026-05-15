@@ -492,13 +492,12 @@ class Variant(Serializable):
 
         rna_resolver : RNAEvidenceResolver or None
             Optional RNA-observed-outcome source. When provided, any
-            :class:`~varcode.MultiOutcomeEffect` in the result has
-            observed outcomes from the resolver appended to its
-            ``outcomes`` view (DNA-predicted first, RNA-observed
-            after). Useful for refining SV / splice / haplotype
-            predictions with isoform-level evidence from Isovar,
-            Exacto, or a custom long-read pipeline. See
-            openvax/varcode#259.
+            :class:`~varcode.MultiOutcomeEffect` in the result is
+            refined with observed candidates from the resolver. Splice
+            mechanism sets are replaced by reconciled copies that track
+            added RNA candidates and excluded DNA predictions; other
+            multi-outcome effects keep the additive candidate behavior.
+            See openvax/varcode#259.
 
         germline : GermlineContext or None
             Optional patient-germline context. When non-empty, every

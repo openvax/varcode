@@ -10,7 +10,7 @@ annotator turns a variant into one or more of these; the classifier
 turns each `MutantTranscript` into a typed `MutationEffect`. When the
 DNA alone admits multiple plausible outcomes — splice ambiguity, SV
 breakpoint resolution, unphased germline-overlapping codons — the
-results are packaged in a `MultiOutcomeEffect` whose `outcomes`
+results are packaged in a `MultiOutcomeEffect` whose `candidates`
 property exposes the set. An optional RNA-evidence resolver narrows
 the set to observed isoforms or appends observed-only outcomes.
 
@@ -76,22 +76,38 @@ is intronic — there's no coding consequence to attach.
 
 ```python
 effects = variant.effects(splice_outcomes=True)
-# SpliceOutcomeSet(...) replaces the splice effect
-#   .candidates ordered most-plausible-first:
-#     SpliceCandidate(NORMAL_SPLICING, plausibility=0.1,
-#                     coding_effect=Substitution(...))
-#     SpliceCandidate(EXON_SKIPPING, plausibility=0.5,
-#                     coding_effect=Deletion(...))
-#     SpliceCandidate(INTRON_RETENTION, plausibility=0.3)
-#     SpliceCandidate(CRYPTIC_DONOR, plausibility=0.1)
+# SpliceOutcomeSet(...) replaces the splice effect.
+# .candidates is a tuple[EffectCandidate, ...], in producer order.
+# Each candidate's .effect is a SpliceMechanismEffect subclass:
+#   EffectCandidate(effect=ExonSkipping(affected_exon=..., in_frame=True,
+#                                       aa_ref="KGYK...", ...))
+#   EffectCandidate(effect=IntronRetention(retained_intron_start=...,
+#                                          side="donor", ...))
+#   EffectCandidate(effect=CrypticDonor(affected_exon=..., ...))
+#   EffectCandidate(effect=NormalSplicing(coding_effect=Substitution(...)))
 ```
 
 `SpliceOutcomeSet` replaces the splice effect with a set of
-candidate outcomes, each carrying a plausibility score
-(hand-tuned heuristic, not a probability) and — where
-computable from cDNA — a concrete `coding_effect`. The
-`NORMAL_SPLICING` candidate carries the same information as
-`alternate_effect` in the default form.
+candidate mechanisms. Class identity = mechanism — `NormalSplicing`,
+`ExonSkipping`, `IntronRetention`, `CrypticDonor`, `CrypticAcceptor`.
+Each is a `SpliceMechanismEffect` subclass that carries its own
+protein vocab on the instance (`aa_ref`, `aa_alt`,
+`mutant_protein_sequence`, `mutant_transcript`); these are `None`
+when the protein math couldn't resolve (e.g. intron retention
+without a genomic-sequence provider), populated otherwise. Each
+mechanism also carries `splice_signal` — the underlying
+`SpliceDonor` / `SpliceAcceptor` / `IntronicSpliceSite` /
+`ExonicSpliceSite` effect describing *where* the disruption was.
+
+Downstream consumers dispatch by class:
+
+```python
+for c in splice_set.candidates:
+    if isinstance(c.effect, ExonSkipping):
+        print(c.effect.affected_exon.exon_id, c.effect.in_frame)
+    elif isinstance(c.effect, IntronRetention):
+        print(c.effect.side, c.effect.retained_intron_start)
+```
 
 When you opt in, `SpliceDonor` / `SpliceAcceptor` /
 `IntronicSpliceSite` also get wrapped, so every splice-
@@ -106,13 +122,54 @@ disrupting variant produces a `SpliceOutcomeSet`.
 | N | `SpliceOutcomeSet` (opt-in via `splice_outcomes=True`) |
 
 Both `ExonicSpliceSite` and `SpliceOutcomeSet` are `MultiOutcomeEffect`
-subclasses, so consumers iterate `.outcomes` uniformly without caring
-about which form they're holding. `alternate_effect` works on both:
-on `ExonicSpliceSite` it's the splicing-proceeds outcome directly; on
-`SpliceOutcomeSet` it resolves to the `NORMAL_SPLICING` candidate's
-`coding_effect`. The element types inside `.outcomes` differ
-(`MutationEffect` vs `SpliceCandidate`), but `outcome.effect.short_description`
-is uniform.
+subclasses, so consumers iterate `.candidates` (a tuple of
+`EffectCandidate` objects) uniformly without caring about which form
+they're holding. `alternate_effect` works on both: on
+`ExonicSpliceSite` it's the splicing-proceeds outcome directly; on
+`SpliceOutcomeSet` it resolves to the inner effect of the
+`NormalSplicing` candidate (or `None` when that candidate is just
+a placeholder). `candidate.effect.short_description` is uniform
+across both forms.
+
+With RNA evidence, splice sets are reconciled rather than merely
+extended. `SpliceOutcomeSet.with_rna_evidence(...)` returns a new set
+whose `candidates` are the RNA-observed mechanisms, while
+`dna_candidates`, `rna_evidence`, `excluded_candidates`,
+`added_candidates`, and `candidate_rna_evidence` preserve the audit
+trail. Use `splice_set.rna_evidence_for(candidate)` to inspect the
+observations supporting one current candidate.
+
+### Candidate provenance
+
+There is no `plausibility` or `probability` field in the shared
+candidate wrapper. The old splice-specific `plausibility` value was a
+DNA-only ordering heuristic, not evidence. Varcode now keeps that
+ordering only as producer order.
+
+Producer-specific support belongs in `candidate.evidence` under
+explicit names: `read_count`, `junction_id`, `psi`, `motif_score`,
+`donor_score`, `acceptor_score`, and so on. Varcode stores evidence
+as opaque provenance and does not normalize it into a probability.
+
+### Picking a single candidate
+
+When you need to collapse a multi-outcome effect to one Effect, two
+notions of "best" are available — pick consciously:
+
+| Accessor | Returns | Meaning |
+|---|---|---|
+| `.most_likely_candidate` | `EffectCandidate` | First candidate after producer ordering |
+| `.most_likely_effect` | `MutationEffect` | Inner effect of the above |
+| `.highest_priority_candidate` | `EffectCandidate` | Top by `effect_priority` (most protein-disruptive) |
+| `.highest_priority_effect` | `MutationEffect` | Inner effect of the above |
+
+The `_candidate` accessors keep the provenance wrapper (`.source`,
+`.evidence`); the `_effect` accessors peel it off. The two "top by"
+notions coincide whenever producer ordering and priority ranking
+agree, which is common — but for clinical / functional filtering
+("flag if any candidate is at least a frameshift") prefer
+`highest_priority_*`: a disruptive candidate behind a less-disruptive
+primary candidate should still light up.
 
 ### Limitations
 
@@ -205,12 +262,12 @@ sv_effects = [
 
 SV effects (`LargeDeletion`, `LargeDuplication`, `Inversion`,
 `GeneFusion`, `TranslocationToIntergenic`) are `MultiOutcomeEffect`
-subclasses — `e.outcomes` exposes the candidate ORFs / cryptic-splice
-outcomes the annotator generated, ordered by a per-class prior.
-External scorers (RNA evidence, long-read assembly) plug in via
-`apply_rna_evidence_to_effects` to narrow the set or append observed
-outcomes; see [Germline-aware annotation](germline.md) for the same
-composition pattern applied to germline.
+subclasses — `e.candidates` exposes the candidate ORFs / cryptic-splice
+outcomes as a tuple of `EffectCandidate` objects in producer order.
+External evidence producers (RNA evidence, long-read assembly)
+plug in via `apply_rna_evidence_to_effects` to append observed
+candidates; see [Germline-aware annotation](germline.md)
+for the same composition pattern applied to germline.
 
 Limitations:
 

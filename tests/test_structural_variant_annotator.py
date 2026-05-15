@@ -14,7 +14,7 @@
 
 These cover the minimal dispatch shape — SV type + overlap pattern
 routed to the right effect class — and the ``MultiOutcomeEffect``
-harmonized interface (``effect.outcomes`` tuple, each carrying
+harmonized interface (``effect.candidates`` tuple, each carrying
 ``EffectCandidate`` with ``source="varcode"``).
 
 Downstream integrations (external splice predictors, RNA evidence,
@@ -97,7 +97,7 @@ def test_sv_large_deletion_spans_cftr_exons():
 
 
 def test_sv_large_deletion_outcomes_shape():
-    """The harmonized interface: ``effect.outcomes`` is a tuple of
+    """The harmonized interface: ``effect.candidates`` is a tuple of
     :class:`EffectCandidate` entries with ``source="varcode"``."""
     transcript = _cftr()
     sv = StructuralVariant(
@@ -108,13 +108,12 @@ def test_sv_large_deletion_outcomes_shape():
         genome=ensembl_grch38,
     )
     effect = _ANNOTATOR.annotate_on_transcript(sv, transcript)
-    outcomes = effect.outcomes
+    outcomes = effect.candidates
     assert isinstance(outcomes, tuple)
     assert len(outcomes) >= 1
     for o in outcomes:
         assert isinstance(o, EffectCandidate)
         assert o.source == "varcode"
-        assert o.probability is None  # varcode doesn't assign; integrations do
 
 
 def test_sv_deletion_purely_intronic_returns_intronic():
@@ -236,10 +235,10 @@ def test_sv_breakend_mate_intergenic_is_translocation():
 # --------------------------------------------------------------------
 
 
-def test_external_integrations_can_attach_scored_outcomes():
+def test_external_integrations_can_attach_evidence():
     """Smoke test: an external tool wraps a varcode-nominated
-    effect in an EffectCandidate with source/probability/evidence, and
-    that EffectCandidate works as the interchange format PR 7 defined."""
+    effect in an EffectCandidate with source/evidence, and that
+    EffectCandidate works as the interchange format PR 7 defined."""
     transcript = _cftr()
     sv = StructuralVariant(
         contig="7",
@@ -254,17 +253,14 @@ def test_external_integrations_can_attach_scored_outcomes():
     # outcome with junction read support.
     rna_scored = EffectCandidate(
         effect=effect,
-        probability=0.94,
         source="isovar",
         evidence={"junction_reads": 87, "split_reads": 15})
     assert rna_scored.source == "isovar"
-    assert rna_scored.probability == 0.94
     assert rna_scored.evidence["junction_reads"] == 87
 
     # A long-read assembly tool would attach its own resolution.
     lr_scored = EffectCandidate(
         effect=effect,
-        probability=0.99,
         source="longread_assembly",
         evidence={"assembled_by": "hifiasm",
                   "breakpoint_confidence": "exact"})
@@ -320,16 +316,16 @@ def test_sv_annotator_attaches_cryptic_outcomes_from_assembly():
         alt_assembly=assembly,
         genome=ensembl_grch38)
     effect = _ANNOTATOR.annotate_on_transcript(sv, transcript)
-    outcomes = effect.outcomes
+    outcomes = effect.candidates
     # Primary outcome + at least one cryptic candidate.
     assert len(outcomes) >= 2
     cryptic = [o for o in outcomes if o.source == "varcode_motif"]
     assert len(cryptic) >= 1
     for o in cryptic:
         assert isinstance(o.effect, CrypticExonCandidate)
-        assert 0.0 <= o.probability <= 1.0
         assert "donor_score" in o.evidence
         assert "acceptor_score" in o.evidence
+        assert "motif_score" in o.evidence
 
 
 def test_sv_without_cryptic_motifs_has_single_outcome():
@@ -345,7 +341,7 @@ def test_sv_without_cryptic_motifs_has_single_outcome():
         alt_assembly="A" * 200,  # uniform A — no donor/acceptor motifs
         genome=ensembl_grch38)
     effect = _ANNOTATOR.annotate_on_transcript(sv, transcript)
-    outcomes = effect.outcomes
+    outcomes = effect.candidates
     # Only the primary varcode classification.
     assert all(o.source == "varcode" for o in outcomes)
 
@@ -831,9 +827,9 @@ def test_canonical_mate_orientation_does_not_warn():
 def test_sv_breakpoint_at_acceptor_attaches_splice_outcomes():
     """A DEL whose 5' breakpoint sits at intronic −1 of CFTR exon 2
     disrupts the canonical acceptor. The SV effect should carry
-    ``varcode_splice`` outcomes for EXON_SKIPPING and INTRON_RETENTION
+    ``varcode_splice`` candidates for ExonSkipping and IntronRetention
     alongside the primary ``LargeDeletion`` classification."""
-    from varcode.splice_outcomes import SpliceOutcome
+    from varcode import ExonSkipping, IntronRetention, NormalSplicing
     transcript = _cftr()
     # CFTR exon 2: 117504253-117504363 (forward strand). Acceptor
     # -1 is 117504252 (last intronic base before the exon).
@@ -845,15 +841,14 @@ def test_sv_breakpoint_at_acceptor_attaches_splice_outcomes():
         genome=ensembl_grch38)
     effect = _ANNOTATOR.annotate_on_transcript(sv, transcript)
     assert isinstance(effect, LargeDeletion)
-    outcomes = effect.outcomes
-    splice = [o for o in outcomes if o.source == "varcode_splice"]
-    assert splice, "Expected at least one varcode_splice outcome"
-    splice_kinds = {o.evidence["splice_outcome"] for o in splice}
-    assert SpliceOutcome.EXON_SKIPPING in splice_kinds
-    assert SpliceOutcome.INTRON_RETENTION in splice_kinds
-    # NORMAL_SPLICING is filtered — the primary SV outcome covers it.
-    assert SpliceOutcome.NORMAL_SPLICING not in splice_kinds
-    # sv_type flows into evidence alongside splice_outcome.
+    splice = [o for o in effect.candidates if o.source == "varcode_splice"]
+    assert splice, "Expected at least one varcode_splice candidate"
+    splice_kinds = {type(o.effect) for o in splice}
+    assert ExonSkipping in splice_kinds
+    assert IntronRetention in splice_kinds
+    # NormalSplicing is filtered — the primary SV outcome covers it.
+    assert NormalSplicing not in splice_kinds
+    # sv_type flows into evidence on attached splice candidates.
     for o in splice:
         assert o.evidence["sv_type"] == "DEL"
 
@@ -861,7 +856,7 @@ def test_sv_breakpoint_at_acceptor_attaches_splice_outcomes():
 def test_sv_breakpoint_at_donor_attaches_splice_outcomes():
     """A DEL whose breakpoint sits at intronic +1 of CFTR exon 2
     disrupts the canonical donor."""
-    from varcode.splice_outcomes import SpliceOutcome
+    from varcode import ExonSkipping
     transcript = _cftr()
     # CFTR exon 2 ends at 117504363. Donor +1 = 117504364.
     sv = StructuralVariant(
@@ -873,9 +868,9 @@ def test_sv_breakpoint_at_donor_attaches_splice_outcomes():
     effect = _ANNOTATOR.annotate_on_transcript(sv, transcript)
     assert isinstance(effect, LargeDeletion)
     splice_kinds = {
-        o.evidence.get("splice_outcome") for o in effect.outcomes
+        type(o.effect) for o in effect.candidates
         if o.source == "varcode_splice"}
-    assert SpliceOutcome.EXON_SKIPPING in splice_kinds
+    assert ExonSkipping in splice_kinds
 
 
 def test_sv_breakpoint_away_from_splice_sites_has_no_splice_outcomes():
@@ -897,7 +892,7 @@ def test_sv_breakpoint_away_from_splice_sites_has_no_splice_outcomes():
         # this test is about the LargeDeletion case, skip.
         pytest.skip("DEL didn't overlap any exon in this fixture")
     assert not any(
-        o.source == "varcode_splice" for o in effect.outcomes)
+        o.source == "varcode_splice" for o in effect.candidates)
 
 
 def test_sv_splice_outcome_effects_are_mutation_effects():
@@ -913,7 +908,7 @@ def test_sv_splice_outcome_effects_are_mutation_effects():
         sv_type="DEL",
         genome=ensembl_grch38)
     effect = _ANNOTATOR.annotate_on_transcript(sv, transcript)
-    for o in effect.outcomes:
+    for o in effect.candidates:
         if o.source == "varcode_splice":
             assert isinstance(o.effect, MutationEffect)
 
@@ -922,10 +917,10 @@ def test_sv_breakpoint_in_intronic_splice_window_donor_side():
     """A DEL whose breakpoint sits 4 bp into the intron after an
     exon end (donor-side intronic splice window, distance 3-6)
     synthesizes :class:`IntronicSpliceSite`, not :class:`SpliceDonor`.
-    The splice-outcome set reflects the lower-plausibility intronic
+    The splice-outcome set reflects the lower-prior intronic
     table (#341)."""
     from varcode.effects import IntronicSpliceSite, SpliceDonor
-    from varcode.splice_outcomes import SpliceOutcome
+    from varcode import ExonSkipping
     transcript = _cftr()
     # CFTR exon 2 ends at 117504363. Donor +4 = 117504367 (intronic,
     # within the 3-6 window).
@@ -936,16 +931,11 @@ def test_sv_breakpoint_in_intronic_splice_window_donor_side():
         sv_type="DEL",
         genome=ensembl_grch38)
     effect = _ANNOTATOR.annotate_on_transcript(sv, transcript)
-    # The synthesized splice effect behind the attached outcomes
-    # should have been an IntronicSpliceSite, not a SpliceDonor.
-    # We verify via the coding effect mix: IntronicSpliceSite's
-    # plausibility table favors NORMAL_SPLICING (filtered), so only
-    # a few non-NORMAL candidates attach.
-    splice = [o for o in effect.outcomes if o.source == "varcode_splice"]
+    splice = [o for o in effect.candidates if o.source == "varcode_splice"]
     assert splice, "Expected at least one intronic-splice-site outcome"
-    splice_kinds = {o.evidence["splice_outcome"] for o in splice}
-    # IntronicSpliceSite donor-side table carries EXON_SKIPPING.
-    assert SpliceOutcome.EXON_SKIPPING in splice_kinds
+    splice_kinds = {type(o.effect) for o in splice}
+    # IntronicSpliceSite donor-side table carries ExonSkipping.
+    assert ExonSkipping in splice_kinds
     # Sanity: the class used for synthesis was IntronicSpliceSite.
     # Inspect via the internal helper directly.
     from varcode.annotators.structural_variant import (
@@ -994,7 +984,7 @@ def test_sv_two_breakpoints_in_same_exon_window_are_deduped():
         genome=ensembl_grch38)
     single_effect = _ANNOTATOR.annotate_on_transcript(single, transcript)
     single_splice = [
-        o for o in single_effect.outcomes
+        o for o in single_effect.candidates
         if o.source == "varcode_splice"]
     # Two-endpoint SV flanking exon 2 on both sides (acceptor -1 AND
     # donor +1). Both endpoints target exon 2's splice window.
@@ -1006,7 +996,7 @@ def test_sv_two_breakpoints_in_same_exon_window_are_deduped():
         genome=ensembl_grch38)
     double_effect = _ANNOTATOR.annotate_on_transcript(double, transcript)
     double_splice = [
-        o for o in double_effect.outcomes
+        o for o in double_effect.candidates
         if o.source == "varcode_splice"]
     # Dedup → same number of splice outcomes from one vs. two
     # endpoints hitting the same exon.

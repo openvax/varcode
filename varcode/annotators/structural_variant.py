@@ -21,8 +21,8 @@ Output: one of the SV effect classes from
 ``LargeDuplication``, ``Inversion``, ``GeneFusion``,
 ``TranslocationToIntergenic``), each of which is a
 :class:`~varcode.effects.MultiOutcomeEffect` exposing
-:attr:`outcomes` — a tuple of :class:`~varcode.effect_candidates.EffectCandidate`
-entries each carrying an effect + probability + source + evidence.
+:attr:`candidates` — a tuple of :class:`~varcode.effect_candidates.EffectCandidate`
+entries each carrying an effect + source + evidence.
 
 Scope
 -----
@@ -53,8 +53,8 @@ Integration hooks
   sequences have a concrete assembled cDNA to read.
 * **External splice predictor**: call the annotator, then wrap each
   returned effect in a new :class:`MultiOutcomeEffect` whose
-  ``outcomes`` tuple includes a fresh ``EffectCandidate(effect=cryptic,
-  source="spliceai", probability=...)`` entry.
+  ``candidates`` tuple includes a fresh ``EffectCandidate(effect=cryptic,
+  source="spliceai", evidence=...)`` entry.
 * **Short-read RNA evidence**: same pattern. Attach an
   ``EffectCandidate`` carrying the read-evidence tool's ``source``
   and a ``junction_reads`` field in ``evidence`` alongside the
@@ -615,7 +615,7 @@ class StructuralVariantAnnotator:
     def annotate_on_transcript(self, variant, transcript):
         """Classify ``variant`` on ``transcript``. Returns a single
         effect (typically a ``MultiOutcomeEffect`` subclass); consume
-        ``effect.outcomes`` for the full outcome set.
+        ``effect.candidates`` for the full outcome set.
         """
         from pyensembl import Transcript
         if not isinstance(transcript, Transcript):
@@ -656,11 +656,11 @@ class StructuralVariantAnnotator:
 
         # Attach cryptic-exon candidates enumerated from flanking
         # sequence / long-read assembly (#337). They show up as
-        # additional Outcomes with source="varcode_motif".
+        # additional EffectCandidate entries with source="varcode_motif".
         self._enumerate_and_attach_cryptics(variant, effect)
         # Attach splice-outcome candidates when any SV breakpoint
         # lands in a canonical splice window on the transcript
-        # (#341). They show up as additional Outcomes with
+        # (#341). They show up as additional EffectCandidate entries with
         # source="varcode_splice".
         self._enumerate_and_attach_splice_outcomes(variant, transcript, effect)
         return effect
@@ -670,7 +670,7 @@ class StructuralVariantAnnotator:
         splice window on ``transcript``, synthesize the matching
         splice-disrupting effect, feed it to
         :func:`~varcode.splice_outcomes.enumerate_splice_outcomes`,
-        and attach the returned outcomes (minus NORMAL_SPLICING,
+        and attach the returned candidates (minus NormalSplicing,
         which the SV primary classification already covers) to
         ``effect`` (#341).
 
@@ -679,9 +679,10 @@ class StructuralVariantAnnotator:
         fall-throughs) or when no breakpoint falls in a splice
         window.
         """
-        from ..effects.effect_classes import StructuralVariantEffect
+        from ..effects.effect_classes import (
+            NormalSplicing, StructuralVariantEffect)
         from ..effect_candidates import EffectCandidate
-        from ..splice_outcomes import SpliceOutcome, enumerate_splice_outcomes
+        from ..splice_outcomes import enumerate_splice_outcomes
         if not isinstance(effect, StructuralVariantEffect):
             return
         # Check both SV endpoints. For DEL/DUP/INV the start and end
@@ -716,17 +717,15 @@ class StructuralVariantAnnotator:
                 splice_set = enumerate_splice_outcomes(synthetic)
             except (AttributeError, KeyError, ValueError):
                 continue
-            for outcome in splice_set.outcomes:
-                if outcome.evidence.get("splice_outcome") is (
-                        SpliceOutcome.NORMAL_SPLICING):
+            for candidate in splice_set.candidates:
+                if isinstance(candidate.effect, NormalSplicing):
                     # Primary SV classification already covers the
                     # "splicing proceeds normally" interpretation.
                     continue
                 attached.append(EffectCandidate(
-                    effect=outcome.effect,
-                    probability=outcome.probability,
+                    effect=candidate.effect,
                     source="varcode_splice",
-                    evidence={**dict(outcome.evidence), **sv_evidence}))
+                    evidence={**dict(candidate.evidence), **sv_evidence}))
         if attached:
             effect._attach_splice_outcomes(attached)
 

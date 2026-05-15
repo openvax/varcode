@@ -3,6 +3,109 @@
 ## [Unreleased]
 
 **Breaking**
+- Unified the multi-outcome machinery: `SpliceCandidate` deleted;
+  `MultiOutcomeEffect.outcomes` accessor + `_with_extra_outcomes`
+  helper + `_extra_outcomes` slot removed
+  ([#382](https://github.com/openvax/varcode/issues/382)).
+  - `SpliceOutcomeSet.candidates` now returns
+    `tuple[EffectCandidate, ...]` — the same shape every other
+    `MultiOutcomeEffect` subclass exposes. Each entry wraps an
+    inner `SpliceMechanismEffect` (`NormalSplicing`,
+    `ExonSkipping`, `IntronRetention`, `CrypticDonor`, or
+    `CrypticAcceptor`). Mechanism identity now lives on
+    `type(candidate.effect)`, and the mechanism object carries
+    fields like `affected_exon`, `side`, `cryptic_genomic_position`,
+    `aa_ref`, `aa_alt`, and `mutant_transcript`. The previous
+    `candidate.outcome` / `candidate.plausibility` /
+    `candidate.coding_effect` / `candidate.predicted_class_name` /
+    `candidate.mutant_transcript` / `candidate.has_protein`
+    fields are gone — read provenance off the `EffectCandidate`
+    (`.source`, `.evidence`) and mechanism/protein state off the
+    inner effect (`candidate.effect`,
+    `candidate.effect.mutant_transcript`).
+    `candidate.plausibility` has no one-for-one semantic replacement:
+    it was the old splice-specific name for a DNA-only ordering
+    heuristic, not evidence. There is no shared
+    `EffectCandidate.probability`; producer-specific support belongs
+    in `candidate.evidence` under explicit names.
+  - `MultiOutcomeEffect.candidates` is the single accessor on every
+    subclass (`SpliceOutcomeSet`, `StructuralVariantEffect`,
+    `PhaseCandidateSet`, `ExonicSpliceSite`, `HaplotypeEffect`).
+    A new `MultiOutcomeEffect.effects` convenience property unwraps
+    to `tuple(c.effect for c in self.candidates)` for callers that
+    don't need provenance.
+  - The post-hoc attachment slot renamed `_extra_outcomes` →
+    `_extra_candidates`; the merge helper renamed
+    `_with_extra_outcomes` → `_combine_with_extra_candidates`.
+    `apply_rna_evidence_to_effects` still uses `_extra_candidates`
+    for non-splice multi-outcome effects; splice mechanism sets now
+    reconcile RNA evidence into a replacement set with
+    `rna_evidence`, `added_candidates`, `excluded_candidates`, and
+    `candidate_rna_evidence` audit fields. External integrations
+    that touched these private names must rename.
+  - `StructuralVariantEffect.__init__` parameter renamed
+    `candidates=` → `primary_effects=` (carries the inner
+    `MutationEffect` tuple; the `candidates` accessor now lifts
+    to `EffectCandidate` automatically). Same on `LargeDeletion`,
+    `LargeDuplication`, `GeneFusion`.
+  - `MultiOutcomeEffect.most_likely` is **removed**. Replaced by
+    four explicit accessors so callers never confuse "wrapped vs
+    unwrapped" or "likeliest vs most-disruptive":
+    - `.most_likely_candidate` → `EffectCandidate` (same as
+      `candidates[0]`)
+    - `.most_likely_effect` → inner `MutationEffect` of the above
+    - `.highest_priority_candidate` → `EffectCandidate` with the
+      highest `effect_priority` among candidates (worst-case
+      classification, independent of producer order)
+    - `.highest_priority_effect` → inner `MutationEffect` of the above
+    Callers doing `effect.most_likely.mutant_protein_sequence` or
+    `effect.most_likely.aa_ref` should switch to
+    `effect.most_likely_effect.mutant_protein_sequence` etc.;
+    callers that want the wrapper (with `.source`, `.evidence`) use
+    `effect.most_likely_candidate`.
+  - Splice mechanisms promoted to first-class `MutationEffect`
+    classes, each carrying its own protein vocab (`aa_ref` /
+    `aa_alt` / `mutant_protein_sequence` / `mutant_transcript`) on
+    the instance — no more wrapping a separate coding effect.
+    New hierarchy:
+    - `SpliceMechanismEffect(TranscriptMutationEffect)` — base,
+      carries `splice_signal` referencing the underlying
+      `SpliceDonor` / `SpliceAcceptor` / `IntronicSpliceSite` /
+      `ExonicSpliceSite` so each mechanism knows *where* the
+      disruption was.
+    - `NormalSplicing` — splice signal hit but splicing proceeds;
+      carries `coding_effect` for the underlying nucleotide-level
+      change (or `None` for purely intronic disruption).
+    - `ExonSkipping` — affected exon excluded; carries
+      `affected_exon` and `in_frame`.
+    - `IntronRetention` — intron retained; carries
+      `retained_intron_start`, `retained_intron_end`, `side`.
+    - `CrypticDonor` / `CrypticAcceptor` — cryptic site replaces
+      canonical; carry `affected_exon`,
+      `cryptic_genomic_position`, `motif_score`,
+      `exon_length_delta`.
+    Unresolved state is "protein fields are `None`" — no parallel
+    placeholder class hierarchy. Class identity = mechanism;
+    consumers dispatch on `isinstance(candidate.effect,
+    ExonSkipping)` instead of evidence-key checks. Resolved
+    mechanisms retain their classified protein consequence as
+    `protein_effect` so severity queries (`effect_priority`,
+    `modifies_protein_sequence`) behave like ordinary coding effects
+    while preserving mechanism identity.
+  - **Deleted**: `SpliceOutcome` enum (replaced by class identity),
+    `PredictedIntronRetention` (subsumed by `IntronRetention`),
+    `PredictedCrypticSpliceSite` (split into `CrypticDonor` +
+    `CrypticAcceptor`), `SpliceOutcomeSet.to_dict` /
+    `.from_dict` overrides (no enum left to stringify),
+    `evidence["splice_outcome"]` / `evidence["placeholder"]` /
+    `evidence["description"]` keys (info now lives on the
+    mechanism Effect — `type(candidate.effect)`,
+    `candidate.effect.resolved`, `candidate.effect.short_description`),
+    `_placeholder_effect_for_outcome` and `_make_splice_candidate`
+    helpers.
+  - **`SpliceOutcomeSet.candidate_proteins`** now keys by mechanism
+    class (e.g. `proteins[ExonSkipping]`) instead of `SpliceOutcome`
+    enum value.
 - `varcode.Outcome` renamed to `varcode.EffectCandidate`. The helper
   `outcomes_from_candidates` renamed to `candidates_from_effects`.
   The module `varcode.outcomes` renamed to
@@ -18,10 +121,9 @@
   candidate re-surfaced by the SV annotator with a different
   `source` tag and `sv_type` in evidence); putting metadata on the
   wrapper instead of the Effect lets the Effect stay shared while
-  the labels diverge. `MultiOutcomeEffect` retains two accessors:
-  `.candidates` (raw `tuple[MutationEffect, ...]`) and `.outcomes`
-  (wrapped `tuple[EffectCandidate, ...]`); the back-compat framing
-  on `.candidates` is dropped — both are first-class. Aspirational
+  the labels diverge. (Per #382, `.outcomes` has since been removed
+  and `MultiOutcomeEffect.candidates` is the single accessor across
+  every subclass.) Aspirational
   `"isovar"` / `"exacto"` / `"longread_assembly"` example tags
   scrubbed from varcode docstrings.
 - Phasing API generalized; Isovar-named identifiers removed from the
@@ -42,19 +144,28 @@
     on `ReadPhaseResolver`. Consumers filtering effects by phase
     source need to update their filter values.
 - `varcode.effects.effect_classes.PhaseAmbiguousEffect` renamed to
-  `PhaseCandidateSet`. No deprecation alias — update imports.
-  Public surface (`.candidates`, `.outcomes`, `.most_likely`,
-  `.short_description`, etc.) is unchanged
+  `PhaseCandidateSet`. No deprecation alias — update imports
   ([#376](https://github.com/openvax/varcode/pull/376)).
+  Per #382, the public surface is `.candidates` (a
+  `tuple[EffectCandidate, ...]` with per-hypothesis evidence keys),
+  `.most_likely_candidate` / `.most_likely_effect` /
+  `.highest_priority_candidate` / `.highest_priority_effect`, and
+  `.short_description`.
 
 **Changed**
-- `SpliceCandidate` and `SpliceOutcomeSet` serialization migrated onto
-  `DataclassSerializable` from `serializable>=1.1.0`. The
+- `SpliceOutcomeSet` serialization migrated onto `serializable>=1.1.0`'s
+  standard introspection (the parallel `SpliceCandidate` dataclass that
+  also lived on this path has since been deleted per #382). The
   `__effect_class__` tagging and hand-rolled class registries
   (`_CODING_EFFECT_CLASS_REGISTRY`, `_SPLICE_SIGNAL_CLASS_REGISTRY`,
   `_rehydrate_coding_effect`) are gone; JSON round-trip now flows
   through `serializable.helpers`' standard `__class__` / `__module__`
   stamping ([#343](https://github.com/openvax/varcode/issues/343)).
+  `SpliceOutcomeSet.to_dict` / `from_dict` are overridden to stringify
+  the `SpliceOutcome` enum stored under
+  `candidate.evidence["splice_outcome"]` (and rehydrate it on the way
+  back) without mutating `self` mid-call, and to emit a single
+  `candidates` key on the wire (no parallel `_candidates`).
   The JSON wire format is unchanged, but **the pre-#305 migration
   shim for the internal `_ExonSkipFrameshiftEffect` class has been
   removed**. JSON produced by varcode 2.4.x or earlier (which could

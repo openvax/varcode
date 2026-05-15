@@ -9,11 +9,10 @@
 The protocol + apply hook should:
 
 * Be a no-op when no resolver is supplied (existing pipelines unchanged).
-* Append RNA-observed outcomes to ``MultiOutcomeEffect.outcomes`` in
-  the agreed-upon ordering (DNA-predicted first, RNA-observed after)
-  and via the back-compat ``_with_extra_outcomes`` hook so subclass
-  overrides of ``outcomes`` (SpliceOutcomeSet, StructuralVariantEffect)
-  pick up evidence uniformly.
+* Attach RNA-observed candidates to ``MultiOutcomeEffect.candidates``.
+  Splice mechanism sets reconcile evidence into a replacement set;
+  other multi-outcome effects append evidence through
+  ``_extra_candidates``.
 * Leave non-multi-outcome effects untouched even when the resolver
   has evidence — the contract is "refinement of a possibility set",
   not "replacement of a deterministic call".
@@ -101,17 +100,16 @@ class TestMakeRNAOutcome:
         o = make_rna_outcome(effect=Substitution)  # placeholder effect
         assert o.source == "rna"
         assert o.evidence == {}
-        assert o.probability is None
 
     def test_well_known_fields_land_in_evidence(self):
         o = make_rna_outcome(
             effect=Substitution,
             transcript_model_id="ISOFORM_42",
             read_count=314,
-            probability=0.91)
+            extra_evidence={"isoform_fraction": 0.91})
         assert o.evidence["transcript_model_id"] == "ISOFORM_42"
         assert o.evidence["read_count"] == 314
-        assert o.probability == 0.91
+        assert o.evidence["isoform_fraction"] == 0.91
 
     def test_extra_evidence_merges_alongside_well_known(self):
         o = make_rna_outcome(
@@ -161,9 +159,9 @@ class TestApplyNoOpCases:
             sv_type="DEL",
             genome=ensembl_grch38)
         effect = sv.effect_on_transcript(_cftr())
-        baseline = tuple(effect.outcomes)
+        baseline = tuple(effect.candidates)
         apply_rna_evidence_to_effects([effect], NullRNAEvidenceResolver())
-        assert tuple(effect.outcomes) == baseline
+        assert tuple(effect.candidates) == baseline
 
 
 # --------------------------------------------------------------------
@@ -189,7 +187,7 @@ class TestApplyAttaches:
 
     def test_observed_outcomes_appended_to_outcomes_view(self):
         effect = self._sv_effect()
-        baseline = tuple(effect.outcomes)
+        baseline = tuple(effect.candidates)
         # Construct a stand-in observed outcome (the effect can be
         # whatever — for this test we recycle the LargeDeletion's own
         # most-likely candidate, since we just need a MutationEffect
@@ -198,12 +196,11 @@ class TestApplyAttaches:
             effect=baseline[0].effect,
             source="isovar",
             transcript_model_id="ISOFORM_A",
-            read_count=42,
-            probability=0.78)
+            read_count=42)
         apply_rna_evidence_to_effects(
             [effect], _StubResolver([observed]))
 
-        new_outcomes = tuple(effect.outcomes)
+        new_outcomes = tuple(effect.candidates)
         # DNA-predicted outcomes preserved at the front, RNA-observed
         # appended at the end. Consumers reading by source can pick
         # whichever they want; consumers iterating in order get the
@@ -220,13 +217,13 @@ class TestApplyAttaches:
         first, Exacto after). We pin the additive contract here so
         future refactors don't silently change to dedup."""
         effect = self._sv_effect()
-        baseline_len = len(tuple(effect.outcomes))
+        baseline_len = len(tuple(effect.candidates))
         observed = make_rna_outcome(
-            effect=tuple(effect.outcomes)[0].effect, source="isovar")
+            effect=tuple(effect.candidates)[0].effect, source="isovar")
         resolver = _StubResolver([observed])
         apply_rna_evidence_to_effects([effect], resolver)
         apply_rna_evidence_to_effects([effect], resolver)
-        assert len(tuple(effect.outcomes)) == baseline_len + 2
+        assert len(tuple(effect.candidates)) == baseline_len + 2
 
     def test_mixed_sources_compose(self):
         """The intended workflow: Isovar resolver runs first, Exacto
@@ -234,13 +231,13 @@ class TestApplyAttaches:
         sources alongside the original DNA-predicted outcomes."""
         effect = self._sv_effect()
         first = make_rna_outcome(
-            effect=tuple(effect.outcomes)[0].effect, source="isovar")
+            effect=tuple(effect.candidates)[0].effect, source="isovar")
         second = make_rna_outcome(
-            effect=tuple(effect.outcomes)[0].effect, source="exacto",
+            effect=tuple(effect.candidates)[0].effect, source="exacto",
             extra_evidence={"long_read_support": True})
         apply_rna_evidence_to_effects([effect], _StubResolver([first]))
         apply_rna_evidence_to_effects([effect], _StubResolver([second]))
-        sources = {o.source for o in effect.outcomes}
+        sources = {o.source for o in effect.candidates}
         assert {"varcode", "isovar", "exacto"}.issubset(sources)
 
 
@@ -270,7 +267,7 @@ class TestNonMultiOutcomeNotMutated:
         apply_rna_evidence_to_effects(effects, _StubResolver([observed]))
         for e in effects:
             if not isinstance(e, MultiOutcomeEffect):
-                assert not hasattr(e, "_extra_outcomes") or not e._extra_outcomes
+                assert not hasattr(e, "_extra_candidates") or not e._extra_candidates
 
 
 # --------------------------------------------------------------------
@@ -318,7 +315,7 @@ class TestEffectsKwargWiring:
 
         # Stub resolver returns one observed outcome per call. Use the
         # baseline's primary outcome's effect as the wrapper target.
-        observed_effect = tuple(baseline_sv_effects[0].outcomes)[0].effect
+        observed_effect = tuple(baseline_sv_effects[0].candidates)[0].effect
         observed = make_rna_outcome(
             effect=observed_effect, source="isovar",
             transcript_model_id="ISO_1", read_count=11)
@@ -330,7 +327,7 @@ class TestEffectsKwargWiring:
             if isinstance(e, StructuralVariantEffect)]
         # Each SV effect should now carry the observed outcome.
         for e in sv_effects:
-            sources = {o.source for o in e.outcomes}
+            sources = {o.source for o in e.candidates}
             assert "isovar" in sources, (
                 "Expected RNA-observed outcome on %r, got sources=%s"
                 % (e, sources))
@@ -347,7 +344,7 @@ class TestEffectsKwargWiring:
             e for e in baseline if isinstance(e, StructuralVariantEffect)]
         assert sv_effects_baseline
 
-        observed_effect = tuple(sv_effects_baseline[0].outcomes)[0].effect
+        observed_effect = tuple(sv_effects_baseline[0].candidates)[0].effect
         observed = make_rna_outcome(
             effect=observed_effect, source="exacto", read_count=7)
         with_evidence = list(
@@ -358,7 +355,7 @@ class TestEffectsKwargWiring:
             e for e in with_evidence
             if isinstance(e, StructuralVariantEffect)]
         for e in sv_effects:
-            sources = {o.source for o in e.outcomes}
+            sources = {o.source for o in e.candidates}
             assert "exacto" in sources
 
 
@@ -381,12 +378,15 @@ class TestOrderingContract:
             sv_type="DEL",
             genome=ensembl_grch38)
         effect = sv.effect_on_transcript(_cftr())
-        dna_predicted = tuple(effect.outcomes)
+        dna_predicted = tuple(effect.candidates)
         observed = make_rna_outcome(
             effect=dna_predicted[0].effect, source="isovar")
         apply_rna_evidence_to_effects([effect], _StubResolver([observed]))
-        new = tuple(effect.outcomes)
+        new = tuple(effect.candidates)
         # First N entries are exactly the original DNA-predicted set.
         assert new[:len(dna_predicted)] == dna_predicted
-        # most_likely should still be the original DNA-predicted top.
-        assert effect.most_likely is effect.candidates[0]
+        # most_likely_candidate should still be the original DNA-predicted top.
+        # Equality (not identity): .candidates rebuilds the EffectCandidate
+        # tuple each access, so each call returns fresh wrapper objects
+        # around the same underlying effect.
+        assert effect.most_likely_candidate == effect.candidates[0]

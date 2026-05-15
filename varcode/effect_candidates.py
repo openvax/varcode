@@ -12,9 +12,9 @@
 
 """``EffectCandidate``: one plausible effect with per-context provenance.
 
-An :class:`EffectCandidate` pairs a :class:`MutationEffect` with a
-``source`` / ``probability`` / ``evidence`` triple describing **how
-this particular candidate came to be**. The wrapper exists because
+An :class:`EffectCandidate` pairs a :class:`MutationEffect` with
+``source`` / ``evidence`` provenance describing **how this particular
+candidate came to be**. The wrapper exists because
 the same :class:`MutationEffect` instance can appear in multiple
 candidate sets with different provenance per context — the wrapper
 carries the context-specific labels without forcing a copy of the
@@ -23,12 +23,11 @@ Effect itself.
 Concrete example: a splice candidate produced by varcode's splice
 classifier surfaces inside its parent
 :class:`SpliceOutcomeSet` tagged ``source="varcode"`` with a
-``splice_outcome`` enum in evidence. When an SV breakpoint sits in
-the same splice window, the SV annotator re-uses that same Effect
-on the SV's own :class:`StructuralVariantEffect` — but tagged
-``source="varcode_splice"`` with the SV's ``sv_type`` merged into
-evidence. The Effect is shared; the metadata diverges. That's why
-the wrapper exists.
+mechanism Effect. When an SV breakpoint sits in the same splice
+window, the SV annotator re-uses that same Effect on the SV's own
+:class:`StructuralVariantEffect` — but tagged ``source="varcode_splice"``
+with the SV's ``sv_type`` merged into evidence. The Effect is shared;
+the metadata diverges. That's why the wrapper exists.
 
 Without ``EffectCandidate``, the alternatives are:
 
@@ -44,24 +43,20 @@ The wrapper is the cheapest answer.
 Where ``EffectCandidate`` appears
 ---------------------------------
 
-:attr:`MultiOutcomeEffect.outcomes` returns
-``tuple[EffectCandidate, ...]``. :attr:`MultiOutcomeEffect.candidates`
-returns the raw ``tuple[MutationEffect, ...]`` — both accessors are
-first-class:
-
-* Use ``outcomes`` when you need per-candidate provenance (filter by
-  source, read evidence, score by probability).
-* Use ``candidates`` when you only need the underlying Effects (e.g.
-  iterate to render short descriptions, dispatch on effect type).
+:attr:`MultiOutcomeEffect.candidates` returns
+``tuple[EffectCandidate, ...]`` on every subclass (#382). When
+callers only need the underlying Effects (no provenance), the
+:attr:`MultiOutcomeEffect.effects` convenience property unwraps:
+``tuple(c.effect for c in self.candidates)``.
 
 External integrations (splice predictors, RNA-evidence callers,
 long-read assembly tools) construct :class:`EffectCandidate`
-instances to surface scored or annotated effects through the same
-surface as varcode's built-ins.
+instances to surface annotated effects through the same surface as
+varcode's built-ins.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Optional, Tuple
+from typing import Any, Mapping, Tuple
 
 from serializable import DataclassSerializable
 
@@ -74,20 +69,14 @@ class EffectCandidate(DataclassSerializable):
     ----------
     effect : MutationEffect
         The effect this candidate represents. Guaranteed to be a
-        :class:`~varcode.effects.MutationEffect` instance — producers
-        that can't compute a full coding effect use placeholder
-        subclasses (e.g.
-        :class:`~varcode.effects.effect_classes.PredictedIntronRetention`)
-        so consumers can read
-        ``candidate.effect.short_description`` and
-        ``candidate.effect.mutant_protein_sequence`` uniformly across
-        SV, splice, and point-variant candidates.
-    probability : float or None
-        Estimated likelihood this candidate actually happens, in
-        ``[0, 1]``. ``None`` means "not scored" — the candidate is in
-        the set but no tool has assigned a probability. Callers that
-        treat ``None`` as "unknown" rather than "zero" will be robust
-        to new candidates added over time.
+        :class:`~varcode.effects.MutationEffect` instance. For
+        outcomes whose protein math isn't yet resolved (e.g. a
+        splice-mechanism Effect built without a ``genomic_sequence``
+        provider), the inner Effect still satisfies the interface —
+        ``aa_ref`` / ``aa_alt`` / ``mutant_protein_sequence`` are
+        simply ``None``, and consumers can read
+        ``candidate.effect.short_description`` uniformly across SV,
+        splice, and point-variant candidates.
     source : str
         Name of the tool or annotator that produced this candidate.
         Defaults to ``"varcode"`` for built-in classifications.
@@ -101,16 +90,8 @@ class EffectCandidate(DataclassSerializable):
     """
 
     effect: Any  # MutationEffect — typed loosely to avoid import cycle
-    probability: Optional[float] = None
     source: str = "varcode"
     evidence: Mapping[str, Any] = field(default_factory=dict)
-
-    def __post_init__(self):
-        if self.probability is not None and not (
-                0.0 <= self.probability <= 1.0):
-            raise ValueError(
-                "probability must be in [0, 1] or None, got %r"
-                % (self.probability,))
 
     @property
     def short_description(self) -> str:
@@ -126,10 +107,9 @@ def candidates_from_effects(
     """Wrap a tuple of :class:`MutationEffect` instances as
     :class:`EffectCandidate` objects with a shared ``source`` string.
 
-    Used by the default :attr:`MultiOutcomeEffect.outcomes`
-    implementation to lift a raw ``candidates`` tuple into the wrapped
-    form without churning every subclass. No probabilities are
-    assigned — callers that want scored candidates construct
-    :class:`EffectCandidate` directly.
+    Convenience for the common case where a producer has a tuple of
+    Effects and wants to lift it into the wrapped form without
+    setting evidence fields. Callers with producer-specific metadata
+    construct :class:`EffectCandidate` directly.
     """
     return tuple(EffectCandidate(effect=c, source=source) for c in effects)

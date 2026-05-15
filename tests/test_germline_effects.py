@@ -141,13 +141,13 @@ class TestSameCodonOverlap:
         e = predict_germline_aware_effect(
             _somatic(), _cftr(), self._ctx(), ann)
         # One germline → 2^1 = 2 hypotheses (cis, trans).
-        assert len(e.outcomes) == 2
+        assert len(e.candidates) == 2
 
     def test_outcomes_carry_haplotype_evidence(self):
         ann = get_default_annotator()
         e = predict_germline_aware_effect(
             _somatic(), _cftr(), self._ctx(), ann)
-        haps = {o.evidence.get("haplotype") for o in e.outcomes}
+        haps = {o.evidence.get("haplotype") for o in e.candidates}
         # The opaque tags from the enumerator: A (all-cis), B (all-trans).
         assert haps == {"A", "B"}
 
@@ -155,14 +155,14 @@ class TestSameCodonOverlap:
         ann = get_default_annotator()
         e = predict_germline_aware_effect(
             _somatic(), _cftr(), self._ctx(), ann)
-        states = {o.evidence.get("phase_state") for o in e.outcomes}
+        states = {o.evidence.get("phase_state") for o in e.candidates}
         assert states == {"unknown"}
 
     def test_outcomes_carry_germline_variants(self):
         ann = get_default_annotator()
         e = predict_germline_aware_effect(
             _somatic(), _cftr(), self._ctx(), ann)
-        for o in e.outcomes:
+        for o in e.candidates:
             germ = o.evidence.get("germline_variants")
             # Cis hypothesis carries the germline variant; trans
             # carries an empty tuple. Either way it's a tuple, not
@@ -178,7 +178,7 @@ class TestSameCodonOverlap:
         e = predict_germline_aware_effect(
             _somatic(), _cftr(), self._ctx(), ann)
         trans_outcome = next(
-            o for o in e.outcomes if o.evidence["haplotype"] == "B")
+            o for o in e.candidates if o.evidence["haplotype"] == "B")
         assert (trans_outcome.effect.short_description
                 == ref_relative.short_description)
 
@@ -191,7 +191,7 @@ class TestSameCodonOverlap:
         e = predict_germline_aware_effect(
             _somatic(), _cftr(), self._ctx(), ann)
         cis_outcome = next(
-            o for o in e.outcomes if o.evidence["haplotype"] == "A")
+            o for o in e.candidates if o.evidence["haplotype"] == "A")
         assert (cis_outcome.effect.short_description
                 != ref_relative.short_description)
 
@@ -562,6 +562,6 @@ class TestComposesWithRNAEvidence:
             [_same_codon_germline()], reference_name="GRCh38")
         e = predict_germline_aware_effect(
             _somatic(), _cftr(), ctx, ann)
-        for outcome in e.outcomes:
+        for outcome in e.candidates:
             assert "haplotype" in outcome.evidence
             assert "phase_state" in outcome.evidence

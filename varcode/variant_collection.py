@@ -149,9 +149,11 @@ class VariantCollection(Collection):
 
         rna_resolver : RNAEvidenceResolver or None
             Optional RNA-observed-outcome source. When provided, any
-            :class:`~varcode.MultiOutcomeEffect` in the result has
-            observed outcomes from the resolver appended to its
-            ``outcomes`` view. See openvax/varcode#259.
+            :class:`~varcode.MultiOutcomeEffect` in the result is
+            refined with observed candidates from the resolver. Splice
+            mechanism sets are reconciled into replacement sets; other
+            multi-outcome effects keep the additive candidate behavior.
+            See openvax/varcode#259.
 
         germline : GermlineContext or None
             Optional patient-germline context. When non-empty, every

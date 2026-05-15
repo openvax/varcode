@@ -19,7 +19,7 @@ The retrofit is a class-hierarchy change only:
   the ``candidates`` / ``most_likely`` / ``priority_class``
   protocol.
 * SpliceOutcomeSet gains a back-compat ``alternate_effect``
-  property that resolves to the NORMAL_SPLICING candidate's
+  property that resolves to the NormalSplicing candidate's
   coding_effect.
 
 No behaviour change — the existing test suite (tests/test_splice_*)
@@ -28,7 +28,7 @@ continues to lock in byte-for-byte output.
 
 from pyensembl import cached_release
 
-from varcode import MultiOutcomeEffect, SpliceOutcome, Variant
+from varcode import MultiOutcomeEffect, NormalSplicing, Variant
 from varcode.effects import ExonicSpliceSite
 
 
@@ -59,14 +59,20 @@ def test_exonic_splice_site_candidates_include_self_and_alternate():
     effect = variant.effect_on_transcript(transcript)
     assert effect.alternate_effect is not None
     # 2-candidate form: splice-disruption (self) + coding consequence.
-    assert effect.candidates == (effect, effect.alternate_effect)
+    # Each entry is an EffectCandidate wrapping the inner effect.
+    inners = tuple(c.effect for c in effect.candidates)
+    assert inners == (effect, effect.alternate_effect)
 
 
 def test_exonic_splice_site_most_likely_is_self():
     variant = Variant("7", 117531114, "G", "T", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     effect = variant.effect_on_transcript(transcript)
-    assert effect.most_likely is effect
+    # most_likely_effect is the inner MutationEffect, which IS the
+    # splice-disruption outcome (this effect itself).
+    assert effect.most_likely_effect is effect
+    # most_likely_candidate wraps it in an EffectCandidate.
+    assert effect.most_likely_candidate.effect is effect
 
 
 def test_exonic_splice_site_priority_class_is_self_class():
@@ -115,20 +121,17 @@ def test_splice_outcome_set_alternate_effect_resolves_to_normal_splicing():
 
 
 def test_splice_outcome_set_alternate_effect_none_when_no_normal_splicing():
-    # SpliceDonor-backed SpliceOutcomeSet: the NORMAL_SPLICING candidate
+    # SpliceDonor-backed SpliceOutcomeSet: the NormalSplicing candidate
     # exists but its coding_effect is None (intronic variant, no
     # underlying coding change). alternate_effect should be None.
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     wrapped_effects = variant.effects(splice_outcomes=True)
     wrapped = next(e for e in wrapped_effects if e.transcript is transcript)
-    # Sanity: this is a SpliceDonor-backed set with a NORMAL_SPLICING
-    # candidate that has no coding_effect.
     normal = next(
         c for c in wrapped.candidates
-        if c.outcome is SpliceOutcome.NORMAL_SPLICING
-    )
-    assert normal.coding_effect is None
+        if isinstance(c.effect, NormalSplicing))
+    assert normal.effect.coding_effect is None
     assert wrapped.alternate_effect is None
 
 
