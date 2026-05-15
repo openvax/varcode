@@ -406,7 +406,7 @@ class SpliceAcceptor(IntronicSpliceSite):
 # the transcript the splice signal was hit. The mechanism Effect
 # describes *what* happens downstream of that disruption.
 #
-# Used by :class:`~varcode.splice_outcomes.AmbiguousSpliceEffect` to
+# Used by :class:`~varcode.splice_outcomes.SpliceOutcomeSet` to
 # fill :attr:`EffectCandidate.effect` for each plausible mechanism a
 # splice disruption could produce. Class identity = mechanism — no
 # parallel enum.
@@ -484,58 +484,53 @@ class NormalSplicing(SpliceMechanismEffect):
     variant), it's ``None``.
 
     Note: this class is special among :class:`SpliceMechanismEffect`
-    subclasses — it doesn't itself transform the protein. The other
-    four mechanisms (skipping, retention, cryptic donor/acceptor)
-    are the actual transformers and carry their own protein vocab.
+    subclasses — it doesn't itself transform the protein, so all the
+    protein-vocab attributes (``aa_ref``, ``aa_alt``,
+    ``mutant_protein_sequence``, ``mutant_transcript``,
+    ``aa_mutation_*_offset``) are *delegating descriptors* that read
+    through to ``coding_effect``. Construction therefore calls
+    :class:`TranscriptMutationEffect`'s ``__init__`` directly rather
+    than :class:`SpliceMechanismEffect`'s — the latter would set
+    those names as plain instance attributes and shadow the
+    descriptors. The other four mechanisms (skipping, retention,
+    cryptic donor/acceptor) actually transform the protein and
+    carry their own protein vocab as instance state.
     """
 
     def __init__(self, variant, transcript, splice_signal,
                  coding_effect=None):
-        SpliceMechanismEffect.__init__(
-            self, variant, transcript, splice_signal)
+        TranscriptMutationEffect.__init__(self, variant, transcript)
+        self.splice_signal = splice_signal
         self.coding_effect = coding_effect
+
+    # Delegating descriptors. Read-only by construction (no setters)
+    # — NormalSplicing never owns these fields directly; they're a
+    # view onto ``coding_effect``. Attempting to assign to one is a
+    # programming error and rightly raises AttributeError.
 
     @property
     def aa_ref(self):
         return getattr(self.coding_effect, "aa_ref", None)
 
-    @aa_ref.setter
-    def aa_ref(self, value):
-        # The base class __init__ assigns to aa_ref; accept and discard
-        # — actual value comes from coding_effect.
-        pass
-
     @property
     def aa_alt(self):
         return getattr(self.coding_effect, "aa_alt", None)
-
-    @aa_alt.setter
-    def aa_alt(self, value):
-        pass
 
     @property
     def mutant_protein_sequence(self):
         return getattr(self.coding_effect, "mutant_protein_sequence", None)
 
-    @mutant_protein_sequence.setter
-    def mutant_protein_sequence(self, value):
-        pass
-
     @property
     def aa_mutation_start_offset(self):
         return getattr(self.coding_effect, "aa_mutation_start_offset", None)
-
-    @aa_mutation_start_offset.setter
-    def aa_mutation_start_offset(self, value):
-        pass
 
     @property
     def aa_mutation_end_offset(self):
         return getattr(self.coding_effect, "aa_mutation_end_offset", None)
 
-    @aa_mutation_end_offset.setter
-    def aa_mutation_end_offset(self, value):
-        pass
+    @property
+    def mutant_transcript(self):
+        return getattr(self.coding_effect, "mutant_transcript", None)
 
     @property
     def short_description(self):
@@ -560,6 +555,24 @@ class ExonSkipping(SpliceMechanismEffect):
         ``True`` when ``len(affected_exon) % 3 == 0`` — the
         exon-skip is codon-aligned and the downstream sequence
         keeps its frame.
+
+    Note on ``aa_ref`` / ``aa_alt`` semantics
+    -----------------------------------------
+    The AA-level fields come from
+    :func:`~varcode.effects.classify.classify_from_protein_diff`,
+    so what they mean depends on ``in_frame``:
+
+    * **In-frame skip** (``in_frame=True``): ``aa_ref`` is the
+      contiguous run of amino acids removed from the reference
+      protein (including the boundary-codon reshape when the exon
+      boundary lands mid-codon). ``aa_alt`` is the reshaped boundary
+      codon's translation (or ``""`` for a clean codon-aligned skip).
+    * **Out-of-frame skip** (``in_frame=False``): ``aa_ref`` is the
+      reference AA at the divergence point (where the frame breaks
+      after the new exon junction); ``aa_alt`` is the first
+      frameshifted AA. The downstream protein continues in the new
+      frame until a premature stop — read the full sequence from
+      :attr:`mutant_protein_sequence`, not from ``aa_alt``.
     """
 
     def __init__(self, variant, transcript, splice_signal, affected_exon,
@@ -581,18 +594,21 @@ class ExonSkipping(SpliceMechanismEffect):
     @property
     def short_description(self):
         exon_id = getattr(self.affected_exon, "exon_id", "?")
-        if self.resolved and self.aa_ref:
-            return "exon-skip %s (p.%s%d_%s%ddel%s)" % (
-                exon_id,
-                self.aa_ref[0],
-                (self.aa_mutation_start_offset or 0) + 1,
-                self.aa_ref[-1],
-                (self.aa_mutation_start_offset or 0) + len(self.aa_ref),
-                "" if self.in_frame else "fs")
-        suffix = "" if self.in_frame else " (out-of-frame)"
         if not self.resolved:
+            suffix = "" if self.in_frame else ", out-of-frame"
             return "exon-skip %s (predicted%s)" % (exon_id, suffix)
-        return "exon-skip %s%s" % (exon_id, suffix)
+        if not self.aa_ref or self.aa_mutation_start_offset is None:
+            # Resolved but no usable AA range — fall back to a bare label.
+            return "exon-skip %s" % exon_id
+        pos = self.aa_mutation_start_offset + 1
+        if self.in_frame:
+            # HGVS deletion: p.{first}{start}_{last}{end}del
+            end = self.aa_mutation_start_offset + len(self.aa_ref)
+            return "exon-skip %s (p.%s%d_%s%ddel)" % (
+                exon_id, self.aa_ref[0], pos, self.aa_ref[-1], end)
+        # HGVS frameshift: p.{aa}{pos}fs — distinct notation from del,
+        # not concatenated with it.
+        return "exon-skip %s (p.%s%dfs)" % (exon_id, self.aa_ref[0], pos)
 
 
 class IntronRetention(SpliceMechanismEffect):
@@ -601,17 +617,21 @@ class IntronRetention(SpliceMechanismEffect):
 
     Parameters beyond the base class
     --------------------------------
-    retained_intron_start, retained_intron_end : int
+    retained_intron_start, retained_intron_end : int or None
         Genomic coordinates of the retained intron (1-based
-        inclusive). Always populated, even when protein math
-        couldn't resolve, so consumers know which intron.
-    side : str
+        inclusive). Populated when the adjacent-exon geometry
+        identifies which intron is being retained; ``None`` when
+        that can't be determined (e.g. transcript missing the
+        adjacent exon, splice boundary ambiguous).
+    side : str or None
         ``"donor"`` or ``"acceptor"`` — which splice boundary failed,
-        causing the intron to be retained.
+        causing the intron to be retained. ``None`` when the side
+        can't be inferred from the splice classification.
     """
 
     def __init__(self, variant, transcript, splice_signal,
-                 retained_intron_start, retained_intron_end, side,
+                 retained_intron_start=None, retained_intron_end=None,
+                 side=None,
                  mutant_transcript=None,
                  aa_ref=None, aa_alt=None,
                  aa_mutation_start_offset=None,
@@ -630,10 +650,13 @@ class IntronRetention(SpliceMechanismEffect):
 
     @property
     def short_description(self):
-        if self.resolved:
-            return "intron-retention (%s side, p.X%dfs*)" % (
-                self.side, (self.aa_mutation_start_offset or 0) + 1)
-        return "intron-retention (%s side, predicted)" % self.side
+        side = self.side or "?"
+        if not self.resolved:
+            return "intron-retention (%s side, predicted)" % side
+        if self.aa_mutation_start_offset is None or not self.aa_ref:
+            return "intron-retention (%s side)" % side
+        return "intron-retention (%s side, p.%s%dfs*)" % (
+            side, self.aa_ref[0], self.aa_mutation_start_offset + 1)
 
 
 class CrypticSpliceSiteEffect(SpliceMechanismEffect):

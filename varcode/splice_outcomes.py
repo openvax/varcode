@@ -593,14 +593,17 @@ def _build_intron_retention_candidate(
     exon = _affected_exon(splice_effect)
     side = _splice_side_for_effect(splice_effect)
 
-    # Compute the retained-intron coords independent of provider
-    # availability, so the IntronRetention instance always knows
-    # which intron is being retained.
+    # Compute the retained-intron coords from the adjacent-exon
+    # geometry, independent of provider availability. When the
+    # geometry isn't resolvable (e.g. first/last exon, transcript
+    # missing the adjacent exon), pass None — the IntronRetention
+    # instance carries None rather than a sentinel zero so consumers
+    # can tell "unknown" from "actually coord 0".
     coords = None
     if transcript is not None and exon is not None and side is not None:
         coords = _adjacent_intron_coords(transcript, exon, side)
-    intron_start = coords[0] if coords is not None else 0
-    intron_end = coords[1] if coords is not None else 0
+    intron_start = coords[0] if coords is not None else None
+    intron_end = coords[1] if coords is not None else None
 
     common = dict(
         variant=splice_effect.variant,
@@ -608,7 +611,7 @@ def _build_intron_retention_candidate(
         splice_signal=splice_effect,
         retained_intron_start=intron_start,
         retained_intron_end=intron_end,
-        side=side or "donor",
+        side=side,
     )
 
     if (genomic_sequence is not None and transcript is not None
