@@ -77,26 +77,41 @@ is intronic — there's no coding consequence to attach.
 ```python
 effects = variant.effects(splice_outcomes=True)
 # SpliceOutcomeSet(...) replaces the splice effect.
-# .candidates is a tuple[EffectCandidate, ...], ordered most-plausible-first:
-#   EffectCandidate(effect=Deletion(...),       probability=0.5,
-#                   evidence={"splice_outcome": EXON_SKIPPING, ...})
-#   EffectCandidate(effect=PredictedIntronRetention(...), probability=0.3,
-#                   evidence={"splice_outcome": INTRON_RETENTION, ...})
-#   EffectCandidate(effect=Substitution(...),   probability=0.1,
-#                   evidence={"splice_outcome": NORMAL_SPLICING, ...})
-#   EffectCandidate(effect=PredictedCrypticSpliceSite(...), probability=0.1,
-#                   evidence={"splice_outcome": CRYPTIC_DONOR, ...})
+# .candidates is a tuple[EffectCandidate, ...], ordered most-plausible-first.
+# Each candidate's .effect is a SpliceMechanismEffect subclass:
+#   EffectCandidate(effect=ExonSkipping(affected_exon=..., in_frame=True,
+#                                       aa_ref="KGYK...", ...),
+#                   probability=0.5)
+#   EffectCandidate(effect=IntronRetention(retained_intron_start=...,
+#                                          side="donor", ...),
+#                   probability=0.3)
+#   EffectCandidate(effect=CrypticDonor(affected_exon=..., ...),
+#                   probability=0.1)
+#   EffectCandidate(effect=NormalSplicing(coding_effect=Substitution(...)),
+#                   probability=0.1)
 ```
 
 `SpliceOutcomeSet` replaces the splice effect with a set of
-candidate outcomes, each an `EffectCandidate` carrying a
-`probability` (hand-tuned plausibility, not a real probability)
-and an inner `effect` that's either a concrete coding effect or a
-placeholder (`PredictedIntronRetention`, `PredictedCrypticSpliceSite`,
-`ExonLoss`, `Intronic`). The biological outcome is stored under
-`candidate.evidence["splice_outcome"]`. The `NORMAL_SPLICING`
-candidate carries the same information as `alternate_effect` in
-the default form.
+candidate mechanisms. Class identity = mechanism — `NormalSplicing`,
+`ExonSkipping`, `IntronRetention`, `CrypticDonor`, `CrypticAcceptor`.
+Each is a `SpliceMechanismEffect` subclass that carries its own
+protein vocab on the instance (`aa_ref`, `aa_alt`,
+`mutant_protein_sequence`, `mutant_transcript`); these are `None`
+when the protein math couldn't resolve (e.g. intron retention
+without a genomic-sequence provider), populated otherwise. Each
+mechanism also carries `splice_signal` — the underlying
+`SpliceDonor` / `SpliceAcceptor` / `IntronicSpliceSite` /
+`ExonicSpliceSite` effect describing *where* the disruption was.
+
+Downstream consumers dispatch by class:
+
+```python
+for c in splice_set.candidates:
+    if isinstance(c.effect, ExonSkipping):
+        print(c.effect.affected_exon.exon_id, c.effect.in_frame)
+    elif isinstance(c.effect, IntronRetention):
+        print(c.effect.side, c.effect.retained_intron_start)
+```
 
 When you opt in, `SpliceDonor` / `SpliceAcceptor` /
 `IntronicSpliceSite` also get wrapped, so every splice-

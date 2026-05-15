@@ -54,11 +54,45 @@
     `effect.most_likely_effect.mutant_protein_sequence` etc.;
     callers that want the wrapper (with `.probability`, `.source`,
     `.evidence`) use `effect.most_likely_candidate`.
-  - Placeholder splice candidates carry
-    `evidence["placeholder"] = True` so consumers (and
-    `SpliceOutcomeSet.alternate_effect`) can tell a placeholder
-    `Intronic` / `ExonLoss` apart from a real one without inspecting
-    class identity.
+  - Splice mechanisms promoted to first-class `MutationEffect`
+    classes, each carrying its own protein vocab (`aa_ref` /
+    `aa_alt` / `mutant_protein_sequence` / `mutant_transcript`) on
+    the instance — no more wrapping a separate coding effect.
+    New hierarchy:
+    - `SpliceMechanismEffect(TranscriptMutationEffect)` — base,
+      carries `splice_signal` referencing the underlying
+      `SpliceDonor` / `SpliceAcceptor` / `IntronicSpliceSite` /
+      `ExonicSpliceSite` so each mechanism knows *where* the
+      disruption was.
+    - `NormalSplicing` — splice signal hit but splicing proceeds;
+      carries `coding_effect` for the underlying nucleotide-level
+      change (or `None` for purely intronic disruption).
+    - `ExonSkipping` — affected exon excluded; carries
+      `affected_exon` and `in_frame`.
+    - `IntronRetention` — intron retained; carries
+      `retained_intron_start`, `retained_intron_end`, `side`.
+    - `CrypticDonor` / `CrypticAcceptor` — cryptic site replaces
+      canonical; carry `affected_exon`,
+      `cryptic_genomic_position`, `motif_score`,
+      `exon_length_delta`.
+    Unresolved state is "protein fields are `None`" — no parallel
+    placeholder class hierarchy. Class identity = mechanism;
+    consumers dispatch on `isinstance(candidate.effect,
+    ExonSkipping)` instead of evidence-key checks.
+  - **Deleted**: `SpliceOutcome` enum (replaced by class identity),
+    `PredictedIntronRetention` (subsumed by `IntronRetention`),
+    `PredictedCrypticSpliceSite` (split into `CrypticDonor` +
+    `CrypticAcceptor`), `SpliceOutcomeSet.to_dict` /
+    `.from_dict` overrides (no enum left to stringify),
+    `evidence["splice_outcome"]` / `evidence["placeholder"]` /
+    `evidence["description"]` keys (info now lives on the
+    mechanism Effect — `type(candidate.effect)`,
+    `candidate.effect.resolved`, `candidate.effect.short_description`),
+    `_placeholder_effect_for_outcome` and `_make_splice_candidate`
+    helpers.
+  - **`SpliceOutcomeSet.candidate_proteins`** now keys by mechanism
+    class (e.g. `proteins[ExonSkipping]`) instead of `SpliceOutcome`
+    enum value.
 - `varcode.Outcome` renamed to `varcode.EffectCandidate`. The helper
   `outcomes_from_candidates` renamed to `candidates_from_effects`.
   The module `varcode.outcomes` renamed to

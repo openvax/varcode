@@ -831,9 +831,9 @@ def test_canonical_mate_orientation_does_not_warn():
 def test_sv_breakpoint_at_acceptor_attaches_splice_outcomes():
     """A DEL whose 5' breakpoint sits at intronic −1 of CFTR exon 2
     disrupts the canonical acceptor. The SV effect should carry
-    ``varcode_splice`` outcomes for EXON_SKIPPING and INTRON_RETENTION
+    ``varcode_splice`` candidates for ExonSkipping and IntronRetention
     alongside the primary ``LargeDeletion`` classification."""
-    from varcode.splice_outcomes import SpliceOutcome
+    from varcode import ExonSkipping, IntronRetention, NormalSplicing
     transcript = _cftr()
     # CFTR exon 2: 117504253-117504363 (forward strand). Acceptor
     # -1 is 117504252 (last intronic base before the exon).
@@ -845,15 +845,14 @@ def test_sv_breakpoint_at_acceptor_attaches_splice_outcomes():
         genome=ensembl_grch38)
     effect = _ANNOTATOR.annotate_on_transcript(sv, transcript)
     assert isinstance(effect, LargeDeletion)
-    outcomes = effect.candidates
-    splice = [o for o in outcomes if o.source == "varcode_splice"]
-    assert splice, "Expected at least one varcode_splice outcome"
-    splice_kinds = {o.evidence["splice_outcome"] for o in splice}
-    assert SpliceOutcome.EXON_SKIPPING in splice_kinds
-    assert SpliceOutcome.INTRON_RETENTION in splice_kinds
-    # NORMAL_SPLICING is filtered — the primary SV outcome covers it.
-    assert SpliceOutcome.NORMAL_SPLICING not in splice_kinds
-    # sv_type flows into evidence alongside splice_outcome.
+    splice = [o for o in effect.candidates if o.source == "varcode_splice"]
+    assert splice, "Expected at least one varcode_splice candidate"
+    splice_kinds = {type(o.effect) for o in splice}
+    assert ExonSkipping in splice_kinds
+    assert IntronRetention in splice_kinds
+    # NormalSplicing is filtered — the primary SV outcome covers it.
+    assert NormalSplicing not in splice_kinds
+    # sv_type flows into evidence on attached splice candidates.
     for o in splice:
         assert o.evidence["sv_type"] == "DEL"
 
@@ -861,7 +860,7 @@ def test_sv_breakpoint_at_acceptor_attaches_splice_outcomes():
 def test_sv_breakpoint_at_donor_attaches_splice_outcomes():
     """A DEL whose breakpoint sits at intronic +1 of CFTR exon 2
     disrupts the canonical donor."""
-    from varcode.splice_outcomes import SpliceOutcome
+    from varcode import ExonSkipping
     transcript = _cftr()
     # CFTR exon 2 ends at 117504363. Donor +1 = 117504364.
     sv = StructuralVariant(
@@ -873,9 +872,9 @@ def test_sv_breakpoint_at_donor_attaches_splice_outcomes():
     effect = _ANNOTATOR.annotate_on_transcript(sv, transcript)
     assert isinstance(effect, LargeDeletion)
     splice_kinds = {
-        o.evidence.get("splice_outcome") for o in effect.candidates
+        type(o.effect) for o in effect.candidates
         if o.source == "varcode_splice"}
-    assert SpliceOutcome.EXON_SKIPPING in splice_kinds
+    assert ExonSkipping in splice_kinds
 
 
 def test_sv_breakpoint_away_from_splice_sites_has_no_splice_outcomes():
@@ -925,7 +924,7 @@ def test_sv_breakpoint_in_intronic_splice_window_donor_side():
     The splice-outcome set reflects the lower-plausibility intronic
     table (#341)."""
     from varcode.effects import IntronicSpliceSite, SpliceDonor
-    from varcode.splice_outcomes import SpliceOutcome
+    from varcode import ExonSkipping
     transcript = _cftr()
     # CFTR exon 2 ends at 117504363. Donor +4 = 117504367 (intronic,
     # within the 3-6 window).
@@ -936,16 +935,11 @@ def test_sv_breakpoint_in_intronic_splice_window_donor_side():
         sv_type="DEL",
         genome=ensembl_grch38)
     effect = _ANNOTATOR.annotate_on_transcript(sv, transcript)
-    # The synthesized splice effect behind the attached outcomes
-    # should have been an IntronicSpliceSite, not a SpliceDonor.
-    # We verify via the coding effect mix: IntronicSpliceSite's
-    # plausibility table favors NORMAL_SPLICING (filtered), so only
-    # a few non-NORMAL candidates attach.
     splice = [o for o in effect.candidates if o.source == "varcode_splice"]
     assert splice, "Expected at least one intronic-splice-site outcome"
-    splice_kinds = {o.evidence["splice_outcome"] for o in splice}
-    # IntronicSpliceSite donor-side table carries EXON_SKIPPING.
-    assert SpliceOutcome.EXON_SKIPPING in splice_kinds
+    splice_kinds = {type(o.effect) for o in splice}
+    # IntronicSpliceSite donor-side table carries ExonSkipping.
+    assert ExonSkipping in splice_kinds
     # Sanity: the class used for synthesis was IntronicSpliceSite.
     # Inspect via the internal helper directly.
     from varcode.annotators.structural_variant import (

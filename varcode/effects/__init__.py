@@ -59,6 +59,13 @@ from .effect_classes import (
     LargeDuplication,
     StructuralVariantEffect,
     TranslocationToIntergenic,
+    # Splice-mechanism effect classes (#382)
+    SpliceMechanismEffect,
+    NormalSplicing,
+    ExonSkipping,
+    IntronRetention,
+    CrypticDonor,
+    CrypticAcceptor,
 )
 
 __all__ = [
@@ -111,4 +118,12 @@ __all__ = [
     "LargeDuplication",
     "StructuralVariantEffect",
     "TranslocationToIntergenic",
+
+    # Splice-mechanism effect classes (#382)
+    "SpliceMechanismEffect",
+    "NormalSplicing",
+    "ExonSkipping",
+    "IntronRetention",
+    "CrypticDonor",
+    "CrypticAcceptor",
 ]

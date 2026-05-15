@@ -22,6 +22,9 @@ from .effect_classes import (
     FrameShift,
     FrameShiftTruncation,
     GeneFusion,
+    CrypticAcceptor,
+    CrypticDonor,
+    ExonSkipping,
     HaplotypeEffect,
     IncompleteTranscript,
     Insertion,
@@ -29,13 +32,13 @@ from .effect_classes import (
     Intragenic,
     Intronic,
     IntronicSpliceSite,
+    IntronRetention,
     Inversion,
     LargeDeletion,
     LargeDuplication,
     NoncodingTranscript,
+    NormalSplicing,
     PrematureStop,
-    PredictedCrypticSpliceSite,
-    PredictedIntronRetention,
     Silent,
     SpliceAcceptor,
     SpliceDonor,
@@ -59,8 +62,17 @@ transcript_effect_priority_list = [
     # characterized coding effect, since they're placeholder outcomes
     # that downstream scoring (SpliceAI, RNA evidence) refines (#340).
     CrypticExonCandidate,
-    PredictedIntronRetention,
-    PredictedCrypticSpliceSite,
+    # Splice-mechanism mechanisms (#382). NormalSplicing sits below
+    # because it's the "no splice transformation" branch; the
+    # transformative mechanisms (skipping / retention / cryptic
+    # donor or acceptor) rank above plain Intronic but below
+    # characterized coding effects since their protein math is
+    # often unresolved without genomic flanking sequence.
+    NormalSplicing,
+    IntronRetention,
+    CrypticDonor,
+    CrypticAcceptor,
+    ExonSkipping,
     ThreePrimeUTR,
     # mutations to the upstream 5' UTR may change the ORF (reading frame),
     # so give 5' UTR mutations higher prioriry

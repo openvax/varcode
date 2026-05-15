@@ -390,55 +390,301 @@ class SpliceAcceptor(IntronicSpliceSite):
 
 
 # =====================================================================
-# Predicted-but-uncomputed placeholder effects (#339).
+# Splice-mechanism effects (#382).
 #
-# Used by :class:`~varcode.splice_outcomes.SpliceOutcomeSet` and, later,
-# :class:`StructuralVariantEffect` to fill :attr:`EffectCandidate.effect` with a
-# real :class:`MutationEffect` when the protein-level outcome cannot be
-# computed from cached transcript cDNA alone (intron retention requires
-# intron sequence; cryptic splice requires flanking genomic sequence).
-# These types carry no aa_ref / aa_alt / mutant_protein_sequence — they
-# are markers so that ``outcome.effect`` still satisfies the
-# MutationEffect interface and downstream iteration doesn't have to
-# branch on None.
+# What the splice machinery does when a disrupted splice signal forces
+# a choice. Each subclass represents one mechanism and carries the
+# protein-level consequence of that mechanism in its own vocab —
+# ``aa_ref`` / ``aa_alt`` / ``mutant_protein_sequence`` /
+# ``mutant_transcript``, populated when varcode can resolve the protein
+# math, ``None`` otherwise. The "unresolved" state is "protein fields
+# are None"; no parallel placeholder class hierarchy.
+#
+# Every subclass references back to the underlying splice-signal
+# disruption via :attr:`splice_signal` — a SpliceDonor / SpliceAcceptor /
+# IntronicSpliceSite / ExonicSpliceSite Effect describing *where* in
+# the transcript the splice signal was hit. The mechanism Effect
+# describes *what* happens downstream of that disruption.
+#
+# Used by :class:`~varcode.splice_outcomes.AmbiguousSpliceEffect` to
+# fill :attr:`EffectCandidate.effect` for each plausible mechanism a
+# splice disruption could produce. Class identity = mechanism — no
+# parallel enum.
 # =====================================================================
 
 
-class PredictedIntronRetention(TranscriptMutationEffect):
-    """Placeholder effect: intron retention predicted, exact protein
-    not computable from cached transcript cDNA.
+class SpliceMechanismEffect(TranscriptMutationEffect):
+    """Base for effects describing what the splice machinery does
+    downstream of a disrupted splice signal.
 
-    Emitted as the :attr:`EffectCandidate.effect` of a SpliceOutcomeSet's
-    ``INTRON_RETENTION`` outcome. The biologically expected outcome is
-    a premature stop codon inside the retained intron; consumers that
-    need the exact protein sequence require intron genomic sequence
-    (see #296).
+    Concrete subclasses: :class:`NormalSplicing`, :class:`ExonSkipping`,
+    :class:`IntronRetention`, :class:`CrypticDonor`,
+    :class:`CrypticAcceptor`. Class identity is the mechanism;
+    instances of this base are not constructed directly.
+
+    Protein vocab fields are optional — ``None`` means "predicted
+    mechanism, exact protein not computable from cached cDNA alone."
+    When resolved, the fields follow the same conventions as
+    :class:`KnownAminoAcidChange` so consumers can read them
+    uniformly.
+
+    Parameters
+    ----------
+    variant : Variant
+    transcript : pyensembl.Transcript
+    splice_signal : MutationEffect
+        The splice-signal-disruption Effect (``SpliceDonor`` /
+        ``SpliceAcceptor`` / ``IntronicSpliceSite`` /
+        ``ExonicSpliceSite``) describing *where* the disruption was
+        in the transcript. Lets consumers reach
+        ``effect.splice_signal.nearest_exon``,
+        ``effect.splice_signal.distance_to_exon``, etc. without
+        carrying those fields redundantly on every mechanism subclass.
+    mutant_transcript : MutantTranscript or None
+    aa_ref, aa_alt : str or None
+    aa_mutation_start_offset, aa_mutation_end_offset : int or None
+    mutant_protein_sequence : str or None
     """
 
-    short_description = "predicted-intron-retention"
-
-
-class PredictedCrypticSpliceSite(TranscriptMutationEffect):
-    """Placeholder effect: a cryptic donor or acceptor is expected to
-    be used in place of the disrupted canonical signal.
-
-    ``direction`` is ``"donor"`` or ``"acceptor"``. Exact protein
-    consequence requires flanking genomic sequence; emitted as the
-    :attr:`EffectCandidate.effect` of a SpliceOutcomeSet's ``CRYPTIC_DONOR`` /
-    ``CRYPTIC_ACCEPTOR`` outcome.
-    """
-
-    def __init__(self, variant, transcript, direction):
+    def __init__(
+            self, variant, transcript, splice_signal,
+            mutant_transcript=None,
+            aa_ref=None, aa_alt=None,
+            aa_mutation_start_offset=None,
+            aa_mutation_end_offset=None,
+            mutant_protein_sequence=None):
         TranscriptMutationEffect.__init__(self, variant, transcript)
-        if direction not in ("donor", "acceptor"):
-            raise ValueError(
-                "PredictedCrypticSpliceSite direction must be "
-                "'donor' or 'acceptor', got %r" % (direction,))
-        self.direction = direction
+        self.splice_signal = splice_signal
+        self.mutant_transcript = mutant_transcript
+        self.aa_ref = aa_ref
+        self.aa_alt = aa_alt
+        self.aa_mutation_start_offset = aa_mutation_start_offset
+        self.aa_mutation_end_offset = aa_mutation_end_offset
+        self.mutant_protein_sequence = mutant_protein_sequence
+
+    @property
+    def resolved(self) -> bool:
+        """True when the protein math succeeded for this mechanism —
+        i.e. :attr:`mutant_protein_sequence` is populated. Convenience
+        for consumers that want to branch on "do we have a concrete
+        protein for this mechanism?"
+        """
+        return self.mutant_protein_sequence is not None
+
+
+class NormalSplicing(SpliceMechanismEffect):
+    """Canonical splicing proceeds despite the disruption.
+
+    The splice signal was hit, but the spliceosome handles it; the
+    protein consequence (if any) is whatever the underlying
+    nucleotide change normally produces — a :class:`Substitution`
+    for an :class:`ExonicSpliceSite`, no protein change for a
+    purely intronic disruption. The underlying coding change is
+    carried as :attr:`coding_effect`; when there isn't one (intronic
+    variant), it's ``None``.
+
+    Note: this class is special among :class:`SpliceMechanismEffect`
+    subclasses — it doesn't itself transform the protein. The other
+    four mechanisms (skipping, retention, cryptic donor/acceptor)
+    are the actual transformers and carry their own protein vocab.
+    """
+
+    def __init__(self, variant, transcript, splice_signal,
+                 coding_effect=None):
+        SpliceMechanismEffect.__init__(
+            self, variant, transcript, splice_signal)
+        self.coding_effect = coding_effect
+
+    @property
+    def aa_ref(self):
+        return getattr(self.coding_effect, "aa_ref", None)
+
+    @aa_ref.setter
+    def aa_ref(self, value):
+        # The base class __init__ assigns to aa_ref; accept and discard
+        # — actual value comes from coding_effect.
+        pass
+
+    @property
+    def aa_alt(self):
+        return getattr(self.coding_effect, "aa_alt", None)
+
+    @aa_alt.setter
+    def aa_alt(self, value):
+        pass
+
+    @property
+    def mutant_protein_sequence(self):
+        return getattr(self.coding_effect, "mutant_protein_sequence", None)
+
+    @mutant_protein_sequence.setter
+    def mutant_protein_sequence(self, value):
+        pass
+
+    @property
+    def aa_mutation_start_offset(self):
+        return getattr(self.coding_effect, "aa_mutation_start_offset", None)
+
+    @aa_mutation_start_offset.setter
+    def aa_mutation_start_offset(self, value):
+        pass
+
+    @property
+    def aa_mutation_end_offset(self):
+        return getattr(self.coding_effect, "aa_mutation_end_offset", None)
+
+    @aa_mutation_end_offset.setter
+    def aa_mutation_end_offset(self, value):
+        pass
 
     @property
     def short_description(self):
-        return "predicted-cryptic-%s" % self.direction
+        if self.coding_effect is None:
+            return "normal-splicing"
+        return "normal-splicing (%s)" % self.coding_effect.short_description
+
+
+class ExonSkipping(SpliceMechanismEffect):
+    """The affected exon is excluded from the mature transcript.
+
+    When in-frame (the exon's length is divisible by 3), the result
+    is a clean amino-acid deletion plus an optional boundary-codon
+    reshape. When out-of-frame, a frameshift propagates from the
+    new exon junction through the rest of the transcript.
+
+    Parameters beyond the base class
+    --------------------------------
+    affected_exon : pyensembl.Exon
+        The skipped exon.
+    in_frame : bool
+        ``True`` when ``len(affected_exon) % 3 == 0`` — the
+        exon-skip is codon-aligned and the downstream sequence
+        keeps its frame.
+    """
+
+    def __init__(self, variant, transcript, splice_signal, affected_exon,
+                 in_frame, mutant_transcript=None,
+                 aa_ref=None, aa_alt=None,
+                 aa_mutation_start_offset=None,
+                 aa_mutation_end_offset=None,
+                 mutant_protein_sequence=None):
+        SpliceMechanismEffect.__init__(
+            self, variant, transcript, splice_signal,
+            mutant_transcript=mutant_transcript,
+            aa_ref=aa_ref, aa_alt=aa_alt,
+            aa_mutation_start_offset=aa_mutation_start_offset,
+            aa_mutation_end_offset=aa_mutation_end_offset,
+            mutant_protein_sequence=mutant_protein_sequence)
+        self.affected_exon = affected_exon
+        self.in_frame = in_frame
+
+    @property
+    def short_description(self):
+        exon_id = getattr(self.affected_exon, "exon_id", "?")
+        if self.resolved and self.aa_ref:
+            return "exon-skip %s (p.%s%d_%s%ddel%s)" % (
+                exon_id,
+                self.aa_ref[0],
+                (self.aa_mutation_start_offset or 0) + 1,
+                self.aa_ref[-1],
+                (self.aa_mutation_start_offset or 0) + len(self.aa_ref),
+                "" if self.in_frame else "fs")
+        suffix = "" if self.in_frame else " (out-of-frame)"
+        if not self.resolved:
+            return "exon-skip %s (predicted%s)" % (exon_id, suffix)
+        return "exon-skip %s%s" % (exon_id, suffix)
+
+
+class IntronRetention(SpliceMechanismEffect):
+    """The intron stays in the mature transcript; translation
+    typically hits a premature stop inside the retained intron.
+
+    Parameters beyond the base class
+    --------------------------------
+    retained_intron_start, retained_intron_end : int
+        Genomic coordinates of the retained intron (1-based
+        inclusive). Always populated, even when protein math
+        couldn't resolve, so consumers know which intron.
+    side : str
+        ``"donor"`` or ``"acceptor"`` — which splice boundary failed,
+        causing the intron to be retained.
+    """
+
+    def __init__(self, variant, transcript, splice_signal,
+                 retained_intron_start, retained_intron_end, side,
+                 mutant_transcript=None,
+                 aa_ref=None, aa_alt=None,
+                 aa_mutation_start_offset=None,
+                 aa_mutation_end_offset=None,
+                 mutant_protein_sequence=None):
+        SpliceMechanismEffect.__init__(
+            self, variant, transcript, splice_signal,
+            mutant_transcript=mutant_transcript,
+            aa_ref=aa_ref, aa_alt=aa_alt,
+            aa_mutation_start_offset=aa_mutation_start_offset,
+            aa_mutation_end_offset=aa_mutation_end_offset,
+            mutant_protein_sequence=mutant_protein_sequence)
+        self.retained_intron_start = retained_intron_start
+        self.retained_intron_end = retained_intron_end
+        self.side = side
+
+    @property
+    def short_description(self):
+        if self.resolved:
+            return "intron-retention (%s side, p.X%dfs*)" % (
+                self.side, (self.aa_mutation_start_offset or 0) + 1)
+        return "intron-retention (%s side, predicted)" % self.side
+
+
+class CrypticSpliceSiteEffect(SpliceMechanismEffect):
+    """Base for cryptic donor / acceptor effects. Carries the
+    cryptic motif's position and score, plus the resulting exon
+    length delta."""
+
+    direction = None  # "donor" / "acceptor", set by subclass
+
+    def __init__(self, variant, transcript, splice_signal, affected_exon,
+                 cryptic_genomic_position=None, motif_score=None,
+                 exon_length_delta=None,
+                 mutant_transcript=None,
+                 aa_ref=None, aa_alt=None,
+                 aa_mutation_start_offset=None,
+                 aa_mutation_end_offset=None,
+                 mutant_protein_sequence=None):
+        SpliceMechanismEffect.__init__(
+            self, variant, transcript, splice_signal,
+            mutant_transcript=mutant_transcript,
+            aa_ref=aa_ref, aa_alt=aa_alt,
+            aa_mutation_start_offset=aa_mutation_start_offset,
+            aa_mutation_end_offset=aa_mutation_end_offset,
+            mutant_protein_sequence=mutant_protein_sequence)
+        self.affected_exon = affected_exon
+        self.cryptic_genomic_position = cryptic_genomic_position
+        self.motif_score = motif_score
+        self.exon_length_delta = exon_length_delta
+
+    @property
+    def short_description(self):
+        if not self.resolved:
+            return "cryptic-%s (predicted)" % self.direction
+        delta = self.exon_length_delta or 0
+        kind = "ext" if delta > 0 else "trunc" if delta < 0 else "shift"
+        return "cryptic-%s %s%dbp" % (
+            self.direction, kind, abs(delta))
+
+
+class CrypticDonor(CrypticSpliceSiteEffect):
+    """A cryptic GT donor is used instead of the disrupted canonical
+    donor; the exon is extended (cryptic site downstream) or
+    truncated (cryptic site upstream)."""
+    direction = "donor"
+
+
+class CrypticAcceptor(CrypticSpliceSiteEffect):
+    """A cryptic AG acceptor is used instead of the disrupted
+    canonical acceptor; the exon is extended (cryptic site upstream)
+    or truncated (cryptic site downstream)."""
+    direction = "acceptor"
 
 
 class Exonic(TranscriptMutationEffect):

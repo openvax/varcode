@@ -67,8 +67,15 @@ from .rna_evidence import (
     make_rna_outcome,
 )
 from .splice_outcomes import (
-    SpliceOutcome,
     SpliceOutcomeSet,
+)
+from .effects.effect_classes import (
+    CrypticAcceptor,
+    CrypticDonor,
+    ExonSkipping,
+    IntronRetention,
+    NormalSplicing,
+    SpliceMechanismEffect,
 )
 from .structural_variant import SV_TYPES, StructuralVariant
 from .sv_allele_parser import parse_symbolic_alt
@@ -99,9 +106,14 @@ __all__ = [
     "Genotype",
     "Zygosity",
 
-    # splice outcome possibility set (openvax/varcode#262)
-    "SpliceOutcome",
+    # splice outcome possibility set (openvax/varcode#262, #382)
     "SpliceOutcomeSet",
+    "SpliceMechanismEffect",
+    "NormalSplicing",
+    "ExonSkipping",
+    "IntronRetention",
+    "CrypticDonor",
+    "CrypticAcceptor",
 
     # MutantTranscript data model + pluggable annotators (openvax/varcode#271)
     "MutantTranscript",

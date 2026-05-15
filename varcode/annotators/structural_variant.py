@@ -679,9 +679,10 @@ class StructuralVariantAnnotator:
         fall-throughs) or when no breakpoint falls in a splice
         window.
         """
-        from ..effects.effect_classes import StructuralVariantEffect
+        from ..effects.effect_classes import (
+            NormalSplicing, StructuralVariantEffect)
         from ..effect_candidates import EffectCandidate
-        from ..splice_outcomes import SpliceOutcome, enumerate_splice_outcomes
+        from ..splice_outcomes import enumerate_splice_outcomes
         if not isinstance(effect, StructuralVariantEffect):
             return
         # Check both SV endpoints. For DEL/DUP/INV the start and end
@@ -717,8 +718,7 @@ class StructuralVariantAnnotator:
             except (AttributeError, KeyError, ValueError):
                 continue
             for candidate in splice_set.candidates:
-                if candidate.evidence.get("splice_outcome") is (
-                        SpliceOutcome.NORMAL_SPLICING):
+                if isinstance(candidate.effect, NormalSplicing):
                     # Primary SV classification already covers the
                     # "splicing proceeds normally" interpretation.
                     continue

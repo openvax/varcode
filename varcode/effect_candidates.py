@@ -70,14 +70,14 @@ class EffectCandidate(DataclassSerializable):
     ----------
     effect : MutationEffect
         The effect this candidate represents. Guaranteed to be a
-        :class:`~varcode.effects.MutationEffect` instance — producers
-        that can't compute a full coding effect use placeholder
-        subclasses (e.g.
-        :class:`~varcode.effects.effect_classes.PredictedIntronRetention`)
-        so consumers can read
-        ``candidate.effect.short_description`` and
-        ``candidate.effect.mutant_protein_sequence`` uniformly across
-        SV, splice, and point-variant candidates.
+        :class:`~varcode.effects.MutationEffect` instance. For
+        outcomes whose protein math isn't yet resolved (e.g. a
+        splice-mechanism Effect built without a ``genomic_sequence``
+        provider), the inner Effect still satisfies the interface —
+        ``aa_ref`` / ``aa_alt`` / ``mutant_protein_sequence`` are
+        simply ``None``, and consumers can read
+        ``candidate.effect.short_description`` uniformly across SV,
+        splice, and point-variant candidates.
     probability : float or None
         Estimated likelihood this candidate actually happens, in
         ``[0, 1]``. ``None`` means "not scored" — the candidate is in
