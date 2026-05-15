@@ -220,25 +220,28 @@ class MultiOutcomeEffect(MutationEffect):
     def highest_priority_candidate(self):
         """The :class:`EffectCandidate` whose inner effect has the
         highest :func:`~varcode.effects.effect_priority` (most
-        protein-disruptive). Distinct from
-        :attr:`most_likely_candidate` whenever probability and
-        priority disagree — e.g. a low-probability frameshift
-        alongside a high-probability silent change.
+        protein-disruptive). Pure priority ranking — probability
+        deliberately doesn't factor in, so a low-probability
+        frameshift sitting alongside a high-probability silent
+        change still surfaces here. (For probability-based ranking
+        use :attr:`most_likely_candidate`; the two answer different
+        questions.)
 
-        Ties are broken by ``probability`` descending (``None`` /
-        unscored treated as 0.0); a remaining tie falls through to
-        the first matching entry of :attr:`candidates`, which is
-        already the most-likely by construction. This keeps the
-        accessor deterministic even when every candidate has
+        Ties on priority resolve to the first matching entry of
+        :attr:`candidates` — which, on subclasses whose
+        :attr:`candidates` is sorted by ``probability`` descending,
+        means "the most-likely tied candidate." Subclasses that sort
+        :attr:`candidates` differently (e.g.
+        :class:`PhaseCandidateSet` sorts by priority itself, since
+        per-hypothesis probability is unknown) inherit that order.
+
+        Behavior is deterministic even when every candidate has
         ``probability=None``.
         """
         from .effect_ordering import effect_priority
         return max(
             self.candidates,
-            key=lambda c: (
-                effect_priority(c.effect),
-                c.probability if c.probability is not None else 0.0,
-            ),
+            key=lambda c: effect_priority(c.effect),
         )
 
     @property

@@ -416,9 +416,12 @@ def test_effects_unwraps_candidate_tuple():
     assert inner == tuple(c.effect for c in target.candidates)
 
 
-def test_highest_priority_secondary_tie_break_is_probability():
-    """When two candidates share the same effect_priority, the
-    one with the higher probability wins the tie.
+def test_highest_priority_ignores_probability_on_ties():
+    """Pure priority ranking: a tie on ``effect_priority`` resolves
+    to the first matching entry of ``candidates``, regardless of
+    probability. Probability deliberately does NOT factor in — the
+    accessor's job is to surface the worst-case classification
+    independent of how likely it is.
     """
     from varcode.effects.effect_classes import MultiOutcomeEffect, Silent
     from varcode import EffectCandidate
@@ -431,23 +434,50 @@ def test_highest_priority_secondary_tie_break_is_probability():
         def candidates(self):
             return self._cands
 
-    # Two candidates wrapping the same Effect class (so same priority);
-    # the second one has higher probability. The sort key tuple
-    # (priority, probability) should pick the higher-probability one.
-    e_low = Silent.__new__(Silent)
-    e_high = Silent.__new__(Silent)
+    # Two candidates with the same priority; the lower-probability
+    # one is listed FIRST. Pure-priority + first-wins must return
+    # it, even though the second has higher probability.
+    e_first = Silent.__new__(Silent)
+    e_second = Silent.__new__(Silent)
     moe = _FakeMOE([
-        EffectCandidate(effect=e_low, probability=0.2),
-        EffectCandidate(effect=e_high, probability=0.9),
+        EffectCandidate(effect=e_first, probability=0.2),
+        EffectCandidate(effect=e_second, probability=0.9),
     ])
-    assert moe.highest_priority_candidate.effect is e_high
+    assert moe.highest_priority_candidate.effect is e_first
 
 
-def test_highest_priority_falls_back_when_all_probabilities_none():
-    """When every candidate has probability=None, the tuple key's
-    probability term collapses to 0.0 for all entries; ``max``
-    deterministically returns the first matching candidate (which
-    is ``candidates[0]`` by construction).
+def test_highest_priority_picks_low_prob_high_impact_over_high_prob_low_impact():
+    """The point of having highest_priority_* separate from
+    most_likely_*: a low-probability frameshift sitting alongside a
+    high-probability silent change should still surface as the
+    highest-impact outcome."""
+    from varcode.effects.effect_classes import (
+        MultiOutcomeEffect, Silent, FrameShift)
+    from varcode import EffectCandidate
+
+    class _FakeMOE(MultiOutcomeEffect):
+        def __init__(self, cands):
+            self._cands = tuple(cands)
+
+        @property
+        def candidates(self):
+            return self._cands
+
+    silent = Silent.__new__(Silent)
+    frameshift = FrameShift.__new__(FrameShift)
+    # Most-likely-first ordering puts Silent (prob=0.9) at index 0.
+    moe = _FakeMOE([
+        EffectCandidate(effect=silent, probability=0.9),
+        EffectCandidate(effect=frameshift, probability=0.05),
+    ])
+    assert moe.most_likely_candidate.effect is silent
+    assert moe.highest_priority_candidate.effect is frameshift
+
+
+def test_highest_priority_works_when_all_probabilities_none():
+    """When every candidate has probability=None, behavior must
+    stay deterministic — first matching entry of candidates wins
+    the priority tie.
     """
     from varcode.effects.effect_classes import MultiOutcomeEffect, Silent
     from varcode import EffectCandidate
@@ -466,7 +496,6 @@ def test_highest_priority_falls_back_when_all_probabilities_none():
         EffectCandidate(effect=e_first, probability=None),
         EffectCandidate(effect=e_second, probability=None),
     ])
-    # First candidate wins on full tie.
     assert moe.highest_priority_candidate.effect is e_first
 
 
