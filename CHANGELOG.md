@@ -3,6 +3,27 @@
 ## [Unreleased]
 
 **Breaking**
+- `varcode.Outcome` renamed to `varcode.EffectCandidate`. The helper
+  `outcomes_from_candidates` renamed to `candidates_from_effects`.
+  The module `varcode.outcomes` renamed to
+  `varcode.effect_candidates`. The test file `tests/test_outcomes.py`
+  renamed to `tests/test_effect_candidates.py`. The `description`
+  field on the wrapper class is removed — use
+  `candidate.effect.short_description` (it was always a passthrough).
+  Also removed from `make_rna_outcome(description=...)`. No
+  deprecation alias; update imports. The class ships with a module
+  docstring explaining *why* the wrapper exists: the same
+  `MutationEffect` instance can appear in multiple multi-outcome
+  contexts with different per-context provenance (e.g. a splice
+  candidate re-surfaced by the SV annotator with a different
+  `source` tag and `sv_type` in evidence); putting metadata on the
+  wrapper instead of the Effect lets the Effect stay shared while
+  the labels diverge. `MultiOutcomeEffect` retains two accessors:
+  `.candidates` (raw `tuple[MutationEffect, ...]`) and `.outcomes`
+  (wrapped `tuple[EffectCandidate, ...]`); the back-compat framing
+  on `.candidates` is dropped — both are first-class. Aspirational
+  `"isovar"` / `"exacto"` / `"longread_assembly"` example tags
+  scrubbed from varcode docstrings.
 - Phasing API generalized; Isovar-named identifiers removed from the
   varcode public surface ([#378](https://github.com/openvax/varcode/issues/378)).
   Varcode no longer imports or names any upstream tool — implementations
