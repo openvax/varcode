@@ -100,17 +100,16 @@ class TestMakeRNAOutcome:
         o = make_rna_outcome(effect=Substitution)  # placeholder effect
         assert o.source == "rna"
         assert o.evidence == {}
-        assert o.probability is None
 
     def test_well_known_fields_land_in_evidence(self):
         o = make_rna_outcome(
             effect=Substitution,
             transcript_model_id="ISOFORM_42",
             read_count=314,
-            probability=0.91)
+            extra_evidence={"isoform_fraction": 0.91})
         assert o.evidence["transcript_model_id"] == "ISOFORM_42"
         assert o.evidence["read_count"] == 314
-        assert o.probability == 0.91
+        assert o.evidence["isoform_fraction"] == 0.91
 
     def test_extra_evidence_merges_alongside_well_known(self):
         o = make_rna_outcome(
@@ -197,8 +196,7 @@ class TestApplyAttaches:
             effect=baseline[0].effect,
             source="isovar",
             transcript_model_id="ISOFORM_A",
-            read_count=42,
-            probability=0.78)
+            read_count=42)
         apply_rna_evidence_to_effects(
             [effect], _StubResolver([observed]))
 

@@ -174,7 +174,6 @@ def test_varcode_splice_candidates_are_unscored_but_ordered():
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     effects = variant.effects(splice_outcomes=True)
     target = next(e for e in effects if e.transcript is transcript)
-    assert [c.probability for c in target.candidates] == [None] * 4
     assert [type(c.effect) for c in target.candidates] == [
         ExonSkipping,
         IntronRetention,
@@ -525,7 +524,6 @@ def test_splice_outcome_set_json_round_trip():
     # Mechanism class identity preserved across round-trip.
     for rt_c, og_c in zip(restored.candidates, target.candidates):
         assert type(rt_c.effect) is type(og_c.effect)
-        assert rt_c.probability == og_c.probability
 
 
 def test_splice_outcome_set_round_trip_preserves_priority_class():
@@ -714,8 +712,7 @@ def test_rna_evidence_reconciles_splice_set_by_excluding_unobserved_mechanisms()
     observed = make_rna_outcome(
         effect=skip.effect,
         source="junction_reads",
-        read_count=18,
-        probability=0.91)
+        read_count=18)
 
     class Resolver:
         def observed_outcomes(self, variant, transcript):

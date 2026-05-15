@@ -91,7 +91,6 @@ class NullRNAEvidenceResolver:
 def make_rna_outcome(
         effect,
         *,
-        probability: Optional[float] = None,
         source: str = "rna",
         transcript_model_id: Optional[str] = None,
         read_count: Optional[int] = None,
@@ -108,9 +107,6 @@ def make_rna_outcome(
     ----------
     effect : MutationEffect
         The effect this RNA-observed outcome represents.
-    probability : float or None
-        Estimated frequency of this isoform (e.g. expression-supported
-        fraction). ``None`` means "not scored".
     source : str
         Producer name; defaults to ``"rna"``. Set to a tool-specific
         string (RNA assembler, long-read caller, etc.) for downstream
@@ -135,7 +131,6 @@ def make_rna_outcome(
         evidence.update(extra_evidence)
     return EffectCandidate(
         effect=effect,
-        probability=probability,
         source=source,
         evidence=evidence,
     )

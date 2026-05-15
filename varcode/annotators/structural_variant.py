@@ -22,7 +22,7 @@ Output: one of the SV effect classes from
 ``TranslocationToIntergenic``), each of which is a
 :class:`~varcode.effects.MultiOutcomeEffect` exposing
 :attr:`candidates` — a tuple of :class:`~varcode.effect_candidates.EffectCandidate`
-entries each carrying an effect + probability + source + evidence.
+entries each carrying an effect + source + evidence.
 
 Scope
 -----
@@ -54,7 +54,7 @@ Integration hooks
 * **External splice predictor**: call the annotator, then wrap each
   returned effect in a new :class:`MultiOutcomeEffect` whose
   ``candidates`` tuple includes a fresh ``EffectCandidate(effect=cryptic,
-  source="spliceai", probability=...)`` entry.
+  source="spliceai", evidence=...)`` entry.
 * **Short-read RNA evidence**: same pattern. Attach an
   ``EffectCandidate`` carrying the read-evidence tool's ``source``
   and a ``junction_reads`` field in ``evidence`` alongside the
@@ -724,7 +724,6 @@ class StructuralVariantAnnotator:
                     continue
                 attached.append(EffectCandidate(
                     effect=candidate.effect,
-                    probability=candidate.probability,
                     source="varcode_splice",
                     evidence={**dict(candidate.evidence), **sv_evidence}))
         if attached:

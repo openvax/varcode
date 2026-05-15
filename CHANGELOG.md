@@ -20,14 +20,14 @@
     `candidate.coding_effect` / `candidate.predicted_class_name` /
     `candidate.mutant_transcript` / `candidate.has_protein`
     fields are gone — read provenance off the `EffectCandidate`
-    (`.probability`, `.source`, `.evidence`) and mechanism/protein
-    state off the inner effect (`candidate.effect`,
+    (`.source`, `.evidence`) and mechanism/protein state off the
+    inner effect (`candidate.effect`,
     `candidate.effect.mutant_transcript`).
     `candidate.plausibility` has no one-for-one semantic replacement:
     it was the old splice-specific name for a DNA-only ordering
-    heuristic. Varcode-generated splice candidates now leave
-    `EffectCandidate.probability=None`; only external scorers or RNA
-    evidence should populate probability.
+    heuristic, not evidence. There is no shared
+    `EffectCandidate.probability`; producer-specific support belongs
+    in `candidate.evidence` under explicit names.
   - `MultiOutcomeEffect.candidates` is the single accessor on every
     subclass (`SpliceOutcomeSet`, `StructuralVariantEffect`,
     `PhaseCandidateSet`, `ExonicSpliceSite`, `HaplotypeEffect`).
@@ -52,17 +52,17 @@
     four explicit accessors so callers never confuse "wrapped vs
     unwrapped" or "likeliest vs most-disruptive":
     - `.most_likely_candidate` → `EffectCandidate` (same as
-      `candidates[0]`; top by probability only for scored producers)
+      `candidates[0]`)
     - `.most_likely_effect` → inner `MutationEffect` of the above
     - `.highest_priority_candidate` → `EffectCandidate` with the
       highest `effect_priority` among candidates (worst-case
-      classification, independent of probability)
+      classification, independent of producer order)
     - `.highest_priority_effect` → inner `MutationEffect` of the above
     Callers doing `effect.most_likely.mutant_protein_sequence` or
     `effect.most_likely.aa_ref` should switch to
     `effect.most_likely_effect.mutant_protein_sequence` etc.;
-    callers that want the wrapper (with `.probability`, `.source`,
-    `.evidence`) use `effect.most_likely_candidate`.
+    callers that want the wrapper (with `.source`, `.evidence`) use
+    `effect.most_likely_candidate`.
   - Splice mechanisms promoted to first-class `MutationEffect`
     classes, each carrying its own protein vocab (`aa_ref` /
     `aa_alt` / `mutant_protein_sequence` / `mutant_transcript`) on

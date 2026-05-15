@@ -32,14 +32,11 @@ cached cDNA alone." No parallel enum, no placeholder class
 hierarchy.
 
 Limitations of this prototype (documented openly so callers know what
-the scores mean):
+the candidate ordering means):
 
 * Varcode-generated splice candidates are ordered by a hard-coded,
-  DNA-only mechanism preference. They do **not** populate
-  ``EffectCandidate.probability`` because varcode has not measured a
-  calibrated probability for these mechanisms. RNA/model integrations
-  can provide their own ``probability`` values; varcode stores those
-  unchanged with their ``source`` / ``evidence``.
+  DNA-only mechanism preference. The ordering is intentionally not
+  exported as a score or probability.
 * :class:`ExonSkipping` and :class:`NormalSplicing` produce concrete
   protein sequences using the cDNA already available from PyEnsembl.
 * :class:`IntronRetention` and the cryptic-splice mechanisms
@@ -131,13 +128,7 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
             excluded_candidates=(), candidate_rna_evidence=()):
         MultiOutcomeEffect.__init__(self, variant)
         self.transcript = transcript
-        # Sort scored candidates by probability descending. Unscored
-        # varcode splice predictions keep their producer order because
-        # Python's sort is stable and all None scores map to 0.0.
-        self._candidates = tuple(sorted(
-            candidates,
-            key=lambda c: c.probability if c.probability is not None else 0.0,
-            reverse=True))
+        self._candidates = tuple(candidates)
         # Class of the original splice-disrupting effect this set
         # replaced (SpliceDonor, SpliceAcceptor, ExonicSpliceSite, or
         # IntronicSpliceSite). Used for priority lookup.
@@ -298,11 +289,7 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
             self.variant,
             getattr(self.transcript, "name", None),
             ", ".join(
-                "%s (p=%s)" % (
-                    c.effect.short_description,
-                    "%.2f" % c.probability
-                    if c.probability is not None
-                    else "?")
+                c.effect.short_description
                 for c in self.candidates),
         )
 
@@ -313,10 +300,9 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
 # ---------------------------------------------------------------------
 # DNA-only mechanism order.
 #
-# Hand-tuned heuristic ordering. These are not probabilities and are
-# intentionally not exported as :attr:`EffectCandidate.probability`.
-# The order only gives varcode a deterministic leading candidate when
-# DNA alone leaves several splice mechanisms possible.
+# Hand-tuned heuristic ordering. These are not probabilities. The order
+# only gives varcode a deterministic leading candidate when DNA alone
+# leaves several splice mechanisms possible.
 # ---------------------------------------------------------------------
 
 

@@ -114,7 +114,6 @@ def test_sv_large_deletion_outcomes_shape():
     for o in outcomes:
         assert isinstance(o, EffectCandidate)
         assert o.source == "varcode"
-        assert o.probability is None  # varcode doesn't assign; integrations do
 
 
 def test_sv_deletion_purely_intronic_returns_intronic():
@@ -236,10 +235,10 @@ def test_sv_breakend_mate_intergenic_is_translocation():
 # --------------------------------------------------------------------
 
 
-def test_external_integrations_can_attach_scored_outcomes():
+def test_external_integrations_can_attach_evidence():
     """Smoke test: an external tool wraps a varcode-nominated
-    effect in an EffectCandidate with source/probability/evidence, and
-    that EffectCandidate works as the interchange format PR 7 defined."""
+    effect in an EffectCandidate with source/evidence, and that
+    EffectCandidate works as the interchange format PR 7 defined."""
     transcript = _cftr()
     sv = StructuralVariant(
         contig="7",
@@ -254,17 +253,14 @@ def test_external_integrations_can_attach_scored_outcomes():
     # outcome with junction read support.
     rna_scored = EffectCandidate(
         effect=effect,
-        probability=0.94,
         source="isovar",
         evidence={"junction_reads": 87, "split_reads": 15})
     assert rna_scored.source == "isovar"
-    assert rna_scored.probability == 0.94
     assert rna_scored.evidence["junction_reads"] == 87
 
     # A long-read assembly tool would attach its own resolution.
     lr_scored = EffectCandidate(
         effect=effect,
-        probability=0.99,
         source="longread_assembly",
         evidence={"assembled_by": "hifiasm",
                   "breakpoint_confidence": "exact"})
@@ -327,9 +323,9 @@ def test_sv_annotator_attaches_cryptic_outcomes_from_assembly():
     assert len(cryptic) >= 1
     for o in cryptic:
         assert isinstance(o.effect, CrypticExonCandidate)
-        assert 0.0 <= o.probability <= 1.0
         assert "donor_score" in o.evidence
         assert "acceptor_score" in o.evidence
+        assert "motif_score" in o.evidence
 
 
 def test_sv_without_cryptic_motifs_has_single_outcome():

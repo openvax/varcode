@@ -17,12 +17,9 @@ from serializable import Serializable
 from .common import bio_seq_to_str
 
 
-def _cryptic_probability(candidate):
+def _cryptic_motif_score(candidate):
     """Average of a cryptic-exon candidate's donor and acceptor motif
-    scores. Used by :attr:`StructuralVariantEffect.candidates` to
-    populate ``EffectCandidate.probability`` when no external scorer is
-    attached (#337). Both scores are match-ratios in ``[0, 1]`` so
-    their mean is already in range.
+    scores. Stored in evidence as a motif score, not a probability.
     """
     donor = candidate.donor_score or 0.0
     acceptor = candidate.acceptor_score or 0.0
@@ -137,8 +134,8 @@ class MultiOutcomeEffect(MutationEffect):
     * :attr:`candidates` — tuple of :class:`~varcode.effect_candidates.EffectCandidate`
       objects in producer order. Each entry pairs an
       inner :class:`MutationEffect` (concrete or placeholder) with
-      its provenance — ``source`` (producer), ``probability``,
-      ``evidence`` dict. The :attr:`effects` helper unwraps to the
+      its provenance — ``source`` (producer) and ``evidence`` dict.
+      The :attr:`effects` helper unwraps to the
       inner Effects when callers don't need provenance.
     * :attr:`priority_class` — effect class whose priority this set
       adopts (read by :func:`varcode.effects.effect_priority`).
@@ -162,8 +159,7 @@ class MultiOutcomeEffect(MutationEffect):
     one that matches your question:
 
     * **Most likely**: the first candidate after producer ordering.
-      Scored producers sort by ``probability``. Unscored producers
-      preserve their own deterministic order.
+      Producers preserve their own deterministic order.
       :attr:`most_likely_candidate` returns the wrapped
       :class:`EffectCandidate` (provenance + inner effect);
       :attr:`most_likely_effect` returns just the inner
@@ -172,16 +168,16 @@ class MultiOutcomeEffect(MutationEffect):
 
     * **Highest priority**: top by varcode's effect-priority ordering
       (see :func:`~varcode.effects.effect_priority`) — the
-      most protein-disruptive candidate regardless of probability.
+      most protein-disruptive candidate regardless of producer order.
       :attr:`highest_priority_candidate` and
       :attr:`highest_priority_effect` are the analogous accessors.
       Use this for clinical / functional filtering ("flag if any
-      candidate is at least a frameshift"), since a low-probability
-      frameshift sitting alongside a high-probability silent change
+      candidate is at least a frameshift"), since a disruptive
+      candidate sitting behind a less-disruptive primary candidate
       should still light up.
 
-    The two coincide when probability ranking and priority ranking
-    agree, which is common but not guaranteed. Pick consciously.
+    The two coincide when producer order and priority ranking agree,
+    which is common but not guaranteed. Pick consciously.
     """
 
     @property
@@ -196,14 +192,12 @@ class MultiOutcomeEffect(MutationEffect):
     @property
     def most_likely_candidate(self):
         """The first :class:`EffectCandidate` in producer order.
-        Scored subclasses sort by ``probability`` before exposing
-        candidates; unscored subclasses keep a deterministic order.
-        Pairs the inner effect with its
-        ``source`` / ``probability`` / ``evidence`` provenance.
+        Pairs the inner effect with its ``source`` / ``evidence``
+        provenance.
 
         For just the inner :class:`MutationEffect`, use
         :attr:`most_likely_effect`. For the most protein-disruptive
-        candidate (independent of probability), use
+        candidate (independent of producer order), use
         :attr:`highest_priority_candidate`.
         """
         return self.candidates[0]
@@ -221,18 +215,15 @@ class MultiOutcomeEffect(MutationEffect):
     def highest_priority_candidate(self):
         """The :class:`EffectCandidate` whose inner effect has the
         highest :func:`~varcode.effects.effect_priority` (most
-        protein-disruptive). Pure priority ranking — probability
-        deliberately doesn't factor in, so a low-probability
-        frameshift sitting alongside a high-probability silent
-        change still surfaces here. (For probability-based ranking
-        use :attr:`most_likely_candidate`; the two answer different
-        questions.)
+        protein-disruptive). Pure priority ranking — producer order
+        deliberately doesn't factor in, so a frameshift sitting
+        behind a less-disruptive primary candidate still surfaces
+        here.
 
         Ties on priority resolve to the first matching entry of
         :attr:`candidates`, preserving the subclass's candidate order.
 
-        Behavior is deterministic even when every candidate has
-        ``probability=None``.
+        Behavior is deterministic.
         """
         from .effect_ordering import effect_priority
         return max(
@@ -256,7 +247,7 @@ class MultiOutcomeEffect(MutationEffect):
         Subclasses that compute :attr:`candidates` dynamically call
         this helper on the tuple they construct so that
         :func:`varcode.rna_evidence.apply_rna_evidence_to_effects`
-        and other post-hoc scorers can attach observed candidates
+        and other post-hoc evidence producers can attach observed candidates
         without subclassing or monkey-patching.
         """
         extra = getattr(self, "_extra_candidates", ())
@@ -1342,8 +1333,8 @@ class FrameShiftTruncation(PrematureStop, FrameShift):
 #
 # The classes are deliberately thin wrappers — the important interface
 # is :attr:`candidates`, which carries :class:`EffectCandidate` objects
-# with probability / source / evidence so external tools (RNA evidence,
-# SpliceAI, long-read assembly) can score them without subclassing.
+# with source / evidence provenance so external tools (RNA evidence,
+# SpliceAI, long-read assembly) can annotate them without subclassing.
 # =====================================================================
 
 
@@ -1375,7 +1366,7 @@ class StructuralVariantEffect(TranscriptMutationEffect, MultiOutcomeEffect):
         # Cryptic-exon candidates nominated by
         # :func:`varcode.cryptic_exons.enumerate_from_structural_variant`
         # (#337). Kept separate from primary effects because their
-        # entries carry different source / probability / evidence.
+        # entries carry different source / evidence.
         self._cryptic_candidates = ()
         # Splice-outcome candidates attached by the SV annotator when
         # an SV breakpoint lands in a canonical splice window (#341).
@@ -1409,11 +1400,11 @@ class StructuralVariantEffect(TranscriptMutationEffect, MultiOutcomeEffect):
             EffectCandidate(
                 effect=c,
                 source="varcode_motif",
-                probability=_cryptic_probability(c),
                 evidence={
                     **base_evidence,
                     "donor_score": c.donor_score,
                     "acceptor_score": c.acceptor_score,
+                    "motif_score": _cryptic_motif_score(c),
                     "interval_start": c.interval_start,
                     "interval_end": c.interval_end,
                 })
@@ -1741,9 +1732,8 @@ class PhaseCandidateSet(TranscriptMutationEffect, MultiOutcomeEffect):
             for candidate, hypothesis in paired)
         return self._combine_with_extra_candidates(base)
 
-    # Note on accessor semantics for this class: per-hypothesis
-    # probability is unknown (that's the whole point), so the
-    # base-class "producer order" contract is replaced here by
+    # Note on accessor semantics for this class: the base-class
+    # "producer order" contract is replaced here by
     # "sorted highest-impact-first" via
     # :func:`effect_priority`. Consequently
     # :attr:`most_likely_candidate` (== ``candidates[0]``) and

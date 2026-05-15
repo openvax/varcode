@@ -80,15 +80,11 @@ effects = variant.effects(splice_outcomes=True)
 # .candidates is a tuple[EffectCandidate, ...], in producer order.
 # Each candidate's .effect is a SpliceMechanismEffect subclass:
 #   EffectCandidate(effect=ExonSkipping(affected_exon=..., in_frame=True,
-#                                       aa_ref="KGYK...", ...),
-#                   probability=None)
+#                                       aa_ref="KGYK...", ...))
 #   EffectCandidate(effect=IntronRetention(retained_intron_start=...,
-#                                          side="donor", ...),
-#                   probability=None)
-#   EffectCandidate(effect=CrypticDonor(affected_exon=..., ...),
-#                   probability=None)
-#   EffectCandidate(effect=NormalSplicing(coding_effect=Substitution(...)),
-#                   probability=None)
+#                                          side="donor", ...))
+#   EffectCandidate(effect=CrypticDonor(affected_exon=..., ...))
+#   EffectCandidate(effect=NormalSplicing(coding_effect=Substitution(...)))
 ```
 
 `SpliceOutcomeSet` replaces the splice effect with a set of
@@ -143,25 +139,17 @@ whose `candidates` are the RNA-observed mechanisms, while
 trail. Use `splice_set.rna_evidence_for(candidate)` to inspect the
 observations supporting one current candidate.
 
-### Candidate scores
+### Candidate provenance
 
-There is no separate `plausibility` field in the new API. That was the
-old splice-specific name for "how likely this candidate seems before
-we have better evidence." The replacement is the generic
-`EffectCandidate.probability` slot, shared by every multi-outcome
-effect.
+There is no `plausibility` or `probability` field in the shared
+candidate wrapper. The old splice-specific `plausibility` value was a
+DNA-only ordering heuristic, not evidence. Varcode now keeps that
+ordering only as producer order.
 
-`probability` exists for one narrow reason: when a producer emits
-multiple candidates for the same variant/transcript, callers need a
-stable way to ask "which candidate does this producer think is most
-likely?" It is optional, source-scoped metadata, not an inherent
-property of the `MutationEffect`.
-
-For varcode-generated splice candidates, `probability` is `None`.
-Varcode keeps a deterministic DNA-only ordering of splice mechanisms,
-but it does not pretend that ordering is a measured probability.
-RNA/model integrations can put their own estimate there, and varcode
-stores it unchanged. `probability=None` means unscored, not impossible.
+Producer-specific support belongs in `candidate.evidence` under
+explicit names: `read_count`, `junction_id`, `psi`, `motif_score`,
+`donor_score`, `acceptor_score`, and so on. Varcode stores evidence
+as opaque provenance and does not normalize it into a probability.
 
 ### Picking a single candidate
 
@@ -170,18 +158,18 @@ notions of "best" are available — pick consciously:
 
 | Accessor | Returns | Meaning |
 |---|---|---|
-| `.most_likely_candidate` | `EffectCandidate` | First candidate after producer ordering; top by `probability` when scored |
+| `.most_likely_candidate` | `EffectCandidate` | First candidate after producer ordering |
 | `.most_likely_effect` | `MutationEffect` | Inner effect of the above |
 | `.highest_priority_candidate` | `EffectCandidate` | Top by `effect_priority` (most protein-disruptive) |
 | `.highest_priority_effect` | `MutationEffect` | Inner effect of the above |
 
-The `_candidate` accessors keep the provenance wrapper (`.probability`,
-`.source`, `.evidence`); the `_effect` accessors peel it off. The two
-"top by" notions coincide whenever probability ranking and priority
-ranking agree, which is common — but for clinical / functional
-filtering ("flag if any candidate is at least a frameshift") prefer
-`highest_priority_*`: a low-probability frameshift sitting alongside a
-high-probability silent change should still light up.
+The `_candidate` accessors keep the provenance wrapper (`.source`,
+`.evidence`); the `_effect` accessors peel it off. The two "top by"
+notions coincide whenever producer ordering and priority ranking
+agree, which is common — but for clinical / functional filtering
+("flag if any candidate is at least a frameshift") prefer
+`highest_priority_*`: a disruptive candidate behind a less-disruptive
+primary candidate should still light up.
 
 ### Limitations
 
@@ -275,8 +263,8 @@ sv_effects = [
 SV effects (`LargeDeletion`, `LargeDuplication`, `Inversion`,
 `GeneFusion`, `TranslocationToIntergenic`) are `MultiOutcomeEffect`
 subclasses — `e.candidates` exposes the candidate ORFs / cryptic-splice
-outcomes as a tuple of `EffectCandidate` objects, ordered by a
-per-class prior. External scorers (RNA evidence, long-read assembly)
+outcomes as a tuple of `EffectCandidate` objects in producer order.
+External evidence producers (RNA evidence, long-read assembly)
 plug in via `apply_rna_evidence_to_effects` to append observed
 candidates; see [Germline-aware annotation](germline.md)
 for the same composition pattern applied to germline.

@@ -13,9 +13,9 @@
 """Tests for the unified :class:`EffectCandidate` type (openvax/varcode#299).
 
 The type is deliberately minimal (dataclass + one helper), so tests
-focus on (a) the contract — probability bounds, defaults, frozen
-semantics — and (b) the ``MultiOutcomeEffect.candidates`` harmonized
-accessor lifting existing ``candidates`` into the new shape.
+focus on (a) the contract — defaults, frozen semantics — and (b) the
+``MultiOutcomeEffect.candidates`` harmonized accessor lifting existing
+``candidates`` into the new shape.
 """
 
 import pytest
@@ -32,7 +32,6 @@ ensembl_grch38 = cached_release(81)
 
 def test_effect_candidate_defaults():
     o = EffectCandidate(effect=object())
-    assert o.probability is None
     assert o.source == "varcode"
     assert o.evidence == {}
 
@@ -46,14 +45,9 @@ def test_effect_candidate_rejects_removed_description_kwarg():
         EffectCandidate(effect=object(), description="old kwarg")
 
 
-def test_effect_candidate_probability_bounds():
-    EffectCandidate(effect=object(), probability=0.0)
-    EffectCandidate(effect=object(), probability=1.0)
-    EffectCandidate(effect=object(), probability=None)
-    with pytest.raises(ValueError):
-        EffectCandidate(effect=object(), probability=-0.1)
-    with pytest.raises(ValueError):
-        EffectCandidate(effect=object(), probability=1.5)
+def test_effect_candidate_rejects_probability_kwarg():
+    with pytest.raises(TypeError):
+        EffectCandidate(effect=object(), probability=0.5)
 
 
 def test_effect_candidate_is_frozen():
@@ -77,7 +71,6 @@ def test_candidates_from_effects_tags_source():
     outcomes = candidates_from_effects((_C(), _C()), source="test_source")
     assert len(outcomes) == 2
     assert all(o.source == "test_source" for o in outcomes)
-    assert all(o.probability is None for o in outcomes)
 
 
 def test_exonic_splice_site_exposes_outcomes():
@@ -100,9 +93,8 @@ def test_exonic_splice_site_exposes_outcomes():
     assert outcomes[0].effect is effect
     # Second outcome: the coding-change alternate.
     assert outcomes[1].effect is effect.alternate_effect
-    # Both default to varcode-source and unscored probability.
+    # Both default to varcode-source.
     assert all(o.source == "varcode" for o in outcomes)
-    assert all(o.probability is None for o in outcomes)
 
 
 def test_sv_outcomes_carry_sv_type_in_evidence():
@@ -167,29 +159,25 @@ def test_effect_candidate_round_trips_via_json():
     real_effect = variant.effect_on_transcript(transcript)
     o = EffectCandidate(
         effect=real_effect,
-        probability=0.75,
         source="spliceai",
         evidence={"ds_ag": 0.12})
     rt = EffectCandidate.from_json(o.to_json())
-    assert rt.probability == 0.75
     assert rt.source == "spliceai"
     assert rt.evidence == {"ds_ag": 0.12}
     # effect round-trips polymorphically — same class as the original.
     assert type(rt.effect) is type(real_effect)
 
 
-def test_effect_candidate_accepts_external_scorer_shape():
+def test_effect_candidate_accepts_external_evidence_shape():
     """An external predictor (SpliceAI-style) can construct an
-    ``EffectCandidate`` with its own probability and evidence dict. This
-    pins the interchange contract — varcode doesn't ship a scorer,
-    but the type stays usable by one."""
+    ``EffectCandidate`` with its own evidence dict. This pins the
+    interchange contract — producer-specific scores stay in evidence
+    under explicit source-native names."""
     class _FakeEffect:
         short_description = "splice-donor"
     scored = EffectCandidate(
         effect=_FakeEffect(),
-        probability=0.87,
         source="spliceai",
         evidence={"ds_ag": 0.02, "ds_al": 0.01, "ds_dg": 0.87, "ds_dl": 0.03})
-    assert scored.probability == 0.87
     assert scored.source == "spliceai"
     assert scored.evidence["ds_dg"] == 0.87
