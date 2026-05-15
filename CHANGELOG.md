@@ -3,6 +3,42 @@
 ## [Unreleased]
 
 **Breaking**
+- Unified the multi-outcome machinery: `SpliceCandidate` deleted;
+  `MultiOutcomeEffect.outcomes` accessor + `_with_extra_outcomes`
+  helper + `_extra_outcomes` slot removed
+  ([#382](https://github.com/openvax/varcode/issues/382)).
+  - `SpliceOutcomeSet.candidates` now returns
+    `tuple[EffectCandidate, ...]` — the same shape every other
+    `MultiOutcomeEffect` subclass exposes. Each entry wraps an
+    inner `MutationEffect` (concrete coding effect or placeholder:
+    `PredictedIntronRetention`, `PredictedCrypticSpliceSite`,
+    `ExonLoss`, `Intronic`). The biological outcome lives on
+    `candidate.evidence["splice_outcome"]` (the `SpliceOutcome`
+    enum); the human-readable summary lives on
+    `candidate.evidence["description"]`. The previous
+    `candidate.outcome` / `candidate.plausibility` /
+    `candidate.coding_effect` / `candidate.predicted_class_name` /
+    `candidate.mutant_transcript` / `candidate.has_protein`
+    fields are gone — read them off the `EffectCandidate`
+    (`.probability`, `.source`, `.evidence`) or the inner effect
+    (`candidate.effect`, `candidate.effect.mutant_transcript`).
+  - `MultiOutcomeEffect.candidates` is the single accessor on every
+    subclass (`SpliceOutcomeSet`, `StructuralVariantEffect`,
+    `PhaseCandidateSet`, `ExonicSpliceSite`, `HaplotypeEffect`).
+    A new `MultiOutcomeEffect.effects` convenience property unwraps
+    to `tuple(c.effect for c in self.candidates)` for callers that
+    don't need provenance.
+  - The post-hoc attachment slot renamed `_extra_outcomes` →
+    `_extra_candidates`; the merge helper renamed
+    `_with_extra_outcomes` → `_combine_with_extra_candidates`.
+    `apply_rna_evidence_to_effects` now writes to
+    `_extra_candidates`. External integrations that touched these
+    private names must rename.
+  - `StructuralVariantEffect.__init__` parameter renamed
+    `candidates=` → `primary_effects=` (carries the inner
+    `MutationEffect` tuple; the `candidates` accessor now lifts
+    to `EffectCandidate` automatically). Same on `LargeDeletion`,
+    `LargeDuplication`, `GeneFusion`.
 - `varcode.Outcome` renamed to `varcode.EffectCandidate`. The helper
   `outcomes_from_candidates` renamed to `candidates_from_effects`.
   The module `varcode.outcomes` renamed to
@@ -18,10 +54,9 @@
   candidate re-surfaced by the SV annotator with a different
   `source` tag and `sv_type` in evidence); putting metadata on the
   wrapper instead of the Effect lets the Effect stay shared while
-  the labels diverge. `MultiOutcomeEffect` retains two accessors:
-  `.candidates` (raw `tuple[MutationEffect, ...]`) and `.outcomes`
-  (wrapped `tuple[EffectCandidate, ...]`); the back-compat framing
-  on `.candidates` is dropped — both are first-class. Aspirational
+  the labels diverge. (Per #382, `.outcomes` has since been removed
+  and `MultiOutcomeEffect.candidates` is the single accessor across
+  every subclass.) Aspirational
   `"isovar"` / `"exacto"` / `"longread_assembly"` example tags
   scrubbed from varcode docstrings.
 - Phasing API generalized; Isovar-named identifiers removed from the
@@ -42,10 +77,11 @@
     on `ReadPhaseResolver`. Consumers filtering effects by phase
     source need to update their filter values.
 - `varcode.effects.effect_classes.PhaseAmbiguousEffect` renamed to
-  `PhaseCandidateSet`. No deprecation alias — update imports.
-  Public surface (`.candidates`, `.outcomes`, `.most_likely`,
-  `.short_description`, etc.) is unchanged
+  `PhaseCandidateSet`. No deprecation alias — update imports
   ([#376](https://github.com/openvax/varcode/pull/376)).
+  Per #382, the public surface is `.candidates` (a
+  `tuple[EffectCandidate, ...]` with per-hypothesis evidence keys),
+  `.most_likely`, `.short_description`.
 
 **Changed**
 - `SpliceCandidate` and `SpliceOutcomeSet` serialization migrated onto

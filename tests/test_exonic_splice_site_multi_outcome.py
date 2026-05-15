@@ -59,14 +59,16 @@ def test_exonic_splice_site_candidates_include_self_and_alternate():
     effect = variant.effect_on_transcript(transcript)
     assert effect.alternate_effect is not None
     # 2-candidate form: splice-disruption (self) + coding consequence.
-    assert effect.candidates == (effect, effect.alternate_effect)
+    # Each entry is an EffectCandidate wrapping the inner effect.
+    inners = tuple(c.effect for c in effect.candidates)
+    assert inners == (effect, effect.alternate_effect)
 
 
 def test_exonic_splice_site_most_likely_is_self():
     variant = Variant("7", 117531114, "G", "T", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     effect = variant.effect_on_transcript(transcript)
-    assert effect.most_likely is effect
+    assert effect.most_likely.effect is effect
 
 
 def test_exonic_splice_site_priority_class_is_self_class():
@@ -116,19 +118,19 @@ def test_splice_outcome_set_alternate_effect_resolves_to_normal_splicing():
 
 def test_splice_outcome_set_alternate_effect_none_when_no_normal_splicing():
     # SpliceDonor-backed SpliceOutcomeSet: the NORMAL_SPLICING candidate
-    # exists but its coding_effect is None (intronic variant, no
-    # underlying coding change). alternate_effect should be None.
+    # exists but its inner effect is the Intronic placeholder (intronic
+    # variant, no underlying coding change). alternate_effect should be
+    # None.
+    from varcode.effects import Intronic
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     wrapped_effects = variant.effects(splice_outcomes=True)
     wrapped = next(e for e in wrapped_effects if e.transcript is transcript)
-    # Sanity: this is a SpliceDonor-backed set with a NORMAL_SPLICING
-    # candidate that has no coding_effect.
     normal = next(
         c for c in wrapped.candidates
-        if c.outcome is SpliceOutcome.NORMAL_SPLICING
+        if c.evidence.get("splice_outcome") is SpliceOutcome.NORMAL_SPLICING
     )
-    assert normal.coding_effect is None
+    assert type(normal.effect) is Intronic
     assert wrapped.alternate_effect is None
 
 

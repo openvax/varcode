@@ -17,8 +17,20 @@ openvax/varcode#262.
 When a variant disrupts a splice signal, the downstream protein
 outcome is not deterministic from DNA alone. Instead of forcing a
 single Effect, this module wraps splice effects in a
-:class:`SpliceOutcomeSet` carrying multiple :class:`SpliceCandidate`
-outcomes with rough plausibility scores.
+:class:`SpliceOutcomeSet` carrying multiple :class:`EffectCandidate`
+entries (the uniform multi-outcome shape; see
+:mod:`varcode.effect_candidates`) with rough plausibility scores
+stored in ``EffectCandidate.probability``.
+
+Each candidate's ``evidence`` dict carries the biological outcome
+under ``"splice_outcome"`` (a :class:`SpliceOutcome` enum value) and a
+human description under ``"description"``. The :class:`MutationEffect`
+wrapped by ``candidate.effect`` is either a real coding effect
+(Substitution, FrameShift, etc.) when the protein math resolved, or a
+placeholder class (:class:`~varcode.effects.effect_classes.PredictedIntronRetention`,
+:class:`~varcode.effects.effect_classes.PredictedCrypticSpliceSite`,
+:class:`~varcode.effects.effect_classes.ExonLoss`, etc.) for outcomes
+that need genomic flanking sequence to resolve.
 
 Limitations of this prototype (documented openly so callers know what
 the scores mean):
@@ -32,25 +44,18 @@ the scores mean):
   produce concrete mutant protein sequences using the cDNA already
   available from PyEnsembl.
 * :class:`SpliceOutcome.INTRON_RETENTION` and the cryptic-splice outcomes
-  produce candidates with a predicted-class label
-  (e.g. "likely PrematureStop") but no exact mutant protein. They
-  require intron / flanking genomic sequence that PyEnsembl does
-  not cache by default. A future PR with genomic-FASTA support
-  would fill these in.
-* EXON_SKIPPING candidates expose the :class:`~varcode.MutantTranscript`
-  they were derived from via :attr:`SpliceCandidate.mutant_transcript`.
-  The stub candidates (INTRON_RETENTION, CRYPTIC_*) and NORMAL_SPLICING
-  carry ``None`` — the former until genomic-FASTA ingestion (#296)
-  wires in intron / flanking sequence, the latter because their
-  coding impact is already fully described by the underlying
-  coding effect on :attr:`~SpliceCandidate.coding_effect`.
+  produce candidates whose ``effect`` is a placeholder
+  (e.g. :class:`PredictedIntronRetention`) but no exact mutant
+  protein. They require intron / flanking genomic sequence that
+  PyEnsembl does not cache by default.
+* Candidates whose protein math resolved expose the
+  :class:`~varcode.MutantTranscript` they were derived from via
+  ``candidate.effect.mutant_transcript``. Placeholder candidates
+  carry ``None`` until genomic-FASTA ingestion fills in the
+  intron / flanking sequence.
 """
 
-from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
-
-from serializable import DataclassSerializable
 
 from .effects.classify import classify_from_protein_diff
 from .effects.codon_tables import codon_table_for_transcript, translate_sequence
@@ -60,7 +65,6 @@ from .effects.effect_classes import (
     Intronic,
     IntronicSpliceSite,
     MultiOutcomeEffect,
-    MutationEffect,
     PredictedCrypticSpliceSite,
     PredictedIntronRetention,
     SpliceAcceptor,
@@ -98,93 +102,6 @@ class SpliceOutcome(Enum):
     disrupted canonical one. Truncates or extends the affected exon."""
 
 
-@dataclass(frozen=True)
-class SpliceCandidate(DataclassSerializable):
-    """One possible outcome of a splice-disrupting variant.
-
-    Plausibility is a rough hand-tuned score, not a probability.
-    Use the relative ordering of candidates rather than the absolute
-    values for downstream filtering.
-
-    Serialization is inherited from
-    :class:`~serializable.DataclassSerializable`; ``to_json`` /
-    ``from_json`` round-trip the ``coding_effect`` polymorphically
-    via the standard ``__class__`` / ``__module__`` stamping from
-    ``serializable.helpers``.
-    """
-
-    outcome: SpliceOutcome
-    plausibility: float
-    description: str
-    """Human-readable summary of the outcome."""
-
-    coding_effect: Optional[MutationEffect] = None
-    """Concrete coding effect (Substitution, Deletion, FrameShift,
-    PrematureStop, etc.) when computable. None for candidates whose
-    protein math requires intron/flanking sequence we don't have
-    cached (intron retention, cryptic splice)."""
-
-    predicted_class_name: Optional[str] = None
-    """When ``coding_effect`` is None, the predicted Effect class name
-    (e.g. ``'PrematureStop'``) inferred from the outcome and exon
-    properties. Useful for filtering downstream."""
-
-    mutant_transcript: Optional[MutantTranscript] = None
-    """The assembled mutant transcript for this outcome (#305). Populated
-    for candidates where varcode can materialize the post-splicing cDNA
-    from cached transcript sequence (EXON_SKIPPING); ``None`` for
-    candidates that need genomic intron / flanking sequence to resolve
-    (INTRON_RETENTION, CRYPTIC_*) — those become populated when
-    genomic-FASTA ingestion lands (#296). Downstream consumers that
-    want to reason about the full cDNA / protein read this directly
-    instead of re-deriving from ``coding_effect`` fields."""
-
-    @property
-    def has_protein(self) -> bool:
-        return self.coding_effect is not None and getattr(
-            self.coding_effect, "mutant_protein_sequence", None
-        ) is not None
-
-    @property
-    def short_description(self) -> str:
-        if self.coding_effect is not None:
-            return "%s (%s, p=%.2f)" % (
-                self.coding_effect.short_description,
-                self.outcome.value,
-                self.plausibility,
-            )
-        return "%s (%s, p=%.2f)" % (
-            self.predicted_class_name or "?",
-            self.outcome.value,
-            self.plausibility,
-        )
-
-    def to_dict(self):
-        """Emit the dataclass fields with :class:`SpliceOutcome`
-        converted to its string value. ``python-serializable`` has no
-        built-in enum branch in
-        :func:`~serializable.helpers.to_serializable_repr`, so we
-        stringify here to keep the JSON round-trip stable. Any
-        future dataclass field typed as an :class:`Enum` will need
-        the same treatment until the upstream helper grows an
-        enum branch (#343).
-        """
-        d = super().to_dict()
-        d["outcome"] = self.outcome.value
-        return d
-
-    @classmethod
-    def from_dict(cls, state_dict):
-        """Inverse of :meth:`to_dict`: reparse the string
-        ``outcome`` into the :class:`SpliceOutcome` enum before
-        delegating to the dataclass constructor (#343)."""
-        state_dict = dict(state_dict)
-        outcome = state_dict.get("outcome")
-        if isinstance(outcome, str):
-            state_dict["outcome"] = SpliceOutcome(outcome)
-        return super().from_dict(state_dict)
-
-
 class SpliceOutcomeSet(MultiOutcomeEffect):
     """A splice-disrupting variant's effect, expressed as a set of
     plausible outcomes rather than a single Effect.
@@ -194,9 +111,17 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
     catch this and any future multi-outcome wrapper (RNA evidence,
     germline-aware, etc.) uniformly — see #299.
 
+    :attr:`candidates` is a ``tuple[EffectCandidate, ...]`` — the same
+    shape every other :class:`MultiOutcomeEffect` subclass exposes
+    (#382). Each candidate's ``effect`` is a real
+    :class:`MutationEffect` (a concrete coding effect or a placeholder
+    like :class:`PredictedIntronRetention`); its ``evidence`` dict
+    carries the biological :class:`SpliceOutcome` under
+    ``"splice_outcome"`` and the human-readable summary under
+    ``"description"``.
+
     For back-compat, :attr:`short_description` delegates to the most
-    plausible candidate. Callers that want all candidates iterate
-    :attr:`candidates`.
+    plausible candidate.
 
     Constructed by :func:`enumerate_splice_outcomes` when a caller
     passes ``splice_outcomes=True`` to ``Variant.effects()`` or
@@ -206,22 +131,73 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
     def __init__(self, variant, transcript, candidates, disrupted_signal_class=None):
         MultiOutcomeEffect.__init__(self, variant)
         self.transcript = transcript
-        # Sort candidates by plausibility descending so .candidates[0]
+        # Sort candidates by probability descending so .candidates[0]
         # is always the most likely.
-        self.candidates = tuple(sorted(
-            candidates, key=lambda c: c.plausibility, reverse=True))
+        self._candidates = tuple(sorted(
+            candidates,
+            key=lambda c: c.probability if c.probability is not None else 0.0,
+            reverse=True))
         # Class of the original splice-disrupting effect this set
         # replaced (SpliceDonor, SpliceAcceptor, ExonicSpliceSite, or
         # IntronicSpliceSite). Used for priority lookup.
         self.disrupted_signal_class = disrupted_signal_class
 
-    # Serialization is inherited from Serializable (the base of
-    # MutationEffect). to_dict emits {variant, transcript, candidates,
-    # disrupted_signal_class} via introspection; to_serializable_repr
-    # recursively handles nested MutationEffects, SpliceCandidate
-    # dataclasses, and the disrupted_signal_class type object via
-    # serializable.helpers' standard __class__ / __module__ stamping
-    # (#343).
+    @property
+    def candidates(self):
+        return self._candidates
+
+    def to_dict(self):
+        """Stringify the :class:`SpliceOutcome` enum in each candidate's
+        ``evidence`` dict before delegating to ``Serializable.to_dict``
+        — ``serializable.helpers`` has no built-in enum branch (#343),
+        and its typed-dict form for enums can't be rehydrated by the
+        ``EnumType`` constructor on round-trip.
+
+        Temporarily swaps ``self._candidates`` for a stringified copy
+        during ``super().to_dict()``, then restores the original so
+        runtime callers still see ``SpliceOutcome`` enums in evidence.
+        """
+        original = self._candidates
+        stringified = []
+        for c in original:
+            outcome = c.evidence.get("splice_outcome")
+            if isinstance(outcome, SpliceOutcome):
+                new_ev = dict(c.evidence)
+                new_ev["splice_outcome"] = outcome.value
+                stringified.append(EffectCandidate(
+                    effect=c.effect,
+                    probability=c.probability,
+                    source=c.source,
+                    evidence=new_ev))
+            else:
+                stringified.append(c)
+        self._candidates = tuple(stringified)
+        try:
+            return super().to_dict()
+        finally:
+            self._candidates = original
+
+    @classmethod
+    def from_dict(cls, state_dict):
+        """Inverse of :meth:`to_dict`: reparse the stringified
+        ``splice_outcome`` back into the enum after
+        ``Serializable.from_dict`` (#343)."""
+        instance = super().from_dict(state_dict)
+        rehydrated = []
+        for c in instance._candidates:
+            outcome = c.evidence.get("splice_outcome")
+            if isinstance(outcome, str):
+                new_ev = dict(c.evidence)
+                new_ev["splice_outcome"] = SpliceOutcome(outcome)
+                rehydrated.append(EffectCandidate(
+                    effect=c.effect,
+                    probability=c.probability,
+                    source=c.source,
+                    evidence=new_ev))
+            else:
+                rehydrated.append(c)
+        instance._candidates = tuple(rehydrated)
+        return instance
 
     @property
     def priority_class(self):
@@ -233,85 +209,27 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
         return self.disrupted_signal_class
 
     @property
-    def most_likely(self) -> SpliceCandidate:
-        return self.candidates[0]
-
-    @property
-    def outcomes(self):
-        """Unified :class:`~varcode.EffectCandidate` view over :attr:`candidates`
-        (#339).
-
-        Each outcome's ``effect`` is guaranteed to be a real
-        :class:`MutationEffect` — for candidates whose protein math
-        requires genomic sequence we don't cache (intron retention,
-        cryptic splice), the effect is a
-        :class:`PredictedIntronRetention` or
-        :class:`PredictedCrypticSpliceSite` placeholder with
-        ``mutant_protein_sequence = None`` instead of ``None`` itself.
-
-        ``evidence`` carries the :class:`SpliceOutcome` enum under key
-        ``"splice_outcome"`` so splice-aware consumers can still
-        dispatch on the biological outcome kind without reaching
-        back into :attr:`candidates`.
-        """
-        return self._with_extra_outcomes(
-            tuple(
-                EffectCandidate(
-                    effect=self._outcome_effect(candidate),
-                    probability=candidate.plausibility,
-                    source="varcode",
-                    evidence={"splice_outcome": candidate.outcome})
-                for candidate in self.candidates))
-
-    def _outcome_effect(self, candidate):
-        """Return the :class:`MutationEffect` that backs ``candidate``
-        for :attr:`outcomes`. Falls back to placeholder classes when
-        the candidate has no computable ``coding_effect``.
-        """
-        if candidate.coding_effect is not None:
-            return candidate.coding_effect
-        transcript = self.transcript
-        if candidate.outcome is SpliceOutcome.INTRON_RETENTION:
-            return PredictedIntronRetention(self.variant, transcript)
-        if candidate.outcome is SpliceOutcome.CRYPTIC_DONOR:
-            return PredictedCrypticSpliceSite(
-                self.variant, transcript, direction="donor")
-        if candidate.outcome is SpliceOutcome.CRYPTIC_ACCEPTOR:
-            return PredictedCrypticSpliceSite(
-                self.variant, transcript, direction="acceptor")
-        if candidate.outcome is SpliceOutcome.EXON_SKIPPING:
-            # Exon-skipping without a computed protein — we know an
-            # exon is affected but the specific exon / skipped-protein
-            # math wasn't resolvable at build time. Emit ExonLoss with
-            # an empty exons tuple so ``.effect`` still satisfies the
-            # MutationEffect interface; consumers that need the
-            # specific exon should reach into ``candidates`` or
-            # construct a SpliceOutcomeSet with RNA evidence attached.
-            return ExonLoss(self.variant, transcript, exons=())
-        # NORMAL_SPLICING candidate with no coding_effect: the variant
-        # is intronic and has no coding change if splicing proceeds.
-        # Represent with Intronic so .effect still satisfies the
-        # MutationEffect contract.
-        return Intronic(
-            self.variant,
-            transcript,
-            nearest_exon=None,
-            distance_to_exon=None)
+    def most_likely(self) -> EffectCandidate:
+        return self._candidates[0]
 
     @property
     def alternate_effect(self):
         """Back-compat shim matching :attr:`ExonicSpliceSite.alternate_effect`.
 
-        Resolves to the ``coding_effect`` of the ``NORMAL_SPLICING``
+        Resolves to the inner effect of the ``NORMAL_SPLICING``
         candidate — i.e. "the coding change that applies when
-        splicing proceeds normally." Returns ``None`` when the
-        ``NORMAL_SPLICING`` candidate has no coding_effect (e.g. the
-        variant is intronic and has no underlying coding change) or
-        when the outcome set doesn't include ``NORMAL_SPLICING``.
+        splicing proceeds normally." Returns ``None`` when no
+        candidate carries the ``NORMAL_SPLICING`` outcome or when
+        that candidate's inner effect is a placeholder
+        :class:`Intronic` (the variant has no underlying coding
+        change if splicing proceeds normally).
         """
-        for candidate in self.candidates:
-            if candidate.outcome is SpliceOutcome.NORMAL_SPLICING:
-                return candidate.coding_effect
+        for candidate in self._candidates:
+            if candidate.evidence.get("splice_outcome") is SpliceOutcome.NORMAL_SPLICING:
+                effect = candidate.effect
+                if isinstance(effect, Intronic) and type(effect) is Intronic:
+                    return None
+                return effect
         return None
 
     @property
@@ -322,8 +240,8 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
         cryptic splice).
         """
         return {
-            outcome.evidence["splice_outcome"]: _protein_str(outcome.effect)
-            for outcome in self.outcomes
+            candidate.evidence["splice_outcome"]: _protein_str(candidate.effect)
+            for candidate in self._candidates
         }
 
     @property
@@ -333,23 +251,37 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
         """
         return {
             protein for protein in (
-                _protein_str(o.effect) for o in self.outcomes)
+                _protein_str(c.effect) for c in self._candidates)
             if protein
         }
 
     @property
     def short_description(self) -> str:
-        return "splice-set:%s" % self.most_likely.short_description
+        return "splice-set:%s" % _candidate_short_description(self.most_likely)
 
     def __str__(self) -> str:
         return "SpliceOutcomeSet(variant=%s, transcript=%s, candidates=[%s])" % (
             self.variant,
             getattr(self.transcript, "name", None),
-            ", ".join(c.short_description for c in self.candidates),
+            ", ".join(_candidate_short_description(c) for c in self._candidates),
         )
 
     def __repr__(self) -> str:
         return str(self)
+
+
+def _candidate_short_description(candidate: EffectCandidate) -> str:
+    """Render an :class:`EffectCandidate` produced by this module
+    (carrying a ``splice_outcome`` evidence key and a probability) as
+    a compact human-readable string. Used by
+    :attr:`SpliceOutcomeSet.short_description` and ``__str__``.
+    """
+    outcome = candidate.evidence.get("splice_outcome")
+    outcome_str = outcome.value if isinstance(outcome, SpliceOutcome) else "?"
+    probability = candidate.probability if candidate.probability is not None else 0.0
+    inner = candidate.effect
+    desc = getattr(inner, "short_description", type(inner).__name__)
+    return "%s (%s, p=%.2f)" % (desc, outcome_str, probability)
 
 
 # ---------------------------------------------------------------------
@@ -465,34 +397,96 @@ def _plausibility_table_for(splice_effect):
 # ---------------------------------------------------------------------
 
 
+def _placeholder_effect_for_outcome(outcome, variant, transcript):
+    """Construct a placeholder :class:`MutationEffect` for a splice
+    outcome whose protein math isn't computable from cached cDNA
+    alone.
+
+    Used at build time so every :class:`EffectCandidate` produced by
+    this module wraps a real :class:`MutationEffect` — downstream
+    consumers can read ``candidate.effect.short_description``,
+    ``candidate.effect.mutant_protein_sequence``, etc. uniformly
+    across splice outcomes whether or not the genomic flanking
+    sequence was available to resolve the protein.
+    """
+    if outcome is SpliceOutcome.INTRON_RETENTION:
+        return PredictedIntronRetention(variant, transcript)
+    if outcome is SpliceOutcome.CRYPTIC_DONOR:
+        return PredictedCrypticSpliceSite(
+            variant, transcript, direction="donor")
+    if outcome is SpliceOutcome.CRYPTIC_ACCEPTOR:
+        return PredictedCrypticSpliceSite(
+            variant, transcript, direction="acceptor")
+    if outcome is SpliceOutcome.EXON_SKIPPING:
+        # Exon-skipping without a computed protein — emit ExonLoss
+        # with an empty exons tuple so ``.effect`` still satisfies
+        # the MutationEffect interface.
+        return ExonLoss(variant, transcript, exons=())
+    # NORMAL_SPLICING placeholder: the variant is intronic and has no
+    # coding change if splicing proceeds.
+    return Intronic(
+        variant, transcript, nearest_exon=None, distance_to_exon=None)
+
+
+def _make_splice_candidate(
+        splice_effect, outcome, plausibility, *,
+        coding_effect=None, mutant_transcript=None, description=None):
+    """Construct an :class:`EffectCandidate` for one splice outcome.
+
+    ``coding_effect`` is the resolved coding effect when the protein
+    math succeeded; ``None`` falls back to a placeholder
+    (:class:`PredictedIntronRetention`, :class:`PredictedCrypticSpliceSite`,
+    :class:`ExonLoss`, :class:`Intronic`) so the candidate's inner
+    effect is always a real :class:`MutationEffect`. The optional
+    ``mutant_transcript`` is attached to the inner effect (so
+    consumers reach it via ``candidate.effect.mutant_transcript``);
+    ``description`` is stored under ``evidence["description"]``
+    alongside the ``"splice_outcome"`` enum.
+    """
+    transcript = getattr(splice_effect, "transcript", None)
+    effect = coding_effect if coding_effect is not None else (
+        _placeholder_effect_for_outcome(
+            outcome, splice_effect.variant, transcript))
+    if mutant_transcript is not None:
+        effect.mutant_transcript = mutant_transcript
+    evidence = {"splice_outcome": outcome}
+    if description is not None:
+        evidence["description"] = description
+    return EffectCandidate(
+        effect=effect,
+        probability=plausibility,
+        source="varcode",
+        evidence=evidence,
+    )
+
+
 def _build_normal_splicing_candidate(splice_effect, plausibility):
     """Normal splicing: the underlying coding effect.
 
     For ExonicSpliceSite this is the .alternate_effect. For other
     splice classes there is no underlying coding effect (the variant
-    is intronic) — return a candidate with no protein but the same
-    plausibility for completeness.
+    is intronic) — return a candidate carrying a placeholder
+    :class:`Intronic` effect.
     """
     underlying = getattr(splice_effect, "alternate_effect", None)
     if underlying is not None:
-        return SpliceCandidate(
-            outcome=SpliceOutcome.NORMAL_SPLICING,
-            plausibility=plausibility,
+        return _make_splice_candidate(
+            splice_effect,
+            SpliceOutcome.NORMAL_SPLICING,
+            plausibility,
+            coding_effect=underlying,
             description=(
                 "Disruption is partial or leaky; canonical splicing "
                 "occurs and the underlying coding change applies."),
-            coding_effect=underlying,
-            predicted_class_name=type(underlying).__name__,
         )
-    return SpliceCandidate(
-        outcome=SpliceOutcome.NORMAL_SPLICING,
-        plausibility=plausibility,
+    return _make_splice_candidate(
+        splice_effect,
+        SpliceOutcome.NORMAL_SPLICING,
+        plausibility,
         description=(
             "Disruption is partial or leaky; canonical splicing "
             "occurs. Variant is intronic and has no coding impact "
             "if splicing proceeds normally."),
-        coding_effect=None,
-        predicted_class_name="Intronic",
     )
 
 
@@ -510,12 +504,11 @@ def _build_exon_skipping_candidate(splice_effect, plausibility):
     transcript = getattr(splice_effect, "transcript", None)
     exon = _affected_exon(splice_effect)
     if transcript is None or exon is None:
-        return SpliceCandidate(
-            outcome=SpliceOutcome.EXON_SKIPPING,
-            plausibility=plausibility,
+        return _make_splice_candidate(
+            splice_effect,
+            SpliceOutcome.EXON_SKIPPING,
+            plausibility,
             description="Affected exon is skipped from the transcript.",
-            coding_effect=None,
-            predicted_class_name="ExonLoss",
         )
 
     mt = _build_exon_skip_mutant_transcript(
@@ -525,14 +518,12 @@ def _build_exon_skipping_candidate(splice_effect, plausibility):
     if mt is None or mt.mutant_protein_sequence is None:
         # Couldn't compute protein (incomplete transcript, exon not
         # found in transcript, etc.).
-        predicted = "FrameShift" if exon_length % 3 != 0 else "Deletion"
-        return SpliceCandidate(
-            outcome=SpliceOutcome.EXON_SKIPPING,
-            plausibility=plausibility,
-            description="Exon %s is skipped." % getattr(exon, "exon_id", "?"),
-            coding_effect=None,
-            predicted_class_name=predicted,
+        return _make_splice_candidate(
+            splice_effect,
+            SpliceOutcome.EXON_SKIPPING,
+            plausibility,
             mutant_transcript=mt,
+            description="Exon %s is skipped." % getattr(exon, "exon_id", "?"),
         )
 
     ref_protein = str(transcript.protein_sequence)
@@ -545,7 +536,6 @@ def _build_exon_skipping_candidate(splice_effect, plausibility):
         length_delta=-exon_length,
         mutant_transcript=mt,
     )
-    predicted_class_name = type(coding_effect).__name__
 
     if exon_length % 3 == 0:
         description = (
@@ -556,13 +546,13 @@ def _build_exon_skipping_candidate(splice_effect, plausibility):
             "Exon %s is skipped (out of frame, frameshift in the "
             "joined transcript)." % getattr(exon, "exon_id", "?"))
 
-    return SpliceCandidate(
-        outcome=SpliceOutcome.EXON_SKIPPING,
-        plausibility=plausibility,
-        description=description,
+    return _make_splice_candidate(
+        splice_effect,
+        SpliceOutcome.EXON_SKIPPING,
+        plausibility,
         coding_effect=coding_effect,
-        predicted_class_name=predicted_class_name,
         mutant_transcript=mt,
+        description=description,
     )
 
 
@@ -739,28 +729,27 @@ def _build_intron_retention_candidate(
                     length_delta=length_delta,
                     mutant_transcript=mt,
                 )
-                return SpliceCandidate(
-                    outcome=SpliceOutcome.INTRON_RETENTION,
-                    plausibility=plausibility,
+                return _make_splice_candidate(
+                    splice_effect,
+                    SpliceOutcome.INTRON_RETENTION,
+                    plausibility,
+                    coding_effect=coding_effect,
+                    mutant_transcript=mt,
                     description=(
                         "Intron is retained in the mature transcript; "
                         "translation from the canonical start hits a "
                         "premature stop inside the retained intron."),
-                    coding_effect=coding_effect,
-                    predicted_class_name=type(coding_effect).__name__,
-                    mutant_transcript=mt,
                 )
-    return SpliceCandidate(
-        outcome=SpliceOutcome.INTRON_RETENTION,
-        plausibility=plausibility,
+    return _make_splice_candidate(
+        splice_effect,
+        SpliceOutcome.INTRON_RETENTION,
+        plausibility,
         description=(
             "Intron is retained in the mature transcript. Almost "
             "always produces a premature stop codon within the "
             "intronic sequence; exact mutant protein requires "
             "intron genomic sequence (pass a ``genomic_sequence`` "
             "callable to ``enumerate_splice_outcomes``)."),
-        coding_effect=None,
-        predicted_class_name="PrematureStop",
     )
 
 
@@ -1004,29 +993,28 @@ def _build_cryptic_splice_candidate(
                         length_delta=length_delta,
                         mutant_transcript=mt,
                     )
-                    return SpliceCandidate(
-                        outcome=outcome,
-                        plausibility=plausibility,
+                    return _make_splice_candidate(
+                        splice_effect,
+                        outcome,
+                        plausibility,
+                        coding_effect=coding_effect,
+                        mutant_transcript=mt,
                         description=(
                             "Cryptic %s at genomic position %d "
                             "(motif score %.2f) replaces the disrupted "
                             "canonical signal." % (
                                 direction, cryptic_pos, score)),
-                        coding_effect=coding_effect,
-                        predicted_class_name=type(coding_effect).__name__,
-                        mutant_transcript=mt,
                     )
-    return SpliceCandidate(
-        outcome=outcome,
-        plausibility=plausibility,
+    return _make_splice_candidate(
+        splice_effect,
+        outcome,
+        plausibility,
         description=(
             "A cryptic %s site nearby may be used in place of the "
             "disrupted canonical signal. Truncates or extends the "
             "affected exon; exact mutant protein requires flanking "
             "genomic sequence (pass a ``genomic_sequence`` callable "
             "to ``enumerate_splice_outcomes``)." % direction),
-        coding_effect=None,
-        predicted_class_name="ComplexSubstitution",
     )
 
 
@@ -1222,10 +1210,9 @@ def wrap_splice_effects_in_collection(effect_collection):
 # Priority integration happens via the `priority_class` attribute on
 # SpliceOutcomeSet — see `effect_priority` in effects.effect_ordering.
 
-# Serialization is inherited from Serializable / DataclassSerializable
-# (see #343). serializable.helpers.to_serializable_repr stamps each
-# nested object's {__module__, __name__} and from_serializable_dict
-# resolves them via _lookup_value, so SpliceCandidate.coding_effect
-# (polymorphic MutationEffect) and SpliceOutcomeSet.disrupted_signal_class
-# (a class object) both round-trip without the hand-rolled registries
-# this module used to carry.
+# Serialization is inherited from Serializable (the base of
+# MutationEffect). to_serializable_repr stamps each nested object's
+# {__module__, __name__} and from_serializable_dict resolves them via
+# _lookup_value, so the polymorphic EffectCandidate.effect (any
+# MutationEffect subclass) and SpliceOutcomeSet.disrupted_signal_class
+# (a class object) both round-trip without hand-rolled registries.

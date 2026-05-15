@@ -21,7 +21,7 @@ Output: one of the SV effect classes from
 ``LargeDuplication``, ``Inversion``, ``GeneFusion``,
 ``TranslocationToIntergenic``), each of which is a
 :class:`~varcode.effects.MultiOutcomeEffect` exposing
-:attr:`outcomes` — a tuple of :class:`~varcode.effect_candidates.EffectCandidate`
+:attr:`candidates` — a tuple of :class:`~varcode.effect_candidates.EffectCandidate`
 entries each carrying an effect + probability + source + evidence.
 
 Scope
@@ -53,7 +53,7 @@ Integration hooks
   sequences have a concrete assembled cDNA to read.
 * **External splice predictor**: call the annotator, then wrap each
   returned effect in a new :class:`MultiOutcomeEffect` whose
-  ``outcomes`` tuple includes a fresh ``EffectCandidate(effect=cryptic,
+  ``candidates`` tuple includes a fresh ``EffectCandidate(effect=cryptic,
   source="spliceai", probability=...)`` entry.
 * **Short-read RNA evidence**: same pattern. Attach an
   ``EffectCandidate`` carrying the read-evidence tool's ``source``
@@ -615,7 +615,7 @@ class StructuralVariantAnnotator:
     def annotate_on_transcript(self, variant, transcript):
         """Classify ``variant`` on ``transcript``. Returns a single
         effect (typically a ``MultiOutcomeEffect`` subclass); consume
-        ``effect.outcomes`` for the full outcome set.
+        ``effect.candidates`` for the full outcome set.
         """
         from pyensembl import Transcript
         if not isinstance(transcript, Transcript):
@@ -716,17 +716,17 @@ class StructuralVariantAnnotator:
                 splice_set = enumerate_splice_outcomes(synthetic)
             except (AttributeError, KeyError, ValueError):
                 continue
-            for outcome in splice_set.outcomes:
-                if outcome.evidence.get("splice_outcome") is (
+            for candidate in splice_set.candidates:
+                if candidate.evidence.get("splice_outcome") is (
                         SpliceOutcome.NORMAL_SPLICING):
                     # Primary SV classification already covers the
                     # "splicing proceeds normally" interpretation.
                     continue
                 attached.append(EffectCandidate(
-                    effect=outcome.effect,
-                    probability=outcome.probability,
+                    effect=candidate.effect,
+                    probability=candidate.probability,
                     source="varcode_splice",
-                    evidence={**dict(outcome.evidence), **sv_evidence}))
+                    evidence={**dict(candidate.evidence), **sv_evidence}))
         if attached:
             effect._attach_splice_outcomes(attached)
 

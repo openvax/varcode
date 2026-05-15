@@ -63,7 +63,7 @@ eff = predict_germline_aware_effect(somatic, cftr, ctx, ann)
 print(type(eff).__name__, eff.short_description)
 # PhaseCandidateSet ?p.L159M
 
-for c in eff.outcomes:
+for c in eff.candidates:
     ev = c.evidence
     print(f"  haplotype={ev['haplotype']:<2} "
           f"germline_in_cis={[v.short_description for v in ev['germline_variants']]} "
@@ -75,8 +75,9 @@ for c in eff.outcomes:
 The `?` prefix on `?p.L159M` flags the description as the
 most-likely candidate of a `PhaseCandidateSet`. Real consumers
 should `isinstance(eff, PhaseCandidateSet)` and iterate
-`eff.candidates` (full classified effects) or `eff.outcomes`
-(candidates plus per-haplotype evidence keys).
+`eff.candidates` (a tuple of `EffectCandidate` objects carrying
+per-hypothesis evidence keys); use `eff.effects` if only the
+inner classified `MutationEffect`s are needed.
 
 ### Scenario 3 — force phasing → single effect
 

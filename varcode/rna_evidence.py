@@ -35,11 +35,11 @@ Usage::
     # Or apply post-hoc to an existing collection:
     apply_rna_evidence_to_effects(effects, resolver)
 
-    # Each affected effect gains observed outcomes alongside its
+    # Each affected effect gains observed candidates alongside its
     # DNA-predicted ones. Filter by source:
     for effect in effects:
-        for outcome in getattr(effect, "outcomes", ()):
-            if outcome.source != "varcode":
+        for candidate in getattr(effect, "candidates", ()):
+            if candidate.source != "varcode":
                 # An RNA-observed isoform.
                 ...
 """
@@ -142,20 +142,21 @@ def make_rna_outcome(
 
 
 def apply_rna_evidence_to_effects(effects: Iterable, resolver) -> Iterable:
-    """Attach RNA-observed outcomes from ``resolver`` to each effect
+    """Attach RNA-observed candidates from ``resolver`` to each effect
     in place.
 
     Walks ``effects`` and, for any effect with a resolvable
     ``(variant, transcript)``, asks ``resolver.observed_outcomes``
-    for any RNA-observed outcomes and stashes them on the effect's
-    ``_extra_outcomes`` slot. The :attr:`MultiOutcomeEffect.outcomes`
-    property (and its overrides) consult that slot via
-    :meth:`MultiOutcomeEffect._with_extra_outcomes` so callers see
-    DNA-predicted outcomes followed by RNA-observed ones.
+    for any RNA-observed candidates and stashes them on the effect's
+    ``_extra_candidates`` slot. :attr:`MultiOutcomeEffect.candidates`
+    overrides consult that slot via
+    :meth:`MultiOutcomeEffect._combine_with_extra_candidates` so
+    callers see DNA-predicted candidates followed by RNA-observed
+    ones.
 
     Single-outcome effects (Missense, FrameShift, etc.) are left
     untouched even when the resolver has evidence — those classes
-    don't expose an ``outcomes`` view, and replacing them with a
+    don't expose a multi-candidate view, and replacing them with a
     multi-outcome wrapper would break downstream ``isinstance`` checks.
     Producers that need to surface RNA observations on point variants
     should report them as a separate :class:`MultiOutcomeEffect` rather
@@ -190,10 +191,10 @@ def apply_rna_evidence_to_effects(effects: Iterable, resolver) -> Iterable:
         if not observed:
             continue
         # Coerce to tuple eagerly so we don't keep a generator that
-        # would silently exhaust on a second outcomes() read.
+        # would silently exhaust on a second candidates() read.
         observed_tuple = tuple(observed)
         if not observed_tuple:
             continue
-        existing = getattr(effect, "_extra_outcomes", ())
-        effect._extra_outcomes = tuple(existing) + observed_tuple
+        existing = getattr(effect, "_extra_candidates", ())
+        effect._extra_candidates = tuple(existing) + observed_tuple
     return effects

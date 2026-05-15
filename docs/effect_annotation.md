@@ -76,22 +76,27 @@ is intronic — there's no coding consequence to attach.
 
 ```python
 effects = variant.effects(splice_outcomes=True)
-# SpliceOutcomeSet(...) replaces the splice effect
-#   .candidates ordered most-plausible-first:
-#     SpliceCandidate(NORMAL_SPLICING, plausibility=0.1,
-#                     coding_effect=Substitution(...))
-#     SpliceCandidate(EXON_SKIPPING, plausibility=0.5,
-#                     coding_effect=Deletion(...))
-#     SpliceCandidate(INTRON_RETENTION, plausibility=0.3)
-#     SpliceCandidate(CRYPTIC_DONOR, plausibility=0.1)
+# SpliceOutcomeSet(...) replaces the splice effect.
+# .candidates is a tuple[EffectCandidate, ...], ordered most-plausible-first:
+#   EffectCandidate(effect=Deletion(...),       probability=0.5,
+#                   evidence={"splice_outcome": EXON_SKIPPING, ...})
+#   EffectCandidate(effect=PredictedIntronRetention(...), probability=0.3,
+#                   evidence={"splice_outcome": INTRON_RETENTION, ...})
+#   EffectCandidate(effect=Substitution(...),   probability=0.1,
+#                   evidence={"splice_outcome": NORMAL_SPLICING, ...})
+#   EffectCandidate(effect=PredictedCrypticSpliceSite(...), probability=0.1,
+#                   evidence={"splice_outcome": CRYPTIC_DONOR, ...})
 ```
 
 `SpliceOutcomeSet` replaces the splice effect with a set of
-candidate outcomes, each carrying a plausibility score
-(hand-tuned heuristic, not a probability) and — where
-computable from cDNA — a concrete `coding_effect`. The
-`NORMAL_SPLICING` candidate carries the same information as
-`alternate_effect` in the default form.
+candidate outcomes, each an `EffectCandidate` carrying a
+`probability` (hand-tuned plausibility, not a real probability)
+and an inner `effect` that's either a concrete coding effect or a
+placeholder (`PredictedIntronRetention`, `PredictedCrypticSpliceSite`,
+`ExonLoss`, `Intronic`). The biological outcome is stored under
+`candidate.evidence["splice_outcome"]`. The `NORMAL_SPLICING`
+candidate carries the same information as `alternate_effect` in
+the default form.
 
 When you opt in, `SpliceDonor` / `SpliceAcceptor` /
 `IntronicSpliceSite` also get wrapped, so every splice-
@@ -106,13 +111,13 @@ disrupting variant produces a `SpliceOutcomeSet`.
 | N | `SpliceOutcomeSet` (opt-in via `splice_outcomes=True`) |
 
 Both `ExonicSpliceSite` and `SpliceOutcomeSet` are `MultiOutcomeEffect`
-subclasses, so consumers iterate `.outcomes` uniformly without caring
-about which form they're holding. `alternate_effect` works on both:
-on `ExonicSpliceSite` it's the splicing-proceeds outcome directly; on
-`SpliceOutcomeSet` it resolves to the `NORMAL_SPLICING` candidate's
-`coding_effect`. The element types inside `.outcomes` differ
-(`MutationEffect` vs `SpliceCandidate`), but `outcome.effect.short_description`
-is uniform.
+subclasses, so consumers iterate `.candidates` (a tuple of
+`EffectCandidate` objects) uniformly without caring about which form
+they're holding. `alternate_effect` works on both: on
+`ExonicSpliceSite` it's the splicing-proceeds outcome directly; on
+`SpliceOutcomeSet` it resolves to the inner effect of the
+`NORMAL_SPLICING` candidate. `candidate.effect.short_description` is
+uniform across both forms.
 
 ### Limitations
 
@@ -205,12 +210,12 @@ sv_effects = [
 
 SV effects (`LargeDeletion`, `LargeDuplication`, `Inversion`,
 `GeneFusion`, `TranslocationToIntergenic`) are `MultiOutcomeEffect`
-subclasses — `e.outcomes` exposes the candidate ORFs / cryptic-splice
-outcomes the annotator generated, ordered by a per-class prior.
-External scorers (RNA evidence, long-read assembly) plug in via
-`apply_rna_evidence_to_effects` to narrow the set or append observed
-outcomes; see [Germline-aware annotation](germline.md) for the same
-composition pattern applied to germline.
+subclasses — `e.candidates` exposes the candidate ORFs / cryptic-splice
+outcomes as a tuple of `EffectCandidate` objects, ordered by a
+per-class prior. External scorers (RNA evidence, long-read assembly)
+plug in via `apply_rna_evidence_to_effects` to narrow the set or
+append observed candidates; see [Germline-aware annotation](germline.md)
+for the same composition pattern applied to germline.
 
 Limitations:
 

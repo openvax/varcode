@@ -493,8 +493,8 @@ class Variant(Serializable):
         rna_resolver : RNAEvidenceResolver or None
             Optional RNA-observed-outcome source. When provided, any
             :class:`~varcode.MultiOutcomeEffect` in the result has
-            observed outcomes from the resolver appended to its
-            ``outcomes`` view (DNA-predicted first, RNA-observed
+            observed candidates from the resolver appended to its
+            ``candidates`` view (DNA-predicted first, RNA-observed
             after). Useful for refining SV / splice / haplotype
             predictions with isoform-level evidence from Isovar,
             Exacto, or a custom long-read pipeline. See

@@ -67,7 +67,6 @@ from .rna_evidence import (
     make_rna_outcome,
 )
 from .splice_outcomes import (
-    SpliceCandidate,
     SpliceOutcome,
     SpliceOutcomeSet,
 )
@@ -101,7 +100,6 @@ __all__ = [
     "Zygosity",
 
     # splice outcome possibility set (openvax/varcode#262)
-    "SpliceCandidate",
     "SpliceOutcome",
     "SpliceOutcomeSet",
 

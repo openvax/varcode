@@ -44,15 +44,11 @@ The wrapper is the cheapest answer.
 Where ``EffectCandidate`` appears
 ---------------------------------
 
-:attr:`MultiOutcomeEffect.outcomes` returns
-``tuple[EffectCandidate, ...]``. :attr:`MultiOutcomeEffect.candidates`
-returns the raw ``tuple[MutationEffect, ...]`` — both accessors are
-first-class:
-
-* Use ``outcomes`` when you need per-candidate provenance (filter by
-  source, read evidence, score by probability).
-* Use ``candidates`` when you only need the underlying Effects (e.g.
-  iterate to render short descriptions, dispatch on effect type).
+:attr:`MultiOutcomeEffect.candidates` returns
+``tuple[EffectCandidate, ...]`` on every subclass (#382). When
+callers only need the underlying Effects (no provenance), the
+:attr:`MultiOutcomeEffect.effects` convenience property unwraps:
+``tuple(c.effect for c in self.candidates)``.
 
 External integrations (splice predictors, RNA-evidence callers,
 long-read assembly tools) construct :class:`EffectCandidate`
@@ -126,10 +122,9 @@ def candidates_from_effects(
     """Wrap a tuple of :class:`MutationEffect` instances as
     :class:`EffectCandidate` objects with a shared ``source`` string.
 
-    Used by the default :attr:`MultiOutcomeEffect.outcomes`
-    implementation to lift a raw ``candidates`` tuple into the wrapped
-    form without churning every subclass. No probabilities are
-    assigned — callers that want scored candidates construct
-    :class:`EffectCandidate` directly.
+    Convenience for the common case where a producer has a tuple of
+    Effects and wants to lift it into the wrapped form without
+    setting probabilities. Callers that want scored candidates
+    construct :class:`EffectCandidate` directly.
     """
     return tuple(EffectCandidate(effect=c, source=source) for c in effects)

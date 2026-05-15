@@ -19,7 +19,7 @@ from .common import bio_seq_to_str
 
 def _cryptic_probability(candidate):
     """Average of a cryptic-exon candidate's donor and acceptor motif
-    scores. Used by :attr:`StructuralVariantEffect.outcomes` to
+    scores. Used by :attr:`StructuralVariantEffect.candidates` to
     populate ``EffectCandidate.probability`` when no external scorer is
     attached (#337). Both scores are match-ratios in ``[0, 1]`` so
     their mean is already in range.
@@ -134,59 +134,51 @@ class MultiOutcomeEffect(MutationEffect):
 
     Subclasses must expose:
 
-    * ``candidates`` — sequence of :class:`MutationEffect` instances,
-      sorted most-plausible-first. (Kept for back-compat with 2.x
-      callers.)
-    * ``most_likely`` — the top candidate (i.e. ``candidates[0]``).
-    * ``priority_class`` — effect class whose priority this set adopts
-      (read by :func:`varcode.effects.effect_priority`).
-
-    **Harmonized interface (#299):** new code should read
-    :attr:`outcomes` instead of ``candidates``. Each entry is an
-    :class:`~varcode.effect_candidates.EffectCandidate` carrying the effect plus
-    provenance (probability, source, evidence dict). The default
-    implementation wraps ``candidates`` with ``source="varcode"``
-    and no probability — external scorers (SpliceAI, Pangolin),
-    RNA-evidence callers (Isovar), and long-read assembly tools
-    override to attach their own scores without subclassing.
+    * :attr:`candidates` — tuple of :class:`~varcode.effect_candidates.EffectCandidate`
+      objects, sorted most-plausible-first. Each entry pairs an
+      inner :class:`MutationEffect` (concrete or placeholder) with
+      its provenance — ``source`` (producer), ``probability``,
+      ``evidence`` dict. The :attr:`effects` helper unwraps to the
+      inner Effects when callers don't need provenance.
+    * :attr:`most_likely` — the top candidate (i.e. ``candidates[0]``).
+    * :attr:`priority_class` — effect class whose priority this set
+      adopts (read by :func:`varcode.effects.effect_priority`).
 
     Downstream consumers filter for multi-outcome results with
     ``isinstance(effect, MultiOutcomeEffect)``, so new wrappers (RNA
     evidence #259, germline-aware #268, SV-at-breakpoint) implement
-    the same protocol without downstream code churn.
+    the same protocol uniformly (#382).
+
+    External integrations (RNA evidence, SpliceAI scoring, etc.)
+    attach extra candidates post-hoc via the ``_extra_candidates``
+    slot — subclasses that override :attr:`candidates` must include
+    those extras in their returned tuple. The :meth:`_combine_with_extra_candidates`
+    helper does the right thing.
     """
 
     @property
-    def outcomes(self):
-        """Tuple of :class:`~varcode.effect_candidates.EffectCandidate` objects,
-        most-plausible-first. Default implementation wraps
-        :attr:`candidates` under ``source="varcode"``; subclasses
-        (or external integrations) override to attach probabilities
-        and evidence.
-
-        External integrations (RNA evidence, SpliceAI scoring, etc.)
-        attach extra outcomes via :meth:`_with_extra_outcomes` —
-        subclasses overriding this property must call that helper on
-        their derived tuple so the plug-in path remains uniform.
+    def effects(self):
+        """Tuple of inner :class:`MutationEffect` objects, in
+        ``candidates`` order. Convenience for callers that don't need
+        per-candidate provenance — equivalent to
+        ``tuple(c.effect for c in self.candidates)``.
         """
-        from ..effect_candidates import candidates_from_effects
-        return self._with_extra_outcomes(
-            candidates_from_effects(self.candidates))
+        return tuple(c.effect for c in self.candidates)
 
-    def _with_extra_outcomes(self, base_outcomes):
-        """Append externally-attached outcomes (#259) to a derived
-        ``outcomes`` tuple.
+    def _combine_with_extra_candidates(self, base_candidates):
+        """Append externally-attached candidates (#259) to a derived
+        ``candidates`` tuple.
 
-        Subclasses that override :attr:`outcomes` should call this
-        helper on the tuple they construct so that
+        Subclasses that compute :attr:`candidates` dynamically call
+        this helper on the tuple they construct so that
         :func:`varcode.rna_evidence.apply_rna_evidence_to_effects`
-        and other post-hoc scorers can attach observed outcomes
+        and other post-hoc scorers can attach observed candidates
         without subclassing or monkey-patching.
         """
-        extra = getattr(self, "_extra_outcomes", ())
+        extra = getattr(self, "_extra_candidates", ())
         if not extra:
-            return tuple(base_outcomes)
-        return tuple(base_outcomes) + tuple(extra)
+            return tuple(base_candidates)
+        return tuple(base_candidates) + tuple(extra)
 
 
 class Intergenic(MutationEffect):
@@ -403,11 +395,11 @@ class ExonicSpliceSite(Exonic, SpliceSite, MultiOutcomeEffect):
     Expresses the two plausible outcomes of a splice-adjacent exonic
     variant — splice-signal disruption vs. the underlying coding
     change if splicing proceeds normally — via the
-    :class:`MultiOutcomeEffect` protocol (see #299). ``candidates``
-    yields ``(self, alternate_effect)`` (both :class:`MutationEffect`
-    instances), and ``alternate_effect`` stays on the instance as a
-    first-class field for back-compat with callers that depended on
-    the 2.x shape.
+    :class:`MultiOutcomeEffect` protocol (#299, #382).
+    :attr:`candidates` yields a 2-tuple of
+    :class:`~varcode.effect_candidates.EffectCandidate` objects;
+    ``alternate_effect`` stays on the instance as a first-class field
+    for back-compat with callers that depended on it.
 
     This is the **lightweight 2-outcome form**. Callers that want
     the richer exon-skipping / intron-retention / cryptic-splice
@@ -446,31 +438,29 @@ class ExonicSpliceSite(Exonic, SpliceSite, MultiOutcomeEffect):
 
     @property
     def candidates(self):
-        """The two plausible outcomes, most-likely-first:
+        """The two plausible outcomes wrapped as
+        :class:`~varcode.effect_candidates.EffectCandidate`:
 
-        ``(self, alternate_effect)`` — position [0] is the
-        splice-disruption outcome (this effect itself), position [1]
-        is the coding change if splicing proceeds. Returns a
-        1-tuple ``(self,)`` when ``alternate_effect`` is None.
-
-        Elements are :class:`MutationEffect` instances directly,
-        not :class:`SpliceCandidate` objects — that's a different
-        (richer) shape used by :class:`SpliceOutcomeSet`. Downstream
-        code that iterates ``candidates`` here reads the effect
-        class / ``short_description`` / ``aa_ref`` etc. on each
-        element, same as on any ``MutationEffect``.
+        Position [0] is the splice-disruption outcome (this effect
+        itself); position [1] is the coding change if splicing
+        proceeds. Returns a 1-tuple when ``alternate_effect`` is None.
+        Extra candidates attached via :meth:`_combine_with_extra_candidates`
+        (e.g. from RNA evidence) come after.
         """
-        if self.alternate_effect is None:
-            return (self,)
-        return (self, self.alternate_effect)
+        from ..effect_candidates import EffectCandidate
+        base = [EffectCandidate(effect=self, source="varcode")]
+        if self.alternate_effect is not None:
+            base.append(EffectCandidate(
+                effect=self.alternate_effect, source="varcode"))
+        return self._combine_with_extra_candidates(tuple(base))
 
     @property
     def most_likely(self):
-        """The splice-disruption outcome is the primary classification
-        (this effect itself). Follows the ``MultiOutcomeEffect``
-        contract of ``most_likely == candidates[0]``.
+        """The splice-disruption outcome is the primary classification.
+        Follows the ``MultiOutcomeEffect`` contract of
+        ``most_likely == candidates[0]``.
         """
-        return self
+        return self.candidates[0]
 
     @property
     def priority_class(self):
@@ -961,11 +951,11 @@ class FrameShiftTruncation(PrematureStop, FrameShift):
 # These describe consequences of SVs at the transcript level. A single
 # SV commonly produces multiple plausible consequences (fusion vs exon
 # loss vs readthrough), so each of these is a ``MultiOutcomeEffect``
-# subclass exposing an ``outcomes`` tuple per #299.
+# subclass exposing a :attr:`candidates` tuple per #299 / #382.
 #
 # The classes are deliberately thin wrappers — the important interface
-# is ``outcomes``, which carries the ``EffectCandidate`` objects with
-# probability / source / evidence so external tools (RNA evidence,
+# is :attr:`candidates`, which carries :class:`EffectCandidate` objects
+# with probability / source / evidence so external tools (RNA evidence,
 # SpliceAI, long-read assembly) can score them without subclassing.
 # =====================================================================
 
@@ -973,26 +963,32 @@ class FrameShiftTruncation(PrematureStop, FrameShift):
 class StructuralVariantEffect(TranscriptMutationEffect, MultiOutcomeEffect):
     """Base class for effects of a :class:`StructuralVariant` on a
     specific transcript. Subclasses set ``short_description``; the
-    ``outcomes`` property is what downstream callers read.
+    :attr:`candidates` tuple is what downstream callers read.
 
-    The ``candidates`` tuple (back-compat 2.x shape) returns
-    ``(self,)`` when no specific alternates have been nominated, or
-    a richer tuple when the subclass carries explicit alternate
-    effects. ``MultiOutcomeEffect.outcomes`` lifts that to the
-    unified :class:`EffectCandidate` shape automatically.
+    :attr:`candidates` always returns a tuple of
+    :class:`~varcode.effect_candidates.EffectCandidate` objects.
+    Primary candidates carry ``source="varcode"``; cryptic-exon
+    candidates attached via :meth:`_attach_cryptic_candidates` carry
+    ``source="varcode_motif"``; splice-outcome candidates attached
+    via :meth:`_attach_splice_outcomes` carry ``source="varcode_splice"``.
     """
 
     def __init__(
-            self, variant, transcript, candidates=None, mutant_transcript=None):
+            self, variant, transcript,
+            primary_effects=None, mutant_transcript=None):
         TranscriptMutationEffect.__init__(self, variant, transcript)
-        self._candidates = (
-            tuple(candidates) if candidates is not None else (self,))
+        # Primary classifications: either the subclass's own effect
+        # (``self``) or a caller-supplied tuple of
+        # :class:`MutationEffect` instances. Lifted into
+        # :class:`EffectCandidate` shape on access.
+        self._primary_effects = (
+            tuple(primary_effects) if primary_effects is not None
+            else (self,))
         self.mutant_transcript = mutant_transcript
-        # Cryptic-exon / cryptic-splice candidates nominated by
+        # Cryptic-exon candidates nominated by
         # :func:`varcode.cryptic_exons.enumerate_from_structural_variant`
-        # (#337). Kept separate from :attr:`_candidates` because their
-        # ``outcomes`` entries carry different source / probability /
-        # evidence than the primary SV classification.
+        # (#337). Kept separate from primary effects because their
+        # entries carry different source / probability / evidence.
         self._cryptic_candidates = ()
         # Splice-outcome candidates attached by the SV annotator when
         # an SV breakpoint lands in a canonical splice window (#341).
@@ -1003,39 +999,12 @@ class StructuralVariantEffect(TranscriptMutationEffect, MultiOutcomeEffect):
 
     @property
     def candidates(self):
-        return self._candidates
+        """Unified :class:`~varcode.EffectCandidate` view over primary
+        SV classifications, attached cryptic candidates, and any
+        splice-outcome candidates (#339, #337, #341, #382).
 
-    @property
-    def most_likely(self):
-        return self._candidates[0]
-
-    def _attach_cryptic_candidates(self, cryptic_candidates):
-        """Attach cryptic-exon candidates (#337). Called by the SV
-        annotator after effect construction so the candidates appear
-        as additional :class:`EffectCandidate` entries on :attr:`outcomes`
-        without polluting :attr:`candidates` (which stays the primary
-        classification tuple for back-compat).
-        """
-        self._cryptic_candidates = tuple(cryptic_candidates)
-
-    def _attach_splice_outcomes(self, splice_outcomes):
-        """Attach splice-outcome candidates that the SV annotator
-        generated by feeding a synthesized splice-disrupting effect
-        into :func:`enumerate_splice_outcomes` (#341). Each entry is
-        a pre-constructed :class:`~varcode.EffectCandidate`; the annotator
-        has already re-sourced them as ``"varcode_splice"`` and
-        enriched evidence with the SV type.
-        """
-        self._splice_candidates = tuple(splice_outcomes)
-
-    @property
-    def outcomes(self):
-        """Unified :class:`~varcode.EffectCandidate` view over
-        :attr:`candidates`, attached cryptic candidates, and any
-        splice-outcome candidates (#339, #337, #341).
-
-        Primary outcomes carry ``source="varcode"``; cryptic-exon
-        outcomes carry ``source="varcode_motif"``; splice-outcome
+        Primary candidates carry ``source="varcode"``; cryptic-exon
+        candidates carry ``source="varcode_motif"``; splice-outcome
         candidates carry ``source="varcode_splice"``. Each source
         marks provenance so external scorers (SpliceAI, Pangolin,
         RNA evidence) can filter before rescoring.
@@ -1045,10 +1014,10 @@ class StructuralVariantEffect(TranscriptMutationEffect, MultiOutcomeEffect):
         base_evidence = {"sv_type": sv_type} if sv_type is not None else {}
         primary = tuple(
             EffectCandidate(
-                effect=candidate,
+                effect=effect,
                 source="varcode",
                 evidence=base_evidence)
-            for candidate in self._candidates)
+            for effect in self._primary_effects)
         cryptic = tuple(
             EffectCandidate(
                 effect=c,
@@ -1062,8 +1031,30 @@ class StructuralVariantEffect(TranscriptMutationEffect, MultiOutcomeEffect):
                     "interval_end": c.interval_end,
                 })
             for c in self._cryptic_candidates)
-        return self._with_extra_outcomes(
+        return self._combine_with_extra_candidates(
             primary + cryptic + tuple(self._splice_candidates))
+
+    @property
+    def most_likely(self):
+        return self.candidates[0]
+
+    def _attach_cryptic_candidates(self, cryptic_candidates):
+        """Attach cryptic-exon candidates (#337). Called by the SV
+        annotator after effect construction so the candidates appear
+        as additional :class:`EffectCandidate` entries on
+        :attr:`candidates` without changing the primary classification.
+        """
+        self._cryptic_candidates = tuple(cryptic_candidates)
+
+    def _attach_splice_outcomes(self, splice_outcomes):
+        """Attach splice-outcome candidates that the SV annotator
+        generated by feeding a synthesized splice-disrupting effect
+        into :func:`enumerate_splice_outcomes` (#341). Each entry is
+        a pre-constructed :class:`~varcode.EffectCandidate`; the annotator
+        has already re-sourced them as ``"varcode_splice"`` and
+        enriched evidence with the SV type.
+        """
+        self._splice_candidates = tuple(splice_outcomes)
 
 
 class LargeDeletion(StructuralVariantEffect):
@@ -1077,10 +1068,11 @@ class LargeDeletion(StructuralVariantEffect):
 
     def __init__(
             self, variant, transcript, affected_exons,
-            candidates=None, mutant_transcript=None):
+            primary_effects=None, mutant_transcript=None):
         StructuralVariantEffect.__init__(
             self, variant, transcript,
-            candidates=candidates, mutant_transcript=mutant_transcript)
+            primary_effects=primary_effects,
+            mutant_transcript=mutant_transcript)
         self.affected_exons = tuple(affected_exons)
 
     def __str__(self):
@@ -1101,10 +1093,11 @@ class LargeDuplication(StructuralVariantEffect):
 
     def __init__(
             self, variant, transcript, affected_exons,
-            candidates=None, mutant_transcript=None):
+            primary_effects=None, mutant_transcript=None):
         StructuralVariantEffect.__init__(
             self, variant, transcript,
-            candidates=candidates, mutant_transcript=mutant_transcript)
+            primary_effects=primary_effects,
+            mutant_transcript=mutant_transcript)
         self.affected_exons = tuple(affected_exons)
 
 
@@ -1137,10 +1130,11 @@ class GeneFusion(StructuralVariantEffect):
 
     def __init__(
             self, variant, transcript, partner_transcript,
-            mutant_transcript=None, candidates=None):
+            mutant_transcript=None, primary_effects=None):
         StructuralVariantEffect.__init__(
             self, variant, transcript,
-            candidates=candidates, mutant_transcript=mutant_transcript)
+            primary_effects=primary_effects,
+            mutant_transcript=mutant_transcript)
         self.partner_transcript = partner_transcript
 
 
@@ -1234,18 +1228,27 @@ class HaplotypeEffect(TranscriptMutationEffect, MultiOutcomeEffect):
         # auditing whether the cis call came from DNA-only phasing
         # or RNA-assembly evidence.
         self.phase_source = phase_source
-        # Single-outcome wrapping: the haplotype IS the outcome.
-        # Kept to honor the MultiOutcomeEffect contract without
-        # forcing subclasses to reimplement the trivial case.
-        self._candidates = (self,)
 
     @property
     def candidates(self):
-        return self._candidates
+        """Single-outcome wrapping: the haplotype IS the outcome,
+        lifted into the uniform :class:`EffectCandidate` shape so
+        consumers iterate :attr:`candidates` the same way across all
+        :class:`MultiOutcomeEffect` subclasses (#382). Extra
+        candidates attached via :meth:`_combine_with_extra_candidates`
+        (e.g. from RNA evidence) come after.
+        """
+        from ..effect_candidates import EffectCandidate
+        evidence = {}
+        if self.phase_source is not None:
+            evidence["phase_source"] = self.phase_source
+        base = (EffectCandidate(
+            effect=self, source="varcode", evidence=evidence),)
+        return self._combine_with_extra_candidates(base)
 
     @property
     def most_likely(self):
-        return self
+        return self.candidates[0]
 
     @property
     def mutant_protein_sequence(self):
@@ -1299,8 +1302,8 @@ class PhaseCandidateSet(TranscriptMutationEffect, MultiOutcomeEffect):
     somatic landed on, and without phase data we can't say which.
     The honest output is the set of plausible effects, one per
     hypothesis. ``most_likely`` returns the highest-priority
-    candidate; ``outcomes`` exposes the full set with per-haplotype
-    evidence keys (``phase_state``, ``haplotype``,
+    candidate; :attr:`candidates` exposes the full set with
+    per-hypothesis evidence keys (``phase_state``, ``haplotype``,
     ``germline_variants``) so consumers — including RNA-evidence
     integrations from #259 — can align across axes.
 
@@ -1332,14 +1335,32 @@ class PhaseCandidateSet(TranscriptMutationEffect, MultiOutcomeEffect):
 
     @property
     def candidates(self):
-        """Per-hypothesis classified effects, sorted by effect
-        priority (most-severe first). Same shape as
-        :attr:`SpliceOutcomeSet.candidates`."""
-        # Lazy import — effect_priority lives in a sibling module.
+        """One :class:`EffectCandidate` per hypothesis, sorted by
+        underlying effect priority (most-severe first), carrying the
+        phase metadata needed to align with RNA-evidence outcomes
+        (#259, #382).
+
+        ``evidence`` keys: ``phase_state`` (``"phased"`` /
+        ``"implicit"`` / ``"unknown"`` / ``"too_many_hypotheses"``),
+        ``haplotype`` (opaque tag), ``germline_variants`` (tuple of
+        the cis germline variants on that hypothesis's haplotype).
+        """
+        from ..effect_candidates import EffectCandidate
         from .effect_ordering import effect_priority
-        return tuple(sorted(
-            self._candidates_raw,
-            key=lambda e: -effect_priority(e)))
+        paired = sorted(
+            zip(self._candidates_raw, self._hypotheses),
+            key=lambda pair: -effect_priority(pair[0]))
+        base = tuple(
+            EffectCandidate(
+                effect=candidate,
+                source="varcode_germline",
+                evidence={
+                    "phase_state": hypothesis.phase_state,
+                    "haplotype": hypothesis.haplotype,
+                    "germline_variants": tuple(hypothesis.cis),
+                })
+            for candidate, hypothesis in paired)
+        return self._combine_with_extra_candidates(base)
 
     @property
     def most_likely(self):
@@ -1348,50 +1369,28 @@ class PhaseCandidateSet(TranscriptMutationEffect, MultiOutcomeEffect):
         return self.candidates[0]
 
     @property
-    def outcomes(self):
-        """One :class:`EffectCandidate` per hypothesis, carrying the phase
-        metadata needed to align with RNA-evidence outcomes (#259).
-
-        ``evidence`` keys: ``phase_state`` (``"phased"`` /
-        ``"implicit"`` / ``"unknown"`` / ``"too_many_hypotheses"``),
-        ``haplotype`` (opaque tag), ``germline_variants`` (tuple of
-        the cis germline variants on that hypothesis's haplotype).
-        """
-        from ..effect_candidates import EffectCandidate
-        outs = []
-        for candidate, hypothesis in zip(
-                self._candidates_raw, self._hypotheses):
-            outs.append(EffectCandidate(
-                effect=candidate,
-                source="varcode_germline",
-                evidence={
-                    "phase_state": hypothesis.phase_state,
-                    "haplotype": hypothesis.haplotype,
-                    "germline_variants": tuple(hypothesis.cis),
-                }))
-        return self._with_extra_outcomes(tuple(outs))
-
-    @property
     def short_description(self):
         """``"?<most_likely>"`` — the leading ``?`` flags the
         ambiguity. Consumers wanting the full possibility set read
-        :attr:`outcomes`."""
-        return "?" + self.most_likely.short_description
+        :attr:`candidates`."""
+        return "?" + self.most_likely.effect.short_description
 
     @property
     def mutant_protein_sequence(self):
         """Most-likely candidate's mutant protein. Consumers iterating
         over hypotheses pull per-candidate sequences from
-        :attr:`outcomes`."""
-        return getattr(self.most_likely, "mutant_protein_sequence", None)
+        :attr:`candidates`."""
+        return getattr(self.most_likely.effect, "mutant_protein_sequence", None)
 
     @property
     def modifies_protein_sequence(self):
-        return getattr(self.most_likely, "modifies_protein_sequence", False)
+        return getattr(
+            self.most_likely.effect, "modifies_protein_sequence", False)
 
     @property
     def modifies_coding_sequence(self):
-        return getattr(self.most_likely, "modifies_coding_sequence", False)
+        return getattr(
+            self.most_likely.effect, "modifies_coding_sequence", False)
 
     def __str__(self):
         return (

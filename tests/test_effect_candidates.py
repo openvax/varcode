@@ -14,7 +14,7 @@
 
 The type is deliberately minimal (dataclass + one helper), so tests
 focus on (a) the contract — probability bounds, defaults, frozen
-semantics — and (b) the ``MultiOutcomeEffect.outcomes`` harmonized
+semantics — and (b) the ``MultiOutcomeEffect.candidates`` harmonized
 accessor lifting existing ``candidates`` into the new shape.
 """
 
@@ -83,7 +83,7 @@ def test_candidates_from_effects_tags_source():
 def test_exonic_splice_site_exposes_outcomes():
     """Real integration: an SNV at the last base of an exon yields
     ``ExonicSpliceSite``, which is a ``MultiOutcomeEffect``. Its
-    ``.outcomes`` should return two :class:`EffectCandidate` entries (the
+    ``.candidates`` should return two :class:`EffectCandidate` entries (the
     splice-disruption outcome and the coding-change alternate)."""
     # CFTR exon 3 ends at 117531114 (last exon base).
     variant = Variant("7", 117531114, "G", "A", ensembl_grch38)
@@ -92,7 +92,7 @@ def test_exonic_splice_site_exposes_outcomes():
     assert isinstance(effect, MultiOutcomeEffect)
     assert isinstance(effect, ExonicSpliceSite)
 
-    outcomes = effect.outcomes
+    outcomes = effect.candidates
     assert len(outcomes) == 2
     assert all(isinstance(o, EffectCandidate) for o in outcomes)
     # First outcome: the splice-disruption classification (the
@@ -106,7 +106,7 @@ def test_exonic_splice_site_exposes_outcomes():
 
 
 def test_sv_outcomes_carry_sv_type_in_evidence():
-    """:class:`StructuralVariantEffect.outcomes` attaches the
+    """:class:`StructuralVariantEffect.candidates` attaches the
     ``sv_type`` to each outcome's evidence so consumers iterating
     outcomes can filter by SV kind uniformly (#339)."""
     from varcode import StructuralVariant, StructuralVariantAnnotator
@@ -118,7 +118,7 @@ def test_sv_outcomes_carry_sv_type_in_evidence():
         sv_type="DEL",
         genome=ensembl_grch38)
     effect = StructuralVariantAnnotator().annotate_on_transcript(sv, transcript)
-    outcomes = effect.outcomes
+    outcomes = effect.candidates
     assert len(outcomes) >= 1
     for o in outcomes:
         assert o.evidence["sv_type"] == "DEL"
@@ -147,7 +147,7 @@ def test_uniform_iteration_sv_and_splice_outcomes():
     splice_effect = next(
         e for e in splice_effects if e.transcript is transcript)
 
-    all_outcomes = list(sv_effect.outcomes) + list(splice_effect.outcomes)
+    all_outcomes = list(sv_effect.candidates) + list(splice_effect.candidates)
     # One-hop read across both outcome kinds:
     for o in all_outcomes:
         assert isinstance(o.effect, MutationEffect)
