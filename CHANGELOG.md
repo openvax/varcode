@@ -19,15 +19,15 @@
     `candidate.outcome` / `candidate.plausibility` /
     `candidate.coding_effect` / `candidate.predicted_class_name` /
     `candidate.mutant_transcript` / `candidate.has_protein`
-    fields are gone — read them off the `EffectCandidate`
-    (`.probability`, `.source`, `.evidence`) or the inner effect
-    (`candidate.effect`, `candidate.effect.mutant_transcript`).
+    fields are gone — read provenance off the `EffectCandidate`
+    (`.probability`, `.source`, `.evidence`) and mechanism/protein
+    state off the inner effect (`candidate.effect`,
+    `candidate.effect.mutant_transcript`).
     `candidate.plausibility` has no one-for-one semantic replacement:
-    it was the old splice-specific name for varcode's DNA-only prior.
-    The numeric value now lives in `EffectCandidate.probability`
-    because all multi-outcome wrappers share the same candidate
-    surface, but for varcode-generated splice candidates it remains a
-    heuristic ordering prior, not a calibrated sample probability.
+    it was the old splice-specific name for a DNA-only ordering
+    heuristic. Varcode-generated splice candidates now leave
+    `EffectCandidate.probability=None`; only external scorers or RNA
+    evidence should populate probability.
   - `MultiOutcomeEffect.candidates` is the single accessor on every
     subclass (`SpliceOutcomeSet`, `StructuralVariantEffect`,
     `PhaseCandidateSet`, `ExonicSpliceSite`, `HaplotypeEffect`).
@@ -51,8 +51,8 @@
   - `MultiOutcomeEffect.most_likely` is **removed**. Replaced by
     four explicit accessors so callers never confuse "wrapped vs
     unwrapped" or "likeliest vs most-disruptive":
-    - `.most_likely_candidate` → `EffectCandidate` (top by
-      probability; same as `candidates[0]`)
+    - `.most_likely_candidate` → `EffectCandidate` (same as
+      `candidates[0]`; top by probability only for scored producers)
     - `.most_likely_effect` → inner `MutationEffect` of the above
     - `.highest_priority_candidate` → `EffectCandidate` with the
       highest `effect_priority` among candidates (worst-case

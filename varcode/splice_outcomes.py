@@ -34,11 +34,12 @@ hierarchy.
 Limitations of this prototype (documented openly so callers know what
 the scores mean):
 
-* Varcode-generated splice candidates put **hand-tuned DNA priors**
-  in ``EffectCandidate.probability`` so the set has a stable
-  most-likely order. They are not calibrated sample probabilities.
-  RNA/model integrations can provide their own ``probability`` values;
-  varcode stores those unchanged with their ``source`` / ``evidence``.
+* Varcode-generated splice candidates are ordered by a hard-coded,
+  DNA-only mechanism preference. They do **not** populate
+  ``EffectCandidate.probability`` because varcode has not measured a
+  calibrated probability for these mechanisms. RNA/model integrations
+  can provide their own ``probability`` values; varcode stores those
+  unchanged with their ``source`` / ``evidence``.
 * :class:`ExonSkipping` and :class:`NormalSplicing` produce concrete
   protein sequences using the cDNA already available from PyEnsembl.
 * :class:`IntronRetention` and the cryptic-splice mechanisms
@@ -130,8 +131,9 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
             excluded_candidates=(), candidate_rna_evidence=()):
         MultiOutcomeEffect.__init__(self, variant)
         self.transcript = transcript
-        # Sort candidates by probability descending so .candidates[0]
-        # is always the most likely.
+        # Sort scored candidates by probability descending. Unscored
+        # varcode splice predictions keep their producer order because
+        # Python's sort is stable and all None scores map to 0.0.
         self._candidates = tuple(sorted(
             candidates,
             key=lambda c: c.probability if c.probability is not None else 0.0,
@@ -296,9 +298,11 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
             self.variant,
             getattr(self.transcript, "name", None),
             ", ".join(
-                "%s (p=%.2f)" % (
+                "%s (p=%s)" % (
                     c.effect.short_description,
-                    c.probability if c.probability is not None else 0.0)
+                    "%.2f" % c.probability
+                    if c.probability is not None
+                    else "?")
                 for c in self.candidates),
         )
 
@@ -307,74 +311,75 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
 
 
 # ---------------------------------------------------------------------
-# DNA prior tables.
+# DNA-only mechanism order.
 #
-# Hand-tuned heuristics. The numbers don't need to be precise — what
-# matters is the relative ordering. Documented openly so reviewers and
-# callers know what to expect. See module docstring for the limitation.
+# Hand-tuned heuristic ordering. These are not probabilities and are
+# intentionally not exported as :attr:`EffectCandidate.probability`.
+# The order only gives varcode a deterministic leading candidate when
+# DNA alone leaves several splice mechanisms possible.
 # ---------------------------------------------------------------------
 
 
-# DNA prior tables are keyed by :class:`SpliceMechanismEffect`
-# subclass — class identity IS the mechanism, no parallel enum.
+# Mechanism orders are tuples of :class:`SpliceMechanismEffect`
+# subclasses — class identity IS the mechanism, no parallel enum.
 
 # Disrupted canonical donor (intronic +1/+2): exon skipping dominates,
 # intron retention common, leaky normal splicing rare.
-_DNA_PRIOR_SPLICE_DONOR = {
-    ExonSkipping: 0.50,
-    IntronRetention: 0.30,
-    CrypticDonor: 0.10,
-    NormalSplicing: 0.10,
-}
+_MECHANISM_ORDER_SPLICE_DONOR = (
+    ExonSkipping,
+    IntronRetention,
+    CrypticDonor,
+    NormalSplicing,
+)
 
 # Disrupted canonical acceptor (intronic -1/-2): same rough
 # distribution as donor.
-_DNA_PRIOR_SPLICE_ACCEPTOR = {
-    ExonSkipping: 0.50,
-    IntronRetention: 0.30,
-    CrypticAcceptor: 0.10,
-    NormalSplicing: 0.10,
-}
+_MECHANISM_ORDER_SPLICE_ACCEPTOR = (
+    ExonSkipping,
+    IntronRetention,
+    CrypticAcceptor,
+    NormalSplicing,
+)
 
 # Disrupted exonic splice site (last 3 of exon): often splicing still
 # proceeds (the disruption is in the exon, where the spliceosome can
 # tolerate more variation), so normal splicing is more competitive.
-_DNA_PRIOR_EXONIC_SPLICE_SITE = {
-    NormalSplicing: 0.50,
-    ExonSkipping: 0.30,
-    CrypticDonor: 0.15,
-    IntronRetention: 0.05,
-}
+_MECHANISM_ORDER_EXONIC_SPLICE_SITE = (
+    NormalSplicing,
+    ExonSkipping,
+    CrypticDonor,
+    IntronRetention,
+)
 
 # Intronic splice site (positions +3 to +6 or -3): less critical
 # region; normal splicing dominates. Two variants — donor-side (+3 to +6)
 # and acceptor-side (-3) — which differ only in the cryptic direction.
-_DNA_PRIOR_INTRONIC_SPLICE_SITE_DONOR = {
-    NormalSplicing: 0.70,
-    ExonSkipping: 0.20,
-    IntronRetention: 0.05,
-    CrypticDonor: 0.05,
-}
+_MECHANISM_ORDER_INTRONIC_SPLICE_SITE_DONOR = (
+    NormalSplicing,
+    ExonSkipping,
+    IntronRetention,
+    CrypticDonor,
+)
 
-_DNA_PRIOR_INTRONIC_SPLICE_SITE_ACCEPTOR = {
-    NormalSplicing: 0.70,
-    ExonSkipping: 0.20,
-    IntronRetention: 0.05,
-    CrypticAcceptor: 0.05,
-}
+_MECHANISM_ORDER_INTRONIC_SPLICE_SITE_ACCEPTOR = (
+    NormalSplicing,
+    ExonSkipping,
+    IntronRetention,
+    CrypticAcceptor,
+)
 
 # Order matters for isinstance matching: more specific classes first.
 # SpliceDonor and SpliceAcceptor are subclasses of IntronicSpliceSite
 # (see effect_classes.py), so they must be checked before the
-# IntronicSpliceSite fallback in _dna_prior_table_for — otherwise
+# IntronicSpliceSite fallback in _mechanism_order_for — otherwise
 # a SpliceDonor would incorrectly fall into the intronic-window table.
 # IntronicSpliceSite itself is deliberately held out of this tuple and
 # dispatched separately so side detection can pick the right cryptic
 # direction.
-_DNA_PRIOR_TABLES = (
-    (SpliceDonor, _DNA_PRIOR_SPLICE_DONOR),
-    (SpliceAcceptor, _DNA_PRIOR_SPLICE_ACCEPTOR),
-    (ExonicSpliceSite, _DNA_PRIOR_EXONIC_SPLICE_SITE),
+_MECHANISM_ORDER_TABLES = (
+    (SpliceDonor, _MECHANISM_ORDER_SPLICE_DONOR),
+    (SpliceAcceptor, _MECHANISM_ORDER_SPLICE_ACCEPTOR),
+    (ExonicSpliceSite, _MECHANISM_ORDER_EXONIC_SPLICE_SITE),
 )
 
 
@@ -388,7 +393,7 @@ def _intronic_splice_side_is_acceptor(splice_effect):
     cryptic donor or cryptic acceptor is the relevant alternative.
 
     Caller contract: ``splice_effect`` must be an ``IntronicSpliceSite``
-    (guaranteed by :func:`_dna_prior_table_for`), so ``variant`` and
+    (guaranteed by :func:`_mechanism_order_for`), so ``variant`` and
     ``nearest_exon`` are always present.
     """
     exon = splice_effect.nearest_exon
@@ -400,20 +405,20 @@ def _intronic_splice_side_is_acceptor(splice_effect):
     return variant.trimmed_base1_end > exon.end
 
 
-def _dna_prior_table_for(splice_effect):
-    """Return the heuristic DNA-prior table that applies to this splice
+def _mechanism_order_for(splice_effect):
+    """Return the DNA-only mechanism order for this splice
     effect, or None for effects we don't wrap.
 
     Uses :func:`isinstance` rather than exact-class dispatch so
     subclasses are handled correctly.
     """
-    for cls, table in _DNA_PRIOR_TABLES:
+    for cls, order in _MECHANISM_ORDER_TABLES:
         if isinstance(splice_effect, cls):
-            return table
+            return order
     if isinstance(splice_effect, IntronicSpliceSite):
         if _intronic_splice_side_is_acceptor(splice_effect):
-            return _DNA_PRIOR_INTRONIC_SPLICE_SITE_ACCEPTOR
-        return _DNA_PRIOR_INTRONIC_SPLICE_SITE_DONOR
+            return _MECHANISM_ORDER_INTRONIC_SPLICE_SITE_ACCEPTOR
+        return _MECHANISM_ORDER_INTRONIC_SPLICE_SITE_DONOR
     return None
 
 
@@ -422,22 +427,20 @@ def _dna_prior_table_for(splice_effect):
 # ---------------------------------------------------------------------
 
 
-def _wrap_in_candidate(mechanism_effect, prior_probability):
+def _wrap_in_candidate(mechanism_effect):
     """Lift a :class:`SpliceMechanismEffect` into an
-    :class:`EffectCandidate` with the given heuristic probability
-    and ``source="varcode"``.
+    unscored :class:`EffectCandidate` with ``source="varcode"``.
 
     Trivial wrapper kept as a named helper for symmetry with how
     other annotators construct ``EffectCandidate`` objects.
     """
     return EffectCandidate(
         effect=mechanism_effect,
-        probability=prior_probability,
         source="varcode",
     )
 
 
-def _build_normal_splicing_candidate(splice_effect, prior_probability):
+def _build_normal_splicing_candidate(splice_effect):
     """Normal splicing: the splice signal was hit but the spliceosome
     handles it; the protein consequence (if any) is whatever the
     underlying coding change normally produces.
@@ -455,7 +458,6 @@ def _build_normal_splicing_candidate(splice_effect, prior_probability):
             transcript=transcript,
             splice_signal=splice_effect,
             coding_effect=coding_effect),
-        prior_probability,
     )
 
 
@@ -491,7 +493,7 @@ def _aa_fields_from_protein_diff(
     }
 
 
-def _build_exon_skipping_candidate(splice_effect, prior_probability):
+def _build_exon_skipping_candidate(splice_effect):
     """Exon skipping: the affected exon is excluded from the mature
     transcript.
 
@@ -513,7 +515,6 @@ def _build_exon_skipping_candidate(splice_effect, prior_probability):
                 splice_signal=splice_effect,
                 affected_exon=exon,
                 in_frame=False),
-            prior_probability,
         )
 
     exon_length = exon.end - exon.start + 1
@@ -532,7 +533,6 @@ def _build_exon_skipping_candidate(splice_effect, prior_probability):
                 affected_exon=exon,
                 in_frame=in_frame,
                 mutant_transcript=mt),
-            prior_probability,
         )
 
     aa_fields = _aa_fields_from_protein_diff(
@@ -546,7 +546,6 @@ def _build_exon_skipping_candidate(splice_effect, prior_probability):
             in_frame=in_frame,
             mutant_transcript=mt,
             **aa_fields),
-        prior_probability,
     )
 
 
@@ -688,8 +687,7 @@ def _splice_side_for_effect(splice_effect):
     return None
 
 
-def _build_intron_retention_candidate(
-        splice_effect, prior_probability, genomic_sequence=None):
+def _build_intron_retention_candidate(splice_effect, genomic_sequence=None):
     """Intron retention: the spliceosome fails and the intron is
     transcribed through to the mature mRNA.
 
@@ -737,13 +735,11 @@ def _build_intron_retention_candidate(
                 splice_effect.variant, transcript, mt, length_delta)
             return _wrap_in_candidate(
                 IntronRetention(mutant_transcript=mt, **common, **aa_fields),
-                prior_probability,
             )
 
     # Predicted state: no protein math.
     return _wrap_in_candidate(
         IntronRetention(**common),
-        prior_probability,
     )
 
 
@@ -955,7 +951,7 @@ def _build_cryptic_site_mutant_transcript(
 
 
 def _build_cryptic_splice_candidate(
-        splice_effect, prior_probability, mechanism_cls, genomic_sequence=None,
+        splice_effect, mechanism_cls, genomic_sequence=None,
         scan_flank=_CRYPTIC_SCAN_FLANK):
     """Cryptic donor/acceptor candidate. When ``genomic_sequence`` is
     provided (#296), scan the canonical splice boundary's flanking
@@ -1004,7 +1000,6 @@ def _build_cryptic_splice_candidate(
                         mutant_transcript=mt,
                         **common,
                         **aa_fields),
-                    prior_probability,
                 )
             # MT built but protein didn't translate — partial info.
             return _wrap_in_candidate(
@@ -1014,13 +1009,11 @@ def _build_cryptic_splice_candidate(
                     exon_length_delta=length_delta,
                     mutant_transcript=mt,
                     **common),
-                prior_probability,
             )
 
     # Predicted state.
     return _wrap_in_candidate(
         mechanism_cls(**common),
-        prior_probability,
     )
 
 
@@ -1174,25 +1167,25 @@ def enumerate_splice_outcomes(splice_effect, genomic_sequence=None):
         input is a splice-disrupting effect; otherwise the input
         unchanged.
     """
-    table = _dna_prior_table_for(splice_effect)
-    if table is None:
+    mechanism_order = _mechanism_order_for(splice_effect)
+    if mechanism_order is None:
         return splice_effect
 
     candidates = []
-    for mechanism_cls, prior_probability in table.items():
+    for mechanism_cls in mechanism_order:
         if mechanism_cls is NormalSplicing:
             candidates.append(_build_normal_splicing_candidate(
-                splice_effect, prior_probability))
+                splice_effect))
         elif mechanism_cls is ExonSkipping:
             candidates.append(_build_exon_skipping_candidate(
-                splice_effect, prior_probability))
+                splice_effect))
         elif mechanism_cls is IntronRetention:
             candidates.append(_build_intron_retention_candidate(
-                splice_effect, prior_probability,
+                splice_effect,
                 genomic_sequence=genomic_sequence))
         elif mechanism_cls in (CrypticDonor, CrypticAcceptor):
             candidates.append(_build_cryptic_splice_candidate(
-                splice_effect, prior_probability, mechanism_cls,
+                splice_effect, mechanism_cls,
                 genomic_sequence=genomic_sequence))
 
     return SpliceOutcomeSet(

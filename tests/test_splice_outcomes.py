@@ -169,13 +169,18 @@ def test_all_candidates_are_splice_mechanism_effects():
         assert isinstance(c.effect, SpliceMechanismEffect)
 
 
-def test_candidates_sorted_by_probability_descending():
+def test_varcode_splice_candidates_are_unscored_but_ordered():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     effects = variant.effects(splice_outcomes=True)
     target = next(e for e in effects if e.transcript is transcript)
-    probs = [c.probability for c in target.candidates]
-    assert probs == sorted(probs, reverse=True)
+    assert [c.probability for c in target.candidates] == [None] * 4
+    assert [type(c.effect) for c in target.candidates] == [
+        ExonSkipping,
+        IntronRetention,
+        CrypticDonor,
+        NormalSplicing,
+    ]
 
 
 def test_most_likely_for_splice_donor_is_exon_skipping():

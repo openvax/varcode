@@ -77,18 +77,18 @@ is intronic — there's no coding consequence to attach.
 ```python
 effects = variant.effects(splice_outcomes=True)
 # SpliceOutcomeSet(...) replaces the splice effect.
-# .candidates is a tuple[EffectCandidate, ...], ordered most-likely-first.
+# .candidates is a tuple[EffectCandidate, ...], in producer order.
 # Each candidate's .effect is a SpliceMechanismEffect subclass:
 #   EffectCandidate(effect=ExonSkipping(affected_exon=..., in_frame=True,
 #                                       aa_ref="KGYK...", ...),
-#                   probability=0.5)
+#                   probability=None)
 #   EffectCandidate(effect=IntronRetention(retained_intron_start=...,
 #                                          side="donor", ...),
-#                   probability=0.3)
+#                   probability=None)
 #   EffectCandidate(effect=CrypticDonor(affected_exon=..., ...),
-#                   probability=0.1)
+#                   probability=None)
 #   EffectCandidate(effect=NormalSplicing(coding_effect=Substitution(...)),
-#                   probability=0.1)
+#                   probability=None)
 ```
 
 `SpliceOutcomeSet` replaces the splice effect with a set of
@@ -157,12 +157,11 @@ stable way to ask "which candidate does this producer think is most
 likely?" It is optional, source-scoped metadata, not an inherent
 property of the `MutationEffect`.
 
-For varcode-generated splice candidates, `probability` is a
-hand-tuned DNA-only prior used to sort the candidates. It is not
-calibrated and should not be interpreted as "50% exon skipping in this
-sample." RNA/model integrations can put their own estimate there, and
-varcode stores it unchanged. `probability=None` means unscored, not
-impossible.
+For varcode-generated splice candidates, `probability` is `None`.
+Varcode keeps a deterministic DNA-only ordering of splice mechanisms,
+but it does not pretend that ordering is a measured probability.
+RNA/model integrations can put their own estimate there, and varcode
+stores it unchanged. `probability=None` means unscored, not impossible.
 
 ### Picking a single candidate
 
@@ -171,7 +170,7 @@ notions of "best" are available — pick consciously:
 
 | Accessor | Returns | Meaning |
 |---|---|---|
-| `.most_likely_candidate` | `EffectCandidate` | Top by `probability` (i.e. `candidates[0]`) |
+| `.most_likely_candidate` | `EffectCandidate` | First candidate after producer ordering; top by `probability` when scored |
 | `.most_likely_effect` | `MutationEffect` | Inner effect of the above |
 | `.highest_priority_candidate` | `EffectCandidate` | Top by `effect_priority` (most protein-disruptive) |
 | `.highest_priority_effect` | `MutationEffect` | Inner effect of the above |

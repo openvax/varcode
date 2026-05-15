@@ -80,12 +80,11 @@ class EffectCandidate(DataclassSerializable):
     probability : float or None
         Optional source-scoped score in ``[0, 1]``. It answers only
         "how likely does this producer think this candidate is within
-        this candidate set?" Varcode-generated splice candidates use
-        hand-tuned DNA-only priors here so the set has a stable order;
-        RNA/model integrations may supply empirical or calibrated
-        estimates. Varcode stores the value unchanged and does not
-        normalize across sources. ``None`` means "not scored", not
-        impossible.
+        this candidate set?" RNA/model integrations may supply
+        empirical or calibrated estimates. Varcode stores the value
+        unchanged and does not normalize across sources. ``None``
+        means "not scored", not impossible; varcode-generated splice
+        candidates intentionally leave this unset.
     source : str
         Name of the tool or annotator that produced this candidate.
         Defaults to ``"varcode"`` for built-in classifications.

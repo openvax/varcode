@@ -135,7 +135,7 @@ class MultiOutcomeEffect(MutationEffect):
     Subclasses must expose:
 
     * :attr:`candidates` — tuple of :class:`~varcode.effect_candidates.EffectCandidate`
-      objects, sorted most-likely-first. Each entry pairs an
+      objects in producer order. Each entry pairs an
       inner :class:`MutationEffect` (concrete or placeholder) with
       its provenance — ``source`` (producer), ``probability``,
       ``evidence`` dict. The :attr:`effects` helper unwraps to the
@@ -161,16 +161,14 @@ class MultiOutcomeEffect(MutationEffect):
     Two orthogonal "best candidate" notions are available; pick the
     one that matches your question:
 
-    * **Most likely**: top by ``probability`` — the producer's
-      source-scoped score for this candidate set. For built-in splice
-      candidates this is only a heuristic DNA prior; RNA/model
-      integrations may provide stronger estimates.
+    * **Most likely**: the first candidate after producer ordering.
+      Scored producers sort by ``probability``. Unscored producers
+      preserve their own deterministic order.
       :attr:`most_likely_candidate` returns the wrapped
       :class:`EffectCandidate` (provenance + inner effect);
       :attr:`most_likely_effect` returns just the inner
       :class:`MutationEffect`. Always equal to ``candidates[0]`` /
-      ``effects[0]`` because :attr:`candidates` is sorted by
-      probability descending.
+      ``effects[0]``.
 
     * **Highest priority**: top by varcode's effect-priority ordering
       (see :func:`~varcode.effects.effect_priority`) — the
@@ -197,9 +195,10 @@ class MultiOutcomeEffect(MutationEffect):
 
     @property
     def most_likely_candidate(self):
-        """The :class:`EffectCandidate` with the highest ``probability``
-        (i.e. ``candidates[0]`` since :attr:`candidates` is sorted
-        most-likely-first). Pairs the inner effect with its
+        """The first :class:`EffectCandidate` in producer order.
+        Scored subclasses sort by ``probability`` before exposing
+        candidates; unscored subclasses keep a deterministic order.
+        Pairs the inner effect with its
         ``source`` / ``probability`` / ``evidence`` provenance.
 
         For just the inner :class:`MutationEffect`, use
@@ -230,12 +229,7 @@ class MultiOutcomeEffect(MutationEffect):
         questions.)
 
         Ties on priority resolve to the first matching entry of
-        :attr:`candidates` — which, on subclasses whose
-        :attr:`candidates` is sorted by ``probability`` descending,
-        means "the most-likely tied candidate." Subclasses that sort
-        :attr:`candidates` differently (e.g.
-        :class:`PhaseCandidateSet` sorts by priority itself, since
-        per-hypothesis probability is unknown) inherit that order.
+        :attr:`candidates`, preserving the subclass's candidate order.
 
         Behavior is deterministic even when every candidate has
         ``probability=None``.
@@ -1749,8 +1743,8 @@ class PhaseCandidateSet(TranscriptMutationEffect, MultiOutcomeEffect):
 
     # Note on accessor semantics for this class: per-hypothesis
     # probability is unknown (that's the whole point), so the
-    # base-class :attr:`candidates` "sorted most-likely-first"
-    # contract is replaced here by "sorted highest-impact-first" via
+    # base-class "producer order" contract is replaced here by
+    # "sorted highest-impact-first" via
     # :func:`effect_priority`. Consequently
     # :attr:`most_likely_candidate` (== ``candidates[0]``) and
     # :attr:`highest_priority_candidate` coincide for this class —
