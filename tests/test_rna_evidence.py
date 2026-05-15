@@ -388,8 +388,8 @@ class TestOrderingContract:
         new = tuple(effect.candidates)
         # First N entries are exactly the original DNA-predicted set.
         assert new[:len(dna_predicted)] == dna_predicted
-        # most_likely should still be the original DNA-predicted top.
+        # most_likely_candidate should still be the original DNA-predicted top.
         # Equality (not identity): .candidates rebuilds the EffectCandidate
         # tuple each access, so each call returns fresh wrapper objects
         # around the same underlying effect.
-        assert effect.most_likely == effect.candidates[0]
+        assert effect.most_likely_candidate == effect.candidates[0]

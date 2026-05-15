@@ -68,7 +68,11 @@ def test_exonic_splice_site_most_likely_is_self():
     variant = Variant("7", 117531114, "G", "T", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     effect = variant.effect_on_transcript(transcript)
-    assert effect.most_likely.effect is effect
+    # most_likely_effect is the inner MutationEffect, which IS the
+    # splice-disruption outcome (this effect itself).
+    assert effect.most_likely_effect is effect
+    # most_likely_candidate wraps it in an EffectCandidate.
+    assert effect.most_likely_candidate.effect is effect
 
 
 def test_exonic_splice_site_priority_class_is_self_class():
@@ -118,10 +122,10 @@ def test_splice_outcome_set_alternate_effect_resolves_to_normal_splicing():
 
 def test_splice_outcome_set_alternate_effect_none_when_no_normal_splicing():
     # SpliceDonor-backed SpliceOutcomeSet: the NORMAL_SPLICING candidate
-    # exists but its inner effect is the Intronic placeholder (intronic
-    # variant, no underlying coding change). alternate_effect should be
-    # None.
-    from varcode.effects import Intronic
+    # exists but its inner effect is a placeholder Intronic (intronic
+    # variant, no underlying coding change). alternate_effect should
+    # be None — driven by the placeholder marker in evidence, not by
+    # class-identity inspection.
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     wrapped_effects = variant.effects(splice_outcomes=True)
@@ -130,7 +134,7 @@ def test_splice_outcome_set_alternate_effect_none_when_no_normal_splicing():
         c for c in wrapped.candidates
         if c.evidence.get("splice_outcome") is SpliceOutcome.NORMAL_SPLICING
     )
-    assert type(normal.effect) is Intronic
+    assert normal.evidence.get("placeholder") is True
     assert wrapped.alternate_effect is None
 
 

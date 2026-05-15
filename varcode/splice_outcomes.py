@@ -147,57 +147,43 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
         return self._candidates
 
     def to_dict(self):
-        """Stringify the :class:`SpliceOutcome` enum in each candidate's
-        ``evidence`` dict before delegating to ``Serializable.to_dict``
-        — ``serializable.helpers`` has no built-in enum branch (#343),
-        and its typed-dict form for enums can't be rehydrated by the
-        ``EnumType`` constructor on round-trip.
+        """Build the dict explicitly rather than delegating to
+        :class:`Serializable`'s introspection-based default.
 
-        Temporarily swaps ``self._candidates`` for a stringified copy
-        during ``super().to_dict()``, then restores the original so
-        runtime callers still see ``SpliceOutcome`` enums in evidence.
+        Two reasons:
+
+        1. ``serializable.helpers`` has no built-in enum branch (#343),
+           and the typed-dict form it would otherwise emit for the
+           :class:`SpliceOutcome` enum stored under
+           ``evidence["splice_outcome"]`` can't be rehydrated by the
+           ``EnumType`` constructor on round-trip. We replace the
+           enum with its string value here and recover it in
+           :meth:`from_dict`.
+        2. Building the dict by hand keeps ``self`` immutable during
+           serialization — an earlier approach swapped
+           ``self._candidates`` temporarily, which was not
+           thread-safe and could leak stringified state to a
+           concurrent reader.
         """
-        original = self._candidates
-        stringified = []
-        for c in original:
-            outcome = c.evidence.get("splice_outcome")
-            if isinstance(outcome, SpliceOutcome):
-                new_ev = dict(c.evidence)
-                new_ev["splice_outcome"] = outcome.value
-                stringified.append(EffectCandidate(
-                    effect=c.effect,
-                    probability=c.probability,
-                    source=c.source,
-                    evidence=new_ev))
-            else:
-                stringified.append(c)
-        self._candidates = tuple(stringified)
-        try:
-            return super().to_dict()
-        finally:
-            self._candidates = original
+        return {
+            "variant": self.variant,
+            "transcript": self.transcript,
+            "candidates": tuple(
+                _serialize_candidate_for_dict(c) for c in self._candidates),
+            "disrupted_signal_class": self.disrupted_signal_class,
+        }
 
     @classmethod
     def from_dict(cls, state_dict):
         """Inverse of :meth:`to_dict`: reparse the stringified
-        ``splice_outcome`` back into the enum after
-        ``Serializable.from_dict`` (#343)."""
-        instance = super().from_dict(state_dict)
-        rehydrated = []
-        for c in instance._candidates:
-            outcome = c.evidence.get("splice_outcome")
-            if isinstance(outcome, str):
-                new_ev = dict(c.evidence)
-                new_ev["splice_outcome"] = SpliceOutcome(outcome)
-                rehydrated.append(EffectCandidate(
-                    effect=c.effect,
-                    probability=c.probability,
-                    source=c.source,
-                    evidence=new_ev))
-            else:
-                rehydrated.append(c)
-        instance._candidates = tuple(rehydrated)
-        return instance
+        ``splice_outcome`` in each candidate's evidence back into the
+        :class:`SpliceOutcome` enum, then construct the set via
+        ``__init__``."""
+        state_dict = dict(state_dict)
+        candidates = state_dict.get("candidates", ())
+        state_dict["candidates"] = tuple(
+            _deserialize_candidate_from_dict(c) for c in candidates)
+        return cls(**state_dict)
 
     @property
     def priority_class(self):
@@ -209,27 +195,24 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
         return self.disrupted_signal_class
 
     @property
-    def most_likely(self) -> EffectCandidate:
-        return self._candidates[0]
-
-    @property
     def alternate_effect(self):
         """Back-compat shim matching :attr:`ExonicSpliceSite.alternate_effect`.
 
         Resolves to the inner effect of the ``NORMAL_SPLICING``
         candidate — i.e. "the coding change that applies when
         splicing proceeds normally." Returns ``None`` when no
-        candidate carries the ``NORMAL_SPLICING`` outcome or when
-        that candidate's inner effect is a placeholder
-        :class:`Intronic` (the variant has no underlying coding
-        change if splicing proceeds normally).
+        candidate carries the ``NORMAL_SPLICING`` outcome, or when
+        that candidate is a placeholder build (marked
+        ``evidence["placeholder"] = True`` in
+        :func:`_make_splice_candidate` when no underlying coding
+        effect was available — e.g. the variant is intronic so
+        there's no protein change if splicing proceeds normally).
         """
         for candidate in self._candidates:
             if candidate.evidence.get("splice_outcome") is SpliceOutcome.NORMAL_SPLICING:
-                effect = candidate.effect
-                if isinstance(effect, Intronic) and type(effect) is Intronic:
+                if candidate.evidence.get("placeholder"):
                     return None
-                return effect
+                return candidate.effect
         return None
 
     @property
@@ -257,7 +240,8 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
 
     @property
     def short_description(self) -> str:
-        return "splice-set:%s" % _candidate_short_description(self.most_likely)
+        return "splice-set:%s" % _candidate_short_description(
+            self.most_likely_candidate)
 
     def __str__(self) -> str:
         return "SpliceOutcomeSet(variant=%s, transcript=%s, candidates=[%s])" % (
@@ -282,6 +266,44 @@ def _candidate_short_description(candidate: EffectCandidate) -> str:
     inner = candidate.effect
     desc = getattr(inner, "short_description", type(inner).__name__)
     return "%s (%s, p=%.2f)" % (desc, outcome_str, probability)
+
+
+def _serialize_candidate_for_dict(candidate: EffectCandidate) -> EffectCandidate:
+    """Return a copy of ``candidate`` safe for ``Serializable``
+    round-trip: the :class:`SpliceOutcome` enum stored under
+    ``evidence["splice_outcome"]`` is replaced by its string value.
+    Inverse of :func:`_deserialize_candidate_from_dict`.
+    """
+    outcome = candidate.evidence.get("splice_outcome")
+    if not isinstance(outcome, SpliceOutcome):
+        return candidate
+    new_ev = dict(candidate.evidence)
+    new_ev["splice_outcome"] = outcome.value
+    return EffectCandidate(
+        effect=candidate.effect,
+        probability=candidate.probability,
+        source=candidate.source,
+        evidence=new_ev,
+    )
+
+
+def _deserialize_candidate_from_dict(candidate: EffectCandidate) -> EffectCandidate:
+    """Inverse of :func:`_serialize_candidate_for_dict`: reparse the
+    stringified ``splice_outcome`` back into the
+    :class:`SpliceOutcome` enum so runtime callers can dispatch on
+    ``candidate.evidence["splice_outcome"] is SpliceOutcome.X``.
+    """
+    outcome = candidate.evidence.get("splice_outcome")
+    if not isinstance(outcome, str):
+        return candidate
+    new_ev = dict(candidate.evidence)
+    new_ev["splice_outcome"] = SpliceOutcome(outcome)
+    return EffectCandidate(
+        effect=candidate.effect,
+        probability=candidate.probability,
+        source=candidate.source,
+        evidence=new_ev,
+    )
 
 
 # ---------------------------------------------------------------------
@@ -437,21 +459,46 @@ def _make_splice_candidate(
     math succeeded; ``None`` falls back to a placeholder
     (:class:`PredictedIntronRetention`, :class:`PredictedCrypticSpliceSite`,
     :class:`ExonLoss`, :class:`Intronic`) so the candidate's inner
-    effect is always a real :class:`MutationEffect`. The optional
-    ``mutant_transcript`` is attached to the inner effect (so
-    consumers reach it via ``candidate.effect.mutant_transcript``);
-    ``description`` is stored under ``evidence["description"]``
-    alongside the ``"splice_outcome"`` enum.
+    effect is always a real :class:`MutationEffect`. Placeholder
+    builds get ``evidence["placeholder"] = True`` so consumers
+    (and :attr:`SpliceOutcomeSet.alternate_effect`) can tell a
+    placeholder apart from a real :class:`Intronic` / :class:`ExonLoss`
+    without inspecting concrete class identity.
+
+    The optional ``mutant_transcript`` is attached to the inner
+    effect (so consumers reach it via
+    ``candidate.effect.mutant_transcript``). ``description`` is
+    stored under ``evidence["description"]`` alongside the
+    ``"splice_outcome"`` enum.
+
+    Aliasing constraint: when ``mutant_transcript`` is supplied,
+    ``coding_effect`` must either be ``None`` (a fresh placeholder
+    will be built) or a freshly-constructed effect with no existing
+    ``mutant_transcript`` — otherwise we'd silently overwrite a
+    shared effect's transcript. All in-tree callers satisfy this:
+    placeholders are fresh per call and ``classify_from_protein_diff``
+    returns a fresh effect each invocation. The assertion below
+    catches future regressions.
     """
+    is_placeholder = coding_effect is None
     transcript = getattr(splice_effect, "transcript", None)
-    effect = coding_effect if coding_effect is not None else (
-        _placeholder_effect_for_outcome(
-            outcome, splice_effect.variant, transcript))
+    if is_placeholder:
+        effect = _placeholder_effect_for_outcome(
+            outcome, splice_effect.variant, transcript)
+    else:
+        effect = coding_effect
     if mutant_transcript is not None:
+        existing = getattr(effect, "mutant_transcript", None)
+        assert existing is None or existing is mutant_transcript, (
+            "_make_splice_candidate would overwrite an existing "
+            "mutant_transcript on a shared effect; pass a freshly-"
+            "constructed coding_effect or omit mutant_transcript.")
         effect.mutant_transcript = mutant_transcript
     evidence = {"splice_outcome": outcome}
     if description is not None:
         evidence["description"] = description
+    if is_placeholder:
+        evidence["placeholder"] = True
     return EffectCandidate(
         effect=effect,
         probability=plausibility,

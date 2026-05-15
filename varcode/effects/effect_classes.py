@@ -140,7 +140,6 @@ class MultiOutcomeEffect(MutationEffect):
       its provenance — ``source`` (producer), ``probability``,
       ``evidence`` dict. The :attr:`effects` helper unwraps to the
       inner Effects when callers don't need provenance.
-    * :attr:`most_likely` — the top candidate (i.e. ``candidates[0]``).
     * :attr:`priority_class` — effect class whose priority this set
       adopts (read by :func:`varcode.effects.effect_priority`).
 
@@ -152,18 +151,100 @@ class MultiOutcomeEffect(MutationEffect):
     External integrations (RNA evidence, SpliceAI scoring, etc.)
     attach extra candidates post-hoc via the ``_extra_candidates``
     slot — subclasses that override :attr:`candidates` must include
-    those extras in their returned tuple. The :meth:`_combine_with_extra_candidates`
-    helper does the right thing.
+    those extras in their returned tuple. The
+    :meth:`_combine_with_extra_candidates` helper does the right
+    thing.
+
+    Picking *the* candidate
+    -----------------------
+
+    Two orthogonal "best candidate" notions are available; pick the
+    one that matches your question:
+
+    * **Most likely**: top by ``probability`` — what the producer
+      thinks is most likely to happen biologically.
+      :attr:`most_likely_candidate` returns the wrapped
+      :class:`EffectCandidate` (provenance + inner effect);
+      :attr:`most_likely_effect` returns just the inner
+      :class:`MutationEffect`. Always equal to ``candidates[0]`` /
+      ``effects[0]`` because :attr:`candidates` is sorted by
+      probability descending.
+
+    * **Highest impact**: top by varcode's effect-priority ordering
+      (see :func:`~varcode.effects.effect_priority`) — the
+      most protein-disruptive candidate regardless of probability.
+      :attr:`highest_impact_candidate` and
+      :attr:`highest_impact_effect` are the analogous accessors. Use
+      this for clinical / functional filtering ("flag if any
+      candidate is at least a frameshift"), since a low-probability
+      frameshift sitting alongside a high-probability silent change
+      should still light up.
+
+    The two coincide when probability ranking and priority ranking
+    agree, which is common but not guaranteed. Pick consciously.
     """
 
     @property
     def effects(self):
         """Tuple of inner :class:`MutationEffect` objects, in
-        ``candidates`` order. Convenience for callers that don't need
-        per-candidate provenance — equivalent to
+        :attr:`candidates` order. Convenience for callers that don't
+        need per-candidate provenance — equivalent to
         ``tuple(c.effect for c in self.candidates)``.
         """
         return tuple(c.effect for c in self.candidates)
+
+    @property
+    def most_likely_candidate(self):
+        """The :class:`EffectCandidate` with the highest ``probability``
+        (i.e. ``candidates[0]`` since :attr:`candidates` is sorted
+        most-plausible-first). Pairs the inner effect with its
+        ``source`` / ``probability`` / ``evidence`` provenance.
+
+        For just the inner :class:`MutationEffect`, use
+        :attr:`most_likely_effect`. For the most protein-disruptive
+        candidate (independent of probability), use
+        :attr:`highest_impact_candidate`.
+        """
+        return self.candidates[0]
+
+    @property
+    def most_likely_effect(self):
+        """The :class:`MutationEffect` of :attr:`most_likely_candidate`.
+        Equivalent to ``most_likely_candidate.effect`` /
+        ``effects[0]`` — given here so callers that don't need
+        provenance don't have to reach through the wrapper.
+        """
+        return self.candidates[0].effect
+
+    @property
+    def highest_impact_candidate(self):
+        """The :class:`EffectCandidate` whose inner effect has the
+        highest :func:`~varcode.effects.effect_priority` (most
+        protein-disruptive). Distinct from
+        :attr:`most_likely_candidate` whenever probability and
+        priority disagree — e.g. a low-probability frameshift
+        alongside a high-probability silent change.
+
+        Ties broken by :attr:`candidates` order (i.e. by probability
+        descending), so the most-likely highest-impact candidate
+        wins.
+        """
+        from .effect_ordering import effect_priority
+        # max() is stable on Python's tuple comparison, but to make
+        # the tie-break explicit we use enumerate so higher
+        # probability wins on equal priority.
+        return max(
+            self.candidates,
+            key=lambda c: (effect_priority(c.effect),))
+
+    @property
+    def highest_impact_effect(self):
+        """The inner :class:`MutationEffect` of
+        :attr:`highest_impact_candidate`. Use when you want the
+        worst-case effect for clinical / functional filtering and
+        don't need provenance.
+        """
+        return self.highest_impact_candidate.effect
 
     def _combine_with_extra_candidates(self, base_candidates):
         """Append externally-attached candidates (#259) to a derived
@@ -453,14 +534,6 @@ class ExonicSpliceSite(Exonic, SpliceSite, MultiOutcomeEffect):
             base.append(EffectCandidate(
                 effect=self.alternate_effect, source="varcode"))
         return self._combine_with_extra_candidates(tuple(base))
-
-    @property
-    def most_likely(self):
-        """The splice-disruption outcome is the primary classification.
-        Follows the ``MultiOutcomeEffect`` contract of
-        ``most_likely == candidates[0]``.
-        """
-        return self.candidates[0]
 
     @property
     def priority_class(self):
@@ -1034,10 +1107,6 @@ class StructuralVariantEffect(TranscriptMutationEffect, MultiOutcomeEffect):
         return self._combine_with_extra_candidates(
             primary + cryptic + tuple(self._splice_candidates))
 
-    @property
-    def most_likely(self):
-        return self.candidates[0]
-
     def _attach_cryptic_candidates(self, cryptic_candidates):
         """Attach cryptic-exon candidates (#337). Called by the SV
         annotator after effect construction so the candidates appear
@@ -1247,10 +1316,6 @@ class HaplotypeEffect(TranscriptMutationEffect, MultiOutcomeEffect):
         return self._combine_with_extra_candidates(base)
 
     @property
-    def most_likely(self):
-        return self.candidates[0]
-
-    @property
     def mutant_protein_sequence(self):
         """Joint protein translated from the haplotype's cDNA, or
         ``None`` if the edits don't land after the CDS start."""
@@ -1362,35 +1427,40 @@ class PhaseCandidateSet(TranscriptMutationEffect, MultiOutcomeEffect):
             for candidate, hypothesis in paired)
         return self._combine_with_extra_candidates(base)
 
-    @property
-    def most_likely(self):
-        """Highest-priority candidate. Used for back-compat consumers
-        that read a single effect."""
-        return self.candidates[0]
+    # Note on accessor semantics for this class: per-hypothesis
+    # probability is unknown (that's the whole point), so the
+    # base-class :attr:`candidates` "sorted most-plausible-first"
+    # contract is replaced here by "sorted highest-impact-first" via
+    # :func:`effect_priority`. Consequently
+    # :attr:`most_likely_candidate` (== ``candidates[0]``) and
+    # :attr:`highest_impact_candidate` coincide for this class —
+    # both return the most protein-disruptive hypothesis, which is
+    # also the conservative single-effect representation downstream
+    # consumers see in ``short_description`` etc.
 
     @property
     def short_description(self):
-        """``"?<most_likely>"`` — the leading ``?`` flags the
+        """``"?<most_likely_effect>"`` — the leading ``?`` flags the
         ambiguity. Consumers wanting the full possibility set read
         :attr:`candidates`."""
-        return "?" + self.most_likely.effect.short_description
+        return "?" + self.most_likely_effect.short_description
 
     @property
     def mutant_protein_sequence(self):
         """Most-likely candidate's mutant protein. Consumers iterating
         over hypotheses pull per-candidate sequences from
         :attr:`candidates`."""
-        return getattr(self.most_likely.effect, "mutant_protein_sequence", None)
+        return getattr(self.most_likely_effect, "mutant_protein_sequence", None)
 
     @property
     def modifies_protein_sequence(self):
         return getattr(
-            self.most_likely.effect, "modifies_protein_sequence", False)
+            self.most_likely_effect, "modifies_protein_sequence", False)
 
     @property
     def modifies_coding_sequence(self):
         return getattr(
-            self.most_likely.effect, "modifies_coding_sequence", False)
+            self.most_likely_effect, "modifies_coding_sequence", False)
 
     def __str__(self):
         return (

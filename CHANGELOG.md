@@ -39,6 +39,26 @@
     `MutationEffect` tuple; the `candidates` accessor now lifts
     to `EffectCandidate` automatically). Same on `LargeDeletion`,
     `LargeDuplication`, `GeneFusion`.
+  - `MultiOutcomeEffect.most_likely` is **removed**. Replaced by
+    four explicit accessors so callers never confuse "wrapped vs
+    unwrapped" or "likeliest vs most-disruptive":
+    - `.most_likely_candidate` → `EffectCandidate` (top by
+      probability; same as `candidates[0]`)
+    - `.most_likely_effect` → inner `MutationEffect` of the above
+    - `.highest_impact_candidate` → `EffectCandidate` with the
+      highest `effect_priority` among candidates (worst-case
+      classification, independent of probability)
+    - `.highest_impact_effect` → inner `MutationEffect` of the above
+    Callers doing `effect.most_likely.mutant_protein_sequence` or
+    `effect.most_likely.aa_ref` should switch to
+    `effect.most_likely_effect.mutant_protein_sequence` etc.;
+    callers that want the wrapper (with `.probability`, `.source`,
+    `.evidence`) use `effect.most_likely_candidate`.
+  - Placeholder splice candidates carry
+    `evidence["placeholder"] = True` so consumers (and
+    `SpliceOutcomeSet.alternate_effect`) can tell a placeholder
+    `Intronic` / `ExonLoss` apart from a real one without inspecting
+    class identity.
 - `varcode.Outcome` renamed to `varcode.EffectCandidate`. The helper
   `outcomes_from_candidates` renamed to `candidates_from_effects`.
   The module `varcode.outcomes` renamed to
@@ -81,16 +101,24 @@
   ([#376](https://github.com/openvax/varcode/pull/376)).
   Per #382, the public surface is `.candidates` (a
   `tuple[EffectCandidate, ...]` with per-hypothesis evidence keys),
-  `.most_likely`, `.short_description`.
+  `.most_likely_candidate` / `.most_likely_effect` /
+  `.highest_impact_candidate` / `.highest_impact_effect`, and
+  `.short_description`.
 
 **Changed**
-- `SpliceCandidate` and `SpliceOutcomeSet` serialization migrated onto
-  `DataclassSerializable` from `serializable>=1.1.0`. The
+- `SpliceOutcomeSet` serialization migrated onto `serializable>=1.1.0`'s
+  standard introspection (the parallel `SpliceCandidate` dataclass that
+  also lived on this path has since been deleted per #382). The
   `__effect_class__` tagging and hand-rolled class registries
   (`_CODING_EFFECT_CLASS_REGISTRY`, `_SPLICE_SIGNAL_CLASS_REGISTRY`,
   `_rehydrate_coding_effect`) are gone; JSON round-trip now flows
   through `serializable.helpers`' standard `__class__` / `__module__`
   stamping ([#343](https://github.com/openvax/varcode/issues/343)).
+  `SpliceOutcomeSet.to_dict` / `from_dict` are overridden to stringify
+  the `SpliceOutcome` enum stored under
+  `candidate.evidence["splice_outcome"]` (and rehydrate it on the way
+  back) without mutating `self` mid-call, and to emit a single
+  `candidates` key on the wire (no parallel `_candidates`).
   The JSON wire format is unchanged, but **the pre-#305 migration
   shim for the internal `_ExonSkipFrameshiftEffect` class has been
   removed**. JSON produced by varcode 2.4.x or earlier (which could

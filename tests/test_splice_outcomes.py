@@ -168,7 +168,7 @@ def test_most_likely_for_splice_donor_is_exon_skipping():
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     effects = variant.effects(splice_outcomes=True)
     target = next(e for e in effects if e.transcript is transcript)
-    assert _outcome_of(target.most_likely) is SpliceOutcome.EXON_SKIPPING
+    assert _outcome_of(target.most_likely_candidate) is SpliceOutcome.EXON_SKIPPING
 
 
 def test_most_likely_for_exonic_splice_site_is_normal_splicing():
@@ -176,7 +176,7 @@ def test_most_likely_for_exonic_splice_site_is_normal_splicing():
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     effects = variant.effects(splice_outcomes=True)
     target = next(e for e in effects if e.transcript is transcript)
-    assert _outcome_of(target.most_likely) is SpliceOutcome.NORMAL_SPLICING
+    assert _outcome_of(target.most_likely_candidate) is SpliceOutcome.NORMAL_SPLICING
 
 
 def test_normal_splicing_carries_underlying_coding_effect():
@@ -205,6 +205,25 @@ def test_intron_retention_candidate_is_placeholder_without_provider():
     intron = _candidate_for(target, SpliceOutcome.INTRON_RETENTION)
     assert isinstance(intron.effect, PredictedIntronRetention)
     assert intron.effect.mutant_protein_sequence is None
+    # Placeholder builds are marked so consumers (and
+    # ``alternate_effect``) can tell them apart from real effects of
+    # the same class.
+    assert intron.evidence.get("placeholder") is True
+
+
+def test_resolved_candidate_does_not_carry_placeholder_marker():
+    """When a real coding effect is built (e.g. EXON_SKIPPING with
+    a computable protein on an in-frame exon), the
+    ``placeholder`` evidence flag must NOT be set."""
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    effects = variant.effects(splice_outcomes=True)
+    target = next(e for e in effects if e.transcript is transcript)
+    skip = _candidate_for(target, SpliceOutcome.EXON_SKIPPING)
+    # Exon 3 is in-frame so we get a concrete Deletion, not a
+    # placeholder.
+    assert type(skip.effect).__name__ == "Deletion"
+    assert "placeholder" not in skip.evidence
 
 
 def test_cryptic_donor_candidate_is_placeholder_without_provider():
@@ -252,7 +271,7 @@ def test_short_description_uses_most_likely():
     target = next(e for e in effects if e.transcript is transcript)
     desc = target.short_description
     assert desc.startswith("splice-set:")
-    assert _outcome_of(target.most_likely).value in desc
+    assert _outcome_of(target.most_likely_candidate).value in desc
 
 
 # --------------------------------------------------------------------
@@ -307,7 +326,7 @@ def test_splice_outcome_set_is_a_multi_outcome_effect():
     assert isinstance(target, MultiOutcomeEffect)
     assert hasattr(target, "candidates") and len(target.candidates) > 0
     assert all(isinstance(c, EffectCandidate) for c in target.candidates)
-    assert target.most_likely is target.candidates[0]
+    assert target.most_likely_candidate is target.candidates[0]
     assert target.priority_class is target.disrupted_signal_class
 
 
@@ -316,6 +335,124 @@ def test_multi_outcome_effect_exported_at_package_level():
     from varcode import effects
     assert MultiOutcomeEffect is effects.MultiOutcomeEffect
     assert issubclass(SpliceOutcomeSet, MultiOutcomeEffect)
+
+
+# --------------------------------------------------------------------
+# Explicit accessor names (#382): most_likely_candidate vs.
+# most_likely_effect vs. highest_impact_candidate vs.
+# highest_impact_effect.
+# --------------------------------------------------------------------
+
+
+def test_most_likely_candidate_returns_effect_candidate():
+    """most_likely_candidate is the wrapped form (provenance + effect)."""
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    effects = variant.effects(splice_outcomes=True)
+    target = next(e for e in effects if e.transcript is transcript)
+    assert isinstance(target.most_likely_candidate, EffectCandidate)
+
+
+def test_most_likely_effect_returns_inner_mutation_effect():
+    """most_likely_effect peels off the wrapper for callers that
+    only need the inner Effect (e.g. ``most_likely_effect.short_description``).
+    """
+    from varcode.effects import MutationEffect
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    effects = variant.effects(splice_outcomes=True)
+    target = next(e for e in effects if e.transcript is transcript)
+    assert isinstance(target.most_likely_effect, MutationEffect)
+    assert not isinstance(target.most_likely_effect, EffectCandidate)
+    # And it's the same effect as inside most_likely_candidate.
+    assert target.most_likely_effect is target.most_likely_candidate.effect
+
+
+def test_highest_impact_candidate_returns_most_disruptive():
+    """highest_impact_candidate picks by effect_priority, not by
+    probability. For a SpliceDonor-backed SpliceOutcomeSet, the
+    EXON_SKIPPING / INTRON_RETENTION candidates resolve to concrete
+    coding effects (Deletion / PrematureStop placeholder etc.) while
+    NORMAL_SPLICING is a placeholder Intronic — the highest-impact
+    one should never be the Intronic placeholder.
+    """
+    from varcode.effects import effect_priority, Intronic
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    effects = variant.effects(splice_outcomes=True)
+    target = next(e for e in effects if e.transcript is transcript)
+    top = target.highest_impact_candidate
+    assert isinstance(top, EffectCandidate)
+    # It's the candidate with the highest priority among all.
+    expected_priority = max(
+        effect_priority(c.effect) for c in target.candidates)
+    assert effect_priority(top.effect) == expected_priority
+    # Intronic (the NORMAL_SPLICING placeholder) has the lowest
+    # priority — should never win.
+    assert type(top.effect) is not Intronic
+
+
+def test_highest_impact_effect_unwraps_to_mutation_effect():
+    from varcode.effects import MutationEffect
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    effects = variant.effects(splice_outcomes=True)
+    target = next(e for e in effects if e.transcript is transcript)
+    assert isinstance(target.highest_impact_effect, MutationEffect)
+    assert target.highest_impact_effect is target.highest_impact_candidate.effect
+
+
+def test_effects_unwraps_candidate_tuple():
+    """The .effects helper returns just the inner MutationEffects."""
+    from varcode.effects import MutationEffect
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    effects = variant.effects(splice_outcomes=True)
+    target = next(e for e in effects if e.transcript is transcript)
+    inner = target.effects
+    assert isinstance(inner, tuple)
+    assert len(inner) == len(target.candidates)
+    assert all(isinstance(e, MutationEffect) for e in inner)
+    assert inner == tuple(c.effect for c in target.candidates)
+
+
+# --------------------------------------------------------------------
+# Serialization invariants (#382): no duplicate `candidates` /
+# `_candidates` keys; to_dict doesn't mutate self.
+# --------------------------------------------------------------------
+
+
+def test_to_dict_has_single_candidates_key_no_dup():
+    """The serialized form must not carry both ``candidates`` (the
+    init param / property name) AND ``_candidates`` (the private
+    storage slot) — that would duplicate the payload."""
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    effects = variant.effects(splice_outcomes=True)
+    target = next(e for e in effects if e.transcript is transcript)
+    d = target.to_dict()
+    assert "candidates" in d
+    assert "_candidates" not in d
+
+
+def test_to_dict_does_not_mutate_self():
+    """``to_dict`` must build the serialized payload without
+    mutating ``self._candidates`` mid-call. A reader observing
+    ``self.candidates`` during serialization should always see the
+    runtime form (enum, not string)."""
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    effects = variant.effects(splice_outcomes=True)
+    target = next(e for e in effects if e.transcript is transcript)
+    before = tuple(target.candidates)
+    target.to_dict()
+    after = tuple(target.candidates)
+    assert before == after
+    # Spot-check that the in-memory form still has enum objects, not
+    # the stringified wire form.
+    for c in target.candidates:
+        outcome = c.evidence.get("splice_outcome")
+        assert isinstance(outcome, SpliceOutcome)
 
 
 # --------------------------------------------------------------------
@@ -382,6 +519,41 @@ def test_cryptic_donor_candidate_effect_is_placeholder_class():
 
 
 # --------------------------------------------------------------------
+# _make_splice_candidate aliasing guard (#382).
+# --------------------------------------------------------------------
+
+
+def test_make_splice_candidate_rejects_overwriting_shared_mutant_transcript():
+    """The internal helper mutates the inner effect's
+    ``mutant_transcript`` field. If a future caller passes a shared
+    ``coding_effect`` that already has a ``mutant_transcript`` set
+    AND also passes a different ``mutant_transcript``, the
+    assertion fires rather than silently clobbering the shared
+    state."""
+    from unittest.mock import MagicMock
+    from varcode.splice_outcomes import _make_splice_candidate
+    from varcode import MutantTranscript
+
+    fake_splice_effect = MagicMock()
+    fake_splice_effect.transcript = None
+    fake_splice_effect.variant = MagicMock()
+
+    pre_owned = MagicMock(spec=MutantTranscript)
+    coding = MagicMock()
+    coding.mutant_transcript = pre_owned  # pretend it's already assigned
+
+    other = MagicMock(spec=MutantTranscript)
+    with pytest.raises(AssertionError):
+        _make_splice_candidate(
+            fake_splice_effect,
+            SpliceOutcome.EXON_SKIPPING,
+            0.5,
+            coding_effect=coding,
+            mutant_transcript=other,
+        )
+
+
+# --------------------------------------------------------------------
 # Boundary-codon reconstruction (#298).
 # --------------------------------------------------------------------
 
@@ -429,7 +601,7 @@ def test_splice_outcome_set_json_round_trip():
     assert type(restored) is SpliceOutcomeSet
     assert len(restored.candidates) == len(target.candidates)
     assert restored.disrupted_signal_class is target.disrupted_signal_class
-    assert _outcome_of(restored.most_likely) is _outcome_of(target.most_likely)
+    assert _outcome_of(restored.most_likely_candidate) is _outcome_of(target.most_likely_candidate)
     for rt_c, og_c in zip(restored.candidates, target.candidates):
         assert _outcome_of(rt_c) is _outcome_of(og_c)
         assert rt_c.probability == og_c.probability
