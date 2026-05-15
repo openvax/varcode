@@ -45,10 +45,10 @@
     - `.most_likely_candidate` → `EffectCandidate` (top by
       probability; same as `candidates[0]`)
     - `.most_likely_effect` → inner `MutationEffect` of the above
-    - `.highest_impact_candidate` → `EffectCandidate` with the
+    - `.highest_priority_candidate` → `EffectCandidate` with the
       highest `effect_priority` among candidates (worst-case
       classification, independent of probability)
-    - `.highest_impact_effect` → inner `MutationEffect` of the above
+    - `.highest_priority_effect` → inner `MutationEffect` of the above
     Callers doing `effect.most_likely.mutant_protein_sequence` or
     `effect.most_likely.aa_ref` should switch to
     `effect.most_likely_effect.mutant_protein_sequence` etc.;
@@ -102,7 +102,7 @@
   Per #382, the public surface is `.candidates` (a
   `tuple[EffectCandidate, ...]` with per-hypothesis evidence keys),
   `.most_likely_candidate` / `.most_likely_effect` /
-  `.highest_impact_candidate` / `.highest_impact_effect`, and
+  `.highest_priority_candidate` / `.highest_priority_effect`, and
   `.short_description`.
 
 **Changed**

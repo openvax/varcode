@@ -170,12 +170,12 @@ class MultiOutcomeEffect(MutationEffect):
       ``effects[0]`` because :attr:`candidates` is sorted by
       probability descending.
 
-    * **Highest impact**: top by varcode's effect-priority ordering
+    * **Highest priority**: top by varcode's effect-priority ordering
       (see :func:`~varcode.effects.effect_priority`) — the
       most protein-disruptive candidate regardless of probability.
-      :attr:`highest_impact_candidate` and
-      :attr:`highest_impact_effect` are the analogous accessors. Use
-      this for clinical / functional filtering ("flag if any
+      :attr:`highest_priority_candidate` and
+      :attr:`highest_priority_effect` are the analogous accessors.
+      Use this for clinical / functional filtering ("flag if any
       candidate is at least a frameshift"), since a low-probability
       frameshift sitting alongside a high-probability silent change
       should still light up.
@@ -203,7 +203,7 @@ class MultiOutcomeEffect(MutationEffect):
         For just the inner :class:`MutationEffect`, use
         :attr:`most_likely_effect`. For the most protein-disruptive
         candidate (independent of probability), use
-        :attr:`highest_impact_candidate`.
+        :attr:`highest_priority_candidate`.
         """
         return self.candidates[0]
 
@@ -217,7 +217,7 @@ class MultiOutcomeEffect(MutationEffect):
         return self.candidates[0].effect
 
     @property
-    def highest_impact_candidate(self):
+    def highest_priority_candidate(self):
         """The :class:`EffectCandidate` whose inner effect has the
         highest :func:`~varcode.effects.effect_priority` (most
         protein-disruptive). Distinct from
@@ -225,26 +225,30 @@ class MultiOutcomeEffect(MutationEffect):
         priority disagree — e.g. a low-probability frameshift
         alongside a high-probability silent change.
 
-        Ties broken by :attr:`candidates` order (i.e. by probability
-        descending), so the most-likely highest-impact candidate
-        wins.
+        Ties are broken by ``probability`` descending (``None`` /
+        unscored treated as 0.0); a remaining tie falls through to
+        the first matching entry of :attr:`candidates`, which is
+        already the most-likely by construction. This keeps the
+        accessor deterministic even when every candidate has
+        ``probability=None``.
         """
         from .effect_ordering import effect_priority
-        # max() is stable on Python's tuple comparison, but to make
-        # the tie-break explicit we use enumerate so higher
-        # probability wins on equal priority.
         return max(
             self.candidates,
-            key=lambda c: (effect_priority(c.effect),))
+            key=lambda c: (
+                effect_priority(c.effect),
+                c.probability if c.probability is not None else 0.0,
+            ),
+        )
 
     @property
-    def highest_impact_effect(self):
+    def highest_priority_effect(self):
         """The inner :class:`MutationEffect` of
-        :attr:`highest_impact_candidate`. Use when you want the
+        :attr:`highest_priority_candidate`. Use when you want the
         worst-case effect for clinical / functional filtering and
         don't need provenance.
         """
-        return self.highest_impact_candidate.effect
+        return self.highest_priority_candidate.effect
 
     def _combine_with_extra_candidates(self, base_candidates):
         """Append externally-attached candidates (#259) to a derived
@@ -1433,7 +1437,7 @@ class PhaseCandidateSet(TranscriptMutationEffect, MultiOutcomeEffect):
     # contract is replaced here by "sorted highest-impact-first" via
     # :func:`effect_priority`. Consequently
     # :attr:`most_likely_candidate` (== ``candidates[0]``) and
-    # :attr:`highest_impact_candidate` coincide for this class —
+    # :attr:`highest_priority_candidate` coincide for this class —
     # both return the most protein-disruptive hypothesis, which is
     # also the conservative single-effect representation downstream
     # consumers see in ``short_description`` etc.

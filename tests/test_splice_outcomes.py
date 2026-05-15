@@ -339,8 +339,8 @@ def test_multi_outcome_effect_exported_at_package_level():
 
 # --------------------------------------------------------------------
 # Explicit accessor names (#382): most_likely_candidate vs.
-# most_likely_effect vs. highest_impact_candidate vs.
-# highest_impact_effect.
+# most_likely_effect vs. highest_priority_candidate vs.
+# highest_priority_effect.
 # --------------------------------------------------------------------
 
 
@@ -368,8 +368,8 @@ def test_most_likely_effect_returns_inner_mutation_effect():
     assert target.most_likely_effect is target.most_likely_candidate.effect
 
 
-def test_highest_impact_candidate_returns_most_disruptive():
-    """highest_impact_candidate picks by effect_priority, not by
+def test_highest_priority_candidate_returns_most_disruptive():
+    """highest_priority_candidate picks by effect_priority, not by
     probability. For a SpliceDonor-backed SpliceOutcomeSet, the
     EXON_SKIPPING / INTRON_RETENTION candidates resolve to concrete
     coding effects (Deletion / PrematureStop placeholder etc.) while
@@ -381,7 +381,7 @@ def test_highest_impact_candidate_returns_most_disruptive():
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     effects = variant.effects(splice_outcomes=True)
     target = next(e for e in effects if e.transcript is transcript)
-    top = target.highest_impact_candidate
+    top = target.highest_priority_candidate
     assert isinstance(top, EffectCandidate)
     # It's the candidate with the highest priority among all.
     expected_priority = max(
@@ -392,14 +392,14 @@ def test_highest_impact_candidate_returns_most_disruptive():
     assert type(top.effect) is not Intronic
 
 
-def test_highest_impact_effect_unwraps_to_mutation_effect():
+def test_highest_priority_effect_unwraps_to_mutation_effect():
     from varcode.effects import MutationEffect
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     effects = variant.effects(splice_outcomes=True)
     target = next(e for e in effects if e.transcript is transcript)
-    assert isinstance(target.highest_impact_effect, MutationEffect)
-    assert target.highest_impact_effect is target.highest_impact_candidate.effect
+    assert isinstance(target.highest_priority_effect, MutationEffect)
+    assert target.highest_priority_effect is target.highest_priority_candidate.effect
 
 
 def test_effects_unwraps_candidate_tuple():
@@ -414,6 +414,60 @@ def test_effects_unwraps_candidate_tuple():
     assert len(inner) == len(target.candidates)
     assert all(isinstance(e, MutationEffect) for e in inner)
     assert inner == tuple(c.effect for c in target.candidates)
+
+
+def test_highest_priority_secondary_tie_break_is_probability():
+    """When two candidates share the same effect_priority, the
+    one with the higher probability wins the tie.
+    """
+    from varcode.effects.effect_classes import MultiOutcomeEffect, Silent
+    from varcode import EffectCandidate
+
+    class _FakeMOE(MultiOutcomeEffect):
+        def __init__(self, cands):
+            self._cands = tuple(cands)
+
+        @property
+        def candidates(self):
+            return self._cands
+
+    # Two candidates wrapping the same Effect class (so same priority);
+    # the second one has higher probability. The sort key tuple
+    # (priority, probability) should pick the higher-probability one.
+    e_low = Silent.__new__(Silent)
+    e_high = Silent.__new__(Silent)
+    moe = _FakeMOE([
+        EffectCandidate(effect=e_low, probability=0.2),
+        EffectCandidate(effect=e_high, probability=0.9),
+    ])
+    assert moe.highest_priority_candidate.effect is e_high
+
+
+def test_highest_priority_falls_back_when_all_probabilities_none():
+    """When every candidate has probability=None, the tuple key's
+    probability term collapses to 0.0 for all entries; ``max``
+    deterministically returns the first matching candidate (which
+    is ``candidates[0]`` by construction).
+    """
+    from varcode.effects.effect_classes import MultiOutcomeEffect, Silent
+    from varcode import EffectCandidate
+
+    class _FakeMOE(MultiOutcomeEffect):
+        def __init__(self, cands):
+            self._cands = tuple(cands)
+
+        @property
+        def candidates(self):
+            return self._cands
+
+    e_first = Silent.__new__(Silent)
+    e_second = Silent.__new__(Silent)
+    moe = _FakeMOE([
+        EffectCandidate(effect=e_first, probability=None),
+        EffectCandidate(effect=e_second, probability=None),
+    ])
+    # First candidate wins on full tie.
+    assert moe.highest_priority_candidate.effect is e_first
 
 
 # --------------------------------------------------------------------

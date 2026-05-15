@@ -129,15 +129,15 @@ notions of "best" are available — pick consciously:
 |---|---|---|
 | `.most_likely_candidate` | `EffectCandidate` | Top by `probability` (i.e. `candidates[0]`) |
 | `.most_likely_effect` | `MutationEffect` | Inner effect of the above |
-| `.highest_impact_candidate` | `EffectCandidate` | Top by `effect_priority` (most protein-disruptive) |
-| `.highest_impact_effect` | `MutationEffect` | Inner effect of the above |
+| `.highest_priority_candidate` | `EffectCandidate` | Top by `effect_priority` (most protein-disruptive) |
+| `.highest_priority_effect` | `MutationEffect` | Inner effect of the above |
 
 The `_candidate` accessors keep the provenance wrapper (`.probability`,
 `.source`, `.evidence`); the `_effect` accessors peel it off. The two
 "top by" notions coincide whenever probability ranking and priority
 ranking agree, which is common — but for clinical / functional
 filtering ("flag if any candidate is at least a frameshift") prefer
-`highest_impact_*`: a low-probability frameshift sitting alongside a
+`highest_priority_*`: a low-probability frameshift sitting alongside a
 high-probability silent change should still light up.
 
 ### Limitations
