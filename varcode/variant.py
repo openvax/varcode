@@ -465,7 +465,7 @@ class Variant(Serializable):
 
         splice_outcomes : bool
             If True, splice-disrupting effects are wrapped in a
-            :class:`varcode.splice_outcomes.SpliceMechanismSet` carrying
+            :class:`varcode.splice_outcomes.SpliceOutcomeSet` carrying
             multiple plausible outcomes (normal splicing, exon
             skipping, intron retention, cryptic splice). Opt-in;
             default False preserves existing behaviour. See

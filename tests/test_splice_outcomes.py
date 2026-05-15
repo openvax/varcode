@@ -14,7 +14,7 @@
 Tests for the splice-mechanism Effect classes
 (openvax/varcode#262, #382).
 
-Each candidate inside a ``SpliceMechanismSet`` carries an
+Each candidate inside a ``SpliceOutcomeSet`` carries an
 :class:`EffectCandidate` whose ``.effect`` is one of:
 :class:`NormalSplicing`, :class:`ExonSkipping`,
 :class:`IntronRetention`, :class:`CrypticDonor`, or
@@ -34,9 +34,8 @@ from varcode import (
     ExonSkipping,
     IntronRetention,
     NormalSplicing,
-    SpliceMechanismSet,
-    SpliceMechanismEffect,
     SpliceOutcomeSet,
+    SpliceMechanismEffect,
     Variant,
     apply_rna_evidence_to_effects,
     make_rna_outcome,
@@ -412,9 +411,7 @@ def test_enumerate_passes_through_non_splice():
 
 
 def test_package_level_exports():
-    assert varcode.SpliceMechanismSet is SpliceMechanismSet
-    assert varcode.SpliceOutcomeSet is SpliceMechanismSet
-    assert SpliceOutcomeSet is SpliceMechanismSet
+    assert varcode.SpliceOutcomeSet is SpliceOutcomeSet
     assert varcode.SpliceMechanismEffect is SpliceMechanismEffect
     assert varcode.NormalSplicing is NormalSplicing
     assert varcode.ExonSkipping is ExonSkipping
@@ -565,7 +562,7 @@ def test_splice_outcome_set_top_priority_works():
     effects = variant.effects(splice_outcomes=True)
     top = effects.top_priority_effect()
     top_class_name = type(top).__name__
-    assert top_class_name in ("SpliceMechanismSet", "SpliceOutcomeSet", "SpliceDonor")
+    assert top_class_name in ("SpliceOutcomeSet", "SpliceDonor")
 
 
 # --------------------------------------------------------------------
@@ -725,7 +722,7 @@ def test_rna_evidence_reconciles_splice_set_by_excluding_unobserved_mechanisms()
 
     assert result is effects
     assert reconciled is not original
-    assert isinstance(reconciled, SpliceMechanismSet)
+    assert isinstance(reconciled, SpliceOutcomeSet)
     assert tuple(reconciled.dna_candidates) == tuple(original.candidates)
     assert reconciled.rna_evidence == (observed,)
     assert reconciled.added_candidates == ()

@@ -76,8 +76,8 @@ is intronic — there's no coding consequence to attach.
 
 ```python
 effects = variant.effects(splice_outcomes=True)
-# SpliceMechanismSet(...) replaces the splice effect.
-# .candidates is a tuple[EffectCandidate, ...], ordered most-plausible-first.
+# SpliceOutcomeSet(...) replaces the splice effect.
+# .candidates is a tuple[EffectCandidate, ...], ordered most-likely-first.
 # Each candidate's .effect is a SpliceMechanismEffect subclass:
 #   EffectCandidate(effect=ExonSkipping(affected_exon=..., in_frame=True,
 #                                       aa_ref="KGYK...", ...),
@@ -91,7 +91,7 @@ effects = variant.effects(splice_outcomes=True)
 #                   probability=0.1)
 ```
 
-`SpliceMechanismSet` replaces the splice effect with a set of
+`SpliceOutcomeSet` replaces the splice effect with a set of
 candidate mechanisms. Class identity = mechanism — `NormalSplicing`,
 `ExonSkipping`, `IntronRetention`, `CrypticDonor`, `CrypticAcceptor`.
 Each is a `SpliceMechanismEffect` subclass that carries its own
@@ -115,7 +115,7 @@ for c in splice_set.candidates:
 
 When you opt in, `SpliceDonor` / `SpliceAcceptor` /
 `IntronicSpliceSite` also get wrapped, so every splice-
-disrupting variant produces a `SpliceMechanismSet`.
+disrupting variant produces a `SpliceOutcomeSet`.
 
 ### Relationship between the two
 
@@ -123,25 +123,46 @@ disrupting variant produces a `SpliceMechanismSet`.
 |---|---|
 | 1 | plain `Substitution` / `Silent` / etc. — not wrapped |
 | 2 | `ExonicSpliceSite` with `alternate_effect` |
-| N | `SpliceMechanismSet` (opt-in via `splice_outcomes=True`) |
+| N | `SpliceOutcomeSet` (opt-in via `splice_outcomes=True`) |
 
-Both `ExonicSpliceSite` and `SpliceMechanismSet` are `MultiOutcomeEffect`
+Both `ExonicSpliceSite` and `SpliceOutcomeSet` are `MultiOutcomeEffect`
 subclasses, so consumers iterate `.candidates` (a tuple of
 `EffectCandidate` objects) uniformly without caring about which form
 they're holding. `alternate_effect` works on both: on
 `ExonicSpliceSite` it's the splicing-proceeds outcome directly; on
-`SpliceMechanismSet` it resolves to the inner effect of the
-`NORMAL_SPLICING` candidate (or `None` when that candidate is just
+`SpliceOutcomeSet` it resolves to the inner effect of the
+`NormalSplicing` candidate (or `None` when that candidate is just
 a placeholder). `candidate.effect.short_description` is uniform
 across both forms.
 
 With RNA evidence, splice sets are reconciled rather than merely
-extended. `SpliceMechanismSet.with_rna_evidence(...)` returns a new set
+extended. `SpliceOutcomeSet.with_rna_evidence(...)` returns a new set
 whose `candidates` are the RNA-observed mechanisms, while
 `dna_candidates`, `rna_evidence`, `excluded_candidates`,
 `added_candidates`, and `candidate_rna_evidence` preserve the audit
 trail. Use `splice_set.rna_evidence_for(candidate)` to inspect the
 observations supporting one current candidate.
+
+### Candidate scores
+
+There is no separate `plausibility` field in the new API. That was the
+old splice-specific name for "how likely this candidate seems before
+we have better evidence." The replacement is the generic
+`EffectCandidate.probability` slot, shared by every multi-outcome
+effect.
+
+`probability` exists for one narrow reason: when a producer emits
+multiple candidates for the same variant/transcript, callers need a
+stable way to ask "which candidate does this producer think is most
+likely?" It is optional, source-scoped metadata, not an inherent
+property of the `MutationEffect`.
+
+For varcode-generated splice candidates, `probability` is a
+hand-tuned DNA-only prior used to sort the candidates. It is not
+calibrated and should not be interpreted as "50% exon skipping in this
+sample." RNA/model integrations can put their own estimate there, and
+varcode stores it unchanged. `probability=None` means unscored, not
+impossible.
 
 ### Picking a single candidate
 

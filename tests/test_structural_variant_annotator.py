@@ -921,7 +921,7 @@ def test_sv_breakpoint_in_intronic_splice_window_donor_side():
     """A DEL whose breakpoint sits 4 bp into the intron after an
     exon end (donor-side intronic splice window, distance 3-6)
     synthesizes :class:`IntronicSpliceSite`, not :class:`SpliceDonor`.
-    The splice-outcome set reflects the lower-plausibility intronic
+    The splice-outcome set reflects the lower-prior intronic
     table (#341)."""
     from varcode.effects import IntronicSpliceSite, SpliceDonor
     from varcode import ExonSkipping

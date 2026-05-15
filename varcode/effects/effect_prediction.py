@@ -65,7 +65,7 @@ def predict_variant_effects(
     splice_outcomes : bool
         When True, splice-disrupting effects (SpliceDonor,
         SpliceAcceptor, ExonicSpliceSite, IntronicSpliceSite) are
-        wrapped in a :class:`SpliceMechanismSet` carrying multiple
+        wrapped in a :class:`SpliceOutcomeSet` carrying multiple
         plausible outcomes (normal splicing, exon skipping, intron
         retention, cryptic splice). Default False for back-compat.
         See ``varcode.splice_outcomes`` for details.

@@ -656,11 +656,11 @@ class StructuralVariantAnnotator:
 
         # Attach cryptic-exon candidates enumerated from flanking
         # sequence / long-read assembly (#337). They show up as
-        # additional Outcomes with source="varcode_motif".
+        # additional EffectCandidate entries with source="varcode_motif".
         self._enumerate_and_attach_cryptics(variant, effect)
         # Attach splice-outcome candidates when any SV breakpoint
         # lands in a canonical splice window on the transcript
-        # (#341). They show up as additional Outcomes with
+        # (#341). They show up as additional EffectCandidate entries with
         # source="varcode_splice".
         self._enumerate_and_attach_splice_outcomes(variant, transcript, effect)
         return effect
@@ -670,7 +670,7 @@ class StructuralVariantAnnotator:
         splice window on ``transcript``, synthesize the matching
         splice-disrupting effect, feed it to
         :func:`~varcode.splice_outcomes.enumerate_splice_outcomes`,
-        and attach the returned outcomes (minus NORMAL_SPLICING,
+        and attach the returned candidates (minus NormalSplicing,
         which the SV primary classification already covers) to
         ``effect`` (#341).
 

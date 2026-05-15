@@ -68,7 +68,6 @@ from .rna_evidence import (
 )
 from .splice_outcomes import (
     SpliceCandidateRNAEvidence,
-    SpliceMechanismSet,
     SpliceOutcomeSet,
 )
 from .effects.effect_classes import (
@@ -108,8 +107,7 @@ __all__ = [
     "Genotype",
     "Zygosity",
 
-    # splice mechanism possibility set (openvax/varcode#262, #382)
-    "SpliceMechanismSet",
+    # splice outcome possibility set (openvax/varcode#262, #382)
     "SpliceOutcomeSet",
     "SpliceCandidateRNAEvidence",
     "SpliceMechanismEffect",

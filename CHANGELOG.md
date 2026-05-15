@@ -7,9 +7,7 @@
   `MultiOutcomeEffect.outcomes` accessor + `_with_extra_outcomes`
   helper + `_extra_outcomes` slot removed
   ([#382](https://github.com/openvax/varcode/issues/382)).
-  - `SpliceMechanismSet` is the primary splice possibility-set name
-    (`SpliceOutcomeSet` remains as a compatibility alias). Its
-    `.candidates` now returns
+  - `SpliceOutcomeSet.candidates` now returns
     `tuple[EffectCandidate, ...]` — the same shape every other
     `MultiOutcomeEffect` subclass exposes. Each entry wraps an
     inner `SpliceMechanismEffect` (`NormalSplicing`,
@@ -24,8 +22,14 @@
     fields are gone — read them off the `EffectCandidate`
     (`.probability`, `.source`, `.evidence`) or the inner effect
     (`candidate.effect`, `candidate.effect.mutant_transcript`).
+    `candidate.plausibility` has no one-for-one semantic replacement:
+    it was the old splice-specific name for varcode's DNA-only prior.
+    The numeric value now lives in `EffectCandidate.probability`
+    because all multi-outcome wrappers share the same candidate
+    surface, but for varcode-generated splice candidates it remains a
+    heuristic ordering prior, not a calibrated sample probability.
   - `MultiOutcomeEffect.candidates` is the single accessor on every
-    subclass (`SpliceMechanismSet`, `StructuralVariantEffect`,
+    subclass (`SpliceOutcomeSet`, `StructuralVariantEffect`,
     `PhaseCandidateSet`, `ExonicSpliceSite`, `HaplotypeEffect`).
     A new `MultiOutcomeEffect.effects` convenience property unwraps
     to `tuple(c.effect for c in self.candidates)` for callers that
@@ -99,7 +103,7 @@
     `candidate.effect.resolved`, `candidate.effect.short_description`),
     `_placeholder_effect_for_outcome` and `_make_splice_candidate`
     helpers.
-  - **`SpliceMechanismSet.candidate_proteins`** now keys by mechanism
+  - **`SpliceOutcomeSet.candidate_proteins`** now keys by mechanism
     class (e.g. `proteins[ExonSkipping]`) instead of `SpliceOutcome`
     enum value.
 - `varcode.Outcome` renamed to `varcode.EffectCandidate`. The helper

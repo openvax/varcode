@@ -19,7 +19,7 @@ The retrofit is a class-hierarchy change only:
   the ``candidates`` / ``most_likely`` / ``priority_class``
   protocol.
 * SpliceOutcomeSet gains a back-compat ``alternate_effect``
-  property that resolves to the NORMAL_SPLICING candidate's
+  property that resolves to the NormalSplicing candidate's
   coding_effect.
 
 No behaviour change — the existing test suite (tests/test_splice_*)

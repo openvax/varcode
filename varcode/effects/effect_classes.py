@@ -135,7 +135,7 @@ class MultiOutcomeEffect(MutationEffect):
     Subclasses must expose:
 
     * :attr:`candidates` — tuple of :class:`~varcode.effect_candidates.EffectCandidate`
-      objects, sorted most-plausible-first. Each entry pairs an
+      objects, sorted most-likely-first. Each entry pairs an
       inner :class:`MutationEffect` (concrete or placeholder) with
       its provenance — ``source`` (producer), ``probability``,
       ``evidence`` dict. The :attr:`effects` helper unwraps to the
@@ -161,8 +161,10 @@ class MultiOutcomeEffect(MutationEffect):
     Two orthogonal "best candidate" notions are available; pick the
     one that matches your question:
 
-    * **Most likely**: top by ``probability`` — what the producer
-      thinks is most likely to happen biologically.
+    * **Most likely**: top by ``probability`` — the producer's
+      source-scoped score for this candidate set. For built-in splice
+      candidates this is only a heuristic DNA prior; RNA/model
+      integrations may provide stronger estimates.
       :attr:`most_likely_candidate` returns the wrapped
       :class:`EffectCandidate` (provenance + inner effect);
       :attr:`most_likely_effect` returns just the inner
@@ -197,7 +199,7 @@ class MultiOutcomeEffect(MutationEffect):
     def most_likely_candidate(self):
         """The :class:`EffectCandidate` with the highest ``probability``
         (i.e. ``candidates[0]`` since :attr:`candidates` is sorted
-        most-plausible-first). Pairs the inner effect with its
+        most-likely-first). Pairs the inner effect with its
         ``source`` / ``probability`` / ``evidence`` provenance.
 
         For just the inner :class:`MutationEffect`, use
@@ -406,7 +408,7 @@ class SpliceAcceptor(IntronicSpliceSite):
 # the transcript the splice signal was hit. The mechanism Effect
 # describes *what* happens downstream of that disruption.
 #
-# Used by :class:`~varcode.splice_outcomes.SpliceMechanismSet` to
+# Used by :class:`~varcode.splice_outcomes.SpliceOutcomeSet` to
 # fill :attr:`EffectCandidate.effect` for each plausible mechanism a
 # splice disruption could produce. Class identity = mechanism — no
 # parallel enum.
@@ -803,7 +805,7 @@ class ExonicSpliceSite(Exonic, SpliceSite, MultiOutcomeEffect):
     This is the **lightweight 2-outcome form**. Callers that want
     the richer exon-skipping / intron-retention / cryptic-splice
     candidate set opt into ``splice_outcomes=True`` and get a
-    :class:`~varcode.splice_outcomes.SpliceMechanismSet` instead.
+    :class:`~varcode.splice_outcomes.SpliceOutcomeSet` instead.
     """
     def __init__(self, variant, transcript, exon, alternate_effect):
         Exonic.__init__(self, variant, transcript)
@@ -1672,7 +1674,7 @@ class HaplotypeEffect(TranscriptMutationEffect, MultiOutcomeEffect):
 # protocol so consumers iterate ``outcomes`` uniformly. This isn't a
 # wrapper around a reference-relative effect — it's the primary
 # effect class for the unknown-phase case, just like
-# SpliceMechanismSet is for splice ambiguity.
+# SpliceOutcomeSet is for splice ambiguity.
 # =====================================================================
 
 
@@ -1747,7 +1749,7 @@ class PhaseCandidateSet(TranscriptMutationEffect, MultiOutcomeEffect):
 
     # Note on accessor semantics for this class: per-hypothesis
     # probability is unknown (that's the whole point), so the
-    # base-class :attr:`candidates` "sorted most-plausible-first"
+    # base-class :attr:`candidates` "sorted most-likely-first"
     # contract is replaced here by "sorted highest-impact-first" via
     # :func:`effect_priority`. Consequently
     # :attr:`most_likely_candidate` (== ``candidates[0]``) and

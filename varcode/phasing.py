@@ -352,7 +352,7 @@ def build_haplotype_effects(variant_collection, effects, phase_resolver):
             continue
         by_transcript.setdefault(t.id, (t, []))[1].append(v)
     # Dedup per transcript (a variant can appear in multiple effect
-    # rows if it has multiple outcomes, e.g. SpliceMechanismSet).
+    # rows if it has multiple outcomes, e.g. SpliceOutcomeSet).
     haplotype_effects = []
     for transcript_id, (transcript, variants) in by_transcript.items():
         unique = []

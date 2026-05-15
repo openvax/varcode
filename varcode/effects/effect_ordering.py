@@ -149,7 +149,7 @@ def effect_priority(effect):
 
     Effects may opt out of class-based priority lookup by exposing a
     ``priority_class`` attribute — used by wrapper classes like
-    :class:`varcode.splice_outcomes.SpliceMechanismSet` to delegate to
+    :class:`varcode.splice_outcomes.SpliceOutcomeSet` to delegate to
     the wrapped effect's class.
     """
     cls = getattr(effect, "priority_class", None) or effect.__class__
@@ -378,7 +378,7 @@ def select_between_exonic_splice_site_and_alternate_effect(effect):
     An exact-class check (not ``isinstance``) is used because the
     function is only meant to unwrap bare ``ExonicSpliceSite``
     instances. This has a useful side effect under
-    ``splice_outcomes=True``: the wrapping ``SpliceMechanismSet`` passes
+    ``splice_outcomes=True``: the wrapping ``SpliceOutcomeSet`` passes
     through unchanged (so every plausible outcome stays visible) and
     sorts by its ``priority_class``.
     """

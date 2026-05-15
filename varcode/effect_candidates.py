@@ -22,7 +22,7 @@ Effect itself.
 
 Concrete example: a splice candidate produced by varcode's splice
 classifier surfaces inside its parent
-:class:`SpliceMechanismSet` tagged ``source="varcode"`` with a
+:class:`SpliceOutcomeSet` tagged ``source="varcode"`` with a
 mechanism Effect. When an SV breakpoint sits in the same splice
 window, the SV annotator re-uses that same Effect on the SV's own
 :class:`StructuralVariantEffect` — but tagged ``source="varcode_splice"``
@@ -78,11 +78,14 @@ class EffectCandidate(DataclassSerializable):
         ``candidate.effect.short_description`` uniformly across SV,
         splice, and point-variant candidates.
     probability : float or None
-        Estimated likelihood this candidate actually happens, in
-        ``[0, 1]``. ``None`` means "not scored" — the candidate is in
-        the set but no tool has assigned a probability. Callers that
-        treat ``None`` as "unknown" rather than "zero" will be robust
-        to new candidates added over time.
+        Optional source-scoped score in ``[0, 1]``. It answers only
+        "how likely does this producer think this candidate is within
+        this candidate set?" Varcode-generated splice candidates use
+        hand-tuned DNA-only priors here so the set has a stable order;
+        RNA/model integrations may supply empirical or calibrated
+        estimates. Varcode stores the value unchanged and does not
+        normalize across sources. ``None`` means "not scored", not
+        impossible.
     source : str
         Name of the tool or annotator that produced this candidate.
         Defaults to ``"varcode"`` for built-in classifications.

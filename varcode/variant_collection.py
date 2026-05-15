@@ -128,7 +128,7 @@ class VariantCollection(Collection):
 
         splice_outcomes : bool, optional
             If True, splice-disrupting effects are wrapped in a
-            :class:`varcode.splice_outcomes.SpliceMechanismSet` carrying
+            :class:`varcode.splice_outcomes.SpliceOutcomeSet` carrying
             multiple plausible outcomes. Opt-in; default False
             preserves existing behaviour. See openvax/varcode#262.
 
