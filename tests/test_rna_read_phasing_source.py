@@ -13,6 +13,7 @@
 import pytest
 
 from varcode import (
+    MolecularPhaseResolver,
     ReadPhaseResolver,
     ReadPhasingSource,
     RNAReadPhasingSource,
@@ -88,6 +89,7 @@ def test_rna_read_phasing_source_satisfies_protocol(tmp_path):
     source = RNAReadPhasingSource(bam_path)
     try:
         assert isinstance(source, ReadPhasingSource)
+        assert MolecularPhaseResolver(source).phase_source == "rna_reads"
         assert ReadPhaseResolver(source).phase_source == "rna_reads"
     finally:
         source.close()
@@ -123,7 +125,7 @@ def test_read_phase_resolver_reports_cis_from_same_read_alt_cooccurrence(tmp_pat
         max_distance_from_read_edge=0,
     )
     try:
-        resolver = ReadPhaseResolver(source)
+        resolver = MolecularPhaseResolver(source)
         assert resolver.in_cis(v1, v2) is True
         assert v2 in resolver.phased_partners(v1)
     finally:
@@ -142,7 +144,7 @@ def test_read_phase_resolver_reports_trans_from_mixed_reads(tmp_path):
         max_distance_from_read_edge=0,
     )
     try:
-        resolver = ReadPhaseResolver(source)
+        resolver = MolecularPhaseResolver(source)
         assert resolver.in_cis(v1, v2) is False
     finally:
         source.close()
@@ -160,7 +162,7 @@ def test_read_phase_resolver_returns_none_below_threshold(tmp_path):
         min_alt_reads=2,
     )
     try:
-        resolver = ReadPhaseResolver(source)
+        resolver = MolecularPhaseResolver(source)
         assert resolver.in_cis(v1, v2) is None
     finally:
         source.close()
@@ -182,7 +184,7 @@ def test_paired_end_fragment_can_support_cis(tmp_path):
         min_alt_reads=1,
     )
     try:
-        resolver = ReadPhaseResolver(source)
+        resolver = MolecularPhaseResolver(source)
         assert resolver.in_cis(v1, v2) is True
     finally:
         source.close()
@@ -236,6 +238,44 @@ def test_deletion_support_uses_deleted_cigar_span(tmp_path):
     )
     try:
         assert source.supports_variant(variant) == 2
+    finally:
+        source.close()
+
+
+def test_reference_skip_does_not_support_deletion(tmp_path):
+    variant = Variant("1", 120, "A", "")
+    sequence = "A" * 40
+    bam_path = _write_bam(tmp_path, [
+        _aligned_segment("r1", 99, sequence, cigar=[(0, 20), (3, 50), (0, 20)]),
+        _aligned_segment("r2", 99, sequence, cigar=[(0, 20), (3, 50), (0, 20)]),
+    ])
+    source = RNAReadPhasingSource(
+        bam_path,
+        max_distance_from_read_edge=0,
+        min_alt_reads=1,
+    )
+    try:
+        assert source.supports_variant(variant) == 0
+        assert source.has_evidence(variant) is False
+    finally:
+        source.close()
+
+
+def test_soft_clip_after_anchor_does_not_support_insertion(tmp_path):
+    variant = Variant("1", 119, "", "TTTT")
+    sequence = "A" * 20 + "TTTT"
+    bam_path = _write_bam(tmp_path, [
+        _aligned_segment("r1", 99, sequence, cigar=[(0, 20), (4, 4)]),
+        _aligned_segment("r2", 99, sequence, cigar=[(0, 20), (4, 4)]),
+    ])
+    source = RNAReadPhasingSource(
+        bam_path,
+        max_distance_from_read_edge=0,
+        min_alt_reads=1,
+    )
+    try:
+        assert source.supports_variant(variant) == 0
+        assert source.has_evidence(variant) is False
     finally:
         source.close()
 

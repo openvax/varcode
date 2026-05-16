@@ -22,6 +22,7 @@ to any one upstream's release cadence.
 from pyensembl import cached_release
 
 from varcode import (
+    MolecularPhaseResolver,
     MutantTranscript,
     MutantTranscriptSource,
     ReadPhaseResolver,
@@ -82,6 +83,13 @@ def _cftr():
 def test_resolver_default_phase_source_tag():
     resolver = ReadPhaseResolver(StubReadPhasingSource())
     assert resolver.phase_source == "read_phasing"
+
+
+def test_molecular_resolver_is_preferred_name():
+    resolver = MolecularPhaseResolver(StubReadPhasingSource())
+    assert resolver.phase_source == "molecular_phasing"
+    assert isinstance(ReadPhaseResolver(StubReadPhasingSource()),
+                      MolecularPhaseResolver)
 
 
 def test_in_cis_true_when_both_observed_together():

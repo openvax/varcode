@@ -480,7 +480,7 @@ class Variant(Serializable):
 
         phase_resolver : PhaseResolver or None
             Optional phase-evidence source (typically a
-            :class:`~varcode.phasing.ReadPhaseResolver` wrapping an
+            :class:`~varcode.phasing.MolecularPhaseResolver` wrapping an
             upstream RNA-phasing tool, or
             :class:`~varcode.phasing.VCFPhaseResolver`). When provided
             and the resolver has an observed mutant transcript for
