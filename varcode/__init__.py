@@ -57,6 +57,7 @@ from .phasing import (
     MutantTranscriptSource,
     ReadPhaseResolver,
     ReadPhasingSource,
+    RNAReadPhasingSource,
     VCFPhaseResolver,
     apply_phase_resolver_to_effects,
 )
@@ -143,6 +144,7 @@ __all__ = [
     "MutantTranscriptSource",
     "ReadPhaseResolver",
     "ReadPhasingSource",
+    "RNAReadPhasingSource",
     "VCFPhaseResolver",
     "apply_phase_resolver_to_effects",
 

@@ -121,6 +121,10 @@ Auto-generated from in-source docstrings via
 
 ::: varcode.ReadPhaseResolver
 
+### `varcode.RNAReadPhasingSource`
+
+::: varcode.RNAReadPhasingSource
+
 ### `varcode.VCFPhaseResolver`
 
 ::: varcode.VCFPhaseResolver

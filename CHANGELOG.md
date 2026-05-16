@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+**Added**
+- Added `RNAReadPhasingSource`, a BAM-backed `ReadPhasingSource`
+  implementation for RNA read/fragment co-occurrence. It is consumed
+  through the existing `ReadPhaseResolver(source)` API and lives behind
+  the optional `varcode[rna]` / `pysam` dependency.
+
 **Breaking**
 - Unified the multi-outcome machinery: `SpliceCandidate` deleted;
   `MultiOutcomeEffect.outcomes` accessor + `_with_extra_outcomes`
