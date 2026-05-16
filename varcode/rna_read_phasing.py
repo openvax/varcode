@@ -248,9 +248,10 @@ class RNAReadPhasingSource:
             return "ref"
         return None
 
-    def _has_deletion_spanning(self, read, start0, end0):
+    def _has_exact_deletion(self, read, start0, end0):
         for operation, ref_start, ref_end, _, _ in self._cigar_events(read):
-            if operation == _CIGAR_DELETION and ref_start <= start0 and end0 <= ref_end:
+            if (operation == _CIGAR_DELETION and
+                    ref_start == start0 and ref_end == end0):
                 return True
         return False
 
@@ -259,7 +260,7 @@ class RNAReadPhasingSource:
             return None
         start0 = variant.start - 1
         end0 = variant.end
-        if self._has_deletion_spanning(read, start0, end0):
+        if self._has_exact_deletion(read, start0, end0):
             return "alt"
         target = set(range(start0, end0))
         ref_to_query = {

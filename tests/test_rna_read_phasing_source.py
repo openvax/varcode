@@ -225,6 +225,44 @@ def test_insertion_support_uses_inserted_cigar_bases(tmp_path):
         source.close()
 
 
+def test_larger_insertion_does_not_support_smaller_insertion(tmp_path):
+    variant = Variant("1", 119, "", "T")
+    sequence = "A" * 20 + "TT" + "A" * 40
+    bam_path = _write_bam(tmp_path, [
+        _aligned_segment("r1", 99, sequence, cigar=[(0, 20), (1, 2), (0, 40)]),
+        _aligned_segment("r2", 99, sequence, cigar=[(0, 20), (1, 2), (0, 40)]),
+    ])
+    source = RNAReadPhasingSource(
+        bam_path,
+        max_distance_from_read_edge=0,
+        min_alt_reads=1,
+    )
+    try:
+        assert source.supports_variant(variant) == 0
+        assert source.has_evidence(variant) is False
+    finally:
+        source.close()
+
+
+def test_shifted_insertion_does_not_support_requested_insertion(tmp_path):
+    variant = Variant("1", 119, "", "T")
+    sequence = "A" * 21 + "T" + "A" * 39
+    bam_path = _write_bam(tmp_path, [
+        _aligned_segment("r1", 99, sequence, cigar=[(0, 21), (1, 1), (0, 39)]),
+        _aligned_segment("r2", 99, sequence, cigar=[(0, 21), (1, 1), (0, 39)]),
+    ])
+    source = RNAReadPhasingSource(
+        bam_path,
+        max_distance_from_read_edge=0,
+        min_alt_reads=1,
+    )
+    try:
+        assert source.supports_variant(variant) == 0
+        assert source.has_evidence(variant) is False
+    finally:
+        source.close()
+
+
 def test_deletion_support_uses_deleted_cigar_span(tmp_path):
     variant = Variant("1", 120, "A", "")
     sequence = "A" * 59
@@ -238,6 +276,111 @@ def test_deletion_support_uses_deleted_cigar_span(tmp_path):
     )
     try:
         assert source.supports_variant(variant) == 2
+    finally:
+        source.close()
+
+
+def test_multibase_deletion_support_requires_exact_cigar_span(tmp_path):
+    variant = Variant("1", 120, "AAA", "")
+    sequence = "A" * 57
+    bam_path = _write_bam(tmp_path, [
+        _aligned_segment("r1", 99, sequence, cigar=[(0, 20), (2, 3), (0, 37)]),
+        _aligned_segment("r2", 99, sequence, cigar=[(0, 20), (2, 3), (0, 37)]),
+    ])
+    source = RNAReadPhasingSource(
+        bam_path,
+        max_distance_from_read_edge=0,
+    )
+    try:
+        assert source.supports_variant(variant) == 2
+        assert source.has_evidence(variant) is True
+    finally:
+        source.close()
+
+
+def test_larger_deletion_does_not_support_smaller_deletion(tmp_path):
+    variant = Variant("1", 120, "A", "")
+    sequence = "A" * 57
+    bam_path = _write_bam(tmp_path, [
+        _aligned_segment("r1", 99, sequence, cigar=[(0, 20), (2, 3), (0, 37)]),
+        _aligned_segment("r2", 99, sequence, cigar=[(0, 20), (2, 3), (0, 37)]),
+    ])
+    source = RNAReadPhasingSource(
+        bam_path,
+        max_distance_from_read_edge=0,
+        min_alt_reads=1,
+    )
+    try:
+        assert source.supports_variant(variant) == 0
+        assert source.has_evidence(variant) is False
+    finally:
+        source.close()
+
+
+def test_smaller_deletion_does_not_support_larger_deletion(tmp_path):
+    variant = Variant("1", 120, "AAA", "")
+    sequence = "A" * 59
+    bam_path = _write_bam(tmp_path, [
+        _aligned_segment("r1", 99, sequence, cigar=[(0, 20), (2, 1), (0, 39)]),
+        _aligned_segment("r2", 99, sequence, cigar=[(0, 20), (2, 1), (0, 39)]),
+    ])
+    source = RNAReadPhasingSource(
+        bam_path,
+        max_distance_from_read_edge=0,
+        min_alt_reads=1,
+    )
+    try:
+        assert source.supports_variant(variant) == 0
+        assert source.has_evidence(variant) is False
+    finally:
+        source.close()
+
+
+def test_shifted_deletion_does_not_support_requested_deletion(tmp_path):
+    variant = Variant("1", 120, "A", "")
+    sequence = "A" * 59
+    bam_path = _write_bam(tmp_path, [
+        _aligned_segment("r1", 99, sequence, cigar=[(0, 21), (2, 1), (0, 38)]),
+        _aligned_segment("r2", 99, sequence, cigar=[(0, 21), (2, 1), (0, 38)]),
+    ])
+    source = RNAReadPhasingSource(
+        bam_path,
+        max_distance_from_read_edge=0,
+        min_alt_reads=1,
+    )
+    try:
+        assert source.supports_variant(variant) == 0
+        assert source.has_evidence(variant) is False
+    finally:
+        source.close()
+
+
+def test_deletion_phasing_ignores_larger_overlapping_deletion(tmp_path):
+    deletion = Variant("1", 120, "A", "")
+    snv = Variant("1", 150, "A", "T")
+    sequence = list("A" * 87)
+    sequence[47] = "T"
+    bam_path = _write_bam(tmp_path, [
+        _aligned_segment(
+            "r1",
+            99,
+            "".join(sequence),
+            cigar=[(0, 20), (2, 3), (0, 67)]),
+        _aligned_segment(
+            "r2",
+            99,
+            "".join(sequence),
+            cigar=[(0, 20), (2, 3), (0, 67)]),
+    ])
+    source = RNAReadPhasingSource(
+        bam_path,
+        max_distance_from_read_edge=0,
+        min_alt_reads=1,
+    )
+    try:
+        resolver = MolecularPhaseResolver(source)
+        assert source.supports_variant(deletion) == 0
+        assert resolver.in_cis(deletion, snv) is None
     finally:
         source.close()
 
