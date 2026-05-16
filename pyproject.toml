@@ -33,6 +33,9 @@ include = ["varcode", "varcode.*"]
 "Homepage" = "https://github.com/openvax/varcode"
 "Bug Tracker" = "https://github.com/openvax/varcode/issues"
 
+[project.optional-dependencies]
+rna = ["pysam>=0.21"]
+
 [project.scripts]
 varcode-genes = "varcode.cli.genes_script:main"
 varcode = "varcode.cli.effects_script:main"

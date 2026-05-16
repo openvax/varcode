@@ -139,7 +139,7 @@ class VariantCollection(Collection):
 
         phase_resolver : PhaseResolver or None
             Optional phase-evidence source (e.g. a
-            :class:`~varcode.phasing.ReadPhaseResolver` wrapping an
+            :class:`~varcode.phasing.MolecularPhaseResolver` wrapping an
             upstream RNA-phasing tool, or
             :class:`~varcode.phasing.VCFPhaseResolver`). When provided,
             any effect whose ``(variant, transcript)`` is covered by an

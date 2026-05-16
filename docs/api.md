@@ -117,9 +117,17 @@ Auto-generated from in-source docstrings via
 
 ::: varcode.MutantTranscriptSource
 
+### `varcode.MolecularPhaseResolver`
+
+::: varcode.MolecularPhaseResolver
+
 ### `varcode.ReadPhaseResolver`
 
 ::: varcode.ReadPhaseResolver
+
+### `varcode.RNAReadPhasingSource`
+
+::: varcode.RNAReadPhasingSource
 
 ### `varcode.VCFPhaseResolver`
 

@@ -54,12 +54,14 @@ from .cryptic_exons import (
 )
 from .effect_candidates import EffectCandidate, candidates_from_effects
 from .phasing import (
+    MolecularPhaseResolver,
     MutantTranscriptSource,
     ReadPhaseResolver,
     ReadPhasingSource,
     VCFPhaseResolver,
     apply_phase_resolver_to_effects,
 )
+from .rna_read_phasing import RNAReadPhasingSource
 from .rna_evidence import (
     NullRNAEvidenceResolver,
     RNAEvidenceResolver,
@@ -140,9 +142,11 @@ __all__ = [
     "score_acceptor",
 
     # Phase resolvers (openvax/varcode#269)
+    "MolecularPhaseResolver",
     "MutantTranscriptSource",
     "ReadPhaseResolver",
     "ReadPhasingSource",
+    "RNAReadPhasingSource",
     "VCFPhaseResolver",
     "apply_phase_resolver_to_effects",
 

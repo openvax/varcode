@@ -72,7 +72,7 @@ class MutantTranscriptSource(Protocol):
         ...
 
 
-class ReadPhaseResolver:
+class MolecularPhaseResolver:
     """Phase resolver backed by a :class:`ReadPhasingSource` (#269, #259).
 
     Two variants are cis if the source reports them as co-observed.
@@ -82,7 +82,7 @@ class ReadPhaseResolver:
 
         # Any object satisfying ReadPhasingSource works. Common
         # implementation: an Isovar adapter shipped by openvax/isovar.
-        resolver = ReadPhaseResolver(source)
+        resolver = MolecularPhaseResolver(source)
         effects = variants.effects(phase_resolver=resolver)
 
     If ``source`` also satisfies :class:`MutantTranscriptSource`, the
@@ -90,16 +90,24 @@ class ReadPhaseResolver:
     effect whose ``(variant, transcript)`` is covered by the source
     gets its :attr:`~MutationEffect.mutant_transcript` populated with
     the observed mutant transcript.
+
+    Sources may also expose their own ``in_cis(v1, v2, transcript=None)``
+    method. When present, the resolver delegates to that method instead
+    of reducing through :meth:`ReadPhasingSource.partners_in_cis`. This
+    lets direct-read sources return ``None`` for pairs without enough
+    co-covering evidence.
     """
 
     #: Provenance tag flowing into :attr:`HaplotypeEffect.phase_source`
     #: when this resolver produced the cis grouping. Distinct from
     #: :attr:`EffectCandidate.source` (an unrelated producer tag on RNA-evidence
     #: outcomes).
-    phase_source = "read_phasing"
+    phase_source = "molecular_phasing"
 
     def __init__(self, phasing_source: ReadPhasingSource):
         self.phasing_source = phasing_source
+        self.phase_source = getattr(
+            phasing_source, "source", self.phase_source)
 
     def has_evidence(self, variant) -> bool:
         """Convenience passthrough to the wrapped source."""
@@ -127,6 +135,9 @@ class ReadPhaseResolver:
         first-class concern. Reintroducible later as an optional
         Protocol extension.
         """
+        source_in_cis = getattr(self.phasing_source, "in_cis", None)
+        if source_in_cis is not None:
+            return source_in_cis(v1, v2, transcript=transcript)
         v1_has = self.phasing_source.has_evidence(v1)
         v2_has = self.phasing_source.has_evidence(v2)
         if not v1_has and not v2_has:
@@ -141,6 +152,18 @@ class ReadPhaseResolver:
         if not self.phasing_source.has_evidence(variant):
             return ()
         return tuple(self.phasing_source.partners_in_cis(variant))
+
+
+class ReadPhaseResolver(MolecularPhaseResolver):
+    """Compatibility name for :class:`MolecularPhaseResolver`.
+
+    The old name is kept because it shipped in varcode 5.0.0. New code
+    should prefer :class:`MolecularPhaseResolver`, which better describes
+    sources backed by reads, paired fragments, assembled contigs, or other
+    direct molecular evidence.
+    """
+
+    phase_source = "read_phasing"
 
 
 class VCFPhaseResolver:
@@ -185,7 +208,7 @@ class VCFPhaseResolver:
     the grouping.
     """
 
-    #: Provenance tag, matching :attr:`ReadPhaseResolver.phase_source`.
+    #: Provenance tag, matching :attr:`MolecularPhaseResolver.phase_source`.
     phase_source = "vcf_ps"
 
     def __init__(self, variant_collection, sample):
@@ -238,7 +261,7 @@ class VCFPhaseResolver:
         different phase sets, uncalled alleles).
 
         ``transcript`` is accepted for interface symmetry with
-        :class:`ReadPhaseResolver.in_cis` but isn't consulted —
+        :class:`MolecularPhaseResolver.in_cis` but isn't consulted —
         DNA-level phase is isoform-agnostic.
         """
         g1 = self._genotype(v1)
