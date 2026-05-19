@@ -41,16 +41,19 @@ jobs:
         run: |
           ./lint.sh
       # Cache the pyensembl downloads — fetching all four releases
-      # uncached takes ~5 minutes per matrix job. The key encodes the
-      # exact release tags below so adding or changing a release
-      # invalidates the cache automatically; bump the trailing -vN
-      # suffix to force a refresh for other reasons.
+      # uncached takes ~5 minutes per matrix job. The key encodes:
+      #   - the exact release tags below (auto-invalidates if a
+      #     release is added/changed)
+      #   - the requirements.txt hash (auto-invalidates if pyensembl
+      #     is bumped to a version with a different on-disk layout)
+      # Bump the trailing -vN suffix to force a refresh for other
+      # reasons.
       - name: Cache pyensembl releases
         id: pyensembl-cache
         uses: actions/cache@v4
         with:
           path: ~/.cache/pyensembl
-          key: pyensembl-${{ runner.os }}-grch37.75-grch38.81-grch38.95-grcm38.95-v1
+          key: pyensembl-${{ runner.os }}-grch37.75-grch38.81-grch38.95-grcm38.95-${{ hashFiles('requirements.txt') }}-v1
       - name: Install Ensembl data
         run: |
           echo "Before installing Ensembl releases" && df -h
