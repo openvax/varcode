@@ -23,6 +23,7 @@ from varcode import (
     Variant,
     apply_variant_to_transcript,
 )
+from varcode.nucleotides import reverse_complement
 
 
 ensembl_grch38 = cached_release(81)
@@ -153,6 +154,63 @@ def test_apply_snv_to_forward_strand_coding_variant():
     # Translated mutant protein populated for in-CDS variants.
     assert mt.mutant_protein_sequence is not None
     assert len(mt.mutant_protein_sequence) > 0
+
+
+def test_apply_to_reverse_strand_iupac_alt_complements_correctly():
+    """IUPAC ambiguity codes in the alt allele are reverse-complemented
+    via the full IUPAC translation table (R↔Y, S↔S, etc.), not passed
+    through as-is. The earlier private complement dict only covered
+    A/C/G/T/N, so an "R" alt on a reverse-strand transcript would land
+    in the edit unchanged instead of becoming its complement "Y"."""
+    transcript = ensembl_grch38.transcript_by_id(BRCA1_TRANSCRIPT_ID)
+    assert transcript.on_backward_strand
+    # Genomic ref at 43082570 is "C" (see neighbour test above) — on
+    # the reverse-strand cDNA this is a "G". Substitute it with an
+    # IUPAC purine code "R".
+    variant = Variant(
+        "17", 43082570, "C", "R", ensembl_grch38,
+        allow_extended_nucleotides=True)
+    mt = apply_variant_to_transcript(variant, transcript)
+    assert mt is not None, (
+        "Variant should resolve cleanly — IUPAC alt shouldn't block "
+        "reference matching since only the alt carries ambiguity.")
+    edit = mt.edits[0]
+    # Reverse-complement of "R" (purine) is "Y" (pyrimidine).
+    assert edit.alt_bases == "Y", (
+        "IUPAC code R must reverse-complement to Y on the negative "
+        "strand; got %r" % edit.alt_bases)
+
+
+def test_iupac_reverse_complement_contract():
+    """Pin the public reverse_complement contract that
+    _resolve_variant_edit depends on: every IUPAC ambiguity code is
+    complemented (not passed through), case is preserved, and U is
+    treated as a transcribed T (→ A). A ref-side IUPAC integration
+    test isn't practical — _resolve_variant_edit's reference-match
+    gate rejects any case where the cDNA reference would need to
+    contain an ambiguity code, which would require a synthetic
+    transcript to exercise — so this guards the dependency directly."""
+    pairs = {
+        "A": "T", "T": "A", "G": "C", "C": "G", "N": "N",
+        "U": "A",             # RNA uracil → A (DNA complement)
+        "R": "Y", "Y": "R",   # purine ↔ pyrimidine
+        "S": "S", "W": "W",   # strong / weak — self-complementary
+        "K": "M", "M": "K",   # keto ↔ amino
+        "B": "V", "V": "B",   # not-A ↔ not-T
+        "D": "H", "H": "D",   # not-C ↔ not-G
+    }
+    for base, expected_complement in pairs.items():
+        assert reverse_complement(base) == expected_complement, (
+            "reverse_complement(%r) must be %r" % (base, expected_complement))
+        # Case-preservation: lowercase input → lowercase complement.
+        assert reverse_complement(base.lower()) == expected_complement.lower(), (
+            "reverse_complement must preserve case (input %r)" % base.lower())
+    # Self-inverse round-trip for a multi-base IUPAC string covering
+    # ref- and alt-style usage. U is excluded because complement(U)=A
+    # and complement(A)=T (not U), so U is not self-inverse — that
+    # asymmetry is the expected RNA→DNA behaviour.
+    seq = "ARYSWKMBDHVNCGTacgt"
+    assert reverse_complement(reverse_complement(seq)) == seq
 
 
 def test_apply_to_reverse_strand_transcript_complements_bases():
