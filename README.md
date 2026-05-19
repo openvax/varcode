@@ -124,9 +124,10 @@ multiple plausible breakpoint resolutions. Varcode wraps these as
 instances. Every multi-outcome effect exposes the same surface:
 
 - `.candidates` → `tuple[EffectCandidate, ...]`
-- Each [`EffectCandidate`](https://github.com/openvax/varcode/blob/main/varcode/effect_candidates.py)
+- Each [`EffectCandidate`](https://github.com/openvax/varcode/blob/main/varcode/effect_candidates.py#:~:text=class%20EffectCandidate%28)
   wraps an inner effect (`.effect`), a producer tag (`.source`,
   e.g. `"varcode"`, `"rna_evidence"`), and free-form `.evidence`.
+- `.effects` → `tuple[MutationEffect, ...]` — convenience that unwraps `.candidates` to inner effects when provenance isn't needed.
 - `.most_likely_candidate` / `.most_likely_effect` — producer-ordered top pick.
 - `.highest_priority_candidate` / `.highest_priority_effect` — most severe by `effect_priority()`.
 
