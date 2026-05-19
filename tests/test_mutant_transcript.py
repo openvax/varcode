@@ -155,6 +155,31 @@ def test_apply_snv_to_forward_strand_coding_variant():
     assert len(mt.mutant_protein_sequence) > 0
 
 
+def test_apply_to_reverse_strand_iupac_alt_complements_correctly():
+    """IUPAC ambiguity codes in the alt allele are reverse-complemented
+    via the full IUPAC translation table (R↔Y, S↔S, etc.), not passed
+    through as-is. The earlier private complement dict only covered
+    A/C/G/T/N, so an "R" alt on a reverse-strand transcript would land
+    in the edit unchanged instead of becoming its complement "Y"."""
+    transcript = ensembl_grch38.transcript_by_id(BRCA1_TRANSCRIPT_ID)
+    assert transcript.on_backward_strand
+    # Genomic ref at 43082570 is "C" (see neighbour test above) — on
+    # the reverse-strand cDNA this is a "G". Substitute it with an
+    # IUPAC purine code "R".
+    variant = Variant(
+        "17", 43082570, "C", "R", ensembl_grch38,
+        allow_extended_nucleotides=True)
+    mt = apply_variant_to_transcript(variant, transcript)
+    assert mt is not None, (
+        "Variant should resolve cleanly — IUPAC alt shouldn't block "
+        "reference matching since only the alt carries ambiguity.")
+    edit = mt.edits[0]
+    # Reverse-complement of "R" (purine) is "Y" (pyrimidine).
+    assert edit.alt_bases == "Y", (
+        "IUPAC code R must reverse-complement to Y on the negative "
+        "strand; got %r" % edit.alt_bases)
+
+
 def test_apply_to_reverse_strand_transcript_complements_bases():
     # BRCA1 is on the reverse strand. Reuse the known-good coding
     # variant from test_splice_site_effects.py: Variant('17', 43082570,

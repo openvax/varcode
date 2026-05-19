@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+**Fixed**
+- `apply_variants_to_transcript` now refuses an insertion abutting
+  another edit at the same cDNA offset. The previous overlap check
+  only caught range overlap and the two-insertions-at-the-same-offset
+  case, so an insertion paired with a substitution or deletion
+  starting at the same offset slipped through and produced an
+  order-dependent joint cDNA. Affected callers (haplotype/germline
+  pipelines via `varcode/phasing.py`, `varcode/germline.py`) now fall
+  back to per-variant effects for these inputs.
+- IUPAC ambiguity codes (R, Y, S, W, K, M, D, V, H, B) in a
+  reverse-strand variant's alleles are now reverse-complemented via
+  the full IUPAC translation table. The private helper in
+  `varcode/mutant_transcript.py` only covered A/C/G/T/N and silently
+  passed ambiguity codes through unchanged; `_resolve_variant_edit`
+  now delegates to `varcode.nucleotides.reverse_complement`.
+
 **Added**
 - Added `RNAReadPhasingSource`, a BAM-backed `ReadPhasingSource`
   implementation for RNA read/fragment co-occurrence. It is consumed

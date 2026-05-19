@@ -71,6 +71,7 @@ from ..effects.effect_classes import (
     NoncodingTranscript,
     TranslocationToIntergenic,
 )
+from ..effects.effect_helpers import exon_length
 from ..mutant_transcript import MutantTranscript, ReferenceSegment
 from ..version import __version__ as _varcode_version
 
@@ -94,7 +95,7 @@ def _exon_cdna_ranges(transcript):
     """
     offset = 0
     for exon in transcript.exons:
-        length = exon.end - exon.start + 1
+        length = exon_length(exon)
         yield exon, offset, offset + length
         offset += length
 
@@ -436,7 +437,7 @@ def _cdna_offset_at_5p_breakpoint(transcript, breakpoint_pos):
     offset = 0
     reverse = transcript.on_backward_strand
     for exon in transcript.exons:
-        exon_len = exon.end - exon.start + 1
+        exon_len = exon_length(exon)
         if reverse:
             if exon.start > breakpoint_pos:
                 offset += exon_len
@@ -473,7 +474,7 @@ def _cdna_offset_at_3p_breakpoint(transcript, breakpoint_pos):
     offset = 0
     reverse = transcript.on_backward_strand
     for exon in transcript.exons:
-        exon_len = exon.end - exon.start + 1
+        exon_len = exon_length(exon)
         if reverse:
             if exon.start > breakpoint_pos:
                 offset += exon_len

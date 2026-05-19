@@ -58,6 +58,11 @@ def variant_overlaps_interval(
     return interval_start <= variant_end and interval_end >= variant_start
 
 
+def exon_length(exon):
+    """Number of bases in an exon (inclusive 1-based coordinates)."""
+    return exon.end - exon.start + 1
+
+
 def matches_exon_end_pattern(seq):
     """Does the end of the nucleotide string `seq` match the canonical splice
     signal for the 3' end of an exon: "MAG", where M is either amino base.

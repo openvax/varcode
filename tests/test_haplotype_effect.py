@@ -85,6 +85,27 @@ def test_apply_variants_order_independent():
     assert a.cdna_sequence == b.cdna_sequence
 
 
+def test_apply_variants_rejects_insertion_abutting_deletion():
+    """An insertion at offset X plus a deletion starting at X resolve
+    to edits with the same cdna_start. Applying them in either order
+    yields a different mutant cDNA (the deletion either consumes the
+    inserted bases or leaves them in place), so the joint result is
+    order-dependent. apply_variants_to_transcript must refuse the
+    combination rather than silently picking one ordering."""
+    from pyensembl import cached_release
+    g = cached_release(81)
+    transcript = g.transcript_by_id("ENST00000003084")  # CFTR, forward
+    # Insertion of "AAA" after genomic position 117531100 → edit at
+    # cdna_start = cdna_offset(117531100) + 1, zero-width.
+    v_ins = Variant("7", 117531100, "T", "TAAA", g)
+    # Deletion of the 2 bases at 117531101-117531102 → edit anchored
+    # at the same cdna_start as the insertion above.
+    v_del = Variant("7", 117531100, "TTG", "T", g)
+    assert apply_variants_to_transcript([v_ins, v_del], transcript) is None
+    # Symmetric: input order doesn't matter — both orderings refused.
+    assert apply_variants_to_transcript([v_del, v_ins], transcript) is None
+
+
 # -----------------------------------------------------------------
 # Read-phasing-resolver-driven joint effect
 # -----------------------------------------------------------------
