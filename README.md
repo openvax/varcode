@@ -107,9 +107,11 @@ by biological context. Each row links to the class definition in
 via a browser text-fragment URL — links survive line-number drift as
 the source file evolves. Severity ordering across types is set by
 [`effect_priority()`](https://github.com/openvax/varcode/blob/main/varcode/effects/effect_ordering.py);
-the abstract bases (`MutationEffect`, `TranscriptMutationEffect`,
+the abstract bases — `MutationEffect`, `TranscriptMutationEffect`,
 `CodingMutation`, `NonsilentCodingMutation`, `SpliceMechanismEffect`,
-`StructuralVariantEffect`, `MultiOutcomeEffect`) are documented in the
+`StructuralVariantEffect`, `MultiOutcomeEffect` — define the shared
+interface, with `MutationEffect`, `NonsilentCodingMutation`, and
+`MultiOutcomeEffect` rendered in the
 [API reference](https://openvax.github.io/varcode/api/).
 
 ### Effects that carry multiple possibilities
@@ -132,9 +134,14 @@ instances. Every multi-outcome effect exposes the same surface:
 - `.highest_priority_candidate` / `.highest_priority_effect` — most severe by `effect_priority()`.
 
 The `MultiOutcomeEffect` containers appear in the sub-tables below
-where they're emitted (e.g. `SpliceOutcomeSet`, `ExonicSpliceSite`,
-the structural-variant effects, `HaplotypeEffect`,
-`PhaseCandidateSet`).
+where they're emitted:
+[`SpliceOutcomeSet`](https://github.com/openvax/varcode/blob/main/varcode/splice_outcomes.py#:~:text=class%20SpliceOutcomeSet%28),
+[`ExonicSpliceSite`](https://github.com/openvax/varcode/blob/main/varcode/effects/effect_classes.py#:~:text=class%20ExonicSpliceSite%28),
+the [`StructuralVariantEffect`](https://github.com/openvax/varcode/blob/main/varcode/effects/effect_classes.py#:~:text=class%20StructuralVariantEffect%28)
+sub-hierarchy,
+[`HaplotypeEffect`](https://github.com/openvax/varcode/blob/main/varcode/effects/effect_classes.py#:~:text=class%20HaplotypeEffect%28),
+and
+[`PhaseCandidateSet`](https://github.com/openvax/varcode/blob/main/varcode/effects/effect_classes.py#:~:text=class%20PhaseCandidateSet%28).
 
 ### Coding region — in-frame changes
 
@@ -174,9 +181,11 @@ splice signal, but say nothing about how the spliceosome responds
 
 The protein-level consequence of a splice-signal hit is not
 deterministic from DNA alone, so varcode emits these as candidates
-inside a `SpliceOutcomeSet` (a `MultiOutcomeEffect`). Each mechanism
-carries the originating disruption on its `.splice_signal` attribute,
-so you can always recover *where* the hit was off any mechanism.
+inside a
+[`SpliceOutcomeSet`](https://github.com/openvax/varcode/blob/main/varcode/splice_outcomes.py#:~:text=class%20SpliceOutcomeSet%28)
+(a `MultiOutcomeEffect`). Each mechanism carries the originating
+disruption on its `.splice_signal` attribute, so you can always
+recover *where* the hit was off any mechanism.
 
 | Effect type | Description |
 | --- | --- |
