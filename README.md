@@ -109,10 +109,10 @@ the source file evolves. Severity ordering across types is set by
 [`effect_priority()`](https://github.com/openvax/varcode/blob/main/varcode/effects/effect_ordering.py);
 the abstract bases — `MutationEffect`, `TranscriptMutationEffect`,
 `CodingMutation`, `NonsilentCodingMutation`, `SpliceMechanismEffect`,
-`StructuralVariantEffect`, `MultiOutcomeEffect` — define the shared
-interface, with `MutationEffect`, `NonsilentCodingMutation`, and
-`MultiOutcomeEffect` rendered in the
-[API reference](https://openvax.github.io/varcode/api/).
+`StructuralVariantEffect` — define the shared interface;
+`MutationEffect` and `NonsilentCodingMutation` have dedicated entries
+in the [API reference](https://openvax.github.io/varcode/api/), and
+`MultiOutcomeEffect` is described in its own section below.
 
 ### Effects that carry multiple possibilities
 
@@ -121,7 +121,11 @@ outcome — splice-signal disruption can resolve as normal splicing,
 exon skipping, intron retention, or cryptic-site use; an exon-edge
 variant might be a routine coding effect *or* a splice disruption;
 a structural variant might affect multiple transcripts or have
-multiple plausible breakpoint resolutions. Varcode wraps these as
+multiple plausible breakpoint resolutions; two or more cis variants
+on one transcript can compose into a joint mutant protein; and when
+phase is unknown between somatic and germline variants sharing a
+window, the somatic effect depends on which haplotype it landed on.
+Varcode wraps these as
 [`MultiOutcomeEffect`](https://github.com/openvax/varcode/blob/main/varcode/effects/effect_classes.py#:~:text=class%20MultiOutcomeEffect%28)
 instances. Every multi-outcome effect exposes the same surface:
 
@@ -210,9 +214,12 @@ recover *where* the hit was off any mechanism.
 
 ### Exon-level and structural-variant effects
 
-The structural-variant effects are themselves `MultiOutcomeEffect`s
-— `.candidates` may include cryptic-exon outcomes, RNA-evidence-
-ranked alternatives, etc.
+`ExonLoss` is a plain `Exonic` effect. The structural-variant
+effects below (`LargeDeletion` through `TranslocationToIntergenic`)
+are `MultiOutcomeEffect`s — their `.candidates` may include
+cryptic-exon outcomes, RNA-evidence-ranked alternatives, and so on.
+`CrypticExonCandidate` typically appears as a candidate inside those
+SV effects rather than standalone.
 
 | Effect type | Description |
 | --- | --- |

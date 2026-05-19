@@ -199,6 +199,16 @@
   those tags to `FrameShift` before loading. Anyone still reading such
   payloads can pin `varcode<4.7` or resurrect the shim in user code.
 
+**Changed**
+- README "Effect Types" section rewritten: 14 missing concrete
+  effect classes added (`Failure`, the splice mechanisms, the
+  structural-variant effects, `CrypticExonCandidate`,
+  `HaplotypeEffect`, `PhaseCandidateSet`), grouped into 7 sub-tables
+  by biological context, with a new intro explaining
+  `MultiOutcomeEffect` and how multi-possibility effects are
+  represented. Each class name links to its source definition via
+  GitHub text-fragment URLs that survive line-number drift.
+
 ## [v2.3.0](https://github.com/openvax/varcode/tree/v2.3.0) (2026-04-13)
 
 **Added**
