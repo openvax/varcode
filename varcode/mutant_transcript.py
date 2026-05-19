@@ -31,6 +31,8 @@ from typing import Optional, Tuple
 
 from serializable import DataclassSerializable
 
+from .nucleotides import reverse_complement
+
 
 @dataclass(frozen=True)
 class TranscriptEdit(DataclassSerializable):
@@ -292,13 +294,6 @@ class MutantTranscript(DataclassSerializable):
 # ---------------------------------------------------------------------
 
 
-_COMPLEMENT = {"A": "T", "T": "A", "G": "C", "C": "G", "N": "N"}
-
-
-def _reverse_complement(seq: str) -> str:
-    return "".join(_COMPLEMENT.get(b, b) for b in reversed(seq.upper()))
-
-
 def _resolve_variant_edit(variant, transcript, full_sequence):
     """Resolve a single :class:`~varcode.Variant` to a
     :class:`TranscriptEdit` against ``transcript``'s cDNA.
@@ -330,8 +325,8 @@ def _resolve_variant_edit(variant, transcript, full_sequence):
     genome_ref = variant.trimmed_ref
     genome_alt = variant.trimmed_alt
     if transcript.on_backward_strand:
-        cdna_ref = _reverse_complement(genome_ref)
-        cdna_alt = _reverse_complement(genome_alt)
+        cdna_ref = reverse_complement(genome_ref)
+        cdna_alt = reverse_complement(genome_alt)
     else:
         cdna_ref = genome_ref
         cdna_alt = genome_alt
@@ -480,10 +475,20 @@ def apply_variants_to_transcript(variants, transcript):
     for i in range(len(resolved) - 1):
         e1 = resolved[i][0]
         e2 = resolved[i + 1][0]
-        # Insertions at the same offset don't "overlap" per se, but
-        # their order is ambiguous — treat as a conflict.
-        if e1.cdna_end > e2.cdna_start or (
-                e1.cdna_start == e2.cdna_start == e1.cdna_end == e2.cdna_end):
+        # Range overlap.
+        if e1.cdna_end > e2.cdna_start:
+            return None
+        # An insertion at the same cdna_start as the next edit is
+        # order-dependent (whether the inserted bases survive a
+        # following deletion, or where they sit relative to a
+        # substitution at the same offset, depends on apply order).
+        # In contrast, adjacent edits at e1.cdna_end == e2.cdna_start
+        # where e1 is NOT an insertion are unambiguous and allowed:
+        # high-to-low application applies e2 first, leaving the slice
+        # below e2.cdna_start untouched, so e1 then operates on its
+        # original range and the two edits compose to a single
+        # deterministic result regardless of input order.
+        if e1.cdna_end == e2.cdna_start and e1.cdna_start == e1.cdna_end:
             return None
     # Apply edits from the highest cDNA offset down so earlier offsets
     # aren't affected by upstream edits' length changes.

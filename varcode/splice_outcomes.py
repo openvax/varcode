@@ -59,6 +59,7 @@ from serializable import DataclassSerializable
 
 from .effects.classify import classify_from_protein_diff
 from .effects.codon_tables import codon_table_for_transcript, translate_sequence
+from .effects.effect_helpers import exon_length
 from .effects.effect_classes import (
     CrypticAcceptor,
     CrypticDonor,
@@ -564,8 +565,7 @@ def _build_exon_skipping_candidate(splice_effect):
                 in_frame=False),
         )
 
-    exon_length = exon.end - exon.start + 1
-    in_frame = (exon_length % 3 == 0)
+    in_frame = (exon_length(exon) % 3 == 0)
     mt = _build_exon_skip_mutant_transcript(
         splice_effect.variant, transcript, exon)
 
@@ -583,7 +583,7 @@ def _build_exon_skipping_candidate(splice_effect):
         )
 
     aa_fields = _aa_fields_from_protein_diff(
-        splice_effect.variant, transcript, mt, length_delta=-exon_length)
+        splice_effect.variant, transcript, mt, length_delta=-exon_length(exon))
     return _wrap_in_candidate(
         ExonSkipping(
             variant=splice_effect.variant,
@@ -678,9 +678,9 @@ def _build_intron_retention_mutant_transcript(
         exon_start_offset = _exon_start_offset_in_transcript(transcript, exon)
     except ValueError:
         return None
-    exon_length = exon.end - exon.start + 1
+    length = exon_length(exon)
     if side == "donor":
-        insert_at = exon_start_offset + exon_length
+        insert_at = exon_start_offset + length
     else:
         insert_at = exon_start_offset
     full_cdna = str(transcript.sequence)
@@ -928,7 +928,7 @@ def _build_cryptic_site_mutant_transcript(
         exon_start_in_tx = _exon_start_offset_in_transcript(transcript, exon)
     except ValueError:
         return None
-    exon_len = exon.end - exon.start + 1
+    exon_len = exon_length(exon)
     full_cdna = str(transcript.sequence)
     if side == "donor":
         # Donor change shifts the exon's 3' end. Junction in transcript
@@ -1086,20 +1086,20 @@ def _build_exon_skip_mutant_transcript(variant, transcript, exon):
     except (StopIteration, ValueError):
         return None
 
-    exon_length = exon.end - exon.start + 1
+    length = exon_length(exon)
     full_sequence = str(transcript.sequence)
 
     post_skip_cdna = (
         full_sequence[:exon_start_in_tx]
-        + full_sequence[exon_start_in_tx + exon_length:]
+        + full_sequence[exon_start_in_tx + length:]
     )
 
     cds_start = min(transcript.start_codon_spliced_offsets)
 
     # Adjust CDS start for the deletion.
-    if exon_start_in_tx + exon_length <= cds_start:
+    if exon_start_in_tx + length <= cds_start:
         # Exon is entirely in the 5' UTR → shift CDS start left.
-        new_cds_start = cds_start - exon_length
+        new_cds_start = cds_start - length
     elif exon_start_in_tx >= cds_start:
         # Exon is entirely after the CDS start → no shift.
         new_cds_start = cds_start
@@ -1120,7 +1120,7 @@ def _build_exon_skip_mutant_transcript(variant, transcript, exon):
 
     edit = TranscriptEdit(
         cdna_start=exon_start_in_tx,
-        cdna_end=exon_start_in_tx + exon_length,
+        cdna_end=exon_start_in_tx + length,
         alt_bases="",
         source_variant=variant,
     )
@@ -1165,7 +1165,7 @@ def _exon_start_offset_in_transcript(transcript, exon):
     for ex in transcript.exons:
         if ex.exon_id == exon.exon_id:
             return offset
-        offset += ex.end - ex.start + 1
+        offset += exon_length(ex)
     raise ValueError("Exon %s not found in transcript %s" % (
         exon.exon_id, transcript.transcript_id))
 

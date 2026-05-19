@@ -53,8 +53,6 @@ from ..effects.effect_classes import (
     Intronic,
     IntronicSpliceSite,
     NoncodingTranscript,
-    SpliceAcceptor,
-    SpliceDonor,
     ThreePrimeUTR,
 )
 from ..mutant_transcript import apply_variant_to_transcript
@@ -107,11 +105,9 @@ class ProteinDiffEffectAnnotator:
             variant, transcript)
 
         # Pure-intronic splice effects: fast only — no protein-
-        # level diff to compute.
-        if isinstance(fast_effect, (SpliceDonor, SpliceAcceptor)):
-            return fast_effect
-        if (isinstance(fast_effect, IntronicSpliceSite)
-                and not isinstance(fast_effect, (SpliceDonor, SpliceAcceptor))):
+        # level diff to compute. SpliceDonor/SpliceAcceptor are
+        # IntronicSpliceSite subclasses, so one check covers all.
+        if isinstance(fast_effect, IntronicSpliceSite):
             return fast_effect
 
         # Non-splice location-based classes (UTR, deep intronic): fast's
