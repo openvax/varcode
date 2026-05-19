@@ -8,9 +8,11 @@
   only caught range overlap and the two-insertions-at-the-same-offset
   case, so an insertion paired with a substitution or deletion
   starting at the same offset slipped through and produced an
-  order-dependent joint cDNA. Affected callers (haplotype/germline
-  pipelines via `varcode/phasing.py`, `varcode/germline.py`) now fall
-  back to per-variant effects for these inputs.
+  order-dependent joint cDNA. User-visible impact: phased haplotype /
+  germline pipelines (`varcode/phasing.py`, `varcode/germline.py`)
+  that previously returned a silently order-dependent joint effect for
+  these inputs now return independent per-variant effects computed
+  against the reference instead.
 - IUPAC ambiguity codes (R, Y, S, W, K, M, D, V, H, B) in a
   reverse-strand variant's alleles are now reverse-complemented via
   the full IUPAC translation table. The private helper in

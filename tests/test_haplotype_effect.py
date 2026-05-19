@@ -106,6 +106,23 @@ def test_apply_variants_rejects_insertion_abutting_deletion():
     assert apply_variants_to_transcript([v_del, v_ins], transcript) is None
 
 
+def test_apply_variants_rejects_two_insertions_at_same_offset():
+    """Two distinct insertions at the same cDNA offset are
+    order-dependent (which one ends up upstream in the mutant cDNA
+    depends on apply order). Previously caught by a 4-way equality
+    check, now caught by the generalised insertion-at-boundary rule —
+    re-pin that the case is still refused after the rule restructure."""
+    from pyensembl import cached_release
+    g = cached_release(81)
+    transcript = g.transcript_by_id("ENST00000003084")  # CFTR, forward
+    # Both anchored at genomic 117531100 → both edits resolve to a
+    # zero-width insertion at the same cdna_start.
+    v_ins_a = Variant("7", 117531100, "T", "TAAA", g)
+    v_ins_b = Variant("7", 117531100, "T", "TGGG", g)
+    assert apply_variants_to_transcript([v_ins_a, v_ins_b], transcript) is None
+    assert apply_variants_to_transcript([v_ins_b, v_ins_a], transcript) is None
+
+
 # -----------------------------------------------------------------
 # Read-phasing-resolver-driven joint effect
 # -----------------------------------------------------------------

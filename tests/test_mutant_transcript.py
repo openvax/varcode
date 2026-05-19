@@ -180,6 +180,32 @@ def test_apply_to_reverse_strand_iupac_alt_complements_correctly():
         "strand; got %r" % edit.alt_bases)
 
 
+def test_iupac_reverse_complement_contract():
+    """Pin the public reverse_complement contract that
+    _resolve_variant_edit depends on: every IUPAC ambiguity code is
+    complemented (not passed through), and the operation is
+    self-inverse. A meaningful ref-side IUPAC integration test isn't
+    possible — _resolve_variant_edit's reference-match gate rejects
+    any case where the cDNA reference would need to contain an
+    ambiguity code — so this guards the dependency directly."""
+    from varcode.nucleotides import reverse_complement
+    pairs = {
+        "A": "T", "T": "A", "G": "C", "C": "G", "N": "N",
+        "R": "Y", "Y": "R",   # purine ↔ pyrimidine
+        "S": "S", "W": "W",   # strong / weak — self-complementary
+        "K": "M", "M": "K",   # keto ↔ amino
+        "B": "V", "V": "B",   # not-A ↔ not-T
+        "D": "H", "H": "D",   # not-C ↔ not-G
+    }
+    for base, expected_complement in pairs.items():
+        assert reverse_complement(base) == expected_complement, (
+            "reverse_complement(%r) must be %r" % (base, expected_complement))
+    # Self-inverse round-trip for a multi-base IUPAC string covering ref-
+    # and alt-style usage.
+    seq = "ARYSWKMBDHVNCGT"
+    assert reverse_complement(reverse_complement(seq)) == seq
+
+
 def test_apply_to_reverse_strand_transcript_complements_bases():
     # BRCA1 is on the reverse strand. Reuse the known-good coding
     # variant from test_splice_site_effects.py: Variant('17', 43082570,

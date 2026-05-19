@@ -482,8 +482,12 @@ def apply_variants_to_transcript(variants, transcript):
         # order-dependent (whether the inserted bases survive a
         # following deletion, or where they sit relative to a
         # substitution at the same offset, depends on apply order).
-        # Adjacent edits at e1.cdna_end == e2.cdna_start where e1 is
-        # NOT an insertion are unambiguous and allowed.
+        # In contrast, adjacent edits at e1.cdna_end == e2.cdna_start
+        # where e1 is NOT an insertion are unambiguous and allowed:
+        # high-to-low application applies e2 first, leaving the slice
+        # below e2.cdna_start untouched, so e1 then operates on its
+        # original range and the two edits compose to a single
+        # deterministic result regardless of input order.
         if e1.cdna_end == e2.cdna_start and e1.cdna_start == e1.cdna_end:
             return None
     # Apply edits from the highest cDNA offset down so earlier offsets
