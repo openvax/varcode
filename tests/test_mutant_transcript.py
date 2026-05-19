@@ -23,6 +23,7 @@ from varcode import (
     Variant,
     apply_variant_to_transcript,
 )
+from varcode.nucleotides import reverse_complement
 
 
 ensembl_grch38 = cached_release(81)
@@ -183,14 +184,15 @@ def test_apply_to_reverse_strand_iupac_alt_complements_correctly():
 def test_iupac_reverse_complement_contract():
     """Pin the public reverse_complement contract that
     _resolve_variant_edit depends on: every IUPAC ambiguity code is
-    complemented (not passed through), and the operation is
-    self-inverse. A meaningful ref-side IUPAC integration test isn't
-    possible — _resolve_variant_edit's reference-match gate rejects
-    any case where the cDNA reference would need to contain an
-    ambiguity code — so this guards the dependency directly."""
-    from varcode.nucleotides import reverse_complement
+    complemented (not passed through), case is preserved, and U is
+    treated as a transcribed T (→ A). A ref-side IUPAC integration
+    test isn't practical — _resolve_variant_edit's reference-match
+    gate rejects any case where the cDNA reference would need to
+    contain an ambiguity code, which would require a synthetic
+    transcript to exercise — so this guards the dependency directly."""
     pairs = {
         "A": "T", "T": "A", "G": "C", "C": "G", "N": "N",
+        "U": "A",             # RNA uracil → A (DNA complement)
         "R": "Y", "Y": "R",   # purine ↔ pyrimidine
         "S": "S", "W": "W",   # strong / weak — self-complementary
         "K": "M", "M": "K",   # keto ↔ amino
@@ -200,9 +202,14 @@ def test_iupac_reverse_complement_contract():
     for base, expected_complement in pairs.items():
         assert reverse_complement(base) == expected_complement, (
             "reverse_complement(%r) must be %r" % (base, expected_complement))
-    # Self-inverse round-trip for a multi-base IUPAC string covering ref-
-    # and alt-style usage.
-    seq = "ARYSWKMBDHVNCGT"
+        # Case-preservation: lowercase input → lowercase complement.
+        assert reverse_complement(base.lower()) == expected_complement.lower(), (
+            "reverse_complement must preserve case (input %r)" % base.lower())
+    # Self-inverse round-trip for a multi-base IUPAC string covering
+    # ref- and alt-style usage. U is excluded because complement(U)=A
+    # and complement(A)=T (not U), so U is not self-inverse — that
+    # asymmetry is the expected RNA→DNA behaviour.
+    seq = "ARYSWKMBDHVNCGTacgt"
     assert reverse_complement(reverse_complement(seq)) == seq
 
 
