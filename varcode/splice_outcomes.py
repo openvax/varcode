@@ -416,21 +416,6 @@ _MECHANISM_ORDER_INTRONIC_SPLICE_SITE_ACCEPTOR = (
     CrypticAcceptor,
 )
 
-# Order matters for isinstance matching: more specific classes first.
-# SpliceDonor and SpliceAcceptor are subclasses of IntronicSpliceSite
-# (see effect_classes.py), so they must be checked before the
-# IntronicSpliceSite fallback in _mechanism_order_for — otherwise
-# a SpliceDonor would incorrectly fall into the intronic-window table.
-# IntronicSpliceSite itself is deliberately held out of this tuple and
-# dispatched separately so side detection can pick the right cryptic
-# direction.
-_MECHANISM_ORDER_TABLES = (
-    (SpliceDonor, _MECHANISM_ORDER_SPLICE_DONOR),
-    (SpliceAcceptor, _MECHANISM_ORDER_SPLICE_ACCEPTOR),
-    (ExonicSpliceSite, _MECHANISM_ORDER_EXONIC_SPLICE_SITE),
-)
-
-
 def _intronic_splice_side_is_acceptor(splice_effect):
     """True if an IntronicSpliceSite effect is on the acceptor side of
     its nearest exon.
@@ -454,16 +439,40 @@ def _intronic_splice_side_is_acceptor(splice_effect):
 
 
 def _mechanism_order_for(splice_effect):
-    """Return the DNA-only mechanism order for this splice
-    effect, or None for effects we don't wrap.
+    """Pick the ordered list of splice mechanisms to enumerate for a
+    given splice-disruption effect.
 
-    Uses :func:`isinstance` rather than exact-class dispatch so
-    subclasses are handled correctly.
+    When a variant disrupts a splice signal, several mechanisms are
+    biologically possible (exon skipping, intron retention, cryptic-
+    site use, or normal splicing). DNA alone can't say which one fires,
+    so :func:`enumerate_splice_outcomes` emits *all* of them as
+    candidates — and this function decides the order they appear in,
+    which sets the ``most_likely`` candidate. The ordering is a hand-
+    tuned, DNA-only heuristic (see the ``_MECHANISM_ORDER_*`` tuples
+    above); it is not a probability.
+
+    Returns the matching ``_MECHANISM_ORDER_*`` tuple, or ``None`` if
+    ``splice_effect`` is not a splice disruption — in which case the
+    caller leaves the effect unwrapped (no ``SpliceOutcomeSet``).
+
+    All four splice-disruption classes are wrapped, including
+    ``IntronicSpliceSite``. Dispatch is most-specific-first because
+    ``SpliceDonor`` and ``SpliceAcceptor`` are *subclasses* of
+    ``IntronicSpliceSite`` (see effect_classes.py): they must be tested
+    before the ``IntronicSpliceSite`` branch, otherwise a canonical
+    donor/acceptor hit (+1/+2 or -1/-2) would fall through to the
+    weaker +3..+6 / -3 intronic-window ordering. ``IntronicSpliceSite``
+    additionally needs a runtime side check to choose between a cryptic
+    donor and a cryptic acceptor, which is why it can't share a fixed
+    table entry with the others.
     """
-    for cls, order in _MECHANISM_ORDER_TABLES:
-        if isinstance(splice_effect, cls):
-            return order
-    if isinstance(splice_effect, IntronicSpliceSite):
+    if isinstance(splice_effect, SpliceDonor):          # intron +1/+2
+        return _MECHANISM_ORDER_SPLICE_DONOR
+    if isinstance(splice_effect, SpliceAcceptor):       # intron -1/-2
+        return _MECHANISM_ORDER_SPLICE_ACCEPTOR
+    if isinstance(splice_effect, ExonicSpliceSite):     # last 3 of exon
+        return _MECHANISM_ORDER_EXONIC_SPLICE_SITE
+    if isinstance(splice_effect, IntronicSpliceSite):   # intron +3..+6 / -3
         if _intronic_splice_side_is_acceptor(splice_effect):
             return _MECHANISM_ORDER_INTRONIC_SPLICE_SITE_ACCEPTOR
         return _MECHANISM_ORDER_INTRONIC_SPLICE_SITE_DONOR
