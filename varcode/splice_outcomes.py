@@ -416,6 +416,7 @@ _MECHANISM_ORDER_INTRONIC_SPLICE_SITE_ACCEPTOR = (
     CrypticAcceptor,
 )
 
+
 def _intronic_splice_side_is_acceptor(splice_effect):
     """True if an IntronicSpliceSite effect is on the acceptor side of
     its nearest exon.
