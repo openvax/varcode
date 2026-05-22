@@ -1246,9 +1246,13 @@ def enumerate_splice_outcomes(splice_effect, genomic_sequence=None):
     # wrapped; everything else passes through untouched.
     if not isinstance(splice_effect, SpliceSite):
         return splice_effect
-    # Every SpliceSite subclass is handled by _mechanism_order_for, so
-    # mechanism_order is guaranteed non-None past the gate above.
     mechanism_order = _mechanism_order_for(splice_effect)
+    if mechanism_order is None:
+        # Defensive: every SpliceSite subclass today is handled by
+        # _mechanism_order_for, but a future direct SpliceSite subclass
+        # without a registered ordering would land here — pass it
+        # through rather than crashing on a None mechanism order.
+        return splice_effect
 
     candidates = []
     for mechanism_cls in mechanism_order:
