@@ -171,8 +171,11 @@ and
 ### Splice-site disruption — *where* the signal was hit
 
 DNA-level locations: these effects say a variant landed on or near a
-splice signal, but say nothing about how the spliceosome responds
-(see the next table for that).
+splice signal, but **don't themselves carry a protein consequence** —
+they say nothing about how the spliceosome responds (see the next
+table for that). All four share the
+[`SpliceSite`](https://github.com/openvax/varcode/blob/main/varcode/effects/effect_classes.py#:~:text=class%20SpliceSite%28)
+base, so `isinstance(effect, SpliceSite)` matches any of them.
 
 | Effect type | Description |
 | --- | --- |
@@ -183,13 +186,17 @@ splice signal, but say nothing about how the spliceosome responds
 
 ### Splice mechanism — *what the spliceosome does* in response
 
-The protein-level consequence of a splice-signal hit is not
-deterministic from DNA alone, so varcode emits these as candidates
-inside a
+**These are the splice effects that carry a protein consequence.** The
+protein-level outcome of a splice-signal hit is not deterministic from
+DNA alone, so (when you opt in with `splice_outcomes=True`) varcode
+emits these as candidates inside a
 [`SpliceOutcomeSet`](https://github.com/openvax/varcode/blob/main/varcode/splice_outcomes.py#:~:text=class%20SpliceOutcomeSet%28)
 (a `MultiOutcomeEffect`). Each mechanism carries the originating
-disruption on its `.splice_signal` attribute, so you can always
-recover *where* the hit was off any mechanism.
+disruption on its `.splice_signal` attribute (a `SpliceSite`
+*instance*), so you can always recover *where* the hit was off any
+mechanism. The set also records the disruption's *class* on
+`.disrupted_signal_class` (the `SpliceSite` subclass, e.g.
+`SpliceDonor` — a type, not an instance) for priority lookup.
 
 | Effect type | Description |
 | --- | --- |

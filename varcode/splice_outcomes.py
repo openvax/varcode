@@ -72,6 +72,7 @@ from .effects.effect_classes import (
     SpliceAcceptor,
     SpliceDonor,
     SpliceMechanismEffect,
+    SpliceSite,
 )
 from .mutant_transcript import MutantTranscript, TranscriptEdit
 from .effect_candidates import EffectCandidate
@@ -134,14 +135,26 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
     catch this and any future multi-outcome wrapper (RNA evidence,
     germline-aware, etc.) uniformly.
 
-    :attr:`candidates` is a ``tuple[EffectCandidate, ...]``. Each
-    candidate's ``effect`` is a :class:`SpliceMechanismEffect`
-    subclass — :class:`NormalSplicing`, :class:`ExonSkipping`,
-    :class:`IntronRetention`, :class:`CrypticDonor`, or
-    :class:`CrypticAcceptor`. Class identity = mechanism. Each
-    mechanism Effect carries its own protein vocab (``aa_ref`` /
-    ``aa_alt`` / ``mutant_protein_sequence`` / ``mutant_transcript``)
-    populated when the protein math resolved, ``None`` when not.
+    This set holds two distinct things — keep them straight:
+
+    * **The disruption** — *where* the splice signal was hit. Stored
+      as :attr:`disrupted_signal_class`, which is the
+      :class:`~varcode.effects.effect_classes.SpliceSite` **subclass**
+      (a *type*, e.g. ``SpliceDonor`` — **not** an Effect instance).
+      It's metadata used for priority lookup. The corresponding
+      Effect *instance* is reachable on every candidate via
+      ``candidate.effect.splice_signal``.
+    * **The protein outcomes** — *what* the spliceosome might do.
+      Stored as :attr:`candidates`, a ``tuple[EffectCandidate, ...]``.
+      Each candidate's ``effect`` is a
+      :class:`~varcode.effects.effect_classes.SpliceMechanismEffect`
+      subclass (:class:`NormalSplicing`, :class:`ExonSkipping`,
+      :class:`IntronRetention`, :class:`CrypticDonor`, or
+      :class:`CrypticAcceptor`) — class identity is the mechanism.
+      These are the effects that carry a protein consequence:
+      ``aa_ref`` / ``aa_alt`` / ``mutant_protein_sequence`` /
+      ``mutant_transcript``, populated when the protein math resolved,
+      ``None`` when only the mechanism is predicted.
 
     For back-compat, :attr:`short_description` delegates to the most
     likely candidate. Constructed by
@@ -170,9 +183,11 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
         MultiOutcomeEffect.__init__(self, variant)
         self.transcript = transcript
         self._candidates = tuple(candidates)
-        # Class of the original splice-disrupting effect this set
-        # replaced (SpliceDonor, SpliceAcceptor, ExonicSpliceSite, or
-        # IntronicSpliceSite). Used for priority lookup.
+        # The SpliceSite *subclass* (a type, not an instance) of the
+        # disruption this set replaced — SpliceDonor, SpliceAcceptor,
+        # ExonicSpliceSite, or IntronicSpliceSite. Used for priority
+        # lookup; the disruption *instance* lives on each candidate's
+        # effect.splice_signal.
         self.disrupted_signal_class = disrupted_signal_class
         self.dna_candidates = tuple(
             self._candidates if dna_candidates is None else dna_candidates)
@@ -1186,16 +1201,19 @@ def _exon_start_offset_in_transcript(transcript, exon):
 
 
 def enumerate_splice_outcomes(splice_effect, genomic_sequence=None):
-    """Wrap a splice-disrupting Effect in a SpliceOutcomeSet.
+    """Wrap a splice-signal disruption in a SpliceOutcomeSet.
 
-    Recognized splice effect classes are SpliceDonor, SpliceAcceptor,
-    ExonicSpliceSite, and IntronicSpliceSite. Unrecognized classes
-    pass through unchanged.
+    The recognized inputs are exactly the
+    :class:`~varcode.effects.effect_classes.SpliceSite` effects
+    (``SpliceDonor`` / ``SpliceAcceptor`` / ``ExonicSpliceSite`` /
+    ``IntronicSpliceSite``) — the "where the signal was hit" effects.
+    Anything else passes through unchanged.
 
     Parameters
     ----------
     splice_effect : MutationEffect
-        Output of varcode's existing splice classification.
+        Output of varcode's existing splice classification. Only
+        :class:`SpliceSite` instances are wrapped.
 
     genomic_sequence : Callable[[str, int, int], str], optional
         Caller-supplied provider for genomic sequence, returning
@@ -1221,12 +1239,16 @@ def enumerate_splice_outcomes(splice_effect, genomic_sequence=None):
     -------
     SpliceOutcomeSet or the original effect
         SpliceOutcomeSet wrapping the candidate mechanisms when the
-        input is a splice-disrupting effect; otherwise the input
+        input is a :class:`SpliceSite` disruption; otherwise the input
         unchanged.
     """
-    mechanism_order = _mechanism_order_for(splice_effect)
-    if mechanism_order is None:
+    # Only splice-signal disruptions (the SpliceSite subclasses) get
+    # wrapped; everything else passes through untouched.
+    if not isinstance(splice_effect, SpliceSite):
         return splice_effect
+    # Every SpliceSite subclass is handled by _mechanism_order_for, so
+    # mechanism_order is guaranteed non-None past the gate above.
+    mechanism_order = _mechanism_order_for(splice_effect)
 
     candidates = []
     for mechanism_cls in mechanism_order:

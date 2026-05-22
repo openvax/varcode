@@ -208,6 +208,19 @@
   `MultiOutcomeEffect` and how multi-possibility effects are
   represented. Each class name links to its source definition via
   GitHub text-fragment URLs that survive line-number drift.
+- Documented and streamlined the splice-effect model: clarified that
+  `SpliceSite` effects (`SpliceDonor` / `SpliceAcceptor` /
+  `IntronicSpliceSite` / `ExonicSpliceSite`) describe *where* a splice
+  signal was hit and carry no protein consequence on their own, while
+  `SpliceMechanismEffect` subclasses describe *what* the spliceosome
+  does and carry the protein change. `SpliceSite` (previously an
+  undocumented marker base) is now the documented, load-bearing type:
+  `enumerate_splice_outcomes` gates on `isinstance(effect, SpliceSite)`
+  rather than enumerating the four subclasses. Documented the
+  `SpliceOutcomeSet.disrupted_signal_class` (a `SpliceSite` *subclass*,
+  i.e. a type, for priority lookup) vs each candidate's
+  `effect.splice_signal` (a `SpliceSite` *instance*) distinction.
+  No behavior change.
 
 ## [v2.3.0](https://github.com/openvax/varcode/tree/v2.3.0) (2026-04-13)
 
