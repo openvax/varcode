@@ -315,21 +315,37 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
         return self.disrupted_signal_class
 
     @property
-    def alternate_effect(self):
-        """Back-compat shim matching :attr:`ExonicSpliceSite.alternate_effect`.
+    def if_splicing_unchanged(self):
+        """The coding effect that applies *if the spliceosome still
+        splices normally* despite the disrupted signal — i.e. the
+        protein consequence of the underlying nucleotide change on its
+        own.
 
-        Resolves to the underlying coding change carried by the
-        :class:`NormalSplicing` candidate (its
-        :attr:`NormalSplicing.coding_effect`) — i.e. "the coding
-        change that applies when splicing proceeds normally."
-        Returns ``None`` when there is no :class:`NormalSplicing`
-        candidate or when it carries ``coding_effect=None`` (e.g.
-        the variant is purely intronic).
+        Resolves to the :class:`NormalSplicing` candidate's
+        :attr:`NormalSplicing.coding_effect`. Returns ``None`` when
+        there is no :class:`NormalSplicing` candidate or it carries no
+        coding consequence (e.g. a purely intronic disruption, where a
+        nucleotide change outside the CDS leaves the protein
+        untouched if splicing proceeds).
+
+        This is the canonical "alternative outcome" accessor, alongside
+        :attr:`most_likely_effect` (the top predicted splicing
+        mechanism) and :attr:`candidates` (every plausible mechanism).
+        Unlike the old ``ExonicSpliceSite.alternate_effect`` it works
+        for intronic disruptions too.
         """
         for candidate in self._candidates:
             if isinstance(candidate.effect, NormalSplicing):
                 return candidate.effect.coding_effect
         return None
+
+    @property
+    def alternate_effect(self):
+        """Deprecated alias for :attr:`if_splicing_unchanged`, kept for
+        parity with the (also deprecated)
+        ``ExonicSpliceSite.alternate_effect``. Prefer
+        :attr:`if_splicing_unchanged`."""
+        return self.if_splicing_unchanged
 
     @property
     def candidate_proteins(self):

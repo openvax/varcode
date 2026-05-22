@@ -248,6 +248,36 @@ def test_normal_splicing_for_intronic_disruption_has_no_coding_effect():
     assert normal.effect.mutant_protein_sequence is None
 
 
+def test_if_splicing_unchanged_returns_normal_splicing_coding_effect():
+    """SpliceOutcomeSet.if_splicing_unchanged surfaces the coding
+    consequence that applies when splicing proceeds — the
+    NormalSplicing candidate's coding_effect — and the deprecated
+    alternate_effect alias agrees."""
+    variant = Variant("7", 117531114, "G", "T", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    splice_set = next(
+        e for e in variant.effects(splice_outcomes=True)
+        if e.transcript is transcript)
+    normal = _candidate_of_type(splice_set, NormalSplicing)
+    assert splice_set.if_splicing_unchanged is normal.effect.coding_effect
+    assert splice_set.if_splicing_unchanged is not None
+    # Deprecated alias delegates to the canonical accessor.
+    assert splice_set.alternate_effect is splice_set.if_splicing_unchanged
+
+
+def test_if_splicing_unchanged_is_none_for_intronic_disruption():
+    """Unlike the old ExonicSpliceSite.alternate_effect, the accessor
+    works for intronic disruptions — returning None when there's no
+    coding consequence if splicing proceeds."""
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    splice_set = next(
+        e for e in variant.effects(splice_outcomes=True)
+        if e.transcript is transcript)
+    assert splice_set.if_splicing_unchanged is None
+    assert splice_set.alternate_effect is None
+
+
 def test_in_frame_exon_skipping_carries_aa_ref_and_protein_sequence():
     """A resolved in-frame ExonSkipping has its own ``aa_ref`` /
     ``mutant_protein_sequence`` populated — no wrapper indirection."""
