@@ -175,7 +175,9 @@ splice signal, but **don't themselves carry a protein consequence** —
 they say nothing about how the spliceosome responds (see the next
 table for that). All four share the
 [`SpliceSite`](https://github.com/openvax/varcode/blob/main/varcode/effects/effect_classes.py#:~:text=class%20SpliceSite%28)
-base, so `isinstance(effect, SpliceSite)` matches any of them.
+base, so `from varcode import SpliceSite; isinstance(effect, SpliceSite)`
+matches any of them. (The four leaf classes are exported from the
+package root too.)
 
 | Effect type | Description |
 | --- | --- |

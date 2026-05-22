@@ -76,9 +76,14 @@ from .effects.effect_classes import (
     CrypticAcceptor,
     CrypticDonor,
     ExonSkipping,
+    ExonicSpliceSite,
     IntronRetention,
+    IntronicSpliceSite,
     NormalSplicing,
+    SpliceAcceptor,
+    SpliceDonor,
     SpliceMechanismEffect,
+    SpliceSite,
 )
 from .structural_variant import SV_TYPES, StructuralVariant
 from .sv_allele_parser import parse_symbolic_alt
@@ -109,7 +114,16 @@ __all__ = [
     "Genotype",
     "Zygosity",
 
+    # splice-signal disruption effects — "where" the signal was hit
+    # (all share the SpliceSite base)
+    "SpliceSite",
+    "SpliceDonor",
+    "SpliceAcceptor",
+    "IntronicSpliceSite",
+    "ExonicSpliceSite",
+
     # splice outcome possibility set (openvax/varcode#262, #382)
+    # — "what" the spliceosome does (the protein-affecting effects)
     "SpliceOutcomeSet",
     "SpliceCandidateRNAEvidence",
     "SpliceMechanismEffect",
