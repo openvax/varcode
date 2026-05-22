@@ -223,6 +223,11 @@
   No behavior change.
 
 **Added**
+- Docs site now has an "Effect types" page that auto-renders every
+  class in `varcode.effects.effect_classes` via mkdocstrings, so the
+  documented catalog stays in sync with the code (previously only the
+  abstract bases were in the API reference, while the full list lived
+  only in the hand-maintained README table).
 - Exported the splice-signal disruption effects at the package root
   for parity with the already-public splice mechanism effects:
   `SpliceSite` (the shared base), `SpliceDonor`, `SpliceAcceptor`,
