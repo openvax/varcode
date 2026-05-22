@@ -339,8 +339,28 @@ class Intronic(TranscriptMutationEffect):
 
 
 class SpliceSite(object):
-    """
-    Parent class for all splice site mutations.
+    """Marker base for the four splice-signal *disruption* effects:
+    :class:`SpliceDonor`, :class:`SpliceAcceptor`,
+    :class:`IntronicSpliceSite`, and :class:`ExonicSpliceSite`.
+
+    A ``SpliceSite`` effect answers **where** a variant hit a splice
+    signal — a position fact (which boundary, how close). It does
+    *not* describe the protein consequence: from DNA alone you can't
+    say how the spliceosome will respond. That downstream protein-level
+    outcome is modeled separately by :class:`SpliceMechanismEffect`
+    subclasses (exon skipping, intron retention, cryptic-site use,
+    normal splicing).
+
+    So the two halves of splice handling are:
+
+    * ``SpliceSite``           → *where* the signal was disrupted.
+    * ``SpliceMechanismEffect`` → *what* the spliceosome does, and the
+      protein change that results.
+
+    :func:`varcode.splice_outcomes.enumerate_splice_outcomes` bridges
+    them: given a ``SpliceSite`` disruption it produces a
+    :class:`~varcode.splice_outcomes.SpliceOutcomeSet` of plausible
+    mechanisms.
     """
     pass
 
@@ -388,10 +408,11 @@ class SpliceAcceptor(IntronicSpliceSite):
 # are None"; no parallel placeholder class hierarchy.
 #
 # Every subclass references back to the underlying splice-signal
-# disruption via :attr:`splice_signal` — a SpliceDonor / SpliceAcceptor /
-# IntronicSpliceSite / ExonicSpliceSite Effect describing *where* in
-# the transcript the splice signal was hit. The mechanism Effect
-# describes *what* happens downstream of that disruption.
+# disruption via :attr:`splice_signal` — a :class:`SpliceSite` effect
+# (SpliceDonor / SpliceAcceptor / IntronicSpliceSite / ExonicSpliceSite)
+# describing *where* in the transcript the splice signal was hit. The
+# mechanism Effect describes *what* happens downstream of that
+# disruption.
 #
 # Used by :class:`~varcode.splice_outcomes.SpliceOutcomeSet` to
 # fill :attr:`EffectCandidate.effect` for each plausible mechanism a
@@ -419,11 +440,11 @@ class SpliceMechanismEffect(TranscriptMutationEffect):
     ----------
     variant : Variant
     transcript : pyensembl.Transcript
-    splice_signal : MutationEffect
-        The splice-signal-disruption Effect (``SpliceDonor`` /
-        ``SpliceAcceptor`` / ``IntronicSpliceSite`` /
-        ``ExonicSpliceSite``) describing *where* the disruption was
-        in the transcript. Lets consumers reach
+    splice_signal : SpliceSite
+        The splice-signal-disruption Effect *instance* describing
+        *where* the disruption was — a :class:`SpliceSite` (one of
+        ``SpliceDonor`` / ``SpliceAcceptor`` / ``IntronicSpliceSite`` /
+        ``ExonicSpliceSite``). Lets consumers reach
         ``effect.splice_signal.nearest_exon``,
         ``effect.splice_signal.distance_to_exon``, etc. without
         carrying those fields redundantly on every mechanism subclass.
