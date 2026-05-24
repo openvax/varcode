@@ -315,11 +315,12 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
         return self.disrupted_signal_class
 
     @property
-    def if_splicing_unchanged(self):
-        """The coding effect that applies *if the spliceosome still
-        splices normally* despite the disrupted signal — i.e. the
-        protein consequence of the underlying nucleotide change on its
-        own.
+    def effect_if_splicing_unchanged(self):
+        """The coding consequence that applies *if the spliceosome
+        still splices normally* despite the disrupted signal — i.e.
+        the protein consequence of the underlying nucleotide change
+        on its own (a :class:`MutationEffect` such as
+        :class:`Substitution`, not a :class:`SpliceMechanismEffect`).
 
         Resolves to the :class:`NormalSplicing` candidate's
         :attr:`NormalSplicing.coding_effect`. Returns ``None`` when
@@ -334,18 +335,13 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
         Unlike the old ``ExonicSpliceSite.alternate_effect`` it works
         for intronic disruptions too.
         """
+        # Iterate DNA-derived candidates only; ``candidates`` also
+        # includes RNA-attached outcomes, but "if splicing proceeds"
+        # is a DNA property.
         for candidate in self._candidates:
             if isinstance(candidate.effect, NormalSplicing):
                 return candidate.effect.coding_effect
         return None
-
-    @property
-    def alternate_effect(self):
-        """Deprecated alias for :attr:`if_splicing_unchanged`, kept for
-        parity with the (also deprecated)
-        ``ExonicSpliceSite.alternate_effect``. Prefer
-        :attr:`if_splicing_unchanged`."""
-        return self.if_splicing_unchanged
 
     @property
     def candidate_proteins(self):

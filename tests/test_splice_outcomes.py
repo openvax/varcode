@@ -82,6 +82,29 @@ def test_default_for_collection_unchanged():
     assert SpliceOutcomeSet not in classes
 
 
+@pytest.mark.parametrize(
+    "position,ref,alt,expected_class",
+    [
+        (117531115, "G", "A", SpliceDonor),
+        (117530898, "G", "A", SpliceAcceptor),
+        (117531115, "A", "G", IntronicSpliceSite),
+    ],
+)
+def test_intronic_splice_classes_lack_alternate_effect(
+        position, ref, alt, expected_class):
+    """The default-shape intronic splice classes (SpliceDonor,
+    SpliceAcceptor, IntronicSpliceSite) don't expose alternate_effect
+    — the variant is intronic, so there's no coding consequence to
+    attach. Only ExonicSpliceSite carries alternate_effect on the
+    default shape."""
+    variant = Variant("7", position, ref, alt, ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    effect = variant.effect_on_transcript(transcript)
+    assert isinstance(effect, expected_class)
+    with pytest.raises(AttributeError):
+        effect.alternate_effect
+
+
 # --------------------------------------------------------------------
 # Opt-in wraps splice effects
 # --------------------------------------------------------------------
@@ -248,24 +271,23 @@ def test_normal_splicing_for_intronic_disruption_has_no_coding_effect():
     assert normal.effect.mutant_protein_sequence is None
 
 
-def test_if_splicing_unchanged_returns_normal_splicing_coding_effect():
-    """SpliceOutcomeSet.if_splicing_unchanged surfaces the coding
-    consequence that applies when splicing proceeds — the
-    NormalSplicing candidate's coding_effect — and the deprecated
-    alternate_effect alias agrees."""
+def test_effect_if_splicing_unchanged_returns_coding_effect():
+    """SpliceOutcomeSet.effect_if_splicing_unchanged surfaces the
+    coding consequence that applies when splicing proceeds — the
+    NormalSplicing candidate's coding_effect."""
     variant = Variant("7", 117531114, "G", "T", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     splice_set = next(
         e for e in variant.effects(splice_outcomes=True)
         if e.transcript is transcript)
     normal = _candidate_of_type(splice_set, NormalSplicing)
-    assert splice_set.if_splicing_unchanged is normal.effect.coding_effect
-    assert splice_set.if_splicing_unchanged is not None
-    # Deprecated alias delegates to the canonical accessor.
-    assert splice_set.alternate_effect is splice_set.if_splicing_unchanged
+    assert (
+        splice_set.effect_if_splicing_unchanged
+        is normal.effect.coding_effect)
+    assert splice_set.effect_if_splicing_unchanged is not None
 
 
-def test_if_splicing_unchanged_is_none_for_intronic_disruption():
+def test_effect_if_splicing_unchanged_none_for_intronic():
     """Unlike the old ExonicSpliceSite.alternate_effect, the accessor
     works for intronic disruptions — returning None when there's no
     coding consequence if splicing proceeds."""
@@ -274,8 +296,7 @@ def test_if_splicing_unchanged_is_none_for_intronic_disruption():
     splice_set = next(
         e for e in variant.effects(splice_outcomes=True)
         if e.transcript is transcript)
-    assert splice_set.if_splicing_unchanged is None
-    assert splice_set.alternate_effect is None
+    assert splice_set.effect_if_splicing_unchanged is None
 
 
 def test_in_frame_exon_skipping_carries_aa_ref_and_protein_sequence():
@@ -701,6 +722,21 @@ def test_highest_priority_candidate_returns_most_disruptive():
     assert effect_priority(top.effect) == expected
 
 
+def test_highest_priority_effect_returns_inner_effect():
+    """highest_priority_effect peels the EffectCandidate wrapper off
+    highest_priority_candidate."""
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    splice_set = next(
+        e for e in variant.effects(splice_outcomes=True)
+        if e.transcript is transcript)
+    assert (
+        splice_set.highest_priority_effect
+        is splice_set.highest_priority_candidate.effect)
+    assert isinstance(
+        splice_set.highest_priority_effect, SpliceMechanismEffect)
+
+
 def test_resolved_splice_mechanism_delegates_priority_to_protein_effect():
     from varcode.effects import Deletion, effect_priority
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
@@ -854,32 +890,6 @@ def test_rna_evidence_support_is_tracked_per_splice_candidate():
     assert reconciled.rna_evidence_for(donor_2_junction) == (donor_2_junction,)
     assert donor_2_junction not in reconciled.rna_evidence_for(donor_1_junction)
     assert donor_1_junction not in reconciled.rna_evidence_for(donor_2_junction)
-
-
-# --------------------------------------------------------------------
-# alternate_effect back-compat shim
-# --------------------------------------------------------------------
-
-
-def test_alternate_effect_for_exonic_splice_site_resolves_to_coding_effect():
-    variant = Variant("7", 117531114, "G", "T", ensembl_grch38)
-    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
-    bare = variant.effect_on_transcript(transcript)
-    assert isinstance(bare, ExonicSpliceSite)
-    bare_alt = bare.alternate_effect
-    splice_set = next(
-        e for e in variant.effects(splice_outcomes=True)
-        if e.transcript is transcript)
-    assert type(splice_set.alternate_effect) is type(bare_alt)
-
-
-def test_alternate_effect_none_when_no_underlying_coding_change():
-    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
-    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
-    splice_set = next(
-        e for e in variant.effects(splice_outcomes=True)
-        if e.transcript is transcript)
-    assert splice_set.alternate_effect is None
 
 
 # --------------------------------------------------------------------

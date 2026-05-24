@@ -26,6 +26,15 @@
   through `MolecularPhaseResolver(source)` and lives behind the optional
   `varcode[rna]` / `pysam` dependency. `ReadPhaseResolver` remains as
   the varcode 5.0 compatibility name.
+- `SpliceOutcomeSet.effect_if_splicing_unchanged` — the canonical
+  "alternative outcome" accessor: the coding consequence that applies
+  if splicing proceeds normally (the `NormalSplicing` candidate's
+  `coding_effect`). Unlike the legacy `ExonicSpliceSite.alternate_effect`,
+  it works for intronic splice disruptions — returning `None` when
+  the nucleotide change leaves the protein untouched (i.e. there is
+  no coding consequence to attach). Sits alongside `most_likely_effect`
+  and `candidates` as the three-accessor surface on `SpliceOutcomeSet`
+  ([#391](https://github.com/openvax/varcode/issues/391)).
 
 **Breaking**
 - Unified the multi-outcome machinery: `SpliceCandidate` deleted;

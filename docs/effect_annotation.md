@@ -47,12 +47,76 @@ an `EffectCollection`. Each element is a `MutationEffect`
 subclass — `Substitution`, `Silent`, `PrematureStop`, and so
 on.
 
-## Splice-disrupting variants: two representations
+## Splice-disrupting variants
 
-When a variant sits in the canonical splice window (last 3
-exonic bases, first 3–6 intronic, canonical donor/acceptor),
-varcode recognizes it as splice-disrupting. Two ways the
-effect is expressed, at different richness levels.
+A single nucleotide change near an exon-intron boundary can hit
+the splice signal *and* the coding sequence at the same time.
+The splice surface captures both possibilities, gives every
+splice-disrupting variant a uniform candidate-set shape, and
+exposes accessors for the "what if splicing still proceeds?"
+question.
+
+### When splice disruption is in play
+
+The classifier is **position-based**: it fires when a variant
+lands in the canonical splice window around an exon-intron
+boundary. The window covers:
+
+- the last 3 exonic bases of an exon (donor side) or the first
+  3 exonic bases of the next exon (acceptor side) — these
+  straddle the boundary and sit on top of the canonical signal
+- the intronic +1..+6 bases on the donor side and -1..-3 bases
+  on the acceptor side — the intronic bases the spliceosome
+  reads directly, including the canonical `GT` (+1/+2) and `AG`
+  (-2/-1) dinucleotides
+
+Four classes record *where* in this window the variant landed:
+
+| Class | Position |
+|---|---|
+| `ExonicSpliceSite` | Exonic side of either boundary (last 3 / first 3 of an exon) |
+| `SpliceDonor` | Canonical `GT` at intronic +1 / +2 |
+| `SpliceAcceptor` | Canonical `AG` at intronic -2 / -1 |
+| `IntronicSpliceSite` | Other intronic positions in the window |
+
+Variants outside this window are **not** flagged as
+splice-disrupting, even when they may affect splicing
+biologically — ESE/ESS motifs mid-exon, branch points ~20–50 bp
+upstream of the acceptor, deep intronic cryptic activation.
+Detecting those requires ML predictors or direct RNA evidence;
+see [Limitations](#limitations).
+
+### Splice and coding effects can co-occur
+
+A variant in an exon sits on a coding base by definition — it
+rewrites a codon. If that same exonic base is **also** in the
+splice window (i.e. within the last 3 / first 3 of the exon),
+the same nucleotide change disrupts the splice signal *and*
+changes the protein. varcode represents this duality as
+**`ExonicSpliceSite`**:
+
+- on the default 2-outcome shape, splice disruption is the
+  primary effect; the coding consequence (a `Substitution`,
+  `Silent`, etc.) hangs off `.alternate_effect`
+- on the opt-in `SpliceOutcomeSet` shape, the same coding
+  consequence is the `coding_effect` of the `NormalSplicing`
+  candidate, reachable through
+  `splice_set.effect_if_splicing_unchanged`
+
+For purely **intronic** disruptions (`SpliceDonor`,
+`SpliceAcceptor`, `IntronicSpliceSite`), there is no codon to
+rewrite — the variant doesn't change a coding base. The default
+shape doesn't expose `alternate_effect` on these classes; the
+opt-in shape's `effect_if_splicing_unchanged` returns `None`.
+
+For coding variants **outside** the splice window, varcode emits
+a plain coding effect (`Substitution`, `Silent`, `FrameShift`,
+…) with no splice annotation attached. The variant may still
+disrupt splicing through a non-canonical mechanism, but varcode
+won't flag it — see Limitations.
+
+Two splice-effect richness levels are available; the rest of
+this section walks through both.
 
 ### Default: lightweight 2-outcome form
 
@@ -108,6 +172,14 @@ for c in splice_set.candidates:
     elif isinstance(c.effect, IntronRetention):
         print(c.effect.side, c.effect.retained_intron_start)
 ```
+
+For the common "what if splicing still proceeds?" question, use
+`splice_set.effect_if_splicing_unchanged` — the `NormalSplicing`
+candidate's `coding_effect` (a `Substitution`, `Silent`, etc., or
+`None` for purely intronic disruptions). This is the
+`SpliceOutcomeSet` analogue of the legacy
+`ExonicSpliceSite.alternate_effect` and works for intronic
+disruptions too.
 
 When you opt in, `SpliceDonor` / `SpliceAcceptor` /
 `IntronicSpliceSite` also get wrapped, so every splice-
@@ -170,6 +242,86 @@ agree, which is common — but for clinical / functional filtering
 ("flag if any candidate is at least a frameshift") prefer
 `highest_priority_*`: a disruptive candidate behind a less-disruptive
 primary candidate should still light up.
+
+### Common questions
+
+A cheat sheet for the simple splice use cases. Each example
+assumes `effect` is a single splice-disrupting effect, or
+`splice_set` is a `SpliceOutcomeSet` (opt-in form).
+
+**Is this variant splice-disrupting?**
+
+```python
+from varcode import MultiOutcomeEffect, SpliceOutcomeSet
+from varcode.effects import (
+    ExonicSpliceSite, SpliceDonor, SpliceAcceptor, IntronicSpliceSite,
+)
+
+# Splice-specific (covers both shapes):
+isinstance(effect, (SpliceOutcomeSet, ExonicSpliceSite,
+                    SpliceDonor, SpliceAcceptor, IntronicSpliceSite))
+
+# Broader: any multi-outcome effect, including SV outcomes
+# (LargeDeletion, GeneFusion, ...) — use when you want one
+# uniform handler for splice + SV ambiguity.
+isinstance(effect, MultiOutcomeEffect)
+```
+
+**What coding consequence applies if splicing still proceeds?**
+
+```python
+# Default (2-outcome) shape — guard, since intronic classes don't expose it:
+if isinstance(effect, ExonicSpliceSite):
+    coding = effect.alternate_effect
+
+# Opt-in (SpliceOutcomeSet) shape — uniform for any disrupted signal:
+coding = splice_set.effect_if_splicing_unchanged
+```
+
+**What's the most likely splice mechanism?**
+
+```python
+splice_set.most_likely_effect                # SpliceMechanismEffect
+splice_set.most_likely_candidate             # EffectCandidate (.effect + .source/.evidence)
+```
+
+**What are all candidate outcomes?**
+
+```python
+for candidate in splice_set.candidates:
+    candidate.effect      # SpliceMechanismEffect (ExonSkipping, IntronRetention, ...)
+    candidate.source      # producer name
+    candidate.evidence    # opaque dict of provenance fields
+```
+
+**Which outcome is the most disruptive?**
+
+```python
+splice_set.highest_priority_effect           # most protein-disruptive
+splice_set.highest_priority_candidate
+```
+
+Use this for clinical / functional filtering ("flag if any
+candidate is at least a frameshift") — a disruptive candidate
+ranked below a less-disruptive primary should still light up.
+
+**What protein sequences could result?**
+
+```python
+splice_set.candidate_proteins                # {ExonSkipping: "MA...", IntronRetention: "", ...}
+splice_set.mutant_protein_sequences          # set[str] of distinct non-empty sequences
+```
+
+Empty string means the mechanism's protein math couldn't resolve
+(typically: no `genomic_sequence` provider, so `IntronRetention`
+and `CrypticDonor` stay predicted-only).
+
+**Where on the transcript is the splice signal?**
+
+```python
+for candidate in splice_set.candidates:
+    candidate.effect.splice_signal           # SpliceDonor / SpliceAcceptor / IntronicSpliceSite / ExonicSpliceSite
+```
 
 ### Limitations
 

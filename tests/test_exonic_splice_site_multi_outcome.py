@@ -10,20 +10,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for the ExonicSpliceSite → MultiOutcomeEffect retrofit
-(openvax/varcode#299 Part 1).
+"""Tests for the ExonicSpliceSite → MultiOutcomeEffect retrofit and
+the SpliceOutcomeSet accessor surface
+(openvax/varcode#299, #391, #392).
 
-The retrofit is a class-hierarchy change only:
-
-* ExonicSpliceSite inherits from MultiOutcomeEffect and exposes
-  the ``candidates`` / ``most_likely`` / ``priority_class``
-  protocol.
-* SpliceOutcomeSet gains a back-compat ``alternate_effect``
-  property that resolves to the NormalSplicing candidate's
-  coding_effect.
-
-No behaviour change — the existing test suite (tests/test_splice_*)
-continues to lock in byte-for-byte output.
+The retrofit makes ExonicSpliceSite a MultiOutcomeEffect — it
+exposes the ``candidates`` / ``most_likely`` / ``priority_class``
+protocol uniformly with SpliceOutcomeSet. The SpliceOutcomeSet
+side exposes ``effect_if_splicing_unchanged``, which resolves to
+the NormalSplicing candidate's coding_effect (the opt-in shape's
+analogue of the legacy ``ExonicSpliceSite.alternate_effect``).
 """
 
 from pyensembl import cached_release
@@ -97,14 +93,15 @@ def test_exonic_splice_site_alternate_effect_still_first_class():
 
 
 # ====================================================================
-# SpliceOutcomeSet gets alternate_effect back-compat property
+# SpliceOutcomeSet exposes effect_if_splicing_unchanged
 # ====================================================================
 
 
-def test_splice_outcome_set_alternate_effect_resolves_to_normal_splicing():
+def test_effect_if_splicing_unchanged_matches_alternate_effect():
     # ExonicSpliceSite wrapped under splice_outcomes=True becomes a
-    # SpliceOutcomeSet. Its .alternate_effect should return the same
-    # coding_effect that ExonicSpliceSite.alternate_effect would.
+    # SpliceOutcomeSet. Its .effect_if_splicing_unchanged should
+    # return the same coding_effect that ExonicSpliceSite.alternate_effect
+    # would.
     variant = Variant("7", 117531114, "G", "T", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
 
@@ -116,14 +113,16 @@ def test_splice_outcome_set_alternate_effect_resolves_to_normal_splicing():
     wrapped = next(e for e in wrapped_effects if e.transcript is transcript)
     # Same underlying coding-effect class; don't require object
     # identity since the wrapped path may rebuild it.
-    assert type(wrapped.alternate_effect) is type(bare_alt)
-    assert wrapped.alternate_effect.short_description == bare_alt.short_description
+    assert type(wrapped.effect_if_splicing_unchanged) is type(bare_alt)
+    assert (
+        wrapped.effect_if_splicing_unchanged.short_description
+        == bare_alt.short_description)
 
 
-def test_splice_outcome_set_alternate_effect_none_when_no_normal_splicing():
+def test_effect_if_splicing_unchanged_none_for_intronic_donor():
     # SpliceDonor-backed SpliceOutcomeSet: the NormalSplicing candidate
     # exists but its coding_effect is None (intronic variant, no
-    # underlying coding change). alternate_effect should be None.
+    # underlying coding change). effect_if_splicing_unchanged should be None.
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     wrapped_effects = variant.effects(splice_outcomes=True)
@@ -132,7 +131,7 @@ def test_splice_outcome_set_alternate_effect_none_when_no_normal_splicing():
         c for c in wrapped.candidates
         if isinstance(c.effect, NormalSplicing))
     assert normal.effect.coding_effect is None
-    assert wrapped.alternate_effect is None
+    assert wrapped.effect_if_splicing_unchanged is None
 
 
 # ====================================================================
@@ -154,7 +153,12 @@ def test_multi_outcome_effect_check_works_on_both_shapes():
     wrapped = next(e for e in wrapped_effects if e.transcript is transcript)
     assert isinstance(wrapped, MultiOutcomeEffect)
 
-    # alternate_effect is callable on both shapes post-retrofit.
+    # The "if splicing unchanged" coding consequence is reachable on
+    # both shapes (under their respective names — ExonicSpliceSite
+    # still carries the legacy ``alternate_effect``; SpliceOutcomeSet
+    # uses ``effect_if_splicing_unchanged``).
     assert bare.alternate_effect is not None
-    assert wrapped.alternate_effect is not None
-    assert type(bare.alternate_effect) is type(wrapped.alternate_effect)
+    assert wrapped.effect_if_splicing_unchanged is not None
+    assert (
+        type(bare.alternate_effect)
+        is type(wrapped.effect_if_splicing_unchanged))
