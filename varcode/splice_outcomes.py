@@ -73,6 +73,7 @@ from .effects.effect_classes import (
     SpliceDonor,
     SpliceMechanismEffect,
     SpliceSite,
+    TranscriptMutationEffect,
 )
 from .mutant_transcript import MutantTranscript, TranscriptEdit
 from .effect_candidates import EffectCandidate
@@ -126,7 +127,7 @@ def _splice_candidate_signature(candidate):
     )
 
 
-class SpliceOutcomeSet(MultiOutcomeEffect):
+class SpliceOutcomeSet(MultiOutcomeEffect, TranscriptMutationEffect):
     """A splice-disrupting variant's effect, expressed as a set of
     plausible mechanisms rather than a single Effect.
 
@@ -158,9 +159,9 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
 
     For back-compat, :attr:`short_description` delegates to the most
     likely candidate. Constructed by
-    :func:`enumerate_splice_outcomes` when a caller passes
-    ``splice_outcomes=True`` to ``Variant.effects()`` or
-    ``VariantCollection.effects()``.
+    :func:`enumerate_splice_outcomes` as part of every
+    ``Variant.effects()`` / ``Variant.effect_on_transcript(...)`` /
+    ``VariantCollection.effects()`` call (always-on as of varcode 6.0).
 
     RNA evidence reconciliation
     ---------------------------
@@ -176,29 +177,98 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
     overrides needed now that there's no enum to stringify.
     """
 
+    # Class-level filter shortcuts. A splice disruption is always
+    # *potentially* protein-modifying — any non-NormalSplicing candidate
+    # (ExonSkipping, IntronRetention, CrypticDonor/Acceptor) can rewrite
+    # the protein. Hardcoded so ``drop_silent_and_noncoding()`` doesn't
+    # silently drop splice variants whose NormalSplicing candidate
+    # happens to carry a Silent coding_effect, and so the filter path
+    # doesn't trigger lazy candidate materialization.
+    modifies_protein_sequence = True
+    modifies_coding_sequence = True
+
     def __init__(
-            self, variant, transcript, candidates, disrupted_signal_class=None,
+            self, variant, transcript, candidates=None,
+            disrupted_signal_class=None,
+            *,
+            splice_effect=None,
+            genomic_sequence=None,
+            mechanism_order=None,
             dna_candidates=None, rna_evidence=(), added_candidates=(),
             excluded_candidates=(), candidate_rna_evidence=()):
-        MultiOutcomeEffect.__init__(self, variant)
-        self.transcript = transcript
-        self._candidates = tuple(candidates)
+        # SpliceOutcomeSet is both a MultiOutcomeEffect (candidate
+        # set) and a TranscriptMutationEffect (carries variant, gene,
+        # transcript). Initialising via TranscriptMutationEffect sets
+        # all three; MultiOutcomeEffect carries no extra state.
+        TranscriptMutationEffect.__init__(self, variant, transcript)
         # The SpliceSite *subclass* (a type, not an instance) of the
         # disruption this set replaced — SpliceDonor, SpliceAcceptor,
         # ExonicSpliceSite, or IntronicSpliceSite. Used for priority
         # lookup; the disruption *instance* lives on each candidate's
         # effect.splice_signal.
         self.disrupted_signal_class = disrupted_signal_class
-        self.dna_candidates = tuple(
-            self._candidates if dna_candidates is None else dna_candidates)
+        if candidates is not None:
+            # Materialized path — RNA-reconciliation rebuilds,
+            # deserialization, tests with explicit candidate lists.
+            self._candidates_cache = tuple(candidates)
+            self._normal_splicing_eager = next(
+                (c for c in self._candidates_cache
+                 if isinstance(c.effect, NormalSplicing)),
+                None)
+            self._lazy_state = None
+        else:
+            # Lazy path — enumerate_splice_outcomes uses this. The
+            # NormalSplicing candidate is computed eagerly because it's
+            # cheap (just wraps the existing coding effect) and is the
+            # fast path for ``effect_if_splicing_unchanged`` /
+            # ``alternate_effect``. Expensive candidates (ExonSkipping,
+            # IntronRetention, cryptic) are deferred until ``.candidates``
+            # is read.
+            if splice_effect is None or mechanism_order is None:
+                raise ValueError(
+                    "SpliceOutcomeSet needs either explicit ``candidates`` "
+                    "or (``splice_effect`` + ``mechanism_order``) for "
+                    "lazy construction.")
+            self._normal_splicing_eager = (
+                _build_normal_splicing_candidate(splice_effect))
+            self._candidates_cache = None
+            self._lazy_state = (splice_effect, mechanism_order, genomic_sequence)
+        self._explicit_dna_candidates = (
+            None if dna_candidates is None else tuple(dna_candidates))
         self.rna_evidence = tuple(rna_evidence)
         self.added_candidates = tuple(added_candidates)
         self.excluded_candidates = tuple(excluded_candidates)
         self.candidate_rna_evidence = tuple(candidate_rna_evidence)
 
     @property
+    def _candidates(self):
+        if self._candidates_cache is None:
+            splice_effect, mechanism_order, genomic_sequence = self._lazy_state
+            materialized = []
+            for mech_cls in mechanism_order:
+                if mech_cls is NormalSplicing:
+                    materialized.append(self._normal_splicing_eager)
+                else:
+                    materialized.append(_build_candidate_for(
+                        mech_cls, splice_effect, genomic_sequence))
+            self._candidates_cache = tuple(materialized)
+            self._lazy_state = None
+        return self._candidates_cache
+
+    @property
     def candidates(self):
         return self._combine_with_extra_candidates(self._candidates)
+
+    @property
+    def dna_candidates(self):
+        # When not explicitly set, defaults to the DNA-derived candidate
+        # set — same as ``_candidates`` here (RNA-attached outcomes live
+        # only on the public ``candidates`` property via
+        # ``_extra_candidates``). Reading this triggers full
+        # materialization if the set was constructed lazily.
+        if self._explicit_dna_candidates is not None:
+            return self._explicit_dna_candidates
+        return self._candidates
 
     def with_rna_evidence(self, observed_candidates):
         """Return a new set reconciled with RNA-observed splice evidence.
@@ -335,13 +405,19 @@ class SpliceOutcomeSet(MultiOutcomeEffect):
         Unlike the old ``ExonicSpliceSite.alternate_effect`` it works
         for intronic disruptions too.
         """
-        # Iterate DNA-derived candidates only; ``candidates`` also
-        # includes RNA-attached outcomes, but "if splicing proceeds"
-        # is a DNA property.
-        for candidate in self._candidates:
-            if isinstance(candidate.effect, NormalSplicing):
-                return candidate.effect.coding_effect
-        return None
+        # Fast path: NormalSplicing is computed eagerly and stored on
+        # the instance, so this read never triggers full materialization
+        # of the expensive candidates (ExonSkipping, IntronRetention,
+        # cryptic).
+        if self._normal_splicing_eager is None:
+            return None
+        return self._normal_splicing_eager.effect.coding_effect
+
+    # Back-compat alias. Existing callers reading ``effect.alternate_effect``
+    # on the default 2-outcome shape (``ExonicSpliceSite``) keep working
+    # when the effect is now wrapped in a ``SpliceOutcomeSet``. New code
+    # should use ``effect_if_splicing_unchanged``.
+    alternate_effect = effect_if_splicing_unchanged
 
     @property
     def candidate_proteins(self):
@@ -1254,6 +1330,26 @@ def enumerate_splice_outcomes(splice_effect, genomic_sequence=None):
         input is a :class:`SpliceSite` disruption; otherwise the input
         unchanged.
     """
+    # Already-wrapped: idempotent for the no-provider case; with a
+    # provider, rebuild so the new sequence flows through to lazy
+    # IntronRetention / cryptic candidates.
+    if isinstance(splice_effect, SpliceOutcomeSet):
+        if genomic_sequence is None:
+            return splice_effect
+        if splice_effect._lazy_state is None:
+            raise RuntimeError(
+                "enumerate_splice_outcomes(splice_set, genomic_sequence=...) "
+                "needs a lazy SpliceOutcomeSet; this one has already "
+                "materialized its candidates.")
+        raw, mechanism_order, _ = splice_effect._lazy_state
+        return SpliceOutcomeSet(
+            variant=splice_effect.variant,
+            transcript=splice_effect.transcript,
+            disrupted_signal_class=splice_effect.disrupted_signal_class,
+            splice_effect=raw,
+            mechanism_order=mechanism_order,
+            genomic_sequence=genomic_sequence,
+        )
     # Only splice-signal disruptions (the SpliceSite subclasses) get
     # wrapped; everything else passes through untouched.
     if not isinstance(splice_effect, SpliceSite):
@@ -1266,29 +1362,38 @@ def enumerate_splice_outcomes(splice_effect, genomic_sequence=None):
         # through rather than crashing on a None mechanism order.
         return splice_effect
 
-    candidates = []
-    for mechanism_cls in mechanism_order:
-        if mechanism_cls is NormalSplicing:
-            candidates.append(_build_normal_splicing_candidate(
-                splice_effect))
-        elif mechanism_cls is ExonSkipping:
-            candidates.append(_build_exon_skipping_candidate(
-                splice_effect))
-        elif mechanism_cls is IntronRetention:
-            candidates.append(_build_intron_retention_candidate(
-                splice_effect,
-                genomic_sequence=genomic_sequence))
-        elif mechanism_cls in (CrypticDonor, CrypticAcceptor):
-            candidates.append(_build_cryptic_splice_candidate(
-                splice_effect, mechanism_cls,
-                genomic_sequence=genomic_sequence))
-
+    # Lazy construction: the SpliceOutcomeSet eagerly builds only the
+    # cheap NormalSplicing candidate (used by the fast
+    # effect_if_splicing_unchanged / alternate_effect path) and defers
+    # ExonSkipping / IntronRetention / cryptic until ``.candidates`` is
+    # accessed.
     return SpliceOutcomeSet(
         variant=splice_effect.variant,
         transcript=getattr(splice_effect, "transcript", None),
-        candidates=candidates,
         disrupted_signal_class=type(splice_effect),
+        splice_effect=splice_effect,
+        mechanism_order=mechanism_order,
+        genomic_sequence=genomic_sequence,
     )
+
+
+def _build_candidate_for(mechanism_cls, splice_effect, genomic_sequence):
+    """Dispatch from a mechanism class to its builder. Used by the lazy
+    materialization path in :class:`SpliceOutcomeSet`.
+    """
+    if mechanism_cls is NormalSplicing:
+        return _build_normal_splicing_candidate(splice_effect)
+    if mechanism_cls is ExonSkipping:
+        return _build_exon_skipping_candidate(splice_effect)
+    if mechanism_cls is IntronRetention:
+        return _build_intron_retention_candidate(
+            splice_effect, genomic_sequence=genomic_sequence)
+    if mechanism_cls in (CrypticDonor, CrypticAcceptor):
+        return _build_cryptic_splice_candidate(
+            splice_effect, mechanism_cls,
+            genomic_sequence=genomic_sequence)
+    raise ValueError(
+        "Unknown splice mechanism class: %r" % (mechanism_cls,))
 
 
 def wrap_splice_effects_in_collection(effect_collection):

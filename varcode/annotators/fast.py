@@ -43,9 +43,15 @@ class FastEffectAnnotator:
     def annotate_on_transcript(self, variant, transcript):
         """Delegate to the existing per-transcript prediction.
 
-        No fast-path / slow-path dispatch at this stage; that lives
-        on the protein-diff annotator once it exists.
+        Returns the raw effect class (``ExonicSpliceSite`` /
+        ``SpliceDonor`` / etc. for splice disruptions), **not** wrapped
+        in ``SpliceOutcomeSet``. The wrap is applied at the collection
+        boundary in :func:`predict_variant_effects` so internal
+        consumers (notably the ``protein_diff`` annotator's dual
+        dispatch) can still pattern-match on the raw class.
         """
         # Lazy import avoids a circular dep at package import time.
-        from ..effects import predict_variant_effect_on_transcript
-        return predict_variant_effect_on_transcript(variant, transcript)
+        from ..effects.effect_prediction import (
+            _predict_variant_effect_on_transcript_raw,
+        )
+        return _predict_variant_effect_on_transcript_raw(variant, transcript)

@@ -124,13 +124,19 @@ def test_set_default_annotator_rejects_unknown_name():
 
 
 def test_fast_annotator_annotator_matches_effect_on_transcript():
+    """FastEffectAnnotator returns the raw splice-signal class for
+    internal consumers (notably protein_diff's dual dispatch);
+    Variant.effect_on_transcript wraps the same raw class in a
+    SpliceOutcomeSet at the user-facing boundary. Both surface the
+    same underlying classification."""
+    from varcode import SpliceOutcomeSet
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id("ENST00000003084")
     direct = variant.effect_on_transcript(transcript)
     annotated = FastEffectAnnotator().annotate_on_transcript(
         variant, transcript)
-    assert type(annotated) is type(direct)
-    assert annotated.short_description == direct.short_description
+    assert isinstance(direct, SpliceOutcomeSet)
+    assert type(annotated) is direct.disrupted_signal_class
 
 
 # ====================================================================
@@ -363,19 +369,28 @@ def test_protein_diff_parity_on_splice_donor():
 
 def test_protein_diff_parity_on_exonic_splice_site():
     # ExonicSpliceSite: dual-dispatch. Splice class from fast,
-    # alternate_effect from protein-diff's protein diff.
+    # alternate_effect from protein-diff's protein diff. The
+    # annotator returns a raw ExonicSpliceSite (the collection-level
+    # wrap converts to SpliceOutcomeSet); Variant.effect_on_transcript
+    # wraps directly.
+    from varcode import SpliceOutcomeSet
+    from varcode.annotators import ProteinDiffEffectAnnotator
+    from varcode.effects import ExonicSpliceSite
     variant = Variant("7", 117531114, "G", "T", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id("ENST00000003084")
-    legacy = variant.effect_on_transcript(transcript)
-    from varcode.annotators import ProteinDiffEffectAnnotator
+    direct = variant.effect_on_transcript(transcript)
     sdiff = ProteinDiffEffectAnnotator().annotate_on_transcript(
         variant, transcript)
-    from varcode.effects import ExonicSpliceSite
-    assert isinstance(legacy, ExonicSpliceSite)
+    assert isinstance(direct, SpliceOutcomeSet)
+    assert direct.disrupted_signal_class is ExonicSpliceSite
     assert isinstance(sdiff, ExonicSpliceSite)
-    # alternate_effect comes from protein-diff in the new annotator.
+    # alternate_effect comes from protein-diff in the new annotator,
+    # and the SpliceOutcomeSet wrap surfaces it via the compat shim.
     assert sdiff.alternate_effect is not None
-    assert type(sdiff.alternate_effect).__name__ == type(legacy.alternate_effect).__name__
+    assert direct.alternate_effect is not None
+    assert (
+        type(sdiff.alternate_effect).__name__
+        == type(direct.alternate_effect).__name__)
 
 
 def test_protein_diff_parity_on_reverse_strand_mnv():

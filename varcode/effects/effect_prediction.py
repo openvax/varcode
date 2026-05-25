@@ -46,12 +46,20 @@ logger = logging.getLogger(__name__)
 def predict_variant_effects(
         variant,
         raise_on_error=False,
-        splice_outcomes=False,
         annotator=None,
         germline=None,
         phase_resolver=None):
     """Determine the effects of a variant on any transcripts it overlaps.
     Returns an EffectCollection object.
+
+    Splice-disrupting effects (where the variant lands in the canonical
+    splice window — see :class:`SpliceDonor` / :class:`SpliceAcceptor` /
+    :class:`ExonicSpliceSite` / :class:`IntronicSpliceSite`) are always
+    returned as a :class:`SpliceOutcomeSet` wrapping the candidate
+    mechanisms. Candidates are computed lazily — only the cheap
+    ``NormalSplicing`` candidate is built eagerly; ``ExonSkipping`` /
+    ``IntronRetention`` / cryptic candidates materialise on first
+    ``.candidates`` access. See ``varcode.splice_outcomes`` for details.
 
     Parameters
     ----------
@@ -61,14 +69,6 @@ def predict_variant_effects(
         Raise an exception if we encounter an error while trying to
         determine the effect of this variant on a transcript, or simply
         log the error and continue.
-
-    splice_outcomes : bool
-        When True, splice-disrupting effects (SpliceDonor,
-        SpliceAcceptor, ExonicSpliceSite, IntronicSpliceSite) are
-        wrapped in a :class:`SpliceOutcomeSet` carrying multiple
-        plausible outcomes (normal splicing, exon skipping, intron
-        retention, cryptic splice). Default False for back-compat.
-        See ``varcode.splice_outcomes`` for details.
 
     annotator : str, EffectAnnotator, or None
         Which registered :class:`EffectAnnotator` to use per-transcript.
@@ -185,11 +185,10 @@ def predict_variant_effects(
         annotator_version=annotator_version,
         annotated_at=annotated_at,
     )
-    if splice_outcomes:
-        # Lazy import to avoid circular deps; splice_outcomes lives at
-        # the package root and consumes effect_classes.
-        from ..splice_outcomes import wrap_splice_effects_in_collection
-        collection = wrap_splice_effects_in_collection(collection)
+    # SpliceOutcomeSet is always-on. Lazy import to avoid circular deps;
+    # splice_outcomes lives at the package root and consumes effect_classes.
+    from ..splice_outcomes import wrap_splice_effects_in_collection
+    collection = wrap_splice_effects_in_collection(collection)
     return collection
 
 
@@ -216,10 +215,29 @@ def predict_variant_effect_on_transcript(variant, transcript):
         """Return the transcript effect (such as FrameShift) that results from
         applying this genomic variant to a particular transcript.
 
+        Splice-disrupting effects are wrapped in a
+        :class:`varcode.splice_outcomes.SpliceOutcomeSet` carrying the
+        candidate mechanisms (always-on as of varcode 6.0). The
+        wrapper is lazy — only the cheap ``NormalSplicing`` candidate
+        is built eagerly; the rest materialise on ``.candidates``
+        access.
+
         Parameters
         ----------
         transcript :  Transcript
             Transcript we're going to apply mutation to.
+        """
+        from ..splice_outcomes import enumerate_splice_outcomes
+        raw_effect = _predict_variant_effect_on_transcript_raw(
+            variant, transcript)
+        return enumerate_splice_outcomes(raw_effect)
+
+
+def _predict_variant_effect_on_transcript_raw(variant, transcript):
+        """The raw classifier — returns the unwrapped splice-signal
+        class (``ExonicSpliceSite`` / ``SpliceDonor`` etc.) for
+        splice-disrupting variants. The public entry point wraps the
+        result in a ``SpliceOutcomeSet``.
         """
 
         if transcript.__class__ is not Transcript:

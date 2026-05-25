@@ -10,17 +10,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from varcode import Variant
+from varcode import Variant, SpliceOutcomeSet
 from varcode.effects import ExonicSpliceSite, PrematureStop
 
 
 def test_STAT1_stop_gain_at_exon_boundary():
     # top priority effect for this variant should be PrematureStop,
-    # even though it's also ExonicSpliceSite
+    # even though it's also an exonic splice site disruption
     stat1_variant = Variant("2", "191872291", "G", "A", "GRCh37")
     effects = stat1_variant.effects()
     print(effects)
-    assert any([e.__class__ is ExonicSpliceSite for e in effects])
+    assert any(
+        isinstance(e, SpliceOutcomeSet)
+        and e.disrupted_signal_class is ExonicSpliceSite
+        for e in effects)
     top_effect = effects.top_priority_effect()
     print(top_effect)
     assert top_effect.__class__ is PrematureStop

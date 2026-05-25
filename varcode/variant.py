@@ -452,24 +452,22 @@ class Variant(Serializable):
         ]
 
     def effects(
-            self, raise_on_error=True, splice_outcomes=False,
+            self, raise_on_error=True,
             annotator=None, phase_resolver=None, rna_resolver=None,
             germline=None):
         """Predict the variant's effects on overlapping transcripts.
+
+        Splice-disrupting effects are always wrapped in a
+        :class:`varcode.splice_outcomes.SpliceOutcomeSet` carrying the
+        candidate mechanisms (normal splicing, exon skipping, intron
+        retention, cryptic splice). Mechanism candidates are computed
+        lazily, so the wrap is cheap. See openvax/varcode#262, #391.
 
         Parameters
         ----------
         raise_on_error : bool
             If True, raise on annotation errors; if False, capture
             them as Failure effects.
-
-        splice_outcomes : bool
-            If True, splice-disrupting effects are wrapped in a
-            :class:`varcode.splice_outcomes.SpliceOutcomeSet` carrying
-            multiple plausible outcomes (normal splicing, exon
-            skipping, intron retention, cryptic splice). Opt-in;
-            default False preserves existing behaviour. See
-            openvax/varcode#262.
 
         annotator : str, EffectAnnotator, or None
             Per-call annotator override. ``None`` uses the currently
@@ -515,7 +513,6 @@ class Variant(Serializable):
         effects = predict_variant_effects(
             variant=self,
             raise_on_error=raise_on_error,
-            splice_outcomes=splice_outcomes,
             annotator=annotator,
             germline=germline,
             phase_resolver=phase_resolver,

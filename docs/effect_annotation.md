@@ -115,50 +115,56 @@ a plain coding effect (`Substitution`, `Silent`, `FrameShift`,
 disrupt splicing through a non-canonical mechanism, but varcode
 won't flag it — see Limitations.
 
-### Default: lightweight 2-outcome form
+### The `SpliceOutcomeSet` shape
+
+Every splice-disrupting variant emits a `SpliceOutcomeSet` — there
+is no "bare splice class" path at the user-facing API as of
+varcode 6.0.
 
 ```python
 variant = Variant("17", 43082575 - 5, "C", "T", "GRCh38")
-effect = variant.effect_on_transcript(transcript)
-# ExonicSpliceSite(...)
-#   .alternate_effect -> Substitution(...)  # if splicing proceeds
-```
-
-`ExonicSpliceSite` carries `alternate_effect`: the coding
-consequence that applies *if splicing still works*. Exactly
-two outcomes, represented as a primary effect + one
-alternate field. Cheap. Ships unconditionally.
-
-`SpliceDonor`, `SpliceAcceptor`, and `IntronicSpliceSite`
-don't expose `alternate_effect` today because the variant
-is intronic — there's no coding consequence to attach.
-
-### Opt-in: full possibility set
-
-```python
-effects = variant.effects(splice_outcomes=True)
-# SpliceOutcomeSet(...) replaces the splice effect.
-# .candidates is a tuple[EffectCandidate, ...], in producer order.
+splice_set = variant.effect_on_transcript(transcript)
+# SpliceOutcomeSet(disrupted_signal_class=ExonicSpliceSite, ...)
+# .candidates is a tuple[EffectCandidate, ...] in producer order.
 # Each candidate's .effect is a SpliceMechanismEffect subclass:
+#   EffectCandidate(effect=NormalSplicing(coding_effect=Substitution(...)))
 #   EffectCandidate(effect=ExonSkipping(affected_exon=..., in_frame=True,
 #                                       aa_ref="KGYK...", ...))
 #   EffectCandidate(effect=IntronRetention(retained_intron_start=...,
 #                                          side="donor", ...))
 #   EffectCandidate(effect=CrypticDonor(affected_exon=..., ...))
-#   EffectCandidate(effect=NormalSplicing(coding_effect=Substitution(...)))
 ```
 
-`SpliceOutcomeSet` replaces the splice effect with a set of
-candidate mechanisms. Class identity = mechanism — `NormalSplicing`,
-`ExonSkipping`, `IntronRetention`, `CrypticDonor`, `CrypticAcceptor`.
-Each is a `SpliceMechanismEffect` subclass that carries its own
-protein vocab on the instance (`aa_ref`, `aa_alt`,
-`mutant_protein_sequence`, `mutant_transcript`); these are `None`
-when the protein math couldn't resolve (e.g. intron retention
-without a genomic-sequence provider), populated otherwise. Each
-mechanism also carries `splice_signal` — the underlying
-`SpliceDonor` / `SpliceAcceptor` / `IntronicSpliceSite` /
-`ExonicSpliceSite` effect describing *where* the disruption was.
+`SpliceOutcomeSet` carries:
+
+- `disrupted_signal_class` — the `SpliceSite` subclass (`SpliceDonor`,
+  `SpliceAcceptor`, `ExonicSpliceSite`, or `IntronicSpliceSite`)
+  identifying where in the splice window the variant landed
+- `candidates` — a tuple of `EffectCandidate` objects in producer
+  order, one per plausible mechanism
+- `effect_if_splicing_unchanged` — the coding consequence that
+  applies if the spliceosome still splices normally (the
+  `NormalSplicing` candidate's `coding_effect`), or `None` for
+  purely intronic disruptions where the nucleotide change doesn't
+  touch a coding base. Also exposed as `alternate_effect` for
+  back-compat with code that read `ExonicSpliceSite.alternate_effect`
+
+Each candidate's `.effect` is a `SpliceMechanismEffect` subclass
+that carries its own protein vocab on the instance (`aa_ref`,
+`aa_alt`, `mutant_protein_sequence`, `mutant_transcript`). Fields
+are `None` when the protein math couldn't resolve (e.g. intron
+retention without a `genomic_sequence` provider), populated
+otherwise. Each mechanism also exposes `splice_signal` — the
+underlying raw `SpliceDonor` / `SpliceAcceptor` /
+`IntronicSpliceSite` / `ExonicSpliceSite` effect describing *where*
+the disruption was.
+
+**Lazy construction.** Only the cheap `NormalSplicing` candidate
+is built eagerly when the set is constructed; `ExonSkipping`,
+`IntronRetention`, and `CrypticDonor`/`CrypticAcceptor` materialise
+on first `.candidates` access and are cached. Filter pipelines
+that drop variants early via `modifies_protein_sequence` /
+`effect_priority` never trigger the expensive candidates.
 
 Downstream consumers dispatch by class:
 
@@ -170,28 +176,21 @@ for c in splice_set.candidates:
         print(c.effect.side, c.effect.retained_intron_start)
 ```
 
-When you opt in, `SpliceDonor` / `SpliceAcceptor` /
-`IntronicSpliceSite` also get wrapped, so every splice-
-disrupting variant produces a `SpliceOutcomeSet`.
-
 ### Common questions
 
-A cheat sheet for the simple splice use cases. Each example
-assumes `effect` is a single splice-disrupting effect (default
-shape) or `splice_set` is a `SpliceOutcomeSet` (opt-in shape;
-see [Opt-in: full possibility set](#opt-in-full-possibility-set)).
+A cheat sheet for the simple splice use cases. `splice_set` is a
+`SpliceOutcomeSet` (every splice-disrupting variant produces one).
 
 **Is this variant splice-disrupting?**
 
 ```python
 from varcode import MultiOutcomeEffect, SpliceOutcomeSet
-from varcode.effects import (
-    ExonicSpliceSite, SpliceDonor, SpliceAcceptor, IntronicSpliceSite,
-)
 
-# Splice-specific (covers both shapes):
-isinstance(effect, (SpliceOutcomeSet, ExonicSpliceSite,
-                    SpliceDonor, SpliceAcceptor, IntronicSpliceSite))
+# Splice-specific check:
+isinstance(effect, SpliceOutcomeSet)
+
+# Or by disrupted signal class:
+isinstance(effect, SpliceOutcomeSet) and effect.disrupted_signal_class is SpliceDonor
 
 # Broader: any multi-outcome effect, including SV outcomes
 # (LargeDeletion, GeneFusion, ...) — use when you want one
@@ -202,12 +201,12 @@ isinstance(effect, MultiOutcomeEffect)
 **What coding consequence applies if splicing still proceeds?**
 
 ```python
-# Default (2-outcome) shape — guard, since intronic classes don't expose it:
-if isinstance(effect, ExonicSpliceSite):
-    coding = effect.alternate_effect
+coding = splice_set.effect_if_splicing_unchanged   # canonical
+coding = splice_set.alternate_effect               # back-compat alias
 
-# Opt-in (SpliceOutcomeSet) shape — uniform for any disrupted signal:
-coding = splice_set.effect_if_splicing_unchanged
+# Either returns the NormalSplicing candidate's coding_effect (a
+# Substitution / Silent / PrematureStop / ...), or None for purely
+# intronic disruptions where the variant doesn't change a coding base.
 ```
 
 **What's the most likely splice mechanism?**
@@ -257,22 +256,7 @@ for candidate in splice_set.candidates:
     candidate.effect.splice_signal           # SpliceDonor / SpliceAcceptor / IntronicSpliceSite / ExonicSpliceSite
 ```
 
-### Relationship between the two
-
-| # candidates | Class |
-|---|---|
-| 1 | plain `Substitution` / `Silent` / etc. — not wrapped |
-| 2 | `ExonicSpliceSite` with `alternate_effect` |
-| N | `SpliceOutcomeSet` (opt-in via `splice_outcomes=True`) |
-
-Both `ExonicSpliceSite` and `SpliceOutcomeSet` are `MultiOutcomeEffect`
-subclasses, so consumers iterate `.candidates` (a tuple of
-`EffectCandidate` objects) uniformly without caring about which form
-they're holding. The "if splicing proceeds" coding consequence is
-reachable on both shapes — `ExonicSpliceSite.alternate_effect` on
-the default shape, `SpliceOutcomeSet.effect_if_splicing_unchanged`
-on the opt-in shape. `candidate.effect.short_description` is uniform
-across both forms.
+### RNA evidence reconciliation
 
 With RNA evidence, splice sets are reconciled rather than merely
 extended. `SpliceOutcomeSet.with_rna_evidence(...)` returns a new set

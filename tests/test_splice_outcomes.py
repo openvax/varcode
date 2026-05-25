@@ -67,23 +67,26 @@ def _candidate_of_type(splice_set, mechanism_cls):
 # --------------------------------------------------------------------
 
 
-def test_default_behavior_unchanged():
+def test_splice_donor_wraps_as_outcome_set():
+    """Splice disruptions are always wrapped in SpliceOutcomeSet
+    (varcode 6.0+); the disrupted_signal_class records which signal
+    was hit."""
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     effect = variant.effect_on_transcript(transcript)
-    assert effect.__class__ is SpliceDonor
-    assert not isinstance(effect, SpliceOutcomeSet)
+    assert isinstance(effect, SpliceOutcomeSet)
+    assert effect.disrupted_signal_class is SpliceDonor
 
 
-def test_default_for_collection_unchanged():
+def test_collection_wraps_splice_effects():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     effects = variant.effects()
     classes = {type(e) for e in effects}
-    assert SpliceOutcomeSet not in classes
+    assert SpliceOutcomeSet in classes
 
 
 @pytest.mark.parametrize(
-    "position,ref,alt,expected_class",
+    "position,ref,alt,expected_signal_class",
     [
         (117531115, "G", "A", SpliceDonor),
         (117530898, "G", "A", SpliceAcceptor),
@@ -95,19 +98,19 @@ def test_default_for_collection_unchanged():
         (117531115, "A", "G", IntronicSpliceSite),
     ],
 )
-def test_intronic_splice_classes_lack_alternate_effect(
-        position, ref, alt, expected_class):
-    """The default-shape intronic splice classes (SpliceDonor,
-    SpliceAcceptor, IntronicSpliceSite) don't expose alternate_effect
-    — the variant doesn't change a coding base, so there's no coding
-    consequence to attach. Only ExonicSpliceSite carries
-    alternate_effect on the default shape."""
+def test_intronic_disruptions_have_no_coding_alternate(
+        position, ref, alt, expected_signal_class):
+    """Purely intronic splice disruptions wrap as SpliceOutcomeSet with
+    no coding consequence — alternate_effect and
+    effect_if_splicing_unchanged both return None (the nucleotide
+    change doesn't touch a coding base)."""
     variant = Variant("7", position, ref, alt, ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     effect = variant.effect_on_transcript(transcript)
-    assert isinstance(effect, expected_class)
-    with pytest.raises(AttributeError):
-        effect.alternate_effect
+    assert isinstance(effect, SpliceOutcomeSet)
+    assert effect.disrupted_signal_class is expected_signal_class
+    assert effect.alternate_effect is None
+    assert effect.effect_if_splicing_unchanged is None
 
 
 # --------------------------------------------------------------------
@@ -117,7 +120,7 @@ def test_intronic_splice_classes_lack_alternate_effect(
 
 def test_opt_in_wraps_splice_donor():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
-    effects = variant.effects(splice_outcomes=True)
+    effects = variant.effects()
     cftr_effect = next(
         e for e in effects
         if getattr(e, "transcript", None) is not None
@@ -130,7 +133,7 @@ def test_opt_in_wraps_splice_donor():
 def test_opt_in_wraps_splice_acceptor():
     variant = Variant("7", 117530898, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
-    effects = variant.effects(splice_outcomes=True)
+    effects = variant.effects()
     target = next(e for e in effects if e.transcript is transcript)
     assert isinstance(target, SpliceOutcomeSet)
     assert target.disrupted_signal_class is SpliceAcceptor
@@ -139,7 +142,7 @@ def test_opt_in_wraps_splice_acceptor():
 def test_opt_in_wraps_exonic_splice_site():
     variant = Variant("7", 117531114, "G", "T", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
-    effects = variant.effects(splice_outcomes=True)
+    effects = variant.effects()
     target = next(e for e in effects if e.transcript is transcript)
     assert isinstance(target, SpliceOutcomeSet)
     assert target.disrupted_signal_class is ExonicSpliceSite
@@ -148,7 +151,7 @@ def test_opt_in_wraps_exonic_splice_site():
 def test_opt_in_wraps_intronic_splice_site():
     variant = Variant("7", 117531115, "A", "G", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
-    effects = variant.effects(splice_outcomes=True)
+    effects = variant.effects()
     target = next(e for e in effects if e.transcript is transcript)
     assert isinstance(target, SpliceOutcomeSet)
     assert target.disrupted_signal_class is IntronicSpliceSite
@@ -156,7 +159,7 @@ def test_opt_in_wraps_intronic_splice_site():
 
 def test_opt_in_passes_through_non_splice_effects():
     variant = Variant("17", 43082575 - 5, "CCT", "GGG", ensembl_grch38)
-    effects = variant.effects(splice_outcomes=True)
+    effects = variant.effects()
     classes = [type(e).__name__ for e in effects]
     assert "Substitution" in classes
 
@@ -169,7 +172,7 @@ def test_opt_in_passes_through_non_splice_effects():
 def test_splice_donor_candidate_set_has_expected_mechanisms():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
-    effects = variant.effects(splice_outcomes=True)
+    effects = variant.effects()
     target = next(e for e in effects if e.transcript is transcript)
     mechanisms = {type(c.effect) for c in target.candidates}
     assert mechanisms == {
@@ -179,7 +182,7 @@ def test_splice_donor_candidate_set_has_expected_mechanisms():
 def test_splice_acceptor_candidate_set_uses_cryptic_acceptor():
     variant = Variant("7", 117530898, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
-    effects = variant.effects(splice_outcomes=True)
+    effects = variant.effects()
     target = next(e for e in effects if e.transcript is transcript)
     mechanisms = {type(c.effect) for c in target.candidates}
     assert CrypticAcceptor in mechanisms
@@ -191,7 +194,7 @@ def test_all_candidates_are_splice_mechanism_effects():
     subclass — uniform shape, no enum / class-identity drift."""
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
-    effects = variant.effects(splice_outcomes=True)
+    effects = variant.effects()
     target = next(e for e in effects if e.transcript is transcript)
     for c in target.candidates:
         assert isinstance(c.effect, SpliceMechanismEffect)
@@ -200,7 +203,7 @@ def test_all_candidates_are_splice_mechanism_effects():
 def test_varcode_splice_candidates_are_unscored_but_ordered():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
-    effects = variant.effects(splice_outcomes=True)
+    effects = variant.effects()
     target = next(e for e in effects if e.transcript is transcript)
     assert [type(c.effect) for c in target.candidates] == [
         ExonSkipping,
@@ -213,7 +216,7 @@ def test_varcode_splice_candidates_are_unscored_but_ordered():
 def test_most_likely_for_splice_donor_is_exon_skipping():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
-    effects = variant.effects(splice_outcomes=True)
+    effects = variant.effects()
     target = next(e for e in effects if e.transcript is transcript)
     assert isinstance(target.most_likely_effect, ExonSkipping)
 
@@ -221,7 +224,7 @@ def test_most_likely_for_splice_donor_is_exon_skipping():
 def test_most_likely_for_exonic_splice_site_is_normal_splicing():
     variant = Variant("7", 117531114, "G", "T", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
-    effects = variant.effects(splice_outcomes=True)
+    effects = variant.effects()
     target = next(e for e in effects if e.transcript is transcript)
     assert isinstance(target.most_likely_effect, NormalSplicing)
 
@@ -235,13 +238,16 @@ def test_most_likely_for_exonic_splice_site_is_normal_splicing():
 def test_splice_mechanism_effects_reference_the_splice_signal():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
-    bare = variant.effect_on_transcript(transcript)
-    assert isinstance(bare, SpliceDonor)
-    splice_set = enumerate_splice_outcomes(bare)
-    for c in splice_set.candidates:
-        assert c.effect.splice_signal is bare
-        # Reachable from the mechanism: where in the transcript was hit.
-        assert c.effect.splice_signal.nearest_exon is not None
+    splice_set = variant.effect_on_transcript(transcript)
+    assert isinstance(splice_set, SpliceOutcomeSet)
+    assert splice_set.disrupted_signal_class is SpliceDonor
+    # Every candidate's splice_signal points back to the same raw
+    # SpliceDonor instance.
+    splice_signals = {c.effect.splice_signal for c in splice_set.candidates}
+    assert len(splice_signals) == 1
+    raw = next(iter(splice_signals))
+    assert isinstance(raw, SpliceDonor)
+    assert raw.nearest_exon is not None
 
 
 # --------------------------------------------------------------------
@@ -256,7 +262,7 @@ def test_normal_splicing_delegates_protein_to_coding_effect():
     variant = Variant("7", 117531114, "G", "T", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     splice_set = next(
-        e for e in variant.effects(splice_outcomes=True)
+        e for e in variant.effects()
         if e.transcript is transcript)
     normal = _candidate_of_type(splice_set, NormalSplicing)
     assert normal.effect.coding_effect is not None
@@ -269,7 +275,7 @@ def test_normal_splicing_for_intronic_disruption_has_no_coding_effect():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     splice_set = next(
-        e for e in variant.effects(splice_outcomes=True)
+        e for e in variant.effects()
         if e.transcript is transcript)
     normal = _candidate_of_type(splice_set, NormalSplicing)
     assert normal.effect.coding_effect is None
@@ -283,7 +289,7 @@ def test_effect_if_splicing_unchanged_returns_coding_effect():
     variant = Variant("7", 117531114, "G", "T", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     splice_set = next(
-        e for e in variant.effects(splice_outcomes=True)
+        e for e in variant.effects()
         if e.transcript is transcript)
     normal = _candidate_of_type(splice_set, NormalSplicing)
     assert (
@@ -299,7 +305,7 @@ def test_effect_if_splicing_unchanged_none_for_intronic():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     splice_set = next(
-        e for e in variant.effects(splice_outcomes=True)
+        e for e in variant.effects()
         if e.transcript is transcript)
     assert splice_set.effect_if_splicing_unchanged is None
 
@@ -310,7 +316,7 @@ def test_in_frame_exon_skipping_carries_aa_ref_and_protein_sequence():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     splice_set = next(
-        e for e in variant.effects(splice_outcomes=True)
+        e for e in variant.effects()
         if e.transcript is transcript)
     skip = _candidate_of_type(splice_set, ExonSkipping)
     assert skip.effect.in_frame is True
@@ -333,7 +339,7 @@ def test_intron_retention_predicted_state_carries_intron_coords():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     splice_set = next(
-        e for e in variant.effects(splice_outcomes=True)
+        e for e in variant.effects()
         if e.transcript is transcript)
     ir = _candidate_of_type(splice_set, IntronRetention)
     assert not ir.effect.resolved
@@ -348,7 +354,7 @@ def test_cryptic_donor_predicted_state_carries_affected_exon():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     splice_set = next(
-        e for e in variant.effects(splice_outcomes=True)
+        e for e in variant.effects()
         if e.transcript is transcript)
     cryptic = _candidate_of_type(splice_set, CrypticDonor)
     assert not cryptic.effect.resolved
@@ -419,7 +425,7 @@ def test_cryptic_donor_with_provider_populates_protein_vocab():
 
 def test_collection_iteration_after_wrapping():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
-    effects = variant.effects(splice_outcomes=True)
+    effects = variant.effects()
     items = list(effects)
     assert len(items) > 0
     splice_set_count = sum(1 for e in items if isinstance(e, SpliceOutcomeSet))
@@ -429,7 +435,7 @@ def test_collection_iteration_after_wrapping():
 def test_short_description_uses_most_likely_inner_effect():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
-    effects = variant.effects(splice_outcomes=True)
+    effects = variant.effects()
     target = next(e for e in effects if e.transcript is transcript)
     desc = target.short_description
     assert desc.startswith("splice-set:")
@@ -445,7 +451,7 @@ def test_short_description_uses_most_likely_inner_effect():
 def test_opt_in_works_on_reverse_strand_donor():
     variant = Variant("17", 43082403, "C", "T", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(BRCA1_TRANSCRIPT_ID)
-    effects = variant.effects(splice_outcomes=True)
+    effects = variant.effects()
     target = next(e for e in effects if e.transcript is transcript)
     assert isinstance(target, SpliceOutcomeSet)
     assert target.disrupted_signal_class is SpliceDonor
@@ -489,7 +495,7 @@ def test_splice_outcome_set_is_a_multi_outcome_effect():
     from varcode import MultiOutcomeEffect
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
-    effects = variant.effects(splice_outcomes=True)
+    effects = variant.effects()
     target = next(e for e in effects if e.transcript is transcript)
     assert isinstance(target, MultiOutcomeEffect)
     assert all(isinstance(c, EffectCandidate) for c in target.candidates)
@@ -513,7 +519,7 @@ def test_mid_codon_in_frame_exon_skip_reshapes_boundary():
             "Canonical donor G not present at 117536674; got %s."
             % type(bare).__name__)
     splice_set = next(
-        e for e in variant.effects(splice_outcomes=True)
+        e for e in variant.effects()
         if e.transcript is transcript)
     skip = _candidate_of_type(splice_set, ExonSkipping)
     # ExonSkipping with a reshaped boundary still carries aa_ref/alt
@@ -525,7 +531,7 @@ def test_mid_codon_in_frame_exon_skip_reshapes_boundary():
 def test_codon_aligned_exon_skip_is_in_frame():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
-    effects = variant.effects(splice_outcomes=True)
+    effects = variant.effects()
     splice_set = next(e for e in effects if e.transcript is transcript)
     skip = _candidate_of_type(splice_set, ExonSkipping)
     # CFTR exon 3 is codon-aligned (216 bp / 72 codons).
@@ -549,7 +555,7 @@ def test_out_of_frame_exon_skip_marked_out_of_frame():
             "Canonical donor G not present at %d; got %s." % (
                 donor_plus_1, type(bare).__name__))
     splice_set = next(
-        e for e in variant.effects(splice_outcomes=True)
+        e for e in variant.effects()
         if e.transcript is transcript)
     skip = _candidate_of_type(splice_set, ExonSkipping)
     assert skip.effect.in_frame is False
@@ -568,7 +574,7 @@ def test_out_of_frame_exon_skip_marked_out_of_frame():
 def test_splice_outcome_set_json_round_trip():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
-    effects = variant.effects(splice_outcomes=True)
+    effects = variant.effects()
     target = next(e for e in effects if e.transcript is transcript)
 
     payload = target.to_json()
@@ -586,7 +592,7 @@ def test_splice_outcome_set_round_trip_preserves_priority_class():
     from varcode.effects import effect_priority
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
-    effects = variant.effects(splice_outcomes=True)
+    effects = variant.effects()
     target = next(e for e in effects if e.transcript is transcript)
     restored = SpliceOutcomeSet.from_json(target.to_json())
     assert effect_priority(restored) == effect_priority(target)
@@ -605,20 +611,26 @@ def test_non_splice_effects_are_not_multi_outcome():
 
 
 def test_splice_outcome_set_sorts_as_disrupted_signal_class():
+    """SpliceOutcomeSet.priority_class delegates to disrupted_signal_class,
+    so the wrapper sorts at the same priority as the raw splice signal
+    would."""
     from varcode.effects import effect_priority
+    from varcode.effects.effect_prediction import (
+        _predict_variant_effect_on_transcript_raw,
+    )
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
-    bare_effect = variant.effect_on_transcript(transcript)
-    assert isinstance(bare_effect, SpliceDonor)
-    bare_priority = effect_priority(bare_effect)
-    wrapped_effects = variant.effects(splice_outcomes=True)
-    wrapped = next(e for e in wrapped_effects if e.transcript is transcript)
-    assert effect_priority(wrapped) == bare_priority
+    raw = _predict_variant_effect_on_transcript_raw(variant, transcript)
+    assert isinstance(raw, SpliceDonor)
+    splice_set = variant.effect_on_transcript(transcript)
+    assert isinstance(splice_set, SpliceOutcomeSet)
+    assert splice_set.disrupted_signal_class is SpliceDonor
+    assert effect_priority(splice_set) == effect_priority(raw)
 
 
 def test_splice_outcome_set_top_priority_works():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
-    effects = variant.effects(splice_outcomes=True)
+    effects = variant.effects()
     top = effects.top_priority_effect()
     top_class_name = type(top).__name__
     assert top_class_name in ("SpliceOutcomeSet", "SpliceDonor")
@@ -632,12 +644,9 @@ def test_splice_outcome_set_top_priority_works():
 def test_acceptor_side_intronic_splice_site_uses_cryptic_acceptor():
     variant = Variant("7", 117530896, "G", "T", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
-    bare = variant.effect_on_transcript(transcript)
-    assert isinstance(bare, IntronicSpliceSite) and \
-        not isinstance(bare, (SpliceDonor, SpliceAcceptor))
-    splice_set = next(
-        e for e in variant.effects(splice_outcomes=True)
-        if e.transcript is transcript)
+    splice_set = variant.effect_on_transcript(transcript)
+    assert isinstance(splice_set, SpliceOutcomeSet)
+    assert splice_set.disrupted_signal_class is IntronicSpliceSite
     mechanisms = {type(c.effect) for c in splice_set.candidates}
     assert CrypticAcceptor in mechanisms
     assert CrypticDonor not in mechanisms
@@ -646,12 +655,9 @@ def test_acceptor_side_intronic_splice_site_uses_cryptic_acceptor():
 def test_donor_side_intronic_splice_site_uses_cryptic_donor():
     variant = Variant("7", 117531117, "G", "T", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
-    bare = variant.effect_on_transcript(transcript)
-    assert isinstance(bare, IntronicSpliceSite) and \
-        not isinstance(bare, (SpliceDonor, SpliceAcceptor))
-    splice_set = next(
-        e for e in variant.effects(splice_outcomes=True)
-        if e.transcript is transcript)
+    splice_set = variant.effect_on_transcript(transcript)
+    assert isinstance(splice_set, SpliceOutcomeSet)
+    assert splice_set.disrupted_signal_class is IntronicSpliceSite
     mechanisms = {type(c.effect) for c in splice_set.candidates}
     assert CrypticDonor in mechanisms
     assert CrypticAcceptor not in mechanisms
@@ -666,7 +672,7 @@ def test_candidate_proteins_keyed_by_mechanism_class():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     splice_set = next(
-        e for e in variant.effects(splice_outcomes=True)
+        e for e in variant.effects()
         if e.transcript is transcript)
     proteins = splice_set.candidate_proteins
     # Keys are mechanism classes, values are protein strings (or "").
@@ -680,7 +686,7 @@ def test_mutant_protein_sequences_collects_distinct_proteins():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     splice_set = next(
-        e for e in variant.effects(splice_outcomes=True)
+        e for e in variant.effects()
         if e.transcript is transcript)
     proteins = splice_set.mutant_protein_sequences
     assert isinstance(proteins, set)
@@ -699,7 +705,7 @@ def test_most_likely_candidate_returns_effect_candidate():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     splice_set = next(
-        e for e in variant.effects(splice_outcomes=True)
+        e for e in variant.effects()
         if e.transcript is transcript)
     assert isinstance(splice_set.most_likely_candidate, EffectCandidate)
 
@@ -708,7 +714,7 @@ def test_most_likely_effect_returns_splice_mechanism_effect():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     splice_set = next(
-        e for e in variant.effects(splice_outcomes=True)
+        e for e in variant.effects()
         if e.transcript is transcript)
     assert isinstance(splice_set.most_likely_effect, SpliceMechanismEffect)
     assert splice_set.most_likely_effect is splice_set.most_likely_candidate.effect
@@ -718,7 +724,7 @@ def test_highest_priority_candidate_returns_most_disruptive():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     splice_set = next(
-        e for e in variant.effects(splice_outcomes=True)
+        e for e in variant.effects()
         if e.transcript is transcript)
     from varcode.effects import effect_priority
     top = splice_set.highest_priority_candidate
@@ -733,7 +739,7 @@ def test_highest_priority_effect_returns_inner_effect():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     splice_set = next(
-        e for e in variant.effects(splice_outcomes=True)
+        e for e in variant.effects()
         if e.transcript is transcript)
     assert (
         splice_set.highest_priority_effect
@@ -747,7 +753,7 @@ def test_resolved_splice_mechanism_delegates_priority_to_protein_effect():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     splice_set = next(
-        e for e in variant.effects(splice_outcomes=True)
+        e for e in variant.effects()
         if e.transcript is transcript)
     skip = _candidate_of_type(splice_set, ExonSkipping)
     assert isinstance(skip.effect.protein_effect, Deletion)
@@ -761,7 +767,7 @@ def test_effects_unwraps_candidate_tuple():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     splice_set = next(
-        e for e in variant.effects(splice_outcomes=True)
+        e for e in variant.effects()
         if e.transcript is transcript)
     inner = splice_set.effects
     assert all(isinstance(e, SpliceMechanismEffect) for e in inner)
@@ -777,7 +783,7 @@ def test_rna_evidence_reconciles_splice_set_by_excluding_unobserved_mechanisms()
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     original = next(
-        e for e in variant.effects(splice_outcomes=True)
+        e for e in variant.effects()
         if e.transcript is transcript)
     skip = _candidate_of_type(original, ExonSkipping)
     observed = make_rna_outcome(
@@ -809,7 +815,7 @@ def test_rna_evidence_records_added_splice_mechanisms():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     original = next(
-        e for e in variant.effects(splice_outcomes=True)
+        e for e in variant.effects()
         if e.transcript is transcript)
     skip = _candidate_of_type(original, ExonSkipping)
     added_effect = CrypticAcceptor(
@@ -839,7 +845,7 @@ def test_rna_evidence_support_is_tracked_per_splice_candidate():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     original = next(
-        e for e in variant.effects(splice_outcomes=True)
+        e for e in variant.effects()
         if e.transcript is transcript)
     skip = _candidate_of_type(original, ExonSkipping)
 
@@ -925,7 +931,7 @@ def test_cftr_exon_3_skip_protein_equals_reference_minus_skipped_aas():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     splice_set = next(
-        e for e in variant.effects(splice_outcomes=True)
+        e for e in variant.effects()
         if e.transcript is transcript)
     skip = _candidate_of_type(splice_set, ExonSkipping)
     assert skip.effect.in_frame
@@ -953,7 +959,7 @@ def test_cftr_exon_3_skip_short_description_uses_hgvs_del_notation():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     splice_set = next(
-        e for e in variant.effects(splice_outcomes=True)
+        e for e in variant.effects()
         if e.transcript is transcript)
     skip = _candidate_of_type(splice_set, ExonSkipping)
     desc = skip.effect.short_description
@@ -977,7 +983,7 @@ def test_cftr_out_of_frame_exon_skip_produces_frameshift_protein():
     if not isinstance(bare, SpliceDonor):
         pytest.skip("g.117509143 G>A not classified as SpliceDonor")
     splice_set = next(
-        e for e in variant.effects(splice_outcomes=True)
+        e for e in variant.effects()
         if e.transcript is transcript)
     skip = _candidate_of_type(splice_set, ExonSkipping)
     assert skip.effect.in_frame is False
@@ -1005,7 +1011,7 @@ def test_cftr_exon_3_skip_aa_alt_describes_junction():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     splice_set = next(
-        e for e in variant.effects(splice_outcomes=True)
+        e for e in variant.effects()
         if e.transcript is transcript)
     skip = _candidate_of_type(splice_set, ExonSkipping)
     assert skip.effect.in_frame
@@ -1025,10 +1031,10 @@ def test_cftr_acceptor_disruption_skips_same_exon_as_donor_disruption():
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
 
     donor_set = next(
-        e for e in donor_variant.effects(splice_outcomes=True)
+        e for e in donor_variant.effects()
         if e.transcript is transcript)
     acceptor_set = next(
-        e for e in acceptor_variant.effects(splice_outcomes=True)
+        e for e in acceptor_variant.effects()
         if e.transcript is transcript)
     donor_skip = _candidate_of_type(donor_set, ExonSkipping)
     acceptor_skip = _candidate_of_type(acceptor_set, ExonSkipping)
@@ -1110,7 +1116,7 @@ def test_exon_skipping_serialization_preserves_affected_exon_and_protein():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     splice_set = next(
-        e for e in variant.effects(splice_outcomes=True)
+        e for e in variant.effects()
         if e.transcript is transcript)
     restored = SpliceOutcomeSet.from_json(splice_set.to_json())
     og = _candidate_of_type(splice_set, ExonSkipping)
@@ -1128,7 +1134,7 @@ def test_intron_retention_serialization_preserves_intron_coords():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     splice_set = next(
-        e for e in variant.effects(splice_outcomes=True)
+        e for e in variant.effects()
         if e.transcript is transcript)
     restored = SpliceOutcomeSet.from_json(splice_set.to_json())
     og = _candidate_of_type(splice_set, IntronRetention)
@@ -1142,7 +1148,7 @@ def test_cryptic_donor_serialization_preserves_direction():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     splice_set = next(
-        e for e in variant.effects(splice_outcomes=True)
+        e for e in variant.effects()
         if e.transcript is transcript)
     restored = SpliceOutcomeSet.from_json(splice_set.to_json())
     og = _candidate_of_type(splice_set, CrypticDonor)
@@ -1155,7 +1161,7 @@ def test_normal_splicing_serialization_preserves_coding_effect_class():
     variant = Variant("7", 117531114, "G", "T", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     splice_set = next(
-        e for e in variant.effects(splice_outcomes=True)
+        e for e in variant.effects()
         if e.transcript is transcript)
     restored = SpliceOutcomeSet.from_json(splice_set.to_json())
     og = _candidate_of_type(splice_set, NormalSplicing)
@@ -1180,7 +1186,7 @@ def test_predicted_exon_skipping_short_description_includes_predicted_tag():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     splice_set = next(
-        e for e in variant.effects(splice_outcomes=True)
+        e for e in variant.effects()
         if e.transcript is transcript)
     # The IntronRetention candidate is predicted (no provider).
     ir = _candidate_of_type(splice_set, IntronRetention)
@@ -1197,7 +1203,7 @@ def test_intron_retention_predicted_side_is_donor_or_acceptor_or_unknown():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     splice_set = next(
-        e for e in variant.effects(splice_outcomes=True)
+        e for e in variant.effects()
         if e.transcript is transcript)
     ir = _candidate_of_type(splice_set, IntronRetention)
     # For a SpliceDonor-classed disruption we expect side="donor".

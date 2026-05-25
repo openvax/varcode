@@ -54,10 +54,21 @@ def expect_effect(
         effect = variant.effect_on_transcript(transcript)
     check_effect_properties(effect)
     if effect_class is not None:
-        assert effect.__class__ is effect_class, \
+        # Splice-disrupting effects are always wrapped in a
+        # SpliceOutcomeSet (varcode 6.0+); when the caller asks for a
+        # splice-signal class (ExonicSpliceSite, SpliceDonor, ...),
+        # match against the wrapper's `disrupted_signal_class`.
+        from varcode import SpliceOutcomeSet
+        actual_class = effect.__class__
+        matches = (
+            actual_class is effect_class
+            or (actual_class is SpliceOutcomeSet
+                and getattr(effect, "disrupted_signal_class", None)
+                is effect_class))
+        assert matches, \
             "Expected effect class %s but got %s" % (
                 effect_class.__name__,
-                effect.__class__.__name__)
+                actual_class.__name__)
     if protein_sequence is not None:
         assert effect.mutant_protein_sequence == protein_sequence, \
             "Expected protein sequence %s but got %s" % (

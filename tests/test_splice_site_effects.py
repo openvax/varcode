@@ -88,19 +88,18 @@ def test_exonic_splice_disrupting_mutation_classified_as_splice_site():
 
 
 def test_exonic_splice_disrupting_mutation_has_coding_alternate():
-    """ExonicSpliceSite should carry the coding effect as alternate_effect.
-
-    When a variant both disrupts a splice signal and changes coding sequence,
-    the ExonicSpliceSite.alternate_effect should be the coding effect (e.g.,
-    Substitution), so both effects are accessible.
-    """
+    """Splice-and-coding variants wrap as SpliceOutcomeSet with the
+    coding consequence reachable via the ``alternate_effect`` compat
+    shim (the legacy ``ExonicSpliceSite.alternate_effect`` access
+    pattern keeps working through the wrapper)."""
+    from varcode import SpliceOutcomeSet
     variant = Variant("7", 117531114, "G", "T", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     effect = variant.effect_on_transcript(transcript)
-    assert effect.__class__ is ExonicSpliceSite, \
-        "Expected ExonicSpliceSite, got %s" % effect.__class__.__name__
+    assert isinstance(effect, SpliceOutcomeSet)
+    assert effect.disrupted_signal_class is ExonicSpliceSite
     assert effect.alternate_effect is not None, \
-        "ExonicSpliceSite should have an alternate_effect"
+        "ExonicSpliceSite wrap should expose alternate_effect"
     assert effect.alternate_effect.__class__ is Substitution, \
         "Expected alternate_effect to be Substitution, got %s" % (
             effect.alternate_effect.__class__.__name__,)
@@ -211,14 +210,18 @@ def test_intronic_splice_site_at_plus_3_to_6():
 
     These positions are implicated in splicing but not as confidently as +1/+2.
     """
+    from varcode import SpliceOutcomeSet
     for offset in [3, 4, 5, 6]:
         pos = 117531114 + offset  # exon 4 end + offset
         variant = Variant("7", pos, "G", "T", ensembl_grch38)
         transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
         effect = variant.effect_on_transcript(transcript)
-        assert effect.__class__ is IntronicSpliceSite, \
-            "Expected IntronicSpliceSite at +%d, got %s" % (
+        assert isinstance(effect, SpliceOutcomeSet), \
+            "Expected SpliceOutcomeSet at +%d, got %s" % (
                 offset, effect.__class__.__name__)
+        assert effect.disrupted_signal_class is IntronicSpliceSite, \
+            "Expected disrupted_signal_class IntronicSpliceSite at +%d, got %s" % (
+                offset, effect.disrupted_signal_class.__name__)
 
 
 def test_intronic_splice_site_at_minus_3():
@@ -252,24 +255,33 @@ def test_deep_intronic_variant_is_intronic():
 
 
 def test_exonic_splice_site_not_dropped_by_drop_silent_and_noncoding():
-    """ExonicSpliceSite with a coding alternate should survive
-    drop_silent_and_noncoding().
+    """ExonicSpliceSite (wrapped as SpliceOutcomeSet) with a coding
+    alternate should survive drop_silent_and_noncoding().
 
-    Regression test for https://github.com/openvax/varcode/issues/136
+    Regression test for https://github.com/openvax/varcode/issues/136.
+    Also covers the silent-splice filter bug surfaced during the
+    always-on switch: SpliceOutcomeSet now reports
+    ``modifies_protein_sequence = True`` unconditionally so splice
+    variants whose NormalSplicing coding effect happens to be Silent
+    are still kept.
     """
-    # Use a variant that produces ExonicSpliceSite with Substitution alternate
+    from varcode import SpliceOutcomeSet
     variant = Variant("7", 117531114, "G", "T", ensembl_grch38)
     effects = variant.effects()
 
-    # Verify there's at least one ExonicSpliceSite
-    splice_effects = [e for e in effects if e.__class__ is ExonicSpliceSite]
-    assert len(splice_effects) > 0, "Expected at least one ExonicSpliceSite"
+    # The variant wraps as SpliceOutcomeSet with ExonicSpliceSite as the
+    # disrupted signal class.
+    splice_effects = [
+        e for e in effects
+        if isinstance(e, SpliceOutcomeSet)
+        and e.disrupted_signal_class is ExonicSpliceSite]
+    assert len(splice_effects) > 0, \
+        "Expected at least one SpliceOutcomeSet wrapping ExonicSpliceSite"
 
-    # After dropping silent and noncoding, the ExonicSpliceSite with a coding
-    # alternate should remain
+    # After dropping silent and noncoding, the splice variant should remain.
     remaining = effects.drop_silent_and_noncoding()
     assert len(remaining) > 0, \
-        "drop_silent_and_noncoding() should not drop ExonicSpliceSite with coding alternate"
+        "drop_silent_and_noncoding() should not drop a splice-disrupting variant"
 
 
 # -----------------------------------------------------------------------
