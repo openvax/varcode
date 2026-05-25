@@ -90,10 +90,10 @@ see [Limitations](#limitations).
 
 A variant in an exon sits on a coding base by definition — it
 rewrites a codon. If that same exonic base is **also** in the
-splice window — the last 3 bases of an exon (donor side) or
-the first base (acceptor side) — the same nucleotide change
-disrupts the splice signal *and* changes the protein. varcode
-represents this duality as **`ExonicSpliceSite`**:
+splice window (the exonic positions in the table above), the
+same nucleotide change disrupts the splice signal *and* changes
+the protein. varcode represents this duality as
+**`ExonicSpliceSite`**:
 
 - on the default 2-outcome shape, splice disruption is the
   primary effect; the coding consequence (a `Substitution`,
@@ -170,81 +170,16 @@ for c in splice_set.candidates:
         print(c.effect.side, c.effect.retained_intron_start)
 ```
 
-For the common "what if splicing still proceeds?" question, use
-`splice_set.effect_if_splicing_unchanged` — the `NormalSplicing`
-candidate's `coding_effect` (a `Substitution`, `Silent`, etc., or
-`None` for purely intronic disruptions). This is the
-`SpliceOutcomeSet` analogue of the legacy
-`ExonicSpliceSite.alternate_effect` and works for intronic
-disruptions too.
-
 When you opt in, `SpliceDonor` / `SpliceAcceptor` /
 `IntronicSpliceSite` also get wrapped, so every splice-
 disrupting variant produces a `SpliceOutcomeSet`.
 
-### Relationship between the two
-
-| # candidates | Class |
-|---|---|
-| 1 | plain `Substitution` / `Silent` / etc. — not wrapped |
-| 2 | `ExonicSpliceSite` with `alternate_effect` |
-| N | `SpliceOutcomeSet` (opt-in via `splice_outcomes=True`) |
-
-Both `ExonicSpliceSite` and `SpliceOutcomeSet` are `MultiOutcomeEffect`
-subclasses, so consumers iterate `.candidates` (a tuple of
-`EffectCandidate` objects) uniformly without caring about which form
-they're holding. `alternate_effect` works on both: on
-`ExonicSpliceSite` it's the splicing-proceeds outcome directly; on
-`SpliceOutcomeSet` it resolves to the inner effect of the
-`NormalSplicing` candidate (or `None` when that candidate is just
-a placeholder). `candidate.effect.short_description` is uniform
-across both forms.
-
-With RNA evidence, splice sets are reconciled rather than merely
-extended. `SpliceOutcomeSet.with_rna_evidence(...)` returns a new set
-whose `candidates` are the RNA-observed mechanisms, while
-`dna_candidates`, `rna_evidence`, `excluded_candidates`,
-`added_candidates`, and `candidate_rna_evidence` preserve the audit
-trail. Use `splice_set.rna_evidence_for(candidate)` to inspect the
-observations supporting one current candidate.
-
-### Candidate provenance
-
-There is no `plausibility` or `probability` field in the shared
-candidate wrapper. The old splice-specific `plausibility` value was a
-DNA-only ordering heuristic, not evidence. Varcode now keeps that
-ordering only as producer order.
-
-Producer-specific support belongs in `candidate.evidence` under
-explicit names: `read_count`, `junction_id`, `psi`, `motif_score`,
-`donor_score`, `acceptor_score`, and so on. Varcode stores evidence
-as opaque provenance and does not normalize it into a probability.
-
-### Picking a single candidate
-
-When you need to collapse a multi-outcome effect to one Effect, two
-notions of "best" are available — pick consciously:
-
-| Accessor | Returns | Meaning |
-|---|---|---|
-| `.most_likely_candidate` | `EffectCandidate` | First candidate after producer ordering |
-| `.most_likely_effect` | `MutationEffect` | Inner effect of the above |
-| `.highest_priority_candidate` | `EffectCandidate` | Top by `effect_priority` (most protein-disruptive) |
-| `.highest_priority_effect` | `MutationEffect` | Inner effect of the above |
-
-The `_candidate` accessors keep the provenance wrapper (`.source`,
-`.evidence`); the `_effect` accessors peel it off. The two "top by"
-notions coincide whenever producer ordering and priority ranking
-agree, which is common — but for clinical / functional filtering
-("flag if any candidate is at least a frameshift") prefer
-`highest_priority_*`: a disruptive candidate behind a less-disruptive
-primary candidate should still light up.
-
 ### Common questions
 
 A cheat sheet for the simple splice use cases. Each example
-assumes `effect` is a single splice-disrupting effect, or
-`splice_set` is a `SpliceOutcomeSet` (opt-in form).
+assumes `effect` is a single splice-disrupting effect (default
+shape) or `splice_set` is a `SpliceOutcomeSet` (opt-in shape;
+see [Opt-in: full possibility set](#opt-in-full-possibility-set)).
 
 **Is this variant splice-disrupting?**
 
@@ -301,6 +236,8 @@ splice_set.highest_priority_candidate
 Use this for clinical / functional filtering ("flag if any
 candidate is at least a frameshift") — a disruptive candidate
 ranked below a less-disruptive primary should still light up.
+See [Picking a single candidate](#picking-a-single-candidate)
+for the "most likely" vs "most disruptive" distinction.
 
 **What protein sequences could result?**
 
@@ -320,14 +257,69 @@ for candidate in splice_set.candidates:
     candidate.effect.splice_signal           # SpliceDonor / SpliceAcceptor / IntronicSpliceSite / ExonicSpliceSite
 ```
 
+### Relationship between the two
+
+| # candidates | Class |
+|---|---|
+| 1 | plain `Substitution` / `Silent` / etc. — not wrapped |
+| 2 | `ExonicSpliceSite` with `alternate_effect` |
+| N | `SpliceOutcomeSet` (opt-in via `splice_outcomes=True`) |
+
+Both `ExonicSpliceSite` and `SpliceOutcomeSet` are `MultiOutcomeEffect`
+subclasses, so consumers iterate `.candidates` (a tuple of
+`EffectCandidate` objects) uniformly without caring about which form
+they're holding. The "if splicing proceeds" coding consequence is
+reachable on both shapes — `ExonicSpliceSite.alternate_effect` on
+the default shape, `SpliceOutcomeSet.effect_if_splicing_unchanged`
+on the opt-in shape. `candidate.effect.short_description` is uniform
+across both forms.
+
+With RNA evidence, splice sets are reconciled rather than merely
+extended. `SpliceOutcomeSet.with_rna_evidence(...)` returns a new set
+whose `candidates` are the RNA-observed mechanisms, while
+`dna_candidates`, `rna_evidence`, `excluded_candidates`,
+`added_candidates`, and `candidate_rna_evidence` preserve the audit
+trail. Use `splice_set.rna_evidence_for(candidate)` to inspect the
+observations supporting one current candidate.
+
+### Candidate provenance
+
+There is no `plausibility` or `probability` field in the shared
+candidate wrapper. The old splice-specific `plausibility` value was a
+DNA-only ordering heuristic, not evidence. Varcode now keeps that
+ordering only as producer order.
+
+Producer-specific support belongs in `candidate.evidence` under
+explicit names: `read_count`, `junction_id`, `psi`, `motif_score`,
+`donor_score`, `acceptor_score`, and so on. Varcode stores evidence
+as opaque provenance and does not normalize it into a probability.
+
+### Picking a single candidate
+
+When you need to collapse a multi-outcome effect to one Effect, two
+notions of "best" are available — pick consciously:
+
+| Accessor | Returns | Meaning |
+|---|---|---|
+| `.most_likely_candidate` | `EffectCandidate` | First candidate after producer ordering |
+| `.most_likely_effect` | `MutationEffect` | Inner effect of the above |
+| `.highest_priority_candidate` | `EffectCandidate` | Top by `effect_priority` (most protein-disruptive) |
+| `.highest_priority_effect` | `MutationEffect` | Inner effect of the above |
+
+The `_candidate` accessors keep the provenance wrapper (`.source`,
+`.evidence`); the `_effect` accessors peel it off. The two "top by"
+notions coincide whenever producer ordering and priority ranking
+agree, which is common — but for clinical / functional filtering
+("flag if any candidate is at least a frameshift") prefer
+`highest_priority_*`: a disruptive candidate behind a less-disruptive
+primary candidate should still light up.
+
 ### Limitations
 
-The splice classifier is **position-based** — it fires on the
-canonical window (last 3 exonic, first 3-6 intronic, donor/acceptor)
-and nothing else. Sequence-based signals are not flagged: exonic
-splicing enhancer/silencer disruption mid-exon (~6-10nt SR-protein
-motifs), branch points (~20-50nt upstream of the acceptor), deep
-intronic cryptic sites. Detecting these needs ML predictors (SpliceAI,
+Sequence-based splice signals are not flagged: exonic splicing
+enhancer/silencer disruption mid-exon (~6-10nt SR-protein motifs),
+branch points (~20-50nt upstream of the acceptor), deep intronic
+cryptic sites. Detecting these needs ML predictors (SpliceAI,
 Pangolin, MMSplice, SpliceTransformer) or direct RNA evidence;
 tracked in [#297][i297].
 
