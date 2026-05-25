@@ -60,24 +60,24 @@ question.
 
 The classifier is **position-based**: it fires when a variant
 lands in the canonical splice window around an exon-intron
-boundary. The window covers:
+boundary. The window is asymmetric — the donor consensus
+(`MAG|GURAGU`) is wider on both sides than the acceptor
+consensus (`YAG|R`):
 
-- the last 3 exonic bases of an exon (donor side) or the first
-  3 exonic bases of the next exon (acceptor side) — these
-  straddle the boundary and sit on top of the canonical signal
-- the intronic +1..+6 bases on the donor side and -1..-3 bases
-  on the acceptor side — the intronic bases the spliceosome
-  reads directly, including the canonical `GT` (+1/+2) and `AG`
-  (-2/-1) dinucleotides
+- **exonic side**: the last 3 bases of an exon (donor side) or
+  the first base of the next exon (acceptor side)
+- **intronic side**: positions +1..+6 of the intron (donor side)
+  and positions -3..-1 (acceptor side), including the canonical
+  `GT` at +1/+2 and `AG` at -2/-1
 
 Four classes record *where* in this window the variant landed:
 
 | Class | Position |
 |---|---|
-| `ExonicSpliceSite` | Exonic side of either boundary (last 3 / first 3 of an exon) |
+| `ExonicSpliceSite` | Last 3 bases of an exon (donor side) or the first base of the next exon (acceptor side) |
 | `SpliceDonor` | Canonical `GT` at intronic +1 / +2 |
 | `SpliceAcceptor` | Canonical `AG` at intronic -2 / -1 |
-| `IntronicSpliceSite` | Other intronic positions in the window |
+| `IntronicSpliceSite` | Intronic +3..+6 (donor side) or -3 (acceptor side); also `+1/+2` or `-1/-2` when the reference base isn't the canonical `GT` / `AG` |
 
 Variants outside this window are **not** flagged as
 splice-disrupting, even when they may affect splicing
@@ -90,10 +90,10 @@ see [Limitations](#limitations).
 
 A variant in an exon sits on a coding base by definition — it
 rewrites a codon. If that same exonic base is **also** in the
-splice window (i.e. within the last 3 / first 3 of the exon),
-the same nucleotide change disrupts the splice signal *and*
-changes the protein. varcode represents this duality as
-**`ExonicSpliceSite`**:
+splice window — the last 3 bases of an exon (donor side) or
+the first base (acceptor side) — the same nucleotide change
+disrupts the splice signal *and* changes the protein. varcode
+represents this duality as **`ExonicSpliceSite`**:
 
 - on the default 2-outcome shape, splice disruption is the
   primary effect; the coding consequence (a `Substitution`,
@@ -114,9 +114,6 @@ a plain coding effect (`Substitution`, `Silent`, `FrameShift`,
 …) with no splice annotation attached. The variant may still
 disrupt splicing through a non-canonical mechanism, but varcode
 won't flag it — see Limitations.
-
-Two splice-effect richness levels are available; the rest of
-this section walks through both.
 
 ### Default: lightweight 2-outcome form
 

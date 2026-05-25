@@ -87,6 +87,11 @@ def test_default_for_collection_unchanged():
     [
         (117531115, "G", "A", SpliceDonor),
         (117530898, "G", "A", SpliceAcceptor),
+        # IntronicSpliceSite via the "non-canonical signal" downgrade
+        # path: at intronic +1 of CFTR exon 3, supplying A as ref
+        # means the reference signal isn't the canonical GT. varcode
+        # classifies on supplied ref/alt + position, not the actual
+        # GRCh38 reference base.
         (117531115, "A", "G", IntronicSpliceSite),
     ],
 )
@@ -94,9 +99,9 @@ def test_intronic_splice_classes_lack_alternate_effect(
         position, ref, alt, expected_class):
     """The default-shape intronic splice classes (SpliceDonor,
     SpliceAcceptor, IntronicSpliceSite) don't expose alternate_effect
-    — the variant is intronic, so there's no coding consequence to
-    attach. Only ExonicSpliceSite carries alternate_effect on the
-    default shape."""
+    — the variant doesn't change a coding base, so there's no coding
+    consequence to attach. Only ExonicSpliceSite carries
+    alternate_effect on the default shape."""
     variant = Variant("7", position, ref, alt, ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     effect = variant.effect_on_transcript(transcript)

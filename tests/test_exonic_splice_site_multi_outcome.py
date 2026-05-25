@@ -98,6 +98,12 @@ def test_exonic_splice_site_alternate_effect_still_first_class():
 
 
 def test_effect_if_splicing_unchanged_matches_alternate_effect():
+    # TODO: revisit when ExonicSpliceSite.alternate_effect is removed
+    # in the breaking 6.0 work (#391) — this test asserts equivalence
+    # between the legacy default-shape attribute and the new opt-in
+    # accessor, so it will need to retire or pivot to a snapshot
+    # comparison once the legacy attribute goes away.
+    #
     # ExonicSpliceSite wrapped under splice_outcomes=True becomes a
     # SpliceOutcomeSet. Its .effect_if_splicing_unchanged should
     # return the same coding_effect that ExonicSpliceSite.alternate_effect
