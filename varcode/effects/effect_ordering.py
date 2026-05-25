@@ -376,10 +376,15 @@ def select_between_exonic_splice_site_and_alternate_effect(effect):
     disruptive coding consequence on its ``alternate_effect``. In
     that case, return the alternate. Otherwise this is the identity.
 
-    For SpliceOutcomeSet, "alternate" is the highest-priority
-    candidate's inner effect — that's the worst case if any of the
-    candidate mechanisms fires, including ExonSkipping / PrematureStop
-    introduced by skipping the disrupted exon.
+    "Alternate" here is specifically the *if-splicing-proceeds*
+    coding effect (``NormalSplicing.coding_effect`` on the wrapper,
+    ``ExonicSpliceSite.alternate_effect`` on the legacy raw class) —
+    **not** the highest-priority across all mechanism candidates.
+    This preserves the legacy ``top_priority_effect`` behavior: an
+    exonic variant that introduces a PrematureStop in-codon still
+    surfaces as PrematureStop, but mechanism-only outcomes like
+    ExonSkipping leave the SpliceOutcomeSet as the canonical top
+    (so the full possibility set stays visible to consumers).
     """
     # Always-on SpliceOutcomeSet: match the legacy unwrap semantics —
     # only ``ExonicSpliceSite``-disruption had a coding alternate worth
