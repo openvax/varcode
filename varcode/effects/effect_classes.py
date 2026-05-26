@@ -808,10 +808,12 @@ class ExonicSpliceSite(Exonic, SpliceSite, MultiOutcomeEffect):
     ``alternate_effect`` stays on the instance as a first-class field
     for back-compat with callers that depended on it.
 
-    This is the **lightweight 2-outcome form**. Callers that want
-    the richer exon-skipping / intron-retention / cryptic-splice
-    candidate set opt into ``splice_outcomes=True`` and get a
-    :class:`~varcode.splice_outcomes.SpliceOutcomeSet` instead.
+    Note: as of varcode 6.0, ``ExonicSpliceSite`` no longer surfaces
+    as the top-level effect at the user-facing API — splice-disrupting
+    variants are always wrapped in
+    :class:`~varcode.splice_outcomes.SpliceOutcomeSet`. ``ExonicSpliceSite``
+    survives as ``splice_set.disrupted_signal_class`` (a type) and as
+    the ``splice_signal`` reference on each candidate (an instance).
     """
     def __init__(self, variant, transcript, exon, alternate_effect):
         Exonic.__init__(self, variant, transcript)

@@ -371,17 +371,38 @@ def multi_gene_effect_sort_key(effect):
 
 def select_between_exonic_splice_site_and_alternate_effect(effect):
     """
-    If the given effect is an ExonicSpliceSite then it might contain
-    an alternate effect of higher priority. In that case, return the
-    alternate effect. Otherwise, this acts as an identity function.
+    If the given effect is an ExonicSpliceSite (or the always-on
+    SpliceOutcomeSet wrapper around one) it might carry a more
+    disruptive coding consequence on its ``alternate_effect``. In
+    that case, return the alternate. Otherwise this is the identity.
 
-    An exact-class check (not ``isinstance``) is used because the
-    function is only meant to unwrap bare ``ExonicSpliceSite``
-    instances. This has a useful side effect under
-    ``splice_outcomes=True``: the wrapping ``SpliceOutcomeSet`` passes
-    through unchanged (so every plausible outcome stays visible) and
-    sorts by its ``priority_class``.
+    "Alternate" here is specifically the *if-splicing-proceeds*
+    coding effect (``NormalSplicing.coding_effect`` on the wrapper,
+    ``ExonicSpliceSite.alternate_effect`` on the legacy raw class) —
+    **not** the highest-priority across all mechanism candidates.
+    This preserves the legacy ``top_priority_effect`` behavior: an
+    exonic variant that introduces a PrematureStop in-codon still
+    surfaces as PrematureStop, but mechanism-only outcomes like
+    ExonSkipping leave the SpliceOutcomeSet as the canonical top
+    (so the full possibility set stays visible to consumers).
     """
+    # Always-on SpliceOutcomeSet: match the legacy unwrap semantics —
+    # only ``ExonicSpliceSite``-disruption had a coding alternate worth
+    # surfacing as the canonical top effect. Intronic disruptions
+    # (SpliceDonor / SpliceAcceptor / IntronicSpliceSite) keep the
+    # SpliceOutcomeSet as the canonical top.
+    from ..splice_outcomes import SpliceOutcomeSet
+    if isinstance(effect, SpliceOutcomeSet):
+        if effect.disrupted_signal_class is not ExonicSpliceSite:
+            return effect
+        alt = effect.alternate_effect
+        if alt is None:
+            return effect
+        signal_priority = effect_priority(effect)
+        alt_priority = effect_priority(alt)
+        if alt_priority > signal_priority:
+            return alt
+        return effect
     if effect.__class__ is not ExonicSpliceSite:
         return effect
     if effect.alternate_effect is None:

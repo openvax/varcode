@@ -12,7 +12,7 @@
 
 import pytest
 from pyensembl import ensembl_grch37
-from varcode import Variant
+from varcode import Variant, SpliceOutcomeSet
 from varcode.effects import (
     ExonicSpliceSite,
     Substitution,
@@ -81,10 +81,12 @@ def test_dbnsfp_validation_set_transcript_mutation(
         "%s not found in %s" % (ensembl_transcript_id, transcript_id_dict)
     effect = transcript_id_dict[ensembl_transcript_id]
 
-    if isinstance(effect, ExonicSpliceSite):
-        # exonic splice site mutations carry with them an alternate effect
-        # which is what we check against dbNSFP (since that database seemed
-        # to ignore exonic splicing mutations)
+    if isinstance(effect, (ExonicSpliceSite, SpliceOutcomeSet)):
+        # Exonic-splice-site mutations carry an alternate effect (the
+        # coding consequence if splicing proceeds) which is what we
+        # check against dbNSFP (the database ignores exonic splice
+        # disruption). Both the legacy ExonicSpliceSite default shape
+        # and the SpliceOutcomeSet wrapper expose ``alternate_effect``.
         effect = effect.alternate_effect
 
     assert isinstance(effect, Substitution), \

@@ -11,7 +11,7 @@
 # limitations under the License.
 
 from pyensembl import ensembl_grch37 as ensembl
-from varcode import Variant
+from varcode import Variant, SpliceOutcomeSet
 from varcode.effects import (
     Substitution,
     Deletion,
@@ -30,11 +30,15 @@ def _get_effect(chrom, pos, dna_ref, dna_alt, transcript_id):
             transcript_id, variant, transcript_dict)
     effect = transcript_dict[transcript_id]
 
-    # COSMIC seems to ignore exonic splice sites
+    # COSMIC seems to ignore exonic splice sites — unwrap to the
+    # underlying coding consequence. Works for both the legacy
+    # ExonicSpliceSite default shape and the SpliceOutcomeSet wrapper
+    # (compat alias resolves to NormalSplicing.coding_effect).
     if isinstance(effect, ExonicSpliceSite):
         return effect.alternate_effect
-    else:
-        return effect
+    if isinstance(effect, SpliceOutcomeSet):
+        return effect.alternate_effect
+    return effect
 
 def _substitution(chrom, pos, dna_ref, dna_alt, transcript_id, aa_ref, aa_alt):
     effect = _get_effect(chrom, pos, dna_ref, dna_alt, transcript_id)

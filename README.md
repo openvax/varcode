@@ -170,30 +170,33 @@ and
 
 ### Splice-site disruption — *where* the signal was hit
 
-DNA-level locations: these effects say a variant landed on or near a
-splice signal, but **don't themselves carry a protein consequence** —
-they say nothing about how the spliceosome responds (see the next
-table for that). All four share the
+DNA-level locations: these classes identify *where* a variant landed
+in the canonical splice window. They no longer appear as top-level
+effects — every splice-disrupting variant is wrapped in a
+`SpliceOutcomeSet` (varcode 6.0+), and these classes survive as the
+wrapper's `disrupted_signal_class` (a type) and as the
+`splice_signal` reference on each candidate mechanism (an instance).
+All four share the
 [`SpliceSite`](https://github.com/openvax/varcode/blob/main/varcode/effects/effect_classes.py#:~:text=class%20SpliceSite%28)
-base, so `from varcode import SpliceSite; isinstance(effect, SpliceSite)`
-matches any of them. (The four leaf classes are exported from the
-package root too.)
+base.
 
 | Effect type | Description |
 | --- | --- |
-| [`SpliceDonor`](https://github.com/openvax/varcode/blob/main/varcode/effects/effect_classes.py#:~:text=class%20SpliceDonor%28) | Mutation in the first two nucleotides of an intron, likely to affect splicing. |
-| [`SpliceAcceptor`](https://github.com/openvax/varcode/blob/main/varcode/effects/effect_classes.py#:~:text=class%20SpliceAcceptor%28) | Mutation in the last two nucleotides of an intron, likely to affect splicing. |
-| [`IntronicSpliceSite`](https://github.com/openvax/varcode/blob/main/varcode/effects/effect_classes.py#:~:text=class%20IntronicSpliceSite%28) | Mutation near the beginning or end of an intron but less likely to affect splicing than donor/acceptor mutations. |
-| [`ExonicSpliceSite`](https://github.com/openvax/varcode/blob/main/varcode/effects/effect_classes.py#:~:text=class%20ExonicSpliceSite%28) | Mutation at the beginning or end of an exon, may affect splicing; itself a `MultiOutcomeEffect` wrapping the alternate exonic coding effect alongside the splice candidates. |
+| [`SpliceDonor`](https://github.com/openvax/varcode/blob/main/varcode/effects/effect_classes.py#:~:text=class%20SpliceDonor%28) | Mutation at canonical donor `GT` (intronic +1/+2). |
+| [`SpliceAcceptor`](https://github.com/openvax/varcode/blob/main/varcode/effects/effect_classes.py#:~:text=class%20SpliceAcceptor%28) | Mutation at canonical acceptor `AG` (intronic -2/-1). |
+| [`IntronicSpliceSite`](https://github.com/openvax/varcode/blob/main/varcode/effects/effect_classes.py#:~:text=class%20IntronicSpliceSite%28) | Other intronic positions in the splice window (+3..+6 donor, -3 acceptor; also +1/+2 or -1/-2 when the reference signal isn't canonical). |
+| [`ExonicSpliceSite`](https://github.com/openvax/varcode/blob/main/varcode/effects/effect_classes.py#:~:text=class%20ExonicSpliceSite%28) | Last 3 bases of an exon (donor side) or first base of an exon (acceptor side); changes a codon *and* disrupts the splice signal. Carries `alternate_effect` (the coding consequence if splicing proceeds). |
 
 ### Splice mechanism — *what the spliceosome does* in response
 
 **These are the splice effects that carry a protein consequence.** The
 protein-level outcome of a splice-signal hit is not deterministic from
-DNA alone, so (when you opt in with `splice_outcomes=True`) varcode
-emits these as candidates inside a
+DNA alone, so varcode wraps every splice-signal disruption in a
 [`SpliceOutcomeSet`](https://github.com/openvax/varcode/blob/main/varcode/splice_outcomes.py#:~:text=class%20SpliceOutcomeSet%28)
-(a `MultiOutcomeEffect`). Each mechanism carries the originating
+(a `MultiOutcomeEffect`) carrying these mechanisms as candidates.
+Wrapping is always-on as of varcode 6.0 and lazy — only the cheap
+`NormalSplicing` candidate is built eagerly; the rest materialise on
+`.candidates` access. Each mechanism carries the originating
 disruption on its `.splice_signal` attribute (a `SpliceSite`
 *instance*), so you can always recover *where* the hit was off any
 mechanism. The set also records the disruption's *class* on

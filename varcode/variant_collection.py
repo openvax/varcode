@@ -115,22 +115,23 @@ class VariantCollection(Collection):
         return self.from_dict(kwargs)
 
     def effects(
-            self, raise_on_error=True, splice_outcomes=False,
+            self, raise_on_error=True,
             annotator=None, phase_resolver=None, rna_resolver=None,
             germline=None, validate_reference=True):
         """
+        Splice-disrupting effects are always wrapped in a
+        :class:`varcode.splice_outcomes.SpliceOutcomeSet` carrying the
+        candidate mechanisms (always-on as of varcode 6.0). Mechanism
+        candidates are computed lazily — only the cheap
+        ``NormalSplicing`` candidate is built eagerly. See
+        openvax/varcode#262, #391.
+
         Parameters
         ----------
         raise_on_error : bool, optional
             If exception is raised while determining effect of variant on a
             transcript, should it be raised? This default is True, meaning
             errors result in raised exceptions, otherwise they are only logged.
-
-        splice_outcomes : bool, optional
-            If True, splice-disrupting effects are wrapped in a
-            :class:`varcode.splice_outcomes.SpliceOutcomeSet` carrying
-            multiple plausible outcomes. Opt-in; default False
-            preserves existing behaviour. See openvax/varcode#262.
 
         annotator : str, EffectAnnotator, or None
             Per-call annotator override applied to every variant in
@@ -189,7 +190,6 @@ class VariantCollection(Collection):
             for variant in self
             for effect in variant.effects(
                 raise_on_error=raise_on_error,
-                splice_outcomes=splice_outcomes,
                 annotator=annotator,
                 germline=germline,
                 phase_resolver=phase_resolver,

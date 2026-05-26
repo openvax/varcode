@@ -1,6 +1,6 @@
 # Change Log
 
-## [Unreleased]
+## [v6.0.0](https://github.com/openvax/varcode/tree/v6.0.0) (2026-05-26)
 
 **Fixed**
 - `apply_variants_to_transcript` now refuses an insertion abutting
@@ -26,8 +26,52 @@
   through `MolecularPhaseResolver(source)` and lives behind the optional
   `varcode[rna]` / `pysam` dependency. `ReadPhaseResolver` remains as
   the varcode 5.0 compatibility name.
+- `SpliceOutcomeSet.effect_if_splicing_unchanged` — the canonical
+  "alternative outcome" accessor: the coding consequence that applies
+  if splicing proceeds normally (the `NormalSplicing` candidate's
+  `coding_effect`). Unlike the legacy `ExonicSpliceSite.alternate_effect`,
+  it works for intronic splice disruptions — returning `None` when
+  the nucleotide change leaves the protein untouched (i.e. there is
+  no coding consequence to attach). Sits alongside `most_likely_effect`
+  and `candidates` as the three-accessor surface on `SpliceOutcomeSet`
+  ([#391](https://github.com/openvax/varcode/issues/391)).
 
 **Breaking**
+- `SpliceOutcomeSet` is now always-on for splice-disrupting variants
+  ([#391](https://github.com/openvax/varcode/issues/391)). Every variant
+  that lands in the canonical splice window — `SpliceDonor`,
+  `SpliceAcceptor`, `ExonicSpliceSite`, `IntronicSpliceSite` — is
+  wrapped in a `SpliceOutcomeSet` carrying the candidate mechanisms.
+  Specifically:
+  - The `splice_outcomes=True` flag on `Variant.effects()` /
+    `VariantCollection.effects()` / `predict_variant_effects()` is
+    **removed**. Callers passing it explicitly get a `TypeError`.
+    Migration: drop the keyword — wrapping is unconditional.
+  - `Variant.effect_on_transcript(transcript)` and the
+    `FastEffectAnnotator` / `ProteinDiffEffectAnnotator` per-transcript
+    paths return a `SpliceOutcomeSet` for splice-disrupting variants
+    instead of the raw `ExonicSpliceSite` / `SpliceDonor` / etc. class.
+    Migration: replace `isinstance(effect, ExonicSpliceSite)` with
+    `isinstance(effect, SpliceOutcomeSet) and effect.disrupted_signal_class is ExonicSpliceSite`.
+    `effect.alternate_effect` still works as a back-compat alias for
+    `effect.effect_if_splicing_unchanged`, so attribute access keeps
+    working through the wrapper.
+  - `SpliceOutcomeSet.modifies_protein_sequence` is hardcoded to
+    `True` (a splice disruption is always *potentially* protein-
+    modifying via a non-`NormalSplicing` candidate). Closes a long-
+    standing filter bug where `drop_silent_and_noncoding()` silently
+    dropped exonic-splice-site variants whose `NormalSplicing.coding_effect`
+    happened to be `Silent`.
+  - Candidate construction is lazy: only the cheap `NormalSplicing`
+    candidate is built eagerly; `ExonSkipping`, `IntronRetention`,
+    `CrypticDonor` / `CrypticAcceptor` materialise on first
+    `.candidates` access. Pipelines that filter on
+    `modifies_protein_sequence` / `effect_priority` and never read
+    `.candidates` pay only the eager cost.
+  - `SpliceOutcomeSet` is now a `TranscriptMutationEffect` subclass
+    (alongside `MultiOutcomeEffect`), so it carries `gene` /
+    `transcript` and matches the standard `isinstance(effect, TranscriptMutationEffect)`
+    filter used by downstream consumers.
 - Unified the multi-outcome machinery: `SpliceCandidate` deleted;
   `MultiOutcomeEffect.outcomes` accessor + `_with_extra_outcomes`
   helper + `_extra_outcomes` slot removed

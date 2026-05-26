@@ -74,26 +74,24 @@ def test_candidates_from_effects_tags_source():
 
 
 def test_exonic_splice_site_exposes_outcomes():
-    """Real integration: an SNV at the last base of an exon yields
-    ``ExonicSpliceSite``, which is a ``MultiOutcomeEffect``. Its
-    ``.candidates`` should return two :class:`EffectCandidate` entries (the
-    splice-disruption outcome and the coding-change alternate)."""
+    """Real integration: an SNV at the last base of an exon yields a
+    SpliceOutcomeSet wrapping an ExonicSpliceSite. The set is a
+    ``MultiOutcomeEffect``; its ``.candidates`` returns the splicing
+    mechanism candidates (NormalSplicing, ExonSkipping, IntronRetention,
+    cryptic) as :class:`EffectCandidate` entries."""
+    from varcode import SpliceOutcomeSet
     # CFTR exon 3 ends at 117531114 (last exon base).
     variant = Variant("7", 117531114, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id("ENST00000003084")
     effect = variant.effect_on_transcript(transcript)
     assert isinstance(effect, MultiOutcomeEffect)
-    assert isinstance(effect, ExonicSpliceSite)
+    assert isinstance(effect, SpliceOutcomeSet)
+    assert effect.disrupted_signal_class is ExonicSpliceSite
 
     outcomes = effect.candidates
-    assert len(outcomes) == 2
+    assert len(outcomes) >= 2  # NormalSplicing + at least one mechanism
     assert all(isinstance(o, EffectCandidate) for o in outcomes)
-    # First outcome: the splice-disruption classification (the
-    # ExonicSpliceSite itself).
-    assert outcomes[0].effect is effect
-    # Second outcome: the coding-change alternate.
-    assert outcomes[1].effect is effect.alternate_effect
-    # Both default to varcode-source.
+    # All candidates default to varcode-source.
     assert all(o.source == "varcode" for o in outcomes)
 
 
@@ -135,7 +133,7 @@ def test_uniform_iteration_sv_and_splice_outcomes():
         sv, transcript)
 
     splice_variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
-    splice_effects = splice_variant.effects(splice_outcomes=True)
+    splice_effects = splice_variant.effects()
     splice_effect = next(
         e for e in splice_effects if e.transcript is transcript)
 
