@@ -1,6 +1,6 @@
 # Change Log
 
-## [Unreleased]
+## [v6.0.0](https://github.com/openvax/varcode/tree/v6.0.0) (2026-05-26)
 
 **Fixed**
 - `apply_variants_to_transcript` now refuses an insertion abutting
