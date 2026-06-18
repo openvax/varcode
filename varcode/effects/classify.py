@@ -120,13 +120,36 @@ def classify_from_protein_diff(
             aa_mutation_start_offset=aa_offset,
             shifted_sequence=alt_delta)
 
+    # A mutant protein that is shorter than the reference and truncated
+    # at the tail is only a PrematureStop if the mutant CDS actually
+    # contains a stop codon. When an in-frame deletion removes the stop
+    # codon of a transcript with no 3' UTR to read into, translation
+    # simply runs off the end of the available sequence — there is no
+    # stop codon at all, so the shortened protein is a C-terminal
+    # Deletion (a stop-loss with no predictable readthrough), not a
+    # PrematureStop. Mirror the in-frame predictor, which reports a
+    # Deletion here. See #394. (When mutant_transcript is unavailable —
+    # e.g. the splice-outcome builder — we can't tell, so fall back to
+    # the historical PrematureStop classification.)
+    mutant_translation_ran_off_end = False
+    if (mutant_transcript is not None
+            and mutant_transcript.cdna_sequence is not None):
+        cds_start = min(transcript.start_codon_spliced_offsets)
+        n_mutant_codons = (
+            len(mutant_transcript.cdna_sequence) - cds_start) // 3
+        # translate() stops *before* the stop codon, so a protein that
+        # consumed every available codon never encountered one.
+        mutant_translation_ran_off_end = len(mut_protein) >= n_mutant_codons
+
     # Premature stop: mutant protein shorter than reference and the
     # change is at the tail (the trimmed alt runs to the end of the
     # mutant protein). Use the single reference residue at the stop-
     # creation point as aa_ref (matching fast's convention, which
     # shows the codon that became a stop rather than the entire
     # truncated tail).
-    if len(mut_protein) < len(ref_protein) and aa_offset + n_alt == len(mut_protein):
+    if (len(mut_protein) < len(ref_protein)
+            and aa_offset + n_alt == len(mut_protein)
+            and not mutant_translation_ran_off_end):
         aa_ref = ref_protein[aa_offset] if aa_offset < len(ref_protein) else ref_delta
 
         # Whole-protein trimming can't distinguish a codon-aligned

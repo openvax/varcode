@@ -283,7 +283,7 @@ def predict_in_frame_coding_effect(
             transcript=transcript,
             aa_pos=aa_mutation_start_offset - n_aa_shared,
             aa_ref=shared_prefix + shared_suffix)
-    elif using_three_prime_utr:
+    elif using_three_prime_utr and n_aa_alt > 0:
         # if non-silent mutation is at the end of the protein then
         # should be a stop-loss
         return StopLoss(
@@ -292,6 +292,22 @@ def predict_in_frame_coding_effect(
             aa_ref=aa_ref,
             aa_alt=aa_alt)
     elif n_aa_alt == 0:
+        # A mutation can disrupt the original stop codon (so
+        # using_three_prime_utr is True) yet add no new amino acids when the
+        # transcript has no 3' UTR sequence to translate into — e.g. MAPK3-006
+        # / ENST00000395199, whose three_prime_utr_sequence is "". With no
+        # readthrough sequence we can't predict an extended protein, so the
+        # honest classification is an in-frame deletion of the C-terminal
+        # residues rather than a StopLoss with an empty aa_alt (which the
+        # StopLoss constructor rejects). Closes #394; the earlier #246 fix
+        # only covered transcripts with a non-empty 3' UTR.
+        #
+        # This is a deliberate choice over a dedicated StopLossDeletion class:
+        # the readthrough peptide is unknowable here, so a Deletion carries
+        # all the predictable consequence. The trade-off is that it ranks at
+        # in-frame-deletion priority rather than stop-loss priority; in
+        # practice a sibling transcript with a real 3' UTR surfaces the
+        # StopLoss for top_priority_effect. See #394 discussion.
         return Deletion(
             variant,
             transcript,
