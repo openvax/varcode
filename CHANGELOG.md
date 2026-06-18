@@ -1,6 +1,6 @@
 # Change Log
 
-## [Unreleased](https://github.com/openvax/varcode/tree/HEAD)
+## [v6.0.1](https://github.com/openvax/varcode/tree/v6.0.1) (2026-06-18)
 
 **Fixed**
 - In-frame deletions that remove the stop codon of a transcript with no
@@ -9,7 +9,12 @@
   `ValueError: If no amino acids added by StopLoss then it should be Silent`.
   With no readthrough sequence to translate into, the effect is now
   classified as a C-terminal `Deletion` instead of an invalid `StopLoss`
-  with an empty `aa_alt`. The earlier
+  with an empty `aa_alt`. Both annotators agree on this: the in-frame
+  predictor (`FastEffectAnnotator`) no longer constructs the invalid
+  `StopLoss`, and the default protein-diff classifier
+  (`classify_from_protein_diff`) no longer mislabels the truncated protein
+  as a `PrematureStop` — there is no stop codon in the mutant CDS, so a
+  premature stop is incorrect. The earlier
   [#246](https://github.com/openvax/varcode/issues/246) fix only covered
   transcripts with a non-empty 3' UTR
   ([#394](https://github.com/openvax/varcode/issues/394)).

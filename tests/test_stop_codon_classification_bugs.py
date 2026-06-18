@@ -245,3 +245,55 @@ def test_394_predict_in_frame_empty_3p_utr_is_deletion_unit():
             getattr(effect, "short_description", effect))
     assert effect.aa_ref == "T"
     assert effect.aa_alt == ""
+
+
+def test_394_default_annotator_agrees_on_deletion():
+    # The reported variant spans the exon boundary, so the default
+    # (protein_diff) annotator falls back to the fast path. This variant
+    # is a clean in-frame deletion fully inside the last exon that still
+    # removes the stop codon of the empty-3'UTR transcript, so it exercises
+    # the protein_diff *slow path* (classify_from_protein_diff) directly.
+    #
+    # Without the classify.py guard this returned PrematureStop ("p.G355*"),
+    # which is wrong — there is no stop codon in the mutant CDS at all, the
+    # protein just runs out of sequence. Both annotators must agree it's a
+    # C-terminal Deletion, matching the #394 decision.
+    variant = Variant(
+        contig="16",
+        start=30128158,
+        ref="CTACGTGCCCCC",
+        alt="",
+        genome="GRCh37",
+    )
+    transcript = variant.ensembl.transcript_by_id("ENST00000395199")
+    assert transcript.three_prime_utr_sequence == ""
+
+    effect = _coding_effect(variant.effect_on_transcript(transcript))
+    assert effect.__class__ is Deletion, \
+        "Expected Deletion, got %s (%s)" % (
+            effect.__class__.__name__,
+            getattr(effect, "short_description", effect))
+    assert effect.short_description == "p.GGT354del", \
+        "Expected p.GGT354del, got %r" % effect.short_description
+
+
+def test_394_genuine_premature_stop_still_classified_as_premature_stop():
+    # Regression guard for the classify.py change: an insertion that
+    # introduces a real stop codon (so the mutant CDS *does* contain a
+    # stop) must still be a PrematureStop, not rerouted to Deletion.
+    # BRCA1-001 / ENST00000357654, reverse strand; inserting "CTA" near
+    # the phase-0 start of exon 12 places a stop codon early in the CDS.
+    from varcode.effects import PrematureStop
+    variant = Variant(
+        contig="17",
+        start=43082575 - 6,
+        ref="",
+        alt="CTA",
+        genome="GRCh38",
+    )
+    transcript = variant.ensembl.transcript_by_id("ENST00000357654")
+    effect = _coding_effect(variant.effect_on_transcript(transcript))
+    assert effect.__class__ is PrematureStop, \
+        "Expected PrematureStop, got %s (%s)" % (
+            effect.__class__.__name__,
+            getattr(effect, "short_description", effect))
