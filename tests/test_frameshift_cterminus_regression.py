@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Regression test for openvax/varcode#<ISSUE>.
+"""Regression test for openvax/varcode#397.
 
 ``classify_from_protein_diff`` (used by the default ``protein_diff`` annotator)
 derived a frameshift's ``shifted_sequence`` from ``trim_shared_flanking_strings``,

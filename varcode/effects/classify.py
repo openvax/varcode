@@ -108,7 +108,7 @@ def classify_from_protein_diff(
         # C-terminus must be kept. Derive the novel tail by trimming the shared PREFIX
         # only -- not `alt_delta`, which also had the shared *suffix* trimmed off and so
         # drops real novel residues (e.g. ATM p.F61fs loses its terminal V because the
-        # reference ATM protein also ends in V). See openvax/varcode#<ISSUE>.
+        # reference ATM protein also ends in V). See openvax/varcode#397.
         _, fs_shifted, fs_prefix = trim_shared_prefix(ref_protein, mut_protein)
         fs_offset = len(fs_prefix)
         # Guard: if the mutation offset is past the end of the reference protein, the
