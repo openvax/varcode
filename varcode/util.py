@@ -53,17 +53,18 @@ def random_variants(
         transcript_ids = ensembl.transcript_ids()
         _transcript_ids_cache[ensembl] = transcript_ids
 
-    # Only draw from transcripts on contigs the genome considers valid.
-    # ``transcript_ids()`` includes transcripts on alternate/patch scaffolds
-    # (e.g. 'CHR_HSCHR11_2_CTG1') whose contig is NOT in ``genome.contigs()``;
-    # a Variant built there passes construction but raises
-    # ``ValueError: Invalid contig name`` lazily, when effect prediction
-    # accesses ``.transcripts`` (see Variant._check_that_genome_has_contig).
-    # Mirror that validity set here so we never hand back a variant that
-    # can't be annotated.
-    valid_contigs = set(ensembl.contigs())
-
     variants = []
+
+    # Effect prediction validates a variant's contig against its OWN
+    # ``self.genome.contigs()`` (see Variant._check_that_genome_has_contig),
+    # where ``self.genome = infer_genome(ensembl)`` -- NOT necessarily the
+    # ``ensembl`` object passed here, and whose contig set can exclude
+    # alternate/patch scaffolds (e.g. 'CHR_HSCHR11_2_CTG1'). A variant built on
+    # such a scaffold passes construction but raises ``ValueError: Invalid
+    # contig name`` lazily, when it's annotated. Validate against the variant's
+    # own genome so every returned variant is annotatable. Computed once from
+    # the first successfully-built variant (all share the same genome).
+    valid_contigs = None
 
     # we should finish way before this loop is over but just in case
     # something is wrong with PyEnsembl we want to avoid an infinite loop
@@ -73,11 +74,6 @@ def random_variants(
             transcript = ensembl.transcript_by_id(transcript_id)
 
             if not transcript.complete:
-                continue
-
-            if transcript.contig not in valid_contigs:
-                # Alternate/patch scaffold — Variant would reject this contig
-                # during annotation. Skip and draw another.
                 continue
 
             try:
@@ -110,13 +106,15 @@ def random_variants(
                     alt=alt,
                     ensembl=ensembl)
             except ValueError:
-                # Some transcripts live on alternate/patch contigs (e.g.
-                # 'CHR_HSCHR19LRC_COX1_CTG3_1') that Variant rejects as
-                # non-standard for the reference, and a few have sequence /
-                # offset edge cases. Skip and draw another transcript rather
-                # than failing the whole generator on an unlucky pick — this
-                # otherwise made the result depend on the (often unseeded)
-                # draw order.
+                # A few transcripts have sequence/offset edge cases that make
+                # Variant construction itself raise; skip and draw another.
+                continue
+            if valid_contigs is None:
+                valid_contigs = set(variant.genome.contigs())
+            if variant.contig not in valid_contigs:
+                # Alternate/patch scaffold whose contig isn't in the genome's
+                # valid set — annotating it would raise ValueError lazily.
+                # This is what previously made the (unseeded) timing test flaky.
                 continue
             variants.append(variant)
         else:
