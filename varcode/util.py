@@ -55,17 +55,6 @@ def random_variants(
 
     variants = []
 
-    # Effect prediction validates a variant's contig against its OWN
-    # ``self.genome.contigs()`` (see Variant._check_that_genome_has_contig),
-    # where ``self.genome = infer_genome(ensembl)`` -- NOT necessarily the
-    # ``ensembl`` object passed here, and whose contig set can exclude
-    # alternate/patch scaffolds (e.g. 'CHR_HSCHR11_2_CTG1'). A variant built on
-    # such a scaffold passes construction but raises ``ValueError: Invalid
-    # contig name`` lazily, when it's annotated. Validate against the variant's
-    # own genome so every returned variant is annotatable. Computed once from
-    # the first successfully-built variant (all share the same genome).
-    valid_contigs = None
-
     # we should finish way before this loop is over but just in case
     # something is wrong with PyEnsembl we want to avoid an infinite loop
     for _ in range(count * 100):
@@ -105,16 +94,25 @@ def random_variants(
                     ref=ref,
                     alt=alt,
                     ensembl=ensembl)
+                # Force the lazy contig validation NOW, through the exact path
+                # effect prediction uses: Variant.transcripts calls
+                # _check_that_genome_has_contig, which reads a process-wide
+                # valid-contig cache keyed by reference name. A variant built on
+                # an alternate/patch scaffold (e.g. 'CHR_HSCHR6_MHC_MCF_CTG1')
+                # constructs fine but raises here; skipping now guarantees we
+                # never return a variant that blows up a later .effects().
+                # Going through .transcripts -- not a separately computed contig
+                # set -- is what makes this consistent with the caller (earlier
+                # attempts compared against the wrong set and let scaffolds
+                # through).
+                overlapping = variant.transcripts
             except ValueError:
-                # A few transcripts have sequence/offset edge cases that make
-                # Variant construction itself raise; skip and draw another.
+                # Alternate/patch-scaffold contig, or a transcript with a
+                # sequence/offset edge case: skip and draw another rather than
+                # failing the whole generator on an unlucky (often unseeded)
+                # pick.
                 continue
-            if valid_contigs is None:
-                valid_contigs = set(variant.genome.contigs())
-            if variant.contig not in valid_contigs:
-                # Alternate/patch scaffold whose contig isn't in the genome's
-                # valid set — annotating it would raise ValueError lazily.
-                # This is what previously made the (unseeded) timing test flaky.
+            if not overlapping:
                 continue
             variants.append(variant)
         else:
