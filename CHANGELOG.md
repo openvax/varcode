@@ -1,5 +1,23 @@
 # Change Log
 
+## [v6.0.2](https://github.com/openvax/varcode/tree/v6.0.2) (2026-07-08)
+
+**Fixed**
+- The default protein-diff annotator (`classify_from_protein_diff`) no
+  longer drops the last 1–2 residues of a frameshift/stop-loss novel
+  C-terminus when that tail coincidentally ends with the same residue(s)
+  as the reference protein's own C-terminus. Reading-frame-changing
+  branches now trim only the shared *prefix* (`trim_shared_prefix`)
+  instead of `trim_shared_flanking_strings`, which also stripped a shared
+  *suffix* — correct for an in-frame indel, but wrong for a novel tail
+  running to a new stop codon. Example: ATM p.F61fs (GRCh38
+  `chr11:g.108227882delT`, `ENST00000675843`) now reports `74 aa … FRKKQNV`
+  from `Variant.effects()`, matching `annotator="fast"` and the true ORF,
+  instead of the truncated `73 aa … FRKKQN`. `annotator="fast"` and
+  `predict_variant_effect_on_transcript()` were never affected
+  ([#396](https://github.com/openvax/varcode/pull/396),
+  [#397](https://github.com/openvax/varcode/issues/397)).
+
 ## [v6.0.1](https://github.com/openvax/varcode/tree/v6.0.1) (2026-06-18)
 
 **Fixed**
