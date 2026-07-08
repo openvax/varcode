@@ -53,6 +53,16 @@ def random_variants(
         transcript_ids = ensembl.transcript_ids()
         _transcript_ids_cache[ensembl] = transcript_ids
 
+    # Only draw from transcripts on contigs the genome considers valid.
+    # ``transcript_ids()`` includes transcripts on alternate/patch scaffolds
+    # (e.g. 'CHR_HSCHR11_2_CTG1') whose contig is NOT in ``genome.contigs()``;
+    # a Variant built there passes construction but raises
+    # ``ValueError: Invalid contig name`` lazily, when effect prediction
+    # accesses ``.transcripts`` (see Variant._check_that_genome_has_contig).
+    # Mirror that validity set here so we never hand back a variant that
+    # can't be annotated.
+    valid_contigs = set(ensembl.contigs())
+
     variants = []
 
     # we should finish way before this loop is over but just in case
@@ -63,6 +73,11 @@ def random_variants(
             transcript = ensembl.transcript_by_id(transcript_id)
 
             if not transcript.complete:
+                continue
+
+            if transcript.contig not in valid_contigs:
+                # Alternate/patch scaffold — Variant would reject this contig
+                # during annotation. Skip and draw another.
                 continue
 
             try:
