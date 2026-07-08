@@ -29,7 +29,10 @@ This module deliberately does NOT handle:
   annotator) special-cases that before calling this function.
 """
 
-from ..string_helpers import trim_shared_flanking_strings
+from ..string_helpers import (
+    trim_shared_flanking_strings,
+    trim_shared_prefix,
+)
 from .effect_classes import (
     ComplexSubstitution,
     Deletion,
@@ -100,25 +103,33 @@ def classify_from_protein_diff(
 
     # Frameshift: cDNA length change not divisible by 3.
     if length_delta % 3 != 0:
-        # Guard: if the mutation offset is past the end of the
-        # reference protein, the edit is in the stop-codon / 3'UTR
-        # region. That's a StopLoss, not a FrameShift.
-        if aa_offset >= len(ref_protein):
+        # A reading-frame change produces a NOVEL C-terminus that runs to a new stop
+        # codon, so a residue it coincidentally shares with the reference protein's own
+        # C-terminus must be kept. Derive the novel tail by trimming the shared PREFIX
+        # only -- not `alt_delta`, which also had the shared *suffix* trimmed off and so
+        # drops real novel residues (e.g. ATM p.F61fs loses its terminal V because the
+        # reference ATM protein also ends in V). See openvax/varcode#<ISSUE>.
+        _, fs_shifted, fs_prefix = trim_shared_prefix(ref_protein, mut_protein)
+        fs_offset = len(fs_prefix)
+        # Guard: if the mutation offset is past the end of the reference protein, the
+        # edit is in the stop-codon / 3'UTR region. That's a StopLoss, not a FrameShift.
+        if fs_offset >= len(ref_protein):
             return StopLoss(
                 variant=variant,
                 transcript=transcript,
                 aa_ref="",
-                aa_alt=alt_delta)
-        if n_alt == 0:
+                aa_alt=fs_shifted)
+        # No novel residues after the shared prefix -> an immediate stop (true truncation).
+        if len(fs_shifted) == 0:
             return FrameShiftTruncation(
                 variant=variant,
                 transcript=transcript,
-                stop_codon_offset=aa_offset)
+                stop_codon_offset=fs_offset)
         return FrameShift(
             variant=variant,
             transcript=transcript,
-            aa_mutation_start_offset=aa_offset,
-            shifted_sequence=alt_delta)
+            aa_mutation_start_offset=fs_offset,
+            shifted_sequence=fs_shifted)
 
     # A mutant protein that is shorter than the reference and truncated
     # at the tail is only a PrematureStop if the mutant CDS actually
