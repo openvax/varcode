@@ -65,33 +65,44 @@ def random_variants(
             if not transcript.complete:
                 continue
 
-            exon = rng.choice(transcript.exons)
-            base1_genomic_position = rng.randint(exon.start, exon.end)
-            transcript_offset = transcript.spliced_offset(base1_genomic_position)
-            seq = transcript.sequence
+            try:
+                exon = rng.choice(transcript.exons)
+                base1_genomic_position = rng.randint(exon.start, exon.end)
+                transcript_offset = transcript.spliced_offset(
+                    base1_genomic_position)
+                seq = transcript.sequence
 
-            ref = str(seq[transcript_offset])
-            if transcript.on_backward_strand:
-                ref = reverse_complement(ref)
+                ref = str(seq[transcript_offset])
+                if transcript.on_backward_strand:
+                    ref = reverse_complement(ref)
 
-            alt_nucleotides = [x for x in STANDARD_NUCLEOTIDES if x != ref]
+                alt_nucleotides = [x for x in STANDARD_NUCLEOTIDES if x != ref]
 
-            if insertions:
-                nucleotide_pairs = [
-                    x + y
-                    for x in STANDARD_NUCLEOTIDES
-                    for y in STANDARD_NUCLEOTIDES
-                ]
-                alt_nucleotides.extend(nucleotide_pairs)
-            if deletions:
-                alt_nucleotides.append("")
-            alt = rng.choice(alt_nucleotides)
-            variant = Variant(
-                transcript.contig,
-                base1_genomic_position,
-                ref=ref,
-                alt=alt,
-                ensembl=ensembl)
+                if insertions:
+                    nucleotide_pairs = [
+                        x + y
+                        for x in STANDARD_NUCLEOTIDES
+                        for y in STANDARD_NUCLEOTIDES
+                    ]
+                    alt_nucleotides.extend(nucleotide_pairs)
+                if deletions:
+                    alt_nucleotides.append("")
+                alt = rng.choice(alt_nucleotides)
+                variant = Variant(
+                    transcript.contig,
+                    base1_genomic_position,
+                    ref=ref,
+                    alt=alt,
+                    ensembl=ensembl)
+            except ValueError:
+                # Some transcripts live on alternate/patch contigs (e.g.
+                # 'CHR_HSCHR19LRC_COX1_CTG3_1') that Variant rejects as
+                # non-standard for the reference, and a few have sequence /
+                # offset edge cases. Skip and draw another transcript rather
+                # than failing the whole generator on an unlucky pick — this
+                # otherwise made the result depend on the (often unseeded)
+                # draw order.
+                continue
             variants.append(variant)
         else:
             return VariantCollection(variants)
