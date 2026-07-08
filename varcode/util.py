@@ -26,13 +26,26 @@ def random_variants(
         genome_name="GRCh38",
         deletions=True,
         insertions=True,
-        random_seed=None):
+        random_seed=None,
+        ensembl=None):
     """
     Generate a VariantCollection with random variants that overlap
     at least one complete coding transcript.
+
+    Parameters
+    ----------
+    ensembl : pyensembl.EnsemblRelease, optional
+        Explicit genome to draw transcripts from. When ``None`` (default)
+        the genome is resolved from ``genome_name`` via
+        :func:`genome_for_reference_name`, which picks pyensembl's *latest*
+        release for that assembly. Pass a pinned release (e.g.
+        ``cached_release(81)``) when the caller needs deterministic data
+        that is actually installed — ``genome_for_reference_name`` can
+        resolve to a release that hasn't been downloaded.
     """
     rng = random.Random(random_seed)
-    ensembl = genome_for_reference_name(genome_name)
+    if ensembl is None:
+        ensembl = genome_for_reference_name(genome_name)
 
     if ensembl in _transcript_ids_cache:
         transcript_ids = _transcript_ids_cache[ensembl]

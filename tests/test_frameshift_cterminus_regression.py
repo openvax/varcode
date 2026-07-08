@@ -25,12 +25,29 @@ ATM reference protein also ends in ``V`` -- so the shared-suffix trim previously
 yielded 73 aa ending ``...F-R-K-K-Q-N``.
 """
 
+import pytest
 from pyensembl import cached_release
 
 from varcode import Variant
 from varcode.effects import FrameShift
 
 ensembl_grch38 = cached_release(115)
+
+# This regression is pinned against the exact reported variant (ATM p.F61fs
+# on MANE Select ENST00000675843), which only exists in newer Ensembl
+# releases. Skip cleanly when release 115 isn't installed -- CI's data mirror
+# (openvax/ensembl-data) tops out at GRCh38.95, so 115 is unavailable there.
+# The same bug CLASS is exercised on an installed release (81) by
+# tests/test_annotator_divergence_scenarios.py (CFTR p.L127fs, BRCA1 p.R71fs)
+# and tests/test_protein_diff_parity.py, so CI coverage of #396/#397 does not
+# depend on release 115.
+try:
+    ensembl_grch38.transcript_by_id("ENST00000675843")
+except Exception as _exc:  # pyensembl raises if the GTF DB isn't downloaded
+    pytest.skip(
+        "Ensembl release 115 not installed (%s); ATM regression covered on "
+        "release 81 elsewhere." % type(_exc).__name__,
+        allow_module_level=True)
 
 
 def _atm_f61fs_effect(annotator):
