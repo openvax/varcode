@@ -67,6 +67,20 @@ jobs:
       - name: Run unit tests
         run: |
           ./test.sh
+      # Cross-annotator parity gate. The run above exercises the default
+      # annotator (fast); this re-runs the whole suite with protein_diff
+      # as the default, so any test whose bare .effects() would diverge
+      # under protein_diff fails CI. This keeps fast and protein_diff
+      # compatible across ALL tests, not just tests/test_protein_diff_parity.py
+      # — load-bearing now that fast is the default while protein_diff
+      # remains the splice/germline substrate (see #397, #398). One Python
+      # version suffices: annotator parity is a property of the code, not
+      # the interpreter. Run without --cov so it doesn't clobber the
+      # coverage file the Coveralls step below uploads.
+      - name: Cross-annotator parity gate (full suite under protein_diff)
+        if: matrix.python-version == '3.11'
+        run: |
+          pytest tests -q --annotator=protein_diff
       - name: Publish coverage to Coveralls
         uses: coverallsapp/github-action@v2.3.6
         with:
