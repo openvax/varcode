@@ -15,8 +15,20 @@ Helper functions and shared datasets for tests
 """
 
 import os
+from pyensembl import cached_release
 from varcode import Variant, VariantCollection, load_maf
 import pandas as pd
+
+# Pin shared fixtures to the suite's standard GRCh38 release (81) rather than
+# letting Variant default to "GRCh38", which resolves to pyensembl's LATEST
+# release (e.g. 115). That default is not installed in CI (the
+# openvax/ensembl-data mirror tops out at GRCh38.95), so any test that
+# annotates these snps -- including test_collection_filtering, which calls
+# .effects() at import -- would flake on "GTF database needs to be created".
+# Release 81 is what the downstream transcript-id assertions were written
+# against.
+ENSEMBL_GRCH38 = cached_release(81)
+
 
 def data_path(name):
     """
@@ -33,17 +45,20 @@ snp_rs4244285 = Variant(
     contig=10,
     start=94781859,
     ref="G",
-    alt="A")
+    alt="A",
+    ensembl=ENSEMBL_GRCH38)
 snp_rs1537415 = Variant(
     contig=9,
     start=135637876,
     ref="C",
-    alt="G")
+    alt="G",
+    ensembl=ENSEMBL_GRCH38)
 snp_rs3892097 = Variant(
     contig=22,
     start=42524947,
     ref="G",
-    alt="A")
+    alt="A",
+    ensembl=ENSEMBL_GRCH38)
 
 db_snp_variants = VariantCollection([
     snp_rs4244285,
