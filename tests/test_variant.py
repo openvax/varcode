@@ -16,10 +16,16 @@ of shared prefix/suffix strings from ref/alt fields.
 """
 
 import pickle
-from pyensembl import ensembl_grch38
+from pyensembl import cached_release
 
 from varcode import Variant
 from .common import eq_
+
+# Pin to an installed release rather than pyensembl's module-level
+# ``ensembl_grch38`` (its LATEST known release, e.g. 115), which isn't on the
+# CI mirror and would flake on runtime auto-download. Matches the convention
+# used across the rest of the suite.
+ensembl_grch38 = cached_release(81)
 
 def test_insertion_shared_prefix():
     variant = Variant(1, start=10, ref="AA", alt="AAT")

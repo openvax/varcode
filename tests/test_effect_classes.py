@@ -39,7 +39,7 @@ from varcode.effects import (
     FrameShiftTruncation,
     # TODO: SpliceDonor, SpliceReceptor
 )
-from pyensembl import ensembl_grch37, cached_release, genome_for_reference_name
+from pyensembl import ensembl_grch37, cached_release
 
 from .common import expect_effect
 
@@ -47,7 +47,11 @@ from .common import expect_effect
 # are very specific to Ensembl data between releases 77-81
 ensembl_grch38 = cached_release(81)
 
-mouse_genome = genome_for_reference_name("grcm38")
+# Pin to the installed mouse release (CI provisions GRCm38.95) rather than
+# genome_for_reference_name("grcm38"), which resolves to the latest known
+# GRCm38 release (102) and would flake on runtime auto-download. The asserted
+# transcript (ENSMUST00000021049 / Psmc5) is identical across 95 and 102.
+mouse_genome = cached_release(95, species="mouse")
 
 def test_incomplete():
     # transcript EGFR-009 (ENST00000450046 in Ensembl 78)
