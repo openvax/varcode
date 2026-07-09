@@ -42,7 +42,7 @@ varcode = "varcode.cli.effects_script:main"
 
 [tool.pytest.ini_options]
 markers = [
-    "parity: parity harness for SequenceDiffEffectAnnotator (WIP #271 stage 3d, #309). Run explicitly with `pytest -m parity` once the classifier lands.",
+    "parity: fast vs protein_diff byte-for-byte parity harness (tests/test_protein_diff_parity.py). Runs by default; also selectable with `pytest -m parity`.",
 ]
 
 [tool.ruff.lint]

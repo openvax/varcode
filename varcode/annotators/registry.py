@@ -13,11 +13,16 @@
 """Process-global registry for :class:`EffectAnnotator` instances.
 
 Kept as a module-level dict (not a class) to match the flat registry
-pattern in the rest of varcode. Default selection is
-``"protein_diff"`` — the protein-diff annotator is self-consistent by
-construction and produces HGVS-canonical output everywhere. ``"fast"``
-remains available as an opt-in for performance-sensitive pipelines or
-byte-for-byte compatibility with 2.x output. See #271.
+pattern in the rest of varcode. Default selection is ``"fast"`` — the
+offset-based classifier varcode has shipped since 2.0.0 and the most
+battle-tested path. During the protein-diff bring-up ``"fast"`` was
+effectively the correctness oracle the protein-diff annotator was
+repeatedly reconciled against (#318–#321), and it has the cleaner bug
+history (see #397). ``"protein_diff"`` stays available as an opt-in
+(``annotator="protein_diff"`` / :func:`use_annotator`): it classifies
+from a translated protein diff, is self-consistent by construction and
+HGVS-canonical, and is the substrate the MutantTranscript /
+splice-outcome / germline machinery builds on. See #271.
 """
 
 from contextlib import contextmanager
@@ -39,7 +44,7 @@ class UnsupportedVariantError(ValueError):
 
 
 _REGISTRY = {}
-_DEFAULT_NAME = "protein_diff"
+_DEFAULT_NAME = "fast"
 
 
 def register_annotator(annotator):
@@ -66,9 +71,8 @@ def get_annotator(name):
 def get_default_annotator():
     """Return the annotator currently configured as the default.
 
-    Current default is ``"protein_diff"`` (#322–#327 closed the last
-    known correctness bugs between the two). ``"fast"`` stays
-    available as an opt-in.
+    Current default is ``"fast"`` (restored as the default in 7.0.0;
+    see #397). ``"protein_diff"`` stays available as an opt-in.
     """
     return _REGISTRY[_DEFAULT_NAME]
 

@@ -1,5 +1,37 @@
 # Change Log
 
+## [v7.0.0](https://github.com/openvax/varcode/tree/v7.0.0) (2026-07-08)
+
+**Changed**
+- The default effect annotator is now **`fast`** (the offset-based
+  classifier varcode has shipped since 2.0.0) instead of `protein_diff`.
+  `Variant.effects()` / `VariantCollection.effects()` with no explicit
+  `annotator=` now route through `fast`. This is a behavior change for
+  callers that relied on the default: for SNVs / indels / MNVs the two
+  annotators are fully reconciled (see `tests/test_protein_diff_parity.py`,
+  `tests/test_annotator_parity_adversarial.py`, and
+  `tests/test_annotator_divergence_scenarios.py`), so nearly all output is
+  unchanged, but any residual divergence now resolves to `fast`'s
+  classification. `protein_diff` stays available via
+  `annotator="protein_diff"` or `varcode.use_annotator("protein_diff")`, and
+  remains the substrate the `MutantTranscript` / splice-outcome / germline
+  machinery builds on. Rationale: `fast` is the more battle-tested path —
+  during the `protein_diff` bring-up it was effectively the correctness oracle
+  `protein_diff` was reconciled against
+  ([#318](https://github.com/openvax/varcode/issues/318)–[#321](https://github.com/openvax/varcode/issues/321)),
+  and it has the cleaner bug history
+  ([#397](https://github.com/openvax/varcode/issues/397)). Major version bump
+  because default behavior changes.
+
+**Added**
+- Regression pins in `tests/test_annotator_divergence_scenarios.py` for the
+  frameshift coincidental-shared-suffix class
+  ([#396](https://github.com/openvax/varcode/pull/396) /
+  [#397](https://github.com/openvax/varcode/issues/397)): a frameshift whose
+  novel C-terminus coincidentally ends with the reference protein's terminal
+  residue(s) must retain the full tail under **both** annotators (CFTR
+  `p.L127fs` on the + strand, BRCA1 `p.R71fs` on the − strand).
+
 ## [v6.0.2](https://github.com/openvax/varcode/tree/v6.0.2) (2026-07-08)
 
 **Fixed**

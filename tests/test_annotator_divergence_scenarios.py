@@ -765,6 +765,66 @@ def test_frameshift_right_after_start_codon_agrees(dual_annotator):
     assert effect.short_description == "p.Q2fs"
 
 
+# ----- Pattern H: frameshift novel C-terminus (family of #396 / #397) -----
+#
+# A frameshift produces a NOVEL C-terminus that runs to a new stop codon.
+# When that novel tail coincidentally ends with the same residue(s) as the
+# reference protein's own C-terminus, the whole-protein
+# ``trim_shared_flanking_strings`` step used to strip those residues off
+# ``shifted_sequence``, so the default protein_diff annotator reported a mutant
+# protein 1-2 aa short of fast's. #396 switched the frameshift branch of
+# classify.py to a prefix-only trim; these pins guard against a regression back
+# to suffix trimming. Both annotators must agree on the FULL novel tail.
+# See openvax/varcode#397.
+
+
+def test_frameshift_coincidental_cterminus_suffix_kept_forward_strand(
+        dual_annotator):
+    """CFTR (+ strand) protein ends in 'L'. A 1-base deletion at 117531003
+    frameshifts codon 127 and the novel ORF runs to a new stop, ending
+    '...GYAFSLL' (132 aa) -- whose terminal 'L' coincides with CFTR's own
+    C-terminal 'L'. Pre-#396 protein_diff trimmed that shared 'L' and
+    reported 131 aa '...GYAFSL'; both annotators must now keep it."""
+    variant = Variant("7", 117531002, "GC", "G", ensembl_grch38)
+    annotator = _FAST if dual_annotator == "fast" else _PDIFF
+    effect = _annotate(variant, CFTR_ID, annotator)
+    assert isinstance(effect, FrameShift)
+    assert effect.short_description == "p.L127fs"
+    assert len(effect.mutant_protein_sequence) == 132
+    assert effect.mutant_protein_sequence.endswith("GYAFSLL")
+    assert effect.shifted_sequence.endswith("YAFSLL")
+
+
+def test_frameshift_coincidental_cterminus_suffix_kept_reverse_strand(
+        dual_annotator):
+    """Same class on BRCA1 (- strand), whose protein ends in 'Y'. A 1-base
+    deletion at 43106457 gives FrameShift p.R71fs whose novel tail ends
+    '...VNLLKSY' (86 aa); the terminal 'Y' coincides with BRCA1's C-terminal
+    'Y'. Confirms the #396 fix is not strand-specific."""
+    variant = Variant("17", 43106456, "CT", "C", ensembl_grch38)
+    annotator = _FAST if dual_annotator == "fast" else _PDIFF
+    effect = _annotate(variant, BRCA1_ID, annotator)
+    assert isinstance(effect, FrameShift)
+    assert effect.short_description == "p.R71fs"
+    assert len(effect.mutant_protein_sequence) == 86
+    assert effect.mutant_protein_sequence.endswith("VNLLKSY")
+    assert effect.shifted_sequence.endswith("VNLLKSY")
+
+
+def test_frameshift_cterminus_annotators_agree_on_full_tail():
+    """Direct fast-vs-protein_diff parity on the coincidental-suffix
+    frameshifts above: the two annotators must produce byte-identical mutant
+    protein sequences (the exact invariant #396 restored)."""
+    for transcript_id, variant in (
+            (CFTR_ID, Variant("7", 117531002, "GC", "G", ensembl_grch38)),
+            (BRCA1_ID, Variant("17", 43106456, "CT", "C", ensembl_grch38))):
+        fast_eff = _annotate(variant, transcript_id, _FAST)
+        pdiff_eff = _annotate(variant, transcript_id, _PDIFF)
+        assert (fast_eff.mutant_protein_sequence
+                == pdiff_eff.mutant_protein_sequence), (
+            "annotators disagree on frameshift tail for %s" % transcript_id)
+
+
 def test_sv_spanning_deletion_star_allele_is_skipped_at_load():
     """The ``*`` allele in VCF means "this position is covered by
     a deletion on another record" — it shouldn't become a Variant.

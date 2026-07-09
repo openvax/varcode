@@ -13,11 +13,13 @@
 """The fast :class:`EffectAnnotator` — a thin wrapper around the
 offset-based effect prediction that varcode has shipped since 2.0.0.
 
-Exists as an :class:`EffectAnnotator` Protocol implementation so
-that the coming protein-diff annotator can be introduced behind
-the same interface without churning callers (#271, stage 2). Until
-then, this annotator is the default and produces byte-for-byte
-identical output to ``Variant.effect_on_transcript(transcript)``.
+The default annotator (restored as the default in 7.0.0; see #397).
+Produces byte-for-byte identical output to
+``Variant.effect_on_transcript(transcript)``. The
+:class:`~varcode.annotators.protein_diff.ProteinDiffEffectAnnotator`
+offers an alternative protein-diff classification behind the same
+:class:`EffectAnnotator` protocol (#271); as of 7.0.0 the two are
+reconciled on SNVs / indels / MNVs.
 """
 
 from ..version import __version__ as _varcode_version

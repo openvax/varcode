@@ -313,25 +313,29 @@ Three annotators ship behind the `EffectAnnotator` protocol:
 
 | Annotator | Algorithm | Used for |
 |---|---|---|
-| `ProteinDiffEffectAnnotator` | Builds a `MutantTranscript`, translates, diffs against the reference protein | Default for SNVs / indels / MNVs |
-| `FastEffectAnnotator` | Offset arithmetic against the reference CDS | Opt-in for byte-for-byte 2.x parity or perf-sensitive paths |
+| `FastEffectAnnotator` | Offset arithmetic against the reference CDS | **Default** for SNVs / indels / MNVs |
+| `ProteinDiffEffectAnnotator` | Builds a `MutantTranscript`, translates, diffs against the reference protein | Opt-in; substrate for the `MutantTranscript` / splice-outcome / germline machinery |
 | `StructuralVariantAnnotator` | Reassembles SV outcomes (deletions, duplications, inversions, fusions, translocations) | Routed automatically when the variant is a `StructuralVariant` |
 
-All three emit the same `MutationEffect` hierarchy. `protein_diff`
-catches boundary-codon and frameshift-realignment cases that
-offset-arithmetic can miss; for trivial SNVs the two produce
-identical output. The SV annotator dispatches on `variant.is_structural`
-and isn't user-selectable for point variants.
+All three emit the same `MutationEffect` hierarchy. `fast` is the
+default: it's the offset-based classifier varcode has shipped since
+2.0.0 and the most battle-tested path (as of 7.0.0, `fast` and
+`protein_diff` are fully reconciled on SNVs / indels / MNVs — see the
+parity and divergence suites). `protein_diff` classifies from a
+translated protein diff, is self-consistent by construction and
+HGVS-canonical, and is the substrate the splice-outcome and
+germline-aware machinery builds on. The SV annotator dispatches on
+`variant.is_structural` and isn't user-selectable for point variants.
 
 ```python
-# Default (protein_diff for point variants, structural_variant for SVs):
+# Default (fast for point variants, structural_variant for SVs):
 effects = variant.effects()
 
-# Opt into the legacy fast path:
-effects = variant.effects(annotator="fast")
+# Opt into the protein-diff path:
+effects = variant.effects(annotator="protein_diff")
 
 # Scoped swap:
-with varcode.use_annotator("fast"):
+with varcode.use_annotator("protein_diff"):
     effects = variant_collection.effects()
 ```
 
