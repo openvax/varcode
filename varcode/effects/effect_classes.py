@@ -1510,12 +1510,17 @@ class Inversion(StructuralVariantEffect):
 
 
 class GeneFusion(StructuralVariantEffect):
-    """A breakend (``<BND>``) whose mate lies in another
-    protein-coding gene — the canonical fusion shape.
+    """A structural variant joining ``transcript`` to a protein-coding
+    transcript in another gene — the canonical fusion shape. Breakends
+    produce it, and so do deletions, duplications and inversions with
+    one end in each gene.
 
-    Carries the two partner transcripts (5' and 3') and, when the
-    annotator has enough context, a :class:`MutantTranscript` built
-    from :class:`ReferenceSegment` entries describing the fused
+    ``transcript`` is the transcript being annotated and
+    ``partner_transcript`` the other one; ``five_prime_transcript``
+    and ``three_prime_transcript`` say which is which (by default
+    ``transcript`` is the 5' partner). When the annotator has enough
+    context, :attr:`mutant_transcript` is built from
+    :class:`ReferenceSegment` entries describing the fused
     allele. Predicting the exact fused-protein sequence requires
     knowing which exons are retained, which typically needs RNA
     evidence — outcomes beyond "this is a plausible fusion" are
@@ -1527,12 +1532,19 @@ class GeneFusion(StructuralVariantEffect):
 
     def __init__(
             self, variant, transcript, partner_transcript,
-            mutant_transcript=None, primary_effects=None):
+            mutant_transcript=None, primary_effects=None,
+            five_prime_transcript=None, three_prime_transcript=None):
         StructuralVariantEffect.__init__(
             self, variant, transcript,
             primary_effects=primary_effects,
             mutant_transcript=mutant_transcript)
         self.partner_transcript = partner_transcript
+        self.five_prime_transcript = (
+            transcript if five_prime_transcript is None
+            else five_prime_transcript)
+        self.three_prime_transcript = (
+            partner_transcript if three_prime_transcript is None
+            else three_prime_transcript)
 
 
 class TranslocationToIntergenic(StructuralVariantEffect):

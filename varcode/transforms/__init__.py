@@ -55,7 +55,11 @@ __all__ = ["pair_breakends", "left_align_indels"]
 
 
 def _is_breakend(variant):
-    return getattr(variant, "sv_type", None) == "BND"
+    """A row written in VCF breakend notation: a BND, or a DEL / DUP /
+    INV the SV parser typed from a breakend's INFO/SVTYPE (those keep
+    their mate fields)."""
+    return (getattr(variant, "sv_type", None) == "BND"
+            or getattr(variant, "mate_contig", None) is not None)
 
 
 def _mate_reference(variant):
@@ -170,11 +174,18 @@ def _build_combined(a, b, a_id, b_id):
     """
     mate_contig = a.mate_contig if a.mate_contig is not None else b.contig
     mate_start = a.mate_start if a.mate_start is not None else b.start
+    # Halves typed from the same DEL / DUP / INV share its span; keep it.
+    # Anything else combines as a plain breakend at A's position.
+    if a.sv_type != "BND" and (a.sv_type, a.start, a.end) == (
+            b.sv_type, b.start, b.end):
+        sv_type, end = a.sv_type, a.end
+    else:
+        sv_type, end = "BND", a.start
     combined = StructuralVariant(
         contig=a.contig,
         start=a.start,
-        end=a.start,
-        sv_type="BND",
+        end=end,
+        sv_type=sv_type,
         alt=a.symbolic_alt,
         ref=a.ref,
         mate_contig=mate_contig,

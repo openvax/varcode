@@ -605,3 +605,190 @@ def test_vcf_loader_sv_explicit_protein_diff_passes_through():
     assert effects.annotator == "protein_diff", (
         "Collection-level annotator metadata should reflect the "
         "explicit override, not the SV annotator.")
+
+
+# --------------------------------------------------------------------
+# Single breakends and UCSC contig names, using esvee records from
+# the osteosarc.com dataset (tests/data/osteosarc_esvee_somatic.vcf)
+# --------------------------------------------------------------------
+
+
+def test_parse_single_breakend_joined_before():
+    """``.AAAA…``: unplaced sequence joined before POS. Parsed as a
+    BND with no mate, keeping the bases for downstream use."""
+    alt = ".AAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    sv = parse_symbolic_alt(
+        contig="chr13", start=56_435_058, ref="A", alt=alt,
+        info={}, genome="GRCh38", convert_ucsc_contig_names=True)
+    assert sv is not None
+    assert sv.sv_type == "BND"
+    assert sv.contig == "13"
+    assert sv.mate_contig is None
+    assert sv.mate_start is None
+    assert sv.symbolic_alt == alt
+    assert sv.info["single_breakend"] is True
+    assert sv.info["bnd_anchor"] == alt[1:]
+    assert sv.short_description == "BND(13:56435058)"
+
+
+def test_parse_single_breakend_joined_after():
+    """``TTTT….``: unplaced sequence joined after POS."""
+    alt = "TTTTTTTTTTTTTTTTTTTTTTTTT."
+    sv = parse_symbolic_alt(
+        contig="chr12", start=72_342_468, ref="T", alt=alt,
+        info={}, genome="GRCh38", convert_ucsc_contig_names=True)
+    assert sv is not None
+    assert sv.sv_type == "BND"
+    assert sv.contig == "12"
+    assert sv.mate_contig is None
+    assert sv.info["bnd_anchor"] == alt[:-1]
+
+
+def test_parse_breakend_converts_ucsc_contig_and_mate():
+    """The SEMA6A::PARM1 breakend as esvee writes it. With UCSC
+    conversion on, the row's contig and its mate on another
+    chromosome both get Ensembl names."""
+    sv = parse_symbolic_alt(
+        contig="chr5", start=116_474_281, ref="C",
+        alt="[chr4:75037126[C", info={"MATEID": "11309"},
+        genome="GRCh38", convert_ucsc_contig_names=True)
+    assert sv.contig == "5"
+    assert sv.mate_contig == "4"
+    assert sv.mate_start == 75_037_126
+    assert sv.symbolic_alt == "[chr4:75037126[C"
+
+
+def test_sv_mate_contig_follows_contig_normalization():
+    """``mate_contig`` gets the same treatment as ``contig``:
+    converted when UCSC conversion is on, left alone when it's off."""
+    kwargs = dict(
+        contig="chr5", start=116_474_281, sv_type="BND",
+        mate_contig="chr4", mate_start=75_037_126, genome="GRCh38")
+    converted = StructuralVariant(convert_ucsc_contig_names=True, **kwargs)
+    assert (converted.contig, converted.mate_contig) == ("5", "4")
+    kept = StructuralVariant(convert_ucsc_contig_names=False, **kwargs)
+    assert (kept.contig, kept.mate_contig) == ("chr5", "chr4")
+
+
+def test_vcf_loader_svs_use_requested_genome():
+    """SV rows get the genome passed to ``load_vcf``, like SNV rows."""
+    body = (
+        "##fileformat=VCFv4.2\n"
+        "##INFO=<ID=SVTYPE,Number=1,Type=String,Description=\"type\">\n"
+        "##INFO=<ID=END,Number=1,Type=Integer,Description=\"end\">\n"
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
+        "22\t51179178\tsv1\tA\t<DEL>\t100\tPASS\tSVTYPE=DEL;END=51179500\n"
+        "22\t51179700\tsnv1\tC\tT\t100\tPASS\t.\n"
+    )
+    path = _write_vcf(body)
+    try:
+        vc = load_vcf(path, genome="GRCh37", parse_structural_variants=True)
+    finally:
+        os.unlink(path)
+    assert len(vc) == 2
+    assert {v.reference_name for v in vc} == {"GRCh37"}
+
+
+def test_parse_breakend_pair_typed_as_deletion():
+    """esvee writes a deletion as two breakends labeled SVTYPE=DEL (a
+    real pair from the dataset, chr1:6458524-6458721). Both halves
+    become the DEL an equivalent ``<DEL>`` record would give, keeping
+    their mate fields and ALT."""
+    halves = [
+        (6_458_524, "C", "C[chr1:6458721[", 6_458_721),
+        (6_458_721, "A", "]chr1:6458524]A", 6_458_524),
+    ]
+    for pos, ref, alt, mate_pos in halves:
+        sv = parse_symbolic_alt(
+            contig="chr1", start=pos, ref=ref, alt=alt,
+            info={"SVTYPE": "DEL"}, genome="GRCh38",
+            convert_ucsc_contig_names=True)
+        assert sv.sv_type == "DEL"
+        assert (sv.contig, sv.start, sv.end) == ("1", 6_458_524, 6_458_720)
+        assert (sv.mate_contig, sv.mate_start) == ("1", mate_pos)
+        assert sv.symbolic_alt == alt
+
+
+def test_parse_breakend_pairs_typed_as_duplication_and_inversion():
+    """The CPEB2::FAM193A (DUP) and OTX1::KIF3C (INV) records in
+    tests/data/osteosarc_esvee_somatic.vcf: each pair maps to one
+    span."""
+    records = [
+        ("chr4", 2_664_478, "T", "]chr4:15012987]T", "DUP",
+         ("4", 2_664_477, 15_012_987)),
+        ("chr4", 15_012_987, "A", "A[chr4:2664478[", "DUP",
+         ("4", 2_664_477, 15_012_987)),
+        ("chr2", 25_955_847, "G", "GTC]chr2:63053516]", "INV",
+         ("2", 25_955_847, 63_053_516)),
+        ("chr2", 63_053_516, "T", "TGA]chr2:25955847]", "INV",
+         ("2", 25_955_847, 63_053_516)),
+    ]
+    for contig, pos, ref, alt, svtype, span in records:
+        sv = parse_symbolic_alt(
+            contig=contig, start=pos, ref=ref, alt=alt,
+            info={"SVTYPE": svtype}, genome="GRCh38",
+            convert_ucsc_contig_names=True)
+        assert sv.sv_type == svtype
+        assert (sv.contig, sv.start, sv.end) == span
+
+
+def test_parse_inversion_breakends_keeping_right_sides():
+    """The other junction of an inversion (``[p[t`` on both halves)
+    maps to the same ``<INV>`` span, one base lower on each end."""
+    sv = parse_symbolic_alt(
+        contig="2", start=1_001, ref="A", alt="[2:2001[A",
+        info={"SVTYPE": "INV"}, genome="GRCh38")
+    assert (sv.sv_type, sv.start, sv.end) == ("INV", 1_000, 2_000)
+
+
+def test_parse_breakend_stays_bnd_when_svtype_does_not_fit():
+    """SVTYPE is only trusted when the breakends agree with it."""
+    def parsed_type(alt, svtype="DEL"):
+        return parse_symbolic_alt(
+            contig="2", start=1_000, ref="A", alt=alt,
+            info={"SVTYPE": svtype}, genome="GRCh38").sv_type
+
+    assert parsed_type("A]2:2000]") == "BND"       # inversion-shaped
+    assert parsed_type("A[3:2000[") == "BND"       # mate on another contig
+    assert parsed_type("AGGT[2:1001[") == "BND"    # nothing deleted
+    assert parsed_type("A[2:2000[", svtype="SGL") == "BND"
+
+
+def test_breakend_records_of_one_deletion_stay_distinct(tmp_path):
+    """esvee's two records for a deletion at chr1:27108304-27108423 (IDs
+    683/684, both with REF ``A``) type to the same DEL span. They're
+    still different records, so ``load_vcf``'s ``distinct`` keeps both
+    and ``pair_breakends`` joins them, while an identical record still
+    compares equal."""
+    from varcode.transforms import pair_breakends
+    path = tmp_path / "esvee_deletion.vcf"
+    path.write_text(
+        "##fileformat=VCFv4.2\n"
+        "##INFO=<ID=SVTYPE,Number=1,Type=String,Description=\"type\">\n"
+        "##INFO=<ID=MATEID,Number=1,Type=String,Description=\"mate\">\n"
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
+        "chr1\t27108304\t683\tA\tA[chr1:27108423[\t48\tPON\t"
+        "SVTYPE=DEL;MATEID=684\n"
+        "chr1\t27108423\t684\tA\t]chr1:27108304]A\t48\tPON\t"
+        "SVTYPE=DEL;MATEID=683\n")
+    vc = load_vcf(
+        str(path), genome="GRCh38", parse_structural_variants=True,
+        only_passing=False)
+    assert len(vc) == 2
+    first, second = vc
+    for sv in (first, second):
+        assert (sv.sv_type, sv.start, sv.end) == (
+            "DEL", 27_108_304, 27_108_422)
+    assert first != second
+
+    paired = pair_breakends(vc)
+    assert [(v.sv_type, v.start, v.end) for v in paired] == [
+        ("DEL", 27_108_304, 27_108_422)]
+
+    same_record = parse_symbolic_alt(
+        contig="chr1", start=27_108_304, ref="A", alt="A[chr1:27108423[",
+        info={"SVTYPE": "DEL"}, genome=first.genome,
+        convert_ucsc_contig_names=True)
+    (matching,) = [v for v in vc if v.symbolic_alt == same_record.symbolic_alt]
+    assert same_record == matching
+    assert hash(same_record) == hash(matching)

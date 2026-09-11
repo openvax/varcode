@@ -491,10 +491,10 @@ def test_brd4_nutm1_fusion_nut_midline_carcinoma():
         contig="19",
         start=brd4_breakpoint,
         sv_type="BND",
-        alt="N]15:%d]" % nutm1_breakpoint,
+        alt="[15:%d[N" % nutm1_breakpoint,
         mate_contig="15",
         mate_start=nutm1_breakpoint,
-        mate_orientation="]]",
+        mate_orientation="[[",
         genome=ensembl_grch38)
     effect = _ANNOTATOR.annotate_on_transcript(sv, brd4)
     assert isinstance(effect, GeneFusion)
@@ -531,10 +531,10 @@ def test_bcr_abl1_fusion_philadelphia_chromosome():
         contig="22",
         start=bcr_breakpoint,
         sv_type="BND",
-        alt="N]9:%d]" % abl1_breakpoint,
+        alt="N[9:%d[" % abl1_breakpoint,
         mate_contig="9",
         mate_start=abl1_breakpoint,
-        mate_orientation="]]",
+        mate_orientation="[[",
         genome=ensembl_grch38)
     effect = _ANNOTATOR.annotate_on_transcript(sv, bcr)
     assert isinstance(effect, GeneFusion)
@@ -565,10 +565,10 @@ def test_ewsr1_fli1_fusion_ewing_sarcoma_type1():
         contig="22",
         start=ewsr1_breakpoint,
         sv_type="BND",
-        alt="N]11:%d]" % fli1_breakpoint,
+        alt="N[11:%d[" % fli1_breakpoint,
         mate_contig="11",
         mate_start=fli1_breakpoint,
-        mate_orientation="]]",
+        mate_orientation="[[",
         genome=ensembl_grch38)
     effect = _ANNOTATOR.annotate_on_transcript(sv, ewsr1)
     assert isinstance(effect, GeneFusion)
@@ -591,10 +591,10 @@ def test_fusion_cdna_equals_segment_concatenation():
         contig="19",
         start=15_250_000,
         sv_type="BND",
-        alt="N]15:34347000]",
+        alt="[15:34347000[N",
         mate_contig="15",
         mate_start=34_347_000,
-        mate_orientation="]]",
+        mate_orientation="[[",
         genome=ensembl_grch38)
     effect = _ANNOTATOR.annotate_on_transcript(sv, brd4)
     mt = effect.mutant_transcript
@@ -616,10 +616,10 @@ def test_fusion_protein_terminates_within_or_at_3p_partner_end():
         contig="19",
         start=15_250_000,
         sv_type="BND",
-        alt="N]15:34347000]",
+        alt="[15:34347000[N",
         mate_contig="15",
         mate_start=34_347_000,
-        mate_orientation="]]",
+        mate_orientation="[[",
         genome=ensembl_grch38)
     effect = _ANNOTATOR.annotate_on_transcript(sv, brd4)
     mt = effect.mutant_transcript
@@ -745,10 +745,10 @@ def test_deletion_with_partial_exon_overlap():
     assert assembled == mt.cdna_sequence
 
 
-def test_warns_on_reverse_complement_mate_orientation():
-    """Reverse-complement BND orientations (``[]`` / ``][``) trip a
-    warning so a caller doesn't silently get canonical-direction
-    output (#336)."""
+def test_warns_when_breakend_orientation_is_unknown():
+    """A BND with a mate but no breakend ALT gives no way to tell which
+    side of each breakpoint is kept, so the annotator warns and treats
+    the annotated transcript as the 5' partner."""
     import warnings
     cftr = _cftr()
     brca1 = ensembl_grch38.transcript_by_id(BRCA1_ID)
@@ -756,24 +756,21 @@ def test_warns_on_reverse_complement_mate_orientation():
         contig="7",
         start=cftr.start + 500,
         sv_type="BND",
-        alt="N[17:%d[" % (brca1.start + 1000),
         mate_contig="17",
         mate_start=brca1.start + 1000,
-        mate_orientation="[]",
         genome=ensembl_grch38)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        _ANNOTATOR.annotate_on_transcript(sv, cftr)
+        effect = _ANNOTATOR.annotate_on_transcript(sv, cftr)
     msgs = [str(w.message) for w in caught]
-    assert any("reverse-complement" in m for m in msgs), (
-        "Expected reverse-complement orientation warning, got %r" % msgs)
+    assert any("orientation" in m for m in msgs), msgs
+    assert isinstance(effect, GeneFusion)
+    assert effect.five_prime_transcript.id == cftr.id
 
 
-def test_alt_assembly_suppresses_reverse_complement_warning():
-    """When the caller resolved the allele via ``alt_assembly`` the
-    canonical-direction inference is bypassed, so the
-    reverse-complement warning shouldn't fire even for ``[]`` / ``][``
-    orientations."""
+def test_alt_assembly_suppresses_unknown_orientation_warning():
+    """With a resolved ``alt_assembly`` the caller has settled
+    orientation, so an unreadable ALT doesn't warn."""
     import warnings
     cftr = _cftr()
     brca1 = ensembl_grch38.transcript_by_id(BRCA1_ID)
@@ -781,24 +778,17 @@ def test_alt_assembly_suppresses_reverse_complement_warning():
         contig="7",
         start=cftr.start + 500,
         sv_type="BND",
-        alt="N[17:%d[" % (brca1.start + 1000),
         mate_contig="17",
         mate_start=brca1.start + 1000,
-        mate_orientation="[]",
         alt_assembly="ACGT" * 50,
         genome=ensembl_grch38)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         _ANNOTATOR.annotate_on_transcript(sv, cftr)
-    assert not any(
-        "reverse-complement" in str(w.message) for w in caught), (
-        "alt_assembly should suppress the orientation warning")
+    assert not any("orientation" in str(w.message) for w in caught)
 
 
-def test_canonical_mate_orientation_does_not_warn():
-    """Canonical ``]]`` / ``[[`` pairings — or a missing orientation
-    — pass silently. Guards against the reverse-complement warning
-    becoming noisy for the common case."""
+def test_breakend_alt_orientation_does_not_warn():
     import warnings
     cftr = _cftr()
     brca1 = ensembl_grch38.transcript_by_id(BRCA1_ID)
@@ -814,8 +804,124 @@ def test_canonical_mate_orientation_does_not_warn():
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         _ANNOTATOR.annotate_on_transcript(sv, cftr)
-    assert not any(
-        "reverse-complement" in str(w.message) for w in caught)
+    assert not any("orientation" in str(w.message) for w in caught)
+
+
+def test_fusion_reported_on_three_prime_partner():
+    """The CFTR::BRCA1 join from the reverse-strand-3p test, seen from
+    the BRCA1 breakpoint. BRCA1 keeps its left side, which on the
+    reverse strand is its 3' end, so it's the 3' partner and the fusion
+    names CFTR as 5'."""
+    brca1 = ensembl_grch38.transcript_by_id(BRCA1_ID)
+    sv = StructuralVariant(
+        contig="17",
+        start=43_120_000,
+        sv_type="BND",
+        alt="N]7:117485000]",
+        mate_contig="7",
+        mate_start=117_485_000,
+        mate_orientation="]]",
+        genome=ensembl_grch38)
+    effect = _ANNOTATOR.annotate_on_transcript(sv, brca1)
+    assert isinstance(effect, GeneFusion)
+    assert effect.three_prime_transcript.id == BRCA1_ID
+    assert effect.five_prime_transcript.gene_name == "CFTR"
+    assert effect.partner_transcript.id == effect.five_prime_transcript.id
+    mt = effect.mutant_transcript
+    assert mt.reference_segments[0].source.id == (
+        effect.five_prime_transcript.id)
+    # BRCA1 3p retains exons 3 onward, as in the CFTR-side test.
+    assert mt.reference_segments[1].start == _sum_exon_lengths(
+        brca1, {1, 2})
+
+
+def test_breakend_joining_two_five_prime_ends_is_not_a_fusion():
+    """CFTR (forward) keeping its left side joined to BRCA1 (reverse)
+    keeping its right side puts both genes' 5' ends together head to
+    head, so no sense-to-sense fusion forms."""
+    cftr = _cftr()
+    sv = StructuralVariant(
+        contig="7",
+        start=117_485_000,
+        sv_type="BND",
+        alt="N[17:43120000[",
+        mate_contig="17",
+        mate_start=43_120_000,
+        mate_orientation="[[",
+        genome=ensembl_grch38)
+    effect = _ANNOTATOR.annotate_on_transcript(sv, cftr)
+    assert isinstance(effect, TranslocationToIntergenic)
+
+
+def _intron_midpoint(transcript, exon_number):
+    """A genomic position in the intron after ``exon_number``
+    (1-based, transcript order)."""
+    a = transcript.exons[exon_number - 1]
+    b = transcript.exons[exon_number]
+    return (min(a.end, b.end) + max(a.start, b.start)) // 2
+
+
+def _longest_coding_transcript(gene_name):
+    return max(
+        (t for t in ensembl_grch38.genes_by_name(gene_name)[0].transcripts
+         if t.is_protein_coding and t.complete),
+        key=lambda t: len(t.protein_sequence))
+
+
+def test_deletion_between_two_genes_is_fusion_on_both_partners():
+    """The ~3 Mb chr21 deletion behind TMPRSS2-ERG in prostate cancer,
+    as a symbolic ``<DEL>`` from ERG intron 3 to TMPRSS2 intron 2. Both
+    genes are on the reverse strand: the deletion keeps ERG's left side
+    (its 3' end) and TMPRSS2's right side (its 5' end), so both
+    transcripts get a fusion with TMPRSS2 as 5' partner, while ETS2,
+    wholly inside the deletion, is still deleted."""
+    tmprss2 = _longest_coding_transcript("TMPRSS2")
+    erg = _longest_coding_transcript("ERG")
+    ets2 = _longest_coding_transcript("ETS2")
+    sv = StructuralVariant(
+        contig="21",
+        start=_intron_midpoint(erg, 3),
+        end=_intron_midpoint(tmprss2, 2) - 1,
+        sv_type="DEL",
+        alt="<DEL>",
+        genome=ensembl_grch38)
+
+    on_tmprss2 = _ANNOTATOR.annotate_on_transcript(sv, tmprss2)
+    assert isinstance(on_tmprss2, GeneFusion)
+    assert on_tmprss2.five_prime_transcript.id == tmprss2.id
+    assert on_tmprss2.three_prime_transcript.gene_name == "ERG"
+
+    on_erg = _ANNOTATOR.annotate_on_transcript(sv, erg)
+    assert isinstance(on_erg, GeneFusion)
+    assert on_erg.three_prime_transcript.id == erg.id
+    assert on_erg.five_prime_transcript.gene_name == "TMPRSS2"
+
+    assert isinstance(
+        _ANNOTATOR.annotate_on_transcript(sv, ets2), LargeDeletion)
+
+
+def test_junction_ends_by_sv_type():
+    """A deletion joins ``start`` to ``end + 1`` and a duplication
+    ``end`` to ``start + 1``. A symbolic ``<INV>`` creates both of its
+    junctions; one typed from a breakend record has only the junction
+    that record observed."""
+    from varcode.annotators.structural_variant import _junction_ends
+
+    def sv(sv_type, **kwargs):
+        return StructuralVariant(
+            contig="7", start=1_000, end=2_000, sv_type=sv_type,
+            genome=ensembl_grch38, **kwargs)
+
+    assert _junction_ends(sv("DEL")) == [
+        (("7", 1_000, "left"), ("7", 2_001, "right"))]
+    assert _junction_ends(sv("DUP")) == [
+        (("7", 1_001, "right"), ("7", 2_000, "left"))]
+    assert _junction_ends(sv("INV")) == [
+        (("7", 1_000, "left"), ("7", 2_000, "left")),
+        (("7", 1_001, "right"), ("7", 2_001, "right"))]
+    assert _junction_ends(sv(
+        "INV", alt="N]7:2000]", mate_contig="7", mate_start=2_000)) == [
+        (("7", 1_000, "left"), ("7", 2_000, "left"))]
 
 
 # --------------------------------------------------------------------

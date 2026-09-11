@@ -114,7 +114,8 @@ class StructuralVariant(Variant):
         Original REF base (usually one nucleotide, the anchor).
         Defaults to ``"N"``.
     mate_contig : str, optional
-        For BND: the mate breakpoint's chromosome.
+        For BND: the mate breakpoint's chromosome. Normalized the same
+        way as ``contig`` (e.g. "chr4" -> "4" when converting UCSC names).
     mate_start : int, optional
         For BND: the mate breakpoint's position.
     mate_orientation : str, optional
@@ -199,7 +200,9 @@ class StructuralVariant(Variant):
 
         # SV-specific fields.
         self.sv_type = sv_type
-        self.mate_contig = mate_contig
+        self.mate_contig = (
+            self._normalize_contig_name(mate_contig)
+            if mate_contig is not None else None)
         self.mate_start = int(mate_start) if mate_start is not None else None
         self.mate_orientation = mate_orientation
         self.ci_start = tuple(ci_start) if ci_start is not None else None
@@ -237,6 +240,9 @@ class StructuralVariant(Variant):
     @property
     def short_description(self) -> str:
         if self.sv_type == "BND":
+            if self.mate_contig is None:
+                # Single breakend, or a symbolic BND with no mate.
+                return "BND(%s:%d)" % (self.contig, self.start)
             mate = "%s:%s" % (self.mate_contig, self.mate_start)
             return "BND(%s:%d -> %s)" % (self.contig, self.start, mate)
         return "%s(%s:%d-%d)" % (
@@ -252,3 +258,21 @@ class StructuralVariant(Variant):
 
     def __repr__(self) -> str:
         return str(self)
+
+    def __eq__(self, other) -> bool:
+        # The base Variant identity compares ref/alt, which for an SV are
+        # placeholders, so the two breakend records of one typed DEL
+        # (same start, end and REF base) would compare equal and
+        # load_vcf(distinct=True) would drop one. Compare what the VCF
+        # record said as well.
+        if self is other:
+            return True
+        return (
+            Variant.__eq__(self, other)
+            and self.sv_type == getattr(other, "sv_type", None)
+            and self._sv_alt == getattr(other, "_sv_alt", None)
+            and self.mate_contig == getattr(other, "mate_contig", None)
+            and self.mate_start == getattr(other, "mate_start", None))
+
+    def __hash__(self) -> int:
+        return Variant.__hash__(self)

@@ -73,6 +73,7 @@ from ..effects.effect_classes import (
 )
 from ..effects.effect_helpers import exon_length
 from ..mutant_transcript import MutantTranscript, ReferenceSegment
+from ..sv_allele_parser import _breakend_sides
 from ..version import __version__ as _varcode_version
 
 
@@ -240,28 +241,65 @@ def _breakpoint_splice_window(transcript, breakpoint_pos):
     return None
 
 
-_REVERSE_COMPLEMENT_BND_ORIENTATIONS = frozenset({"[]", "]["})
+def _retains_five_prime_end(transcript, side):
+    """Whether keeping ``side`` of a breakpoint inside ``transcript``
+    keeps the transcript's 5' end: the left side on the forward
+    strand, the right side on the reverse strand."""
+    return (side == "left") == (transcript.strand == "+")
 
 
-def _warn_on_reverse_complement_orientation(variant):
-    """Emit a single warning when the breakend's ``mate_orientation``
-    indicates a reverse-complement join (``[]`` or ``][``) that
-    ``_build_fusion_mutant_transcript`` doesn't yet handle correctly
-    (#336). Canonical ``]]`` / ``[[`` pairings, or a missing
-    orientation, pass silently.
+def _junction_ends(variant):
+    """The novel adjacencies ``variant`` creates, as
+    ``((contig, pos, side), (contig, pos, side))`` pairs, where
+    ``side`` is the side of the breakpoint that's kept.
+
+    For a BND the first element is the row's own breakpoint and the
+    sides come from its ALT (``None`` when the ALT isn't a breakend).
+    For DEL / DUP / INV the first element is the end at
+    ``variant.start`` and the second the end at ``variant.end``, using
+    the symbolic-allele convention that ``start`` is the base before
+    the event: a deletion joins ``start`` (kept on the left) to
+    ``end + 1`` (kept on the right), and a tandem duplication joins
+    ``end`` to ``start + 1``. An inversion creates two junctions; when
+    it was typed from a breakend record, the ALT says which one that
+    record observed.
     """
+    sv_type = getattr(variant, "sv_type", None)
+    contig = variant.contig
+    sides = _breakend_sides(getattr(variant, "symbolic_alt", None))
+    if sv_type == "BND":
+        this_side, mate_side = sides or (None, None)
+        return [((contig, variant.start, this_side),
+                 (variant.mate_contig, variant.mate_start, mate_side))]
+    start, end = variant.start, variant.end
+    if sv_type == "DEL":
+        return [((contig, start, "left"), (contig, end + 1, "right"))]
+    if sv_type == "DUP":
+        return [((contig, start + 1, "right"), (contig, end, "left"))]
+    if sv_type == "INV":
+        keep_left = ((contig, start, "left"), (contig, end, "left"))
+        keep_right = (
+            (contig, start + 1, "right"), (contig, end + 1, "right"))
+        if sides == ("left", "left"):
+            return [keep_left]
+        if sides == ("right", "right"):
+            return [keep_right]
+        return [keep_left, keep_right]
+    return []
+
+
+def _warn_on_unknown_breakend_orientation(variant):
+    """Warn when a breakend with a mate has no well-formed breakend
+    ALT, so the kept sides are unknown and the annotator falls back
+    to treating the annotated transcript as the 5' fusion partner."""
     import warnings
-    orientation = getattr(variant, "mate_orientation", None)
-    if orientation is None:
-        return
-    if orientation in _REVERSE_COMPLEMENT_BND_ORIENTATIONS:
-        warnings.warn(
-            "StructuralVariantAnnotator treats BND %r as a canonical "
-            "5p→3p fusion; reverse-complement orientations (%s) are "
-            "not yet interpreted. Pass a resolved sequence via "
-            "StructuralVariant.alt_assembly to override." % (
-                variant.short_description, orientation),
-            stacklevel=3)
+    warnings.warn(
+        "StructuralVariantAnnotator can't read the breakend orientation "
+        "of %s from ALT %r; treating the annotated transcript as the "
+        "5' fusion partner. Use a VCF breakend ALT such as N[17:100[ "
+        "or pass StructuralVariant.alt_assembly." % (
+            variant.short_description, variant.symbolic_alt),
+        stacklevel=3)
 
 
 class _AssembledAllele:
@@ -523,32 +561,36 @@ def _translate_fused_cdna(fused_cdna, five_prime_transcript, five_prime_len):
         return None
 
 
-def _build_fusion_mutant_transcript(variant, transcript, partner):
-    """Build a :class:`MutantTranscript` for a BND classified as
-    :class:`GeneFusion` (#336).
+def _build_fusion_mutant_transcript(
+        variant, transcript, partner,
+        five_prime_pos=None, three_prime_pos=None):
+    """Build a :class:`MutantTranscript` for a :class:`GeneFusion`
+    (#336).
 
-    The canonical case — intron:intron breakpoints joining a 5'
-    partner's N-terminal exons to a 3' partner's C-terminal exons —
-    yields a fused cDNA whose 5' portion is
+    ``transcript`` is the 5' partner and ``partner`` the 3' partner;
+    ``five_prime_pos`` and ``three_prime_pos`` are their breakpoints,
+    defaulting to ``variant.start`` and ``variant.mate_start``. The
+    canonical case — intron:intron breakpoints joining a 5' partner's
+    N-terminal exons to a 3' partner's C-terminal exons — yields a
+    fused cDNA whose 5' portion is
     ``transcript.sequence[0:5p_cdna_offset]`` and whose 3' portion
     is ``partner.sequence[3p_cdna_offset:]``. When the 5' partner's
     start codon lies in the retained region, the fused protein is
     translated through the junction.
 
-    BND ``mate_orientation`` semantics (which side of each
-    breakpoint joins — ``]p]t`` vs ``t[p[`` etc.) are not yet
-    consulted here; the builder assumes the canonical "5p
-    N-terminus + 3p C-terminus" direction, which matches BRD4-NUTM1,
-    BCR-ABL1, EWSR1-FLI1, and similar oncogenic fusions. Callers
-    with reverse-complement breakend pairings can override by
-    passing a pre-resolved ``alt_assembly`` on the variant.
+    The annotator assigns the 5' / 3' roles from breakend orientation
+    and strand before calling this.
     """
+    if five_prime_pos is None:
+        five_prime_pos = variant.start
+    if three_prime_pos is None:
+        three_prime_pos = variant.mate_start
     five_prime_cdna = str(transcript.sequence)
     three_prime_cdna = str(partner.sequence)
     five_prime_offset = _cdna_offset_at_5p_breakpoint(
-        transcript, variant.start)
+        transcript, five_prime_pos)
     three_prime_offset = _cdna_offset_at_3p_breakpoint(
-        partner, variant.mate_start)
+        partner, three_prime_pos)
     five_prime_retained = five_prime_cdna[:five_prime_offset]
     three_prime_retained = three_prime_cdna[three_prime_offset:]
     fused_cdna = five_prime_retained + three_prime_retained
@@ -758,9 +800,14 @@ class StructuralVariantAnnotator:
     # -- classification helpers -----------------------------------------
 
     def _annotate_deletion(self, variant, transcript):
-        """A deletion overlapping a transcript. If it covers one or
-        more exons, report :class:`LargeDeletion`; if purely
-        intronic, report :class:`Intronic`."""
+        """A deletion overlapping a transcript. If one end of the
+        deletion falls in this transcript and the other in a fusion
+        partner, report :class:`GeneFusion`; if it covers one or more
+        exons, :class:`LargeDeletion`; if purely intronic,
+        :class:`Intronic`."""
+        fusion = self._fusion_across_span_boundary(variant, transcript)
+        if fusion is not None:
+            return fusion
         affected = self._overlapping_exons(variant, transcript)
         if not affected:
             return self._intronic_or_intergenic(variant, transcript)
@@ -773,6 +820,9 @@ class StructuralVariantAnnotator:
                 variant, transcript))
 
     def _annotate_duplication(self, variant, transcript):
+        fusion = self._fusion_across_span_boundary(variant, transcript)
+        if fusion is not None:
+            return fusion
         affected = self._overlapping_exons(variant, transcript)
         if not affected:
             return self._intronic_or_intergenic(variant, transcript)
@@ -785,6 +835,9 @@ class StructuralVariantAnnotator:
                 variant, transcript))
 
     def _annotate_inversion(self, variant, transcript):
+        fusion = self._fusion_across_span_boundary(variant, transcript)
+        if fusion is not None:
+            return fusion
         affected = self._overlapping_exons(variant, transcript)
         if not affected:
             return self._intronic_or_intergenic(variant, transcript)
@@ -811,38 +864,26 @@ class StructuralVariantAnnotator:
 
     def _annotate_breakend(self, variant, transcript):
         """A breakend whose first breakpoint lies on ``transcript``.
-        If the mate lands on another protein-coding transcript,
-        report :class:`GeneFusion`; otherwise,
+        If the join links this transcript sense-to-sense with a
+        protein-coding transcript at the mate, report
+        :class:`GeneFusion`; otherwise
         :class:`TranslocationToIntergenic`.
         """
         mate_contig = getattr(variant, "mate_contig", None)
         mate_start = getattr(variant, "mate_start", None)
         assembly_mt = _build_alt_assembly_mutant_transcript(
             variant, transcript)
-        # The reverse-complement warning only applies when we're
-        # inferring the fused allele from reference + breakpoint; if
-        # the caller supplied ``alt_assembly`` they already resolved
-        # the orientation themselves.
-        if assembly_mt is None:
-            _warn_on_reverse_complement_orientation(variant)
-        if mate_contig is None or mate_start is None:
-            return TranslocationToIntergenic(
-                variant=variant,
-                transcript=transcript,
-                mutant_transcript=assembly_mt or (
-                    _build_translocation_mutant_transcript(
-                        variant, transcript)))
-
-        partner = self._coding_transcript_at(
-            variant, mate_contig, mate_start)
-        if partner is not None and partner.id != transcript.id:
-            return GeneFusion(
-                variant=variant,
-                transcript=transcript,
-                partner_transcript=partner,
-                mutant_transcript=assembly_mt or (
-                    _build_fusion_mutant_transcript(
-                        variant, transcript, partner)))
+        if mate_contig is not None and mate_start is not None:
+            # With a resolved alt_assembly the caller has already
+            # settled orientation, so an unreadable ALT isn't worth a
+            # warning.
+            if (assembly_mt is None
+                    and _breakend_sides(variant.symbolic_alt) is None):
+                _warn_on_unknown_breakend_orientation(variant)
+            fusion = self._fusion_at_junction_ends(
+                variant, transcript, _junction_ends(variant))
+            if fusion is not None:
+                return fusion
         return TranslocationToIntergenic(
             variant=variant,
             transcript=transcript,
@@ -893,25 +934,104 @@ class StructuralVariantAnnotator:
                 distance_to_exon=distance)
         return Intergenic(variant=variant)
 
-    def _coding_transcript_at(self, variant, contig, position):
-        """Find the first protein-coding transcript overlapping
-        ``contig:position`` in the variant's genome. Returns
-        ``None`` if no coding transcript lives there.
+    def _fusion_across_span_boundary(self, variant, transcript):
+        """For a DEL / DUP / INV with exactly one end inside
+        ``transcript``, the :class:`GeneFusion` formed across that end,
+        or ``None``. SVs with both ends (or neither) inside the
+        transcript keep their deletion / duplication / inversion
+        classification, as do those with no fusion partner."""
+        if str(variant.contig) != str(transcript.contig):
+            return None
+        inside = [
+            pos for pos in (variant.start, variant.end)
+            if transcript.start <= pos <= transcript.end]
+        if len(inside) != 1:
+            return None
+        at_start = inside[0] == variant.start
+        ends = [
+            (start_end, end_end) if at_start else (end_end, start_end)
+            for start_end, end_end in _junction_ends(variant)]
+        return self._fusion_at_junction_ends(variant, transcript, ends)
+
+    def _fusion_at_junction_ends(self, variant, transcript, ends):
+        """The :class:`GeneFusion` ``transcript`` forms at any of
+        ``ends`` — ``((contig, pos, side), (mate_contig, mate_pos,
+        mate_side))`` pairs whose first element lies in ``transcript``
+        — or ``None``.
+
+        The kept side and the strand give each transcript's role: a
+        transcript that keeps its 5' end is the 5' partner and needs a
+        protein-coding partner at the other end that keeps its 3' end,
+        and vice versa, which is what makes the join sense-to-sense.
+        Junctions where ``transcript`` is the 5' partner are tried
+        first. An unknown side (``None``) treats ``transcript`` as the
+        5' partner and accepts any partner.
         """
+        def keeps_five_prime(pair):
+            side = pair[0][2]
+            return side is None or _retains_five_prime_end(transcript, side)
+
+        for pair in sorted(ends, key=lambda p: not keeps_five_prime(p)):
+            (_, pos, _), (mate_contig, mate_pos, mate_side) = pair
+            five_prime = keeps_five_prime(pair)
+            partner = self._fusion_partner(
+                variant, transcript, mate_contig, mate_pos, mate_side,
+                five_prime)
+            if partner is None:
+                continue
+            if five_prime:
+                five, three, five_pos, three_pos = (
+                    transcript, partner, pos, mate_pos)
+            else:
+                five, three, five_pos, three_pos = (
+                    partner, transcript, mate_pos, pos)
+            return GeneFusion(
+                variant=variant,
+                transcript=transcript,
+                partner_transcript=partner,
+                five_prime_transcript=five,
+                three_prime_transcript=three,
+                mutant_transcript=_build_alt_assembly_mutant_transcript(
+                    variant, transcript) or _build_fusion_mutant_transcript(
+                        variant, five, three,
+                        five_prime_pos=five_pos, three_prime_pos=three_pos))
+        return None
+
+    def _fusion_partner(
+            self, variant, transcript, contig, position, side,
+            transcript_is_five_prime):
+        """First protein-coding transcript at ``contig:position``, other
+        than ``transcript``, that keeps the opposite end to
+        ``transcript`` — its 3' end when ``transcript`` is the 5'
+        partner, and vice versa. An unknown ``side`` accepts any."""
+        for candidate in self._coding_transcripts_at(
+                variant, contig, position):
+            if candidate.id == transcript.id:
+                continue
+            if side is None or (
+                    _retains_five_prime_end(candidate, side)
+                    != transcript_is_five_prime):
+                return candidate
+        return None
+
+    def _coding_transcripts_at(self, variant, contig, position):
+        """Protein-coding transcripts overlapping ``contig:position`` in
+        the variant's genome, in pyensembl's order. Empty when the
+        genome can't answer (e.g. a contig it doesn't have)."""
         genome = getattr(variant, "genome", None) or getattr(
             variant, "ensembl", None)
         if genome is None:
-            return None
+            return []
         try:
-            contig_norm = str(contig)
             transcripts = genome.transcripts_at_locus(
-                contig_norm, int(position), int(position))
+                str(contig), int(position), int(position))
         except Exception:
-            return None
+            return []
+        coding = []
         for t in transcripts:
             try:
                 if t.is_protein_coding:
-                    return t
+                    coding.append(t)
             except Exception:
                 continue
-        return None
+        return coding

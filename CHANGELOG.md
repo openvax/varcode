@@ -1,5 +1,46 @@
 # Change Log
 
+## [v7.1.0](https://github.com/openvax/varcode/tree/v7.1.0) (2026-09-11)
+
+**Changed**
+- Structural-variant fusion annotation follows breakend orientation. The
+  side of each breakpoint that's kept, with transcript strand, decides
+  which transcript is the 5' and which the 3' partner, and a partner has
+  to join sense-to-sense. `GeneFusion` is reported on either partner
+  (`GeneFusion.transcript` can be the 3' partner) and carries
+  `five_prime_transcript` / `three_prime_transcript`. A breakend whose
+  ALT keeps the wrong sides for a fusion now gives
+  `TranslocationToIntergenic`.
+- A `DEL` / `DUP` / `INV` with one end in a transcript and a
+  sense-to-sense partner at the other end gives a `GeneFusion` (e.g. the
+  TMPRSS2-ERG deletion) instead of a deletion, duplication or inversion
+  of that transcript's exons.
+- Breakend pairs labeled `SVTYPE=DEL` / `DUP` / `INV` (esvee, GRIDSS)
+  load as typed SVs spanning the event when the breakend sides fit the
+  label, so `effects()` covers the whole span; `pair_breakends` keeps
+  their type and span.
+- The reverse-complement orientation warning is replaced by a warning
+  when a breakend with a mate has no breakend ALT to read orientation
+  from.
+
+**Fixed**
+- VCF single breakends (`.ACGT` / `ACGT.`) no longer crash `load_vcf`;
+  they load as `BND`s with no mate.
+- SVs from `load_vcf` use the genome and contig-name settings passed to
+  it. Previously they fell back to the default GRCh38 and kept `chr`
+  names, so `effects()` raised on UCSC-named VCFs.
+- `StructuralVariant.mate_contig` is normalized like `contig`, and
+  `Variant._convert_ucsc_contig_name_to_ensembl` converts its argument
+  rather than the variant's own contig.
+- `StructuralVariant` equality compares SV type, ALT and mate, so
+  `load_vcf(distinct=True)` no longer merges different SV records at the
+  same position.
+
+**Added**
+- Fusion regression tests from the public osteosarc.com osteosarcoma
+  dataset, validated against LINX (`tests/test_osteosarc_fusions.py`,
+  `tests/data/osteosarc_esvee_somatic.vcf`).
+
 ## [v7.0.0](https://github.com/openvax/varcode/tree/v7.0.0) (2026-07-08)
 
 **Changed**
