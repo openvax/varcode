@@ -6,7 +6,8 @@
 - Structural-variant fusion annotation follows breakend orientation. The
   side of each breakpoint that's kept, with transcript strand, decides
   which transcript is the 5' and which the 3' partner, and a partner has
-  to join sense-to-sense. `GeneFusion` is reported on either partner
+  to be in another gene and join sense-to-sense. `GeneFusion` is reported
+  on either partner
   (`GeneFusion.transcript` can be the 3' partner) and carries
   `five_prime_transcript` / `three_prime_transcript`. A breakend whose
   ALT keeps the wrong sides for a fusion now gives

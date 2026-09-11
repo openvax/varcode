@@ -1000,13 +1000,15 @@ class StructuralVariantAnnotator:
     def _fusion_partner(
             self, variant, transcript, contig, position, side,
             transcript_is_five_prime):
-        """First protein-coding transcript at ``contig:position``, other
-        than ``transcript``, that keeps the opposite end to
-        ``transcript`` — its 3' end when ``transcript`` is the 5'
-        partner, and vice versa. An unknown ``side`` accepts any."""
+        """First protein-coding transcript at ``contig:position``, in a
+        different gene from ``transcript``, that keeps the opposite end
+        to ``transcript`` — its 3' end when ``transcript`` is the 5'
+        partner, and vice versa. An unknown ``side`` accepts any.
+        Another isoform of the same gene isn't a fusion partner: an
+        event with both ends in one gene is intragenic."""
         for candidate in self._coding_transcripts_at(
                 variant, contig, position):
-            if candidate.id == transcript.id:
+            if candidate.gene_id == transcript.gene_id:
                 continue
             if side is None or (
                     _retains_five_prime_end(candidate, side)

@@ -47,7 +47,7 @@ from varcode import StructuralVariant, StructuralVariantAnnotator, load_vcf
 from varcode.annotators.structural_variant import (
     _build_fusion_mutant_transcript,
 )
-from varcode.effects import GeneFusion
+from varcode.effects import GeneFusion, Intronic
 from varcode.transforms import pair_breakends
 
 from .data import data_path
@@ -314,3 +314,63 @@ def test_esvee_vcf_pairs_into_one_variant_per_junction():
         ("DUP", "4", 2_664_477, 15_012_987),
         ("INV", "2", 25_955_847, 63_053_516),
     ]
+
+
+def _load_esvee_records(tmp_path, records):
+    """Load a few esvee records (sites only) from the dataset."""
+    path = tmp_path / "esvee_records.vcf"
+    path.write_text(
+        "##fileformat=VCFv4.2\n"
+        "##INFO=<ID=SVTYPE,Number=1,Type=String,Description=\"type\">\n"
+        "##INFO=<ID=MATEID,Number=1,Type=String,Description=\"mate\">\n"
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
+        + "".join("\t".join(record) + "\n" for record in records))
+    return load_vcf(
+        str(path), genome=ensembl_grch38, parse_structural_variants=True)
+
+
+def test_esvee_deletion_within_cbx5_is_not_a_fusion(tmp_path):
+    """A 3.3 kb deletion inside CBX5 (T1 organoid, records 34402/34403).
+    CBX5's long isoform holds both ends; two short isoforms hold one end
+    each, and what lies at the other end is another CBX5 isoform, which
+    isn't a fusion partner."""
+    vc = _load_esvee_records(tmp_path, [
+        ("chr12", "54259010", "34402", "T", "T[chr12:54262307[", "57",
+         "PASS", "SVTYPE=DEL;MATEID=34403"),
+        ("chr12", "54262307", "34403", "C", "]chr12:54259010]C", "57",
+         "PASS", "SVTYPE=DEL;MATEID=34402"),
+    ])
+    sv = vc[0]
+    assert (sv.sv_type, sv.start, sv.end) == ("DEL", 54_259_010, 54_262_306)
+    long_isoform = ensembl_grch38.transcript_by_id("ENST00000209875")
+    assert isinstance(
+        _ANNOTATOR.annotate_on_transcript(sv, long_isoform), Intronic)
+    for transcript_id in ("ENST00000439541", "ENST00000550411"):
+        effect = _ANNOTATOR.annotate_on_transcript(
+            sv, ensembl_grch38.transcript_by_id(transcript_id))
+        assert not isinstance(effect, GeneFusion), transcript_id
+
+
+def test_esvee_insertion_breakends_are_not_a_fusion(tmp_path):
+    """esvee writes an insertion in COPB2 at chr3:139358615 as two
+    breakends a base apart (T1 organoid, records 10440/10441,
+    SVTYPE=INS), so they load as BNDs. The mate lies in COPB2 too, so
+    no COPB2 transcript reports a fusion with itself."""
+    insert = (
+        "AATTAGCCTCAGCACCGAGAACGAATTGTATATGGGCGGGCAGGGGAGAAGATGGGCAGAGAAATG"
+        "AGAATGAAGGGGAGTTCTTGGGATTCTGGTC")
+    vc = _load_esvee_records(tmp_path, [
+        ("chr3", "139358615", "10440", "A", "]chr3:139358616]" + insert + "A",
+         "80", "PASS", "SVTYPE=INS;MATEID=10441"),
+        ("chr3", "139358616", "10441", "G", "G" + insert + "[chr3:139358615[",
+         "80", "PASS", "SVTYPE=INS;MATEID=10440"),
+    ])
+    assert [v.sv_type for v in vc] == ["BND", "BND"]
+    sv = vc[0]
+    transcripts = [
+        t for t in ensembl_grch38.transcripts_at_locus("3", sv.start, sv.start)
+        if t.is_protein_coding]
+    assert {t.gene_name for t in transcripts} == {"COPB2"}
+    for transcript in transcripts:
+        effect = _ANNOTATOR.annotate_on_transcript(sv, transcript)
+        assert not isinstance(effect, GeneFusion), transcript.id
