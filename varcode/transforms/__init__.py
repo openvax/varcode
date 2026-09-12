@@ -55,6 +55,9 @@ __all__ = ["pair_breakends", "left_align_indels"]
 
 
 def _is_breakend(variant):
+    """A breakend row. Typed DEL / DUP / INV variants are events rather
+    than records — :func:`pair_breakends` builds those from two
+    breakends — so they never pair again."""
     return getattr(variant, "sv_type", None) == "BND"
 
 
@@ -168,13 +171,20 @@ def _build_combined(a, b, a_id, b_id):
     when A doesn't already carry it (which is the common case — A's
     ``mate_contig`` already points at B's contig).
     """
+    from ..structural_variant import typed_event_from_breakends
     mate_contig = a.mate_contig if a.mate_contig is not None else b.contig
     mate_start = a.mate_start if a.mate_start is not None else b.start
+    # When both halves carry the same DEL / DUP / INV label from their
+    # caller and their kept sides fit it, the pair describes that event
+    # and the combined row spans it. Otherwise it stays a breakend at
+    # A's position.
+    typed = typed_event_from_breakends(a, b)
+    sv_type, start, end = typed if typed else ("BND", a.start, a.start)
     combined = StructuralVariant(
         contig=a.contig,
-        start=a.start,
-        end=a.start,
-        sv_type="BND",
+        start=start,
+        end=end,
+        sv_type=sv_type,
         alt=a.symbolic_alt,
         ref=a.ref,
         mate_contig=mate_contig,

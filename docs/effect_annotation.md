@@ -376,8 +376,15 @@ annotator's output specifically.
 `sv_type` (one of `DEL`, `DUP`, `INV`, `INS`, `CNV`, `BND`), `end`,
 breakend mate fields, confidence intervals, and an open-ended `info`
 dict. Pass `parse_structural_variants=True` to `load_vcf` to load
-symbolic ALTs (`<DEL>`, `<INS:ME:ALU>`, `<CN0>`, breakends) as
-`StructuralVariant` objects rather than dropping them.
+symbolic ALTs (`<DEL>`, `<INS:ME:ALU>`, `<CN0>`), breakends and single
+breakends (`.ACGT` / `ACGT.`, loaded as a `BND` with no mate) as
+`StructuralVariant` objects rather than dropping them. SVs get the
+genome and contig-name settings passed to `load_vcf`, mates included.
+Callers such as esvee and GRIDSS write deletions, duplications and
+inversions as breakend pairs labeled `SVTYPE=DEL` / `DUP` / `INV`. Each
+row loads as the breakend it is; `varcode.transforms.pair_breakends`
+joins the pair into one SV of that type, spanning the event, when the
+two halves agree on the label and their kept sides fit it.
 
 ```python
 from varcode import load_vcf
@@ -398,13 +405,26 @@ plug in via `apply_rna_evidence_to_effects` to append observed
 candidates; see [Germline-aware annotation](germline.md)
 for the same composition pattern applied to germline.
 
+Fusions follow breakend orientation: the side of each breakpoint that's
+kept, with the transcript's strand, decides whether a transcript is the
+5' or 3' partner, and a partner has to join sense-to-sense. A breakend,
+or a `DEL` / `DUP` / `INV` with one end in each of two genes (such as
+the deletion behind TMPRSS2-ERG), gives a `GeneFusion` on both
+partners; `five_prime_transcript` and `three_prime_transcript` say which
+is which. Transcripts containing both ends of a `DEL` / `DUP` / `INV`,
+or lying wholly inside it, get `LargeDeletion` / `LargeDuplication` /
+`Inversion`.
+
 Limitations:
 
-- Mate breakend pairing (joining two `BND` rows that are halves of one
-  translocation) is deferred. Each `BND` row produces its own
-  `StructuralVariant`; consumers can match `MATEID` themselves.
+- Each breakend row produces its own `StructuralVariant`;
+  `varcode.transforms.pair_breakends` joins the two rows of a pair (see
+  [Transforms](transforms.md)).
 - `parse_structural_variants=False` is the default. Without the flag,
   symbolic ALTs are dropped with a warning that names the flag.
+- The fusion partner is the first protein-coding transcript at the other
+  breakpoint with the right orientation, not a ranked choice
+  ([#406](https://github.com/openvax/varcode/issues/406)).
 
 ## Downstream consumers
 

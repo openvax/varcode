@@ -91,11 +91,11 @@ def reference_range(genome: Any, contig: str, start: int, end: int) -> str:
     * Chromosome FASTA hit: one slice. O(end - start).
     * Single-transcript span: one locus query, one slice. O(1) in
       transcript lookups.
-    * Per-position fallback: one locus query per position, but
-      all-or-nothing makes the loop bail at the first uncovered
-      position. Worst case is O(covered prefix length), not the full
-      range — a range that's mostly intronic produces one transcript
-      query, not N.
+    * Per-position fallback: the transcripts overlapping the range are
+      fetched once and every position is answered from that list, so a
+      range read costs one locus query whichever path serves it.
+      All-or-nothing still makes the loop bail at the first uncovered
+      position.
 
     See module docstring for the full fallback order.
     """
@@ -110,13 +110,17 @@ def reference_range(genome: Any, contig: str, start: int, end: int) -> str:
         if from_fasta and len(from_fasta) == end - start + 1:
             return from_fasta
 
-    span = _range_from_single_transcript(genome, contig, start, end)
+    # One locus query serves both the single-transcript span and the
+    # per-position fallback: a transcript covering any position inside
+    # the range necessarily overlaps the range itself.
+    transcripts = _transcripts_at(genome, contig, start, end)
+    span = _range_from_transcripts(transcripts, start, end)
     if span is not None:
         return span
 
     bases = []
     for pos in range(start, end + 1):
-        base = _base_from_genome_transcripts(genome, contig, pos)
+        base = _base_from_transcripts(transcripts, contig, pos)
         if not base:
             return ""
         bases.append(base)
@@ -151,12 +155,30 @@ def _fasta_range(fasta: Any, contig: str, start: int, end: int) -> str:
     return raw.upper()
 
 
+def _transcripts_at(genome: Any, contig: str, start: int, end: int) -> list:
+    """Transcripts overlapping ``[start, end]``, or ``[]`` when the
+    genome can't answer (missing contig, no locus index, ...)."""
+    try:
+        return list(genome.transcripts_at_locus(contig, start, end))
+    except Exception:
+        return []
+
+
 def _base_from_genome_transcripts(
         genome: Any, contig: str, position: int) -> str:
     """Walk the genome's transcripts at ``position`` and return the
-    first ``+`` strand base any of them yields.
+    first ``+`` strand base any of them yields."""
+    return _base_from_transcripts(
+        _transcripts_at(genome, contig, position, position),
+        contig, position)
 
-    Returns ``""`` when no transcript covers ``position``. When
+
+def _base_from_transcripts(
+        transcripts: Any, contig: str, position: int) -> str:
+    """The first ``+`` strand base at ``position`` that any of
+    ``transcripts`` yields.
+
+    Returns ``""`` when none of them covers ``position``. When
     multiple transcripts cover the same position they should agree
     on the ``+`` strand base; a disagreement implies annotation skew,
     an alt-locus position, or a pyensembl bug. We silently take the
@@ -165,11 +187,6 @@ def _base_from_genome_transcripts(
     the diagnostic available without flooding warnings or carrying
     module-level dedup state.
     """
-    try:
-        transcripts = genome.transcripts_at_locus(contig, position, position)
-    except Exception:
-        return ""
-
     answer = ""
     for t in transcripts:
         base = _read_transcript_base(t, position)
@@ -234,10 +251,14 @@ def _range_from_single_transcript(
     success, or ``None`` if no single transcript spans the range
     (caller falls back to per-position).
     """
-    try:
-        transcripts = genome.transcripts_at_locus(contig, start, end)
-    except Exception:
-        return None
+    return _range_from_transcripts(
+        _transcripts_at(genome, contig, start, end), start, end)
+
+
+def _range_from_transcripts(
+        transcripts: Any, start: int, end: int) -> Optional[str]:
+    """The ``+`` strand sequence over ``[start, end]`` from the first
+    of ``transcripts`` that fully covers it, or ``None``."""
     for t in transcripts:
         span = _plus_strand_slice(t, start, end)
         if span:

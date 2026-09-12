@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Parse VCF symbolic alleles and breakends into
+"""Parse VCF symbolic alleles, breakends and single breakends into
 :class:`StructuralVariant` objects.
 
 Kept as a small, self-contained module so the VCF loader can call it
@@ -47,6 +47,35 @@ _BREAKEND_RE = re.compile(
     r"(?P<close>[\[\]])"
     r"(?P<suffix>[ACGTNacgtn]*)$"
 )
+
+
+# VCF 4.2 §5.4.9 single breakend: ``.ACGT`` or ``ACGT.`` — a breakpoint
+# joined to sequence the caller couldn't place (often a repeat or
+# mobile-element insertion). The dot marks the unplaced side; the bases
+# are the REF-adjacent base plus any assembled inserted sequence.
+_SINGLE_BREAKEND_RE = re.compile(
+    r"^(?:\.(?P<joined_before>[ACGTNacgtn]+)"
+    r"|(?P<joined_after>[ACGTNacgtn]+)\.)$"
+)
+
+
+def breakend_sides(alt):
+    """Which side of each breakpoint a VCF breakend ALT keeps.
+
+    Returns ``(this_side, mate_side)``, each ``"left"`` (bases up to
+    the position are kept) or ``"right"`` (bases from the position
+    on), or ``None`` when ``alt`` isn't a well-formed breakend:
+    ``t[p[`` keeps left / right, ``t]p]`` left / left, ``]p]t``
+    right / left and ``[p[t`` right / right.
+    """
+    m = _BREAKEND_RE.match(alt or "")
+    if m is None or m.group("open") != m.group("close"):
+        return None
+    if bool(m.group("prefix")) == bool(m.group("suffix")):
+        return None
+    this_side = "left" if m.group("prefix") else "right"
+    mate_side = "right" if m.group("open") == "[" else "left"
+    return this_side, mate_side
 
 
 def _extract_info(info, key):
@@ -93,7 +122,10 @@ def parse_symbolic_alt(
         ref: str,
         alt: str,
         info=None,
-        genome=None) -> Optional[StructuralVariant]:
+        genome=None,
+        normalize_contig_names: bool = True,
+        convert_ucsc_contig_names: Optional[bool] = None,
+) -> Optional[StructuralVariant]:
     """Parse a single symbolic or breakend ALT into a
     :class:`StructuralVariant`. Returns ``None`` if the ALT is not
     symbolic (the caller keeps handling it as a simple variant).
@@ -103,6 +135,11 @@ def parse_symbolic_alt(
     etc. The parser reads those when present but doesn't require
     them — the ALT shape alone is enough to distinguish symbolic
     from breakend from inline.
+
+    ``normalize_contig_names`` and ``convert_ucsc_contig_names`` mean
+    the same as for :class:`~varcode.Variant` and apply to both
+    ``contig`` and a breakend's mate contig. The VCF loader forwards
+    its own settings.
     """
     if not alt:
         return None
@@ -173,6 +210,8 @@ def parse_symbolic_alt(
             ci_end=tuple(ci_end) if ci_end else None,
             info=sv_info,
             genome=genome,
+            normalize_contig_names=normalize_contig_names,
+            convert_ucsc_contig_names=convert_ucsc_contig_names,
         )
 
     # Breakend: t[CHROM:POS[ etc. Four orientation shapes per §5.4.
@@ -188,6 +227,11 @@ def parse_symbolic_alt(
         # base is on (prefix = joined-after, suffix = joined-before)
         # and the bracket direction (mate strand).
         orientation = open_br + close_br
+        # One record is one breakend, even when the caller labels it
+        # SVTYPE=DEL / DUP / INV: that label describes the event both
+        # halves make together, which
+        # :func:`~varcode.transforms.pair_breakends` builds from the
+        # pair. The label rides along in ``info`` for it to read.
         return StructuralVariant(
             contig=contig,
             start=int(start),
@@ -200,8 +244,32 @@ def parse_symbolic_alt(
             mate_orientation=orientation,
             info={"mateid": (_extract_info(info, "MATEID")
                              or _extract_info(info, "PARID")),
-                  "bnd_anchor": prefix or suffix},
+                  "bnd_anchor": prefix or suffix,
+                  "svtype": _extract_info_scalar(info, "SVTYPE")},
             genome=genome,
+            normalize_contig_names=normalize_contig_names,
+            convert_ucsc_contig_names=convert_ucsc_contig_names,
+        )
+
+    # Single breakend: ``.ACGT`` / ``ACGT.``. There's no mate to point
+    # at, so it's a BND with ``mate_contig=None``, which the annotator
+    # treats like a breakend into intergenic space.
+    m = _SINGLE_BREAKEND_RE.match(alt)
+    if m:
+        return StructuralVariant(
+            contig=contig,
+            start=int(start),
+            end=int(start),
+            sv_type="BND",
+            alt=alt,
+            ref=ref or "N",
+            info={"single_breakend": True,
+                  "bnd_anchor": (m.group("joined_before")
+                                 or m.group("joined_after")),
+                  "svtype": _extract_info_scalar(info, "SVTYPE")},
+            genome=genome,
+            normalize_contig_names=normalize_contig_names,
+            convert_ucsc_contig_names=convert_ucsc_contig_names,
         )
 
     # Spanning-deletion placeholder. VCF 4.2+ uses ``*`` to mean "this

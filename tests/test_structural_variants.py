@@ -26,6 +26,7 @@ Coverage:
 """
 
 import os
+import pathlib
 import tempfile
 
 import pytest
@@ -605,3 +606,235 @@ def test_vcf_loader_sv_explicit_protein_diff_passes_through():
     assert effects.annotator == "protein_diff", (
         "Collection-level annotator metadata should reflect the "
         "explicit override, not the SV annotator.")
+
+
+# --------------------------------------------------------------------
+# Single breakends and UCSC contig names, using esvee records from
+# the osteosarc.com dataset (tests/data/osteosarc_esvee_somatic.vcf)
+# --------------------------------------------------------------------
+
+
+def test_parse_single_breakend_joined_before():
+    """``.AAAA…``: unplaced sequence joined before POS. Parsed as a
+    BND with no mate, keeping the bases for downstream use."""
+    alt = ".AAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    sv = parse_symbolic_alt(
+        contig="chr13", start=56_435_058, ref="A", alt=alt,
+        info={}, genome="GRCh38", convert_ucsc_contig_names=True)
+    assert sv is not None
+    assert sv.sv_type == "BND"
+    assert sv.contig == "13"
+    assert sv.mate_contig is None
+    assert sv.mate_start is None
+    assert sv.symbolic_alt == alt
+    assert sv.info["single_breakend"] is True
+    assert sv.info["bnd_anchor"] == alt[1:]
+    assert sv.short_description == "BND(13:56435058)"
+
+
+def test_parse_single_breakend_joined_after():
+    """``TTTT….``: unplaced sequence joined after POS."""
+    alt = "TTTTTTTTTTTTTTTTTTTTTTTTT."
+    sv = parse_symbolic_alt(
+        contig="chr12", start=72_342_468, ref="T", alt=alt,
+        info={}, genome="GRCh38", convert_ucsc_contig_names=True)
+    assert sv is not None
+    assert sv.sv_type == "BND"
+    assert sv.contig == "12"
+    assert sv.mate_contig is None
+    assert sv.info["bnd_anchor"] == alt[:-1]
+
+
+def test_parse_breakend_converts_ucsc_contig_and_mate():
+    """The SEMA6A::PARM1 breakend as esvee writes it. With UCSC
+    conversion on, the row's contig and its mate on another
+    chromosome both get Ensembl names."""
+    sv = parse_symbolic_alt(
+        contig="chr5", start=116_474_281, ref="C",
+        alt="[chr4:75037126[C", info={"MATEID": "11309"},
+        genome="GRCh38", convert_ucsc_contig_names=True)
+    assert sv.contig == "5"
+    assert sv.mate_contig == "4"
+    assert sv.mate_start == 75_037_126
+    assert sv.symbolic_alt == "[chr4:75037126[C"
+
+
+def test_sv_mate_contig_follows_contig_normalization():
+    """``mate_contig`` gets the same treatment as ``contig``:
+    converted when UCSC conversion is on, left alone when it's off."""
+    kwargs = dict(
+        contig="chr5", start=116_474_281, sv_type="BND",
+        mate_contig="chr4", mate_start=75_037_126, genome="GRCh38")
+    converted = StructuralVariant(convert_ucsc_contig_names=True, **kwargs)
+    assert (converted.contig, converted.mate_contig) == ("5", "4")
+    kept = StructuralVariant(convert_ucsc_contig_names=False, **kwargs)
+    assert (kept.contig, kept.mate_contig) == ("chr5", "chr4")
+
+
+def test_vcf_loader_svs_use_requested_genome():
+    """SV rows get the genome passed to ``load_vcf``, like SNV rows."""
+    body = (
+        "##fileformat=VCFv4.2\n"
+        "##INFO=<ID=SVTYPE,Number=1,Type=String,Description=\"type\">\n"
+        "##INFO=<ID=END,Number=1,Type=Integer,Description=\"end\">\n"
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
+        "22\t51179178\tsv1\tA\t<DEL>\t100\tPASS\tSVTYPE=DEL;END=51179500\n"
+        "22\t51179700\tsnv1\tC\tT\t100\tPASS\t.\n"
+    )
+    path = _write_vcf(body)
+    try:
+        vc = load_vcf(path, genome="GRCh37", parse_structural_variants=True)
+    finally:
+        os.unlink(path)
+    assert len(vc) == 2
+    assert {v.reference_name for v in vc} == {"GRCh37"}
+
+
+def test_breakend_record_keeps_its_own_position_and_label():
+    """A breakend record is one end of an event, so it loads as a BND at
+    its own position even when the caller labels the pair SVTYPE=DEL.
+    The label rides along for ``pair_breakends`` (real esvee record,
+    chr1:6458524)."""
+    sv = parse_symbolic_alt(
+        contig="chr1", start=6_458_524, ref="C", alt="C[chr1:6458721[",
+        info={"SVTYPE": "DEL", "MATEID": "266"}, genome="GRCh38",
+        convert_ucsc_contig_names=True)
+    assert (sv.sv_type, sv.contig, sv.start, sv.end) == (
+        "BND", "1", 6_458_524, 6_458_524)
+    assert (sv.mate_contig, sv.mate_start) == ("1", 6_458_721)
+    assert sv.info["svtype"] == "DEL"
+
+
+def _paired(tmp_path, records):
+    """Load breakend records and pair them into events."""
+    from varcode.transforms import pair_breakends
+    path = tmp_path / "breakends.vcf"
+    path.write_text(
+        "##fileformat=VCFv4.2\n"
+        "##INFO=<ID=SVTYPE,Number=1,Type=String,Description=\"type\">\n"
+        "##INFO=<ID=MATEID,Number=1,Type=String,Description=\"mate\">\n"
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
+        + "".join("\t".join(record) + "\n" for record in records))
+    vc = load_vcf(
+        str(path), genome="GRCh38", parse_structural_variants=True,
+        only_passing=False)
+    return vc, pair_breakends(vc)
+
+
+def test_pairing_builds_a_deletion_from_two_breakend_records():
+    """The esvee records for chr1:6458524-6458721, labeled SVTYPE=DEL,
+    pair into the DEL an equivalent ``<DEL>`` record would give."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as directory:
+        vc, paired = _paired(pathlib.Path(directory), [
+            ("chr1", "6458524", "265", "C", "C[chr1:6458721[", "46", "PASS",
+             "SVTYPE=DEL;MATEID=266"),
+            ("chr1", "6458721", "266", "A", "]chr1:6458524]A", "46", "PASS",
+             "SVTYPE=DEL;MATEID=265"),
+        ])
+    assert [v.sv_type for v in vc] == ["BND", "BND"]
+    assert [(v.sv_type, v.start, v.end) for v in paired] == [
+        ("DEL", 6_458_524, 6_458_720)]
+
+
+def test_pairing_builds_duplications_and_inversions():
+    """The CPEB2::FAM193A (DUP) and OTX1::KIF3C (INV) esvee pairs."""
+    import tempfile
+    events = []
+    for records in (
+            [("chr4", "2664478", "11585", "T", "]chr4:15012987]T", "31",
+              "PASS", "SVTYPE=DUP;MATEID=11828"),
+             ("chr4", "15012987", "11828", "A", "A[chr4:2664478[", "31",
+              "PASS", "SVTYPE=DUP;MATEID=11585")],
+            [("chr2", "25955847", "4055", "G", "GTC]chr2:63053516]", "46",
+              "PASS", "SVTYPE=INV;MATEID=4571"),
+             ("chr2", "63053516", "4571", "T", "TGA]chr2:25955847]", "46",
+              "PASS", "SVTYPE=INV;MATEID=4055")]):
+        with tempfile.TemporaryDirectory() as directory:
+            _, paired = _paired(pathlib.Path(directory), records)
+        events += [(v.sv_type, v.contig, v.start, v.end) for v in paired]
+    assert events == [
+        ("DUP", "4", 2_664_477, 15_012_987),
+        ("INV", "2", 25_955_847, 63_053_516)]
+
+
+def test_pairing_keeps_breakends_when_the_label_does_not_fit():
+    """SVTYPE is only trusted when both halves agree and their kept
+    sides match it: here the sides describe an inversion, not a
+    deletion, so the pair stays a breakend."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as directory:
+        _, paired = _paired(pathlib.Path(directory), [
+            ("2", "1000", "a", "A", "A]2:2000]", "50", "PASS",
+             "SVTYPE=DEL;MATEID=b"),
+            ("2", "2000", "b", "A", "A]2:1000]", "50", "PASS",
+             "SVTYPE=DEL;MATEID=a"),
+        ])
+    assert [(v.sv_type, v.start, v.end) for v in paired] == [
+        ("BND", 1_000, 1_000)]
+
+
+def test_breakend_records_of_one_deletion_stay_distinct():
+    """esvee's two records for a deletion at chr1:27108304-27108423 (IDs
+    683/684, both with REF ``A``) are different records, so
+    ``load_vcf``'s ``distinct`` keeps both and ``pair_breakends`` joins
+    them into one deletion."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as directory:
+        vc, paired = _paired(pathlib.Path(directory), [
+            ("chr1", "27108304", "683", "A", "A[chr1:27108423[", "48", "PON",
+             "SVTYPE=DEL;MATEID=684"),
+            ("chr1", "27108423", "684", "A", "]chr1:27108304]A", "48", "PON",
+             "SVTYPE=DEL;MATEID=683"),
+        ])
+    assert len(vc) == 2
+    first, second = vc
+    assert first != second
+    assert [(v.sv_type, v.start, v.end) for v in paired] == [
+        ("DEL", 27_108_304, 27_108_422)]
+
+
+def test_structural_variants_differing_only_in_inserted_sequence():
+    """Two insertions at one position with different assembled sequence
+    are different records: identity covers every field the record
+    carries, not just its locus."""
+    def insertion(inserted):
+        return parse_symbolic_alt(
+            contig="1", start=1_000, ref="A", alt="<INS>",
+            info={"SVTYPE": "INS", "END": 1_000, "INSSEQ": inserted},
+            genome="GRCh38")
+
+    first = insertion("ACGTACGT")
+    second = insertion("TTTTGGGGCCCC")
+    assert first.alt_assembly != second.alt_assembly
+    assert first != second
+    assert len({first, second}) == 2
+    assert first == insertion("ACGTACGT")
+
+
+def test_junctions_by_sv_type():
+    """Every SV states the adjacencies it creates the same way: a
+    deletion joins ``start`` to ``end + 1``, a duplication ``end`` to
+    ``start + 1``, and a symbolic inversion makes both of its junctions
+    while one built from a breakend pair keeps only the junction that
+    pair observed."""
+    def sv(sv_type, **kwargs):
+        return StructuralVariant(
+            contig="7", start=1_000, end=2_000, sv_type=sv_type,
+            genome="GRCh38", **kwargs)
+
+    assert sv("DEL").junctions == (
+        (("7", 1_000, "left"), ("7", 2_001, "right")),)
+    assert sv("DUP").junctions == (
+        (("7", 1_001, "right"), ("7", 2_000, "left")),)
+    assert sv("INV").junctions == (
+        (("7", 1_000, "left"), ("7", 2_000, "left")),
+        (("7", 1_001, "right"), ("7", 2_001, "right")))
+    from_breakends = sv(
+        "INV", alt="N]7:2000]", mate_contig="7", mate_start=2_000)
+    assert from_breakends.junctions == (
+        (("7", 1_000, "left"), ("7", 2_000, "left")),)
+    assert from_breakends.breakpoints == (("7", 1_000), ("7", 2_000))
+    # An insertion has no second end to join.
+    assert sv("INS").junctions == ()
+    assert sv("INS").breakpoints == (("7", 1_000),)

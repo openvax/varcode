@@ -1,5 +1,65 @@
 # Change Log
 
+## [v7.1.0](https://github.com/openvax/varcode/tree/v7.1.0) (2026-09-11)
+
+**Changed**
+- Structural-variant fusion annotation follows breakend orientation. The
+  side of each breakpoint that's kept, with transcript strand, decides
+  which transcript is the 5' and which the 3' partner, and a partner has
+  to be in another gene and join sense-to-sense. `GeneFusion` is reported
+  on either partner
+  (`GeneFusion.transcript` can be the 3' partner) and carries
+  `five_prime_transcript` / `three_prime_transcript`. A breakend whose
+  ALT keeps the wrong sides for a fusion now gives
+  `TranslocationToIntergenic`.
+- A `DEL` / `DUP` / `INV` with one end in a transcript and a
+  sense-to-sense partner at the other end gives a `GeneFusion` (e.g. the
+  TMPRSS2-ERG deletion) instead of a deletion, duplication or inversion
+  of that transcript's exons.
+- `pair_breakends` builds a typed `DEL` / `DUP` / `INV` from a breakend
+  pair that carries that `SVTYPE` (esvee, GRIDSS) when both halves agree
+  on the label and their kept sides fit it, so `effects()` covers the
+  whole span. Each record still loads as the breakend it is, so
+  annotating an unpaired collection doesn't report the event twice.
+- `StructuralVariant.junctions` exposes the novel adjacencies a variant
+  creates as pairs of `Breakend` ends (position plus the side kept), and
+  `breakpoints` lists their positions. Fusion assembly, transcript
+  containment, cryptic-exon scanning and splice windows all read from
+  them, so every consumer uses the same breakpoints.
+- The reverse-complement orientation warning is replaced by a warning
+  when a breakend with a mate has no breakend ALT to read orientation
+  from.
+
+**Fixed**
+- VCF single breakends (`.ACGT` / `ACGT.`) no longer crash `load_vcf`;
+  they load as `BND`s with no mate.
+- SVs from `load_vcf` use the genome and contig-name settings passed to
+  it. Previously they fell back to the default GRCh38 and kept `chr`
+  names, so `effects()` raised on UCSC-named VCFs.
+- `StructuralVariant.mate_contig` is normalized like `contig`, and
+  `Variant._convert_ucsc_contig_name_to_ensembl` converts its argument
+  rather than the variant's own contig.
+- `StructuralVariant` equality compares every field the record carries
+  (type, span, ALT, mate, assembled allele and confidence intervals), so
+  `load_vcf(distinct=True)` no longer merges different SV records at the
+  same position.
+- A fusion keeps the base at each breakpoint, so a breakpoint inside an
+  exon no longer drops one base from the 5' partner (and frameshifts the
+  predicted protein).
+- A fusion partner must be in a gene that doesn't span both ends of the
+  junction, so an event inside one gene isn't reported as a fusion with a
+  nested or antisense gene at its far end.
+- A `GeneFusion` reported on its 3' partner carries a mutant transcript
+  whose `reference_transcript` is the transcript being annotated.
+- `reference_range` reads a range with one locus query instead of one
+  per position when no single transcript spans it, which is the path
+  cryptic-exon scoring takes on a genome with no chromosome FASTA.
+
+**Added**
+- Fusion regression tests from the public osteosarc.com osteosarcoma
+  dataset, validated against LINX (`tests/test_osteosarc_fusions.py`,
+  `tests/data/osteosarc_esvee_somatic.vcf`).
+
 ## [v7.0.0](https://github.com/openvax/varcode/tree/v7.0.0) (2026-07-08)
 
 **Changed**

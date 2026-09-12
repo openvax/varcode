@@ -152,17 +152,13 @@ class Variant(Serializable):
             self.original_reference_name = self.reference_name
 
         self.original_contig = contig
-        self.contig = normalize_chromosome(contig) if normalize_contig_names else contig
 
         if convert_ucsc_contig_names is None:
             self.convert_ucsc_contig_names = self.original_genome_was_ucsc
         else:
             self.convert_ucsc_contig_names = convert_ucsc_contig_names
 
-        # trim off the starting "chr" from hg19 chromosome names to make them
-        # match GRCh37, also convert "chrM" to "MT".
-        if self.convert_ucsc_contig_names:
-            self.contig = self._convert_ucsc_contig_name_to_ensembl(self.contig)
+        self.contig = self._normalize_contig_name(contig)
 
         if ref != alt and ref in STANDARD_NUCLEOTIDES and alt in STANDARD_NUCLEOTIDES:
             # Optimization for common case.
@@ -583,6 +579,21 @@ class Variant(Serializable):
         """Is this variant a pyrimidine to purine change or vice versa"""
         return self.is_snv and is_purine(self.ref) != is_purine(self.alt)
 
+    def _normalize_contig_name(self, contig):
+        """
+        Apply this variant's contig-name settings to ``contig``: tidy the
+        name when ``normalize_contig_names`` is set, then trim the "chr"
+        prefix from UCSC names to match Ensembl (and convert "chrM" to
+        "MT") when ``convert_ucsc_contig_names`` is set. Shared with
+        StructuralVariant so breakend mates are named like the variant's
+        own contig.
+        """
+        if self.normalize_contig_names:
+            contig = normalize_chromosome(contig)
+        if self.convert_ucsc_contig_names:
+            contig = self._convert_ucsc_contig_name_to_ensembl(contig)
+        return contig
+
     def _convert_ucsc_contig_name_to_ensembl(self, contig):
         """
         Convert names such as "chr1" to "1" but don't convert the
@@ -598,7 +609,7 @@ class Variant(Serializable):
         str
         """
         if contig.startswith("chr") and "_" not in contig:
-            contig = self.contig[3:]
+            contig = contig[3:]
         if contig == "M":
             contig = "MT"
         return contig

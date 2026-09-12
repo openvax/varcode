@@ -292,10 +292,11 @@ def enumerate_from_structural_variant(
     """Convenience wrapper: enumerate candidates in the genomic
     region around an SV breakpoint.
 
-    Reads ``flank`` bp either side of ``variant.start`` from the
-    variant's genome (and the same around ``variant.mate_start`` for
-    breakends). If the variant carries an ``alt_assembly`` (long-
-    read resolution), scans that instead of the reference.
+    Reads ``flank`` bp either side of each of the variant's
+    breakpoints (see :attr:`StructuralVariant.breakpoints`, which
+    covers both ends of every junction the variant creates). If the
+    variant carries an ``alt_assembly`` (long-read resolution), scans
+    that instead of the reference.
 
     Returns the combined, sorted candidate list.
     """
@@ -316,11 +317,9 @@ def enumerate_from_structural_variant(
         return candidates
 
     # Otherwise, scan reference flanking regions around breakpoints.
-    breakpoints = [(variant.contig, variant.start)]
-    mate_contig = getattr(variant, "mate_contig", None)
-    mate_start = getattr(variant, "mate_start", None)
-    if mate_contig is not None and mate_start is not None:
-        breakpoints.append((mate_contig, mate_start))
+    breakpoints = list(getattr(variant, "breakpoints", ()) or ())
+    if not breakpoints:
+        breakpoints = [(variant.contig, variant.start)]
 
     for contig, pos in breakpoints:
         if genome is None:
