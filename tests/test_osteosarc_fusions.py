@@ -36,8 +36,9 @@ The tests at the end load the same junctions from
 ``tests/data/osteosarc_esvee_somatic.vcf``: the esvee records as
 published (UCSC ``chr`` contig names) plus two single breakends, with
 only the FORMAT and sample columns removed. esvee labels the
-CPEB2::FAM193A pair a duplication and OTX1::KIF3C an inversion, so
-those load as typed SVs and must still come out as fusions.
+CPEB2::FAM193A pair a duplication and OTX1::KIF3C an inversion;
+``pair_breakends`` turns each pair into that event, and both the
+records and the paired event must still come out as fusions.
 """
 
 import pytest
@@ -168,7 +169,8 @@ def test_cpeb2_fam193a_in_frame_fusion():
     assert isinstance(effect, GeneFusion)
     assert effect.partner_transcript.gene_name == "FAM193A"
 
-    mt = _build_fusion_mutant_transcript(sv, cpeb2, fam193a)
+    mt = _build_fusion_mutant_transcript(
+        cpeb2, cpeb2, 15_012_987, fam193a, 2_664_478)
     assert mt.reference_segments[0].end == _sum_exon_lengths(
         cpeb2, {1, 2, 3})
     assert mt.reference_segments[1].start == _sum_exon_lengths(
@@ -204,8 +206,9 @@ def _fusion_on(sv, transcript_id):
 
 def test_esvee_vcf_loads_every_record():
     """All eight records load, single breakends included, with Ensembl
-    contig names and the genome given to load_vcf. The DUP- and
-    INV-labeled breakend pairs load as typed SVs spanning the event."""
+    contig names and the genome given to load_vcf. Each record loads as
+    the breakend it is, at its own position, whatever SVTYPE its caller
+    labeled the pair with."""
     vc = _esvee_svs()
     assert len(vc) == 8
     assert all(isinstance(v, StructuralVariant) for v in vc)
@@ -215,26 +218,26 @@ def test_esvee_vcf_loads_every_record():
             v.sv_type, v.contig, v.start, v.end, v.mate_contig)
         for v in vc}
     assert parsed == {
-        "4055": ("INV", "2", 25_955_847, 63_053_516, "2"),
-        "4571": ("INV", "2", 25_955_847, 63_053_516, "2"),
-        "11585": ("DUP", "4", 2_664_477, 15_012_987, "4"),
-        "11828": ("DUP", "4", 2_664_477, 15_012_987, "4"),
+        "4055": ("BND", "2", 25_955_847, 25_955_847, "2"),
+        "4571": ("BND", "2", 63_053_516, 63_053_516, "2"),
+        "11585": ("BND", "4", 2_664_478, 2_664_478, "4"),
+        "11828": ("BND", "4", 15_012_987, 15_012_987, "4"),
         "11309": ("BND", "4", 75_037_126, 75_037_126, "5"),
         "15093": ("BND", "5", 116_474_281, 116_474_281, "4"),
         "30830": ("BND", "12", 72_342_468, 72_342_468, None),
         "32579": ("BND", "13", 56_435_058, 56_435_058, None),
     }
+    assert {v.info.get("svtype") for v in vc} == {"INV", "DUP", "BND", "SGL"}
     singles = [v for v in vc if v.mate_contig is None]
     assert all(v.info["single_breakend"] for v in singles)
 
 
 def test_esvee_vcf_breakend_records_annotate():
-    """Breakend records, single breakends included, go through
-    ``effects()``. (The typed DUP and INV span tens of megabases, so
+    """Every record, single breakends included, goes through
+    ``effects()``. (The paired DUP and INV span tens of megabases, so
     they're checked transcript by transcript below.)"""
     for sv in _esvee_svs():
-        if sv.sv_type == "BND":
-            assert len(sv.effects()) > 0
+        assert len(sv.effects()) > 0
 
 
 def test_esvee_vcf_without_sv_parsing_skips_records():
@@ -248,13 +251,15 @@ def test_esvee_vcf_without_sv_parsing_skips_records():
 
 
 def test_esvee_vcf_otx1_kif3c_inversion_is_fusion_on_both_partners():
-    """Either record of the INV-labeled OTX1::KIF3C junction gives the
-    same fusion on OTX1 and on KIF3C: the 35-residue out-of-frame
-    protein from the direct test above."""
+    """Either record of the INV-labeled OTX1::KIF3C junction, and the
+    inversion they pair into, give the same fusion on OTX1 and on
+    KIF3C: the 35-residue out-of-frame protein from the direct test
+    above."""
     otx1 = ensembl_grch38.transcript_by_id("ENST00000282549")
     kif3c = ensembl_grch38.transcript_by_id("ENST00000264712")
-    for record_id in ("4055", "4571"):
-        sv = _esvee_sv(record_id)
+    (inversion,) = [
+        v for v in pair_breakends(_esvee_svs()) if v.sv_type == "INV"]
+    for sv in (_esvee_sv("4055"), _esvee_sv("4571"), inversion):
         for transcript in (otx1, kif3c):
             fusion = _ANNOTATOR.annotate_on_transcript(sv, transcript)
             assert isinstance(fusion, GeneFusion)
@@ -266,12 +271,13 @@ def test_esvee_vcf_otx1_kif3c_inversion_is_fusion_on_both_partners():
 
 def test_esvee_vcf_cpeb2_fam193a_duplication_is_fusion():
     """esvee labels CPEB2::FAM193A a 12 Mb tandem duplication. CPEB2
-    holds its right end and FAM193A its left, so each gets a fusion with
-    CPEB2 as 5' partner rather than an internal duplication of its own
-    exons."""
+    holds its right end and FAM193A its left, so once paired each gets a
+    fusion with CPEB2 as 5' partner rather than an internal duplication
+    of its own exons."""
     cpeb2 = ensembl_grch38.transcript_by_id("ENST00000538197")
     fam193a = ensembl_grch38.transcript_by_id("ENST00000637812")
-    sv = _esvee_sv("11828")
+    (sv,) = [v for v in pair_breakends(_esvee_svs()) if v.sv_type == "DUP"]
+    assert (sv.start, sv.end) == (2_664_477, 15_012_987)
 
     on_cpeb2 = _ANNOTATOR.annotate_on_transcript(sv, cpeb2)
     assert isinstance(on_cpeb2, GeneFusion)
@@ -331,16 +337,16 @@ def _load_esvee_records(tmp_path, records):
 
 def test_esvee_deletion_within_cbx5_is_not_a_fusion(tmp_path):
     """A 3.3 kb deletion inside CBX5 (T1 organoid, records 34402/34403).
-    CBX5's long isoform holds both ends; two short isoforms hold one end
-    each, and what lies at the other end is another CBX5 isoform, which
-    isn't a fusion partner."""
+    CBX5's long isoform holds both ends of the paired deletion; two
+    short isoforms hold one end each, and what lies at the other end is
+    CBX5 itself, so no isoform reports a fusion."""
     vc = _load_esvee_records(tmp_path, [
         ("chr12", "54259010", "34402", "T", "T[chr12:54262307[", "57",
          "PASS", "SVTYPE=DEL;MATEID=34403"),
         ("chr12", "54262307", "34403", "C", "]chr12:54259010]C", "57",
          "PASS", "SVTYPE=DEL;MATEID=34402"),
     ])
-    sv = vc[0]
+    (sv,) = pair_breakends(vc)
     assert (sv.sv_type, sv.start, sv.end) == ("DEL", 54_259_010, 54_262_306)
     long_isoform = ensembl_grch38.transcript_by_id("ENST00000209875")
     assert isinstance(

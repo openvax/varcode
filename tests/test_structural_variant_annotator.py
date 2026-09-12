@@ -629,31 +629,58 @@ def test_fusion_protein_terminates_within_or_at_3p_partner_end():
         len(mt.cdna_sequence) - cds_start)
 
 
-def test_5p_and_3p_offsets_partition_transcript_at_exon_boundary():
-    """Boundary convention (#336 review): a breakpoint at any exon
-    terminal base yields identical 5p and 3p cDNA offsets — 5p
-    retains ``[0, offset)`` and 3p retains ``[offset, full_len)``,
-    together partitioning the transcript cDNA exactly.
+def test_retained_cdna_partitions_transcript_at_each_base():
+    """A breakend names the last base its side keeps, so keeping the
+    left side at a base and the right side at the next one partition
+    the transcript's cDNA exactly, with no base lost or repeated.
 
     Walks every exon terminal base on CFTR (forward) and BRCA1
-    (reverse) and asserts the partition invariant.
+    (reverse) and asserts the partition.
     """
-    from varcode.annotators.structural_variant import (
-        _cdna_offset_at_3p_breakpoint,
-        _cdna_offset_at_5p_breakpoint,
-    )
+    from varcode.annotators.structural_variant import _retained_cdna
     for transcript in (
             _cftr(), ensembl_grch38.transcript_by_id(BRCA1_ID)):
-        full_len = len(str(transcript.sequence))
+        full_length = len(str(transcript.sequence))
+        forward = transcript.strand == "+"
         for exon in transcript.exons:
-            for breakpoint in (exon.start, exon.end):
-                five_p = _cdna_offset_at_5p_breakpoint(transcript, breakpoint)
-                three_p = _cdna_offset_at_3p_breakpoint(transcript, breakpoint)
-                assert five_p == three_p, (
-                    "5p/3p disagree at exon terminal for %s bp=%d: "
-                    "5p=%d 3p=%d" % (
-                        transcript.id, breakpoint, five_p, three_p))
-                assert 0 <= five_p <= full_len
+            for position in (exon.start, exon.end):
+                # The 3' side picks up at the next base in transcript
+                # order, which is one higher on the forward strand and
+                # one lower on the reverse strand.
+                next_position = position + 1 if forward else position - 1
+                _, five_prime_end = _retained_cdna(
+                    transcript, position, True)
+                three_prime_start, _ = _retained_cdna(
+                    transcript, next_position, False)
+                assert five_prime_end == three_prime_start, (
+                    "%s at %d: 5' keeps %d bases, 3' starts at %d" % (
+                        transcript.id, position, five_prime_end,
+                        three_prime_start))
+                assert 0 <= five_prime_end <= full_length
+
+
+def test_fusion_keeps_the_base_at_an_exonic_breakpoint():
+    """A breakpoint inside an exon keeps that base on the side that
+    retains it. CFTR exon 1 starts at cDNA offset 0, so a breakend 50
+    bases in, keeping the left side, retains 51 bases."""
+    cftr = _cftr()
+    breakpoint = cftr.exons[0].start + 50
+    brca1_breakpoint = 43_120_000
+    sv = StructuralVariant(
+        contig="7",
+        start=breakpoint,
+        sv_type="BND",
+        alt="N]17:%d]" % brca1_breakpoint,
+        mate_contig="17",
+        mate_start=brca1_breakpoint,
+        mate_orientation="]]",
+        genome=ensembl_grch38)
+    effect = _ANNOTATOR.annotate_on_transcript(sv, cftr)
+    assert isinstance(effect, GeneFusion)
+    five_prime_segment = effect.mutant_transcript.reference_segments[0]
+    assert five_prime_segment.end == 51
+    assert effect.mutant_transcript.cdna_sequence.startswith(
+        str(cftr.sequence)[:51])
 
 
 def test_fusion_with_reverse_strand_3p_partner():
@@ -898,30 +925,6 @@ def test_deletion_between_two_genes_is_fusion_on_both_partners():
 
     assert isinstance(
         _ANNOTATOR.annotate_on_transcript(sv, ets2), LargeDeletion)
-
-
-def test_junction_ends_by_sv_type():
-    """A deletion joins ``start`` to ``end + 1`` and a duplication
-    ``end`` to ``start + 1``. A symbolic ``<INV>`` creates both of its
-    junctions; one typed from a breakend record has only the junction
-    that record observed."""
-    from varcode.annotators.structural_variant import _junction_ends
-
-    def sv(sv_type, **kwargs):
-        return StructuralVariant(
-            contig="7", start=1_000, end=2_000, sv_type=sv_type,
-            genome=ensembl_grch38, **kwargs)
-
-    assert _junction_ends(sv("DEL")) == [
-        (("7", 1_000, "left"), ("7", 2_001, "right"))]
-    assert _junction_ends(sv("DUP")) == [
-        (("7", 1_001, "right"), ("7", 2_000, "left"))]
-    assert _junction_ends(sv("INV")) == [
-        (("7", 1_000, "left"), ("7", 2_000, "left")),
-        (("7", 1_001, "right"), ("7", 2_001, "right"))]
-    assert _junction_ends(sv(
-        "INV", alt="N]7:2000]", mate_contig="7", mate_start=2_000)) == [
-        (("7", 1_000, "left"), ("7", 2_000, "left"))]
 
 
 # --------------------------------------------------------------------

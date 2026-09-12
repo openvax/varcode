@@ -57,7 +57,7 @@ downstream integrations without forcing them into the core class:
   annotator requires; the rest ride along for downstream consumers.
 """
 
-from typing import Any, Mapping, Optional, Tuple
+from typing import Any, Mapping, NamedTuple, Optional, Tuple
 
 from .variant import Variant
 
@@ -71,6 +71,72 @@ SV_TYPES = frozenset({
     "CNV",     # copy number variant (unspecified direction)
     "BND",     # breakend (half of a translocation / complex rearrangement)
 })
+
+
+class Breakend(NamedTuple):
+    """One end of a novel adjacency.
+
+    ``position`` is the last base the rearrangement keeps on that side,
+    and ``keeps`` says which side that is: ``"left"`` keeps the bases up
+    to and including ``position``, ``"right"`` those from ``position``
+    on. ``keeps`` is ``None`` when the record didn't say — a breakend
+    ALT varcode couldn't read.
+    """
+
+    contig: str
+    position: int
+    keeps: Optional[str] = None
+
+
+def typed_event_from_breakends(a, b):
+    """The DEL / DUP / INV span that two paired breakend records
+    describe, or ``None`` when they don't describe one.
+
+    Callers such as esvee and GRIDSS write deletions, duplications and
+    inversions as a pair of breakend records labeled ``SVTYPE=DEL`` and
+    so on. Given both halves, with contig names already normalized,
+    return ``(sv_type, start, end)`` with the coordinates the equivalent
+    ``<DEL>`` / ``<DUP>`` / ``<INV>`` record would have, where ``start``
+    is the base before the event. Returns ``None`` unless both halves
+    agree on a same-contig DEL, DUP or INV label, point at each other,
+    and keep sides that fit that label.
+    """
+    from .sv_allele_parser import breakend_sides
+    labels = {
+        str((variant.info or {}).get("svtype") or "").upper()
+        for variant in (a, b)}
+    if len(labels) != 1:
+        return None
+    (label,) = labels
+    if label not in ("DEL", "DUP", "INV"):
+        return None
+    if a.contig != b.contig or a.start == b.start:
+        return None
+    if (a.mate_contig, a.mate_start) != (b.contig, b.start):
+        return None
+    if (b.mate_contig, b.mate_start) != (a.contig, a.start):
+        return None
+    sides = {}
+    for variant in (a, b):
+        variant_sides = breakend_sides(variant.symbolic_alt)
+        if variant_sides is None:
+            return None
+        sides[variant.start] = variant_sides[0]
+    low, high = sorted((a.start, b.start))
+    low_keeps_left = sides[low] == "left"
+    high_keeps_left = sides[high] == "left"
+    if label == "DEL" and low_keeps_left and not high_keeps_left:
+        # Adjacent breakpoints delete nothing — that's an insertion
+        # point, not a deletion.
+        if high - low > 1:
+            return ("DEL", low, high - 1)
+    elif label == "DUP" and not low_keeps_left and high_keeps_left:
+        return ("DUP", low - 1, high)
+    elif label == "INV" and low_keeps_left == high_keeps_left:
+        if low_keeps_left:
+            return ("INV", low, high)
+        return ("INV", low - 1, high - 1)
+    return None
 
 
 class StructuralVariant(Variant):
@@ -150,6 +216,8 @@ class StructuralVariant(Variant):
         "alt_assembly",
         "info",
         "_sv_alt",
+        "_junctions",
+        "_locus_transcripts",
     )
 
     def __init__(
@@ -214,6 +282,14 @@ class StructuralVariant(Variant):
         # and downstream consumers see what the VCF said.
         self._sv_alt = alt if alt is not None else "<%s>" % sv_type
 
+        # Caches, like Variant's overlapping-gene / transcript caches:
+        # the junction list derived from the fields above, and
+        # protein-coding transcripts looked up per locus by the SV
+        # annotator (one breakend's mate is queried once per variant
+        # rather than once per transcript at the other end).
+        self._junctions = None
+        self._locus_transcripts = {}
+
     @property
     def is_structural(self) -> bool:
         return True
@@ -222,6 +298,76 @@ class StructuralVariant(Variant):
     def symbolic_alt(self) -> str:
         """The original symbolic / breakend ALT string from the VCF."""
         return self._sv_alt
+
+    @property
+    def junctions(self) -> Tuple[Tuple[Breakend, Breakend], ...]:
+        """The novel adjacencies this variant creates, each a pair of
+        :class:`Breakend` ends.
+
+        One junction for a breakend record (its own position joined to
+        its mate), and one for a deletion or tandem duplication. A
+        symbolic inversion has two, since it joins both of its ends; an
+        inversion built from one breakend pair has only the junction
+        that pair observed. Empty for insertions, CNVs and single
+        breakends, which have no second end to join.
+
+        Positions follow the VCF symbolic-allele convention that
+        ``start`` is the base before the event, so a deletion joins
+        ``start`` (keeping the left side) to ``end + 1`` (keeping the
+        right side), and a tandem duplication joins ``end`` to
+        ``start + 1``.
+        """
+        if self._junctions is None:
+            self._junctions = self._compute_junctions()
+        return self._junctions
+
+    def _compute_junctions(self):
+        # Local import: sv_allele_parser imports this module.
+        from .sv_allele_parser import breakend_sides
+        sides = breakend_sides(self._sv_alt)
+        contig, start, end = self.contig, self.start, self.end
+        if self.sv_type == "BND":
+            if self.mate_contig is None or self.mate_start is None:
+                return ()
+            this_side, mate_side = sides if sides else (None, None)
+            return ((
+                Breakend(contig, start, this_side),
+                Breakend(self.mate_contig, self.mate_start, mate_side)),)
+        if self.sv_type == "DEL":
+            return ((
+                Breakend(contig, start, "left"),
+                Breakend(contig, end + 1, "right")),)
+        if self.sv_type == "DUP":
+            return ((
+                Breakend(contig, start + 1, "right"),
+                Breakend(contig, end, "left")),)
+        if self.sv_type == "INV":
+            keeping_left = (
+                Breakend(contig, start, "left"),
+                Breakend(contig, end, "left"))
+            keeping_right = (
+                Breakend(contig, start + 1, "right"),
+                Breakend(contig, end + 1, "right"))
+            if sides == ("left", "left"):
+                return (keeping_left,)
+            if sides == ("right", "right"):
+                return (keeping_right,)
+            return (keeping_left, keeping_right)
+        return ()
+
+    @property
+    def breakpoints(self) -> Tuple[Tuple[str, int], ...]:
+        """Distinct ``(contig, position)`` breakpoints of this variant's
+        junctions, for consumers that read sequence around them
+        (cryptic-exon and splice-window scans). Falls back to the
+        variant's own start when it has no junction."""
+        loci = []
+        for junction in self.junctions:
+            for breakend in junction:
+                locus = (breakend.contig, breakend.position)
+                if locus not in loci:
+                    loci.append(locus)
+        return tuple(loci) or ((self.contig, self.start),)
 
     @property
     def length(self) -> Optional[int]:
@@ -259,20 +405,31 @@ class StructuralVariant(Variant):
     def __repr__(self) -> str:
         return str(self)
 
+    def _sv_identity(self):
+        """What the record said, beyond the base variant's locus. The
+        base :class:`Variant` identity compares ref/alt, which are
+        placeholders on an SV, so two different SV records at one
+        position would otherwise compare equal and
+        ``load_vcf(distinct=True)`` would drop one."""
+        return (
+            self.sv_type,
+            self.end,
+            self._sv_alt,
+            self.mate_contig,
+            self.mate_start,
+            self.mate_orientation,
+            self.alt_assembly,
+            self.ci_start,
+            self.ci_end)
+
     def __eq__(self, other) -> bool:
-        # The base Variant identity compares ref/alt, which for an SV are
-        # placeholders, so the two breakend records of one typed DEL
-        # (same start, end and REF base) would compare equal and
-        # load_vcf(distinct=True) would drop one. Compare what the VCF
-        # record said as well.
         if self is other:
             return True
+        if not isinstance(other, StructuralVariant):
+            return False
         return (
             Variant.__eq__(self, other)
-            and self.sv_type == getattr(other, "sv_type", None)
-            and self._sv_alt == getattr(other, "_sv_alt", None)
-            and self.mate_contig == getattr(other, "mate_contig", None)
-            and self.mate_start == getattr(other, "mate_start", None))
+            and self._sv_identity() == other._sv_identity())
 
     def __hash__(self) -> int:
         return Variant.__hash__(self)

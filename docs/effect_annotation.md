@@ -381,9 +381,10 @@ breakends (`.ACGT` / `ACGT.`, loaded as a `BND` with no mate) as
 `StructuralVariant` objects rather than dropping them. SVs get the
 genome and contig-name settings passed to `load_vcf`, mates included.
 Callers such as esvee and GRIDSS write deletions, duplications and
-inversions as breakend pairs labeled `SVTYPE=DEL` / `DUP` / `INV`; when
-the breakend sides fit the label, those rows load as that type with the
-span the equivalent `<DEL>` / `<DUP>` / `<INV>` record would have.
+inversions as breakend pairs labeled `SVTYPE=DEL` / `DUP` / `INV`. Each
+row loads as the breakend it is; `varcode.transforms.pair_breakends`
+joins the pair into one SV of that type, spanning the event, when the
+two halves agree on the label and their kept sides fit it.
 
 ```python
 from varcode import load_vcf

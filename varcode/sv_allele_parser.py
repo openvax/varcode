@@ -59,7 +59,7 @@ _SINGLE_BREAKEND_RE = re.compile(
 )
 
 
-def _breakend_sides(alt):
+def breakend_sides(alt):
     """Which side of each breakpoint a VCF breakend ALT keeps.
 
     Returns ``(this_side, mate_side)``, each ``"left"`` (bases up to
@@ -76,43 +76,6 @@ def _breakend_sides(alt):
     this_side = "left" if m.group("prefix") else "right"
     mate_side = "right" if m.group("open") == "[" else "left"
     return this_side, mate_side
-
-
-def _breakend_event_span(svtype, contig, pos, mate_contig, mate_pos, sides):
-    """Type a breakend row from its INFO/SVTYPE when that's safe.
-
-    Callers such as esvee and GRIDSS write deletions, duplications and
-    inversions as breakend pairs labeled ``SVTYPE=DEL`` etc. When the
-    label is DEL, DUP or INV, both breakpoints are on one contig, and
-    the kept ``sides`` fit that type, return ``(sv_type, start, end)``
-    with the coordinates the equivalent ``<DEL>`` / ``<DUP>`` /
-    ``<INV>`` record would have (``start`` is the base before the
-    event). Otherwise return ``("BND", pos, pos)``.
-    """
-    as_breakend = ("BND", pos, pos)
-    if isinstance(svtype, str):
-        svtype = svtype.upper()
-    if (svtype not in ("DEL", "DUP", "INV") or sides is None
-            or contig != mate_contig or pos == mate_pos):
-        return as_breakend
-    keeps_left = sides[0] == "left"
-    mate_keeps_left = sides[1] == "left"
-    if pos < mate_pos:
-        low, high = pos, mate_pos
-        low_keeps_left, high_keeps_left = keeps_left, mate_keeps_left
-    else:
-        low, high = mate_pos, pos
-        low_keeps_left, high_keeps_left = mate_keeps_left, keeps_left
-    if svtype == "DEL" and low_keeps_left and not high_keeps_left:
-        if high - low > 1:
-            return ("DEL", low, high - 1)
-    elif svtype == "DUP" and not low_keeps_left and high_keeps_left:
-        return ("DUP", low - 1, high)
-    elif svtype == "INV" and low_keeps_left == high_keeps_left:
-        if low_keeps_left:
-            return ("INV", low, high)
-        return ("INV", low - 1, high - 1)
-    return as_breakend
 
 
 def _extract_info(info, key):
@@ -264,16 +227,16 @@ def parse_symbolic_alt(
         # base is on (prefix = joined-after, suffix = joined-before)
         # and the bracket direction (mate strand).
         orientation = open_br + close_br
-        # A DEL / DUP / INV written as breakends keeps its type and
-        # span, along with the mate fields below.
-        sv_type, sv_start, sv_end = _breakend_event_span(
-            _extract_info_scalar(info, "SVTYPE"), contig, int(start),
-            mate_contig, mate_pos, _breakend_sides(alt))
+        # One record is one breakend, even when the caller labels it
+        # SVTYPE=DEL / DUP / INV: that label describes the event both
+        # halves make together, which
+        # :func:`~varcode.transforms.pair_breakends` builds from the
+        # pair. The label rides along in ``info`` for it to read.
         return StructuralVariant(
             contig=contig,
-            start=sv_start,
-            end=sv_end,
-            sv_type=sv_type,
+            start=int(start),
+            end=int(start),
+            sv_type="BND",
             alt=alt,
             ref=ref or "N",
             mate_contig=mate_contig,
@@ -281,7 +244,8 @@ def parse_symbolic_alt(
             mate_orientation=orientation,
             info={"mateid": (_extract_info(info, "MATEID")
                              or _extract_info(info, "PARID")),
-                  "bnd_anchor": prefix or suffix},
+                  "bnd_anchor": prefix or suffix,
+                  "svtype": _extract_info_scalar(info, "SVTYPE")},
             genome=genome,
             normalize_contig_names=normalize_contig_names,
             convert_ucsc_contig_names=convert_ucsc_contig_names,
@@ -301,7 +265,8 @@ def parse_symbolic_alt(
             ref=ref or "N",
             info={"single_breakend": True,
                   "bnd_anchor": (m.group("joined_before")
-                                 or m.group("joined_after"))},
+                                 or m.group("joined_after")),
+                  "svtype": _extract_info_scalar(info, "SVTYPE")},
             genome=genome,
             normalize_contig_names=normalize_contig_names,
             convert_ucsc_contig_names=convert_ucsc_contig_names,

@@ -16,10 +16,16 @@
   sense-to-sense partner at the other end gives a `GeneFusion` (e.g. the
   TMPRSS2-ERG deletion) instead of a deletion, duplication or inversion
   of that transcript's exons.
-- Breakend pairs labeled `SVTYPE=DEL` / `DUP` / `INV` (esvee, GRIDSS)
-  load as typed SVs spanning the event when the breakend sides fit the
-  label, so `effects()` covers the whole span; `pair_breakends` keeps
-  their type and span.
+- `pair_breakends` builds a typed `DEL` / `DUP` / `INV` from a breakend
+  pair that carries that `SVTYPE` (esvee, GRIDSS) when both halves agree
+  on the label and their kept sides fit it, so `effects()` covers the
+  whole span. Each record still loads as the breakend it is, so
+  annotating an unpaired collection doesn't report the event twice.
+- `StructuralVariant.junctions` exposes the novel adjacencies a variant
+  creates as pairs of `Breakend` ends (position plus the side kept), and
+  `breakpoints` lists their positions. Fusion assembly, transcript
+  containment, cryptic-exon scanning and splice windows all read from
+  them, so every consumer uses the same breakpoints.
 - The reverse-complement orientation warning is replaced by a warning
   when a breakend with a mate has no breakend ALT to read orientation
   from.
@@ -33,9 +39,21 @@
 - `StructuralVariant.mate_contig` is normalized like `contig`, and
   `Variant._convert_ucsc_contig_name_to_ensembl` converts its argument
   rather than the variant's own contig.
-- `StructuralVariant` equality compares SV type, ALT and mate, so
+- `StructuralVariant` equality compares every field the record carries
+  (type, span, ALT, mate, assembled allele and confidence intervals), so
   `load_vcf(distinct=True)` no longer merges different SV records at the
   same position.
+- A fusion keeps the base at each breakpoint, so a breakpoint inside an
+  exon no longer drops one base from the 5' partner (and frameshifts the
+  predicted protein).
+- A fusion partner must be in a gene that doesn't span both ends of the
+  junction, so an event inside one gene isn't reported as a fusion with a
+  nested or antisense gene at its far end.
+- A `GeneFusion` reported on its 3' partner carries a mutant transcript
+  whose `reference_transcript` is the transcript being annotated.
+- `reference_range` reads a range with one locus query instead of one
+  per position when no single transcript spans it, which is the path
+  cryptic-exon scoring takes on a genome with no chromosome FASTA.
 
 **Added**
 - Fusion regression tests from the public osteosarc.com osteosarcoma

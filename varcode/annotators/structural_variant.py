@@ -73,7 +73,7 @@ from ..effects.effect_classes import (
 )
 from ..effects.effect_helpers import exon_length
 from ..mutant_transcript import MutantTranscript, ReferenceSegment
-from ..sv_allele_parser import _breakend_sides
+from ..sv_allele_parser import breakend_sides
 from ..version import __version__ as _varcode_version
 
 
@@ -248,44 +248,63 @@ def _retains_five_prime_end(transcript, side):
     return (side == "left") == (transcript.strand == "+")
 
 
-def _junction_ends(variant):
-    """The novel adjacencies ``variant`` creates, as
-    ``((contig, pos, side), (contig, pos, side))`` pairs, where
-    ``side`` is the side of the breakpoint that's kept.
+def _contains(feature, breakend):
+    """Whether ``feature`` (a transcript or gene) spans ``breakend``."""
+    return (str(feature.contig) == str(breakend.contig)
+            and feature.start <= breakend.position <= feature.end)
 
-    For a BND the first element is the row's own breakpoint and the
-    sides come from its ALT (``None`` when the ALT isn't a breakend).
-    For DEL / DUP / INV the first element is the end at
-    ``variant.start`` and the second the end at ``variant.end``, using
-    the symbolic-allele convention that ``start`` is the base before
-    the event: a deletion joins ``start`` (kept on the left) to
-    ``end + 1`` (kept on the right), and a tandem duplication joins
-    ``end`` to ``start + 1``. An inversion creates two junctions; when
-    it was typed from a breakend record, the ALT says which one that
-    record observed.
+
+def _gene_of(transcript):
+    """``transcript``'s gene, or ``None`` when the genome can't say."""
+    try:
+        return transcript.gene
+    except Exception:
+        return None
+
+
+def _exonic_bases_before(transcript, position):
+    """``(offset, position_is_exonic)`` for ``position`` in
+    ``transcript``: how many cDNA bases lie transcript-5' of it, and
+    whether the base at ``position`` is itself exonic.
+
+    "Transcript-5' of" means a lower genomic coordinate on the forward
+    strand and a higher one on the reverse strand.
     """
-    sv_type = getattr(variant, "sv_type", None)
-    contig = variant.contig
-    sides = _breakend_sides(getattr(variant, "symbolic_alt", None))
-    if sv_type == "BND":
-        this_side, mate_side = sides or (None, None)
-        return [((contig, variant.start, this_side),
-                 (variant.mate_contig, variant.mate_start, mate_side))]
-    start, end = variant.start, variant.end
-    if sv_type == "DEL":
-        return [((contig, start, "left"), (contig, end + 1, "right"))]
-    if sv_type == "DUP":
-        return [((contig, start + 1, "right"), (contig, end, "left"))]
-    if sv_type == "INV":
-        keep_left = ((contig, start, "left"), (contig, end, "left"))
-        keep_right = (
-            (contig, start + 1, "right"), (contig, end + 1, "right"))
-        if sides == ("left", "left"):
-            return [keep_left]
-        if sides == ("right", "right"):
-            return [keep_right]
-        return [keep_left, keep_right]
-    return []
+    offset = 0
+    reverse = transcript.on_backward_strand
+    for exon in transcript.exons:
+        length = exon_length(exon)
+        if reverse:
+            if exon.start > position:
+                offset += length
+            elif exon.end >= position:
+                return offset + (exon.end - position), True
+            else:
+                return offset, False
+        else:
+            if exon.end < position:
+                offset += length
+            elif exon.start <= position:
+                return offset + (position - exon.start), True
+            else:
+                return offset, False
+    return offset, False
+
+
+def _retained_cdna(transcript, position, keep_five_prime):
+    """The cDNA slice of ``transcript`` a junction at ``position``
+    keeps, as ``(start, end)`` offsets into ``transcript.sequence``.
+
+    A breakend names the last base its side keeps, so an exonic
+    breakpoint keeps that base on whichever side retains it. An
+    intronic breakpoint snaps to the exon boundary: the 5' side ends
+    with the last exon transcript-5' of the breakpoint, and the 3' side
+    starts with the first exon transcript-3' of it.
+    """
+    offset, exonic = _exonic_bases_before(transcript, position)
+    if keep_five_prime:
+        return 0, offset + (1 if exonic else 0)
+    return offset, len(str(transcript.sequence))
 
 
 def _warn_on_unknown_breakend_orientation(variant):
@@ -455,81 +474,6 @@ def _build_inversion_mutant_transcript(variant, transcript):
         annotator_name="structural_variant")
 
 
-def _cdna_offset_at_5p_breakpoint(transcript, breakpoint_pos):
-    """Return the cDNA offset in the 5' partner at which fusion
-    splits the transcript (#336).
-
-    All cDNA bases at offsets ``[0, returned_offset)`` are retained
-    in the fused product. Handles forward and reverse strand
-    transcripts; for an intronic breakpoint the walker snaps to the
-    end of the last transcript-order exon upstream of the
-    breakpoint (the biologically expected behavior — the
-    spliceosome completes the preceding exon before the junction).
-
-    Boundary convention: a breakpoint exactly AT the 5' terminal
-    base of an exon (``breakpoint_pos == exon.start`` on forward
-    strand, ``== exon.end`` on reverse strand) excludes that exon
-    from the retained 5' portion, so the 5p / 3p retained offsets
-    partition the transcript cDNA without overlap.
-    """
-    offset = 0
-    reverse = transcript.on_backward_strand
-    for exon in transcript.exons:
-        exon_len = exon_length(exon)
-        if reverse:
-            if exon.start > breakpoint_pos:
-                offset += exon_len
-            elif exon.end > breakpoint_pos:
-                offset += exon.end - breakpoint_pos
-                return offset
-            else:
-                return offset
-        else:
-            if exon.end < breakpoint_pos:
-                offset += exon_len
-            elif exon.start < breakpoint_pos:
-                offset += breakpoint_pos - exon.start
-                return offset
-            else:
-                return offset
-    return offset
-
-
-def _cdna_offset_at_3p_breakpoint(transcript, breakpoint_pos):
-    """Return the cDNA offset in the 3' partner at which the fusion
-    picks up (#336).
-
-    All cDNA bases at offsets ``[returned_offset, end)`` are
-    retained. For an intronic breakpoint the walker snaps to the
-    start of the first transcript-order exon downstream of the
-    breakpoint.
-
-    Boundary convention mirrors :func:`_cdna_offset_at_5p_breakpoint`:
-    a breakpoint AT the 5' terminal base of an exon keeps that exon
-    in the 3' retained portion (its cDNA starts at the returned
-    offset).
-    """
-    offset = 0
-    reverse = transcript.on_backward_strand
-    for exon in transcript.exons:
-        exon_len = exon_length(exon)
-        if reverse:
-            if exon.start > breakpoint_pos:
-                offset += exon_len
-            elif exon.end > breakpoint_pos:
-                return offset + (exon.end - breakpoint_pos)
-            else:
-                return offset
-        else:
-            if exon.end < breakpoint_pos:
-                offset += exon_len
-            elif exon.start < breakpoint_pos:
-                return offset + (breakpoint_pos - exon.start)
-            else:
-                return offset
-    return offset
-
-
 def _translate_fused_cdna(fused_cdna, five_prime_transcript, five_prime_len):
     """Translate ``fused_cdna`` from the 5' partner's CDS start when
     that start codon lies in the retained 5' portion (#336).
@@ -562,54 +506,48 @@ def _translate_fused_cdna(fused_cdna, five_prime_transcript, five_prime_len):
 
 
 def _build_fusion_mutant_transcript(
-        variant, transcript, partner,
-        five_prime_pos=None, three_prime_pos=None):
+        reference_transcript,
+        five_prime_transcript, five_prime_position,
+        three_prime_transcript, three_prime_position):
     """Build a :class:`MutantTranscript` for a :class:`GeneFusion`
     (#336).
 
-    ``transcript`` is the 5' partner and ``partner`` the 3' partner;
-    ``five_prime_pos`` and ``three_prime_pos`` are their breakpoints,
-    defaulting to ``variant.start`` and ``variant.mate_start``. The
-    canonical case — intron:intron breakpoints joining a 5' partner's
-    N-terminal exons to a 3' partner's C-terminal exons — yields a
-    fused cDNA whose 5' portion is
-    ``transcript.sequence[0:5p_cdna_offset]`` and whose 3' portion
-    is ``partner.sequence[3p_cdna_offset:]``. When the 5' partner's
-    start codon lies in the retained region, the fused protein is
-    translated through the junction.
+    The fused cDNA is the 5' partner's cDNA up to its breakpoint
+    followed by the 3' partner's from its breakpoint on, each keeping
+    the base at its breakpoint. When the 5' partner's start codon lies
+    in the retained portion, the protein is translated through the
+    junction.
 
-    The annotator assigns the 5' / 3' roles from breakend orientation
-    and strand before calling this.
+    ``reference_transcript`` is the transcript being annotated, which
+    may be either partner, so an effect and its mutant transcript
+    describe the same transcript; each partner's contribution is in the
+    segments. The annotator assigns the 5' / 3' roles from breakend
+    orientation and strand before calling this.
     """
-    if five_prime_pos is None:
-        five_prime_pos = variant.start
-    if three_prime_pos is None:
-        three_prime_pos = variant.mate_start
-    five_prime_cdna = str(transcript.sequence)
-    three_prime_cdna = str(partner.sequence)
-    five_prime_offset = _cdna_offset_at_5p_breakpoint(
-        transcript, five_prime_pos)
-    three_prime_offset = _cdna_offset_at_3p_breakpoint(
-        partner, three_prime_pos)
-    five_prime_retained = five_prime_cdna[:five_prime_offset]
-    three_prime_retained = three_prime_cdna[three_prime_offset:]
-    fused_cdna = five_prime_retained + three_prime_retained
+    five_prime_cdna = str(five_prime_transcript.sequence)
+    three_prime_cdna = str(three_prime_transcript.sequence)
+    _, five_prime_end = _retained_cdna(
+        five_prime_transcript, five_prime_position, True)
+    three_prime_start, _ = _retained_cdna(
+        three_prime_transcript, three_prime_position, False)
+    fused_cdna = (
+        five_prime_cdna[:five_prime_end]
+        + three_prime_cdna[three_prime_start:])
     segments = (
         ReferenceSegment(
-            source=transcript, start=0, end=five_prime_offset,
+            source=five_prime_transcript, start=0, end=five_prime_end,
             strand="+", label="5p_partner"),
         ReferenceSegment(
-            source=partner,
-            start=three_prime_offset, end=len(three_prime_cdna),
+            source=three_prime_transcript,
+            start=three_prime_start, end=len(three_prime_cdna),
             strand="+", label="3p_partner"),
     )
-    mutant_protein = _translate_fused_cdna(
-        fused_cdna, transcript, len(five_prime_retained))
     return MutantTranscript(
-        reference_transcript=transcript,
+        reference_transcript=reference_transcript,
         reference_segments=segments,
         cdna_sequence=fused_cdna,
-        mutant_protein_sequence=mutant_protein,
+        mutant_protein_sequence=_translate_fused_cdna(
+            fused_cdna, five_prime_transcript, five_prime_end),
         annotator_name="structural_variant")
 
 
@@ -669,29 +607,38 @@ class StructuralVariantAnnotator:
             return NoncodingTranscript(variant, transcript)
 
         sv_type = getattr(variant, "sv_type", None)
+        # A caller-resolved allele, when there is one, is preferred over
+        # anything inferred from breakpoints; build it once per call.
+        assembly = _build_alt_assembly_mutant_transcript(variant, transcript)
 
-        if sv_type == "DEL":
-            effect = self._annotate_deletion(variant, transcript)
-        elif sv_type == "DUP":
-            effect = self._annotate_duplication(variant, transcript)
-        elif sv_type == "INV":
-            effect = self._annotate_inversion(variant, transcript)
-        elif sv_type in ("CNV",):
+        span_effects = {
+            "DEL": self._annotate_deletion,
+            "DUP": self._annotate_duplication,
+            "INV": self._annotate_inversion,
             # CNVs are ambiguous at the protein level (gain vs loss
             # depends on direction). Treat as duplication in the CNV-
             # gain case; the CN0 subtype is routed to deletion logic
             # at parse time (see sv_allele_parser).
-            effect = self._annotate_duplication(variant, transcript)
-        elif sv_type == "BND":
-            effect = self._annotate_breakend(variant, transcript)
-        elif sv_type == "INS":
+            "CNV": self._annotate_duplication,
             # A large symbolic insertion is *structurally* an SV but
             # functionally resembles an in-frame-or-frameshift
             # insertion if the sequence is known. For now we defer
-            # to the deletion shape (reporting the anchor codon) —
+            # to the duplication shape (reporting the anchor codon) —
             # callers with ``alt_assembly`` populated get a richer
             # result once the SV annotator materializes segments.
-            effect = self._annotate_insertion(variant, transcript)
+            "INS": self._annotate_insertion,
+        }
+        if sv_type == "BND":
+            effect = self._annotate_breakend(variant, transcript, assembly)
+        elif sv_type in span_effects:
+            # A span with one end in this transcript and a sense-to-sense
+            # partner at the other end is a fusion; otherwise it keeps
+            # its own deletion / duplication / inversion effect.
+            # Insertions and CNVs have no junction, so the check is a
+            # no-op for them.
+            effect = (
+                self._fusion_across_junction(variant, transcript, assembly)
+                or span_effects[sv_type](variant, transcript, assembly))
         else:
             # Unknown SV type — fall back to intergenic so the call
             # graph doesn't crash.
@@ -728,14 +675,13 @@ class StructuralVariantAnnotator:
         from ..splice_outcomes import enumerate_splice_outcomes
         if not isinstance(effect, StructuralVariantEffect):
             return
-        # Check both SV endpoints. For DEL/DUP/INV the start and end
-        # coordinates are the two breakpoints; for BND they're equal,
-        # so dedup via a set. Mate-position checks against the partner
-        # transcript aren't yet wired here — a follow-up can extend.
-        bp_positions = {variant.start}
-        end_pos = getattr(variant, "end", None)
-        if end_pos is not None:
-            bp_positions.add(end_pos)
+        # The variant's junction breakpoints, restricted to this
+        # transcript's contig: the same positions the fusion and
+        # cryptic-exon paths use.
+        bp_positions = {
+            position for contig, position
+            in getattr(variant, "breakpoints", ())
+            if str(contig) == str(transcript.contig)}
         sv_type = getattr(variant, "sv_type", None)
         sv_evidence = {"sv_type": sv_type} if sv_type is not None else {}
         attached = []
@@ -799,15 +745,10 @@ class StructuralVariantAnnotator:
 
     # -- classification helpers -----------------------------------------
 
-    def _annotate_deletion(self, variant, transcript):
-        """A deletion overlapping a transcript. If one end of the
-        deletion falls in this transcript and the other in a fusion
-        partner, report :class:`GeneFusion`; if it covers one or more
-        exons, :class:`LargeDeletion`; if purely intronic,
-        :class:`Intronic`."""
-        fusion = self._fusion_across_span_boundary(variant, transcript)
-        if fusion is not None:
-            return fusion
+    def _annotate_deletion(self, variant, transcript, assembly=None):
+        """A deletion overlapping a transcript: :class:`LargeDeletion`
+        when it covers one or more exons, :class:`Intronic` when it's
+        purely intronic."""
         affected = self._overlapping_exons(variant, transcript)
         if not affected:
             return self._intronic_or_intergenic(variant, transcript)
@@ -815,14 +756,10 @@ class StructuralVariantAnnotator:
             variant=variant,
             transcript=transcript,
             affected_exons=affected,
-            mutant_transcript=_build_alt_assembly_mutant_transcript(
-                variant, transcript) or _build_deletion_mutant_transcript(
+            mutant_transcript=assembly or _build_deletion_mutant_transcript(
                 variant, transcript))
 
-    def _annotate_duplication(self, variant, transcript):
-        fusion = self._fusion_across_span_boundary(variant, transcript)
-        if fusion is not None:
-            return fusion
+    def _annotate_duplication(self, variant, transcript, assembly=None):
         affected = self._overlapping_exons(variant, transcript)
         if not affected:
             return self._intronic_or_intergenic(variant, transcript)
@@ -830,27 +767,20 @@ class StructuralVariantAnnotator:
             variant=variant,
             transcript=transcript,
             affected_exons=affected,
-            mutant_transcript=_build_alt_assembly_mutant_transcript(
-                variant, transcript) or _build_duplication_mutant_transcript(
+            mutant_transcript=assembly or _build_duplication_mutant_transcript(
                 variant, transcript))
 
-    def _annotate_inversion(self, variant, transcript):
-        fusion = self._fusion_across_span_boundary(variant, transcript)
-        if fusion is not None:
-            return fusion
+    def _annotate_inversion(self, variant, transcript, assembly=None):
         affected = self._overlapping_exons(variant, transcript)
         if not affected:
             return self._intronic_or_intergenic(variant, transcript)
         return Inversion(
             variant=variant,
             transcript=transcript,
-            mutant_transcript=_build_alt_assembly_mutant_transcript(
-                variant, transcript) or _build_inversion_mutant_transcript(
+            mutant_transcript=assembly or _build_inversion_mutant_transcript(
                 variant, transcript))
 
-    def _annotate_insertion(self, variant, transcript):
-        # Large symbolic <INS>: treat like duplication-style disruption
-        # for transcripts with overlapping exons.
+    def _annotate_insertion(self, variant, transcript, assembly=None):
         affected = self._overlapping_exons(variant, transcript)
         if not affected:
             return self._intronic_or_intergenic(variant, transcript)
@@ -858,36 +788,30 @@ class StructuralVariantAnnotator:
             variant=variant,
             transcript=transcript,
             affected_exons=affected,
-            mutant_transcript=_build_alt_assembly_mutant_transcript(
-                variant, transcript) or _build_duplication_mutant_transcript(
+            mutant_transcript=assembly or _build_duplication_mutant_transcript(
                 variant, transcript))
 
-    def _annotate_breakend(self, variant, transcript):
-        """A breakend whose first breakpoint lies on ``transcript``.
-        If the join links this transcript sense-to-sense with a
-        protein-coding transcript at the mate, report
-        :class:`GeneFusion`; otherwise
+    def _annotate_breakend(self, variant, transcript, assembly=None):
+        """A breakend whose breakpoint lies on ``transcript``. If the
+        join links this transcript sense-to-sense with a protein-coding
+        transcript at the mate, report :class:`GeneFusion`; otherwise
         :class:`TranslocationToIntergenic`.
         """
-        mate_contig = getattr(variant, "mate_contig", None)
-        mate_start = getattr(variant, "mate_start", None)
-        assembly_mt = _build_alt_assembly_mutant_transcript(
-            variant, transcript)
-        if mate_contig is not None and mate_start is not None:
+        if variant.junctions:
             # With a resolved alt_assembly the caller has already
             # settled orientation, so an unreadable ALT isn't worth a
             # warning.
-            if (assembly_mt is None
-                    and _breakend_sides(variant.symbolic_alt) is None):
+            if (assembly is None
+                    and breakend_sides(variant.symbolic_alt) is None):
                 _warn_on_unknown_breakend_orientation(variant)
-            fusion = self._fusion_at_junction_ends(
-                variant, transcript, _junction_ends(variant))
+            fusion = self._fusion_across_junction(
+                variant, transcript, assembly)
             if fusion is not None:
                 return fusion
         return TranslocationToIntergenic(
             variant=variant,
             transcript=transcript,
-            mutant_transcript=assembly_mt or (
+            mutant_transcript=assembly or (
                 _build_translocation_mutant_transcript(
                     variant, transcript)))
 
@@ -934,106 +858,110 @@ class StructuralVariantAnnotator:
                 distance_to_exon=distance)
         return Intergenic(variant=variant)
 
-    def _fusion_across_span_boundary(self, variant, transcript):
-        """For a DEL / DUP / INV with exactly one end inside
-        ``transcript``, the :class:`GeneFusion` formed across that end,
-        or ``None``. SVs with both ends (or neither) inside the
-        transcript keep their deletion / duplication / inversion
-        classification, as do those with no fusion partner."""
-        if str(variant.contig) != str(transcript.contig):
-            return None
-        inside = [
-            pos for pos in (variant.start, variant.end)
-            if transcript.start <= pos <= transcript.end]
-        if len(inside) != 1:
-            return None
-        at_start = inside[0] == variant.start
-        ends = [
-            (start_end, end_end) if at_start else (end_end, start_end)
-            for start_end, end_end in _junction_ends(variant)]
-        return self._fusion_at_junction_ends(variant, transcript, ends)
+    def _fusion_across_junction(self, variant, transcript, assembly=None):
+        """The :class:`GeneFusion` ``transcript`` forms at one of
+        ``variant``'s junctions, or ``None``.
 
-    def _fusion_at_junction_ends(self, variant, transcript, ends):
-        """The :class:`GeneFusion` ``transcript`` forms at any of
-        ``ends`` — ``((contig, pos, side), (mate_contig, mate_pos,
-        mate_side))`` pairs whose first element lies in ``transcript``
-        — or ``None``.
-
-        The kept side and the strand give each transcript's role: a
-        transcript that keeps its 5' end is the 5' partner and needs a
-        protein-coding partner at the other end that keeps its 3' end,
-        and vice versa, which is what makes the join sense-to-sense.
-        Junctions where ``transcript`` is the 5' partner are tried
-        first. An unknown side (``None``) treats ``transcript`` as the
-        5' partner and accepts any partner.
+        A junction end belongs to this transcript when the transcript
+        spans it and the transcript's *gene* doesn't span the other
+        end: an event with both ends in one gene is intragenic, however
+        short the isoform being annotated. The kept side and the strand
+        then give the transcript's role — keeping its 5' end makes it
+        the 5' partner — and the partner at the other end has to keep
+        the opposite end, which is what makes the join sense-to-sense.
+        Junctions where this transcript is the 5' partner are tried
+        first. A kept side of ``None`` (unreadable ALT) treats the
+        transcript as the 5' partner and accepts any partner.
         """
-        def keeps_five_prime(pair):
-            side = pair[0][2]
-            return side is None or _retains_five_prime_end(transcript, side)
+        gene = _gene_of(transcript)
 
-        for pair in sorted(ends, key=lambda p: not keeps_five_prime(p)):
-            (_, pos, _), (mate_contig, mate_pos, mate_side) = pair
-            five_prime = keeps_five_prime(pair)
+        def keeps_five_prime(breakend):
+            return breakend.keeps is None or _retains_five_prime_end(
+                transcript, breakend.keeps)
+
+        ends = []
+        for junction in getattr(variant, "junctions", ()):
+            for near, far in (junction, junction[::-1]):
+                if not _contains(transcript, near):
+                    continue
+                if gene is not None and _contains(gene, far):
+                    continue
+                ends.append((near, far))
+
+        for near, far in sorted(
+                ends, key=lambda pair: not keeps_five_prime(pair[0])):
+            five_prime = keeps_five_prime(near)
             partner = self._fusion_partner(
-                variant, transcript, mate_contig, mate_pos, mate_side,
-                five_prime)
+                variant, transcript, near, far, five_prime)
             if partner is None:
                 continue
             if five_prime:
-                five, three, five_pos, three_pos = (
-                    transcript, partner, pos, mate_pos)
+                five, five_position = transcript, near.position
+                three, three_position = partner, far.position
             else:
-                five, three, five_pos, three_pos = (
-                    partner, transcript, mate_pos, pos)
+                five, five_position = partner, far.position
+                three, three_position = transcript, near.position
+            if assembly is None:
+                assembly = _build_alt_assembly_mutant_transcript(
+                    variant, transcript)
             return GeneFusion(
                 variant=variant,
                 transcript=transcript,
                 partner_transcript=partner,
                 five_prime_transcript=five,
                 three_prime_transcript=three,
-                mutant_transcript=_build_alt_assembly_mutant_transcript(
-                    variant, transcript) or _build_fusion_mutant_transcript(
-                        variant, five, three,
-                        five_prime_pos=five_pos, three_prime_pos=three_pos))
+                mutant_transcript=assembly or _build_fusion_mutant_transcript(
+                    transcript, five, five_position, three, three_position))
         return None
 
     def _fusion_partner(
-            self, variant, transcript, contig, position, side,
-            transcript_is_five_prime):
-        """First protein-coding transcript at ``contig:position``, in a
-        different gene from ``transcript``, that keeps the opposite end
-        to ``transcript`` — its 3' end when ``transcript`` is the 5'
-        partner, and vice versa. An unknown ``side`` accepts any.
-        Another isoform of the same gene isn't a fusion partner: an
-        event with both ends in one gene is intragenic."""
+            self, variant, transcript, near, far, transcript_is_five_prime):
+        """The protein-coding transcript at ``far`` that fuses with
+        ``transcript``, or ``None``.
+
+        A partner is in another gene, keeps the end opposite to
+        ``transcript``'s, and — like ``transcript`` — belongs to a gene
+        that doesn't span both ends of the junction. An unknown kept
+        side accepts any partner.
+        """
         for candidate in self._coding_transcripts_at(
-                variant, contig, position):
+                variant, far.contig, far.position):
             if candidate.gene_id == transcript.gene_id:
                 continue
-            if side is None or (
-                    _retains_five_prime_end(candidate, side)
+            candidate_gene = _gene_of(candidate)
+            if candidate_gene is not None and _contains(candidate_gene, near):
+                continue
+            if far.keeps is None or (
+                    _retains_five_prime_end(candidate, far.keeps)
                     != transcript_is_five_prime):
                 return candidate
         return None
 
     def _coding_transcripts_at(self, variant, contig, position):
         """Protein-coding transcripts overlapping ``contig:position`` in
-        the variant's genome, in pyensembl's order. Empty when the
-        genome can't answer (e.g. a contig it doesn't have)."""
+        the variant's genome, in pyensembl's order. Cached on the
+        variant, since every transcript at one end of a junction asks
+        the same question about the other end. Empty when the genome
+        can't answer (e.g. a contig it doesn't have)."""
+        cache = getattr(variant, "_locus_transcripts", None)
+        key = (str(contig), int(position))
+        if cache is not None and key in cache:
+            return cache[key]
         genome = getattr(variant, "genome", None) or getattr(
             variant, "ensembl", None)
-        if genome is None:
-            return []
-        try:
-            transcripts = genome.transcripts_at_locus(
-                str(contig), int(position), int(position))
-        except Exception:
-            return []
         coding = []
-        for t in transcripts:
+        if genome is not None:
             try:
-                if t.is_protein_coding:
-                    coding.append(t)
+                transcripts = genome.transcripts_at_locus(
+                    str(contig), int(position), int(position))
             except Exception:
-                continue
+                transcripts = []
+            for candidate in transcripts:
+                try:
+                    if candidate.is_protein_coding:
+                        coding.append(candidate)
+                except Exception:
+                    continue
+        if cache is not None:
+            cache[key] = coding
         return coding
