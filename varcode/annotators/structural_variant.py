@@ -69,6 +69,7 @@ from ..effects.effect_classes import (
     LargeDeletion,
     LargeDuplication,
     NoncodingTranscript,
+    StructuralVariantEffect,
     TranslocationToIntergenic,
 )
 from ..effects.effect_helpers import exon_length
@@ -254,12 +255,17 @@ def _contains(feature, breakend):
             and feature.start <= breakend.position <= feature.end)
 
 
-def _gene_of(transcript):
-    """``transcript``'s gene, or ``None`` when the genome can't say."""
-    try:
-        return transcript.gene
-    except Exception:
-        return None
+def _cached(variant, key, compute):
+    """``compute()``, memoized in the variant's annotation cache under
+    ``key``. Results that depend only on the variant (mate-locus
+    transcripts, cryptic-exon candidates) are then computed once per
+    variant rather than once per transcript it's annotated on."""
+    cache = getattr(variant, "_annotation_cache", None)
+    if cache is None:
+        return compute()
+    if key not in cache:
+        cache[key] = compute()
+    return cache[key]
 
 
 def _exonic_bases_before(transcript, position):
@@ -291,9 +297,10 @@ def _exonic_bases_before(transcript, position):
     return offset, False
 
 
-def _retained_cdna(transcript, position, keep_five_prime):
-    """The cDNA slice of ``transcript`` a junction at ``position``
-    keeps, as ``(start, end)`` offsets into ``transcript.sequence``.
+def _cdna_cut(transcript, position, keep_five_prime):
+    """The cDNA offset where a junction at ``position`` cuts
+    ``transcript``: the 5' side keeps ``sequence[:cut]`` and the 3' side
+    ``sequence[cut:]``.
 
     A breakend names the last base its side keeps, so an exonic
     breakpoint keeps that base on whichever side retains it. An
@@ -302,9 +309,7 @@ def _retained_cdna(transcript, position, keep_five_prime):
     starts with the first exon transcript-3' of it.
     """
     offset, exonic = _exonic_bases_before(transcript, position)
-    if keep_five_prime:
-        return 0, offset + (1 if exonic else 0)
-    return offset, len(str(transcript.sequence))
+    return offset + 1 if keep_five_prime and exonic else offset
 
 
 def _warn_on_unknown_breakend_orientation(variant):
@@ -526,9 +531,9 @@ def _build_fusion_mutant_transcript(
     """
     five_prime_cdna = str(five_prime_transcript.sequence)
     three_prime_cdna = str(three_prime_transcript.sequence)
-    _, five_prime_end = _retained_cdna(
+    five_prime_end = _cdna_cut(
         five_prime_transcript, five_prime_position, True)
-    three_prime_start, _ = _retained_cdna(
+    three_prime_start = _cdna_cut(
         three_prime_transcript, three_prime_position, False)
     fused_cdna = (
         five_prime_cdna[:five_prime_end]
@@ -587,6 +592,25 @@ class StructuralVariantAnnotator:
     version = _varcode_version
     supports = frozenset({"DEL", "DUP", "INV", "INS", "CNV", "BND"})
 
+    # SV types with a reference span, mapped to the method that says
+    # what the span does to a transcript's exons.
+    _SPAN_EFFECTS = {
+        "DEL": "_annotate_deletion",
+        "DUP": "_annotate_duplication",
+        "INV": "_annotate_inversion",
+        # CNVs are ambiguous at the protein level (gain vs loss depends
+        # on direction). Treat as duplication in the CNV-gain case; the
+        # CN0 subtype is routed to deletion logic at parse time (see
+        # sv_allele_parser).
+        "CNV": "_annotate_duplication",
+        # A large symbolic insertion is *structurally* an SV but
+        # functionally resembles an in-frame-or-frameshift insertion if
+        # the sequence is known. For now we defer to the duplication
+        # shape — callers with ``alt_assembly`` populated get a richer
+        # result once the SV annotator materializes segments.
+        "INS": "_annotate_insertion",
+    }
+
     def __repr__(self):
         return "StructuralVariantAnnotator(name=%r, version=%r)" % (
             self.name, self.version)
@@ -611,34 +635,22 @@ class StructuralVariantAnnotator:
         # anything inferred from breakpoints; build it once per call.
         assembly = _build_alt_assembly_mutant_transcript(variant, transcript)
 
-        span_effects = {
-            "DEL": self._annotate_deletion,
-            "DUP": self._annotate_duplication,
-            "INV": self._annotate_inversion,
-            # CNVs are ambiguous at the protein level (gain vs loss
-            # depends on direction). Treat as duplication in the CNV-
-            # gain case; the CN0 subtype is routed to deletion logic
-            # at parse time (see sv_allele_parser).
-            "CNV": self._annotate_duplication,
-            # A large symbolic insertion is *structurally* an SV but
-            # functionally resembles an in-frame-or-frameshift
-            # insertion if the sequence is known. For now we defer
-            # to the duplication shape (reporting the anchor codon) —
-            # callers with ``alt_assembly`` populated get a richer
-            # result once the SV annotator materializes segments.
-            "INS": self._annotate_insertion,
-        }
         if sv_type == "BND":
             effect = self._annotate_breakend(variant, transcript, assembly)
-        elif sv_type in span_effects:
+        elif sv_type in self._SPAN_EFFECTS:
+            span_effect = getattr(self, self._SPAN_EFFECTS[sv_type])(
+                variant, transcript, assembly)
             # A span with one end in this transcript and a sense-to-sense
-            # partner at the other end is a fusion; otherwise it keeps
-            # its own deletion / duplication / inversion effect.
-            # Insertions and CNVs have no junction, so the check is a
-            # no-op for them.
-            effect = (
-                self._fusion_across_junction(variant, transcript, assembly)
-                or span_effects[sv_type](variant, transcript, assembly))
+            # partner at the other end is a fusion. What the span does to
+            # this transcript's own exons stays on the fusion as a further
+            # primary candidate. Insertions and CNVs have no junction, so
+            # they never fuse.
+            effect = self._fusion_across_junction(
+                variant, transcript, assembly)
+            if effect is None:
+                effect = span_effect
+            elif isinstance(span_effect, StructuralVariantEffect):
+                effect._attach_primary_effects((span_effect,))
         else:
             # Unknown SV type — fall back to intergenic so the call
             # graph doesn't crash.
@@ -675,13 +687,9 @@ class StructuralVariantAnnotator:
         from ..splice_outcomes import enumerate_splice_outcomes
         if not isinstance(effect, StructuralVariantEffect):
             return
-        # The variant's junction breakpoints, restricted to this
-        # transcript's contig: the same positions the fusion and
-        # cryptic-exon paths use.
-        bp_positions = {
-            position for contig, position
-            in getattr(variant, "breakpoints", ())
-            if str(contig) == str(transcript.contig)}
+        # The SV's own endpoints: ``start`` and ``end`` of a span, or a
+        # breakend's position (where the two are equal).
+        bp_positions = {variant.start, variant.end}
         sv_type = getattr(variant, "sv_type", None)
         sv_evidence = {"sv_type": sv_type} if sv_type is not None else {}
         attached = []
@@ -733,13 +741,18 @@ class StructuralVariantAnnotator:
         from ..effects.effect_classes import StructuralVariantEffect
         if not isinstance(effect, StructuralVariantEffect):
             return
-        try:
-            candidates = enumerate_from_structural_variant(variant)
-        except (AttributeError, KeyError, ValueError, OSError):
-            # Genome sequence fetch failed (no FASTA cached, unknown
-            # contig, etc.) — silently skip; consumers still get the
-            # primary SV classification.
-            return
+        def enumerate_candidates():
+            try:
+                return enumerate_from_structural_variant(variant)
+            except (AttributeError, KeyError, ValueError, OSError):
+                # Genome sequence fetch failed (no FASTA cached, unknown
+                # contig, etc.) — skip; consumers still get the primary
+                # SV classification.
+                return []
+
+        # The candidates depend only on the variant, not the transcript.
+        candidates = _cached(
+            variant, "cryptic_candidates", enumerate_candidates)
         if candidates:
             effect._attach_cryptic_candidates(candidates)
 
@@ -858,7 +871,7 @@ class StructuralVariantAnnotator:
                 distance_to_exon=distance)
         return Intergenic(variant=variant)
 
-    def _fusion_across_junction(self, variant, transcript, assembly=None):
+    def _fusion_across_junction(self, variant, transcript, assembly):
         """The :class:`GeneFusion` ``transcript`` forms at one of
         ``variant``'s junctions, or ``None``.
 
@@ -873,7 +886,7 @@ class StructuralVariantAnnotator:
         first. A kept side of ``None`` (unreadable ALT) treats the
         transcript as the 5' partner and accepts any partner.
         """
-        gene = _gene_of(transcript)
+        gene = transcript.gene
 
         def keeps_five_prime(breakend):
             return breakend.keeps is None or _retains_five_prime_end(
@@ -884,7 +897,7 @@ class StructuralVariantAnnotator:
             for near, far in (junction, junction[::-1]):
                 if not _contains(transcript, near):
                     continue
-                if gene is not None and _contains(gene, far):
+                if _contains(gene, far):
                     continue
                 ends.append((near, far))
 
@@ -901,9 +914,6 @@ class StructuralVariantAnnotator:
             else:
                 five, five_position = partner, far.position
                 three, three_position = transcript, near.position
-            if assembly is None:
-                assembly = _build_alt_assembly_mutant_transcript(
-                    variant, transcript)
             return GeneFusion(
                 variant=variant,
                 transcript=transcript,
@@ -928,8 +938,7 @@ class StructuralVariantAnnotator:
                 variant, far.contig, far.position):
             if candidate.gene_id == transcript.gene_id:
                 continue
-            candidate_gene = _gene_of(candidate)
-            if candidate_gene is not None and _contains(candidate_gene, near):
+            if _contains(candidate.gene, near):
                 continue
             if far.keeps is None or (
                     _retains_five_prime_end(candidate, far.keeps)
@@ -941,27 +950,17 @@ class StructuralVariantAnnotator:
         """Protein-coding transcripts overlapping ``contig:position`` in
         the variant's genome, in pyensembl's order. Cached on the
         variant, since every transcript at one end of a junction asks
-        the same question about the other end. Empty when the genome
-        can't answer (e.g. a contig it doesn't have)."""
-        cache = getattr(variant, "_locus_transcripts", None)
-        key = (str(contig), int(position))
-        if cache is not None and key in cache:
-            return cache[key]
-        genome = getattr(variant, "genome", None) or getattr(
-            variant, "ensembl", None)
-        coding = []
-        if genome is not None:
+        the same question about the other end."""
+        def lookup():
             try:
-                transcripts = genome.transcripts_at_locus(
+                transcripts = variant.genome.transcripts_at_locus(
                     str(contig), int(position), int(position))
-            except Exception:
-                transcripts = []
-            for candidate in transcripts:
-                try:
-                    if candidate.is_protein_coding:
-                        coding.append(candidate)
-                except Exception:
-                    continue
-        if cache is not None:
-            cache[key] = coding
-        return coding
+            except ValueError:
+                # A contig the genome doesn't know, e.g. a mate on a
+                # decoy or unplaced contig.
+                return []
+            return [t for t in transcripts if t.is_protein_coding]
+
+        return _cached(
+            variant, ("coding_transcripts", str(contig), int(position)),
+            lookup)

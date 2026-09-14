@@ -637,7 +637,7 @@ def test_retained_cdna_partitions_transcript_at_each_base():
     Walks every exon terminal base on CFTR (forward) and BRCA1
     (reverse) and asserts the partition.
     """
-    from varcode.annotators.structural_variant import _retained_cdna
+    from varcode.annotators.structural_variant import _cdna_cut
     for transcript in (
             _cftr(), ensembl_grch38.transcript_by_id(BRCA1_ID)):
         full_length = len(str(transcript.sequence))
@@ -648,9 +648,8 @@ def test_retained_cdna_partitions_transcript_at_each_base():
                 # order, which is one higher on the forward strand and
                 # one lower on the reverse strand.
                 next_position = position + 1 if forward else position - 1
-                _, five_prime_end = _retained_cdna(
-                    transcript, position, True)
-                three_prime_start, _ = _retained_cdna(
+                five_prime_end = _cdna_cut(transcript, position, True)
+                three_prime_start = _cdna_cut(
                     transcript, next_position, False)
                 assert five_prime_end == three_prime_start, (
                     "%s at %d: 5' keeps %d bases, 3' starts at %d" % (
@@ -684,8 +683,8 @@ def test_fusion_keeps_the_base_at_an_exonic_breakpoint():
 
 
 def test_fusion_with_reverse_strand_3p_partner():
-    """Exercises the reverse-strand branch of
-    :func:`_cdna_offset_at_3p_breakpoint` — CFTR (forward strand, 5p)
+    """Exercises a reverse-strand 3' partner in
+    :func:`_cdna_cut` — CFTR (forward strand, 5p)
     fused to BRCA1 (reverse strand, 3p). Not a biologically observed
     fusion; the purpose is to pin the arithmetic for a forward-5p +
     reverse-3p pair."""
@@ -917,6 +916,11 @@ def test_deletion_between_two_genes_is_fusion_on_both_partners():
     assert isinstance(on_tmprss2, GeneFusion)
     assert on_tmprss2.five_prime_transcript.id == tmprss2.id
     assert on_tmprss2.three_prime_transcript.gene_name == "ERG"
+    # What the deletion does to TMPRSS2's own exons follows the fusion.
+    (deletion,) = [
+        c.effect for c in on_tmprss2.candidates
+        if isinstance(c.effect, LargeDeletion)]
+    assert deletion.affected_exons
 
     on_erg = _ANNOTATOR.annotate_on_transcript(sv, erg)
     assert isinstance(on_erg, GeneFusion)
@@ -1166,3 +1170,43 @@ def test_translocation_to_intergenic_attaches_single_segment_mutant_transcript()
     mt = effect.mutant_transcript
     assert mt is not None
     assert len(mt.reference_segments) == 1
+
+
+def test_mate_orientation_gives_the_mates_kept_side():
+    """Without a breakend ALT, ``mate_orientation`` still says which side
+    of the mate is kept (``[`` the right, ``]`` the left). BRCA1 is on
+    the reverse strand, so keeping its left side keeps its 3' end and
+    completes a fusion with CFTR; keeping its right side doesn't."""
+    import warnings
+    cftr = _cftr()
+
+    def annotate(orientation):
+        sv = StructuralVariant(
+            contig="7",
+            start=117_485_000,
+            sv_type="BND",
+            mate_contig="17",
+            mate_start=43_120_000,
+            mate_orientation=orientation,
+            genome=ensembl_grch38)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            return _ANNOTATOR.annotate_on_transcript(sv, cftr)
+
+    assert isinstance(annotate("]]"), GeneFusion)
+    assert isinstance(annotate("[["), TranslocationToIntergenic)
+
+
+def test_sv_deletion_end_six_bases_past_exon_is_in_splice_window():
+    """Splice windows are measured from the SV's own ``start`` and
+    ``end``. A deletion ending 6 bp past CFTR exon 2 (which ends at
+    117504363) sits at the outer edge of the donor-side intronic splice
+    window."""
+    sv = StructuralVariant(
+        contig="7",
+        start=117_504_300,  # inside exon 2
+        end=117_504_369,    # intronic +6 on the donor side
+        sv_type="DEL",
+        genome=ensembl_grch38)
+    effect = _ANNOTATOR.annotate_on_transcript(sv, _cftr())
+    assert any(o.source == "varcode_splice" for o in effect.candidates)

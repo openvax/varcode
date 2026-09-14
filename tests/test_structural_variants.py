@@ -838,3 +838,36 @@ def test_junctions_by_sv_type():
     # An insertion has no second end to join.
     assert sv("INS").junctions == ()
     assert sv("INS").breakpoints == (("7", 1_000),)
+
+
+def test_structural_variant_round_trips_through_serialization():
+    """``to_dict`` carries every SV field, so JSON and pickle both
+    round-trip to an equal variant."""
+    import pickle
+    breakend = StructuralVariant(
+        contig="chr5", start=116_474_281, sv_type="BND",
+        alt="[chr4:75037126[C", ref="C", mate_contig="chr4",
+        mate_start=75_037_126, mate_orientation="[[", ci_start=(-2, 3),
+        info={"mateid": "11309"}, genome="GRCh38",
+        convert_ucsc_contig_names=True)
+    insertion = StructuralVariant(
+        contig="1", start=1_000, sv_type="INS", alt="<INS>",
+        alt_assembly="ACGTACGT", genome="GRCh38")
+    for sv in (breakend, insertion):
+        assert pickle.loads(pickle.dumps(sv)) == sv
+        assert StructuralVariant.from_json(sv.to_json()) == sv
+
+
+def test_pairing_does_not_type_an_event_starting_before_position_one():
+    """A duplication whose low breakend is a contig's first base would
+    need a padding base at position 0, so the pair stays breakends."""
+    from varcode.structural_variant import typed_event_from_breakends
+    low = StructuralVariant(
+        contig="1", start=1, sv_type="BND", alt="]1:500]N",
+        mate_contig="1", mate_start=500, info={"svtype": "DUP"},
+        genome="GRCh38")
+    high = StructuralVariant(
+        contig="1", start=500, sv_type="BND", alt="N[1:1[",
+        mate_contig="1", mate_start=1, info={"svtype": "DUP"},
+        genome="GRCh38")
+    assert typed_event_from_breakends(low, high) is None

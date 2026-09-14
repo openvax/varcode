@@ -14,8 +14,8 @@
   `TranslocationToIntergenic`.
 - A `DEL` / `DUP` / `INV` with one end in a transcript and a
   sense-to-sense partner at the other end gives a `GeneFusion` (e.g. the
-  TMPRSS2-ERG deletion) instead of a deletion, duplication or inversion
-  of that transcript's exons.
+  TMPRSS2-ERG deletion). The deletion, duplication or inversion of that
+  transcript's exons follows the fusion in its `candidates`.
 - `pair_breakends` builds a typed `DEL` / `DUP` / `INV` from a breakend
   pair that carries that `SVTYPE` (esvee, GRIDSS) when both halves agree
   on the label and their kept sides fit it, so `effects()` covers the
@@ -24,8 +24,7 @@
 - `StructuralVariant.junctions` exposes the novel adjacencies a variant
   creates as pairs of `Breakend` ends (position plus the side kept), and
   `breakpoints` lists their positions. Fusion assembly, transcript
-  containment, cryptic-exon scanning and splice windows all read from
-  them, so every consumer uses the same breakpoints.
+  containment and cryptic-exon scanning all read from them.
 - The reverse-complement orientation warning is replaced by a warning
   when a breakend with a mate has no breakend ALT to read orientation
   from.
@@ -43,6 +42,8 @@
   (type, span, ALT, mate, assembled allele and confidence intervals), so
   `load_vcf(distinct=True)` no longer merges different SV records at the
   same position.
+- `StructuralVariant.to_dict` covers every SV field, so JSON and pickle
+  round-trip SVs (pickling one previously raised `TypeError`).
 - A fusion keeps the base at each breakpoint, so a breakpoint inside an
   exon no longer drops one base from the 5' partner (and frameshifts the
   predicted protein).

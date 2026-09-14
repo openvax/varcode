@@ -128,15 +128,20 @@ def typed_event_from_breakends(a, b):
     if label == "DEL" and low_keeps_left and not high_keeps_left:
         # Adjacent breakpoints delete nothing — that's an insertion
         # point, not a deletion.
-        if high - low > 1:
-            return ("DEL", low, high - 1)
+        event = ("DEL", low, high - 1) if high - low > 1 else None
     elif label == "DUP" and not low_keeps_left and high_keeps_left:
-        return ("DUP", low - 1, high)
+        event = ("DUP", low - 1, high)
     elif label == "INV" and low_keeps_left == high_keeps_left:
-        if low_keeps_left:
-            return ("INV", low, high)
-        return ("INV", low - 1, high - 1)
-    return None
+        event = (
+            ("INV", low, high) if low_keeps_left
+            else ("INV", low - 1, high - 1))
+    else:
+        event = None
+    # The padding base before an event that begins at a contig's first
+    # base would be position 0; leave such a pair as breakends.
+    if event is None or event[1] < 1:
+        return None
+    return event
 
 
 class StructuralVariant(Variant):
@@ -188,7 +193,9 @@ class StructuralVariant(Variant):
         For BND: one of ``"[["``, ``"[]"``, ``"][``, ``"]]"``
         encoding the VCF 4.1 breakend strand + direction shorthand
         (first bracket = preceding; second = following). See VCF
-        §5.4 for the full grammar.
+        §5.4 for the full grammar. When ``alt`` isn't a breakend,
+        ``"[["`` / ``"]]"`` still tell the annotator which side of the
+        mate is kept.
     ci_start : (int, int), optional
         Confidence interval around ``start`` (VCF CIPOS).
     ci_end : (int, int), optional
@@ -217,7 +224,7 @@ class StructuralVariant(Variant):
         "info",
         "_sv_alt",
         "_junctions",
-        "_locus_transcripts",
+        "_annotation_cache",
     )
 
     def __init__(
@@ -283,12 +290,12 @@ class StructuralVariant(Variant):
         self._sv_alt = alt if alt is not None else "<%s>" % sv_type
 
         # Caches, like Variant's overlapping-gene / transcript caches:
-        # the junction list derived from the fields above, and
-        # protein-coding transcripts looked up per locus by the SV
-        # annotator (one breakend's mate is queried once per variant
-        # rather than once per transcript at the other end).
+        # the junction list derived from the fields above, and results
+        # the SV annotator derives from the variant alone (mate-locus
+        # transcripts, cryptic-exon candidates), which would otherwise be
+        # recomputed for every transcript the variant is annotated on.
         self._junctions = None
-        self._locus_transcripts = {}
+        self._annotation_cache = {}
 
     @property
     def is_structural(self) -> bool:
@@ -329,7 +336,15 @@ class StructuralVariant(Variant):
         if self.sv_type == "BND":
             if self.mate_contig is None or self.mate_start is None:
                 return ()
-            this_side, mate_side = sides if sides else (None, None)
+            if sides:
+                this_side, mate_side = sides
+            else:
+                # Without a breakend ALT this record's side is unknown,
+                # but ``mate_orientation``'s bracket still gives the
+                # mate's: ``[`` keeps the right side, ``]`` the left.
+                this_side = None
+                mate_side = {"[[": "right", "]]": "left"}.get(
+                    self.mate_orientation)
             return ((
                 Breakend(contig, start, this_side),
                 Breakend(self.mate_contig, self.mate_start, mate_side)),)
@@ -433,3 +448,24 @@ class StructuralVariant(Variant):
 
     def __hash__(self) -> int:
         return Variant.__hash__(self)
+
+    def to_dict(self):
+        """The constructor arguments, so serialization (JSON, pickle)
+        round-trips every SV field rather than only the base locus."""
+        return dict(
+            contig=self.original_contig,
+            start=self.original_start,
+            sv_type=self.sv_type,
+            end=self.end,
+            alt=self._sv_alt,
+            ref=self.original_ref,
+            mate_contig=self.mate_contig,
+            mate_start=self.mate_start,
+            mate_orientation=self.mate_orientation,
+            ci_start=self.ci_start,
+            ci_end=self.ci_end,
+            alt_assembly=self.alt_assembly,
+            info=self.info,
+            genome=self.original_genome,
+            normalize_contig_names=self.normalize_contig_names,
+            convert_ucsc_contig_names=self.convert_ucsc_contig_names)

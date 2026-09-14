@@ -1435,6 +1435,14 @@ class StructuralVariantEffect(TranscriptMutationEffect, MultiOutcomeEffect):
         return self._combine_with_extra_candidates(
             primary + cryptic + tuple(self._splice_candidates))
 
+    def _attach_primary_effects(self, effects):
+        """Add further primary classifications after this effect. The SV
+        annotator uses it when a variant both fuses a transcript and
+        deletes, duplicates or inverts part of it: the fusion stays the
+        most likely candidate, and the span's effect follows it with
+        ``source="varcode"``."""
+        self._primary_effects = self._primary_effects + tuple(effects)
+
     def _attach_cryptic_candidates(self, cryptic_candidates):
         """Attach cryptic-exon candidates (#337). Called by the SV
         annotator after effect construction so the candidates appear
@@ -1548,11 +1556,14 @@ class GeneFusion(StructuralVariantEffect):
 
 
 class TranslocationToIntergenic(StructuralVariantEffect):
-    """A breakend whose mate lies in intergenic space. The
-    downstream consequence depends on whether the intergenic region
-    contains cryptic splice / ORF signals — reported as a single
-    outcome here, with PR 11's cryptic-exon enumerator adding
-    candidate outcomes when applicable."""
+    """A breakend that doesn't form a gene fusion: its mate lies in
+    intergenic space, or the join meets a gene in an orientation that
+    can't read sense-to-sense into it (e.g. two genes' 5' ends joined
+    head to head). The downstream consequence depends on whether the
+    sequence beyond the breakpoint contains cryptic splice / ORF
+    signals — reported as a single outcome here, with PR 11's
+    cryptic-exon enumerator adding candidate outcomes when
+    applicable."""
 
     short_description = "sv-translocation-intergenic"
 

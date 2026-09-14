@@ -223,3 +223,16 @@ def test_enumerate_from_structural_variant_without_alt_or_genome():
     # function should return empty, not crash.
     candidates = enumerate_from_structural_variant(sv)
     assert candidates == []
+
+
+def test_cryptic_scan_merges_nearby_breakpoint_windows():
+    """A symbolic inversion's two junctions put breakpoints one base
+    apart at each end; their windows merge, so each end is scanned once
+    and no candidate is nominated twice. Windows stop at position 1."""
+    from varcode import StructuralVariant
+    from varcode.cryptic_exons import _scan_windows
+    inversion = StructuralVariant(
+        contig="7", start=1_000, end=2_000, sv_type="INV", genome="GRCh38")
+    assert _scan_windows(inversion.breakpoints, flank=100) == [
+        ("7", 900, 1_101), ("7", 1_900, 2_101)]
+    assert _scan_windows([("1", 50)], flank=100) == [("1", 1, 150)]
