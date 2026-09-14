@@ -771,6 +771,97 @@ def test_deletion_with_partial_exon_overlap():
     assert assembled == mt.cdna_sequence
 
 
+def _pair_direct_breakends(low, high):
+    """Pair directly constructed BNDs with standard VCF-style metadata."""
+    from varcode import VariantCollection
+    from varcode.transforms import pair_breakends
+
+    metadata = {
+        "direct": {
+            low: {"id": "a", "info": low.info},
+            high: {"id": "b", "info": high.info},
+        }
+    }
+    vc = VariantCollection(
+        variants=[low, high], source_to_metadata_dict=metadata)
+    (combined,) = pair_breakends(vc)
+    return combined
+
+
+def test_paired_deletion_retains_exonic_anchor_base():
+    """A paired DEL's low breakend is retained, not part of its span."""
+    transcript = _cftr()
+    exon1, exon2 = transcript.exons[:2]
+    low_position = exon1.end
+    high_position = exon2.end + 1
+    low = StructuralVariant(
+        contig="7", start=low_position, sv_type="BND",
+        alt="N[7:%d[" % high_position,
+        mate_contig="7", mate_start=high_position,
+        info={"SVTYPE": "DEL", "MATEID": "b"},
+        genome=ensembl_grch38)
+    high = StructuralVariant(
+        contig="7", start=high_position, sv_type="BND",
+        alt="]7:%d]N" % low_position,
+        mate_contig="7", mate_start=low_position,
+        info={"SVTYPE": "DEL", "MATEID": "a"},
+        genome=ensembl_grch38)
+
+    deletion = _pair_direct_breakends(low, high)
+    assert (deletion.start, deletion.end) == (
+        low_position, high_position - 1)
+    assert (deletion.affected_start, deletion.affected_end) == (
+        low_position + 1, high_position - 1)
+    assert deletion.length == high_position - low_position - 1
+    effect = _ANNOTATOR.annotate_on_transcript(deletion, transcript)
+    assert isinstance(effect, LargeDeletion)
+    assert exon1 not in effect.affected_exons
+    assert exon2 in effect.affected_exons
+
+    exon1_length = exon1.end - exon1.start + 1
+    exon2_length = exon2.end - exon2.start + 1
+    cdna = str(transcript.sequence)
+    expected = cdna[:exon1_length] + cdna[exon1_length + exon2_length:]
+    assert effect.mutant_transcript.cdna_sequence == expected
+
+
+def test_paired_duplication_excludes_low_padding_base():
+    """A paired DUP copies from its low breakend, not ``low - 1``."""
+    transcript = _cftr()
+    exon1 = transcript.exons[0]
+    low_position = exon1.start + 50
+    high_position = exon1.end
+    low = StructuralVariant(
+        contig="7", start=low_position, sv_type="BND",
+        alt="]7:%d]N" % high_position,
+        mate_contig="7", mate_start=high_position,
+        info={"SVTYPE": "DUP", "MATEID": "b"},
+        genome=ensembl_grch38)
+    high = StructuralVariant(
+        contig="7", start=high_position, sv_type="BND",
+        alt="N[7:%d[" % low_position,
+        mate_contig="7", mate_start=low_position,
+        info={"SVTYPE": "DUP", "MATEID": "a"},
+        genome=ensembl_grch38)
+
+    duplication = _pair_direct_breakends(low, high)
+    assert (duplication.start, duplication.end) == (
+        low_position - 1, high_position)
+    assert (duplication.affected_start, duplication.affected_end) == (
+        low_position, high_position)
+    assert duplication.length == high_position - low_position + 1
+    effect = _ANNOTATOR.annotate_on_transcript(duplication, transcript)
+    assert isinstance(effect, LargeDuplication)
+
+    exon1_length = exon1.end - exon1.start + 1
+    cdna = str(transcript.sequence)
+    expected = (
+        cdna[:exon1_length]
+        + cdna[50:exon1_length]
+        + cdna[exon1_length:])
+    assert effect.mutant_transcript.cdna_sequence == expected
+
+
 def test_warns_when_breakend_orientation_is_unknown():
     """A BND with a mate but no breakend ALT gives no way to tell which
     side of each breakpoint is kept, so the annotator warns and treats

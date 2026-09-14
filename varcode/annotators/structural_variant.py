@@ -118,6 +118,14 @@ def _merge_adjacent_ranges(ranges):
     return merged
 
 
+def _affected_span(variant):
+    """Inclusive reference bases changed by a structural variant."""
+    start = getattr(variant, "affected_start", variant.start)
+    end = getattr(variant, "affected_end", getattr(
+        variant, "end", variant.start))
+    return min(start, end), max(start, end)
+
+
 def _cdna_ranges_kept_after_deletion(variant, transcript):
     """Compute the cDNA ranges of ``transcript`` that survive after
     the genomic deletion described by ``variant``.
@@ -127,8 +135,7 @@ def _cdna_ranges_kept_after_deletion(variant, transcript):
     transcripts and the case where the deletion cuts through the
     middle of an exon.
     """
-    del_start = min(variant.start, variant.end)
-    del_end = max(variant.start, variant.end)
+    del_start, del_end = _affected_span(variant)
     kept = []
     reverse = transcript.on_backward_strand
     for exon, c_s, c_e in _exon_cdna_ranges(transcript):
@@ -162,8 +169,7 @@ def _cdna_ranges_within_sv(variant, transcript):
     """cDNA ranges that fall INSIDE the SV span (used for DUP to
     derive the duplicated body and for INV to derive the flipped
     middle)."""
-    sv_start = min(variant.start, variant.end)
-    sv_end = max(variant.start, variant.end)
+    sv_start, sv_end = _affected_span(variant)
     inside = []
     reverse = transcript.on_backward_strand
     for exon, c_s, c_e in _exon_cdna_ranges(transcript):
@@ -687,9 +693,17 @@ class StructuralVariantAnnotator:
         from ..splice_outcomes import enumerate_splice_outcomes
         if not isinstance(effect, StructuralVariantEffect):
             return
-        # The SV's own endpoints: ``start`` and ``end`` of a span, or a
-        # breakend's position (where the two are equal).
-        bp_positions = {variant.start, variant.end}
+        affected_start, affected_end = _affected_span(variant)
+        event_end = getattr(variant, "end", variant.start)
+        if (affected_start, affected_end) != (variant.start, event_end):
+            # Typed breakend pairs retain their original junction positions
+            # separately from the bases affected between them.
+            bp_positions = {
+                position for _, position in variant.breakpoints}
+        else:
+            # Preserve the established symbolic-SV interpretation of POS
+            # and END as the positions whose splice windows are inspected.
+            bp_positions = {variant.start, event_end}
         sv_type = getattr(variant, "sv_type", None)
         sv_evidence = {"sv_type": sv_type} if sv_type is not None else {}
         attached = []
@@ -835,10 +849,7 @@ class StructuralVariantAnnotator:
         span on this transcript's contig. Contig mismatch => empty."""
         if str(variant.contig) != str(transcript.contig):
             return []
-        var_start = variant.start
-        var_end = getattr(variant, "end", None) or variant.start
-        if var_end < var_start:
-            var_start, var_end = var_end, var_start
+        var_start, var_end = _affected_span(variant)
         overlapping = []
         for exon in transcript.exons:
             if exon.end < var_start or exon.start > var_end:
@@ -850,20 +861,21 @@ class StructuralVariantAnnotator:
         """Classify an SV that doesn't overlap any exon — either
         intronic (breakpoints inside the transcript envelope) or
         intergenic."""
+        var_start, var_end = _affected_span(variant)
         if (str(variant.contig) == str(transcript.contig)
-                and variant.start >= transcript.start
-                and getattr(variant, "end", variant.start) <= transcript.end):
+                and var_start >= transcript.start
+                and var_end <= transcript.end):
             # Inside the transcript envelope but outside every exon
             # => intronic.  Distance-to-exon detail is best-effort:
             # find the nearest exon start/end for diagnostic use.
             nearest_exon = min(
                 transcript.exons,
                 key=lambda e: min(
-                    abs(e.start - variant.start),
-                    abs(e.end - variant.start)))
+                    abs(e.start - var_start),
+                    abs(e.end - var_start)))
             distance = min(
-                abs(nearest_exon.start - variant.start),
-                abs(nearest_exon.end - variant.start))
+                abs(nearest_exon.start - var_start),
+                abs(nearest_exon.end - var_start))
             return Intronic(
                 variant=variant,
                 transcript=transcript,

@@ -88,27 +88,35 @@ class Breakend(NamedTuple):
     keeps: Optional[str] = None
 
 
-def typed_event_from_breakends(a, b):
+def _typed_event_details_from_breakends(a, b):
     """The DEL / DUP / INV span that two paired breakend records
     describe, or ``None`` when they don't describe one.
 
     Callers such as esvee and GRIDSS write deletions, duplications and
     inversions as a pair of breakend records labeled ``SVTYPE=DEL`` and
     so on. Given both halves, with contig names already normalized,
-    return ``(sv_type, start, end)`` with the coordinates the equivalent
-    ``<DEL>`` / ``<DUP>`` / ``<INV>`` record would have, where ``start``
-    is the base before the event. Returns ``None`` unless both halves
-    agree on a same-contig DEL, DUP or INV label, point at each other,
-    and keep sides that fit that label.
+    return ``(sv_type, start, end, affected_start, affected_end)``. The
+    first coordinate pair matches an equivalent ``<DEL>`` / ``<DUP>`` /
+    ``<INV>`` record, where ``start`` is the base before the event; the
+    second pair excludes retained anchor bases. Returns ``None`` unless
+    both halves agree on a same-contig DEL, DUP or INV label, point at
+    each other, and keep sides that fit that label.
+
     """
     from .sv_allele_parser import breakend_sides
-    labels = {
-        str((variant.info or {}).get("svtype") or "").upper()
-        for variant in (a, b)}
+
+    def event_label(variant):
+        info = variant.info or {}
+        value = info.get("svtype")
+        if value is None or value == "":
+            value = info.get("SVTYPE")
+        return str(value or "").upper()
+
+    labels = {event_label(variant) for variant in (a, b)}
     if len(labels) != 1:
         return None
-    (label,) = labels
-    if label not in ("DEL", "DUP", "INV"):
+    (sv_type,) = labels
+    if sv_type not in ("DEL", "DUP", "INV"):
         return None
     if a.contig != b.contig or a.start == b.start:
         return None
@@ -125,23 +133,37 @@ def typed_event_from_breakends(a, b):
     low, high = sorted((a.start, b.start))
     low_keeps_left = sides[low] == "left"
     high_keeps_left = sides[high] == "left"
-    if label == "DEL" and low_keeps_left and not high_keeps_left:
+    if sv_type == "DEL" and low_keeps_left and not high_keeps_left:
         # Adjacent breakpoints delete nothing — that's an insertion
         # point, not a deletion.
-        event = ("DEL", low, high - 1) if high - low > 1 else None
-    elif label == "DUP" and not low_keeps_left and high_keeps_left:
-        event = ("DUP", low - 1, high)
-    elif label == "INV" and low_keeps_left == high_keeps_left:
-        event = (
-            ("INV", low, high) if low_keeps_left
-            else ("INV", low - 1, high - 1))
+        details = (
+            "DEL", low, high - 1, low + 1, high - 1
+        ) if high - low > 1 else None
+    elif sv_type == "DUP" and not low_keeps_left and high_keeps_left:
+        details = ("DUP", low - 1, high, low, high)
+    elif sv_type == "INV" and low_keeps_left == high_keeps_left:
+        details = (
+            ("INV", low, high, low + 1, high) if low_keeps_left
+            else ("INV", low - 1, high - 1, low, high - 1))
     else:
-        event = None
+        details = None
     # The padding base before an event that begins at a contig's first
     # base would be position 0; leave such a pair as breakends.
-    if event is None or event[1] < 1:
+    if details is None or details[1] < 1:
         return None
-    return event
+    return details
+
+
+def typed_event_from_breakends(a, b):
+    """The DEL / DUP / INV event described by two breakend records.
+
+    Returns ``(sv_type, start, end)`` using the coordinates of an
+    equivalent symbolic VCF record, or ``None`` when the pair cannot be
+    typed. Retained VCF padding bases are excluded separately through the
+    resulting :class:`StructuralVariant`'s affected-span coordinates.
+    """
+    details = _typed_event_details_from_breakends(a, b)
+    return details[:3] if details is not None else None
 
 
 class StructuralVariant(Variant):
@@ -165,6 +187,10 @@ class StructuralVariant(Variant):
       equals start (insertions are zero-width in reference coords).
       For a BND, ``end == start`` and the other breakpoint lives in
       :attr:`mate_contig` / :attr:`mate_start`.
+    * :attr:`affected_start` / :attr:`affected_end` — inclusive bases
+      changed by a span event. These normally equal ``start`` / ``end``;
+      paired breakend events use them to exclude retained VCF padding
+      bases from exon and mutant-sequence annotation.
 
     Parameters
     ----------
@@ -211,6 +237,10 @@ class StructuralVariant(Variant):
         produces.
     genome, ensembl, normalize_contig_names, convert_ucsc_contig_names
         Same meaning as :class:`Variant`.
+    affected_start, affected_end : int, optional
+        Inclusive affected-region coordinates. Defaults to ``start`` and
+        ``end`` respectively. Primarily used for typed breakend pairs whose
+        event coordinates include a retained padding base.
     """
 
     __slots__ = (
@@ -222,6 +252,8 @@ class StructuralVariant(Variant):
         "ci_end",
         "alt_assembly",
         "info",
+        "affected_start",
+        "affected_end",
         "_sv_alt",
         "_junctions",
         "_annotation_cache",
@@ -245,7 +277,9 @@ class StructuralVariant(Variant):
             genome=None,
             ensembl=None,
             normalize_contig_names: bool = True,
-            convert_ucsc_contig_names=None):
+            convert_ucsc_contig_names=None,
+            affected_start: Optional[int] = None,
+            affected_end: Optional[int] = None):
         if sv_type not in SV_TYPES:
             raise ValueError(
                 "Unknown sv_type %r (expected one of %s)"
@@ -272,6 +306,10 @@ class StructuralVariant(Variant):
         # Override end position — base Variant ignores end for SNVs
         # but we need it as an explicit SV endpoint.
         self.end = int(end)
+        self.affected_start = int(
+            start if affected_start is None else affected_start)
+        self.affected_end = int(
+            end if affected_end is None else affected_end)
 
         # SV-specific fields.
         self.sv_type = sv_type
@@ -396,7 +434,7 @@ class StructuralVariant(Variant):
             # length, not an interval on the reference. Callers that
             # need the ref-coord span see 0 (INS is zero-width on ref).
             return 0
-        return self.end - self.start + 1
+        return abs(self.affected_end - self.affected_start) + 1
 
     @property
     def short_description(self) -> str:
@@ -429,6 +467,8 @@ class StructuralVariant(Variant):
         return (
             self.sv_type,
             self.end,
+            self.affected_start,
+            self.affected_end,
             self._sv_alt,
             self.mate_contig,
             self.mate_start,
@@ -457,6 +497,8 @@ class StructuralVariant(Variant):
             start=self.original_start,
             sv_type=self.sv_type,
             end=self.end,
+            affected_start=self.affected_start,
+            affected_end=self.affected_end,
             alt=self._sv_alt,
             ref=self.original_ref,
             mate_contig=self.mate_contig,

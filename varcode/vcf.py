@@ -331,6 +331,9 @@ def dataframes_to_variant_collection(
 
     variants = []
     metadata = {}
+    structural_variant_genome = variant_kwargs.get("genome")
+    if structural_variant_genome is None:
+        structural_variant_genome = variant_kwargs.get("ensembl")
     # Split the skip counters so the user-facing warning can name a fix.
     # ``flag_off``: symbolic ALT seen with ``parse_structural_variants=False``
     #   — the user can opt into SV loading by flipping the flag.
@@ -397,7 +400,7 @@ def dataframes_to_variant_collection(
                                 ref=ref,
                                 alt=alt,
                                 info=info,
-                                genome=variant_kwargs.get("genome"),
+                                genome=structural_variant_genome,
                                 normalize_contig_names=variant_kwargs.get(
                                     "normalize_contig_names", True),
                                 convert_ucsc_contig_names=variant_kwargs.get(

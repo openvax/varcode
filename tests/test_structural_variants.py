@@ -29,6 +29,7 @@ import os
 import pathlib
 import tempfile
 
+import pandas
 import pytest
 
 from varcode import (
@@ -690,6 +691,35 @@ def test_vcf_loader_svs_use_requested_genome():
     assert {v.reference_name for v in vc} == {"GRCh37"}
 
 
+def test_dataframe_loader_svs_use_legacy_ensembl_genome_alias():
+    """The deprecated ``ensembl`` alias applies equally to structural
+    and ordinary rows passed directly to ``dataframes_to_variant_collection``.
+    """
+    from varcode.vcf import dataframes_to_variant_collection
+
+    columns = [
+        "CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO"]
+    dataframe = pandas.DataFrame([
+        ("22", 51_179_178, "sv1", "A", "<DEL>", "100", "PASS",
+         "SVTYPE=DEL;END=51179500"),
+        ("22", 51_179_700, "snv1", "C", "T", "100", "PASS", "."),
+    ], columns=columns)
+
+    def parse_info(value):
+        if value == ".":
+            return {}
+        return {"SVTYPE": "DEL", "END": 51_179_500}
+
+    vc = dataframes_to_variant_collection(
+        [dataframe],
+        source_path="legacy-ensembl.vcf",
+        info_parser=parse_info,
+        variant_kwargs={"ensembl": "GRCh37"},
+        parse_structural_variants=True)
+    assert len(vc) == 2
+    assert {v.reference_name for v in vc} == {"GRCh37"}
+
+
 def test_breakend_record_keeps_its_own_position_and_label():
     """A breakend record is one end of an event, so it loads as a BND at
     its own position even when the caller labels the pair SVTYPE=DEL.
@@ -735,6 +765,21 @@ def test_pairing_builds_a_deletion_from_two_breakend_records():
     assert [v.sv_type for v in vc] == ["BND", "BND"]
     assert [(v.sv_type, v.start, v.end) for v in paired] == [
         ("DEL", 6_458_524, 6_458_720)]
+
+
+def test_typed_pair_accepts_uppercase_svtype_info():
+    """Directly constructed BNDs may retain standard VCF key casing."""
+    from varcode.structural_variant import typed_event_from_breakends
+
+    low = StructuralVariant(
+        contig="1", start=100, sv_type="BND", alt="N[1:200[",
+        mate_contig="1", mate_start=200, info={"SVTYPE": "DEL"},
+        genome="GRCh38")
+    high = StructuralVariant(
+        contig="1", start=200, sv_type="BND", alt="]1:100]N",
+        mate_contig="1", mate_start=100, info={"SVTYPE": "DEL"},
+        genome="GRCh38")
+    assert typed_event_from_breakends(low, high) == ("DEL", 100, 199)
 
 
 def test_pairing_builds_duplications_and_inversions():
@@ -853,7 +898,10 @@ def test_structural_variant_round_trips_through_serialization():
     insertion = StructuralVariant(
         contig="1", start=1_000, sv_type="INS", alt="<INS>",
         alt_assembly="ACGTACGT", genome="GRCh38")
-    for sv in (breakend, insertion):
+    typed_span = StructuralVariant(
+        contig="1", start=1_000, end=2_000, sv_type="DEL",
+        affected_start=1_001, affected_end=2_000, genome="GRCh38")
+    for sv in (breakend, insertion, typed_span):
         assert pickle.loads(pickle.dumps(sv)) == sv
         assert StructuralVariant.from_json(sv.to_json()) == sv
 
