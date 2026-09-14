@@ -1435,6 +1435,14 @@ class StructuralVariantEffect(TranscriptMutationEffect, MultiOutcomeEffect):
         return self._combine_with_extra_candidates(
             primary + cryptic + tuple(self._splice_candidates))
 
+    def _attach_primary_effects(self, effects):
+        """Add further primary classifications after this effect. The SV
+        annotator uses it when a variant both fuses a transcript and
+        deletes, duplicates or inverts part of it: the fusion stays the
+        most likely candidate, and the span's effect follows it with
+        ``source="varcode"``."""
+        self._primary_effects = self._primary_effects + tuple(effects)
+
     def _attach_cryptic_candidates(self, cryptic_candidates):
         """Attach cryptic-exon candidates (#337). Called by the SV
         annotator after effect construction so the candidates appear
@@ -1510,12 +1518,17 @@ class Inversion(StructuralVariantEffect):
 
 
 class GeneFusion(StructuralVariantEffect):
-    """A breakend (``<BND>``) whose mate lies in another
-    protein-coding gene — the canonical fusion shape.
+    """A structural variant joining ``transcript`` to a protein-coding
+    transcript in another gene — the canonical fusion shape. Breakends
+    produce it, and so do deletions, duplications and inversions with
+    one end in each gene.
 
-    Carries the two partner transcripts (5' and 3') and, when the
-    annotator has enough context, a :class:`MutantTranscript` built
-    from :class:`ReferenceSegment` entries describing the fused
+    ``transcript`` is the transcript being annotated and
+    ``partner_transcript`` the other one; ``five_prime_transcript``
+    and ``three_prime_transcript`` say which is which (by default
+    ``transcript`` is the 5' partner). When the annotator has enough
+    context, :attr:`mutant_transcript` is built from
+    :class:`ReferenceSegment` entries describing the fused
     allele. Predicting the exact fused-protein sequence requires
     knowing which exons are retained, which typically needs RNA
     evidence — outcomes beyond "this is a plausible fusion" are
@@ -1527,20 +1540,30 @@ class GeneFusion(StructuralVariantEffect):
 
     def __init__(
             self, variant, transcript, partner_transcript,
-            mutant_transcript=None, primary_effects=None):
+            mutant_transcript=None, primary_effects=None,
+            five_prime_transcript=None, three_prime_transcript=None):
         StructuralVariantEffect.__init__(
             self, variant, transcript,
             primary_effects=primary_effects,
             mutant_transcript=mutant_transcript)
         self.partner_transcript = partner_transcript
+        self.five_prime_transcript = (
+            transcript if five_prime_transcript is None
+            else five_prime_transcript)
+        self.three_prime_transcript = (
+            partner_transcript if three_prime_transcript is None
+            else three_prime_transcript)
 
 
 class TranslocationToIntergenic(StructuralVariantEffect):
-    """A breakend whose mate lies in intergenic space. The
-    downstream consequence depends on whether the intergenic region
-    contains cryptic splice / ORF signals — reported as a single
-    outcome here, with PR 11's cryptic-exon enumerator adding
-    candidate outcomes when applicable."""
+    """A breakend that doesn't form a gene fusion: its mate lies in
+    intergenic space, or the join meets a gene in an orientation that
+    can't read sense-to-sense into it (e.g. two genes' 5' ends joined
+    head to head). The downstream consequence depends on whether the
+    sequence beyond the breakpoint contains cryptic splice / ORF
+    signals — reported as a single outcome here, with PR 11's
+    cryptic-exon enumerator adding candidate outcomes when
+    applicable."""
 
     short_description = "sv-translocation-intergenic"
 

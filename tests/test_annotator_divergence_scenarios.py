@@ -403,6 +403,12 @@ from varcode.vcf import _is_symbolic_allele  # noqa: E402
     "]17:198982]G",
     "[13:123456[T",
     "T[13:123456[",
+    # Single breakends (VCF 4.2 section 5.4.9), including esvee ALTs
+    # from the osteosarc.com dataset:
+    ".A",
+    "A.",
+    ".AAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "TTTTTTTTTTTTTTTTTTTTTTTTT.",
     # Spanning-deletion placeholder:
     "*",
 ])

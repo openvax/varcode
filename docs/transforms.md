@@ -107,26 +107,29 @@ either a caller bug (asymmetric filtering, separate re-genotyping per
 half) or a real analytical concern. The transform raises with both
 row IDs and both GT values so the problem surfaces.
 
-### Trade-off: single fusion direction post-collapse
+### Trade-off: one partner's transcripts post-collapse
 
-A reciprocal translocation produces two derivative chromosomes
-(`der(15)t(15;19)` and `der(19)t(15;19)` for BRD4-NUTM1). Pre-pair,
-varcode emits one `GeneFusion` effect per half × overlapping
-transcript — so both fusion directions are represented. Post-pair,
-the combined variant is anchored at the lex-earlier endpoint, so
-effects represent that single direction.
+A breakend pair describes a single novel junction. Pre-pair, each half
+is annotated against the transcripts at its own position, so a fusion
+shows up on both partner genes, and `GeneFusion.five_prime_transcript`
+/ `three_prime_transcript` say which partner is which. Post-pair, a
+combined BND is anchored at the lex-earlier endpoint, so its effects
+cover only that endpoint's transcripts. (Pairs typed as DEL / DUP / INV
+span both ends, so their effects already cover both partners.)
 
-The other direction is reachable: `combined.source_variants` returns
+The other partner is reachable: `combined.source_variants` returns
 both originals, and you can annotate the other half directly:
 
 ```python
 combined = next(v for v in vc if v.source_variants)
-other_direction = combined.source_variants[1].effects()
+other_partner = combined.source_variants[1].effects()
 ```
 
-If you want both directions in the same effect collection without
-running `pair_breakends`, just don't run it — the parser already
-emits both halves.
+If you want both partners in the same effect collection, don't run
+`pair_breakends`; the parser already emits both halves. A reciprocal
+translocation's second derivative chromosome (`der(19)t(15;19)` as
+well as `der(15)t(15;19)` for BRD4-NUTM1) is a separate breakend pair
+in the VCF.
 
 ## `left_align_indels`
 

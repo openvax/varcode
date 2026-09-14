@@ -284,6 +284,22 @@ def enumerate_candidates(
     return candidates
 
 
+def _scan_windows(breakpoints, flank):
+    """``(contig, start, end)`` windows reaching ``flank`` bases either
+    side of each breakpoint, clamped at position 1, with overlapping or
+    touching windows on a contig merged — so breakpoints close together
+    (an inversion's paired ends, a short deletion) are scanned once and
+    don't nominate the same cryptic exon twice."""
+    windows = []
+    for contig, position in sorted(set(breakpoints)):
+        start, end = max(1, position - flank), position + flank
+        if windows and windows[-1][0] == contig and start <= windows[-1][2] + 1:
+            windows[-1] = (contig, windows[-1][1], max(end, windows[-1][2]))
+        else:
+            windows.append((contig, start, end))
+    return windows
+
+
 def enumerate_from_structural_variant(
         variant,
         flank: int = 500,
@@ -292,10 +308,11 @@ def enumerate_from_structural_variant(
     """Convenience wrapper: enumerate candidates in the genomic
     region around an SV breakpoint.
 
-    Reads ``flank`` bp either side of ``variant.start`` from the
-    variant's genome (and the same around ``variant.mate_start`` for
-    breakends). If the variant carries an ``alt_assembly`` (long-
-    read resolution), scans that instead of the reference.
+    Reads ``flank`` bp either side of each of the variant's
+    breakpoints (see :attr:`StructuralVariant.breakpoints`, which
+    covers both ends of every junction the variant creates). If the
+    variant carries an ``alt_assembly`` (long-read resolution), scans
+    that instead of the reference.
 
     Returns the combined, sorted candidate list.
     """
@@ -316,16 +333,14 @@ def enumerate_from_structural_variant(
         return candidates
 
     # Otherwise, scan reference flanking regions around breakpoints.
-    breakpoints = [(variant.contig, variant.start)]
-    mate_contig = getattr(variant, "mate_contig", None)
-    mate_start = getattr(variant, "mate_start", None)
-    if mate_contig is not None and mate_start is not None:
-        breakpoints.append((mate_contig, mate_start))
+    breakpoints = list(getattr(variant, "breakpoints", ()) or ())
+    if not breakpoints:
+        breakpoints = [(variant.contig, variant.start)]
 
-    for contig, pos in breakpoints:
-        if genome is None:
-            continue
-        ref_seq = reference_range(genome, contig, pos - flank, pos + flank)
+    if genome is None:
+        return candidates
+    for contig, start, end in _scan_windows(breakpoints, flank):
+        ref_seq = reference_range(genome, contig, start, end)
         if not ref_seq:
             # Warn once per genome — firing per-breakpoint creates noise
             # in pipelines that annotate many SVs without a FASTA. The
@@ -336,7 +351,7 @@ def enumerate_from_structural_variant(
         candidates.extend(enumerate_candidates(
             contig=contig,
             sequence=ref_seq,
-            sequence_start=pos - flank,
+            sequence_start=start,
             variant=variant,
             score_fn=score_fn,
             **kwargs))

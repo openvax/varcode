@@ -34,6 +34,7 @@ nav:
   - Home: index.md
   - Feature guides:
       - Effect annotation: effect_annotation.md
+      - Structural variants: structural_variants.md
       - Genotypes & sample queries: genotype.md
       - VariantCollection transforms: transforms.md
       - CSV round-trip: csv.md

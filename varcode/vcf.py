@@ -39,6 +39,7 @@ def _is_symbolic_allele(alt):
     Examples of alleles that return True:
         <DEL>, <DUP>, <INS>, <INV>, <CN0>, <INS:ME:ALU>  (symbolic)
         G]17:198982], ]17:198982]G, [13:123456[T, T[13:123456[  (breakends)
+        .A, A., .ACGT, ACGT.  (single breakends)
         *  (spanning deletion placeholder)
     """
     if not alt:
@@ -46,6 +47,8 @@ def _is_symbolic_allele(alt):
     if alt.startswith("<"):
         return True
     if "[" in alt or "]" in alt:
+        return True
+    if len(alt) > 1 and (alt[0] == "." or alt[-1] == "."):
         return True
     if alt == "*":
         return True
@@ -328,6 +331,9 @@ def dataframes_to_variant_collection(
 
     variants = []
     metadata = {}
+    structural_variant_genome = variant_kwargs.get("genome")
+    if structural_variant_genome is None:
+        structural_variant_genome = variant_kwargs.get("ensembl")
     # Split the skip counters so the user-facing warning can name a fix.
     # ``flag_off``: symbolic ALT seen with ``parse_structural_variants=False``
     #   — the user can opt into SV loading by flipping the flag.
@@ -394,7 +400,11 @@ def dataframes_to_variant_collection(
                                 ref=ref,
                                 alt=alt,
                                 info=info,
-                                genome=variant_kwargs.get("ensembl"),
+                                genome=structural_variant_genome,
+                                normalize_contig_names=variant_kwargs.get(
+                                    "normalize_contig_names", True),
+                                convert_ucsc_contig_names=variant_kwargs.get(
+                                    "convert_ucsc_contig_names"),
                             )
                             if sv is None:
                                 n_skipped_unparseable += 1

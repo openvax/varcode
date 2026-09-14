@@ -57,7 +57,7 @@ downstream integrations without forcing them into the core class:
   annotator requires; the rest ride along for downstream consumers.
 """
 
-from typing import Any, Mapping, Optional, Tuple
+from typing import Any, Mapping, NamedTuple, Optional, Tuple
 
 from .variant import Variant
 
@@ -71,6 +71,99 @@ SV_TYPES = frozenset({
     "CNV",     # copy number variant (unspecified direction)
     "BND",     # breakend (half of a translocation / complex rearrangement)
 })
+
+
+class Breakend(NamedTuple):
+    """One end of a novel adjacency.
+
+    ``position`` is the last base the rearrangement keeps on that side,
+    and ``keeps`` says which side that is: ``"left"`` keeps the bases up
+    to and including ``position``, ``"right"`` those from ``position``
+    on. ``keeps`` is ``None`` when the record didn't say — a breakend
+    ALT varcode couldn't read.
+    """
+
+    contig: str
+    position: int
+    keeps: Optional[str] = None
+
+
+def _typed_event_details_from_breakends(a, b):
+    """The DEL / DUP / INV span that two paired breakend records
+    describe, or ``None`` when they don't describe one.
+
+    Callers such as esvee and GRIDSS write deletions, duplications and
+    inversions as a pair of breakend records labeled ``SVTYPE=DEL`` and
+    so on. Given both halves, with contig names already normalized,
+    return ``(sv_type, start, end, affected_start, affected_end)``. The
+    first coordinate pair matches an equivalent ``<DEL>`` / ``<DUP>`` /
+    ``<INV>`` record, where ``start`` is the base before the event; the
+    second pair excludes retained anchor bases. Returns ``None`` unless
+    both halves agree on a same-contig DEL, DUP or INV label, point at
+    each other, and keep sides that fit that label.
+
+    """
+    from .sv_allele_parser import breakend_sides
+
+    def event_label(variant):
+        info = variant.info or {}
+        value = info.get("svtype")
+        if value is None or value == "":
+            value = info.get("SVTYPE")
+        return str(value or "").upper()
+
+    labels = {event_label(variant) for variant in (a, b)}
+    if len(labels) != 1:
+        return None
+    (sv_type,) = labels
+    if sv_type not in ("DEL", "DUP", "INV"):
+        return None
+    if a.contig != b.contig or a.start == b.start:
+        return None
+    if (a.mate_contig, a.mate_start) != (b.contig, b.start):
+        return None
+    if (b.mate_contig, b.mate_start) != (a.contig, a.start):
+        return None
+    sides = {}
+    for variant in (a, b):
+        variant_sides = breakend_sides(variant.symbolic_alt)
+        if variant_sides is None:
+            return None
+        sides[variant.start] = variant_sides[0]
+    low, high = sorted((a.start, b.start))
+    low_keeps_left = sides[low] == "left"
+    high_keeps_left = sides[high] == "left"
+    if sv_type == "DEL" and low_keeps_left and not high_keeps_left:
+        # Adjacent breakpoints delete nothing — that's an insertion
+        # point, not a deletion.
+        details = (
+            "DEL", low, high - 1, low + 1, high - 1
+        ) if high - low > 1 else None
+    elif sv_type == "DUP" and not low_keeps_left and high_keeps_left:
+        details = ("DUP", low - 1, high, low, high)
+    elif sv_type == "INV" and low_keeps_left == high_keeps_left:
+        details = (
+            ("INV", low, high, low + 1, high) if low_keeps_left
+            else ("INV", low - 1, high - 1, low, high - 1))
+    else:
+        details = None
+    # The padding base before an event that begins at a contig's first
+    # base would be position 0; leave such a pair as breakends.
+    if details is None or details[1] < 1:
+        return None
+    return details
+
+
+def typed_event_from_breakends(a, b):
+    """The DEL / DUP / INV event described by two breakend records.
+
+    Returns ``(sv_type, start, end)`` using the coordinates of an
+    equivalent symbolic VCF record, or ``None`` when the pair cannot be
+    typed. Retained VCF padding bases are excluded separately through the
+    resulting :class:`StructuralVariant`'s affected-span coordinates.
+    """
+    details = _typed_event_details_from_breakends(a, b)
+    return details[:3] if details is not None else None
 
 
 class StructuralVariant(Variant):
@@ -94,6 +187,10 @@ class StructuralVariant(Variant):
       equals start (insertions are zero-width in reference coords).
       For a BND, ``end == start`` and the other breakpoint lives in
       :attr:`mate_contig` / :attr:`mate_start`.
+    * :attr:`affected_start` / :attr:`affected_end` — inclusive bases
+      changed by a span event. These normally equal ``start`` / ``end``;
+      paired breakend events use them to exclude retained VCF padding
+      bases from exon and mutant-sequence annotation.
 
     Parameters
     ----------
@@ -114,14 +211,17 @@ class StructuralVariant(Variant):
         Original REF base (usually one nucleotide, the anchor).
         Defaults to ``"N"``.
     mate_contig : str, optional
-        For BND: the mate breakpoint's chromosome.
+        For BND: the mate breakpoint's chromosome. Normalized the same
+        way as ``contig`` (e.g. "chr4" -> "4" when converting UCSC names).
     mate_start : int, optional
         For BND: the mate breakpoint's position.
     mate_orientation : str, optional
         For BND: one of ``"[["``, ``"[]"``, ``"][``, ``"]]"``
         encoding the VCF 4.1 breakend strand + direction shorthand
         (first bracket = preceding; second = following). See VCF
-        §5.4 for the full grammar.
+        §5.4 for the full grammar. When ``alt`` isn't a breakend,
+        ``"[["`` / ``"]]"`` still tell the annotator which side of the
+        mate is kept.
     ci_start : (int, int), optional
         Confidence interval around ``start`` (VCF CIPOS).
     ci_end : (int, int), optional
@@ -137,6 +237,10 @@ class StructuralVariant(Variant):
         produces.
     genome, ensembl, normalize_contig_names, convert_ucsc_contig_names
         Same meaning as :class:`Variant`.
+    affected_start, affected_end : int, optional
+        Inclusive affected-region coordinates. Defaults to ``start`` and
+        ``end`` respectively. Primarily used for typed breakend pairs whose
+        event coordinates include a retained padding base.
     """
 
     __slots__ = (
@@ -148,7 +252,11 @@ class StructuralVariant(Variant):
         "ci_end",
         "alt_assembly",
         "info",
+        "affected_start",
+        "affected_end",
         "_sv_alt",
+        "_junctions",
+        "_annotation_cache",
     )
 
     def __init__(
@@ -169,7 +277,9 @@ class StructuralVariant(Variant):
             genome=None,
             ensembl=None,
             normalize_contig_names: bool = True,
-            convert_ucsc_contig_names=None):
+            convert_ucsc_contig_names=None,
+            affected_start: Optional[int] = None,
+            affected_end: Optional[int] = None):
         if sv_type not in SV_TYPES:
             raise ValueError(
                 "Unknown sv_type %r (expected one of %s)"
@@ -196,10 +306,16 @@ class StructuralVariant(Variant):
         # Override end position — base Variant ignores end for SNVs
         # but we need it as an explicit SV endpoint.
         self.end = int(end)
+        self.affected_start = int(
+            start if affected_start is None else affected_start)
+        self.affected_end = int(
+            end if affected_end is None else affected_end)
 
         # SV-specific fields.
         self.sv_type = sv_type
-        self.mate_contig = mate_contig
+        self.mate_contig = (
+            self._normalize_contig_name(mate_contig)
+            if mate_contig is not None else None)
         self.mate_start = int(mate_start) if mate_start is not None else None
         self.mate_orientation = mate_orientation
         self.ci_start = tuple(ci_start) if ci_start is not None else None
@@ -211,6 +327,14 @@ class StructuralVariant(Variant):
         # and downstream consumers see what the VCF said.
         self._sv_alt = alt if alt is not None else "<%s>" % sv_type
 
+        # Caches, like Variant's overlapping-gene / transcript caches:
+        # the junction list derived from the fields above, and results
+        # the SV annotator derives from the variant alone (mate-locus
+        # transcripts, cryptic-exon candidates), which would otherwise be
+        # recomputed for every transcript the variant is annotated on.
+        self._junctions = None
+        self._annotation_cache = {}
+
     @property
     def is_structural(self) -> bool:
         return True
@@ -219,6 +343,84 @@ class StructuralVariant(Variant):
     def symbolic_alt(self) -> str:
         """The original symbolic / breakend ALT string from the VCF."""
         return self._sv_alt
+
+    @property
+    def junctions(self) -> Tuple[Tuple[Breakend, Breakend], ...]:
+        """The novel adjacencies this variant creates, each a pair of
+        :class:`Breakend` ends.
+
+        One junction for a breakend record (its own position joined to
+        its mate), and one for a deletion or tandem duplication. A
+        symbolic inversion has two, since it joins both of its ends; an
+        inversion built from one breakend pair has only the junction
+        that pair observed. Empty for insertions, CNVs and single
+        breakends, which have no second end to join.
+
+        Positions follow the VCF symbolic-allele convention that
+        ``start`` is the base before the event, so a deletion joins
+        ``start`` (keeping the left side) to ``end + 1`` (keeping the
+        right side), and a tandem duplication joins ``end`` to
+        ``start + 1``.
+        """
+        if self._junctions is None:
+            self._junctions = self._compute_junctions()
+        return self._junctions
+
+    def _compute_junctions(self):
+        # Local import: sv_allele_parser imports this module.
+        from .sv_allele_parser import breakend_sides
+        sides = breakend_sides(self._sv_alt)
+        contig, start, end = self.contig, self.start, self.end
+        if self.sv_type == "BND":
+            if self.mate_contig is None or self.mate_start is None:
+                return ()
+            if sides:
+                this_side, mate_side = sides
+            else:
+                # Without a breakend ALT this record's side is unknown,
+                # but ``mate_orientation``'s bracket still gives the
+                # mate's: ``[`` keeps the right side, ``]`` the left.
+                this_side = None
+                mate_side = {"[[": "right", "]]": "left"}.get(
+                    self.mate_orientation)
+            return ((
+                Breakend(contig, start, this_side),
+                Breakend(self.mate_contig, self.mate_start, mate_side)),)
+        if self.sv_type == "DEL":
+            return ((
+                Breakend(contig, start, "left"),
+                Breakend(contig, end + 1, "right")),)
+        if self.sv_type == "DUP":
+            return ((
+                Breakend(contig, start + 1, "right"),
+                Breakend(contig, end, "left")),)
+        if self.sv_type == "INV":
+            keeping_left = (
+                Breakend(contig, start, "left"),
+                Breakend(contig, end, "left"))
+            keeping_right = (
+                Breakend(contig, start + 1, "right"),
+                Breakend(contig, end + 1, "right"))
+            if sides == ("left", "left"):
+                return (keeping_left,)
+            if sides == ("right", "right"):
+                return (keeping_right,)
+            return (keeping_left, keeping_right)
+        return ()
+
+    @property
+    def breakpoints(self) -> Tuple[Tuple[str, int], ...]:
+        """Distinct ``(contig, position)`` breakpoints of this variant's
+        junctions, for consumers that read sequence around them
+        (cryptic-exon and splice-window scans). Falls back to the
+        variant's own start when it has no junction."""
+        loci = []
+        for junction in self.junctions:
+            for breakend in junction:
+                locus = (breakend.contig, breakend.position)
+                if locus not in loci:
+                    loci.append(locus)
+        return tuple(loci) or ((self.contig, self.start),)
 
     @property
     def length(self) -> Optional[int]:
@@ -232,11 +434,14 @@ class StructuralVariant(Variant):
             # length, not an interval on the reference. Callers that
             # need the ref-coord span see 0 (INS is zero-width on ref).
             return 0
-        return self.end - self.start + 1
+        return abs(self.affected_end - self.affected_start) + 1
 
     @property
     def short_description(self) -> str:
         if self.sv_type == "BND":
+            if self.mate_contig is None:
+                # Single breakend, or a symbolic BND with no mate.
+                return "BND(%s:%d)" % (self.contig, self.start)
             mate = "%s:%s" % (self.mate_contig, self.mate_start)
             return "BND(%s:%d -> %s)" % (self.contig, self.start, mate)
         return "%s(%s:%d-%d)" % (
@@ -252,3 +457,57 @@ class StructuralVariant(Variant):
 
     def __repr__(self) -> str:
         return str(self)
+
+    def _sv_identity(self):
+        """What the record said, beyond the base variant's locus. The
+        base :class:`Variant` identity compares ref/alt, which are
+        placeholders on an SV, so two different SV records at one
+        position would otherwise compare equal and
+        ``load_vcf(distinct=True)`` would drop one."""
+        return (
+            self.sv_type,
+            self.end,
+            self.affected_start,
+            self.affected_end,
+            self._sv_alt,
+            self.mate_contig,
+            self.mate_start,
+            self.mate_orientation,
+            self.alt_assembly,
+            self.ci_start,
+            self.ci_end)
+
+    def __eq__(self, other) -> bool:
+        if self is other:
+            return True
+        if not isinstance(other, StructuralVariant):
+            return False
+        return (
+            Variant.__eq__(self, other)
+            and self._sv_identity() == other._sv_identity())
+
+    def __hash__(self) -> int:
+        return Variant.__hash__(self)
+
+    def to_dict(self):
+        """The constructor arguments, so serialization (JSON, pickle)
+        round-trips every SV field rather than only the base locus."""
+        return dict(
+            contig=self.original_contig,
+            start=self.original_start,
+            sv_type=self.sv_type,
+            end=self.end,
+            affected_start=self.affected_start,
+            affected_end=self.affected_end,
+            alt=self._sv_alt,
+            ref=self.original_ref,
+            mate_contig=self.mate_contig,
+            mate_start=self.mate_start,
+            mate_orientation=self.mate_orientation,
+            ci_start=self.ci_start,
+            ci_end=self.ci_end,
+            alt_assembly=self.alt_assembly,
+            info=self.info,
+            genome=self.original_genome,
+            normalize_contig_names=self.normalize_contig_names,
+            convert_ucsc_contig_names=self.convert_ucsc_contig_names)
