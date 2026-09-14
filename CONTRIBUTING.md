@@ -22,7 +22,7 @@ style guidelines.
 * If the work is based on an existing issue, please reference the issue in the PR.
 * All new code should be accompanied by comprehensive unit tests.
 * If the PR fixes or implements an issue, please state "Closes #XYZ" or "Fixes #XYZ", where XYZ is the issue number.
-* Please ensure that your code works under Python >= 3.7.
+* Please ensure that your code works under Python >= 3.9.
 
 Licensing
 ---------
