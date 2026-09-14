@@ -10,13 +10,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Germline-aware annotation: input contract (#268, #289).
+"""Germline-aware annotation.
 
 Effect prediction against the reference genome is the wrong baseline
 for somatic-variant analysis in a real patient. The correct baseline
-is the patient's germline. This module ships the *input contract* for
-that — the :class:`GermlineContext` object — without yet wiring it
-through annotator dispatch (which lands in subsequent slices of #268).
+is the patient's germline. This module defines the input contract —
+the :class:`GermlineContext` object — and the effect prediction that
+consumes it (:func:`predict_germline_aware_effect`).
 
 A :class:`GermlineContext` is the patient's germline plus enough
 metadata for the effect classifier to handle it correctly:
@@ -40,11 +40,6 @@ The four canonical input shapes from #268 each have a constructor:
 
 Route 5 (``INFO=GERMLINE`` flags on a single VCF) is deferred — it's a
 small adapter that lives in the loader once it has a clear consumer.
-
-This module *only* ships the input contract and validation. Effect-side
-work (window-based lookup, transcript construction with germline
-applied, phase enumeration → multi-outcome packaging, LOH detection,
-splice signal recomputation) lands in subsequent slices.
 """
 from __future__ import annotations
 

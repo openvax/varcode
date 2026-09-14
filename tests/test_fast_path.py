@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for the shared fast-path SNV helper (openvax/varcode#271, stage 3c).
+"""Tests for the fast-path SNV helper.
 
 The helper is an optimization: for trivial single-codon SNVs in the
 middle of a coding region it short-circuits the full in-frame pipeline.
@@ -59,23 +59,15 @@ def _call_fast_path(variant, transcript):
 
 
 def test_fast_path_returns_substitution_for_missense_snv():
-    # BRCA1 coding missense: 17:43082570 CCT>GGG — multi-base, won't
-    # hit the fast path. Use a SNV variant instead.
-    # CFTR chr7 — pick a known single-base coding variant.
+    # CFTR coding SNV.
     variant = Variant("7", 117531095, "T", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
-    # The fast path and fast path should agree; run the full pipeline
-    # and directly compare with the helper.
-    fast_effect = variant.effect_on_transcript(transcript)
+    # The full pipeline and the fast-path helper should agree.
+    full_effect = variant.effect_on_transcript(transcript)
     fast_effect = _call_fast_path(variant, transcript)
-    if fast_effect is None:
-        # If the variant falls outside the fast path's accept window
-        # (e.g. hits the stop codon region), just skip — those cases
-        # are covered by the reject tests below.
-        return
-    # Fast-path output should match legacy byte-for-byte.
-    assert type(fast_effect) is type(fast_effect)
-    assert fast_effect.short_description == fast_effect.short_description
+    assert fast_effect is not None
+    assert type(fast_effect) is type(full_effect)
+    assert fast_effect.short_description == full_effect.short_description
 
 
 # ====================================================================
@@ -125,11 +117,8 @@ def test_fast_path_rejects_start_codon_variant():
 
 
 # ====================================================================
-# Integration: existing suite covers byte-for-byte parity across all
-# SNV test cases (the 600-test baseline passed unchanged after the
-# fast path was wired into predict_in_frame_coding_effect). This test
-# adds a focused sanity check on a few CFTR coding SNVs to lock that
-# in explicitly.
+# Integration: the helper agrees with the full pipeline on several
+# CFTR coding SNVs.
 # ====================================================================
 
 
@@ -148,14 +137,14 @@ def test_fast_path_and_fast_annotator_agree_on_several_coding_snvs():
     ]
     matched = 0
     for variant in test_variants:
-        legacy = variant.effect_on_transcript(transcript)
+        full = variant.effect_on_transcript(transcript)
         fast = _call_fast_path(variant, transcript)
         if fast is None:
-            # Fast path declined — legacy should produce a non-SNV-
-            # classifiable effect (splice-boundary or start/stop).
+            # Fast path declined — the full pipeline handles it
+            # (splice-boundary or start/stop).
             continue
-        assert type(fast) is type(legacy)
-        assert fast.short_description == legacy.short_description
+        assert type(fast) is type(full)
+        assert fast.short_description == full.short_description
         matched += 1
     assert matched > 0, (
         "Expected at least one of the CFTR coding SNVs to hit the fast "

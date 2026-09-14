@@ -149,7 +149,7 @@ __all__ = [
     "SV_TYPES",
     "parse_symbolic_alt",
 
-    # Cryptic-exon candidate enumerator (PR 11; pluggable scorer hook)
+    # Cryptic-exon candidate enumerator (pluggable scorer hook)
     "enumerate_cryptic_exon_candidates",
     "enumerate_from_structural_variant",
     "score_donor",

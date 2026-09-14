@@ -84,7 +84,7 @@ def warn_on_version_drift(header_metadata, current_version, source_path):
     Also checks ``annotator`` and ``annotator_version`` when both are
     present in the header: warns when the CSV was written with a
     different annotator than the current default, or when the
-    annotator version has a major mismatch (#271 stage 3b).
+    annotator version has a major mismatch.
     """
     import warnings
 

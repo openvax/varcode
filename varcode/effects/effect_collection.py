@@ -401,7 +401,7 @@ class EffectCollection(Collection):
         metadata = OrderedDict()
         metadata["varcode_version"] = _varcode_version
         metadata["reference_name"] = self._serialized_reference_name()
-        # Annotator provenance (#271 stage 3b). Each field is skipped
+        # Annotator provenance. Each field is skipped
         # when None by write_metadata_header.
         metadata["annotator"] = self.annotator
         metadata["annotator_version"] = self.annotator_version
