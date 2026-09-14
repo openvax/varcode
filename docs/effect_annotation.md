@@ -405,15 +405,11 @@ plug in via `apply_rna_evidence_to_effects` to append observed
 candidates; see [Germline-aware annotation](germline.md)
 for the same composition pattern applied to germline.
 
-Fusions follow breakend orientation: the side of each breakpoint that's
-kept, with the transcript's strand, decides whether a transcript is the
-5' or 3' partner, and a partner has to join sense-to-sense. A breakend,
-or a `DEL` / `DUP` / `INV` with one end in each of two genes (such as
-the deletion behind TMPRSS2-ERG), gives a `GeneFusion` on both
-partners; `five_prime_transcript` and `three_prime_transcript` say which
-is which. Transcripts containing both ends of a `DEL` / `DUP` / `INV`,
-or lying wholly inside it, get `LargeDeletion` / `LargeDuplication` /
-`Inversion`.
+Fusions follow breakend orientation and strand. [Structural variant
+annotation](structural_variants.md) covers every case: breakends between
+genes and intergenic space, strand combinations for deletions,
+duplications and inversions, where a breakpoint lands, and which effect
+class comes back.
 
 Limitations:
 

@@ -57,6 +57,10 @@
   cryptic-exon scoring takes on a genome with no chromosome FASTA.
 
 **Added**
+- A structural variant annotation guide (`docs/structural_variants.md`)
+  covering which transcripts are annotated, how strand and kept sides
+  decide fusion direction, every breakend combination, deletions,
+  duplications and inversions by strand, and where a breakpoint lands.
 - Fusion regression tests from the public osteosarc.com osteosarcoma
   dataset, validated against LINX (`tests/test_osteosarc_fusions.py`,
   `tests/data/osteosarc_esvee_somatic.vcf`).
