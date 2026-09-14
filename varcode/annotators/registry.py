@@ -50,10 +50,9 @@ def get_annotator(name):
 
 
 def get_default_annotator():
-    """Return the annotator currently configured as the default.
-
-    Current default is ``"fast"`` (restored as the default in 7.0.0;
-    see #397). ``"protein_diff"`` stays available as an opt-in.
+    """Return the annotator currently configured as the default
+    (``"fast"`` unless changed via :func:`set_default_annotator` or
+    :func:`use_annotator`).
     """
     return _REGISTRY[_DEFAULT_NAME]
 

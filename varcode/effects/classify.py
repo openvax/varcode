@@ -12,11 +12,12 @@
 
 """Classify a MutationEffect from a reference/mutant protein pair.
 
-Shared classifier used by both the splice-outcome builder
-(:mod:`varcode.splice_outcomes`, #305) and the forthcoming
-:class:`ProteinDiffEffectAnnotator` (#309 / stage 3d). Reduces
-the protein pair via :func:`trim_shared_flanking_strings` and
-dispatches to the standard Effect classes.
+Shared classifier used by the splice-outcome builder
+(:mod:`varcode.splice_outcomes`), germline-aware prediction
+(:mod:`varcode.germline`), and :class:`ProteinDiffEffectAnnotator`.
+Reduces the protein pair to its differing region (shared prefix only
+for frameshifts, shared prefix and suffix otherwise) and dispatches to
+the standard Effect classes.
 
 This module deliberately does NOT handle:
 

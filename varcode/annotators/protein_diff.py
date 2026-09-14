@@ -11,12 +11,10 @@
 # limitations under the License.
 
 """ProteinDiffEffectAnnotator — classify effects from protein diff
-instead of offset arithmetic (openvax/varcode#271 stage 3d, #309).
+instead of offset arithmetic.
 
 See :doc:`/effect_annotation` for the user-facing guide covering
-how fast, protein-diff, splice outcomes, and the SV roadmap
-fit together. This module docstring captures implementation
-detail relevant to reviewers of the classifier itself.
+how fast, protein-diff, and splice outcomes fit together.
 
 Algorithm
 ---------
@@ -35,12 +33,11 @@ Algorithm
    :func:`apply_variant_to_transcript`, compare the translated
    mutant protein to the reference, and classify via
    :func:`classify_from_protein_diff` (shared with the
-   splice-outcome builder, #305).
+   splice-outcome builder and germline-aware prediction).
 
-4. **AlternateStartCodon**: non-diff special case (resolved in
-   #304). When proteins match but the first codon changed to a
-   non-ATG alternate start, emit :class:`AlternateStartCodon`
-   instead of :class:`Silent`.
+4. **AlternateStartCodon**: non-diff special case. When proteins
+   match but the first codon changed to a non-ATG alternate start,
+   emit :class:`AlternateStartCodon` instead of :class:`Silent`.
 """
 
 from ..effects.classify import classify_from_protein_diff
