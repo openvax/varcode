@@ -76,8 +76,7 @@ class Completeness(enum.Enum):
     * If a position is **absent** from the ``NORMAL`` column of a
       somatic-caller VCF, it likely means the somatic caller didn't
       emit a row — not that the position is ref/ref. The patient's
-      germline state at that codon is unknown. The honest output is
-      a possibility set including "unknown germline."
+      germline state at that codon is unknown.
     * If a position is **absent** from a panel-of-normals filter
       list, it definitely doesn't imply ref/ref — the file only
       lists curated hotspots.
@@ -85,9 +84,8 @@ class Completeness(enum.Enum):
     Mis-treating "absent" as "ref/ref" silently produces wrong
     germline-aware effects on somatic variants in long stretches of
     the genome the somatic caller never touched. The flag exists so
-    that mistake fails loud (or at least produces an honest
-    possibility set) instead of silently corrupting clinical
-    annotation.
+    that uncertainty is surfaced instead of silently corrupting
+    clinical annotation.
 
     Values
     ------
@@ -101,8 +99,8 @@ class Completeness(enum.Enum):
     +-------------------+-----------------------------------+--------------------------+
     | :attr:`SPARSE`    | ``NORMAL`` column of a somatic    | ⇒ unknown (probably      |
     |                   | tumor-vs-normal VCF (Mutect2,     |   ref/ref but not        |
-    |                   | Strelka2 somatic, VarScan2        |   queried). Honest output|
-    |                   | somatic)                          |   is a possibility set.  |
+    |                   | Strelka2 somatic, VarScan2        |   queried)               |
+    |                   | somatic)                          |                          |
     +-------------------+-----------------------------------+--------------------------+
     | :attr:`HOTSPOTS_  | Panel-of-normals filter list,     | ⇒ definitely unknown.    |
     | ONLY`             | ClinVar pathogenic list, single-  |   Strictly weaker        |
@@ -115,19 +113,18 @@ class Completeness(enum.Enum):
     |                   | by accident from a missing kwarg  |                          |
     +-------------------+-----------------------------------+--------------------------+
 
-    What downstream slices do with this
-    -----------------------------------
+    How effect prediction uses this
+    -------------------------------
 
-    Slice 3 of #268 wires ``germline=`` through annotator dispatch.
     When a somatic variant lands in a transcript window that has no
-    germline calls, the annotator reads this flag to decide between:
+    germline calls, :func:`predict_germline_aware_effect` reads this
+    flag:
 
-    * ``COMPLETE`` → patient is ref/ref in this window; emit a
-      single reference-relative effect.
+    * ``COMPLETE`` → patient is ref/ref in this window; emit the
+      reference-relative effect.
     * ``SPARSE`` / ``HOTSPOTS_ONLY`` → patient's germline is
-      unknown in this window; emit a possibility set including the
-      reference-relative effect plus "germline-unknown" outcomes
-      so the user sees the uncertainty.
+      unknown in this window; emit the reference-relative effect
+      with ``effect.germline_unknown = True``.
     * ``EMPTY`` → no germline-aware logic; reference-relative.
 
     Constructors and defaults
@@ -416,7 +413,7 @@ class GermlineContext:
         """Germline variants overlapping ``[start, end]`` on
         ``contig`` (inclusive on both ends).
 
-        Used by the window-based lookup machinery (slice 2 of #268).
+        Used by :func:`predict_germline_aware_effect`.
         Lazy interval index is built on first call and cached on the
         instance — subsequent calls are O(log N) per contig.
 
@@ -511,13 +508,10 @@ class GermlineContext:
         """Subset ``vc`` to variants where ``sample`` has a non-ref
         genotype.
 
-        For slice 1 we keep this conservative: a variant is "called
-        in the sample" if the GT field is present and not all-ref
-        (``./.`` / ``0/0`` / ``0|0`` are ref-or-missing). Real
-        sample-aware extraction (handling ``.|0`` mixed phase,
-        somatic-vs-germline GT semantics, etc.) lives in slice 8 of
-        the umbrella — this is the minimal sufficient implementation
-        to ship the input contract.
+        Conservative: a variant is "called in the sample" if the GT
+        field is present and not all-ref (``./.`` / ``0/0`` / ``0|0``
+        are ref-or-missing). ``.|0`` mixed phase and
+        somatic-vs-germline GT semantics are not handled.
         """
         from .variant_collection import VariantCollection
         keep = []
@@ -545,9 +539,9 @@ class GermlineContext:
 # Germline-aware effect prediction
 #
 # This is where the input contract from above flows through to actual
-# effect classification. The shape from the design pivot in #268:
-# germline isn't a wrapper around an effect, it's a transcript modifier
-# applied before classification. ``predict_germline_aware_effect`` is
+# effect classification. Germline isn't a wrapper around an effect,
+# it's a transcript modifier applied before classification.
+# ``predict_germline_aware_effect`` is
 # the single entry point — ``predict_variant_effects`` calls it
 # whenever a non-empty ``GermlineContext`` is supplied; otherwise it
 # stays out of the way.
@@ -577,7 +571,7 @@ class GermlineContext:
 #      ``MultiOutcomeEffect`` subclass; not a wrapper around a
 #      reference-relative effect).
 #
-# Out of scope for v1 (refinements that don't change this API):
+# Not handled (refinements that don't change this API):
 #   * Splice-signal recomputation when germline already disrupts a
 #     splice site varcode would otherwise classify against (#363).
 #     Falls out partially because the patient transcript carries the
