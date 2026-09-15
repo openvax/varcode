@@ -5,9 +5,10 @@
 **Fixed**
 - `effects(annotator=...)` no longer gives a structural variant to a
   point-variant annotator. `annotator="fast"` or `"protein_diff"` on an SV
-  used to run point-variant arithmetic on its placeholder `N>A` allele and
-  return wrong effects (a deletion spanning CFTR exons came back as
-  `ExonLoss` instead of `LargeDeletion`). An annotator is now only given
+  used to classify it by its span and placeholder `N>A` allele, ignoring
+  `sv_type`: a CFTR-BRCA1 breakend came back as `Intronic` instead of
+  `GeneFusion`, a duplication or inversion across exons as `ExonLoss`, and
+  a deletion inside one exon raised `ReferenceMismatchError`. An annotator is now only given
   variants whose kind is in its `supports` set; anything else raises
   `UnsupportedVariantError`, even with `raise_on_error=False`. This
   applies to `VariantCollection.effects` too, so a collection containing

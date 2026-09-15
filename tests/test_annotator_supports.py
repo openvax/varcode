@@ -11,8 +11,9 @@
 # limitations under the License.
 
 """An annotator is only given variants whose kind is in its ``supports``
-set. Before this was enforced, ``annotator="fast"`` on a structural
-deletion returned ``ExonLoss`` instead of ``LargeDeletion`` (#412)."""
+set. Before this was enforced, ``annotator="fast"`` classified an SV by
+its span and placeholder allele: a breakend fusion came back as
+``Intronic`` and a duplication across exons as ``ExonLoss`` (#412)."""
 
 import pytest
 from pyensembl import cached_release
