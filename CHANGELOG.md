@@ -1,5 +1,14 @@
 # Change Log
 
+## [v7.1.1](https://github.com/openvax/varcode/tree/v7.1.1) (2026-09-14)
+
+**Fixed**
+- Four regression tests no longer silently skip. Three splice-outcome tests
+  now inspect the always-on `SpliceOutcomeSet` wrapper and assert its
+  `disrupted_signal_class`; the explicit 50-base deletion test now derives
+  its coordinates from the pinned CFTR transcript instead of using a
+  position one base before the intended exon.
+
 ## [v7.1.0](https://github.com/openvax/varcode/tree/v7.1.0) (2026-09-11)
 
 **Changed**
