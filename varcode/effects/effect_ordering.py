@@ -47,6 +47,7 @@ from .effect_classes import (
     Substitution,
     ThreePrimeUTR,
     TranslocationToIntergenic,
+    Unresolved,
 )
 from ..common import apply_groupby
 
@@ -57,6 +58,7 @@ transcript_effect_priority_list = [
     Intragenic,
     NoncodingTranscript,
     Intronic,
+    Unresolved,
     # speculative intron-retention / cryptic-splice / cryptic-exon
     # candidates — surface above plain Intronic but below any
     # characterized coding effect, since they're placeholder outcomes

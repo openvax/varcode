@@ -15,6 +15,7 @@ from .annotators import (
     EffectAnnotator,
     FastEffectAnnotator,
     ProteinDiffEffectAnnotator,
+    RealizedEffectAnnotator,
     StructuralVariantAnnotator,
     UnsupportedVariantError,
     get_annotator,
@@ -68,6 +69,7 @@ from .rna_evidence import (
     apply_rna_evidence_to_effects,
     make_rna_outcome,
 )
+from .realized_effects import predict_realized_effect
 from .splice_outcomes import (
     SpliceCandidateRNAEvidence,
     SpliceOutcomeSet,
@@ -98,6 +100,7 @@ from .effects import (
     MultiOutcomeEffect,
     MutationEffect,
     NonsilentCodingMutation,
+    Unresolved,
 )
 from .version import __version__
 
@@ -143,6 +146,7 @@ __all__ = [
     # Unified multi-outcome type (openvax/varcode#299)
     "EffectCandidate",
     "candidates_from_effects",
+    "predict_realized_effect",
 
     # Structural variants (openvax/varcode#252 / #264)
     "StructuralVariant",
@@ -173,6 +177,7 @@ __all__ = [
     "EffectAnnotator",
     "FastEffectAnnotator",
     "ProteinDiffEffectAnnotator",
+    "RealizedEffectAnnotator",
     "StructuralVariantAnnotator",
     "UnsupportedVariantError",
     "get_annotator",
@@ -187,6 +192,7 @@ __all__ = [
     "top_priority_effect",
     "MultiOutcomeEffect",
     "MutationEffect",
+    "Unresolved",
     "NonsilentCodingMutation",
 
     # exceptions

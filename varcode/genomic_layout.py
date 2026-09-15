@@ -148,6 +148,24 @@ class LayoutSegment:
                     self.length))
         return reverse_complement(sequence) if self.strand == "-" else sequence
 
+    def base(self, offset, sequence_provider=None):
+        """Return one base without materializing a large lazy segment."""
+        if offset < 0 or offset >= self.length:
+            raise IndexError(offset)
+        if self.sequence is not None:
+            return self.sequence[offset]
+        if sequence_provider is None:
+            raise SequenceUnavailable(
+                "No genomic sequence provider for %s:%d" % (
+                    self.contig, self.genomic_position(offset)))
+        position = self.genomic_position(offset)
+        base = sequence_provider(self.contig, position, position).upper()
+        if len(base) != 1:
+            raise ValueError(
+                "Sequence provider returned %d bases for %s:%d; expected 1"
+                % (len(base), self.contig, position))
+        return reverse_complement(base) if self.strand == "-" else base
+
 
 def _coalesce(segments):
     """Merge adjacent compatible lazy reference segments."""
@@ -233,6 +251,38 @@ class GenomicLayout:
             (segment.contig, segment.genomic_position(i), segment.origin_kind)
             for segment in self.segments
             for i in range(segment.length))
+
+    def base(self, offset):
+        """Return ``(base, contig, position, origin_kind)`` at an offset."""
+        contig, position, origin_kind = self.origin(offset)
+        consumed = 0
+        for segment in self.segments:
+            if offset < consumed + segment.length:
+                within = offset - consumed
+                return (
+                    segment.base(within, self.sequence_provider),
+                    contig,
+                    position,
+                    origin_kind,
+                )
+            consumed += segment.length
+        raise IndexError(offset)
+
+    def origin(self, offset):
+        """Return ``(contig, position, origin_kind)`` without fetching bases."""
+        if offset < 0 or offset >= self.length:
+            raise IndexError(offset)
+        consumed = 0
+        for segment in self.segments:
+            if offset < consumed + segment.length:
+                within = offset - consumed
+                return (
+                    segment.contig,
+                    segment.genomic_position(within),
+                    segment.origin_kind,
+                )
+            consumed += segment.length
+        raise IndexError(offset)
 
     def reversed(self):
         """Reverse-complement the molecule while preserving base origins."""
@@ -327,12 +377,21 @@ class GenomicLayout:
 
         end = variant.trimmed_base1_end
         low, high, strand = self._span_offsets(contig, start, end)
-        existing = self.slice(low, high).materialize()
-        expected = ref if strand == "+" else reverse_complement(ref)
-        if validate_reference and existing.upper() != expected:
-            raise ValueError(
-                "Reference allele %r does not match realized layout %r "
-                "at %s:%d-%d" % (expected, existing, contig, start, end))
+        if validate_reference:
+            try:
+                existing = self.slice(low, high).materialize()
+            except SequenceUnavailable:
+                # Tier 0 can still realize the coordinate edit; it simply
+                # cannot validate an intronic reference allele without FASTA.
+                existing = None
+            if existing is not None:
+                expected = (
+                    ref if strand == "+" else reverse_complement(ref))
+                if existing.upper() != expected:
+                    raise ValueError(
+                        "Reference allele %r does not match realized layout "
+                        "%r at %s:%d-%d" % (
+                            expected, existing, contig, start, end))
         replacement = _point_replacement_segments(
             contig=contig,
             start=start,
@@ -373,6 +432,17 @@ class GenomicLayout:
 
         start = variant.affected_start
         end = variant.affected_end
+        covered = [
+            segment
+            for segment in self.segments
+            if segment.contig == variant.contig
+            and segment.origin_kind in ("reference", "alternate")]
+        if not covered:
+            return self
+        start = max(start, min(segment.start for segment in covered))
+        end = min(end, max(segment.end for segment in covered))
+        if start > end:
+            return self
         low, high, strand = self._span_offsets(variant.contig, start, end)
         affected = self.slice(low, high)
         if kind == "DEL":

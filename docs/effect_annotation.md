@@ -309,15 +309,16 @@ tracked in [#297][i297].
 
 ## Annotator selection
 
-Three annotators ship behind the `EffectAnnotator` protocol:
+Four annotators ship behind the `EffectAnnotator` protocol:
 
 | Annotator | Algorithm | Used for |
 |---|---|---|
 | `FastEffectAnnotator` | Offset arithmetic against the reference CDS | **Default** for SNVs / indels / MNVs |
 | `ProteinDiffEffectAnnotator` | Builds a `MutantTranscript`, translates, diffs against the reference protein | Opt-in; substrate for the `MutantTranscript` / splice-outcome / germline machinery |
 | `StructuralVariantAnnotator` | Reassembles SV outcomes (deletions, duplications, inversions, fusions, translocations) | Routed automatically when the variant is a `StructuralVariant` |
+| `RealizedEffectAnnotator` | Composes phase, splice choices, haplotype edits and SV layouts, then classifies mutant versus patient baseline | Experimental opt-in via `annotator="realized"` |
 
-All three emit the same `MutationEffect` hierarchy. `fast` is the
+All four emit the same `MutationEffect` hierarchy. `fast` is the
 default: it's the offset-based classifier varcode has shipped since
 2.0.0 and the most battle-tested path (as of 7.0.0, `fast` and
 `protein_diff` are fully reconciled on SNVs / indels / MNVs — see the
@@ -337,7 +338,18 @@ effects = variant.effects(annotator="protein_diff")
 # Scoped swap:
 with varcode.use_annotator("protein_diff"):
     effects = variant_collection.effects()
+
+# Experimental composable engine. The return value on each transcript is an
+# ordinary effect; inspect .candidates for alternative phase/splice products.
+effects = variant.effects(annotator="realized", germline=germline_context)
 ```
+
+The `realized` annotator keeps mechanism preference ordinal at tier 0; it does
+not present the built-in splice rule order as a calibrated probability.
+Canonical and exon-skip paths need only transcript annotation. A genome with
+reference FASTA additionally resolves intron retention and cryptic splice
+sites from the mutated haplotype. `predict_realized_effect` accepts several
+known-cis somatic variants when a caller needs their joint product.
 
 Third-party annotators (isovar, Exacto) register via the registry:
 
