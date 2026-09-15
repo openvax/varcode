@@ -15,6 +15,7 @@ from .data import ov_wustle_variants, db_snp_variants
 
 from tempfile import NamedTemporaryFile
 import pandas as pd
+import pytest
 
 
 def test_varcode_effects_script():
@@ -36,3 +37,13 @@ def test_varcode_effects_script():
         f.flush()
         combined_variants = pd.read_csv(f.name)
         assert len(combined_variants) == (len(ov_wustle_variants) + len(db_snp_variants))
+
+
+def test_varcode_genes_script_missing_maf_exits_cleanly(capsys):
+    with pytest.raises(SystemExit) as exc_info:
+        run_script(["--maf", "/nonexistent/x.maf"])
+    assert exc_info.value.code == 1
+    stderr = capsys.readouterr().err
+    assert "Traceback" not in stderr
+    assert ": error: " in stderr
+    assert "/nonexistent/x.maf" in stderr
