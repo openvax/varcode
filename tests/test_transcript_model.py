@@ -292,7 +292,10 @@ def test_cryptic_donor_is_realized_on_mutated_haplotype_both_strands(
     assert resolved[0][3] > 0
 
 
-def test_transcript_model_annotator_routes_bnd_through_verified_fusion_builder():
+def test_transcript_model_annotator_routes_bnd_through_verified_fusion_builder(monkeypatch):
+    import sys
+
+    monkeypatch.setitem(sys.modules, "varcode.annotators.structural_variant", None)
     genome = cached_release(95)
     otx1 = genome.transcript_by_id("ENST00000282549")
     variant = StructuralVariant(

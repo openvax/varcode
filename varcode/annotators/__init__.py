@@ -21,11 +21,9 @@ from typing import Protocol, runtime_checkable
 
 from .fast import FastEffectAnnotator
 from .protein_diff import ProteinDiffEffectAnnotator
-from .structural_variant import StructuralVariantAnnotator
 from ..realized_effects import RealizedEffectAnnotator
 from ..transcript_model import TranscriptModelEffectAnnotator
 from .registry import (
-    UnsupportedVariantError,
     get_annotator,
     get_default_annotator,
     register_annotator,
@@ -77,10 +75,8 @@ __all__ = [
     "EffectAnnotator",
     "FastEffectAnnotator",
     "ProteinDiffEffectAnnotator",
-    "StructuralVariantAnnotator",
     "RealizedEffectAnnotator",
     "TranscriptModelEffectAnnotator",
-    "UnsupportedVariantError",
     "get_annotator",
     "get_default_annotator",
     "register_annotator",

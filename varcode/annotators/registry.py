@@ -21,17 +21,7 @@ from contextlib import contextmanager
 
 from .fast import FastEffectAnnotator
 from .protein_diff import ProteinDiffEffectAnnotator
-from .structural_variant import StructuralVariantAnnotator
 from ..transcript_model import TranscriptModelEffectAnnotator
-
-
-class UnsupportedVariantError(ValueError):
-    """Legacy compatibility import; built-in annotators do not raise this.
-
-    Partial annotators should return ``NotImplemented`` instead. Public
-    prediction APIs convert that sentinel into an ``Unresolved`` effect.
-    """
-    pass
 
 
 _REGISTRY = {}
@@ -152,10 +142,9 @@ def use_annotator(name_or_instance):
                 _REGISTRY[name] = prior_registration
 
 
-# Register built-in annotators at import time.
+# Register the default and opt-in experiments. No input-dependent routing.
 register_annotator(FastEffectAnnotator())
 register_annotator(ProteinDiffEffectAnnotator())
-register_annotator(StructuralVariantAnnotator())
 register_annotator(TranscriptModelEffectAnnotator())
 # Backward-compatible selection; new results carry the canonical name.
 _REGISTRY["realized"] = _REGISTRY["transcript_model"]

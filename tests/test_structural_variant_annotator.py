@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for :class:`StructuralVariantAnnotator` (PR 10; #252).
+"""Structural-effect regression tests through the unified default.
 
 These cover the minimal dispatch shape — SV type + overlap pattern
 routed to the right effect class — and the ``MultiOutcomeEffect``
@@ -28,8 +28,8 @@ from pyensembl import cached_release
 
 from varcode import (
     EffectCandidate,
+    FastEffectAnnotator,
     StructuralVariant,
-    StructuralVariantAnnotator,
     get_annotator,
 )
 from varcode.effects import (
@@ -43,7 +43,7 @@ from varcode.effects import (
 )
 
 ensembl_grch38 = cached_release(81)
-_ANNOTATOR = StructuralVariantAnnotator()
+_ANNOTATOR = FastEffectAnnotator()
 
 CFTR_ID = "ENST00000003084"   # chr7, + strand, 1480 aa
 BRCA1_ID = "ENST00000357654"  # chr17, - strand
@@ -58,15 +58,15 @@ def _cftr():
 # --------------------------------------------------------------------
 
 
-def test_sv_annotator_registered_by_name():
-    annotator = get_annotator("structural_variant")
-    assert isinstance(annotator, StructuralVariantAnnotator)
+def test_default_annotator_registered_by_name():
+    assert isinstance(get_annotator("fast"), FastEffectAnnotator)
 
 
-def test_sv_only_annotator_declines_point_variants():
+def test_internal_structural_helper_declines_point_variants():
     from varcode import Variant
+    from varcode.effects.structural import predict_structural_variant_effect
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
-    assert _ANNOTATOR.annotate_on_transcript(variant, _cftr()) is NotImplemented
+    assert predict_structural_variant_effect(variant, _cftr()) is NotImplemented
 
 
 # --------------------------------------------------------------------
@@ -634,7 +634,7 @@ def test_retained_cdna_partitions_transcript_at_each_base():
     Walks every exon terminal base on CFTR (forward) and BRCA1
     (reverse) and asserts the partition.
     """
-    from varcode.annotators.structural_variant import _cdna_cut
+    from varcode.effects.structural import _cdna_cut
     for transcript in (
             _cftr(), ensembl_grch38.transcript_by_id(BRCA1_ID)):
         full_length = len(str(transcript.sequence))
@@ -722,7 +722,7 @@ def test_fusion_protein_is_none_when_5p_cds_past_breakpoint():
     retained cDNA, :func:`_translate_fused_cdna` returns None so the
     effect carries no fused-protein sequence (documented branch of
     #336)."""
-    from varcode.annotators.structural_variant import _translate_fused_cdna
+    from varcode.effects.structural import _translate_fused_cdna
     cftr = _cftr()
     cds_start = min(cftr.start_codon_spliced_offsets)
     # Simulate a fused cDNA where the retained 5p portion is shorter
@@ -1139,7 +1139,7 @@ def test_sv_breakpoint_in_intronic_splice_window_donor_side():
     assert ExonSkipping in splice_kinds
     # Sanity: the class used for synthesis was IntronicSpliceSite.
     # Inspect via the internal helper directly.
-    from varcode.annotators.structural_variant import (
+    from varcode.effects.structural import (
         _breakpoint_splice_window,
     )
     window = _breakpoint_splice_window(transcript, 117_504_367)
@@ -1154,7 +1154,7 @@ def test_sv_breakpoint_in_intronic_splice_window_acceptor_side():
     """Distance 3 bp on the acceptor side → IntronicSpliceSite (not
     SpliceAcceptor). Acceptor-side intronic window is tighter (only
     distance 3 is counted)."""
-    from varcode.annotators.structural_variant import (
+    from varcode.effects.structural import (
         _breakpoint_splice_window,
     )
     from varcode.effects import IntronicSpliceSite
@@ -1209,7 +1209,7 @@ def test_reverse_strand_splice_window_donor_side():
     A breakpoint at genomic 43124013 sits 4 bp transcript-3' of the
     exon (donor-side intronic window). The reverse-strand branch of
     ``best_before`` must flip the genomic inequality correctly."""
-    from varcode.annotators.structural_variant import (
+    from varcode.effects.structural import (
         _breakpoint_splice_window,
     )
     from varcode.effects import IntronicSpliceSite
@@ -1229,7 +1229,7 @@ def test_reverse_strand_splice_window_acceptor_side():
     """Acceptor -1 on a reverse-strand transcript: breakpoint at
     genomic exon.end + 1 = transcript-5' adjacent base. Must return
     :class:`SpliceAcceptor` with distance 1."""
-    from varcode.annotators.structural_variant import (
+    from varcode.effects.structural import (
         _breakpoint_splice_window,
     )
     from varcode.effects import SpliceAcceptor

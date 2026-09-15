@@ -8,6 +8,12 @@ germline-aware point-variant path. Both explicit and implicit selection must
 use that same routing. Keep the structural implementation in its own module.
 Do not promote the experimental transcript model or change its ranking.
 
+Structural prediction lives in `varcode.effects.structural` as plain internal
+helpers. The default and transcript model's fusion path call those helpers
+directly, not another annotator. The registry selects an explicitly requested
+implementation, never an implementation based on variant kind. There is no
+separate structural annotator or implicit fallback between annotators.
+
 ## Partial annotators
 
 The protocol requires only `name` and `annotate_on_transcript`. An annotator
@@ -23,10 +29,17 @@ experimental annotator declines. Actual exceptions retain the existing
 `raise_on_error` behavior; `None` is not a valid annotation result.
 
 `protein_diff` and `transcript_model` remain optional experimental implementations.
-The structural-only entry point remains available for compatibility. Remove
-the unused `supports` metadata; retain the exported `UnsupportedVariantError`
-as a compatibility import, not the new contract. Use a major version bump
-because capability metadata and scoped SV-selection behavior change.
+Varcode 9 removes the old structural annotator class/module/registry entry and
+`UnsupportedVariantError`. Structural callers use the default; partial plugins
+use the return-value contract above. Structural mutant transcripts retain their
+historical builder provenance (`structural_variant`); effect collections record
+the selected annotator, including `fast` or `transcript_model`. A stored builder
+label is not a selectable annotator name.
+
+Joint haplotype construction still occurs in `VariantCollection.effects()`
+outside the selected annotator. Moving that active behavior into the annotator
+is tracked separately in [#437](https://github.com/openvax/varcode/issues/437),
+not part of the structural-helper cleanup.
 
 ## Verification
 

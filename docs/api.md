@@ -91,10 +91,6 @@ Auto-generated from in-source docstrings via
 
 ::: varcode.ProteinDiffEffectAnnotator
 
-### `varcode.StructuralVariantAnnotator`
-
-::: varcode.StructuralVariantAnnotator
-
 ### Registry
 
 ::: varcode.register_annotator
@@ -233,7 +229,3 @@ the default. The former `realized` name and public imports remain aliases.
 ### `varcode.GenomeBuildMismatchError`
 
 ::: varcode.GenomeBuildMismatchError
-
-### `varcode.UnsupportedVariantError`
-
-::: varcode.UnsupportedVariantError
