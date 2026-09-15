@@ -140,10 +140,8 @@ def test_fast_annotator_annotator_matches_effect_on_transcript():
 
 
 # ====================================================================
-# UnsupportedVariantError is available as an exception class for the
-# protein-diff annotator to raise. No code throws it yet (no
-# annotator currently checks `.supports` at runtime), but downstream
-# code can already catch it.
+# UnsupportedVariantError (enforcement is tested in
+# test_annotator_supports.py)
 # ====================================================================
 
 

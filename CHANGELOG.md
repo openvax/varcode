@@ -1,5 +1,20 @@
 # Change Log
 
+## [v7.2.0](https://github.com/openvax/varcode/tree/v7.2.0)
+
+**Fixed**
+- `effects(annotator=...)` no longer gives a structural variant to a
+  point-variant annotator. `annotator="fast"` or `"protein_diff"` on an SV
+  used to run point-variant arithmetic on its placeholder `N>A` allele and
+  return wrong effects (a deletion spanning CFTR exons came back as
+  `ExonLoss` instead of `LargeDeletion`). An annotator is now only given
+  variants whose kind is in its `supports` set; anything else raises
+  `UnsupportedVariantError`, even with `raise_on_error=False`. This
+  applies to `VariantCollection.effects` too, so a collection containing
+  SVs can't be annotated with an explicit point annotator. Leaving
+  `annotator=None` still sends SVs to the `structural_variant` annotator.
+  Fixes #412.
+
 ## [v7.1.0](https://github.com/openvax/varcode/tree/v7.1.0) (2026-09-11)
 
 **Changed**

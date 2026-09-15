@@ -59,10 +59,12 @@ class EffectAnnotator(Protocol):
     * ``name`` — short identifier (e.g. ``"fast"``) used in the
       registry and in serialized provenance.
     * ``supports`` — set of variant-kind tags the annotator can
-      handle (e.g. ``{"snv", "indel"}``). Callers that hand the
-      annotator a variant outside this set get a clear
-      :class:`UnsupportedVariantError` rather than silently wrong
-      output.
+      handle: ``"snv"``, ``"indel"``, ``"mnv"``, or a structural
+      variant's ``sv_type``. ``Variant.effects`` and
+      ``VariantCollection.effects`` raise
+      :class:`UnsupportedVariantError` for a variant outside this
+      set. Calling ``annotate_on_transcript`` directly is not
+      checked.
     * :meth:`annotate_on_transcript` — the per-transcript entry
       point.
 

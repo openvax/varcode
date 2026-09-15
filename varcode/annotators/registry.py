@@ -43,6 +43,49 @@ class UnsupportedVariantError(ValueError):
     pass
 
 
+def variant_kind(variant):
+    """Return the ``supports`` tag that describes ``variant``.
+
+    A structural variant's kind is its ``sv_type`` (``"DEL"``,
+    ``"BND"``, ...). A point variant is ``"snv"``, ``"indel"``, or
+    ``"mnv"`` for anything else (multi-base and complex substitutions).
+    The structural check comes first because a
+    :class:`~varcode.StructuralVariant` carries a placeholder
+    ``ref="N"``/``alt="A"``, which would otherwise read as an SNV.
+    """
+    if getattr(variant, "is_structural", False):
+        return variant.sv_type
+    if variant.is_snv:
+        return "snv"
+    if variant.is_indel:
+        return "indel"
+    return "mnv"
+
+
+def check_annotator_supports(annotator, variant):
+    """Raise :class:`UnsupportedVariantError` if ``annotator`` can't
+    handle ``variant``.
+
+    An annotator without a ``supports`` attribute is not checked.
+    """
+    supports = getattr(annotator, "supports", None)
+    if supports is None:
+        return
+    kind = variant_kind(variant)
+    if kind in supports:
+        return
+    message = "Annotator %r does not support %s variants (supports %s): %s." % (
+        getattr(annotator, "name", annotator),
+        kind,
+        ", ".join(sorted(supports)),
+        variant)
+    if getattr(variant, "is_structural", False):
+        message += (
+            " Leave annotator=None to annotate structural variants with "
+            "the 'structural_variant' annotator.")
+    raise UnsupportedVariantError(message)
+
+
 _REGISTRY = {}
 _DEFAULT_NAME = "fast"
 

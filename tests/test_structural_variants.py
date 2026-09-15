@@ -569,14 +569,13 @@ def test_sv_effect_on_transcript_routes_via_sv_annotator():
         "and produce a StructuralVariantEffect — got %s" % type(effect).__name__)
 
 
-def test_vcf_loader_sv_explicit_protein_diff_passes_through():
-    """The dispatch only kicks in when ``annotator is None``. An
-    explicit override (``annotator="protein_diff"``, e.g. for parity
-    testing the SV against the point-variant path) must bypass the
-    SV-routing shim. We don't assert what comes back — just that
-    the routing didn't quietly substitute the SV annotator."""
+def test_vcf_loader_sv_explicit_protein_diff_raises():
+    """An explicit point-variant annotator can't annotate an SV. It
+    would run point-variant arithmetic on the placeholder REF/ALT and
+    return wrong effects, so it raises instead, even with
+    ``raise_on_error=False`` (#412)."""
     from pyensembl import cached_release
-    from varcode.effects.effect_classes import StructuralVariantEffect
+    from varcode import UnsupportedVariantError
     ensembl_grch38 = cached_release(81)
     cftr = ensembl_grch38.transcript_by_id("ENST00000003084")
     body = (
@@ -591,22 +590,10 @@ def test_vcf_loader_sv_explicit_protein_diff_passes_through():
     try:
         vc = load_vcf(
             path, genome=ensembl_grch38, parse_structural_variants=True)
-        effects = vc.effects(
-            annotator="protein_diff", raise_on_error=False)
+        with pytest.raises(UnsupportedVariantError):
+            vc.effects(annotator="protein_diff", raise_on_error=False)
     finally:
         os.unlink(path)
-    # protein_diff doesn't understand SVs; on the placeholder REF/ALT
-    # it should produce something, but specifically *not* a typed
-    # StructuralVariantEffect — that would mean the dispatch fired
-    # despite the explicit override.
-    sv_effects = [e for e in effects if isinstance(e, StructuralVariantEffect)]
-    assert len(sv_effects) == 0, (
-        "Explicit annotator='protein_diff' on an SV must bypass the "
-        "SV-routing shim; got %d StructuralVariantEffect instance(s)."
-        % len(sv_effects))
-    assert effects.annotator == "protein_diff", (
-        "Collection-level annotator metadata should reflect the "
-        "explicit override, not the SV annotator.")
 
 
 # --------------------------------------------------------------------

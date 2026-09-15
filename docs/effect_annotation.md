@@ -349,6 +349,14 @@ variant.effects(annotator=my_annotator.name)
 Any object exposing `name` / `supports` / `version` /
 `annotate_on_transcript` satisfies the protocol.
 
+`supports` is enforced. `fast` and `protein_diff` support `snv`,
+`indel` and `mnv`; `structural_variant` supports the SV types (`DEL`,
+`DUP`, `INV`, `INS`, `CNV`, `BND`). Passing a variant to an annotator
+that doesn't support its kind raises `UnsupportedVariantError`, so
+`effects(annotator="fast")` on a collection containing SVs fails
+instead of returning point-variant effects for them. Leave
+`annotator=None` to have SVs routed to `structural_variant`.
+
 ## Provenance
 
 Every `EffectCollection` produced by `predict_variant_effects`

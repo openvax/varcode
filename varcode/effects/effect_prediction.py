@@ -74,8 +74,12 @@ def predict_variant_effects(
         Which registered :class:`EffectAnnotator` to use per-transcript.
         ``None`` (default) picks up whatever is currently set via
         :func:`set_default_annotator` / :func:`use_annotator` — today
-        that's ``"fast"``. A string is looked up in the registry;
-        an instance is used directly. See openvax/varcode#271.
+        that's ``"fast"``, with structural variants sent to
+        ``"structural_variant"``. A string is looked up in the registry;
+        an instance is used directly. Raises
+        :class:`~varcode.UnsupportedVariantError`, whatever
+        ``raise_on_error`` says, if the annotator's ``supports`` set
+        doesn't include the variant's kind.
 
     germline : GermlineContext or None
         Optional patient germline context. When non-empty, every per-
@@ -98,7 +102,11 @@ def predict_variant_effects(
     """
     # Lazy import — varcode.annotators depends on varcode.effects at
     # load time, so we defer to break the cycle.
-    from ..annotators.registry import get_annotator, resolve_annotator
+    from ..annotators.registry import (
+        check_annotator_supports,
+        get_annotator,
+        resolve_annotator,
+    )
     annotator_instance = resolve_annotator(annotator)
     # Germline-aware helper, lazily imported because varcode.germline
     # imports from varcode.effects.classify (cycle if unconditional).
@@ -107,17 +115,14 @@ def predict_variant_effects(
     # its inputs.
     if germline:
         from ..germline import predict_germline_aware_effect
-    # Kind dispatch for structural variants: ``fast``/``protein_diff``
-    # declare ``supports = {"snv","indel","mnv"}``, but that flag is
-    # metadata — nobody dispatches on it. Without this override an SV
-    # silently flows to the point-variant annotator, which annotates
-    # the placeholder ``ref="N"/alt="A"`` and emits nonsense. When
-    # the caller didn't explicitly pick an annotator, route SVs to
-    # the SV annotator regardless of the default. Explicit overrides
-    # (annotator="protein_diff" on an SV, e.g. for parity testing)
-    # still pass through. See #264.
+    # With no annotator given, structural variants go to the SV
+    # annotator whatever the default is. Any annotator that doesn't
+    # list the variant's kind in ``supports`` is refused: a point
+    # annotator given an SV runs offset arithmetic on its placeholder
+    # ref/alt and returns plausible but wrong effects.
     if annotator is None and getattr(variant, "is_structural", False):
         annotator_instance = get_annotator("structural_variant")
+    check_annotator_supports(annotator_instance, variant)
     annotator_name = getattr(annotator_instance, "name", None)
     annotator_version = getattr(annotator_instance, "version", None)
     # if this variant isn't overlapping any genes, return a
