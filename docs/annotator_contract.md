@@ -6,7 +6,7 @@ Keep `fast` as the compatible registry name for the built-in default. It owns
 point-variant prediction, structural-variant routing, and the existing
 germline-aware point-variant path. Both explicit and implicit selection must
 use that same routing. Keep the structural implementation in its own module.
-Do not promote the experimental realized-effect model or change its ranking.
+Do not promote the experimental transcript model or change its ranking.
 
 ## Partial annotators
 
@@ -22,7 +22,7 @@ selected annotator's provenance. Never substitute another annotator after an
 experimental annotator declines. Actual exceptions retain the existing
 `raise_on_error` behavior; `None` is not a valid annotation result.
 
-`protein_diff` and `realized` remain optional experimental implementations.
+`protein_diff` and `transcript_model` remain optional experimental implementations.
 The structural-only entry point remains available for compatibility. Remove
 the unused `supports` metadata; retain the exported `UnsupportedVariantError`
 as a compatibility import, not the new contract. Use a major version bump

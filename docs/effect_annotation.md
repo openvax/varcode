@@ -318,7 +318,7 @@ selected. Optional annotators may implement only part of the problem:
 | `FastEffectAnnotator` | Point-edit prediction, internal SV routing, and patient-baseline point-edit comparison | **Default** |
 | `ProteinDiffEffectAnnotator` | Builds a `MutantTranscript`, translates, diffs against the reference protein | Experimental opt-in for point edits |
 | `StructuralVariantAnnotator` | Reassembles SV outcomes (deletions, duplications, inversions, fusions, translocations) | Internal default implementation; structural-only entry point retained for compatibility |
-| `RealizedEffectAnnotator` | Composes phase, splice choices, haplotype edits and SV layouts, then classifies mutant versus patient baseline | Experimental opt-in via `annotator="realized"` |
+| `TranscriptModelEffectAnnotator` | Composes phase, splice choices, haplotype edits and SV layouts, then classifies mutant versus patient baseline | Experimental opt-in via `annotator="transcript_model"` |
 
 All emit the same `MutationEffect` hierarchy. Protein comparison remains a
 shared implementation helper used by splice, germline, and realized-product
@@ -338,15 +338,20 @@ with varcode.use_annotator("protein_diff"):
 
 # Experimental composable engine. The return value on each transcript is an
 # ordinary effect; inspect .candidates for alternative phase/splice products.
-effects = variant.effects(annotator="realized", germline=germline_context)
+effects = variant.effects(annotator="transcript_model", germline=germline_context)
 ```
 
-The `realized` annotator keeps mechanism preference ordinal at tier 0; it does
+The `transcript_model` annotator keeps mechanism preference ordinal at tier 0; it does
 not present the built-in splice rule order as a calibrated probability.
 Canonical and exon-skip paths need only transcript annotation. A genome with
 reference FASTA additionally resolves intron retention and cryptic splice
-sites from the mutated haplotype. `predict_realized_effect` accepts several
+sites from the mutated haplotype. `predict_transcript_model_effect` accepts several
 known-cis somatic variants when a caller needs their joint product.
+
+The former `realized` selection, `RealizedEffectAnnotator` class and
+`predict_realized_effect` function remain compatibility aliases. New results
+record `transcript_model` as the annotator name. This is a naming change only:
+the transcript model remains experimental and `fast` remains the default.
 
 Third-party annotators (isovar, Exacto) register via the registry:
 
@@ -383,7 +388,7 @@ phase_resolver=None)` method has the same return contract. Without that method,
 nonempty germline context produces `Unresolved` rather than being ignored or
 sent to another implementation. The default retains the existing germline
 point-edit path; SV plus germline composition remains experimental in
-`realized`. Empty context uses `annotate_on_transcript` as usual.
+`transcript_model`. Empty context uses `annotate_on_transcript` as usual.
 
 `variant.effect_on_transcript(transcript, annotator=..., germline=...)` and
 `predict_variant_effect_on_transcript` now use the same selection rules as

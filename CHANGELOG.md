@@ -1,5 +1,17 @@
 # Change Log
 
+## [v8.0.1](https://github.com/openvax/varcode/tree/v8.0.1) (2026-09-15)
+
+**Changed**
+- Renamed the experimental `realized` annotator to `transcript_model`, with
+  `TranscriptModelEffectAnnotator` and `predict_transcript_model_effect` in
+  `varcode.transcript_model`. The old registry name, class, function and module
+  imports remain compatibility aliases. New annotation provenance uses
+  `transcript_model`, including when selected through the old alias.
+- The transcript model remains experimental and opt-in. The `fast` default,
+  biological model, candidate ordering and unsupported-input behavior are
+  unchanged.
+
 ## [v8.0.0](https://github.com/openvax/varcode/tree/v8.0.0) (2026-09-15)
 
 **Changed**

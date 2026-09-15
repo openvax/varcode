@@ -490,7 +490,7 @@ def classify_products(variant, transcript, baseline, mutant):
         reference_transcript=transcript,
         cdna_sequence=mutant.cdna_sequence,
         mutant_protein_sequence=mutant.protein_sequence,
-        annotator_name="realized")
+        annotator_name="transcript_model")
     return classify_from_protein_diff(
         variant=variant,
         transcript=transcript,

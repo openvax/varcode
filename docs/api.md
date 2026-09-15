@@ -155,6 +155,19 @@ Auto-generated from in-source docstrings via
 
 ::: varcode.make_rna_outcome
 
+## Experimental transcript model
+
+This annotator is opt-in with `annotator="transcript_model"`; `fast` remains
+the default. The former `realized` name and public imports remain aliases.
+
+### `varcode.TranscriptModelEffectAnnotator`
+
+::: varcode.TranscriptModelEffectAnnotator
+
+### `varcode.predict_transcript_model_effect`
+
+::: varcode.predict_transcript_model_effect
+
 ## Germline-aware annotation
 
 ### `varcode.GermlineContext`
