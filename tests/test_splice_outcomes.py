@@ -403,6 +403,58 @@ def _synthetic_cryptic_donor_provider(motif_offset=65, motif="CAGGTAAGT"):
     return provider
 
 
+_CFTR_DONOR_SCAN_START = 117531064
+_CFTR_DONOR_SCAN_SEQUENCE = (
+    "CACATTGGAATGCAGATGAGAATAGCTATGTTTAGTTTGATTTATAAGAAGGTAATACTTCCTT"
+    "GCACAGGCCCCATGGCACATATATTCTGTATCGTACA"
+)
+_CFTR_ACCEPTOR_SCAN_START = 117534226
+_CFTR_ACCEPTOR_SCAN_SEQUENCE = (
+    "TATTTGTATTTTGTTTGTTGAAATTATCTAACTTTCCATTTTTCTTTTAGACTTTAAAGCTGTCA"
+    "AGCCGTGTTCTAGATAAAATAAGTATTGGACAACTT"
+)
+_BRCA1_DONOR_SCAN_START = 43082354
+_BRCA1_DONOR_SCAN_SEQUENCE = (
+    "GAAGGAAAGAATTTTGCTTAAGATATCAGTGTTTGGCCAACAATACACACCTTTTTCTGATGTGCT"
+    "TTGTTCTGGATTTCGCAGGTCCTCAAGGGCAGAAG"
+)
+_BRCA1_ACCEPTOR_SCAN_START = 43082525
+_BRCA1_ACCEPTOR_SCAN_SEQUENCE = (
+    "AGCCATTTCCTGCTGGAGCTTTATCAGGTTATGTTGCATGGTATCCCTCTGCTTCAAAAACGATAA"
+    "ATGGCACCAAGAAAATGAAATACTTTGAGAAGCTT"
+)
+
+
+def _cftr_donor_genomic_provider(contig, start, end):
+    """Small deterministic GRCh38 provider around CFTR exon 4's donor."""
+    if (_CFTR_DONOR_SCAN_START <= start
+            and end < _CFTR_DONOR_SCAN_START + len(
+                _CFTR_DONOR_SCAN_SEQUENCE)):
+        i = start - _CFTR_DONOR_SCAN_START
+        return _CFTR_DONOR_SCAN_SEQUENCE[i:i + end - start + 1]
+    # Intron-retention construction asks for the entire adjacent intron.
+    # Preserve the canonical donor +1 reference base for mutation tests.
+    seq = ["A"] * (end - start + 1)
+    donor_plus_one = 117531115
+    if start <= donor_plus_one <= end:
+        seq[donor_plus_one - start] = "G"
+    return "".join(seq)
+
+
+def _splice_boundary_genomic_provider(contig, start, end):
+    windows = (
+        ("7", _CFTR_ACCEPTOR_SCAN_START, _CFTR_ACCEPTOR_SCAN_SEQUENCE),
+        ("17", _BRCA1_DONOR_SCAN_START, _BRCA1_DONOR_SCAN_SEQUENCE),
+        ("17", _BRCA1_ACCEPTOR_SCAN_START, _BRCA1_ACCEPTOR_SCAN_SEQUENCE),
+    )
+    for window_contig, window_start, sequence in windows:
+        if (contig == window_contig and window_start <= start
+                and end < window_start + len(sequence)):
+            i = start - window_start
+            return sequence[i:i + end - start + 1]
+    return "A" * (end - start + 1)
+
+
 def test_cryptic_donor_with_provider_populates_protein_vocab():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
@@ -416,6 +468,98 @@ def test_cryptic_donor_with_provider_populates_protein_vocab():
     assert cryptic.effect.cryptic_genomic_position is not None
     assert cryptic.effect.exon_length_delta is not None
     assert cryptic.effect.mutant_transcript is not None
+
+
+def test_cryptic_donor_scores_mutated_haplotype_not_destroyed_site():
+    """A destroyed canonical donor cannot nominate itself as cryptic (#422)."""
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    splice_set = enumerate_splice_outcomes(
+        variant.effect_on_transcript(transcript),
+        genomic_sequence=_cftr_donor_genomic_provider)
+    cryptic = _candidate_of_type(splice_set, CrypticDonor).effect
+
+    assert cryptic.cryptic_genomic_position == 117531092
+    assert cryptic.cryptic_genomic_position != transcript.exons[3].end
+    assert cryptic.exon_length_delta == -22
+    assert len(cryptic.mutant_protein_sequence) == 157
+
+
+@pytest.mark.parametrize(
+    "transcript_id,variant_args,mechanism_cls,canonical_pos,cryptic_pos,delta",
+    [
+        (
+            CFTR_TRANSCRIPT_ID,
+            ("7", 117534274, "A", "G"),
+            CrypticAcceptor,
+            117534276,
+            117534304,
+            -28,
+        ),
+        (
+            BRCA1_TRANSCRIPT_ID,
+            ("17", 43082403, "C", "T"),
+            CrypticDonor,
+            43082404,
+            43082402,
+            2,
+        ),
+        (
+            BRCA1_TRANSCRIPT_ID,
+            ("17", 43082576, "C", "A"),
+            CrypticAcceptor,
+            43082575,
+            43082572,
+            -3,
+        ),
+    ],
+)
+def test_cryptic_boundary_coordinates_across_side_and_strand(
+        transcript_id, variant_args, mechanism_cls, canonical_pos,
+        cryptic_pos, delta):
+    transcript = ensembl_grch38.transcript_by_id(transcript_id)
+    variant = Variant(*variant_args, ensembl_grch38)
+    splice_set = enumerate_splice_outcomes(
+        variant.effect_on_transcript(transcript),
+        genomic_sequence=_splice_boundary_genomic_provider)
+    cryptic = _candidate_of_type(splice_set, mechanism_cls).effect
+
+    assert cryptic.cryptic_genomic_position == cryptic_pos
+    assert cryptic.cryptic_genomic_position != canonical_pos
+    assert cryptic.exon_length_delta == delta
+
+
+def test_resolved_splice_mechanisms_keep_originating_exonic_indel():
+    """Mechanism realization and the exonic allele happen on one molecule."""
+    variant = Variant("7", 117531112, "AA", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    splice_set = enumerate_splice_outcomes(
+        variant.effect_on_transcript(transcript),
+        genomic_sequence=_cftr_donor_genomic_provider)
+
+    cryptic = _candidate_of_type(splice_set, CrypticDonor).effect
+    assert cryptic.cryptic_genomic_position == 117531092
+    assert cryptic.exon_length_delta == -22
+    assert len(cryptic.mutant_protein_sequence) == 157
+
+    retention = _candidate_of_type(splice_set, IntronRetention).effect
+    assert len(retention.mutant_transcript.edits) == 2
+    assert any(edit.is_deletion for edit in retention.mutant_transcript.edits)
+    intron_length = 117534275 - 117531115 + 1
+    assert len(retention.mutant_transcript.cdna_sequence) == (
+        len(str(transcript.sequence)) + intron_length - 1)
+
+
+def test_intron_retention_applies_intronic_splice_variant_to_intron():
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    splice_set = enumerate_splice_outcomes(
+        variant.effect_on_transcript(transcript),
+        genomic_sequence=_cftr_donor_genomic_provider)
+    retention = _candidate_of_type(splice_set, IntronRetention).effect
+
+    assert len(retention.mutant_transcript.edits) == 1
+    assert retention.mutant_transcript.edits[0].alt_bases.startswith("A")
 
 
 # --------------------------------------------------------------------

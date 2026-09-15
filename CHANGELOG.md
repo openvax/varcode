@@ -1,5 +1,16 @@
 # Change Log
 
+## [v7.1.2](https://github.com/openvax/varcode/tree/v7.1.2) (2026-09-15)
+
+**Fixed**
+- Cryptic splice-site scans now score the mutated allele and use one
+  interbase boundary convention across donors, acceptors, and both strands.
+  A destroyed canonical donor can no longer nominate itself as a cryptic
+  replacement.
+- FASTA-backed cryptic-splice and intron-retention outcomes now realize the
+  originating exonic or intronic allele on the same mutant transcript instead
+  of constructing the splice mechanism from reference sequence alone.
+
 ## [v7.1.1](https://github.com/openvax/varcode/tree/v7.1.1) (2026-09-14)
 
 **Fixed**
