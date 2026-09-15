@@ -181,3 +181,23 @@ def test_ordering_uses_ordinal_rank_when_scores_are_uncalibrated():
 
     assert ordered[0].effect is low_priority
     assert ordered[0].probability is None
+
+
+def test_ordering_prefers_fewer_cis_variants_after_rank_and_priority():
+    baseline = product("ABCDEFG")
+    outcomes = (
+        ClassifiedOutcome(
+            EffectHypothesis(
+                phase=(("g", "cis"),), enumeration_index=0),
+            effect("cis"), baseline, product("ABCDEX"), 3),
+        ClassifiedOutcome(
+            EffectHypothesis(
+                phase=(("g", "trans"),), enumeration_index=1),
+            effect("reference-like"), baseline, product("ABCDEY"), 3),
+    )
+    candidates = merge_classified_outcomes(outcomes)
+
+    ordered = order_realized_candidates(candidates, lambda value: 1)
+
+    assert [type(candidate.effect).__name__ for candidate in ordered] == [
+        "reference-like", "cis"]

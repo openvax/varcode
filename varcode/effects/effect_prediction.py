@@ -158,14 +158,21 @@ def predict_variant_effects(
                     # into a PhaseCandidateSet when phase is
                     # unknown. Empty context delegates to the
                     # annotator unchanged. See #268.
-                    annotate = (
-                        annotator_instance.annotate_on_transcript
-                        if not germline else
-                        lambda v, t: predict_germline_aware_effect(
+                    if germline and hasattr(
+                            annotator_instance, "annotate_with_context"):
+                        annotate = lambda v, t: (
+                            annotator_instance.annotate_with_context(
+                                v, t,
+                                germline_ctx=germline,
+                                phase_resolver=phase_resolver))
+                    elif germline:
+                        annotate = lambda v, t: predict_germline_aware_effect(
                             v, t,
                             germline_ctx=germline,
                             annotator=annotator_instance,
-                            phase_resolver=phase_resolver))
+                            phase_resolver=phase_resolver)
+                    else:
+                        annotate = annotator_instance.annotate_on_transcript
                     if raise_on_error:
                         effect = annotate(variant, transcript)
                     else:

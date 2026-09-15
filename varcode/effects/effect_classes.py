@@ -296,6 +296,25 @@ class Failure(TranscriptMutationEffect):
     pass
 
 
+class Unresolved(TranscriptMutationEffect):
+    """A biologically explicit hypothesis whose sequence is unavailable.
+
+    Unlike :class:`Failure`, this is not an annotation error.  The mechanism
+    is known (for example intron retention), but completing the product needs
+    genomic sequence or an observed RNA assembly that the caller did not
+    supply.
+    """
+
+    def __init__(self, variant, transcript, mechanism, reason=None):
+        TranscriptMutationEffect.__init__(self, variant, transcript)
+        self.mechanism = mechanism
+        self.reason = reason
+
+    @property
+    def short_description(self):
+        return "unresolved-%s" % self.mechanism.replace("_", "-")
+
+
 class NoncodingTranscript(TranscriptMutationEffect):
     """
     Any mutation to a transcript with a non-coding biotype
@@ -1397,6 +1416,12 @@ class StructuralVariantEffect(TranscriptMutationEffect, MultiOutcomeEffect):
         # annotator re-sources them as ``"varcode_splice"`` and
         # enriches evidence with ``sv_type`` before attaching.
         self._splice_candidates = ()
+
+    @property
+    def mutant_protein_sequence(self):
+        """Protein carried by the realized structural transcript, if any."""
+        return getattr(
+            self.mutant_transcript, "mutant_protein_sequence", None)
 
     @property
     def candidates(self):

@@ -210,7 +210,22 @@ def _effect_identity(effect):
         getattr(effect, "aa_ref", None),
         getattr(effect, "aa_alt", None),
         getattr(effect, "splice_signal", None),
+        getattr(effect, "mechanism", None),
     )
+
+
+def _phase_identity(phase):
+    """Hashable phase provenance even for duck-typed test variants."""
+    return tuple((
+        (
+            getattr(variant, "contig", None),
+            getattr(variant, "start", getattr(
+                variant, "trimmed_base1_start", None)),
+            getattr(variant, "ref", getattr(variant, "trimmed_ref", None)),
+            getattr(variant, "alt", getattr(variant, "trimmed_alt", None)),
+        ),
+        state,
+    ) for variant, state in phase)
 
 
 @dataclass(frozen=True)
@@ -226,7 +241,7 @@ class ClassifiedOutcome:
 
     def merge_key(self, protein_flank=30, cdna_flank=90):
         """Identity of the comparison, not merely the mutant product."""
-        return (
+        key = (
             _effect_identity(self.effect),
             self.baseline.local_protein(self.change_aa_offset, protein_flank),
             self.mutant.local_protein(self.change_aa_offset, protein_flank),
@@ -235,6 +250,10 @@ class ClassifiedOutcome:
             self.baseline.junction_signature,
             self.mutant.junction_signature,
         )
+        if type(self.effect).__name__ == "Unresolved":
+            # Unknown products cannot prove equivalence across phase.
+            key += (_phase_identity(self.hypothesis.phase),)
+        return key
 
 
 @dataclass(frozen=True)
@@ -251,6 +270,13 @@ class RealizedEffectCandidate:
     @property
     def hypotheses(self):
         return tuple(outcome.hypothesis for outcome in self.outcomes)
+
+    @property
+    def n_cis(self):
+        """Fewest cis germline alleles among merged hypotheses."""
+        return min(
+            sum(state == "cis" for _, state in hypothesis.phase)
+            for hypothesis in self.hypotheses)
 
 
 def merge_classified_outcomes(outcomes, protein_flank=30, cdna_flank=90):
@@ -313,6 +339,7 @@ def order_realized_candidates(candidates, effect_priority_fn):
             probability_key,
             candidate.ordinal_key,
             -effect_priority_fn(candidate.effect),
+            candidate.n_cis,
             candidate.first_enumeration_index,
         )
 

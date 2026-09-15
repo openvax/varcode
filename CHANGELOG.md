@@ -1,5 +1,34 @@
 # Change Log
 
+## [v7.3.0](https://github.com/openvax/varcode/tree/v7.3.0) (2026-09-15)
+
+**Added**
+- Added the opt-in `realized` effect annotator and
+  `predict_realized_effect`. It composes unknown germline phase, splice-site
+  choices, point variants and local structural variants on one genomic
+  layout, realizes the patient baseline and mutant product, classifies their
+  protein difference, merges identical comparisons, and returns an ordinary
+  top effect with ordered alternatives in `effect.candidates`.
+- Added graph-native exon projection and splicing on forward and reverse
+  strands. Canonical and exon-skip products resolve without a FASTA; with
+  genomic sequence, intron-retention and cryptic-site products are translated
+  from the mutated haplotype. Sequence-dependent tier-0 branches are reported
+  as `Unresolved`.
+- Added BND support to the realized annotator through the independently
+  validated fusion assembler, including translated cross-gene products.
+
+**Fixed**
+- Splice choices whose required exon was removed by another choice are no
+  longer enumerated, including the impossible combination of retaining an
+  intron while skipping the exon that terminates it.
+- The 64-hypothesis safety limit now applies to the combined phase × splice
+  product instead of separately to each phase branch.
+- Exonic alleles excluded from a realized mRNA are reported as `Silent` with
+  `excluded_from_mrna=True`, rather than being mislabeled as genomic
+  `Intronic` variants.
+- Structural effects now expose the protein on their realized
+  `mutant_transcript` through `effect.mutant_protein_sequence`.
+
 ## [v7.2.0](https://github.com/openvax/varcode/tree/v7.2.0) (2026-09-15)
 
 **Added**
