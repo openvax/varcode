@@ -203,16 +203,16 @@ def test_germline_helper_preserves_a_subclass_refusal(point_variant, transcript)
 
 
 @pytest.mark.parametrize("with_context", [False, True])
-def test_realized_declines_unresolved_cnv_direction(transcript, point_variant, with_context):
+def test_transcript_model_declines_unresolved_cnv_direction(transcript, point_variant, with_context):
     context = GermlineContext.from_variants([point_variant]) if with_context else None
     result = structural_variant("CNV").effect_on_transcript(
-        transcript, annotator="realized", germline=context)
-    assert_unsupported(result, "realized")
+        transcript, annotator="transcript_model", germline=context)
+    assert_unsupported(result, "transcript_model")
 
 
-def test_realized_reports_missing_insertion_sequence(transcript):
+def test_transcript_model_reports_missing_insertion_sequence(transcript):
     result = structural_variant("INS").effect_on_transcript(
-        transcript, annotator="realized")
+        transcript, annotator="transcript_model")
     assert isinstance(result, Unresolved)
     assert result.mechanism == "sequence_unavailable"
     assert "alt_assembly" in result.reason
