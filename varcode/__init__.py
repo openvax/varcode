@@ -16,6 +16,7 @@ from .annotators import (
     FastEffectAnnotator,
     ProteinDiffEffectAnnotator,
     RealizedEffectAnnotator,
+    TranscriptModelEffectAnnotator,
     StructuralVariantAnnotator,
     UnsupportedVariantError,
     get_annotator,
@@ -70,6 +71,7 @@ from .rna_evidence import (
     make_rna_outcome,
 )
 from .realized_effects import predict_realized_effect
+from .transcript_model import predict_transcript_model_effect
 from .splice_outcomes import (
     SpliceCandidateRNAEvidence,
     SpliceOutcomeSet,
@@ -147,6 +149,7 @@ __all__ = [
     "EffectCandidate",
     "candidates_from_effects",
     "predict_realized_effect",
+    "predict_transcript_model_effect",
 
     # Structural variants (openvax/varcode#252 / #264)
     "StructuralVariant",
@@ -178,6 +181,7 @@ __all__ = [
     "FastEffectAnnotator",
     "ProteinDiffEffectAnnotator",
     "RealizedEffectAnnotator",
+    "TranscriptModelEffectAnnotator",
     "StructuralVariantAnnotator",
     "UnsupportedVariantError",
     "get_annotator",

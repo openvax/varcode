@@ -54,7 +54,7 @@ class FastEffectAnnotator:
             self, variant, transcript, germline_ctx, phase_resolver=None):
         """Use the established patient-baseline path for point edits.
 
-        Structural haplotype composition remains experimental in ``realized``.
+        Structural haplotype composition remains experimental in ``transcript_model``.
         Do not send an SV's placeholder alleles to the point-edit builder.
         """
         if getattr(variant, "is_structural", False):

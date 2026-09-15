@@ -66,7 +66,6 @@ def test_fast_annotator_annotator_is_registered():
 def test_default_annotator_matches_active_configuration(request):
     configured = request.config.getoption("--annotator") or "fast"
     default = get_default_annotator()
-    assert default.name == configured
     assert default is get_annotator(configured)
 
 
