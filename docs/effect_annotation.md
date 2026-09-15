@@ -309,28 +309,25 @@ tracked in [#297][i297].
 
 ## Annotator selection
 
-Four annotators ship behind the `EffectAnnotator` protocol:
+There is one built-in default, registered as `fast` for compatibility. It
+handles both point variants and rearrangements, including when explicitly
+selected. Optional annotators may implement only part of the problem:
 
 | Annotator | Algorithm | Used for |
 |---|---|---|
-| `FastEffectAnnotator` | Offset arithmetic against the reference CDS | **Default** for SNVs / indels / MNVs |
-| `ProteinDiffEffectAnnotator` | Builds a `MutantTranscript`, translates, diffs against the reference protein | Opt-in; substrate for the `MutantTranscript` / splice-outcome / germline machinery |
-| `StructuralVariantAnnotator` | Reassembles SV outcomes (deletions, duplications, inversions, fusions, translocations) | Routed automatically when the variant is a `StructuralVariant` |
+| `FastEffectAnnotator` | Point-edit prediction, internal SV routing, and patient-baseline point-edit comparison | **Default** |
+| `ProteinDiffEffectAnnotator` | Builds a `MutantTranscript`, translates, diffs against the reference protein | Experimental opt-in for point edits |
+| `StructuralVariantAnnotator` | Reassembles SV outcomes (deletions, duplications, inversions, fusions, translocations) | Internal default implementation; structural-only entry point retained for compatibility |
 | `RealizedEffectAnnotator` | Composes phase, splice choices, haplotype edits and SV layouts, then classifies mutant versus patient baseline | Experimental opt-in via `annotator="realized"` |
 
-All four emit the same `MutationEffect` hierarchy. `fast` is the
-default: it's the offset-based classifier varcode has shipped since
-2.0.0 and the most battle-tested path (as of 7.0.0, `fast` and
-`protein_diff` are fully reconciled on SNVs / indels / MNVs — see the
-parity and divergence suites). `protein_diff` classifies from a
-translated protein diff, is self-consistent by construction and
-HGVS-canonical, and is the substrate the splice-outcome and
-germline-aware machinery builds on. The SV annotator dispatches on
-`variant.is_structural` and isn't user-selectable for point variants.
+All emit the same `MutationEffect` hierarchy. Protein comparison remains a
+shared implementation helper used by splice, germline, and realized-product
+classification; those paths do not require selecting `protein_diff`.
 
 ```python
-# Default (fast for point variants, structural_variant for SVs):
+# One default for both point variants and SVs:
 effects = variant.effects()
+effects = variant.effects(annotator="fast")  # same routing
 
 # Opt into the protein-diff path:
 effects = variant.effects(annotator="protein_diff")
@@ -358,8 +355,39 @@ varcode.register_annotator(my_annotator)
 variant.effects(annotator=my_annotator.name)
 ```
 
-Any object exposing `name` / `supports` / `version` /
-`annotate_on_transcript` satisfies the protocol.
+The protocol requires only `name` and `annotate_on_transcript`; `version` is
+optional provenance. Return a `MutationEffect` when a prediction is available
+or Python's `NotImplemented` singleton when this particular input is outside
+the implementation. No `supports` list is required:
+
+```python
+class MyExperiment:
+    name = "my_experiment"
+
+    def annotate_on_transcript(self, variant, transcript):
+        prediction = my_model.predict(variant, transcript)
+        if prediction is None:
+            return NotImplemented
+        return prediction  # a MutationEffect
+```
+
+Public APIs turn `NotImplemented` into
+`Unresolved(mechanism="unsupported_annotation", reason=...)`, preserving the
+selected annotator's provenance. They do not silently substitute the default.
+For example, selecting `protein_diff` for an SV returns `Unresolved`, even
+inside `use_annotator("protein_diff")`. `None` is a plugin error, and exceptions
+retain the usual `raise_on_error` behavior. Unknown never means harmless.
+
+An optional `annotate_with_context(variant, transcript, germline_ctx,
+phase_resolver=None)` method has the same return contract. Without that method,
+nonempty germline context produces `Unresolved` rather than being ignored or
+sent to another implementation. The default retains the existing germline
+point-edit path; SV plus germline composition remains experimental in
+`realized`. Empty context uses `annotate_on_transcript` as usual.
+
+`variant.effect_on_transcript(transcript, annotator=..., germline=...)` and
+`predict_variant_effect_on_transcript` now use the same selection rules as
+`effects()`, including the current scoped default.
 
 ## Provenance
 

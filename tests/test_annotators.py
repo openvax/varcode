@@ -42,7 +42,6 @@ def test_fast_annotator_annotator_satisfies_protocol():
     # @runtime_checkable Protocol — isinstance works structurally.
     assert isinstance(annotator, EffectAnnotator)
     assert annotator.name == "fast"
-    assert {"snv", "indel", "mnv"}.issubset(annotator.supports)
 
 
 def test_duck_typed_annotator_satisfies_protocol():
@@ -50,9 +49,8 @@ def test_duck_typed_annotator_satisfies_protocol():
     # shape is enough.
     class DuckAnnotator:
         name = "duck"
-        supports = frozenset({"snv"})
         def annotate_on_transcript(self, variant, transcript):
-            return None
+            return NotImplemented
     assert isinstance(DuckAnnotator(), EffectAnnotator)
 
 
@@ -97,6 +95,7 @@ def test_register_rejects_nameless_annotators():
 
 
 def test_set_default_annotator_swaps_registry_default():
+    prior_default = get_default_annotator().name
     class Swap:
         name = "test_swap_default"
         supports = frozenset({"snv"})
@@ -107,7 +106,7 @@ def test_set_default_annotator_swaps_registry_default():
         set_default_annotator("test_swap_default")
         assert get_default_annotator().__class__ is Swap
     finally:
-        set_default_annotator("protein_diff")
+        set_default_annotator(prior_default)
         from varcode.annotators.registry import _REGISTRY
         _REGISTRY.pop("test_swap_default", None)
 
@@ -140,10 +139,8 @@ def test_fast_annotator_annotator_matches_effect_on_transcript():
 
 
 # ====================================================================
-# UnsupportedVariantError is available as an exception class for the
-# protein-diff annotator to raise. No code throws it yet (no
-# annotator currently checks `.supports` at runtime), but downstream
-# code can already catch it.
+# UnsupportedVariantError remains importable for compatibility. The
+# return-value protocol uses NotImplemented instead of this exception.
 # ====================================================================
 
 

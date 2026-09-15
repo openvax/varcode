@@ -23,7 +23,9 @@ from .effect_helpers import changes_exonic_splice_site
 from .effect_collection import EffectCollection
 from .effect_prediction_coding import predict_variant_coding_effect_on_transcript
 from .effect_classes import (
+    MutationEffect,
     Failure,
+    Unresolved,
     Intergenic,
     Intragenic,
     NoncodingTranscript,
@@ -41,6 +43,29 @@ from .effect_classes import (
 
 
 logger = logging.getLogger(__name__)
+
+
+def _annotate_transcript(
+        annotator, variant, transcript, germline=None, phase_resolver=None):
+    """Apply the return-value contract without hiding errors or falling back."""
+    if germline:
+        annotate = getattr(annotator, "annotate_with_context", None)
+        result = NotImplemented if annotate is None else annotate(
+            variant, transcript, germline_ctx=germline,
+            phase_resolver=phase_resolver)
+    else:
+        result = annotator.annotate_on_transcript(variant, transcript)
+    if result is NotImplemented:
+        name = getattr(annotator, "name", type(annotator).__name__)
+        return Unresolved(
+            variant, transcript, mechanism="unsupported_annotation",
+            reason="Annotator %r does not implement this input%s" % (
+                name, " with germline context" if germline else ""))
+    if not isinstance(result, MutationEffect):
+        raise TypeError(
+            "Annotators must return a MutationEffect or NotImplemented, got %r"
+            % (result,))
+    return result
 
 
 def predict_variant_effects(
@@ -98,26 +123,8 @@ def predict_variant_effects(
     """
     # Lazy import — varcode.annotators depends on varcode.effects at
     # load time, so we defer to break the cycle.
-    from ..annotators.registry import get_annotator, resolve_annotator
+    from ..annotators.registry import resolve_annotator
     annotator_instance = resolve_annotator(annotator)
-    # Germline-aware helper, lazily imported because varcode.germline
-    # imports from varcode.effects.classify (cycle if unconditional).
-    # Per-call validation lives on VariantCollection.effects (where
-    # we have the full somatic collection); this entry point trusts
-    # its inputs.
-    if germline:
-        from ..germline import predict_germline_aware_effect
-    # Kind dispatch for structural variants: ``fast``/``protein_diff``
-    # declare ``supports = {"snv","indel","mnv"}``, but that flag is
-    # metadata — nobody dispatches on it. Without this override an SV
-    # silently flows to the point-variant annotator, which annotates
-    # the placeholder ``ref="N"/alt="A"`` and emits nonsense. When
-    # the caller didn't explicitly pick an annotator, route SVs to
-    # the SV annotator regardless of the default. Explicit overrides
-    # (annotator="protein_diff" on an SV, e.g. for parity testing)
-    # still pass through. See #264.
-    if annotator is None and getattr(variant, "is_structural", False):
-        annotator_instance = get_annotator("structural_variant")
     annotator_name = getattr(annotator_instance, "name", None)
     annotator_version = getattr(annotator_instance, "version", None)
     # if this variant isn't overlapping any genes, return a
@@ -152,27 +159,9 @@ def predict_variant_effects(
             else:
                 # gene ID  has transcripts overlapped by this variant
                 for transcript in transcripts_grouped_by_gene[gene_id]:
-                    # Germline-aware path takes over when a non-empty
-                    # context is supplied — it owns window lookup,
-                    # phase enumeration, LOH detection, and packaging
-                    # into a PhaseCandidateSet when phase is
-                    # unknown. Empty context delegates to the
-                    # annotator unchanged. See #268.
-                    if germline and hasattr(
-                            annotator_instance, "annotate_with_context"):
-                        annotate = lambda v, t: (
-                            annotator_instance.annotate_with_context(
-                                v, t,
-                                germline_ctx=germline,
-                                phase_resolver=phase_resolver))
-                    elif germline:
-                        annotate = lambda v, t: predict_germline_aware_effect(
-                            v, t,
-                            germline_ctx=germline,
-                            annotator=annotator_instance,
-                            phase_resolver=phase_resolver)
-                    else:
-                        annotate = annotator_instance.annotate_on_transcript
+                    annotate = lambda v, t: _annotate_transcript(
+                        annotator_instance, v, t, germline=germline,
+                        phase_resolver=phase_resolver)
                     if raise_on_error:
                         effect = annotate(variant, transcript)
                     else:
@@ -218,7 +207,8 @@ def predict_variant_effect_on_transcript_or_failure(variant, transcript):
         return Failure(variant, transcript)
 
 
-def predict_variant_effect_on_transcript(variant, transcript):
+def predict_variant_effect_on_transcript(
+        variant, transcript, annotator=None, germline=None, phase_resolver=None):
         """Return the transcript effect (such as FrameShift) that results from
         applying this genomic variant to a particular transcript.
 
@@ -233,10 +223,18 @@ def predict_variant_effect_on_transcript(variant, transcript):
         ----------
         transcript :  Transcript
             Transcript we're going to apply mutation to.
+        annotator : str, EffectAnnotator, or None
+            Registered name or instance; None uses the current default.
+        germline : GermlineContext or None
+            Optional patient context, passed to annotate_with_context.
+        phase_resolver : PhaseResolver or None
+            Optional evidence for germline phase.
         """
+        from ..annotators.registry import resolve_annotator
         from ..splice_outcomes import enumerate_splice_outcomes
-        raw_effect = _predict_variant_effect_on_transcript_raw(
-            variant, transcript)
+        raw_effect = _annotate_transcript(
+            resolve_annotator(annotator), variant, transcript,
+            germline=germline, phase_resolver=phase_resolver)
         return enumerate_splice_outcomes(raw_effect)
 
 

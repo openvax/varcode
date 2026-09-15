@@ -10,27 +10,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Effect annotator interface (openvax/varcode#271, stage 1).
+"""One built-in default annotator and optional partial implementations.
 
-An :class:`EffectAnnotator` takes a :class:`Variant` and a
-:class:`Transcript` and returns a :class:`MutationEffect` (or a
-:class:`MutantTranscript` consumed by one, depending on the
-implementation). Annotators coexist behind a shared Protocol so
-users can choose between:
-
-* ``fast`` — the offset-based annotator that has shipped since
-  2.0.0. Wraps :func:`varcode.effects.predict_variant_effect_on_transcript`.
-* ``protein_diff`` — the coming annotator that materializes a
-  :class:`MutantTranscript` and diffs its translated protein
-  against the reference. Not in this stage; see #271.
-
-Third parties (Isovar, Exacto) can register their own annotators by
-implementing the Protocol and calling :func:`register_annotator`.
-
-This stage 1 PR ships only the Protocol + registry + fast wrapper;
-the protein-diff annotator, fast-path routing, per-call selection on
-``Variant.effects()``, and ``EffectCollection`` provenance fields
-land in follow-up PRs as outlined in #271.
+``fast`` owns point-variant and structural routing. ``protein_diff`` and
+``realized`` remain experimental alternatives. Third parties register any
+object satisfying :class:`EffectAnnotator`; they need no capability list.
 """
 
 from typing import Protocol, runtime_checkable
@@ -59,28 +43,30 @@ class EffectAnnotator(Protocol):
 
     * ``name`` — short identifier (e.g. ``"fast"``) used in the
       registry and in serialized provenance.
-    * ``supports`` — set of variant-kind tags the annotator can
-      handle (e.g. ``{"snv", "indel"}``). Callers that hand the
-      annotator a variant outside this set get a clear
-      :class:`UnsupportedVariantError` rather than silently wrong
-      output.
     * :meth:`annotate_on_transcript` — the per-transcript entry
-      point.
+      point, returning a ``MutationEffect`` or ``NotImplemented``.
+
+    Return Python's ``NotImplemented`` singleton when this particular input
+    is unsupported. Public prediction APIs expose it as an ``Unresolved``
+    effect with a reason, retaining this annotator's provenance. They never
+    silently replace an experimental result with the default's prediction.
+    ``None`` is invalid; exceptions retain normal error-handling semantics.
 
     Optionally exposes ``version`` (string) — used in CSV provenance
     headers so readers can detect when a serialized collection came
     from a different annotator version. Built-in annotators track
     varcode's version; third-party annotators expose their own.
 
-    The protocol is intentionally narrow at this stage — additional
-    methods (``annotate_collection``, ``annotate_with_context``) will
-    be added as downstream work needs them. The contract is
-    duck-typed (``@runtime_checkable``) so third-party annotators
+    Optionally implement ``annotate_with_context(variant, transcript,
+    germline_ctx, phase_resolver=None)`` with the same return contract.
+    Without it, nonempty germline context is unsupported. Empty context
+    calls ``annotate_on_transcript`` as usual.
+
+    The contract is duck-typed (``@runtime_checkable``) so third-party annotators
     don't need to inherit from varcode just to register.
     """
 
     name: str
-    supports: frozenset
 
     def annotate_on_transcript(self, variant, transcript):
         ...

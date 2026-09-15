@@ -301,11 +301,21 @@ class RealizedEffectAnnotator:
 
     name = "realized"
     version = _varcode_version
-    supports = frozenset({
-        "snv", "indel", "mnv", "DEL", "DUP", "INV", "BND"})
 
     def annotate_on_transcript(self, variant, transcript):
-        return predict_realized_effect((variant,), transcript)
+        return self._predict(variant, transcript)
+
+    @staticmethod
+    def _predict(variant, transcript, **kwargs):
+        from .genomic_layout import SequenceUnavailable, UnsupportedLayoutEdit
+        try:
+            return predict_realized_effect((variant,), transcript, **kwargs)
+        except UnsupportedLayoutEdit:
+            return NotImplemented
+        except SequenceUnavailable as error:
+            return Unresolved(
+                variant, transcript, mechanism="sequence_unavailable",
+                reason=str(error))
 
     def annotate_with_context(
             self, variant, transcript, germline_ctx, phase_resolver=None):
@@ -322,10 +332,12 @@ class RealizedEffectAnnotator:
         end = min(transcript.end, end + 90)
         germline = tuple(germline_ctx.variants_in_window(
             variant.contig, start, end))
-        result = predict_realized_effect(
-            (variant,), transcript,
+        result = self._predict(
+            variant, transcript,
             germline_variants=germline,
             phase_resolver=phase_resolver)
+        if result is NotImplemented:
+            return result
         if (not germline and germline_ctx.completeness in (
                 Completeness.SPARSE, Completeness.HOTSPOTS_ONLY)):
             result.germline_unknown = True

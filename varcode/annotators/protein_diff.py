@@ -64,22 +64,26 @@ class ProteinDiffEffectAnnotator:
     """Classify effects by diffing translated mutant protein against
     the reference protein.
 
-    Produces byte-for-byte identical output to
-    :class:`FastEffectAnnotator` on the common case (trivial
-    SNVs and simple indels) because both flow through the same
-    :func:`classify_from_protein_diff` classifier. Diverges where
-    protein-diff's approach is provably more accurate (boundary
-    codons, frameshift realignment). Any divergence must appear in
-    the parity harness ``EXPECTED_DIFFS`` with an issue link.
+    Experimental alternative for point edits. The parity harness compares
+    it with the default on their shared domain and records intentional
+    divergences with issue links. Structural variants return
+    ``NotImplemented``. Shared splice/germline classification helpers do not
+    depend on this annotator.
     """
 
     name = "protein_diff"
     version = _varcode_version
-    supports = frozenset({"snv", "indel", "mnv"})
 
     def __repr__(self):
         return "ProteinDiffEffectAnnotator(name=%r, version=%r)" % (
             self.name, self.version)
+
+    def annotate_with_context(
+            self, variant, transcript, germline_ctx, phase_resolver=None):
+        """Share the default's patient-baseline path for point edits."""
+        return FastEffectAnnotator.annotate_with_context(
+            self, variant, transcript, germline_ctx,
+            phase_resolver=phase_resolver)
 
     def annotate_on_transcript(self, variant, transcript):
         """Classify the effect of ``variant`` on ``transcript``.
@@ -93,6 +97,9 @@ class ProteinDiffEffectAnnotator:
             raise TypeError(
                 "Expected %s : %s to have type Transcript" % (
                     transcript, type(transcript)))
+
+        if getattr(variant, "is_structural", False):
+            return NotImplemented
 
         if not transcript.is_protein_coding:
             return NoncodingTranscript(variant, transcript)

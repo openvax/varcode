@@ -440,19 +440,12 @@ def test_sv_variant_constructor_accepts_symbolic_alt_but_breaks_downstream():
         Variant("22", 51179178, "A", "<CN0>", ensembl_grch38)
 
 
-def test_sv_annotators_declare_supports_sets_without_sv_kinds():
-    """Both shipped annotators advertise a ``supports`` frozenset
-    that deliberately omits SV variant kinds. SV support lands as a
-    third annotator (see docstring in mutant_transcript.py about
-    the planned ``reference_segments`` extension for fusions /
-    translocations)."""
-    assert _FAST.supports == frozenset({"snv", "indel", "mnv"})
-    assert _PDIFF.supports == frozenset({"snv", "indel", "mnv"})
-    # No annotator in the registry advertises support for SV kinds:
-    for sv_kind in ("sv", "bnd", "breakend", "fusion", "cnv", "del_symbolic",
-                    "dup", "inv"):
-        assert sv_kind not in _FAST.supports
-        assert sv_kind not in _PDIFF.supports
+def test_protein_diff_declines_sv_without_reading_placeholder_alleles():
+    from varcode import StructuralVariant
+    variant = StructuralVariant(
+        "7", 117531100, sv_type="DEL", end=117531200, genome=ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_ID)
+    assert _PDIFF.annotate_on_transcript(variant, transcript) is NotImplemented
 
 
 def test_sv_large_explicit_deletion_still_annotates_through_indel_path():
