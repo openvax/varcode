@@ -11,19 +11,15 @@
 # limitations under the License.
 
 """Data model for representing the result of applying one or more
-variants to a reference transcript (openvax/varcode#271, stage 1).
+variants to a reference transcript.
 
-:class:`TranscriptEdit` and :class:`MutantTranscript` are the types
-used by the forthcoming protein-diff :class:`EffectAnnotator`
-(``varcode.annotators``) to reshape effect annotation from
-"reason about offsets against the reference" to "materialize the
-mutant sequence, translate it, compare to the reference protein."
-
-This module only defines the data shapes — the sequence-construction
-logic, fast-path dispatch, and annotator wiring are staged across
-later PRs (see the tracking issue). For now, this lets adjacent work
-(splice_outcomes rewrite, RNA-evidence ingestion, germline-aware
-annotation) reference a stable abstraction.
+:class:`TranscriptEdit` and :class:`MutantTranscript` let effect
+annotation materialize the mutant sequence, translate it, and compare
+it to the reference protein instead of reasoning about offsets against
+the reference. :func:`apply_variant_to_transcript` and
+:func:`apply_variants_to_transcript` build them; the protein-diff
+annotator, splice outcomes, phasing, and germline-aware annotation
+consume them.
 """
 
 from dataclasses import dataclass, field
@@ -290,7 +286,7 @@ class MutantTranscript(DataclassSerializable):
 
 
 # ---------------------------------------------------------------------
-# Construction (#271 stage 2)
+# Construction
 # ---------------------------------------------------------------------
 
 
@@ -400,8 +396,7 @@ def apply_variant_to_transcript(variant, transcript):
       computed offset.
 
     Callers that get ``None`` should fall back to the fast
-    :class:`EffectAnnotator`. The forthcoming protein-diff annotator
-    layers effect classification on top of this builder.
+    :class:`EffectAnnotator`, as the protein-diff annotator does.
     """
     from pyensembl import Transcript
 

@@ -10,8 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for the pluggable EffectAnnotator interface and registry
-(openvax/varcode#271, stage 1)."""
+"""Tests for the pluggable EffectAnnotator interface and registry."""
 
 import pytest
 from pyensembl import cached_release
@@ -173,7 +172,6 @@ def test_annotator_types_exported_at_package_level():
 
 # ====================================================================
 # annotator= kwarg on Variant.effects() and VariantCollection.effects()
-# (see #271 stage 3a)
 # ====================================================================
 
 
@@ -322,7 +320,7 @@ def test_resolve_annotator_resolves_none_to_default():
 
 
 # ====================================================================
-# ProteinDiffEffectAnnotator (#309, stage 3d)
+# ProteinDiffEffectAnnotator
 # ====================================================================
 
 

@@ -10,16 +10,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""The fast :class:`EffectAnnotator` — a thin wrapper around the
-offset-based effect prediction that varcode has shipped since 2.0.0.
+"""The fast :class:`EffectAnnotator` — the default annotator, a thin
+wrapper around varcode's offset-based effect prediction.
 
-The default annotator (restored as the default in 7.0.0; see #397).
-Produces byte-for-byte identical output to
-``Variant.effect_on_transcript(transcript)``. The
 :class:`~varcode.annotators.protein_diff.ProteinDiffEffectAnnotator`
-offers an alternative protein-diff classification behind the same
-:class:`EffectAnnotator` protocol (#271); as of 7.0.0 the two are
-reconciled on SNVs / indels / MNVs.
+offers protein-diff classification behind the same
+:class:`EffectAnnotator` protocol.
 """
 
 from ..version import __version__ as _varcode_version
@@ -31,16 +27,13 @@ class FastEffectAnnotator:
     name = "fast"
 
     version = _varcode_version
-    """Built-in annotators track varcode's own version. Third-party
-    annotators (isovar's plugin, exacto's plugin) expose their own
-    version string here; CSV provenance headers and round-trip
-    warnings read from this field. See #271."""
+    """Built-in annotators track varcode's own version; third-party
+    annotators expose their own. CSV provenance headers and round-trip
+    warnings read from this field."""
 
     supports = frozenset({"snv", "indel", "mnv"})
-    """Variant kinds this annotator handles. Splice-possibility
-    sets, structural variants, and phased haplotypes fall outside
-    the fast offset-based path and will be handled by the
-    protein-diff annotator."""
+    """Variant kinds this annotator handles. Structural variants go
+    through :class:`~varcode.annotators.structural_variant.StructuralVariantAnnotator`."""
 
     def annotate_on_transcript(self, variant, transcript):
         """Delegate to the existing per-transcript prediction.

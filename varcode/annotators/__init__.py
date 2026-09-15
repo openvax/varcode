@@ -10,27 +10,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Effect annotator interface (openvax/varcode#271, stage 1).
+"""Effect annotator interface.
 
 An :class:`EffectAnnotator` takes a :class:`Variant` and a
-:class:`Transcript` and returns a :class:`MutationEffect` (or a
-:class:`MutantTranscript` consumed by one, depending on the
-implementation). Annotators coexist behind a shared Protocol so
-users can choose between:
+:class:`Transcript` and returns a :class:`MutationEffect`. Built-in
+annotators, selectable by name via the registry:
 
-* ``fast`` — the offset-based annotator that has shipped since
-  2.0.0. Wraps :func:`varcode.effects.predict_variant_effect_on_transcript`.
-* ``protein_diff`` — the coming annotator that materializes a
-  :class:`MutantTranscript` and diffs its translated protein
-  against the reference. Not in this stage; see #271.
+* ``fast`` (default) — offset-based classification. Wraps
+  :func:`varcode.effects.predict_variant_effect_on_transcript`.
+* ``protein_diff`` — materializes a :class:`MutantTranscript` and
+  diffs its translated protein against the reference.
+* ``structural_variant`` — classifies :class:`StructuralVariant`
+  inputs.
 
-Third parties (Isovar, Exacto) can register their own annotators by
-implementing the Protocol and calling :func:`register_annotator`.
-
-This stage 1 PR ships only the Protocol + registry + fast wrapper;
-the protein-diff annotator, fast-path routing, per-call selection on
-``Variant.effects()``, and ``EffectCollection`` provenance fields
-land in follow-up PRs as outlined in #271.
+Third parties can register their own annotators by implementing the
+Protocol and calling :func:`register_annotator`.
 """
 
 from typing import Protocol, runtime_checkable
@@ -72,11 +66,8 @@ class EffectAnnotator(Protocol):
     from a different annotator version. Built-in annotators track
     varcode's version; third-party annotators expose their own.
 
-    The protocol is intentionally narrow at this stage — additional
-    methods (``annotate_collection``, ``annotate_with_context``) will
-    be added as downstream work needs them. The contract is
-    duck-typed (``@runtime_checkable``) so third-party annotators
-    don't need to inherit from varcode just to register.
+    The contract is duck-typed (``@runtime_checkable``) so third-party
+    annotators don't need to inherit from varcode just to register.
     """
 
     name: str

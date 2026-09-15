@@ -10,22 +10,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Shared fast path for trivial single-codon SNVs (openvax/varcode#271,
-stage 3c).
+"""Fast path for trivial single-codon SNVs.
 
-Both the fast and forthcoming protein-diff annotators dispatch
-coding-SNV variants through the same short-circuit so they agree on
-the common case. The full :func:`predict_in_frame_coding_effect` logic
-only runs for variants that actually need it — indels, MNVs,
-start-/stop-adjacent substitutions, and anything that might fall out
-of the straightforward Silent / Substitution / PrematureStop
-classification.
-
-Extracting this helper doesn't change behaviour on its own: fast
-still produces the same Effect classes and same ``short_description``
-byte-for-byte. The value comes in stage 3d when the protein-diff
-annotator shares this code path, removing it as a source of A/B
-divergence between the two annotators.
+:func:`predict_in_frame_coding_effect` tries this short-circuit first,
+so the full in-frame logic only runs for variants that actually need
+it — indels, MNVs, start-/stop-adjacent substitutions, and anything
+that might fall out of the straightforward Silent / Substitution /
+PrematureStop classification.
 """
 
 from .codon_tables import codon_table_for_transcript

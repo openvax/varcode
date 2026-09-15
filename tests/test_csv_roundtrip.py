@@ -300,7 +300,7 @@ def test_effect_collection_from_csv_raises_without_genome_or_header():
 
 
 # -----------------------------------------------------------------------
-# Annotator provenance round-trip (#271 stage 3b)
+# Annotator provenance round-trip
 # -----------------------------------------------------------------------
 
 
