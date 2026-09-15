@@ -18,7 +18,11 @@ from .version_info import print_version_info
 from .variant_args import make_variants_parser, variant_collection_from_args
 
 
-logging.config.fileConfig(str(resources.files(__package__) / "logging.conf"))
+# as_file, rather than str(), so that logging.conf is also readable when varcode
+# is zip-imported (zipapp, pex, shiv, zipped egg), where files() hands back a
+# zipfile.Path that open() can't use.
+with resources.as_file(resources.files(__package__) / "logging.conf") as _logging_conf:
+    logging.config.fileConfig(_logging_conf)
 logger = logging.getLogger(__name__)
 
 arg_parser = make_variants_parser(
