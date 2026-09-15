@@ -75,7 +75,12 @@ from .effects.effect_classes import (
     SpliceSite,
     TranscriptMutationEffect,
 )
-from .mutant_transcript import MutantTranscript, TranscriptEdit
+from .mutant_transcript import (
+    MutantTranscript,
+    TranscriptEdit,
+    _resolve_variant_edit,
+    _translate_from_cds,
+)
 from .effect_candidates import EffectCandidate
 
 
@@ -778,6 +783,8 @@ def _build_intron_retention_mutant_transcript(
     if not intron_seq:
         return None
     intron_seq = intron_seq.upper()
+    intron_seq = _apply_point_variant_to_genomic_sequence(
+        intron_seq, intron_start, variant)
     if transcript.on_backward_strand:
         # Caller returns forward-strand genomic bases; for a reverse
         # strand transcript we need the reverse complement to get
@@ -797,30 +804,29 @@ def _build_intron_retention_mutant_transcript(
     else:
         insert_at = exon_start_offset
     full_cdna = str(transcript.sequence)
-    mutant_cdna = (
-        full_cdna[:insert_at] + intron_seq + full_cdna[insert_at:])
-    edit = TranscriptEdit(
+    retention_edit = TranscriptEdit(
         cdna_start=insert_at,
         cdna_end=insert_at,
         alt_bases=intron_seq,
         source_variant=variant,
     )
+    originating_edit = _point_variant_transcript_edit(
+        variant, transcript, full_cdna)
+    if originating_edit is False:
+        return None
+    edits = [retention_edit]
+    if originating_edit is not None:
+        edits.append(originating_edit)
+    composed = _compose_transcript_edits(full_cdna, edits)
+    if composed is None:
+        return None
+    mutant_cdna, edits = composed
     # Translate from the canonical start codon; premature stop inside
     # the retained intron terminates the ORF.
-    cds_start = min(transcript.start_codon_spliced_offsets)
-    mut_protein = None
-    if cds_start < len(mutant_cdna):
-        codon_table = codon_table_for_transcript(transcript)
-        coding = mutant_cdna[cds_start:]
-        truncated = coding[:(len(coding) // 3) * 3]
-        try:
-            mut_protein = translate_sequence(
-                truncated, codon_table=codon_table, to_stop=True)
-        except ValueError:
-            mut_protein = None
+    mut_protein = _translate_from_cds(mutant_cdna, transcript)
     return MutantTranscript(
         reference_transcript=transcript,
-        edits=(edit,),
+        edits=edits,
         cdna_sequence=mutant_cdna,
         mutant_protein_sequence=mut_protein,
         annotator_name="splice_outcomes",
@@ -911,17 +917,150 @@ consumers wanting a wider scan pass ``cryptic_scan_flank`` through
 :func:`enumerate_splice_outcomes`."""
 
 
+def _apply_point_variant_to_genomic_sequence(
+        sequence, sequence_start, variant, *, keep_origins=False):
+    """Apply a nucleotide variant to forward-strand genomic sequence.
+
+    ``sequence_start`` is the 1-based coordinate of ``sequence[0]``.
+    Structural variants and variants outside the window are left alone.
+    When the supplied sequence does not match the variant's reference
+    allele (as can happen with synthetic test providers), it is also left
+    alone rather than inventing a haplotype.
+
+    If ``keep_origins`` is true, return ``(sequence, origins)`` where each
+    origin is the corresponding 1-based reference position, or ``None``
+    for an inserted base. This lets cryptic-site offsets be translated
+    back to genomic coordinates after an indel changes sequence length.
+    """
+    origins = list(range(sequence_start, sequence_start + len(sequence)))
+    if getattr(variant, "is_structural", False):
+        return (sequence, origins) if keep_origins else sequence
+
+    ref = getattr(variant, "trimmed_ref", "")
+    alt = getattr(variant, "trimmed_alt", "")
+    start = getattr(variant, "trimmed_base1_start", None)
+    if start is None:
+        return (sequence, origins) if keep_origins else sequence
+
+    if ref:
+        offset = start - sequence_start
+        if offset < 0 or offset + len(ref) > len(sequence):
+            return (sequence, origins) if keep_origins else sequence
+        if sequence[offset:offset + len(ref)].upper() != ref.upper():
+            return (sequence, origins) if keep_origins else sequence
+        aligned = min(len(ref), len(alt))
+        alt_origins = [start + i for i in range(aligned)]
+        alt_origins.extend([None] * (len(alt) - aligned))
+        sequence = sequence[:offset] + alt + sequence[offset + len(ref):]
+        origins[offset:offset + len(ref)] = alt_origins
+    elif alt:
+        # Normalized insertions occur after ``start``.
+        offset = start - sequence_start + 1
+        if offset < 0 or offset > len(sequence):
+            return (sequence, origins) if keep_origins else sequence
+        sequence = sequence[:offset] + alt + sequence[offset:]
+        origins[offset:offset] = [None] * len(alt)
+
+    return (sequence, origins) if keep_origins else sequence
+
+
+def _compose_transcript_edits(full_cdna, edits):
+    """Apply non-conflicting reference-cDNA edits and return their result."""
+    edits = sorted(edits, key=lambda edit: (edit.cdna_start, edit.cdna_end))
+    for left, right in zip(edits, edits[1:]):
+        if left.cdna_end > right.cdna_start:
+            return None
+    mutant_cdna = full_cdna
+    for edit in reversed(edits):
+        mutant_cdna = (
+            mutant_cdna[:edit.cdna_start]
+            + edit.alt_bases
+            + mutant_cdna[edit.cdna_end:]
+        )
+    return mutant_cdna, tuple(edits)
+
+
+def _point_variant_transcript_edit(variant, transcript, full_cdna):
+    """Return the originating exonic edit.
+
+    ``None`` means the allele is wholly intronic. ``False`` means it
+    overlaps an exon but cannot be represented safely as one cDNA edit.
+    """
+    if getattr(variant, "is_structural", False):
+        return None
+    resolved = _resolve_variant_edit(variant, transcript, full_cdna)
+    if resolved is not None:
+        return resolved[0]
+    start = getattr(variant, "trimmed_base1_start", None)
+    end = getattr(variant, "trimmed_base1_end", start)
+    if start is not None and any(
+            start <= exon.end and end >= exon.start
+            for exon in transcript.exons):
+        return False
+    return None
+
+
+def _without_edit_removed_by(edit, remove_start, remove_end):
+    """Drop an originating edit swallowed by a splice-boundary truncation.
+
+    Return ``False`` for a partial overlap, which cannot be composed safely
+    in reference-cDNA coordinates.
+    """
+    if edit is None:
+        return None
+    if edit.cdna_start == edit.cdna_end:
+        if remove_start < edit.cdna_start < remove_end:
+            return None
+        return edit
+    if edit.cdna_end <= remove_start or edit.cdna_start >= remove_end:
+        return edit
+    if remove_start <= edit.cdna_start and edit.cdna_end <= remove_end:
+        return None
+    return False
+
+
+def _canonical_boundary_offset(origins, exon, side, reverse):
+    """Locate a reference splice boundary in a mutated scan layout.
+
+    The returned offset is an interbase (Python-slice) offset in
+    transcript order: donor exonic bases end there and acceptor exonic
+    bases begin there.
+    """
+    if side == "donor":
+        exonic_pos = exon.start if reverse else exon.end
+        intronic_pos = exonic_pos - 1 if reverse else exonic_pos + 1
+        if exonic_pos in origins:
+            return origins.index(exonic_pos) + 1
+        if intronic_pos in origins:
+            return origins.index(intronic_pos)
+    else:
+        exonic_pos = exon.end if reverse else exon.start
+        intronic_pos = exonic_pos + 1 if reverse else exonic_pos - 1
+        if exonic_pos in origins:
+            return origins.index(exonic_pos)
+        if intronic_pos in origins:
+            return origins.index(intronic_pos) + 1
+    return None
+
+
+def _cryptic_boundary_genomic_position(origins, offset, side):
+    """Map an interbase cryptic boundary to its adjacent exonic base."""
+    index = offset - 1 if side == "donor" else offset
+    if index < 0 or index >= len(origins):
+        return None
+    return origins[index]
+
+
 def _best_cryptic_site(sequence, canonical_offset, kind):
     """Scan ``sequence`` for the highest-scoring cryptic splice site
     of ``kind`` (``"donor"`` or ``"acceptor"``), ignoring the
     canonical position itself (#296).
 
-    ``sequence`` is in transcript order (5'→3'); the canonical
-    boundary sits AFTER position ``canonical_offset`` for donor (the
-    exon/intron junction) and BEFORE for acceptor. Returns
-    ``(offset, score)`` — ``offset`` is the cryptic equivalent of the
-    canonical boundary in ``sequence`` coordinates — or ``None`` when
-    no above-threshold site is found.
+    ``sequence`` is in transcript order (5'→3'). ``canonical_offset``
+    and the returned candidate offset are interbase (Python-slice)
+    offsets: donor exonic bases end at the offset and acceptor exonic
+    bases begin there. Returns ``(offset, score)`` or ``None`` when no
+    above-threshold site is found.
     """
     from .cryptic_exons import (
         ACCEPTOR_WINDOW,
@@ -931,13 +1070,11 @@ def _best_cryptic_site(sequence, canonical_offset, kind):
     )
     scorer = score_donor if kind == "donor" else score_acceptor
     window = DONOR_WINDOW if kind == "donor" else ACCEPTOR_WINDOW
-    # For donor: offset of returned candidate = position of
-    # exon/intron junction in sequence (= end of exonic portion).
-    # Donor window is 3 exonic + 6 intronic → junction sits at
-    # window_start + 3.
+    # Donor window is 3 exonic + 6 intronic, so the interbase junction
+    # follows the third exonic base at window_start + 3.
     #
-    # For acceptor: window is 3 intronic + 1 exonic → junction
-    # (= start of new exon) sits at window_start + 3.
+    # Acceptor window is 3 intronic + 1 exonic, so the interbase
+    # junction before the first exonic base is also window_start + 3.
     junction_offset_in_window = 3
     best = None
     for i in range(len(sequence) - window + 1):
@@ -988,7 +1125,9 @@ def _build_cryptic_site_mutant_transcript(
         boundary_pos = exon.end if reverse else exon.start
         scan_start = boundary_pos - scan_flank
         scan_end = boundary_pos + scan_flank
-    # Fetch forward-strand sequence.
+    # Fetch forward-strand sequence and realize the originating allele
+    # before scoring. Otherwise a destroyed canonical motif remains in
+    # the scan and can be selected as its own cryptic replacement (#422).
     try:
         forward_seq = genomic_sequence(
             transcript.contig, scan_start, scan_end).upper()
@@ -996,47 +1135,43 @@ def _build_cryptic_site_mutant_transcript(
         return None
     if not forward_seq:
         return None
+    forward_seq, origins = _apply_point_variant_to_genomic_sequence(
+        forward_seq, scan_start, variant, keep_origins=True)
     # For reverse-strand transcript, transcript-order sequence is the
     # reverse complement of the forward-strand region.
     from .nucleotides import reverse_complement
     if reverse:
         scan_seq = reverse_complement(forward_seq)
+        origins.reverse()
     else:
         scan_seq = forward_seq
-    # Map genomic positions in the scan window → sequence offsets in
-    # transcript order.
-    region_length = scan_end - scan_start + 1
-    if reverse:
-        def genomic_to_seq_offset(g_pos):
-            return scan_end - g_pos
-    else:
-        def genomic_to_seq_offset(g_pos):
-            return g_pos - scan_start
-    canonical_offset = genomic_to_seq_offset(boundary_pos)
-    # Correction for donor/acceptor "junction" convention in
-    # _best_cryptic_site: donor's junction = last exonic base → on
-    # forward strand that's boundary_pos, offset (boundary_pos - scan_start).
-    # For acceptor: junction = first exonic base = boundary_pos, same
-    # offset calculation. Both map directly.
+    canonical_offset = _canonical_boundary_offset(
+        origins, exon, side, reverse)
+    if canonical_offset is None:
+        return None
     result = _best_cryptic_site(scan_seq, canonical_offset, kind=side)
     if result is None:
         return None
     cryptic_offset_in_seq, score = result
-    # Translate back to genomic position.
-    if reverse:
-        cryptic_genomic_pos = scan_end - cryptic_offset_in_seq
-    else:
-        cryptic_genomic_pos = scan_start + cryptic_offset_in_seq
+    cryptic_genomic_pos = _cryptic_boundary_genomic_position(
+        origins, cryptic_offset_in_seq, side)
+    # A boundary inside newly inserted sequence has no single genomic
+    # base coordinate. The current effect model cannot represent it.
+    if cryptic_genomic_pos is None:
+        return None
     # Build the mutant cDNA by replacing the canonical exon boundary
     # with the cryptic one.
     #
     # Delta in exon length (transcript-order bases):
     #   donor:   cryptic - canonical (positive = extends exon)
     #   acceptor: canonical - cryptic (positive = extends exon at 5' end)
+    transcript_direction = -1 if reverse else 1
     if side == "donor":
-        exon_length_delta = cryptic_offset_in_seq - canonical_offset
+        exon_length_delta = (
+            cryptic_genomic_pos - boundary_pos) * transcript_direction
     else:
-        exon_length_delta = canonical_offset - cryptic_offset_in_seq
+        exon_length_delta = (
+            boundary_pos - cryptic_genomic_pos) * transcript_direction
     try:
         exon_start_in_tx = _exon_start_offset_in_transcript(transcript, exon)
     except ValueError:
@@ -1050,6 +1185,10 @@ def _build_cryptic_site_mutant_transcript(
     else:
         # Acceptor change shifts the exon's 5' start.
         junction_cdna = exon_start_in_tx
+    originating_edit = _point_variant_transcript_edit(
+        variant, transcript, full_cdna)
+    if originating_edit is False:
+        return None
     if exon_length_delta >= 0:
         # Exon is extended → insert intron bases from the scan window.
         if side == "donor":
@@ -1063,9 +1202,7 @@ def _build_cryptic_site_mutant_transcript(
             # junction.
             added = scan_seq[cryptic_offset_in_seq:canonical_offset]
             insert_at = junction_cdna
-        mutant_cdna = (
-            full_cdna[:insert_at] + added + full_cdna[insert_at:])
-        edit = TranscriptEdit(
+        splice_edit = TranscriptEdit(
             cdna_start=insert_at,
             cdna_end=insert_at,
             alt_bases=added,
@@ -1081,28 +1218,28 @@ def _build_cryptic_site_mutant_transcript(
         else:
             remove_start = junction_cdna
             remove_end = junction_cdna + removed
-        mutant_cdna = (
-            full_cdna[:remove_start] + full_cdna[remove_end:])
-        edit = TranscriptEdit(
+        if originating_edit is not None:
+            originating_edit = _without_edit_removed_by(
+                originating_edit, remove_start, remove_end)
+            if originating_edit is False:
+                return None
+        splice_edit = TranscriptEdit(
             cdna_start=remove_start,
             cdna_end=remove_end,
             alt_bases="",
             source_variant=variant,
         )
-    cds_start = min(transcript.start_codon_spliced_offsets)
-    mut_protein = None
-    if cds_start < len(mutant_cdna):
-        codon_table = codon_table_for_transcript(transcript)
-        coding = mutant_cdna[cds_start:]
-        truncated = coding[:(len(coding) // 3) * 3]
-        try:
-            mut_protein = translate_sequence(
-                truncated, codon_table=codon_table, to_stop=True)
-        except ValueError:
-            mut_protein = None
+    edits = [splice_edit]
+    if originating_edit is not None:
+        edits.append(originating_edit)
+    composed = _compose_transcript_edits(full_cdna, edits)
+    if composed is None:
+        return None
+    mutant_cdna, edits = composed
+    mut_protein = _translate_from_cds(mutant_cdna, transcript)
     mt = MutantTranscript(
         reference_transcript=transcript,
-        edits=(edit,),
+        edits=edits,
         cdna_sequence=mutant_cdna,
         mutant_protein_sequence=mut_protein,
         annotator_name="splice_outcomes",
