@@ -1,5 +1,17 @@
 # Change Log
 
+## [v7.2.0](https://github.com/openvax/varcode/tree/v7.2.0) (2026-09-15)
+
+**Added**
+- Added the internal coordinate-aware genomic-layout foundation for the
+  realized effect engine. Layouts preserve base origins through point edits,
+  deletions, duplications, inversions, reverse strands, and cross-contig
+  breakend joins without expanding large introns into per-base objects.
+- Added composable phase/splice hypothesis and realized-product types.
+  Splice hypotheses are validated as graph rewrites, rule preferences remain
+  ordinal unless a calibrated probability is supplied, and candidate merging
+  now keys on both the patient baseline and mutant product.
+
 ## [v7.1.2](https://github.com/openvax/varcode/tree/v7.1.2) (2026-09-15)
 
 **Fixed**
