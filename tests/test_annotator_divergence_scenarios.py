@@ -456,39 +456,38 @@ def test_sv_annotators_declare_supports_sets_without_sv_kinds():
 
 
 def test_sv_large_explicit_deletion_still_annotates_through_indel_path():
-    """A deletion that's biologically SV-scale (hundreds of bp) but
+    """A deletion that's biologically SV-scale (50 bp) but
     spelled out as an explicit ref/alt string is still just an
     indel to varcode. This documents the CURRENT capability: we
-    don't need a symbolic allele for kilobase-scale deletions as
+    don't need a symbolic allele for SV-scale deletions as
     long as the caller is willing to write them out.
 
     The annotation itself isn't the point — we just assert it
     doesn't crash, and that something coding-flavoured comes back
     (not a Failure/Intergenic).
     """
-    # Build a 50-base deletion inside CFTR exon 11. Anchor+50 bases.
+    # Build a 50-base deletion inside CFTR exon 12. The explicit REF
+    # contains one retained anchor followed by the 50 deleted bases.
     transcript = ensembl_grch38.transcript_by_id(CFTR_ID)
     from varcode.effects.transcript_helpers import interval_offset_on_transcript
-    pos = 117587738  # inside CFTR exon 11 (known coding region)
-    try:
-        off = interval_offset_on_transcript(pos, pos + 49, transcript)
-    except Exception:
-        pytest.skip("Coordinate %d not on CFTR transcript in this release"
-                    % pos)
-    ref = str(transcript.sequence)[off:off + 50]
-    if len(ref) != 50:
-        pytest.skip("Insufficient exon length at %d" % pos)
+    exon = transcript.exons[11]
+    assert exon.exon_id == "ENSE00000718654"
+    pos = exon.start
+    off = interval_offset_on_transcript(pos, pos + 50, transcript)
+    ref = str(transcript.sequence)[off:off + 51]
+    assert len(ref) == 51
     variant = Variant("7", pos, ref, ref[0], ensembl_grch38)
-    # The deletion spans a splice site inside the CFTR gene — it
-    # may come back as ExonLoss, a frameshift, or an ExonicSpliceSite.
-    # Any non-crash, non-failure result satisfies this test.
     with varcode.use_annotator("fast"):
         effects_fast = variant.effects()
     with varcode.use_annotator("protein_diff"):
         effects_pd = variant.effects()
-    # Neither should be empty.
-    assert len(effects_fast) > 0
-    assert len(effects_pd) > 0
+    fast_effect = next(
+        e for e in effects_fast if getattr(e, "transcript", None) is transcript)
+    pd_effect = next(
+        e for e in effects_pd if getattr(e, "transcript", None) is transcript)
+    assert isinstance(fast_effect, FrameShift)
+    assert isinstance(pd_effect, FrameShift)
+    assert fast_effect.short_description == pd_effect.short_description
 
 
 # ====================================================================

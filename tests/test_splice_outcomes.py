@@ -513,14 +513,9 @@ def test_splice_outcome_set_is_a_multi_outcome_effect():
 def test_mid_codon_in_frame_exon_skip_reshapes_boundary():
     variant = Variant("7", 117536674, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
-    bare = variant.effect_on_transcript(transcript)
-    if not isinstance(bare, SpliceDonor):
-        pytest.skip(
-            "Canonical donor G not present at 117536674; got %s."
-            % type(bare).__name__)
-    splice_set = next(
-        e for e in variant.effects()
-        if e.transcript is transcript)
+    splice_set = variant.effect_on_transcript(transcript)
+    assert isinstance(splice_set, SpliceOutcomeSet)
+    assert splice_set.disrupted_signal_class is SpliceDonor
     skip = _candidate_of_type(splice_set, ExonSkipping)
     # ExonSkipping with a reshaped boundary still carries aa_ref/alt
     # on the instance.
@@ -545,18 +540,12 @@ def test_out_of_frame_exon_skip_marked_out_of_frame():
         if (exon.end - exon.start + 1) % 3 != 0:
             target_exon = exon
             break
-    if target_exon is None:
-        pytest.skip("No out-of-frame exon found in CFTR beyond exon 2")
+    assert target_exon is not None
     donor_plus_1 = target_exon.end + 1
     variant = Variant("7", donor_plus_1, "G", "A", ensembl_grch38)
-    bare = variant.effect_on_transcript(transcript)
-    if not isinstance(bare, SpliceDonor):
-        pytest.skip(
-            "Canonical donor G not present at %d; got %s." % (
-                donor_plus_1, type(bare).__name__))
-    splice_set = next(
-        e for e in variant.effects()
-        if e.transcript is transcript)
+    splice_set = variant.effect_on_transcript(transcript)
+    assert isinstance(splice_set, SpliceOutcomeSet)
+    assert splice_set.disrupted_signal_class is SpliceDonor
     skip = _candidate_of_type(splice_set, ExonSkipping)
     assert skip.effect.in_frame is False
     # Out-of-frame skip produces a real (frameshifted) protein sequence.
@@ -979,12 +968,9 @@ def test_cftr_out_of_frame_exon_skip_produces_frameshift_protein():
     """
     variant = Variant("7", 117509143, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
-    bare = variant.effect_on_transcript(transcript)
-    if not isinstance(bare, SpliceDonor):
-        pytest.skip("g.117509143 G>A not classified as SpliceDonor")
-    splice_set = next(
-        e for e in variant.effects()
-        if e.transcript is transcript)
+    splice_set = variant.effect_on_transcript(transcript)
+    assert isinstance(splice_set, SpliceOutcomeSet)
+    assert splice_set.disrupted_signal_class is SpliceDonor
     skip = _candidate_of_type(splice_set, ExonSkipping)
     assert skip.effect.in_frame is False
     ref = str(transcript.protein_sequence)
