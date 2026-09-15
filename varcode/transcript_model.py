@@ -197,9 +197,8 @@ def predict_transcript_model_effect(
         # orientation, fused cDNA and translation from this same BND. Keep it
         # as the BND realization path while the layout engine handles local
         # span variants.
-        from .annotators.structural_variant import StructuralVariantAnnotator
-        return StructuralVariantAnnotator().annotate_on_transcript(
-            primary, transcript)
+        from .effects.structural import predict_structural_variant_effect
+        return predict_structural_variant_effect(primary, transcript)
     if not transcript.is_protein_coding:
         return NoncodingTranscript(primary, transcript)
     if not transcript.complete:

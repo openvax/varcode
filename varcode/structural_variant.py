@@ -23,9 +23,8 @@ This module introduces :class:`StructuralVariant`, a :class:`Variant`
 subclass that preserves the SV-specific fields (type, end position,
 breakend mate, confidence intervals) instead of dropping them. The
 class is deliberately minimal — it describes *what the VCF said*, not
-*what the biological consequence is*. Effect annotation happens in
-:class:`~varcode.annotators.structural_variant.StructuralVariantAnnotator`
-(PR 10).
+*what the biological consequence is*. The default
+:class:`~varcode.annotators.fast.FastEffectAnnotator` handles its effects.
 
 Design notes for future integrations
 ------------------------------------
