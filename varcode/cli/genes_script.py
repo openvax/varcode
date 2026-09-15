@@ -12,14 +12,14 @@
 
 import logging
 import logging.config
-import pkg_resources
+from importlib import resources
 import sys
 
 from .version_info import print_version_info
 from .variant_args import make_variants_parser, variant_collection_from_args
 
 
-logging.config.fileConfig(pkg_resources.resource_filename(__name__, 'logging.conf'))
+logging.config.fileConfig(str(resources.files(__package__) / "logging.conf"))
 logger = logging.getLogger(__name__)
 
 arg_parser = make_variants_parser(
