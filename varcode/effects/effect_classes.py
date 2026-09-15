@@ -297,12 +297,13 @@ class Failure(TranscriptMutationEffect):
 
 
 class Unresolved(TranscriptMutationEffect):
-    """A biologically explicit hypothesis whose sequence is unavailable.
+    """An effect that could not be resolved with this model or evidence.
 
-    Unlike :class:`Failure`, this is not an annotation error.  The mechanism
-    is known (for example intron retention), but completing the product needs
-    genomic sequence or an observed RNA assembly that the caller did not
-    supply.
+    Unlike :class:`Failure`, this is not an annotation error. A hypothesis
+    may require missing genomic sequence or an RNA assembly. Alternatively,
+    ``mechanism="unsupported_annotation"`` means the selected annotator
+    returned ``NotImplemented`` for this input. ``reason`` explains why;
+    unresolved does not mean the variant is harmless.
     """
 
     def __init__(self, variant, transcript, mechanism, reason=None):

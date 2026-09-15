@@ -1,5 +1,30 @@
 # Change Log
 
+## [v8.0.0](https://github.com/openvax/varcode/tree/v8.0.0) (2026-09-15)
+
+**Changed**
+- One built-in default annotator (`fast`) now owns point-edit and structural
+  routing. Explicit `annotator="fast"` handles SVs just like `effects()`.
+  Single-transcript APIs accept annotator and germline context and honor the
+  same scoped selection as collection annotation.
+- Partial experimental annotators return `NotImplemented` for unsupported
+  inputs, without declaring `supports`. Public APIs expose those results as
+  `Unresolved` with a reason and retain the selected annotator's provenance;
+  they never silently substitute another annotator. `None` is an invalid
+  plugin result. `UnsupportedVariantError` remains a compatibility import.
+- Nonempty germline context requires `annotate_with_context`. The default
+  retains established germline point-edit prediction; SV/germline composition
+  remains experimental in `realized`. `protein_diff` declines SVs before
+  reading placeholder nucleotide alleles. Realized-layout limitations return
+  explicit unknowns without swallowing other errors.
+- `protein_diff` and `realized` remain optional experiments; shared protein
+  comparison helpers and point-edit parity tests remain in use. This release
+  changes the annotator contract, not the default biological model or ranking.
+
+**Fixed**
+- The registry-default test now restores the prior annotator rather than
+  leaking `protein_diff` into later tests.
+
 ## [v7.3.0](https://github.com/openvax/varcode/tree/v7.3.0) (2026-09-15)
 
 **Added**

@@ -10,19 +10,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Process-global registry for :class:`EffectAnnotator` instances.
+"""Annotator registry with one built-in default and optional experiments.
 
-Kept as a module-level dict (not a class) to match the flat registry
-pattern in the rest of varcode. Default selection is ``"fast"`` — the
-offset-based classifier varcode has shipped since 2.0.0 and the most
-battle-tested path. During the protein-diff bring-up ``"fast"`` was
-effectively the correctness oracle the protein-diff annotator was
-repeatedly reconciled against (#318–#321), and it has the cleaner bug
-history (see #397). ``"protein_diff"`` stays available as an opt-in
-(``annotator="protein_diff"`` / :func:`use_annotator`): it classifies
-from a translated protein diff, is self-consistent by construction and
-HGVS-canonical, and is the substrate the MutantTranscript /
-splice-outcome / germline machinery builds on. See #271.
+``fast`` handles point edits and rearrangements. Experimental annotators
+can decline individual inputs by returning ``NotImplemented``; no static
+capability declaration or implicit fallback is used.
 """
 
 from contextlib import contextmanager
@@ -34,12 +26,10 @@ from ..realized_effects import RealizedEffectAnnotator
 
 
 class UnsupportedVariantError(ValueError):
-    """Raised when an :class:`EffectAnnotator` is asked to handle a
-    variant kind outside its declared ``supports`` set.
+    """Legacy compatibility import; built-in annotators do not raise this.
 
-    Prefer this over silent mis-annotation — the whole point of the
-    pluggable-annotator design is that callers can see exactly which
-    annotator handles which variant kinds.
+    Partial annotators should return ``NotImplemented`` instead. Public
+    prediction APIs convert that sentinel into an ``Unresolved`` effect.
     """
     pass
 

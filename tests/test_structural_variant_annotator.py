@@ -63,13 +63,10 @@ def test_sv_annotator_registered_by_name():
     assert isinstance(annotator, StructuralVariantAnnotator)
 
 
-def test_sv_annotator_supports_sv_types():
-    assert "DEL" in _ANNOTATOR.supports
-    assert "BND" in _ANNOTATOR.supports
-    assert "INV" in _ANNOTATOR.supports
-    assert "DUP" in _ANNOTATOR.supports
-    # Doesn't claim SNV/indel/mnv — those are for fast/protein_diff.
-    assert "snv" not in _ANNOTATOR.supports
+def test_sv_only_annotator_declines_point_variants():
+    from varcode import Variant
+    variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
+    assert _ANNOTATOR.annotate_on_transcript(variant, _cftr()) is NotImplemented
 
 
 # --------------------------------------------------------------------

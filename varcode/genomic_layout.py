@@ -31,6 +31,10 @@ from typing import Callable, Optional, Tuple
 from .nucleotides import reverse_complement
 
 
+class UnsupportedLayoutEdit(ValueError):
+    """A layout operation this implementation cannot realize."""
+
+
 class SequenceUnavailable(ValueError):
     """Raised when a lazy reference segment is materialized without FASTA."""
 
@@ -411,9 +415,9 @@ class GenomicLayout:
         """
         kind = variant.sv_type
         if kind == "BND":
-            raise ValueError("Use join_breakends for BND variants")
+            raise UnsupportedLayoutEdit("Use join_breakends for BND variants")
         if kind == "CNV":
-            raise ValueError("CNV direction is unresolved")
+            raise UnsupportedLayoutEdit("CNV direction is unresolved")
         if kind == "INS":
             sequence = variant.alt_assembly
             if not sequence:
@@ -474,7 +478,7 @@ class GenomicLayout:
                 for segment in affected.segments)
             insert_at = high if strand == "+" else low
             return self.replace(insert_at, insert_at, duplicated)
-        raise ValueError("Unsupported structural variant type %r" % kind)
+        raise UnsupportedLayoutEdit("Unsupported structural variant type %r" % kind)
 
     def apply_variants(self, variants, validate_reference=True):
         """Apply variants in descending genomic order.

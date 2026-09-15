@@ -19,10 +19,9 @@ scope exercise both code paths automatically.
 
 The ``annotator_scope`` autouse fixture sets the default annotator
 for the entire test function based on the ``--annotator`` CLI option
-(default: ``"fast"``). This lets CI run the full suite under
-``protein_diff`` with ``pytest --annotator=protein_diff`` to catch
-parity regressions across ALL tests, not just the explicit parity
-harness.
+(default: ``"fast"``). CI uses ``--annotator=protein_diff -m parity``
+for the shared point-edit domain. Partial experimental annotators are not
+expected to satisfy tests for unsupported inputs (for example SVs).
 """
 
 import os

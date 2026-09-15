@@ -587,16 +587,13 @@ class StructuralVariantAnnotator:
     """Classify :class:`~varcode.StructuralVariant` consequences on
     a single transcript.
 
-    ``supports`` advertises the SV kinds the annotator handles. The
-    :class:`~varcode.FastEffectAnnotator` and
-    :class:`~varcode.annotators.protein_diff.ProteinDiffEffectAnnotator`
-    advertise ``{"snv", "indel", "mnv"}``; this one advertises the
-    SV-type tokens used on :attr:`StructuralVariant.sv_type`.
+    Used internally by the default annotator. The structural-only entry
+    point remains available for compatibility and returns ``NotImplemented``
+    for point variants or structural events it cannot interpret.
     """
 
     name = "structural_variant"
     version = _varcode_version
-    supports = frozenset({"DEL", "DUP", "INV", "INS", "CNV", "BND"})
 
     # SV types with a reference span, mapped to the method that says
     # what the span does to a transcript's exons.
@@ -633,10 +630,14 @@ class StructuralVariantAnnotator:
             raise TypeError(
                 "Expected pyensembl.Transcript, got %s" % type(transcript))
 
+        sv_type = getattr(variant, "sv_type", None)
+        if (not getattr(variant, "is_structural", False)
+                or (sv_type != "BND" and sv_type not in self._SPAN_EFFECTS)):
+            return NotImplemented
+
         if not transcript.is_protein_coding:
             return NoncodingTranscript(variant, transcript)
 
-        sv_type = getattr(variant, "sv_type", None)
         # A caller-resolved allele, when there is one, is preferred over
         # anything inferred from breakpoints; build it once per call.
         assembly = _build_alt_assembly_mutant_transcript(variant, transcript)
@@ -657,10 +658,6 @@ class StructuralVariantAnnotator:
                 effect = span_effect
             elif isinstance(span_effect, StructuralVariantEffect):
                 effect._attach_primary_effects((span_effect,))
-        else:
-            # Unknown SV type — fall back to intergenic so the call
-            # graph doesn't crash.
-            return Intergenic(variant)
 
         # Attach cryptic-exon candidates enumerated from flanking
         # sequence / long-read assembly (#337). They show up as

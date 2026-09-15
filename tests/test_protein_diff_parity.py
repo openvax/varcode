@@ -12,9 +12,9 @@
 
 """Byte-for-byte parity harness: ``fast`` vs ``protein_diff``.
 
-Now that ``fast`` is the default annotator (7.0.0) while ``protein_diff``
-remains the substrate for the splice-outcome / germline machinery, the
-two must stay reconciled — this suite is the gate that enforces it.
+The default and experimental ``protein_diff`` annotators must stay
+reconciled on their shared point-edit domain. Experimental refusal outside
+that domain is tested separately in ``test_partial_annotators.py``.
 
 **What this adds over ``test_annotator_parity_adversarial.py``.** That
 suite compares only the effect *class* and *short_description*. This one

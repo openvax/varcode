@@ -903,7 +903,7 @@ def _classify_against_patient_baseline(
             # sees a per-hypothesis result; it just degenerates.
             from .effects import predict_variant_effect_on_transcript
             return predict_variant_effect_on_transcript(
-                somatic_variant, transcript)
+                somatic_variant, transcript, annotator="fast")
         baseline_protein = baseline.mutant_protein_sequence
         baseline_length_delta = baseline.total_length_delta
     else:
@@ -922,14 +922,14 @@ def _classify_against_patient_baseline(
         # classification of the somatic alone.
         from .effects import predict_variant_effect_on_transcript
         return predict_variant_effect_on_transcript(
-            somatic_variant, transcript)
+            somatic_variant, transcript, annotator="fast")
 
     if baseline_protein is None:
         # Edge: transcript has no reference protein (incomplete or
         # non-coding got past our gate); fall back.
         from .effects import predict_variant_effect_on_transcript
         return predict_variant_effect_on_transcript(
-            somatic_variant, transcript)
+            somatic_variant, transcript, annotator="fast")
 
     # Length delta of the somatic alone, after stripping the germline-
     # only baseline shift. classify_from_protein_diff expects the diff
@@ -997,6 +997,8 @@ def predict_germline_aware_effect(
     if not germline_in_window:
         effect = annotator.annotate_on_transcript(
             somatic_variant, transcript)
+        if effect is NotImplemented:
+            return effect
         if germline_ctx.completeness in (
                 Completeness.SPARSE, Completeness.HOTSPOTS_ONLY):
             effect.germline_unknown = True
