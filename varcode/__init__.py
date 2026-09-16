@@ -64,10 +64,13 @@ from .phasing import (
 from .rna_read_phasing import RNAReadPhasingSource
 from .rna_evidence import (
     NullRNAEvidenceResolver,
+    RNAEvidence,
     RNAEvidenceResolver,
     apply_rna_evidence_to_effects,
+    make_fusion_outcome,
     make_rna_outcome,
 )
+from .exacto import load_exacto_fusions
 from .realized_effects import predict_realized_effect
 from .transcript_model import predict_transcript_model_effect
 from .splice_outcomes import (
@@ -171,9 +174,12 @@ __all__ = [
 
     # RNA-evidence resolver (openvax/varcode#259)
     "RNAEvidenceResolver",
+    "RNAEvidence",
     "NullRNAEvidenceResolver",
     "apply_rna_evidence_to_effects",
     "make_rna_outcome",
+    "make_fusion_outcome",
+    "load_exacto_fusions",
 
     "EffectAnnotator",
     "FastEffectAnnotator",

@@ -34,6 +34,13 @@ from serializable import DataclassSerializable
 from .nucleotides import reverse_complement
 
 
+@dataclass
+class _AssembledAllele(DataclassSerializable):
+    """Sequence provider for an externally assembled ReferenceSegment."""
+
+    sequence: str
+
+
 @dataclass(frozen=True)
 class TranscriptEdit(DataclassSerializable):
     """A single edit applied to a transcript's spliced mRNA.
@@ -261,6 +268,26 @@ class MutantTranscript(DataclassSerializable):
             raise ValueError(
                 "MutantTranscript requires either reference_transcript "
                 "(point-variant shape) or reference_segments (SV shape).")
+
+    @classmethod
+    def from_sequence(cls, sequence, *, reference_transcript=None,
+                      mutant_protein_sequence=None, annotator_name="unknown",
+                      evidence=None, label="observed_sequence"):
+        """Wrap an oriented external sequence without reconstructing it.
+
+        Sequence is already in transcript 5'-to-3' order. This constructor
+        does not infer an ORF, splice structure, or sequence completeness.
+        Producers must describe partial observations in ``evidence``.
+        """
+        return cls(
+            reference_transcript=reference_transcript,
+            reference_segments=(ReferenceSegment(
+                source=_AssembledAllele(sequence), start=0, end=len(sequence),
+                label=label),),
+            cdna_sequence=sequence,
+            mutant_protein_sequence=mutant_protein_sequence,
+            annotator_name=annotator_name,
+            evidence=evidence)
 
     @property
     def is_identical_to_reference(self) -> bool:
