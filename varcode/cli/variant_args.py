@@ -11,6 +11,8 @@
 # limitations under the License.
 
 from argparse import ArgumentParser
+from contextlib import contextmanager
+import os
 
 from ..vcf import load_vcf
 from ..maf import load_maf
@@ -100,6 +102,52 @@ def make_variants_parser(**kwargs):
     return parser
 
 
+@contextmanager
+def exit_on_user_error(arg_parser):
+    """
+    Report mistakes a user can make on the command line (missing input
+    file, unknown genome, invalid contig or allele, reference mismatch,
+    unwritable output path) as a one-line ``prog: error: ...`` message with
+    exit status 1, instead of a traceback.
+    """
+    try:
+        yield
+    except (ValueError, OSError) as e:
+        arg_parser.exit(1, "%s: error: %s\n" % (arg_parser.prog, e))
+
+
+def check_output_directory(path):
+    """
+    Fail before any annotation work if an output file can't be written where
+    the user asked for it.
+    """
+    if os.path.isdir(path):
+        raise ValueError("output path is a directory: %s" % path)
+    directory = os.path.dirname(os.path.abspath(path))
+    if not os.path.isdir(directory):
+        raise ValueError("output directory does not exist: %s" % directory)
+
+
+# PyEnsembl looks up loci in SQLite, whose INTEGER is a signed 64-bit value.
+# A larger position raises OverflowError from inside the query, which isn't a
+# ValueError and so wouldn't be reported as the bad coordinate it is.
+MAX_POSITION = 2 ** 63 - 1
+
+
+def parse_position(position):
+    try:
+        parsed = int(position)
+    except ValueError:
+        raise ValueError(
+            "--variant position must be an integer, got %r" % (position,)
+        ) from None
+    if parsed > MAX_POSITION:
+        raise ValueError(
+            "--variant position is out of range, got %s (must be at most %d)" % (
+                parsed, MAX_POSITION))
+    return parsed
+
+
 def download_and_install_reference_data(variant_collections):
     unique_genomes = {
         variant.ensembl
@@ -130,7 +178,7 @@ def variant_collection_from_args(args, required=True):
         variants = [
             Variant(
                 chromosome,
-                start=position,
+                start=parse_position(position),
                 ref=ref,
                 alt=alt,
                 genome=args.genome)

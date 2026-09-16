@@ -12,6 +12,7 @@
 
 from tempfile import NamedTemporaryFile
 import pandas as pd
+import pytest
 
 from varcode.cli.effects_script import main as run_script
 from varcode import Variant
@@ -43,3 +44,52 @@ def test_varcode_effects_script_kras_g12d_top_effect():
     eq_(df.loc[0].gene_name, "KRAS")
     eq_(df.iloc[0].effect, "p.G12D")
 
+
+@pytest.mark.parametrize(
+    "commandline_args, message",
+    [
+        ([], "No variants loaded"),
+        (["--vcf", "/nonexistent/x.vcf"], "No such file or directory"),
+        (["--variant", "12", "25398284", "C", "T"], "--genome must be specified"),
+        (
+            ["--genome", "grch37", "--variant", "12", "abc", "C", "T"],
+            "--variant position must be an integer, got 'abc'",
+        ),
+        (
+            ["--genome", "grch37", "--variant", "12", "9" * 20, "C", "T"],
+            "--variant position is out of range",
+        ),
+        (
+            ["--genome", "grch37", "--variant", "12", "25398284", "C", "T",
+             "--output-csv", "/nonexistent/dir/out.csv"],
+            "output directory does not exist: /nonexistent/dir",
+        ),
+    ],
+)
+def test_varcode_effects_script_user_errors_exit_cleanly(commandline_args, message, capsys):
+    with pytest.raises(SystemExit) as exc_info:
+        run_script(commandline_args)
+    eq_(exc_info.value.code, 1)
+    stderr = capsys.readouterr().err
+    assert "Traceback" not in stderr
+    assert message in stderr
+
+
+def test_varcode_effects_script_output_csv_directory_fails_before_annotating(
+        tmp_path, capsys):
+    """
+    An --output-csv path which is itself a directory should be rejected by the
+    same pre-flight check as a missing directory, rather than after the whole
+    annotation run.
+    """
+    commandline_args = [
+        "--genome", "grch37",
+        "--variant", "12", "25398284", "C", "T",
+        "--output-csv", str(tmp_path),
+    ]
+    with pytest.raises(SystemExit) as exc_info:
+        run_script(commandline_args)
+    eq_(exc_info.value.code, 1)
+    stderr = capsys.readouterr().err
+    assert "Traceback" not in stderr
+    assert "output path is a directory: %s" % tmp_path in stderr

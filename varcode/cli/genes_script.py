@@ -16,7 +16,12 @@ from importlib import resources
 import sys
 
 from .version_info import print_version_info
-from .variant_args import make_variants_parser, variant_collection_from_args
+from .variant_args import (
+    check_output_directory,
+    exit_on_user_error,
+    make_variants_parser,
+    variant_collection_from_args,
+)
 
 
 # as_file, rather than str(), so that logging.conf is also readable when varcode
@@ -46,8 +51,11 @@ def main(args_list=None):
     if args_list is None:
         args_list = sys.argv[1:]
     args = arg_parser.parse_args(args_list)
-    variants = variant_collection_from_args(args)
-    variants_dataframe = variants.to_dataframe()
-    logger.info('\n%s', variants_dataframe)
-    if args.output_csv:
-        variants_dataframe.to_csv(args.output_csv, index=False)
+    with exit_on_user_error(arg_parser):
+        if args.output_csv:
+            check_output_directory(args.output_csv)
+        variants = variant_collection_from_args(args)
+        variants_dataframe = variants.to_dataframe()
+        logger.info('\n%s', variants_dataframe)
+        if args.output_csv:
+            variants_dataframe.to_csv(args.output_csv, index=False)
