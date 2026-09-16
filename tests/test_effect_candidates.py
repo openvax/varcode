@@ -99,7 +99,7 @@ def test_sv_outcomes_carry_sv_type_in_evidence():
     """:class:`StructuralVariantEffect.candidates` attaches the
     ``sv_type`` to each outcome's evidence so consumers iterating
     outcomes can filter by SV kind uniformly (#339)."""
-    from varcode import StructuralVariant, StructuralVariantAnnotator
+    from varcode import StructuralVariant, FastEffectAnnotator
     transcript = ensembl_grch38.transcript_by_id("ENST00000003084")
     sv = StructuralVariant(
         contig="7",
@@ -107,7 +107,7 @@ def test_sv_outcomes_carry_sv_type_in_evidence():
         end=transcript.start + 5_000,
         sv_type="DEL",
         genome=ensembl_grch38)
-    effect = StructuralVariantAnnotator().annotate_on_transcript(sv, transcript)
+    effect = FastEffectAnnotator().annotate_on_transcript(sv, transcript)
     outcomes = effect.candidates
     assert len(outcomes) >= 1
     for o in outcomes:
@@ -118,7 +118,7 @@ def test_uniform_iteration_sv_and_splice_outcomes():
     """The point of #339: downstream code iterating
     ``outcome.effect.short_description`` works across SV and splice
     outcomes without any ``isinstance`` branching."""
-    from varcode import StructuralVariant, StructuralVariantAnnotator
+    from varcode import StructuralVariant, FastEffectAnnotator
     from varcode.effects.effect_classes import MutationEffect
 
     transcript = ensembl_grch38.transcript_by_id("ENST00000003084")
@@ -129,7 +129,7 @@ def test_uniform_iteration_sv_and_splice_outcomes():
         end=transcript.start + 5_000,
         sv_type="DEL",
         genome=ensembl_grch38)
-    sv_effect = StructuralVariantAnnotator().annotate_on_transcript(
+    sv_effect = FastEffectAnnotator().annotate_on_transcript(
         sv, transcript)
 
     splice_variant = Variant("7", 117531115, "G", "A", ensembl_grch38)

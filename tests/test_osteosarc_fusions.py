@@ -44,8 +44,8 @@ records and the paired event must still come out as fusions.
 import pytest
 from pyensembl import cached_release
 
-from varcode import StructuralVariant, StructuralVariantAnnotator, load_vcf
-from varcode.annotators.structural_variant import (
+from varcode import StructuralVariant, FastEffectAnnotator, load_vcf
+from varcode.effects.structural import (
     _build_fusion_mutant_transcript,
 )
 from varcode.effects import GeneFusion, Intronic
@@ -56,7 +56,7 @@ from .data import data_path
 # Release 95 rather than the suite's usual 81: LINX's FAM193A
 # transcript (ENST00000637812) isn't in 81. CI installs both.
 ensembl_grch38 = cached_release(95)
-_ANNOTATOR = StructuralVariantAnnotator()
+_ANNOTATOR = FastEffectAnnotator()
 
 
 def _sum_exon_lengths(transcript, exon_numbers):

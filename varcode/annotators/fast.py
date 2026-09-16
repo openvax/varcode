@@ -41,9 +41,8 @@ class FastEffectAnnotator:
         dispatch) can still pattern-match on the raw class.
         """
         if getattr(variant, "is_structural", False):
-            from .structural_variant import StructuralVariantAnnotator
-            return StructuralVariantAnnotator().annotate_on_transcript(
-                variant, transcript)
+            from ..effects.structural import predict_structural_variant_effect
+            return predict_structural_variant_effect(variant, transcript)
         # Lazy import avoids a circular dep at package import time.
         from ..effects.effect_prediction import (
             _predict_variant_effect_on_transcript_raw,

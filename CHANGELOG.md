@@ -1,5 +1,26 @@
 # Change Log
 
+## [v9.0.0](https://github.com/openvax/varcode/tree/v9.0.0) (unreleased)
+
+**Breaking changes**
+- Removed `StructuralVariantAnnotator`, the `varcode.annotators.structural_variant`
+  module, and `annotator="structural_variant"`. Use `effects()` or
+  `annotator="fast"` for both point variants and SVs; direct callers can use
+  `FastEffectAnnotator().annotate_on_transcript(variant, transcript)`.
+- Removed `UnsupportedVariantError` and its package/registry exports. Partial
+  annotators return `NotImplemented`; public prediction APIs expose an
+  `Unresolved` effect without silently selecting another annotator.
+- Pickles referring to classes in the removed structural-annotator module or
+  to `UnsupportedVariantError` must be read with varcode 8 before migrating.
+
+**Changed**
+- The default annotator calls internal structural prediction helpers directly,
+  without instantiating another annotator. The experimental transcript model
+  shares those helpers for fusion prediction. Classification, sequence assembly,
+  candidates, and existing provenance are unchanged.
+- `fast` remains the default; `protein_diff` and `transcript_model` remain
+  experimental. Joint haplotype construction is unchanged (tracked in #437).
+
 ## [v8.0.2](https://github.com/openvax/varcode/tree/v8.0.2) (2026-09-15)
 
 **Fixed**

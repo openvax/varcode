@@ -20,7 +20,6 @@ import varcode
 from varcode import (
     EffectAnnotator,
     FastEffectAnnotator,
-    UnsupportedVariantError,
     Variant,
     get_annotator,
     get_default_annotator,
@@ -138,20 +137,6 @@ def test_fast_annotator_annotator_matches_effect_on_transcript():
 
 
 # ====================================================================
-# UnsupportedVariantError remains importable for compatibility. The
-# return-value protocol uses NotImplemented instead of this exception.
-# ====================================================================
-
-
-def test_unsupported_variant_error_is_a_value_error():
-    # Users can `except ValueError` and catch unsupported-variant
-    # errors alongside other validation failures if they want.
-    assert issubclass(UnsupportedVariantError, ValueError)
-    with pytest.raises(UnsupportedVariantError):
-        raise UnsupportedVariantError("test")
-
-
-# ====================================================================
 # Package-level exports
 # ====================================================================
 
@@ -159,7 +144,6 @@ def test_unsupported_variant_error_is_a_value_error():
 def test_annotator_types_exported_at_package_level():
     assert varcode.EffectAnnotator is EffectAnnotator
     assert varcode.FastEffectAnnotator is FastEffectAnnotator
-    assert varcode.UnsupportedVariantError is UnsupportedVariantError
     # Registry functions too
     assert varcode.get_annotator is get_annotator
     assert varcode.get_default_annotator is get_default_annotator

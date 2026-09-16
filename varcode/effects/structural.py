@@ -10,58 +10,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""``StructuralVariantAnnotator`` — minimal, pluggable SV effect
-classifier (PR 10; #252 / #259 / #305).
+"""Internal structural-effect prediction shared by the default and transcript model.
 
-Input: a :class:`~varcode.StructuralVariant` and a
-``pyensembl.Transcript``.
+The public default calls these helpers directly; this module does not select or
+instantiate annotators. Structural classification, sequence construction and
+candidate enumeration live here.
 
-Output: one of the SV effect classes from
-:mod:`varcode.effects.effect_classes` (``LargeDeletion``,
-``LargeDuplication``, ``Inversion``, ``GeneFusion``,
-``TranslocationToIntergenic``), each of which is a
-:class:`~varcode.effects.MultiOutcomeEffect` exposing
-:attr:`candidates` — a tuple of :class:`~varcode.effect_candidates.EffectCandidate`
-entries each carrying an effect + source + evidence.
-
-Scope
------
-
-This annotator is deliberately shallow:
-
-* It identifies which transcript(s) an SV overlaps and classifies
-  the top-level consequence (deletion of exons, fusion candidate,
-  intergenic translocation, etc.).
-* It does *not* compute the exact fused protein sequence, predict
-  whether a cryptic exon will be retained, or rank outcomes by
-  likelihood. Those require external tools (SpliceAI, RNA evidence
-  via Isovar, or long-read assembly) that attach additional
-  :class:`EffectCandidate` entries with their own ``source`` and ``evidence``.
-
-The point of shipping this annotator now, even with thin logic, is
-to make the *shape* of SV output available to the rest of the
-ecosystem: the ``MultiOutcomeEffect`` + ``EffectCandidate`` contract is
-what lets RNA and assembly tools integrate cleanly.
-
-Integration hooks
------------------
-
-* **SV with ``alt_assembly`` populated** (long-read resolution):
-  the annotator wraps the resolved allele as a single
-  :class:`~varcode.ReferenceSegment` on the returned
-  :class:`MutantTranscript`, so consumers that compute fused-protein
-  sequences have a concrete assembled cDNA to read.
-* **External splice predictor**: call the annotator, then wrap each
-  returned effect in a new :class:`MultiOutcomeEffect` whose
-  ``candidates`` tuple includes a fresh ``EffectCandidate(effect=cryptic,
-  source="spliceai", evidence=...)`` entry.
-* **Short-read RNA evidence**: same pattern. Attach an
-  ``EffectCandidate`` carrying the read-evidence tool's ``source``
-  and a ``junction_reads`` field in ``evidence`` alongside the
-  varcode-nominated outcome.
+Mutant transcripts retain the historical ``structural_variant`` builder
+provenance; their containing effect collection records the selected annotator.
 """
 
-from ..effects.effect_classes import (
+from .effect_classes import (
     GeneFusion,
     Intergenic,
     Intronic,
@@ -72,10 +31,9 @@ from ..effects.effect_classes import (
     StructuralVariantEffect,
     TranslocationToIntergenic,
 )
-from ..effects.effect_helpers import exon_length
+from .effect_helpers import exon_length
 from ..mutant_transcript import MutantTranscript, ReferenceSegment
 from ..sv_allele_parser import breakend_sides
-from ..version import __version__ as _varcode_version
 
 
 # --------------------------------------------------------------------
@@ -211,7 +169,7 @@ def _breakpoint_splice_window(transcript, breakpoint_pos):
     exonic-splice case has extra alternate-effect machinery that
     doesn't apply to an SV's already-disruptive primary outcome.
     """
-    from ..effects.effect_classes import (
+    from .effect_classes import (
         IntronicSpliceSite,
         SpliceAcceptor,
         SpliceDonor,
@@ -324,7 +282,7 @@ def _warn_on_unknown_breakend_orientation(variant):
     to treating the annotated transcript as the 5' fusion partner."""
     import warnings
     warnings.warn(
-        "StructuralVariantAnnotator can't read the breakend orientation "
+        "Structural prediction can't read the breakend orientation "
         "of %s from ALT %r; treating the annotated transcript as the "
         "5' fusion partner. Use a VCF breakend ALT such as N[17:100[ "
         "or pass StructuralVariant.alt_assembly." % (
@@ -493,7 +451,7 @@ def _translate_fused_cdna(fused_cdna, five_prime_transcript, five_prime_len):
     codon) or ``None`` when the CDS start is past the breakpoint or
     translation otherwise fails.
     """
-    from ..effects.codon_tables import (
+    from .codon_tables import (
         codon_table_for_transcript,
         translate_sequence,
     )
@@ -583,393 +541,379 @@ def _build_translocation_mutant_transcript(variant, transcript):
         annotator_name="structural_variant")
 
 
-class StructuralVariantAnnotator:
-    """Classify :class:`~varcode.StructuralVariant` consequences on
-    a single transcript.
-
-    Used internally by the default annotator. The structural-only entry
-    point remains available for compatibility and returns ``NotImplemented``
-    for point variants or structural events it cannot interpret.
+def predict_structural_variant_effect(variant, transcript):
+    """Classify ``variant`` on ``transcript``. Returns a single
+    effect (typically a ``MultiOutcomeEffect`` subclass); consume
+    ``effect.candidates`` for the full outcome set.
     """
+    from pyensembl import Transcript
+    if not isinstance(transcript, Transcript):
+        raise TypeError(
+            "Expected pyensembl.Transcript, got %s" % type(transcript))
 
-    name = "structural_variant"
-    version = _varcode_version
+    sv_type = getattr(variant, "sv_type", None)
+    if (not getattr(variant, "is_structural", False)
+            or (sv_type != "BND" and sv_type not in _SPAN_EFFECTS)):
+        return NotImplemented
 
-    # SV types with a reference span, mapped to the method that says
-    # what the span does to a transcript's exons.
-    _SPAN_EFFECTS = {
-        "DEL": "_annotate_deletion",
-        "DUP": "_annotate_duplication",
-        "INV": "_annotate_inversion",
-        # CNVs are ambiguous at the protein level (gain vs loss depends
-        # on direction). Treat as duplication in the CNV-gain case; the
-        # CN0 subtype is routed to deletion logic at parse time (see
-        # sv_allele_parser).
-        "CNV": "_annotate_duplication",
-        # A large symbolic insertion is *structurally* an SV but
-        # functionally resembles an in-frame-or-frameshift insertion if
-        # the sequence is known. For now we defer to the duplication
-        # shape — callers with ``alt_assembly`` populated get a richer
-        # result once the SV annotator materializes segments.
-        "INS": "_annotate_insertion",
-    }
+    if not transcript.is_protein_coding:
+        return NoncodingTranscript(variant, transcript)
 
-    def __repr__(self):
-        return "StructuralVariantAnnotator(name=%r, version=%r)" % (
-            self.name, self.version)
+    # A caller-resolved allele, when there is one, is preferred over
+    # anything inferred from breakpoints; build it once per call.
+    assembly = _build_alt_assembly_mutant_transcript(variant, transcript)
 
-    # -- public API -------------------------------------------------------
+    if sv_type == "BND":
+        effect = _annotate_breakend(variant, transcript, assembly)
+    elif sv_type in _SPAN_EFFECTS:
+        span_effect = _SPAN_EFFECTS[sv_type](
+            variant, transcript, assembly)
+        # A span with one end in this transcript and a sense-to-sense
+        # partner at the other end is a fusion. What the span does to
+        # this transcript's own exons stays on the fusion as a further
+        # primary candidate. Insertions and CNVs have no junction, so
+        # they never fuse.
+        effect = _fusion_across_junction(
+            variant, transcript, assembly)
+        if effect is None:
+            effect = span_effect
+        elif isinstance(span_effect, StructuralVariantEffect):
+            effect._attach_primary_effects((span_effect,))
 
-    def annotate_on_transcript(self, variant, transcript):
-        """Classify ``variant`` on ``transcript``. Returns a single
-        effect (typically a ``MultiOutcomeEffect`` subclass); consume
-        ``effect.candidates`` for the full outcome set.
-        """
-        from pyensembl import Transcript
-        if not isinstance(transcript, Transcript):
-            raise TypeError(
-                "Expected pyensembl.Transcript, got %s" % type(transcript))
+    # Attach cryptic-exon candidates enumerated from flanking
+    # sequence / long-read assembly (#337). They show up as
+    # additional EffectCandidate entries with source="varcode_motif".
+    _enumerate_and_attach_cryptics(variant, effect)
+    # Attach splice-outcome candidates when any SV breakpoint
+    # lands in a canonical splice window on the transcript
+    # (#341). They show up as additional EffectCandidate entries with
+    # source="varcode_splice".
+    _enumerate_and_attach_splice_outcomes(variant, transcript, effect)
+    return effect
 
-        sv_type = getattr(variant, "sv_type", None)
-        if (not getattr(variant, "is_structural", False)
-                or (sv_type != "BND" and sv_type not in self._SPAN_EFFECTS)):
-            return NotImplemented
 
-        if not transcript.is_protein_coding:
-            return NoncodingTranscript(variant, transcript)
+def _enumerate_and_attach_splice_outcomes(variant, transcript, effect):
+    """If any breakpoint of ``variant`` lands in a canonical
+    splice window on ``transcript``, synthesize the matching
+    splice-disrupting effect, feed it to
+    :func:`~varcode.splice_outcomes.enumerate_splice_outcomes`,
+    and attach the returned candidates (minus NormalSplicing,
+    which the SV primary classification already covers) to
+    ``effect`` (#341).
 
-        # A caller-resolved allele, when there is one, is preferred over
-        # anything inferred from breakpoints; build it once per call.
-        assembly = _build_alt_assembly_mutant_transcript(variant, transcript)
-
-        if sv_type == "BND":
-            effect = self._annotate_breakend(variant, transcript, assembly)
-        elif sv_type in self._SPAN_EFFECTS:
-            span_effect = getattr(self, self._SPAN_EFFECTS[sv_type])(
-                variant, transcript, assembly)
-            # A span with one end in this transcript and a sense-to-sense
-            # partner at the other end is a fusion. What the span does to
-            # this transcript's own exons stays on the fusion as a further
-            # primary candidate. Insertions and CNVs have no junction, so
-            # they never fuse.
-            effect = self._fusion_across_junction(
-                variant, transcript, assembly)
-            if effect is None:
-                effect = span_effect
-            elif isinstance(span_effect, StructuralVariantEffect):
-                effect._attach_primary_effects((span_effect,))
-
-        # Attach cryptic-exon candidates enumerated from flanking
-        # sequence / long-read assembly (#337). They show up as
-        # additional EffectCandidate entries with source="varcode_motif".
-        self._enumerate_and_attach_cryptics(variant, effect)
-        # Attach splice-outcome candidates when any SV breakpoint
-        # lands in a canonical splice window on the transcript
-        # (#341). They show up as additional EffectCandidate entries with
-        # source="varcode_splice".
-        self._enumerate_and_attach_splice_outcomes(variant, transcript, effect)
-        return effect
-
-    def _enumerate_and_attach_splice_outcomes(self, variant, transcript, effect):
-        """If any breakpoint of ``variant`` lands in a canonical
-        splice window on ``transcript``, synthesize the matching
-        splice-disrupting effect, feed it to
-        :func:`~varcode.splice_outcomes.enumerate_splice_outcomes`,
-        and attach the returned candidates (minus NormalSplicing,
-        which the SV primary classification already covers) to
-        ``effect`` (#341).
-
-        No-op when ``effect`` isn't an
-        :class:`StructuralVariantEffect` (Intronic/Intergenic
-        fall-throughs) or when no breakpoint falls in a splice
-        window.
-        """
-        from ..effects.effect_classes import (
-            NormalSplicing, StructuralVariantEffect)
-        from ..effect_candidates import EffectCandidate
-        from ..splice_outcomes import enumerate_splice_outcomes
-        if not isinstance(effect, StructuralVariantEffect):
-            return
-        affected_start, affected_end = _affected_span(variant)
-        event_end = getattr(variant, "end", variant.start)
-        if (affected_start, affected_end) != (variant.start, event_end):
-            # Typed breakend pairs retain their original junction positions
-            # separately from the bases affected between them.
-            bp_positions = {
-                position for _, position in variant.breakpoints}
-        else:
-            # Preserve the established symbolic-SV interpretation of POS
-            # and END as the positions whose splice windows are inspected.
-            bp_positions = {variant.start, event_end}
-        sv_type = getattr(variant, "sv_type", None)
-        sv_evidence = {"sv_type": sv_type} if sv_type is not None else {}
-        attached = []
-        seen_exons = set()
-        for bp in bp_positions:
-            window = _breakpoint_splice_window(transcript, bp)
-            if window is None:
-                continue
-            splice_cls, exon, distance = window
-            # If two endpoints land in the same exon's splice window,
-            # only emit one set of splice candidates — the outcomes
-            # are identical.
-            if exon.exon_id in seen_exons:
-                continue
-            seen_exons.add(exon.exon_id)
-            try:
-                synthetic = splice_cls(
-                    variant=variant,
-                    transcript=transcript,
-                    nearest_exon=exon,
-                    distance_to_exon=distance)
-                splice_set = enumerate_splice_outcomes(synthetic)
-            except (AttributeError, KeyError, ValueError):
-                continue
-            for candidate in splice_set.candidates:
-                if isinstance(candidate.effect, NormalSplicing):
-                    # Primary SV classification already covers the
-                    # "splicing proceeds normally" interpretation.
-                    continue
-                attached.append(EffectCandidate(
-                    effect=candidate.effect,
-                    source="varcode_splice",
-                    evidence={**dict(candidate.evidence), **sv_evidence}))
-        if attached:
-            effect._attach_splice_outcomes(attached)
-
-    def _enumerate_and_attach_cryptics(self, variant, effect):
-        """Enumerate cryptic-exon candidates around the SV and hand
-        them to ``effect._attach_cryptic_candidates`` (#337). The
-        annotator is the only legitimate caller of that method —
-        separating enumeration (here) from storage (on the effect)
-        keeps the motif-scoring dependency out of ``effect_classes``.
-
-        No-op when ``effect`` isn't an
-        :class:`StructuralVariantEffect` (e.g. intronic
-        fall-through) or when the enumerator returns nothing.
-        """
-        from ..cryptic_exons import enumerate_from_structural_variant
-        from ..effects.effect_classes import StructuralVariantEffect
-        if not isinstance(effect, StructuralVariantEffect):
-            return
-        def enumerate_candidates():
-            try:
-                return enumerate_from_structural_variant(variant)
-            except (AttributeError, KeyError, ValueError, OSError):
-                # Genome sequence fetch failed (no FASTA cached, unknown
-                # contig, etc.) — skip; consumers still get the primary
-                # SV classification.
-                return []
-
-        # The candidates depend only on the variant, not the transcript.
-        candidates = _cached(
-            variant, "cryptic_candidates", enumerate_candidates)
-        if candidates:
-            effect._attach_cryptic_candidates(candidates)
-
-    # -- classification helpers -----------------------------------------
-
-    def _annotate_deletion(self, variant, transcript, assembly=None):
-        """A deletion overlapping a transcript: :class:`LargeDeletion`
-        when it covers one or more exons, :class:`Intronic` when it's
-        purely intronic."""
-        affected = self._overlapping_exons(variant, transcript)
-        if not affected:
-            return self._intronic_or_intergenic(variant, transcript)
-        return LargeDeletion(
-            variant=variant,
-            transcript=transcript,
-            affected_exons=affected,
-            mutant_transcript=assembly or _build_deletion_mutant_transcript(
-                variant, transcript))
-
-    def _annotate_duplication(self, variant, transcript, assembly=None):
-        affected = self._overlapping_exons(variant, transcript)
-        if not affected:
-            return self._intronic_or_intergenic(variant, transcript)
-        return LargeDuplication(
-            variant=variant,
-            transcript=transcript,
-            affected_exons=affected,
-            mutant_transcript=assembly or _build_duplication_mutant_transcript(
-                variant, transcript))
-
-    def _annotate_inversion(self, variant, transcript, assembly=None):
-        affected = self._overlapping_exons(variant, transcript)
-        if not affected:
-            return self._intronic_or_intergenic(variant, transcript)
-        return Inversion(
-            variant=variant,
-            transcript=transcript,
-            mutant_transcript=assembly or _build_inversion_mutant_transcript(
-                variant, transcript))
-
-    def _annotate_insertion(self, variant, transcript, assembly=None):
-        affected = self._overlapping_exons(variant, transcript)
-        if not affected:
-            return self._intronic_or_intergenic(variant, transcript)
-        return LargeDuplication(
-            variant=variant,
-            transcript=transcript,
-            affected_exons=affected,
-            mutant_transcript=assembly or _build_duplication_mutant_transcript(
-                variant, transcript))
-
-    def _annotate_breakend(self, variant, transcript, assembly=None):
-        """A breakend whose breakpoint lies on ``transcript``. If the
-        join links this transcript sense-to-sense with a protein-coding
-        transcript at the mate, report :class:`GeneFusion`; otherwise
-        :class:`TranslocationToIntergenic`.
-        """
-        if variant.junctions:
-            # With a resolved alt_assembly the caller has already
-            # settled orientation, so an unreadable ALT isn't worth a
-            # warning.
-            if (assembly is None
-                    and breakend_sides(variant.symbolic_alt) is None):
-                _warn_on_unknown_breakend_orientation(variant)
-            fusion = self._fusion_across_junction(
-                variant, transcript, assembly)
-            if fusion is not None:
-                return fusion
-        return TranslocationToIntergenic(
-            variant=variant,
-            transcript=transcript,
-            mutant_transcript=assembly or (
-                _build_translocation_mutant_transcript(
-                    variant, transcript)))
-
-    # -- utilities ------------------------------------------------------
-
-    def _overlapping_exons(self, variant, transcript):
-        """Return the exons (in transcript order) that overlap the SV
-        span on this transcript's contig. Contig mismatch => empty."""
-        if str(variant.contig) != str(transcript.contig):
-            return []
-        var_start, var_end = _affected_span(variant)
-        overlapping = []
-        for exon in transcript.exons:
-            if exon.end < var_start or exon.start > var_end:
-                continue
-            overlapping.append(exon)
-        return overlapping
-
-    def _intronic_or_intergenic(self, variant, transcript):
-        """Classify an SV that doesn't overlap any exon — either
-        intronic (breakpoints inside the transcript envelope) or
-        intergenic."""
-        var_start, var_end = _affected_span(variant)
-        if (str(variant.contig) == str(transcript.contig)
-                and var_start >= transcript.start
-                and var_end <= transcript.end):
-            # Inside the transcript envelope but outside every exon
-            # => intronic.  Distance-to-exon detail is best-effort:
-            # find the nearest exon start/end for diagnostic use.
-            nearest_exon = min(
-                transcript.exons,
-                key=lambda e: min(
-                    abs(e.start - var_start),
-                    abs(e.end - var_start)))
-            distance = min(
-                abs(nearest_exon.start - var_start),
-                abs(nearest_exon.end - var_start))
-            return Intronic(
+    No-op when ``effect`` isn't an
+    :class:`StructuralVariantEffect` (Intronic/Intergenic
+    fall-throughs) or when no breakpoint falls in a splice
+    window.
+    """
+    from .effect_classes import (
+        NormalSplicing, StructuralVariantEffect)
+    from ..effect_candidates import EffectCandidate
+    from ..splice_outcomes import enumerate_splice_outcomes
+    if not isinstance(effect, StructuralVariantEffect):
+        return
+    affected_start, affected_end = _affected_span(variant)
+    event_end = getattr(variant, "end", variant.start)
+    if (affected_start, affected_end) != (variant.start, event_end):
+        # Typed breakend pairs retain their original junction positions
+        # separately from the bases affected between them.
+        bp_positions = {
+            position for _, position in variant.breakpoints}
+    else:
+        # Preserve the established symbolic-SV interpretation of POS
+        # and END as the positions whose splice windows are inspected.
+        bp_positions = {variant.start, event_end}
+    sv_type = getattr(variant, "sv_type", None)
+    sv_evidence = {"sv_type": sv_type} if sv_type is not None else {}
+    attached = []
+    seen_exons = set()
+    for bp in bp_positions:
+        window = _breakpoint_splice_window(transcript, bp)
+        if window is None:
+            continue
+        splice_cls, exon, distance = window
+        # If two endpoints land in the same exon's splice window,
+        # only emit one set of splice candidates — the outcomes
+        # are identical.
+        if exon.exon_id in seen_exons:
+            continue
+        seen_exons.add(exon.exon_id)
+        try:
+            synthetic = splice_cls(
                 variant=variant,
                 transcript=transcript,
-                nearest_exon=nearest_exon,
+                nearest_exon=exon,
                 distance_to_exon=distance)
-        return Intergenic(variant=variant)
-
-    def _fusion_across_junction(self, variant, transcript, assembly):
-        """The :class:`GeneFusion` ``transcript`` forms at one of
-        ``variant``'s junctions, or ``None``.
-
-        A junction end belongs to this transcript when the transcript
-        spans it and the transcript's *gene* doesn't span the other
-        end: an event with both ends in one gene is intragenic, however
-        short the isoform being annotated. The kept side and the strand
-        then give the transcript's role — keeping its 5' end makes it
-        the 5' partner — and the partner at the other end has to keep
-        the opposite end, which is what makes the join sense-to-sense.
-        Junctions where this transcript is the 5' partner are tried
-        first. A kept side of ``None`` (unreadable ALT) treats the
-        transcript as the 5' partner and accepts any partner.
-        """
-        gene = transcript.gene
-
-        def keeps_five_prime(breakend):
-            return breakend.keeps is None or _retains_five_prime_end(
-                transcript, breakend.keeps)
-
-        ends = []
-        for junction in getattr(variant, "junctions", ()):
-            for near, far in (junction, junction[::-1]):
-                if not _contains(transcript, near):
-                    continue
-                if _contains(gene, far):
-                    continue
-                ends.append((near, far))
-
-        for near, far in sorted(
-                ends, key=lambda pair: not keeps_five_prime(pair[0])):
-            five_prime = keeps_five_prime(near)
-            partner = self._fusion_partner(
-                variant, transcript, near, far, five_prime)
-            if partner is None:
+            splice_set = enumerate_splice_outcomes(synthetic)
+        except (AttributeError, KeyError, ValueError):
+            continue
+        for candidate in splice_set.candidates:
+            if isinstance(candidate.effect, NormalSplicing):
+                # Primary SV classification already covers the
+                # "splicing proceeds normally" interpretation.
                 continue
-            if five_prime:
-                five, five_position = transcript, near.position
-                three, three_position = partner, far.position
-            else:
-                five, five_position = partner, far.position
-                three, three_position = transcript, near.position
-            return GeneFusion(
-                variant=variant,
-                transcript=transcript,
-                partner_transcript=partner,
-                five_prime_transcript=five,
-                three_prime_transcript=three,
-                mutant_transcript=assembly or _build_fusion_mutant_transcript(
-                    transcript, five, five_position, three, three_position))
-        return None
+            attached.append(EffectCandidate(
+                effect=candidate.effect,
+                source="varcode_splice",
+                evidence={**dict(candidate.evidence), **sv_evidence}))
+    if attached:
+        effect._attach_splice_outcomes(attached)
 
-    def _fusion_partner(
-            self, variant, transcript, near, far, transcript_is_five_prime):
-        """The protein-coding transcript at ``far`` that fuses with
-        ``transcript``, or ``None``.
 
-        A partner is in another gene, keeps the end opposite to
-        ``transcript``'s, and — like ``transcript`` — belongs to a gene
-        that doesn't span both ends of the junction. An unknown kept
-        side accepts any partner.
-        """
-        for candidate in self._coding_transcripts_at(
-                variant, far.contig, far.position):
-            if candidate.gene_id == transcript.gene_id:
+def _enumerate_and_attach_cryptics(variant, effect):
+    """Enumerate cryptic-exon candidates around the SV and hand
+    them to ``effect._attach_cryptic_candidates`` (#337). The
+    annotator is the only legitimate caller of that method —
+    separating enumeration (here) from storage (on the effect)
+    keeps the motif-scoring dependency out of ``effect_classes``.
+
+    No-op when ``effect`` isn't an
+    :class:`StructuralVariantEffect` (e.g. intronic
+    fall-through) or when the enumerator returns nothing.
+    """
+    from ..cryptic_exons import enumerate_from_structural_variant
+    from .effect_classes import StructuralVariantEffect
+    if not isinstance(effect, StructuralVariantEffect):
+        return
+    def enumerate_candidates():
+        try:
+            return enumerate_from_structural_variant(variant)
+        except (AttributeError, KeyError, ValueError, OSError):
+            # Genome sequence fetch failed (no FASTA cached, unknown
+            # contig, etc.) — skip; consumers still get the primary
+            # SV classification.
+            return []
+
+    # The candidates depend only on the variant, not the transcript.
+    candidates = _cached(
+        variant, "cryptic_candidates", enumerate_candidates)
+    if candidates:
+        effect._attach_cryptic_candidates(candidates)
+
+# -- classification helpers -----------------------------------------
+
+
+def _annotate_deletion(variant, transcript, assembly=None):
+    """A deletion overlapping a transcript: :class:`LargeDeletion`
+    when it covers one or more exons, :class:`Intronic` when it's
+    purely intronic."""
+    affected = _overlapping_exons(variant, transcript)
+    if not affected:
+        return _intronic_or_intergenic(variant, transcript)
+    return LargeDeletion(
+        variant=variant,
+        transcript=transcript,
+        affected_exons=affected,
+        mutant_transcript=assembly or _build_deletion_mutant_transcript(
+            variant, transcript))
+
+
+def _annotate_duplication(variant, transcript, assembly=None):
+    affected = _overlapping_exons(variant, transcript)
+    if not affected:
+        return _intronic_or_intergenic(variant, transcript)
+    return LargeDuplication(
+        variant=variant,
+        transcript=transcript,
+        affected_exons=affected,
+        mutant_transcript=assembly or _build_duplication_mutant_transcript(
+            variant, transcript))
+
+
+def _annotate_inversion(variant, transcript, assembly=None):
+    affected = _overlapping_exons(variant, transcript)
+    if not affected:
+        return _intronic_or_intergenic(variant, transcript)
+    return Inversion(
+        variant=variant,
+        transcript=transcript,
+        mutant_transcript=assembly or _build_inversion_mutant_transcript(
+            variant, transcript))
+
+
+def _annotate_insertion(variant, transcript, assembly=None):
+    affected = _overlapping_exons(variant, transcript)
+    if not affected:
+        return _intronic_or_intergenic(variant, transcript)
+    return LargeDuplication(
+        variant=variant,
+        transcript=transcript,
+        affected_exons=affected,
+        mutant_transcript=assembly or _build_duplication_mutant_transcript(
+            variant, transcript))
+
+
+def _annotate_breakend(variant, transcript, assembly=None):
+    """A breakend whose breakpoint lies on ``transcript``. If the
+    join links this transcript sense-to-sense with a protein-coding
+    transcript at the mate, report :class:`GeneFusion`; otherwise
+    :class:`TranslocationToIntergenic`.
+    """
+    if variant.junctions:
+        # With a resolved alt_assembly the caller has already
+        # settled orientation, so an unreadable ALT isn't worth a
+        # warning.
+        if (assembly is None
+                and breakend_sides(variant.symbolic_alt) is None):
+            _warn_on_unknown_breakend_orientation(variant)
+        fusion = _fusion_across_junction(
+            variant, transcript, assembly)
+        if fusion is not None:
+            return fusion
+    return TranslocationToIntergenic(
+        variant=variant,
+        transcript=transcript,
+        mutant_transcript=assembly or (
+            _build_translocation_mutant_transcript(
+                variant, transcript)))
+
+# -- utilities ------------------------------------------------------
+
+
+def _overlapping_exons(variant, transcript):
+    """Return the exons (in transcript order) that overlap the SV
+    span on this transcript's contig. Contig mismatch => empty."""
+    if str(variant.contig) != str(transcript.contig):
+        return []
+    var_start, var_end = _affected_span(variant)
+    overlapping = []
+    for exon in transcript.exons:
+        if exon.end < var_start or exon.start > var_end:
+            continue
+        overlapping.append(exon)
+    return overlapping
+
+
+def _intronic_or_intergenic(variant, transcript):
+    """Classify an SV that doesn't overlap any exon — either
+    intronic (breakpoints inside the transcript envelope) or
+    intergenic."""
+    var_start, var_end = _affected_span(variant)
+    if (str(variant.contig) == str(transcript.contig)
+            and var_start >= transcript.start
+            and var_end <= transcript.end):
+        # Inside the transcript envelope but outside every exon
+        # => intronic.  Distance-to-exon detail is best-effort:
+        # find the nearest exon start/end for diagnostic use.
+        nearest_exon = min(
+            transcript.exons,
+            key=lambda e: min(
+                abs(e.start - var_start),
+                abs(e.end - var_start)))
+        distance = min(
+            abs(nearest_exon.start - var_start),
+            abs(nearest_exon.end - var_start))
+        return Intronic(
+            variant=variant,
+            transcript=transcript,
+            nearest_exon=nearest_exon,
+            distance_to_exon=distance)
+    return Intergenic(variant=variant)
+
+
+def _fusion_across_junction(variant, transcript, assembly):
+    """The :class:`GeneFusion` ``transcript`` forms at one of
+    ``variant``'s junctions, or ``None``.
+
+    A junction end belongs to this transcript when the transcript
+    spans it and the transcript's *gene* doesn't span the other
+    end: an event with both ends in one gene is intragenic, however
+    short the isoform being annotated. The kept side and the strand
+    then give the transcript's role — keeping its 5' end makes it
+    the 5' partner — and the partner at the other end has to keep
+    the opposite end, which is what makes the join sense-to-sense.
+    Junctions where this transcript is the 5' partner are tried
+    first. A kept side of ``None`` (unreadable ALT) treats the
+    transcript as the 5' partner and accepts any partner.
+    """
+    gene = transcript.gene
+
+    def keeps_five_prime(breakend):
+        return breakend.keeps is None or _retains_five_prime_end(
+            transcript, breakend.keeps)
+
+    ends = []
+    for junction in getattr(variant, "junctions", ()):
+        for near, far in (junction, junction[::-1]):
+            if not _contains(transcript, near):
                 continue
-            if _contains(candidate.gene, near):
+            if _contains(gene, far):
                 continue
-            if far.keeps is None or (
-                    _retains_five_prime_end(candidate, far.keeps)
-                    != transcript_is_five_prime):
-                return candidate
-        return None
+            ends.append((near, far))
 
-    def _coding_transcripts_at(self, variant, contig, position):
-        """Protein-coding transcripts overlapping ``contig:position`` in
-        the variant's genome, in pyensembl's order. Cached on the
-        variant, since every transcript at one end of a junction asks
-        the same question about the other end."""
-        def lookup():
-            try:
-                transcripts = variant.genome.transcripts_at_locus(
-                    str(contig), int(position), int(position))
-            except ValueError:
-                # A contig the genome doesn't know, e.g. a mate on a
-                # decoy or unplaced contig.
-                return []
-            return [t for t in transcripts if t.is_protein_coding]
+    for near, far in sorted(
+            ends, key=lambda pair: not keeps_five_prime(pair[0])):
+        five_prime = keeps_five_prime(near)
+        partner = _fusion_partner(
+            variant, transcript, near, far, five_prime)
+        if partner is None:
+            continue
+        if five_prime:
+            five, five_position = transcript, near.position
+            three, three_position = partner, far.position
+        else:
+            five, five_position = partner, far.position
+            three, three_position = transcript, near.position
+        return GeneFusion(
+            variant=variant,
+            transcript=transcript,
+            partner_transcript=partner,
+            five_prime_transcript=five,
+            three_prime_transcript=three,
+            mutant_transcript=assembly or _build_fusion_mutant_transcript(
+                transcript, five, five_position, three, three_position))
+    return None
 
-        return _cached(
-            variant, ("coding_transcripts", str(contig), int(position)),
-            lookup)
+
+def _fusion_partner(
+        variant, transcript, near, far, transcript_is_five_prime):
+    """The protein-coding transcript at ``far`` that fuses with
+    ``transcript``, or ``None``.
+
+    A partner is in another gene, keeps the end opposite to
+    ``transcript``'s, and — like ``transcript`` — belongs to a gene
+    that doesn't span both ends of the junction. An unknown kept
+    side accepts any partner.
+    """
+    for candidate in _coding_transcripts_at(
+            variant, far.contig, far.position):
+        if candidate.gene_id == transcript.gene_id:
+            continue
+        if _contains(candidate.gene, near):
+            continue
+        if far.keeps is None or (
+                _retains_five_prime_end(candidate, far.keeps)
+                != transcript_is_five_prime):
+            return candidate
+    return None
+
+
+def _coding_transcripts_at(variant, contig, position):
+    """Protein-coding transcripts overlapping ``contig:position`` in
+    the variant's genome, in pyensembl's order. Cached on the
+    variant, since every transcript at one end of a junction asks
+    the same question about the other end."""
+    def lookup():
+        try:
+            transcripts = variant.genome.transcripts_at_locus(
+                str(contig), int(position), int(position))
+        except ValueError:
+            # A contig the genome doesn't know, e.g. a mate on a
+            # decoy or unplaced contig.
+            return []
+        return [t for t in transcripts if t.is_protein_coding]
+
+    return _cached(
+        variant, ("coding_transcripts", str(contig), int(position)),
+        lookup)
+
+
+# Reference-span events share the same implementation regardless of caller.
+# Preserve the existing CNV-gain and symbolic-insertion interpretations.
+_SPAN_EFFECTS = {
+    "DEL": _annotate_deletion,
+    "DUP": _annotate_duplication,
+    "INV": _annotate_inversion,
+    "CNV": _annotate_duplication,
+    "INS": _annotate_insertion,
+}
