@@ -1544,7 +1544,7 @@ class Inversion(StructuralVariantEffect):
 
 
 class GeneFusion(StructuralVariantEffect):
-    """A structural variant joining ``transcript`` to a protein-coding
+    """A structural variant joining ``transcript`` to a sense-oriented
     transcript in another gene — the canonical fusion shape. Breakends
     produce it, and so do deletions, duplications and inversions with
     one end in each gene.
@@ -1558,8 +1558,9 @@ class GeneFusion(StructuralVariantEffect):
     allele. Predicting the exact fused-protein sequence requires
     knowing which exons are retained, which typically needs RNA
     evidence — outcomes beyond "this is a plausible fusion" are
-    left to downstream tools that attach :class:`EffectCandidate`
-    objects with their own producer ``source`` tag.
+    imported with :func:`varcode.make_fusion_outcome` or supplied by tools
+    attaching :class:`EffectCandidate` objects with their own ``source`` tag.
+    An RNA-observed gene fusion need not encode a complete protein.
     """
 
     short_description = "sv-gene-fusion"

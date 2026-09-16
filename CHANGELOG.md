@@ -1,5 +1,25 @@
 # Change Log
 
+## [v9.1.0](https://github.com/openvax/varcode/tree/v9.1.0) (2026-09-16)
+
+**Added**
+- `load_exacto_fusions` imports selected SV-linked transcript structures and
+  DNA/RNA integration rows without guessing an ORF or choosing one isoform.
+  Original oriented sequence, splice/path rows, model IDs, and variant links
+  remain available on existing `MutantTranscript`/effect candidates (#259, #261).
+- `RNAEvidence` is a small concrete resolver for imported candidates;
+  `make_fusion_outcome` imports a caller-specified observed sequence using
+  existing structural effects. Partial and antisense/intergenic observations
+  need not be promoted to coding fusions. Translation requires an explicit,
+  complete start-to-stop ORF and is labeled prediction, not protein evidence.
+- `MutantTranscript.from_sequence` shares external-sequence construction with
+  the existing assembled-SV path, removing the duplicate sequence wrapper.
+
+**Fixed**
+- RNA observations attached to single-outcome structural predictions such as
+  `Intronic` are retained alongside the DNA prediction. Deterministic
+  point-variant behavior and default annotation remain unchanged.
+
 ## [v9.0.0](https://github.com/openvax/varcode/tree/v9.0.0) (2026-09-15)
 
 **Breaking changes**

@@ -88,6 +88,89 @@ class NullRNAEvidenceResolver:
         return ()
 
 
+class RNAEvidence:
+    """Imported candidates, also usable as an RNAEvidenceResolver.
+
+    Keeps each observed model separately; read counts do not become likelihoods.
+    A fusion is available on both explicitly identified partner transcripts.
+    """
+
+    def __init__(self, candidates=()):
+        self.candidates = tuple(candidates)
+
+    def observed_outcomes(self, variant, transcript):
+        return tuple(
+            candidate for candidate in self.candidates
+            if candidate.effect.variant == variant
+            and any(getattr(t, "id", None) == transcript.id for t in (
+                candidate.effect.transcript,
+                getattr(candidate.effect, "partner_transcript", None))))
+
+
+def make_fusion_outcome(
+        variant, transcript, *, sequence, transcript_model_id,
+        partner_transcript=None, cds_start=None, source="rna", read_count=None,
+        extra_evidence=None):
+    """Import one RNA junction/model using existing structural effect classes.
+
+    ``sequence`` is the observed 5'-to-3' sequence, never genomic-forward
+    sequence. ``transcript`` is its annotated 5' anchor. Supply a 3' partner
+    only when the observed path joins that transcript in sense orientation;
+    otherwise leave it None and retain the locus/orientation in evidence.
+    An absent partner gives TranslocationToIntergenic, not a coding GeneFusion.
+
+    No reference exons are appended and no ORF is guessed. An explicit
+    zero-based ``cds_start`` requests translation of a complete start-to-stop
+    ORF in the supplied sequence; invalid or incomplete ORFs raise ValueError.
+    Such a protein is sequence-predicted, not evidence of translation.
+    """
+    from .effects.effect_classes import GeneFusion, TranslocationToIntergenic
+    from .effects.codon_tables import codon_table_for_transcript, translate_sequence
+    from .mutant_transcript import MutantTranscript
+
+    if not getattr(variant, "is_structural", False):
+        raise ValueError("RNA fusion import requires a StructuralVariant")
+    if not isinstance(sequence, str) or not sequence or set(sequence.upper()) - set("ACGTN"):
+        raise ValueError("Observed sequence must be nonempty DNA (ACGTN)")
+    if not transcript_model_id:
+        raise ValueError("transcript_model_id is required")
+    if read_count is not None and (isinstance(read_count, bool)
+                                   or not isinstance(read_count, int) or read_count < 0):
+        raise ValueError("read_count must be a non-negative integer or None")
+    sequence = sequence.upper()
+    protein = None
+    evidence = dict(extra_evidence or {})
+    evidence.update(sequence_status=evidence.get("sequence_status", "unknown"),
+                    protein_status="not_determined")
+    if cds_start is not None:
+        if isinstance(cds_start, bool) or not isinstance(cds_start, int) or cds_start < 0:
+            raise ValueError("cds_start must be a non-negative integer")
+        coding = sequence[cds_start:]
+        table = codon_table_for_transcript(transcript)
+        if coding[:3] not in table.start_codons:
+            raise ValueError("cds_start does not identify a start codon")
+        stop = next((i for i in range(3, len(coding) - 2, 3)
+                     if coding[i:i + 3] in table.stop_codons), None)
+        if stop is None or "N" in coding[:stop]:
+            raise ValueError("A complete, unambiguous start-to-stop ORF is required")
+        protein = "M" + translate_sequence(coding[3:stop], codon_table=table)
+        evidence.update(cds_start=cds_start, cds_end=cds_start + stop + 3,
+                        protein_status="predicted_from_observed_rna")
+    evidence.update(transcript_model_id=str(transcript_model_id))
+    if read_count is not None:
+        evidence["read_count"] = read_count
+    model = MutantTranscript.from_sequence(
+        sequence, reference_transcript=transcript,
+        mutant_protein_sequence=protein, annotator_name=source, evidence=evidence)
+    if partner_transcript is None:
+        effect = TranslocationToIntergenic(variant, transcript, mutant_transcript=model)
+    else:
+        if transcript.gene_id == partner_transcript.gene_id:
+            raise ValueError("A gene fusion requires two different genes")
+        effect = GeneFusion(variant, transcript, partner_transcript, mutant_transcript=model)
+    return make_rna_outcome(effect, source=source, extra_evidence=evidence)
+
+
 def make_rna_outcome(
         effect,
         *,
@@ -162,7 +245,7 @@ def apply_rna_evidence_to_effects(effects: Iterable, resolver) -> Iterable:
     the additive side-channel behavior: observed candidates are stashed
     on ``_extra_candidates`` and exposed through ``.candidates``.
 
-    Single-outcome effects (Missense, FrameShift, etc.) are left
+    Single-outcome point-variant effects (Missense, FrameShift, etc.) are left
     untouched even when the resolver has evidence — those classes
     don't expose a multi-candidate view, and replacing them with a
     multi-outcome wrapper would break downstream ``isinstance`` checks.
@@ -170,7 +253,9 @@ def apply_rna_evidence_to_effects(effects: Iterable, resolver) -> Iterable:
     should report them as a separate :class:`MultiOutcomeEffect` rather
     than mutating an existing single-outcome one. (The point-variant
     diff is generally already correct from DNA, so this is rarely an
-    issue in practice.)
+    issue in practice.) Single-outcome structural calls (e.g. Intronic) are
+    wrapped in StructuralVariantEffect when observations exist, retaining the
+    DNA classification alongside the imported models.
 
     Safe to call on a mixed collection where only some variants have
     RNA evidence; no-op when ``resolver`` is None or doesn't implement
@@ -185,12 +270,13 @@ def apply_rna_evidence_to_effects(effects: Iterable, resolver) -> Iterable:
 
     # Lazy import to avoid an import cycle (effect_classes imports
     # from varcode.effect_candidates, which sits below us).
-    from .effects.effect_classes import MultiOutcomeEffect
+    from .effects.effect_classes import MultiOutcomeEffect, StructuralVariantEffect
 
     replacements = []
     changed = False
     for effect in effects:
-        if not isinstance(effect, MultiOutcomeEffect):
+        is_structural = getattr(getattr(effect, "variant", None), "is_structural", False)
+        if not isinstance(effect, MultiOutcomeEffect) and not is_structural:
             replacements.append(effect)
             continue
         variant = getattr(effect, "variant", None)
@@ -208,6 +294,11 @@ def apply_rna_evidence_to_effects(effects: Iterable, resolver) -> Iterable:
         if not observed_tuple:
             replacements.append(effect)
             continue
+        if not isinstance(effect, MultiOutcomeEffect):
+            # An intronic/noncoding DNA call must not hide an observed SV model.
+            effect = StructuralVariantEffect(
+                variant, transcript, primary_effects=(effect,))
+            changed = True
         if hasattr(effect, "with_rna_evidence"):
             refined = effect.with_rna_evidence(observed_tuple)
             replacements.append(refined)

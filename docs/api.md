@@ -65,6 +65,14 @@ Auto-generated from in-source docstrings via
 
 ## Mutant transcripts
 
+### Observed RNA import
+
+::: varcode.load_exacto_fusions
+
+::: varcode.make_fusion_outcome
+
+::: varcode.RNAEvidence
+
 ### `varcode.MutantTranscript`
 
 ::: varcode.MutantTranscript

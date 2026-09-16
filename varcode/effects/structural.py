@@ -33,6 +33,8 @@ from .effect_classes import (
 )
 from .effect_helpers import exon_length
 from ..mutant_transcript import MutantTranscript, ReferenceSegment
+# Existing assembled-SV pickles use this private module path.
+from ..mutant_transcript import _AssembledAllele  # noqa: F401
 from ..sv_allele_parser import breakend_sides
 
 
@@ -290,24 +292,6 @@ def _warn_on_unknown_breakend_orientation(variant):
         stacklevel=3)
 
 
-class _AssembledAllele:
-    """Minimal :class:`ReferenceSegment.source` adapter for a
-    caller-supplied assembled allele (long-read resolution, targeted
-    local assembly, etc.). Exposes ``sequence`` so downstream segment
-    consumers can slice into it the same way they slice a pyensembl
-    ``Transcript``'s cDNA.
-    """
-
-    __slots__ = ("sequence",)
-
-    def __init__(self, sequence):
-        self.sequence = sequence
-
-    def __repr__(self):
-        length = len(self.sequence) if self.sequence else 0
-        return "_AssembledAllele(len=%d)" % length
-
-
 def _build_alt_assembly_mutant_transcript(variant, transcript):
     """If ``variant.alt_assembly`` is populated, build a
     single-:class:`ReferenceSegment` :class:`MutantTranscript` wrapping
@@ -321,21 +305,11 @@ def _build_alt_assembly_mutant_transcript(variant, transcript):
     assembly = getattr(variant, "alt_assembly", None)
     if not assembly:
         return None
-    source = _AssembledAllele(assembly)
-    segments = (
-        ReferenceSegment(
-            source=source,
-            start=0,
-            end=len(assembly),
-            strand="+",
-            label="alt_assembly"),
-    )
-    return MutantTranscript(
+    return MutantTranscript.from_sequence(
+        assembly,
         reference_transcript=transcript,
-        reference_segments=segments,
-        cdna_sequence=assembly,
         annotator_name="structural_variant",
-        evidence={"source": "alt_assembly"})
+        evidence={"source": "alt_assembly"}, label="alt_assembly")
 
 
 def _build_deletion_mutant_transcript(variant, transcript):
