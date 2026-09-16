@@ -11,6 +11,7 @@
 # limitations under the License.
 
 import logging
+from datetime import datetime, timezone
 
 from ..nucleotides import reverse_complement
 from pyensembl import Transcript
@@ -93,7 +94,8 @@ def predict_variant_effects(
     raise_on_error : bool
         Raise an exception if we encounter an error while trying to
         determine the effect of this variant on a transcript, or simply
-        log the error and continue.
+        log the error and continue. If the initial gene/transcript lookup
+        fails, return an empty EffectCollection with annotator provenance.
 
     annotator : str, EffectAnnotator, or None
         Which registered :class:`EffectAnnotator` to use per-transcript.
@@ -134,11 +136,17 @@ def predict_variant_effects(
     try:
         gene_ids = variant.gene_ids
         transcripts = variant.transcripts
-    except:
+    except Exception as error:
         if raise_on_error:
             raise
         else:
-            return []
+            logger.warning("Encountered error looking up %s: %s", variant, error)
+            return EffectCollection(
+                [],
+                annotator=annotator_name,
+                annotator_version=annotator_version,
+                annotated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            )
 
     if len(gene_ids) == 0:
         effects = [Intergenic(variant)]
@@ -173,7 +181,6 @@ def predict_variant_effects(
                                 variant, transcript, error)
                             effect = Failure(variant, transcript)
                     effects.append(effect)
-    from datetime import datetime, timezone
     annotated_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
     collection = EffectCollection(
         effects,

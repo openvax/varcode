@@ -348,25 +348,15 @@ class Variant(Serializable):
                 self.alt)
 
 
-    # dictionary from reference names to sets of valid contigs
-    _reference_name_to_valid_contig_names = {}
-
     def _check_that_genome_has_contig(self):
         """
         Any annotation code which wants to look up genomic loci in a reference
         genome should first run this helper to make sure the normalized contig
         name is in the genome.
         """
-        reference_name = self.reference_name
-
-        if reference_name not in self._reference_name_to_valid_contig_names:
-            self._reference_name_to_valid_contig_names[reference_name] = set(
-                self.genome.contigs())
-
-        valid_contigs =  \
-            self._reference_name_to_valid_contig_names[reference_name]
-
-        if self.contig not in valid_contigs:
+        # Different annotation datasets can share an assembly name. Query
+        # this genome's contigs; pyensembl caches the query per database.
+        if self.contig not in self.genome.contigs():
             raise ValueError("Invalid contig name '%s' for reference '%s'" % (
                 self.contig,
                 self.reference_name))
@@ -463,7 +453,9 @@ class Variant(Serializable):
         ----------
         raise_on_error : bool
             If True, raise on annotation errors; if False, capture
-            them as Failure effects.
+            per-transcript errors as Failure effects. Failed initial
+            gene/transcript lookups return an empty EffectCollection
+            and log the error.
 
         annotator : str, EffectAnnotator, or None
             Per-call annotator override. ``None`` uses the currently
