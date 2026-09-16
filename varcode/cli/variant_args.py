@@ -118,21 +118,34 @@ def exit_on_user_error(arg_parser):
 
 def check_output_directory(path):
     """
-    Fail before any annotation work if the directory for an output file
-    doesn't exist.
+    Fail before any annotation work if an output file can't be written where
+    the user asked for it.
     """
+    if os.path.isdir(path):
+        raise ValueError("output path is a directory: %s" % path)
     directory = os.path.dirname(os.path.abspath(path))
     if not os.path.isdir(directory):
         raise ValueError("output directory does not exist: %s" % directory)
 
 
+# PyEnsembl looks up loci in SQLite, whose INTEGER is a signed 64-bit value.
+# A larger position raises OverflowError from inside the query, which isn't a
+# ValueError and so wouldn't be reported as the bad coordinate it is.
+MAX_POSITION = 2 ** 63 - 1
+
+
 def parse_position(position):
     try:
-        return int(position)
+        parsed = int(position)
     except ValueError:
         raise ValueError(
             "--variant position must be an integer, got %r" % (position,)
         ) from None
+    if parsed > MAX_POSITION:
+        raise ValueError(
+            "--variant position is out of range, got %s (must be at most %d)" % (
+                parsed, MAX_POSITION))
+    return parsed
 
 
 def download_and_install_reference_data(variant_collections):

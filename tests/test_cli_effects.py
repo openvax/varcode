@@ -56,6 +56,10 @@ def test_varcode_effects_script_kras_g12d_top_effect():
             "--variant position must be an integer, got 'abc'",
         ),
         (
+            ["--genome", "grch37", "--variant", "12", "9" * 20, "C", "T"],
+            "--variant position is out of range",
+        ),
+        (
             ["--genome", "grch37", "--variant", "12", "25398284", "C", "T",
              "--output-csv", "/nonexistent/dir/out.csv"],
             "output directory does not exist: /nonexistent/dir",
@@ -69,3 +73,23 @@ def test_varcode_effects_script_user_errors_exit_cleanly(commandline_args, messa
     stderr = capsys.readouterr().err
     assert "Traceback" not in stderr
     assert message in stderr
+
+
+def test_varcode_effects_script_output_csv_directory_fails_before_annotating(
+        tmp_path, capsys):
+    """
+    An --output-csv path which is itself a directory should be rejected by the
+    same pre-flight check as a missing directory, rather than after the whole
+    annotation run.
+    """
+    commandline_args = [
+        "--genome", "grch37",
+        "--variant", "12", "25398284", "C", "T",
+        "--output-csv", str(tmp_path),
+    ]
+    with pytest.raises(SystemExit) as exc_info:
+        run_script(commandline_args)
+    eq_(exc_info.value.code, 1)
+    stderr = capsys.readouterr().err
+    assert "Traceback" not in stderr
+    assert "output path is a directory: %s" % tmp_path in stderr
