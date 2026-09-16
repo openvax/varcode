@@ -1,5 +1,15 @@
 # Change Log
 
+## [v8.0.3](https://github.com/openvax/varcode/tree/v8.0.3) (2026-09-15)
+
+**Fixed**
+- Contig validation now uses the actual Genome annotation dataset instead of
+  sharing a cache by assembly name. Subsets, custom annotations and releases
+  named GRCh38 no longer accept or reject chromosomes based on loading order
+  (#402).
+- Suppressed gene/transcript lookup errors return an empty `EffectCollection`
+  with annotator provenance, rather than a plain list, and log the error.
+
 ## [v8.0.2](https://github.com/openvax/varcode/tree/v8.0.2) (2026-09-15)
 
 **Fixed**
