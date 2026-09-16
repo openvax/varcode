@@ -317,8 +317,14 @@ selected. Optional annotators may implement only part of the problem:
 |---|---|---|
 | `FastEffectAnnotator` | Point-edit prediction, internal SV routing, and patient-baseline point-edit comparison | **Default** |
 | `ProteinDiffEffectAnnotator` | Builds a `MutantTranscript`, translates, diffs against the reference protein | Experimental opt-in for point edits |
-| `StructuralVariantAnnotator` | Reassembles SV outcomes (deletions, duplications, inversions, fusions, translocations) | Internal default implementation; structural-only entry point retained for compatibility |
 | `TranscriptModelEffectAnnotator` | Composes phase, splice choices, haplotype edits and SV layouts, then classifies mutant versus patient baseline | Experimental opt-in via `annotator="transcript_model"` |
+
+Structural prediction is an internal helper of the default, not a second
+annotator it invokes. Varcode 9 removes the old `StructuralVariantAnnotator`
+class/module and `annotator="structural_variant"` selection; use the default
+or `annotator="fast"` instead. `UnsupportedVariantError` is also removed:
+partial annotators return `NotImplemented` (see below). No outer router
+selects an annotator based on variant kind or supplies an implicit fallback.
 
 All emit the same `MutationEffect` hierarchy. Protein comparison remains a
 shared implementation helper used by splice, germline, and realized-product

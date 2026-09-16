@@ -543,11 +543,11 @@ def test_vcf_loader_sv_yields_structural_variant_effect():
         "<DEL> row; got effect types %s" % [type(e).__name__ for e in effects])
 
 
-def test_sv_effect_on_transcript_routes_via_sv_annotator():
+def test_sv_effect_on_transcript_uses_default_structural_prediction():
     """Companion to the kind-dispatch fix in
     :func:`predict_variant_effects`: the legacy
     :meth:`Variant.effect_on_transcript` path also has to route SVs
-    through ``StructuralVariantAnnotator``. Otherwise ``predict_*_effects``
+    through the default's structural helpers. Otherwise ``predict_*_effects``
     is correct but ``sv.effect_on_transcript(t)`` quietly does offset
     arithmetic on the placeholder ``ref="N"/alt="A"`` and emits
     nonsense — a footgun for anyone who learned the legacy API."""
