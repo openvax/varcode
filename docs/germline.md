@@ -34,6 +34,37 @@ possibility set** — one classified effect per haplotype hypothesis
 Phase known → single `MutationEffect`. Phase unknown →
 `PhaseCandidateSet` with `.candidates` for the full set.
 
+### Known deletion haplotypes in RNA alignments
+
+Splice-aware aligners can encode a known deletion's RNA sequence with `N`
+rather than `D`, or split the gap among mismatches and smaller deletions.
+Opt in to a local **sequence hypothesis** instead of interpreting the gap as
+proof of a DNA deletion:
+
+```python
+source = RNAReadPhasingSource("tumor.rna.bam", min_alt_reads=1)
+source.register_haplotype([known_deletion, adjacent_snv_1, adjacent_snv_2])
+resolver = MolecularPhaseResolver(source)
+effects = variants.effects(phase_resolver=resolver)
+```
+
+The variants must share one genome dataset and contig. The genome must provide
+reference sequence across the interval, through a FASTA or annotated transcript.
+Every retained base between five-base reference flanks must match one alignment
+and pass the configured quality/read-edge filters. No mates or separate partial
+haplotypes are stitched together. Registration invalidates cached counts.
+
+Registration does not assert cis phase: it supplies a candidate to test. For
+registered variants, only full-context matches count as alternate support;
+nonmatches remain unknown, not trans evidence. The current local mode supports
+nonoverlapping substitutions and deletions. Register competing combinations
+separately. Unregistered variants keep the ordinary CIGAR-based behavior.
+
+For the audited GRCh38 MAP2 example, the combination of `209694769 C>A`,
+`209694770 T>G`, and the 28-base deletion at `209694773` gives the same local
+sequence under `28D`, `28N`, and `22D2M6D` alignments. An unrelated 19,449-base
+exon skip lacks the required local anchors and is not supporting evidence.
+
 ## Concrete example: same codon, three scenarios
 
 CFTR has a somatic at GRCh38 7:117531100 `T→A`. A neighbouring

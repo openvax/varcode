@@ -124,6 +124,7 @@ class RNAReadPhasingSource:
         self._support_cache = {}
         self._phase_cache = {}
         self._contig_cache = {}
+        self._haplotypes = []
         if variants is not None:
             self.register_variants(variants)
 
@@ -139,6 +140,79 @@ class RNAReadPhasingSource:
         """
         for variant in variants:
             self._register_variant(variant)
+
+    def register_haplotype(self, variants, *, flanking_bases=5):
+        """Test a known local allele combination by its anchored RNA sequence.
+
+        Parameters
+        ----------
+        variants : sequence of Variant
+            Nonoverlapping substitutions/deletions on one genome and contig.
+            All alternate alleles form one hypothesis, not an assumed phase.
+            Register competing hypotheses separately when necessary.
+        flanking_bases : int
+            Unchanged reference bases required on each side (default five).
+
+        Notes
+        -----
+        A match requires the entire sequence, including both flanks, on ONE
+        alignment, with the configured base-quality and read-edge filters.
+        Equivalent D/N/split-gap encodings can then support the same known
+        sequence. This does not establish a genomic deletion from an RNA skip.
+        Reference is fetched from the variants' genome; unavailable sequence,
+        overlapping edits and reference mismatches raise ValueError. No BAM
+        bases are corrected, no missing bases filled, and no mates assembled.
+        Registered variants use these full-context matches instead of individual
+        CIGAR calls. Nonmatches remain unknown, not reference/trans evidence.
+        """
+        from .genome_sequence import reference_range
+
+        variants = tuple(sorted(variants, key=lambda v: v.start))
+        if not variants or isinstance(flanking_bases, bool) or not isinstance(flanking_bases, int) or flanking_bases < 1:
+            raise ValueError("A nonempty haplotype and positive flanking_bases are required")
+        first = variants[0]
+        if any(v.contig != first.contig or v.genome is not first.genome for v in variants):
+            raise ValueError("Haplotype variants must share a genome dataset and contig")
+        if any(not v.ref or len(v.alt) > len(v.ref) for v in variants):
+            raise ValueError("Anchored haplotypes currently support substitutions and deletions")
+        if any(a.end >= b.start for a, b in zip(variants, variants[1:])):
+            raise ValueError("Haplotype edits must not overlap")
+        left, right = first.start - flanking_bases, variants[-1].end + flanking_bases
+        if left < 1:
+            raise ValueError("Haplotype lacks a left genomic anchor")
+        sequence = reference_range(first.genome, first.contig, left, right).upper()
+        if len(sequence) != right - left + 1 or set(sequence) - set("ACGT"):
+            raise ValueError("Unambiguous reference sequence is required across the haplotype")
+        for variant in reversed(variants):
+            start = variant.start - left
+            end = start + len(variant.ref)
+            if sequence[start:end] != variant.ref.upper():
+                raise ValueError("Haplotype reference allele disagrees with its genome")
+            sequence = sequence[:start] + variant.alt.upper() + sequence[end:]
+        if set(sequence) - set("ACGT"):
+            raise ValueError("Unambiguous alternate sequence is required")
+        keys = frozenset(self._variant_key(v) for v in variants)
+        record = (keys, left - 1, right - 1, sequence)
+        if record not in self._haplotypes:
+            self._haplotypes.append(record)
+            self.register_variants(variants)
+            self._support_cache.clear()
+            self._phase_cache.clear()
+
+    def _matches_haplotype(self, read, left0, right0, sequence):
+        anchors = {}
+        for operation, start, end, query, _ in self._cigar_events(read):
+            if operation in (_CIGAR_MATCH, _CIGAR_EQUAL, _CIGAR_DIFF):
+                for position in (left0, right0):
+                    if start <= position < end:
+                        anchors[position] = query + position - start
+        if left0 not in anchors or right0 not in anchors:
+            return False
+        left, right = anchors[left0], anchors[right0]
+        if right < left or right - left + 1 != len(sequence):
+            return False
+        return (self._base_calls_ok(read, range(left, right + 1))
+                and read.query_sequence[left:right + 1].upper() == sequence)
 
     def _register_variant(self, variant):
         key = self._variant_key(variant)
@@ -312,7 +386,16 @@ class RNAReadPhasingSource:
         return None
 
     def _read_allele(self, read, variant):
-        if not self._passes_read_filters(read):
+        if not self._passes_read_filters(read) or read.query_sequence is None:
+            return None
+        key = self._variant_key(variant)
+        registered = False
+        for keys, left, right, sequence in self._haplotypes:
+            if key in keys:
+                registered = True
+                if self._matches_haplotype(read, left, right, sequence):
+                    return "alt"
+        if registered:
             return None
         if variant.is_insertion:
             return self._insertion_allele(read, variant)
@@ -346,7 +429,8 @@ class RNAReadPhasingSource:
         supporting_fragments = set()
         for read in reads:
             if self._read_allele(read, variant) == "alt":
-                supporting_fragments.add(read.query_name)
+                supporting_fragments.add((
+                    read.get_tag("RG") if read.has_tag("RG") else "", read.query_name))
         count = len(supporting_fragments)
         self._support_cache[key] = count
         return count
@@ -373,9 +457,20 @@ class RNAReadPhasingSource:
         grouped = defaultdict(list)
         for read in reads:
             if self._passes_read_filters(read):
-                grouped[read.query_name].append(read)
+                key = (read.get_tag("RG") if read.has_tag("RG") else "", read.query_name)
+                grouped[key].append(read)
         fragments = []
+        anchored = any(self._variant_key(v) in keys
+                       for v in (v1, v2) for keys, _, _, _ in self._haplotypes)
         for fragment_reads in grouped.values():
+            if anchored:
+                # Never assemble a new anchored haplotype from mates or from
+                # different registered combinations through a shared allele.
+                pairs = {tuple(self._read_allele(read, v) for v in (v1, v2))
+                         for read in fragment_reads}
+                fragments.append(("alt", "alt") if ("alt", "alt") in pairs
+                                 else (None, None))
+                continue
             alleles = []
             for variant in (v1, v2):
                 calls = [

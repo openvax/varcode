@@ -12,11 +12,13 @@ variants anchor the import, and Exacto's ordered sequence/structure is retained.
 
 from collections import defaultdict
 from contextlib import nullcontext
+from dataclasses import replace
 import csv
 import gzip
 import os
 
 from .rna_evidence import RNAEvidence, make_fusion_outcome
+from .effects.codon_tables import STANDARD
 
 
 def _rows(path, required):
@@ -113,8 +115,72 @@ def _validate_path(bases, genome):
         previous_end = end
 
 
+def _primary_protein(rows, structure):
+    """Validate native per-base codons against their observed RNA source rows."""
+    rows = sorted(rows, key=lambda r: int(r["primary_structure_index"]))
+    if [int(r["primary_structure_index"]) for r in rows] != list(range(len(rows))):
+        raise ValueError("Primary-structure indices must be unique and contiguous from zero")
+    sources = {int(r["index"]): r for r in structure}
+    bases = []
+    for row in rows:
+        source = sources.get(int(row["transcript_structure_index"]))
+        if source is None or row["type"] != source["type"]:
+            raise ValueError("Primary record does not match its transcript-structure source")
+        start, end = int(row["read_start"]), int(row["read_end"])
+        if row["type"] == "event":
+            if (start, end) != (int(source["read_start"]), int(source["read_end"])) or any(
+                    row[k] for k in ("amino_acid", "nucleotide")):
+                raise ValueError("Invalid primary-structure event")
+            continue
+        offset = start - int(source["read_start"])
+        nt = row["nucleotide"].upper()
+        if (start != end or len(nt) != 1 or offset < 0
+                or source["sequence"][offset:offset + 1].upper() != nt):
+            raise ValueError("Primary nucleotide disagrees with observed transcript sequence")
+        i = len(bases)
+        if int(row["codon_index"]) != i % 3 or int(row["amino_acid_index"]) != i // 3:
+            raise ValueError("Invalid primary codon/amino-acid indices")
+        if bases and start != int(bases[-1]["read_start"]) + 1:
+            raise ValueError("Primary coding bases must be contiguous in observed RNA")
+        bases.append(row)
+    if not bases:
+        raise ValueError("Primary structure has no coding bases")
+    protein = []
+    for i in range(0, len(bases), 3):
+        chunk = bases[i:i + 3]
+        if len(chunk) < 3:
+            if any(r["amino_acid"] for r in chunk):
+                raise ValueError("An incomplete codon cannot claim an amino acid")
+            break
+        codon = "".join(r["nucleotide"].upper() for r in chunk)
+        aa = "*" if codon in STANDARD.stop_codons else STANDARD.forward_table.get(codon, "X")
+        if any(r["amino_acid"] != aa for r in chunk):
+            raise ValueError("Primary amino acid disagrees with its observed codon")
+        if aa == "*" and i + 3 != len(bases):
+            raise ValueError("Primary structure continues after a stop codon")
+        protein.append(aa)
+    if not protein or protein == ["*"]:
+        raise ValueError("Primary structure has no translated amino acids")
+    first_codon = "".join(r["nucleotide"].upper() for r in bases[:3])
+    start_complete, stop_complete = first_codon == "ATG", protein[-1] == "*"
+    sequence_start = min(int(r["read_start"]) for r in structure if r["type"] == "base")
+    evidence = dict(
+        exacto_primary_structure=rows, exacto_peptide_id=rows[0]["peptide_id"],
+        protein_status="predicted_from_observed_rna", protein_source="exacto",
+        protein_translation_table=1, protein_start_codon_observed=start_complete,
+        protein_stop_codon_observed=stop_complete,
+        protein_completeness=("start_to_stop" if start_complete and stop_complete
+                              else "partial_end" if start_complete
+                              else "partial_start" if stop_complete else "partial_both"),
+        cds_start=int(bases[0]["read_start"]) - sequence_start,
+        cds_end=int(bases[-1]["read_end"]) - sequence_start + 1,
+        trailing_partial_codon_bases=len(bases) % 3,
+        translation_evidence="sequence_prediction_only")
+    return "".join(protein).removesuffix("*"), evidence
+
+
 def load_exacto_fusions(structures_path, integrated_path, *, variants_by_id,
-                       cds_starts=None):
+                       cds_starts=None, primary_structures_path=None):
     """Import selected SV-linked RNA models as an RNAEvidence resolver.
 
     Parameters
@@ -131,6 +197,12 @@ def load_exacto_fusions(structures_path, integrated_path, *, variants_by_id,
         Optional, explicitly chosen zero-based ORF starts in assembled sequence,
         keyed by ``(transcript_model_id, tuple(sorted(reference_transcript_ids)))``.
         No ORF is chosen automatically. See ``make_fusion_outcome``.
+    primary_structures_path : path or text stream or None
+        Optional native Exacto primary-structures TSV (including peptide_id).
+        Import each peptide separately, validate its codons against the observed
+        RNA, and retain partial-protein status and per-base provenance. Cannot
+        be combined with cds_starts. These are sequence predictions, not protein
+        expression evidence. Models without peptide rows remain untranslated.
 
     Returns
     -------
@@ -145,9 +217,12 @@ def load_exacto_fusions(structures_path, integrated_path, *, variants_by_id,
     missing or antisense 3' partner remains TranslocationToIntergenic, never a
     guessed coding fusion. Incomplete sequence, unknown transcript IDs, circular
     paths and multi-gene (>2) models raise rather than silently losing structure.
-    This does not import all Exacto variant types or primary-structure tables.
+    This does not import all Exacto variant types. Exacto's native primary
+    structures use the standard genetic code; that producer choice is recorded.
     Read/model completeness and read support are not inferred from row counts.
     """
+    if primary_structures_path is not None and cds_starts is not None:
+        raise ValueError("Choose primary structures or explicit cds_starts, not both")
     variants = {str(key): value for key, value in variants_by_id.items()}
     if len(variants) != len(variants_by_id):
         raise ValueError("DNA call IDs collide after conversion to strings")
@@ -173,6 +248,20 @@ def load_exacto_fusions(structures_path, integrated_path, *, variants_by_id,
     if selected - set(models):
         raise ValueError("Missing structures for linked transcript models: %s" %
                          sorted(selected - set(models)))
+    peptides = defaultdict(lambda: defaultdict(list))
+    peptide_models = {}
+    if primary_structures_path is not None:
+        fields = ["peptide_id", "primary_structure_index", "type", "amino_acid",
+                  "amino_acid_index", "codon_index", "nucleotide", "transcript_model_id",
+                  "reference_transcript_ids", "transcript_structure_index", "read_start", "read_end"]
+        for row in _rows(primary_structures_path, fields):
+            key = _model_key(row)
+            if key not in selected:
+                continue
+            peptide = row["peptide_id"]
+            if not peptide or peptide_models.setdefault(peptide, key) != key:
+                raise ValueError("Missing peptide_id or peptide assigned to multiple RNA models")
+            peptides[key][peptide].append(row)
     candidates = []
     for (model_id, refs, dna_id), integration_rows in sorted(links.items()):
         variant = variants[dna_id]
@@ -202,9 +291,18 @@ def load_exacto_fusions(structures_path, integrated_path, *, variants_by_id,
             reference_transcript_ids=list(refs), partner_status=partner_status,
             exacto_structure=rows, exacto_integration=integration_rows,
             sequence_status="observed_model_completeness_unknown")
-        candidates.append(make_fusion_outcome(
-            variant, transcript, sequence=sequence, transcript_model_id=model_id,
-            partner_transcript=partner, source="exacto",
-            cds_start=(cds_starts or {}).get((model_id, refs)),
-            extra_evidence=evidence))
+        for primary_rows in peptides[(model_id, refs)].values() or [None]:
+            candidate = make_fusion_outcome(
+                variant, transcript, sequence=sequence, transcript_model_id=model_id,
+                partner_transcript=partner, source="exacto",
+                cds_start=(cds_starts or {}).get((model_id, refs)),
+                extra_evidence=evidence)
+            if primary_rows is not None:
+                protein, primary_evidence = _primary_protein(primary_rows, rows)
+                combined = dict(candidate.evidence, **primary_evidence)
+                candidate.effect.mutant_transcript = replace(
+                    candidate.effect.mutant_transcript,
+                    mutant_protein_sequence=protein, evidence=combined)
+                candidate = replace(candidate, evidence=combined)
+            candidates.append(candidate)
     return RNAEvidence(candidates)

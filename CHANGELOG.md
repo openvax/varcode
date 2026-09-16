@@ -1,5 +1,22 @@
 # Change Log
 
+## [v9.2.0](https://github.com/openvax/varcode/tree/v9.2.0) (2026-09-16)
+
+**Added**
+- `RNAReadPhasingSource.register_haplotype` tests an explicitly supplied local
+  allele combination against anchored, quality-filtered RNA sequence. Equivalent
+  deletion, splice-gap and split-gap alignments can support a known sequence
+  without treating arbitrary RNA skips as DNA deletions (#441).
+- `load_exacto_fusions(..., primary_structures_path=...)` imports native Exacto
+  peptide predictions, including separate ORFs and partial proteins. Codons and
+  coordinates are checked against observed RNA; original per-base provenance and
+  completeness remain explicit. Prediction is not evidence of translation.
+
+**Fixed**
+- RNA read support and pair grouping use `(RG, QNAME)`, preventing unrelated
+  libraries with reused names from creating false cis evidence or being
+  collapsed into one supporting fragment (#443).
+
 ## [v9.1.0](https://github.com/openvax/varcode/tree/v9.1.0) (2026-09-16)
 
 **Added**
