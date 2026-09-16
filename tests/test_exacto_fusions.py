@@ -111,6 +111,98 @@ def test_import_uses_existing_effects_without_double_reverse_complement(context)
     assert evidence.observed_outcomes(context[0], tx("OTHER", "+", "G3")) == ()
 
 
+def primary_rows(sequence="ATGAAAGGGTAA", peptide="1", start=0):
+    from varcode.effects.codon_tables import STANDARD
+    rows = []
+    for i, nt in enumerate(sequence):
+        codon = sequence[i // 3 * 3:i // 3 * 3 + 3]
+        aa = "*" if codon in STANDARD.stop_codons else STANDARD.forward_table.get(codon, "")
+        rows.append(dict(peptide_id=peptide, primary_structure_index=str(i),
+                         type="base", amino_acid=aa, amino_acid_index=str(i // 3),
+                         codon_index=str(i % 3), nucleotide=nt.lower(),
+                         transcript_model_id="1", reference_transcript_ids="T1,T2",
+                         transcript_structure_index=str((start + i) // 6),
+                         read_start=str(start + i), read_end=str(start + i),
+                         codon_dna_variant_call_ids="D1"))
+    return rows
+
+
+def test_native_primary_structure_import(context):
+    rows = primary_rows()
+    (candidate,) = load(context, primary_structures_path=table(rows[::-1])).candidates
+    assert candidate.effect.mutant_protein_sequence == "MKG"
+    assert candidate.evidence["protein_completeness"] == "start_to_stop"
+    assert candidate.evidence["translation_evidence"] == "sequence_prediction_only"
+    assert candidate.evidence["exacto_primary_structure"] == rows
+    assert candidate.effect.mutant_transcript.evidence == candidate.evidence
+
+
+def test_primary_structure_keeps_multiple_orfs(context):
+    rows = primary_rows() + primary_rows("AAAGGGTAA", peptide="2", start=3)
+    candidates = load(context, primary_structures_path=table(rows)).candidates
+    assert [c.effect.mutant_protein_sequence for c in candidates] == ["MKG", "KG"]
+    assert candidates[1].evidence["protein_completeness"] == "partial_start"
+    assert candidates[1].evidence["cds_start"] == 3
+
+
+@pytest.mark.parametrize("length,protein,trailing", [(9, "MKG", 0), (10, "MKG", 1), (11, "MKG", 2)])
+def test_incomplete_primary_protein_remains_visible(context, length, protein, trailing):
+    rows = primary_rows("ATGAAAGGGTAA"[:length])
+    (candidate,) = load(context, primary_structures_path=table(rows)).candidates
+    assert candidate.effect.mutant_protein_sequence == protein
+    assert candidate.evidence["protein_completeness"] == "partial_end"
+    assert candidate.evidence["trailing_partial_codon_bases"] == trailing
+
+
+@pytest.mark.parametrize("field,value", [
+    ("primary_structure_index", "1"), ("codon_index", "2"),
+    ("amino_acid_index", "1"), ("nucleotide", "C"), ("amino_acid", "K"),
+    ("read_end", "2"), ("transcript_structure_index", "99"), ("peptide_id", "")])
+def test_invalid_primary_records_fail_closed(context, field, value):
+    rows = primary_rows()
+    rows[0][field] = value
+    with pytest.raises(ValueError):
+        load(context, primary_structures_path=table(rows))
+
+
+def test_primary_and_manual_start_are_mutually_exclusive(context):
+    with pytest.raises(ValueError, match="not both"):
+        load(context, primary_structures_path=table(primary_rows()), cds_starts={})
+
+
+def test_model_without_primary_rows_stays_untranslated(context):
+    rows = primary_rows()
+    for row in rows:
+        row["transcript_model_id"] = "unselected"
+    (candidate,) = load(context, primary_structures_path=table(rows)).candidates
+    assert candidate.effect.mutant_protein_sequence is None
+
+
+def test_primary_events_preserve_codon_order_and_provenance(context):
+    structure = structures()
+    structure[1]["index"] = "2"
+    event = dict(structure[0], index="1", type="event", kind="splicing",
+                 read_start="5", read_end="6", sequence="")
+    structure.insert(1, event)
+    primary = primary_rows()
+    for row in primary[6:]:
+        row["primary_structure_index"] = str(int(row["primary_structure_index"]) + 1)
+        row["transcript_structure_index"] = "2"
+    primary.insert(6, dict(primary[0], primary_structure_index="6", type="event",
+                           transcript_structure_index="1", read_start="5", read_end="6",
+                           amino_acid="", nucleotide="", codon_index="-1", amino_acid_index="-1"))
+    (candidate,) = load(context, rows=structure, primary_structures_path=table(primary)).candidates
+    assert candidate.effect.mutant_protein_sequence == "MKG"
+    assert candidate.evidence["exacto_primary_structure"][6]["type"] == "event"
+
+
+def test_primary_structure_cannot_translate_past_stop(context):
+    sequence = "ATGTAAGGGTAA"
+    with pytest.raises(ValueError, match="after a stop"):
+        load(context, rows=structures(sequence=sequence),
+             primary_structures_path=table(primary_rows(sequence)))
+
+
 def test_one_dna_event_keeps_multiple_models_and_reference_groups(context):
     rows = structures() + structures(model="2") + structures(refs="T1.1,T2.2")
     links = [link(), link(model="2"), link(refs="T1.1,T2.2")]

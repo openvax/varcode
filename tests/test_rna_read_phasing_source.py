@@ -190,6 +190,32 @@ def test_paired_end_fragment_can_support_cis(tmp_path):
         source.close()
 
 
+def test_identical_names_in_distinct_read_groups_do_not_create_cis(tmp_path):
+    v1, v2 = Variant("1", 120, "A", "T"), Variant("1", 320, "A", "G")
+    first = _snv_read("same_name", 100, {120: "T"})
+    second = _snv_read("same_name", 300, {320: "G"})
+    first.set_tag("RG", "library1")
+    second.set_tag("RG", "library2")
+    source = RNAReadPhasingSource(_write_bam(tmp_path, [first, second]),
+                                  min_alt_reads=1, max_distance_from_read_edge=0)
+    try:
+        assert source.in_cis(v1, v2) is None
+    finally:
+        source.close()
+
+
+def test_distinct_read_groups_count_as_distinct_fragments(tmp_path):
+    variant = Variant("1", 120, "A", "T")
+    reads = [_snv_read("same_name", 100, {120: "T"}) for _ in range(2)]
+    for index, read in enumerate(reads):
+        read.set_tag("RG", "library%d" % index)
+    source = RNAReadPhasingSource(_write_bam(tmp_path, reads), max_distance_from_read_edge=0)
+    try:
+        assert source.supports_variant(variant) == 2
+    finally:
+        source.close()
+
+
 def test_low_quality_alt_base_is_discounted(tmp_path):
     variant = Variant("1", 120, "A", "T")
     bam_path = _write_bam(tmp_path, [

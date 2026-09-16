@@ -46,7 +46,7 @@ with an annotated sense 5' anchor. A missing or antisense 3' annotation gives
 `TranslocationToIntergenic`, whose existing meaning includes non-sense joins.
 Unknown transcript IDs and incomplete/unsupported structures raise errors.
 This does not implement all Exacto DNA/RNA variant formats, circular RNA,
-multi-gene paths, or primary-structure tables. Those remain in the broader
+or multi-gene paths. Those remain in the broader
 [#260](https://github.com/openvax/varcode/issues/260) roadmap.
 
 For other producers, use the same existing effect classes directly:
@@ -78,6 +78,43 @@ offset>` to `make_fusion_outcome`, or a `cds_starts` mapping keyed by
 loader. This requires a valid unambiguous start-to-stop ORF in the supplied
 sequence. It produces a **sequence-predicted protein**, not evidence of
 translation, full-length RNA, tumor-cell identity, or a mature two-gene fusion.
+
+### Import Exacto's protein predictions
+
+When Exacto has already selected reading frames, supply its native
+primary-structures table instead of choosing `cds_starts` yourself:
+
+```python
+rna = load_exacto_fusions(
+    "transcript_structures.tsv", "integrated_variants.tsv",
+    variants_by_id=variants_by_id,
+    primary_structures_path="primary_structures.tsv",
+)
+for candidate in rna.candidates:
+    print(candidate.evidence.get("exacto_peptide_id"))
+    print(candidate.effect.mutant_protein_sequence)
+    print(candidate.evidence.get("protein_completeness"))
+```
+
+Each `(model, reference-transcript group, peptide_id)` remains separate. The
+loader validates native `primary_structure_index`, `amino_acid_index`, and
+`codon_index`, checks each nucleotide against its `transcript_structure_index`
+and inclusive read coordinates, and checks the amino acid against its codon.
+The amino acid repeated on all three base rows is emitted once. Terminal `*`
+is retained in provenance but omitted from `mutant_protein_sequence`.
+
+Partial peptides are available, with `protein_completeness` set to
+`partial_start`, `partial_end`, or `partial_both`; start-to-stop predictions
+are labeled `start_to_stop`. Trailing incomplete codons cannot claim an amino
+acid. Missing peptide rows leave that model's protein `None`. Per-base variant
+IDs, frameshift state and all original fields remain in `exacto_primary_structure`.
+Exacto's standard genetic-code choice is recorded as `protein_translation_table=1`.
+
+These sequences are **predictions from RNA**, not evidence of translation.
+A complete start-to-stop ORF need not cross the rearrangement or establish a
+full-length fusion transcript. Downstream users must check completeness and
+source coordinates rather than treating every protein string as a complete
+expressed fusion protein.
 
 The small osteosarc regression fixtures deliberately exercise the negative
 case: GABBR1 joins sequence upstream of SLC29A1, OTUD7A joins an antisense FMN1
