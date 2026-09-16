@@ -1,5 +1,15 @@
 # Change Log
 
+## [v8.0.2](https://github.com/openvax/varcode/tree/v8.0.2) (2026-09-15)
+
+**Fixed**
+- `varcode` and `varcode-genes` no longer fail at startup when `pkg_resources`
+  is unavailable. Both commands load their packaged logging configuration with
+  the standard library's `importlib.resources`, including from zipped packages.
+- Added subprocess regression tests for both commands with `pkg_resources`
+  imports blocked, so older setuptools in a test environment cannot mask the
+  missing runtime dependency.
+
 ## [v8.0.1](https://github.com/openvax/varcode/tree/v8.0.1) (2026-09-15)
 
 **Changed**
