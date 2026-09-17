@@ -35,7 +35,7 @@ from .effect_helpers import exon_length
 from ..mutant_transcript import MutantTranscript, ReferenceSegment
 # Existing assembled-SV pickles use this private module path.
 from ..mutant_transcript import _AssembledAllele  # noqa: F401
-from ..sv_allele_parser import breakend_sides
+from ..sv_allele_parser import breakend_sides, _breakend_local_side
 
 
 # --------------------------------------------------------------------
@@ -501,23 +501,29 @@ def _build_fusion_mutant_transcript(
 
 
 def _build_translocation_mutant_transcript(variant, transcript):
-    """Build a :class:`MutantTranscript` for a BND classified as
-    :class:`TranslocationToIntergenic`.
+    """Describe only the retained local reference fragment of a BND.
 
-    One segment covering the (this-side) transcript up to the
-    breakpoint. Intergenic space beyond the breakpoint isn't
-    representable as a transcript source; #338 and #341 extend this
-    with caller-supplied genomic intervals / long-read assemblies.
+    The other side and full mutant cDNA/protein remain unknown. Without
+    local orientation or a breakpoint on this transcript, no fragment can
+    be established. Supplied assemblies are handled by the caller.
     """
+    side = _breakend_local_side(variant.symbolic_alt)
+    if (side is None or str(variant.contig) != str(transcript.contig)
+            or not transcript.start <= variant.start <= transcript.end):
+        return None
+    keep_five_prime = _retains_five_prime_end(transcript, side)
+    cut = _cdna_cut(transcript, variant.start, keep_five_prime)
     full_len = len(str(transcript.sequence))
+    start, end = (0, cut) if keep_five_prime else (cut, full_len)
     segments = (
         ReferenceSegment(
-            source=transcript, start=0, end=full_len,
-            strand="+", label="translocation_5p"),)
+            source=transcript, start=start, end=end, strand="+",
+            label="translocation_5p" if keep_five_prime else "translocation_3p"),)
     return MutantTranscript(
         reference_transcript=transcript,
         reference_segments=segments,
         cdna_sequence=None,
+        evidence={"sequence_status": "retained_reference_fragment"},
         annotator_name="structural_variant")
 
 

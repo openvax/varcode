@@ -1,5 +1,14 @@
 # Change Log
 
+## [v9.2.4](https://github.com/openvax/varcode/tree/v9.2.4) (2026-09-17)
+
+**Fixed**
+- BND fallbacks retain only the strand/orientation-correct reference cDNA
+  prefix or suffix, not the entire transcript (#447). Single breakends retain
+  their known local side; unknown local orientation leaves the model unresolved.
+  Fragments are explicitly labeled partial, full cDNA/protein remain unknown,
+  and supplied assemblies and existing coding-fusion predictions are preserved.
+
 ## [v9.2.3](https://github.com/openvax/varcode/tree/v9.2.3) (2026-09-17)
 
 **Fixed**
