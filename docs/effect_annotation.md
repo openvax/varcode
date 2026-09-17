@@ -1,16 +1,18 @@
 # Effect annotation
 
-How varcode turns a variant into one or more `MutationEffect` objects.
+Use `effects()` to predict consequences, then inspect the transcript, protein
+sequence, and any alternatives. Start with [Getting started](getting_started.md)
+if you still need reference data or a first runnable example.
 
 ## Basic usage
 
 ```python
 import varcode
 
-variants = varcode.load_maf("my_variants.maf")
-
+variants = varcode.load_vcf("variants.vcf", genome=81)  # GRCh38
 effects = variants.effects()
-effects.top_priority_effect()
+for variant, effect in effects.top_priority_effect_per_variant().items():
+    print(variant.short_description, effect.short_description)
 ```
 
 For ordinary use, this is all the selection you need. The default handles
@@ -21,6 +23,61 @@ if your input includes SV records.
 The result is an `EffectCollection` with a prediction for each relevant
 `(variant, transcript)` pair. Effects include `Substitution`, `Silent`,
 `FrameShift`, structural consequences and unresolved predictions.
+
+## Read an effect
+
+An effect's `short_description` summarizes the change. Its `transcript` identifies
+the prediction's transcript when one applies; intergenic effects have none.
+`top_priority_effect_per_variant()` gives one summary per variant, while
+`top_priority_effect()` selects one effect from the whole collection. Priority
+is consequence ordering, not a probability or clinical classification.
+
+Given an effect from the collection, read its predicted protein directly:
+
+```python
+protein = effect.mutant_protein_sequence  # may be None
+model = effect.mutant_transcript         # may be None even when protein is available
+cdna = model.cdna_sequence if model is not None else None
+evidence = model.evidence if model is not None else None
+```
+
+`None` means unavailable, not unchanged. A transcript model may contain only
+partial structure; see [how it composes](#how-it-composes). For a complete
+single-variant example, see [reading the protein](getting_started.md#read-the-predicted-protein).
+
+## Reading alternatives
+
+Some predictions are outcome sets rather than a single known consequence:
+
+```python
+from varcode import MultiOutcomeEffect
+
+if isinstance(effect, MultiOutcomeEffect):
+    for candidate in effect.candidates:
+        print(candidate.effect.short_description)
+        print(candidate.effect.mutant_protein_sequence)
+        print(candidate.source, candidate.evidence)
+```
+
+Candidate order follows the producer's rules or evidence. `most_likely_effect`
+returns the first candidate; `highest_priority_effect` returns the most severe
+by Varcode's ordering. Neither establishes that the outcome occurred. Keep the
+candidate wrapper when you need its provenance.
+
+## Choose a deeper topic
+
+- [Splice outcomes](#splice-disrupting-variants): normal splicing, exon skips,
+  intron retention, and cryptic sites.
+- [Structural variants](structural_variants.md): loading SVs and interpreting
+  fusion, partial-sequence, and RNA-supported results.
+- [Germline and phasing](germline.md): patient-specific baselines and joint effects.
+- [Experimental annotators and integrations](#annotator-selection): supported
+  inputs, result-shape differences, and the extension contract.
+- [Effect types](effect_types.md) and [API reference](api.md): individual fields
+  and classes.
+
+The rest of this page is reference detail; ordinary annotation does not require
+an understanding of the internal representations.
 
 ## How it composes
 
@@ -36,15 +93,6 @@ through `MultiOutcomeEffect.candidates`. Their order reflects the producer's
 rules or evidence, not necessarily calibrated probabilities. An optional
 RNA-evidence resolver can refine the alternatives or add observed outcomes.
 Experimental result shapes are described in the [advanced section](#annotator-selection).
-
-## The four primitives
-
-| Primitive | What it represents | Module |
-|---|---|---|
-| `MutationEffect` (and subclasses) | A predicted consequence, unresolved result, or outcome set | `varcode.effects.effect_classes` |
-| `MutantTranscript` | Edits or transcript structure with provenance; cDNA and protein sequences are optional | `varcode.mutant_transcript` |
-| `MultiOutcomeEffect` | A set of candidate effects in producer-defined order | `varcode.effects.effect_classes` |
-| `EffectAnnotator` | An implementation that predicts effects; ordinary callers use the default | `varcode.annotators` |
 
 ## Splice-disrupting variants
 
@@ -87,26 +135,20 @@ see [Limitations](#limitations).
 
 ### Splice and coding effects can co-occur
 
-A variant in an exon sits on a coding base by definition — it
-rewrites a codon. If that same exonic base is **also** in the
-splice window (the exonic positions in the table above), the
-same nucleotide change disrupts the splice signal *and* changes
-the protein. varcode represents this duality as
-**`ExonicSpliceSite`**:
+An exonic variant can affect a codon and a splice signal at the same time.
+Not every exonic base is coding: exons also include untranslated regions
+([Ensembl glossary](https://www.ensembl.org/Help/Glossary?id=521)).
 
-- on the default 2-outcome shape, splice disruption is the
-  primary effect; the coding consequence (a `Substitution`,
-  `Silent`, etc.) hangs off `.alternate_effect`
-- on the opt-in `SpliceOutcomeSet` shape, the same coding
-  consequence is the `coding_effect` of the `NormalSplicing`
-  candidate, reachable through
-  `splice_set.effect_if_splicing_unchanged`
+At the public API, splice disruptions are wrapped in `SpliceOutcomeSet`.
+For a coding exonic disruption, the `NormalSplicing` candidate contains the
+coding consequence if splicing proceeds unchanged, accessible through
+`splice_set.effect_if_splicing_unchanged`. The underlying `ExonicSpliceSite`
+signal also records it as `alternate_effect`; that signal is not a separate
+default result shape.
 
-For purely **intronic** disruptions (`SpliceDonor`,
-`SpliceAcceptor`, `IntronicSpliceSite`), there is no codon to
-rewrite — the variant doesn't change a coding base. The default
-shape doesn't expose `alternate_effect` on these classes; the
-opt-in shape's `effect_if_splicing_unchanged` returns `None`.
+For purely intronic disruptions (`SpliceDonor`, `SpliceAcceptor`,
+`IntronicSpliceSite`), there is no directly changed coding base.
+`effect_if_splicing_unchanged` returns `None`.
 
 For coding variants **outside** the splice window, varcode emits
 a plain coding effect (`Substitution`, `Silent`, `FrameShift`,
@@ -116,22 +158,17 @@ won't flag it — see Limitations.
 
 ### The `SpliceOutcomeSet` shape
 
-Every splice-disrupting variant emits a `SpliceOutcomeSet` — there
-is no "bare splice class" path at the user-facing API as of
-varcode 6.0.
+Every splice-disrupting variant emits a `SpliceOutcomeSet`; no opt-in flag is
+needed. The raw signal classes describe the disrupted site inside the set.
 
 ```python
-variant = Variant("17", 43082575 - 5, "C", "T", "GRCh38")
+from varcode import Variant
+
+variant = Variant("7", 117_531_114, "G", "T", genome=81)
+transcript = variant.genome.transcript_by_id("ENST00000003084")
 splice_set = variant.effect_on_transcript(transcript)
-# SpliceOutcomeSet(disrupted_signal_class=ExonicSpliceSite, ...)
-# .candidates is a tuple[EffectCandidate, ...] in producer order.
-# Each candidate's .effect is a SpliceMechanismEffect subclass:
-#   EffectCandidate(effect=NormalSplicing(coding_effect=Substitution(...)))
-#   EffectCandidate(effect=ExonSkipping(affected_exon=..., in_frame=True,
-#                                       aa_ref="KGYK...", ...))
-#   EffectCandidate(effect=IntronRetention(retained_intron_start=...,
-#                                          side="donor", ...))
-#   EffectCandidate(effect=CrypticDonor(affected_exon=..., ...))
+print(type(splice_set).__name__)  # SpliceOutcomeSet
+print(splice_set.disrupted_signal_class.__name__)  # ExonicSpliceSite
 ```
 
 `SpliceOutcomeSet` carries:
@@ -168,6 +205,8 @@ that drop variants early via `modifies_protein_sequence` /
 Downstream consumers dispatch by class:
 
 ```python
+from varcode import ExonSkipping, IntronRetention
+
 for c in splice_set.candidates:
     if isinstance(c.effect, ExonSkipping):
         print(c.effect.affected_exon.exon_id, c.effect.in_frame)
@@ -183,7 +222,7 @@ A cheat sheet for the simple splice use cases. `splice_set` is a
 **Is this variant splice-disrupting?**
 
 ```python
-from varcode import MultiOutcomeEffect, SpliceOutcomeSet
+from varcode import MultiOutcomeEffect, SpliceDonor, SpliceOutcomeSet
 
 # Splice-specific check:
 isinstance(effect, SpliceOutcomeSet)
@@ -231,9 +270,8 @@ splice_set.highest_priority_effect           # most protein-disruptive
 splice_set.highest_priority_candidate
 ```
 
-Use this for clinical / functional filtering ("flag if any
-candidate is at least a frameshift") — a disruptive candidate
-ranked below a less-disruptive primary should still light up.
+Use this when reviewing the most disruptive predicted alternative, even if it
+is not the producer's first choice. It is not evidence of clinical significance.
 See [Picking a single candidate](#picking-a-single-candidate)
 for the "most likely" vs "most disruptive" distinction.
 
@@ -292,10 +330,8 @@ notions of "best" are available — pick consciously:
 The `_candidate` accessors keep the provenance wrapper (`.source`,
 `.evidence`); the `_effect` accessors peel it off. The two "top by"
 notions coincide whenever producer ordering and priority ranking
-agree, which is common — but for clinical / functional filtering
-("flag if any candidate is at least a frameshift") prefer
-`highest_priority_*`: a disruptive candidate behind a less-disruptive
-primary candidate should still light up.
+agree. Use `highest_priority_*` to review the most disruptive predicted
+alternative, and inspect evidence before interpreting it as an observed outcome.
 
 ### Limitations
 
@@ -305,6 +341,43 @@ branch points (~20-50nt upstream of the acceptor), deep intronic
 cryptic sites. Detecting these needs ML predictors (SpliceAI,
 Pangolin, MMSplice, SpliceTransformer) or direct RNA evidence;
 tracked in [#297][i297].
+
+## Structural variants
+
+Load symbolic alleles and breakends with `parse_structural_variants=True`.
+The ordinary `effects()` interface handles them; there is no separate annotator
+to select. Follow the [structural variant guide](structural_variants.md) for
+loading, pairing, protein access, and RNA-supported models.
+
+## Provenance
+
+Every `EffectCollection` produced by `predict_variant_effects`
+records:
+
+- `annotator` — name of the annotator that ran (`"fast"`,
+  `"protein_diff"`, etc.)
+- `annotator_version` — version string
+- `annotated_at` — ISO-8601 UTC timestamp
+
+Fields are preserved through `clone_with_new_elements`
+(so `filter` / `groupby` keep them), written to CSV headers
+(`# annotator=fast`, etc.), and recovered by `from_csv`
+verbatim — restored collections remember *when* they were
+originally produced.
+
+A mismatch between the CSV's annotator and the current default
+raises a warning on load. CSV loading re-annotates with the selected
+implementation; selecting the recorded annotator does not restore historical
+predictions or evidence. See [serialization limits](csv.md#csv-vs-json).
+
+## The four primitives
+
+| Primitive | What it represents | Module |
+|---|---|---|
+| `MutationEffect` (and subclasses) | A predicted consequence, unresolved result, or outcome set | `varcode.effects.effect_classes` |
+| `MutantTranscript` | Edits or transcript structure with provenance; cDNA and protein sequences are optional | `varcode.mutant_transcript` |
+| `MultiOutcomeEffect` | A set of candidate effects in producer-defined order | `varcode.effects.effect_classes` |
+| `EffectAnnotator` | An implementation that predicts effects; ordinary callers use the default | `varcode.annotators` |
 
 <a id="annotator-selection"></a>
 
@@ -344,15 +417,7 @@ structural or combined input is supported.
 
 ### Reading sequences and alternatives
 
-For a single effect, distinguish an effect's predicted protein from its optional
-transcript model:
-
-```python
-protein = effect.mutant_protein_sequence  # may be None
-model = effect.mutant_transcript         # may be None even when protein is available
-cdna = model.cdna_sequence if model is not None else None
-evidence = model.evidence if model is not None else None
-```
+Use the [ordinary sequence accessors](#read-an-effect) for a single effect.
 
 `None` does not mean an unchanged protein. A model containing reference segments
 can still be partial: for example, a BND's retained fragment is labeled
@@ -461,87 +526,12 @@ point-edit path; SV plus germline composition remains experimental in
 `predict_variant_effect_on_transcript` now use the same selection rules as
 `effects()`, including the current scoped default.
 
-## Provenance
-
-Every `EffectCollection` produced by `predict_variant_effects`
-records:
-
-- `annotator` — name of the annotator that ran (`"fast"`,
-  `"protein_diff"`, etc.)
-- `annotator_version` — version string
-- `annotated_at` — ISO-8601 UTC timestamp
-
-Fields are preserved through `clone_with_new_elements`
-(so `filter` / `groupby` keep them), written to CSV headers
-(`# annotator=fast`, etc.), and recovered by `from_csv`
-verbatim — restored collections remember *when* they were
-originally produced.
-
-A mismatch between the CSV's annotator and the current default
-raises a warning on load; wrap `from_csv` in
-`use_annotator(<csv's annotator>)` if you need the original
-annotator's output specifically.
-
-## Structural variants
-
-`StructuralVariant` (a `Variant` subclass) carries SV-specific fields:
-`sv_type` (one of `DEL`, `DUP`, `INV`, `INS`, `CNV`, `BND`), `end`,
-breakend mate fields, confidence intervals, and an open-ended `info`
-dict. Pass `parse_structural_variants=True` to `load_vcf` to load
-symbolic ALTs (`<DEL>`, `<INS:ME:ALU>`, `<CN0>`), breakends and single
-breakends (`.ACGT` / `ACGT.`, loaded as a `BND` with no mate) as
-`StructuralVariant` objects rather than dropping them. SVs get the
-genome and contig-name settings passed to `load_vcf`, mates included.
-Callers such as esvee and GRIDSS write deletions, duplications and
-inversions as breakend pairs labeled `SVTYPE=DEL` / `DUP` / `INV`. Each
-row loads as the breakend it is; `varcode.transforms.pair_breakends`
-joins the pair into one SV of that type, spanning the event, when the
-two halves agree on the label and their kept sides fit it.
-
-```python
-from varcode import load_vcf
-
-vc = load_vcf("manta.vcf", parse_structural_variants=True)
-sv_effects = [
-    e for e in vc.effects()
-    if e.variant.__class__.__name__ == "StructuralVariant"
-]
-```
-
-SV effects (`LargeDeletion`, `LargeDuplication`, `Inversion`,
-`GeneFusion`, `TranslocationToIntergenic`) are `MultiOutcomeEffect`
-subclasses — `e.candidates` exposes the candidate ORFs / cryptic-splice
-outcomes as a tuple of `EffectCandidate` objects in producer order.
-External evidence producers (RNA evidence, long-read assembly)
-plug in via `apply_rna_evidence_to_effects` to append observed
-candidates; see [Germline-aware annotation](germline.md)
-for the same composition pattern applied to germline.
-
-Fusions follow breakend orientation and strand. [Structural variant
-annotation](structural_variants.md) covers every case: breakends between
-genes and intergenic space, strand combinations for deletions,
-duplications and inversions, where a breakpoint lands, and which effect
-class comes back.
-
-Limitations:
-
-- Each breakend row produces its own `StructuralVariant`;
-  `varcode.transforms.pair_breakends` joins the two rows of a pair (see
-  [Transforms](transforms.md)).
-- `parse_structural_variants=False` is the default. Without the flag,
-  symbolic ALTs are dropped with a warning that names the flag.
-- The fusion partner is the first protein-coding transcript at the other
-  breakpoint with the right orientation, not a ranked choice
-  ([#406](https://github.com/openvax/varcode/issues/406)).
-
 ## Downstream consumers
 
-`MutantTranscript` is the prediction-boundary type for downstream
-neoantigen pipelines (topiary reads `mt.mutant_protein_sequence`;
-vaxrank consumes the `EffectCollection` + protein pair to score
-neoantigens). RNA-evidence callers (isovar, Exacto) plug in either as
-registered annotators or via the `RNAEvidenceResolver` protocol —
-see [Germline-aware annotation](germline.md) for the resolver pattern,
-which the same evidence shape uses across germline / phase / RNA.
+Integration authors can use the [annotator contract](annotator_contract.md) and
+[RNA evidence API](api.md#rna-evidence). Preserve effect candidates, transcript
+identity, sequence completeness, and provenance when passing predictions to
+other tools; a sequence string alone does not establish a complete expressed
+protein.
 
 [i297]: https://github.com/openvax/varcode/issues/297

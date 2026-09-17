@@ -1,39 +1,28 @@
 # VariantCollection transforms
 
-A **transform** is a pure function: given a `VariantCollection` and
-optional auxiliary inputs (reference, phase resolver, ...), it returns
-a new `VariantCollection`. Cardinality may be preserved, reduced, or
-increased. Composition is by application — no registry, no protocol.
+Transforms return a new variant collection without modifying the input.
+Use them when you need to pair SV records or normalize indel coordinates;
+ordinary `effects()` calls do not require a preprocessing pipeline.
 
-The pattern lives in `varcode.transforms`. As of 4.20.0 it ships one
-transform, `pair_breakends`; the module is designed to grow.
-
-## The contract
-
-Every transform owes three things, documented in its docstring:
-
-| Field | Meaning |
-|---|---|
-| **Cardinality** | `preserves`, `reduces`, or `increases`. |
-| **Provenance** | Every output variant carries `source_variants: tuple[Variant, ...]`. Empty tuple for pass-through; one element for derived-from-one; two or more for combined. Not part of hash/equality. |
-| **Metadata behavior** | Explicit rule for how `source_to_metadata_dict` entries flow through (which fields are inherited from which source, which require agreement, what happens on disagreement). |
-
-Transforms are **idempotent on inputs they don't recognize**. Running
-`pair_breakends` twice produces the same VC; the second pass finds no
-unpaired BNDs to combine because every combined row's `source_variants`
-is already populated.
-
-Composition is just function application:
+## Common tasks
 
 ```python
-import varcode
-from varcode.transforms import pair_breakends
+from varcode import load_vcf
+from varcode.transforms import left_align_indels, pair_breakends
 
-vc = varcode.load_vcf("tumor.vcf", genome="GRCh38",
-                     parse_structural_variants=True)
-vc = pair_breakends(vc)
-effects = vc.effects()
+variants = load_vcf("tumor.vcf", genome=81, parse_structural_variants=True)
+paired = pair_breakends(variants)
+normalized = left_align_indels(variants)
 ```
+
+Choose the operation you need; these are independent examples. Pairing reduces
+the number of records and can change which partner's transcripts are annotated.
+Left-alignment depends on available reference sequence.
+
+- [Pair breakends](#pair_breakends): usage, pairing rules, and the
+  [partner-coverage trade-off](#trade-off-one-partners-transcripts-post-collapse).
+- [Left-align indels](#left_align_indels): reference requirements and partial shifts.
+- [Transform contract](#the-contract): provenance and metadata rules for authors.
 
 ## `pair_breakends`
 
@@ -49,9 +38,9 @@ A VCF can represent the same translocation event two ways:
 | BreakDancer / CREST / older DELLY | One row, `SVTYPE=TRA`, `CHR2`/`END` in INFO | Pass-through, `source_variants=()` |
 | GRIDSS unresolved single-end | One BND row, no `MATEID` | Pass-through |
 
-The point is **caller-uniformity after the transform**: regardless of
-which caller produced the VCF, effect prediction sees one variant per
-rearrangement event.
+Recognized reciprocal pairs become one variant per junction. Unpaired or
+unsupported records pass through; a complex rearrangement may still require
+several variants.
 
 ### Usage
 
@@ -65,7 +54,7 @@ vc = pair_breakends(vc)
 
 # Each combined variant carries both endpoints + provenance.
 for v in vc:
-    if v.sv_type == "BND" and v.source_variants:
+    if v.is_structural and v.sv_type == "BND" and v.source_variants:
         bnd_a, bnd_b = v.source_variants
         print(f"{v.contig}:{v.start} <-> {v.mate_contig}:{v.mate_start} "
               f"from rows {bnd_a.info.get('paired_with')} + "
@@ -162,12 +151,12 @@ vc = left_align_indels(vc)
 
 No `reference` parameter — `left_align_indels` reads bases via the
 genome the variants already carry (see
-[varcode.Genome](api.md#varcodegenome)). Coverage depends on which
+[varcode.Genome](api.md#varcode.Genome)). Coverage depends on which
 genome shape was passed.
 
 ### Behavior
 
-| Variant kind | EffectCandidate |
+| Variant kind | Result |
 |---|---|
 | Pure SNV / MNV / complex (`ATG→GCC`) | Pass-through, `source_variants=()` |
 | Already-canonical indel (no equivalent leftward position) | Pass-through, `source_variants=()` |
@@ -198,6 +187,21 @@ Running `left_align_indels` twice produces the same result on the
 second call — every variant is already at its canonical leftmost
 position after the first call. Composes cleanly with `pair_breakends`
 in either order; SVs and BNDs are not indels and pass through.
+
+## The contract
+
+Every transform owes three things, documented in its docstring:
+
+| Field | Meaning |
+|---|---|
+| **Cardinality** | `preserves`, `reduces`, or `increases`. |
+| **Provenance** | Every output variant carries `source_variants: tuple[Variant, ...]`. Empty tuple for pass-through; one element for derived-from-one; two or more for combined. Not part of hash/equality. |
+| **Metadata behavior** | Explicit rule for how `source_to_metadata_dict` entries flow through (which fields are inherited from which source, which require agreement, what happens on disagreement). |
+
+Transforms are **idempotent on inputs they don't recognize**. Running
+`pair_breakends` twice produces the same VC; the second pass finds no
+unpaired BNDs to combine because every combined row's `source_variants`
+is already populated.
 
 ## Roadmap
 

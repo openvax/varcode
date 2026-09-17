@@ -1,9 +1,7 @@
 # Genotypes and sample-aware queries
 
-*New in varcode 2.3.0 ([#267](https://github.com/openvax/varcode/issues/267)).*
-
 When you load a multi-sample VCF, varcode captures each sample's genotype
-(GT, AD, DP, GQ, PS) automatically. As of 2.3.0 this data is available
+(GT, AD, DP, GQ, PS) automatically. This data is available
 as structured `Genotype` objects and via sample-aware filtering helpers
 on `VariantCollection`.
 
@@ -111,12 +109,12 @@ interpretation.
 ## Beyond zygosity: phased and germline-aware effects
 
 The Genotype API gives you the data; downstream effect prediction
-uses it via separate features that landed later:
+uses it when you explicitly provide a phase resolver or germline context:
 
 - **Phased effects of cis variants** — when two variants share a
   phase set, varcode builds a joint `HaplotypeEffect` via
   `effects(phase_resolver=...)`. See
-  [#269](https://github.com/openvax/varcode/issues/269).
+  [phasing](germline.md#how-varcode-handles-unknown-phase).
 - **Germline-aware somatic annotation** — pass a `GermlineContext` to
   `effects(germline=...)` and somatic variants are classified against
   the patient's germline-applied transcript. See

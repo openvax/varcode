@@ -32,16 +32,20 @@ theme:
 
 nav:
   - Home: index.md
-  - Feature guides:
+  - Getting started: getting_started.md
+  - Everyday tasks:
       - Effect annotation: effect_annotation.md
-      - Structural variants: structural_variants.md
       - Genotypes & sample queries: genotype.md
-      - VariantCollection transforms: transforms.md
-      - CSV round-trip: csv.md
-      - Error handling: errors.md
+      - Saving & reloading results: csv.md
+      - Troubleshooting: errors.md
+  - Advanced workflows:
+      - Structural variants & RNA: structural_variants.md
       - Germline-aware annotation: germline.md
-  - API reference: api.md
-  - Effect types: effect_types.md
+      - VariantCollection transforms: transforms.md
+  - Reference:
+      - Effect types: effect_types.md
+      - API reference: api.md
+      - Annotator integration contract: annotator_contract.md
   - Changelog: changelog.md
 
 markdown_extensions:

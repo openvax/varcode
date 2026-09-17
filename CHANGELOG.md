@@ -3,6 +3,11 @@
 ## [v9.2.5](https://github.com/openvax/varcode/tree/v9.2.5) (2026-09-17)
 
 **Documentation**
+- Make the README a short introduction and add a reproducible getting-started
+  guide. Group navigation into everyday tasks, advanced workflows, and reference;
+  move implementation details behind usage examples (#415, #453).
+- Correct germline examples and resolver descriptions (#413), stale splice and
+  serialization explanations, and the missing Genome API link (#451).
 - Lead the annotation guide with ordinary `effects()` usage. Explain optional
   implementations, supported-input limits, partial transcript models, sequence
   and candidate access, legacy aliases, and current haplotype ownership in an

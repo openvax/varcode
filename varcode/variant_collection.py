@@ -140,7 +140,7 @@ class VariantCollection(Collection):
             the collection. See :meth:`Variant.effects` and
             openvax/varcode#271.
 
-        phase_resolver : PhaseResolver or None
+        phase_resolver : resolver object or None
             Optional phase-evidence source (e.g. a
             :class:`~varcode.phasing.MolecularPhaseResolver` wrapping an
             upstream RNA-phasing tool, or

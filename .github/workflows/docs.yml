@@ -42,7 +42,7 @@ jobs:
           pip install mkdocs mkdocs-material 'mkdocstrings[python]'
 
       - name: Build docs
-        run: mkdocs build
+        run: mkdocs build --strict
 
       - name: Upload site artifact
         if: github.ref == 'refs/heads/main'

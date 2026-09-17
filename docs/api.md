@@ -1,7 +1,14 @@
 # API reference
 
-Auto-generated from in-source docstrings via
-[mkdocstrings](https://mkdocstrings.github.io/).
+Use [Getting started](getting_started.md) for a first example and the
+[task guides](index.md#find-your-next-task) for workflows. This page lists
+signatures, parameters, and return types from the source docstrings.
+
+## Reference genomes
+
+### `varcode.Genome`
+
+::: varcode.Genome
 
 ## Variants
 

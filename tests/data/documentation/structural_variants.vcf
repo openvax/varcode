@@ -1,0 +1,6 @@
+##fileformat=VCFv4.2
+##reference=GRCh38
+##INFO=<ID=SVTYPE,Number=1,Type=String,Description="SV type">
+##INFO=<ID=END,Number=1,Type=Integer,Description="End position">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+7	117531100	cftr_deletion	T	<DEL>	60	PASS	SVTYPE=DEL;END=117531110

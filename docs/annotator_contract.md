@@ -1,5 +1,10 @@
 # Unified default annotator
 
+This is an integration/developer contract, not a setup step. Ordinary callers
+use `variants.effects()`; see [Effect annotation](effect_annotation.md).
+For optional implementations and examples, start with the
+[advanced guide](effect_annotation.md#annotator-selection).
+
 ## Scope
 
 Keep `fast` as the compatible registry name for the built-in default. It owns
