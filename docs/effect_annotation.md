@@ -2,30 +2,6 @@
 
 How varcode turns a variant into one or more `MutationEffect` objects.
 
-## How it composes
-
-A single DNA event can produce one or more plausible mutant proteins.
-varcode represents each concrete mutant as a `MutantTranscript`. The
-annotator turns a variant into one or more of these; the classifier
-turns each `MutantTranscript` into a typed `MutationEffect`. When the
-DNA alone admits multiple plausible outcomes — splice ambiguity, SV
-breakpoint resolution, unphased germline-overlapping codons — the
-results are packaged in a `MultiOutcomeEffect` whose `candidates`
-property exposes the set. An optional RNA-evidence resolver narrows
-the set to observed isoforms or appends observed-only outcomes.
-
-## The four primitives
-
-| Primitive | What it represents | Module |
-|---|---|---|
-| `MutationEffect` (and subclasses) | One deterministic consequence: `Substitution`, `Silent`, `FrameShift`, `PrematureStop`, ... | `varcode.effects.effect_classes` |
-| `MutantTranscript` | One concrete mutant protein with edit provenance and the annotator that produced it | `varcode.mutant_transcript` |
-| `MultiOutcomeEffect` | Possibility set: a sequence of candidate outcomes ordered by a prior (most likely first) | `varcode.effects.effect_classes` |
-| `EffectAnnotator` | How a variant becomes effects or mutant transcripts | `varcode.annotators` |
-
-Everything in effect annotation is an implementation or consumer
-of one of those four.
-
 ## Basic usage
 
 ```python
@@ -33,19 +9,42 @@ import varcode
 
 variants = varcode.load_maf("my_variants.maf")
 
-# Simplest path: get an EffectCollection.
 effects = variants.effects()
 effects.top_priority_effect()
-
-# Filter by transcript consequence.
-nonsilent = effects.drop_silent_and_noncoding()
 ```
 
-`variants.effects()` calls the current default annotator
-(`"fast"`) on every `(variant, transcript)` pair and returns
-an `EffectCollection`. Each element is a `MutationEffect`
-subclass — `Substitution`, `Silent`, `PrematureStop`, and so
-on.
+For ordinary use, this is all the selection you need. The default handles
+point variants and structural variants through the same interface; you do
+not need to choose an annotator. See [structural variant loading](#structural-variants)
+if your input includes SV records.
+
+The result is an `EffectCollection` with a prediction for each relevant
+`(variant, transcript)` pair. Effects include `Substitution`, `Silent`,
+`FrameShift`, structural consequences and unresolved predictions.
+
+## How it composes
+
+An effect describes a predicted consequence. It may also carry a
+`MutantTranscript`: edits or reference-segment structure, provenance, and
+optional mutant cDNA and protein sequences. This is **not necessarily a known
+protein or complete RNA molecule**. It can describe a partial retained fragment,
+or a structure whose sequence is still unknown. Not every effect has an attached
+`MutantTranscript`; some effects expose a predicted protein directly.
+
+When several outcomes are plausible, ordinary outcome sets expose alternatives
+through `MultiOutcomeEffect.candidates`. Their order reflects the producer's
+rules or evidence, not necessarily calibrated probabilities. An optional
+RNA-evidence resolver can refine the alternatives or add observed outcomes.
+Experimental result shapes are described in the [advanced section](#annotator-selection).
+
+## The four primitives
+
+| Primitive | What it represents | Module |
+|---|---|---|
+| `MutationEffect` (and subclasses) | A predicted consequence, unresolved result, or outcome set | `varcode.effects.effect_classes` |
+| `MutantTranscript` | Edits or transcript structure with provenance; cDNA and protein sequences are optional | `varcode.mutant_transcript` |
+| `MultiOutcomeEffect` | A set of candidate effects in producer-defined order | `varcode.effects.effect_classes` |
+| `EffectAnnotator` | An implementation that predicts effects; ordinary callers use the default | `varcode.annotators` |
 
 ## Splice-disrupting variants
 
@@ -307,59 +306,121 @@ cryptic sites. Detecting these needs ML predictors (SpliceAI,
 Pangolin, MMSplice, SpliceTransformer) or direct RNA evidence;
 tracked in [#297][i297].
 
-## Annotator selection
+<a id="annotator-selection"></a>
 
-There is one built-in default, registered as `fast` for compatibility. It
-handles both point variants and rearrangements, including when explicitly
-selected. Optional annotators may implement only part of the problem:
+## Advanced: annotators and implementation limits
 
-| Annotator | Algorithm | Used for |
+Skip this section unless you are comparing implementations, using an experiment,
+or writing an integration. Ordinary callers should keep using `variants.effects()`.
+
+### What the optional implementations change
+
+| Selection | How it predicts | Supported scope and limits |
 |---|---|---|
-| `FastEffectAnnotator` | Point-edit prediction, internal SV routing, and patient-baseline point-edit comparison | **Default** |
-| `ProteinDiffEffectAnnotator` | Builds a `MutantTranscript`, translates, diffs against the reference protein | Experimental opt-in for point edits |
-| `TranscriptModelEffectAnnotator` | Composes phase, splice choices, haplotype edits and SV layouts, then classifies mutant versus patient baseline | Experimental opt-in via `annotator="transcript_model"` |
+| Default (omit `annotator=`) | Established point-edit prediction, internal structural handling, and patient-baseline comparison for point edits | Point variants and SVs; germline/phase context for point edits. General SV-plus-germline composition is not supported. |
+| `annotator="protein_diff"` | Constructs and translates point-edited transcripts, then compares proteins; reuses the default's splice/location and germline helpers | Experimental alternative for point edits, not broader biological coverage. SV inputs are unsupported. |
+| `annotator="transcript_model"` | Enumerates phase/splice hypotheses, constructs transcript products, compares against the patient's baseline, then merges equivalent results | Experimental point edits and local DEL/DUP/INV layouts. Insertions require `alt_assembly`; CNVs are unsupported. BNDs use the existing structural helper, but BND-plus-haplotype composition is unresolved. Nonlocal DUP/INV handling remains limited; see #449 below. |
 
-Structural prediction is an internal helper of the default, not a second
-annotator it invokes. Varcode 9 removes the old `StructuralVariantAnnotator`
-class/module and `annotator="structural_variant"` selection; use the default
-or `annotator="fast"` instead. `UnsupportedVariantError` is also removed:
-partial annotators return `NotImplemented` (see below). No outer router
-selects an annotator based on variant kind or supplies an implicit fallback.
+The default's historical registry name is `fast`; you may see it in provenance
+headers. You do not need to pass that name. There is no separate selectable
+structural annotator or outside router switching implementations for you.
+**Getting protein sequences does not require selecting `protein_diff`.** Protein
+comparison is also a shared helper used by the other prediction paths.
 
-All emit the same `MutationEffect` hierarchy. Protein comparison remains a
-shared implementation helper used by splice, germline, and realized-product
-classification; those paths do not require selecting `protein_diff`.
+Given a `variant` and one of its `transcript` objects, selection is explicit:
 
 ```python
-# One default for both point variants and SVs:
-effects = variant.effects()
-effects = variant.effects(annotator="fast")  # same routing
-
-# Opt into the protein-diff path:
-effects = variant.effects(annotator="protein_diff")
-
-# Scoped swap:
-with varcode.use_annotator("protein_diff"):
-    effects = variant_collection.effects()
-
-# Experimental composable engine. The return value on each transcript is an
-# ordinary effect; inspect .candidates for alternative phase/splice products.
-effects = variant.effects(annotator="transcript_model", germline=germline_context)
+effect = variant.effect_on_transcript(transcript)  # ordinary use
+comparison = variant.effect_on_transcript(transcript, annotator="protein_diff")
+experimental = variant.effect_on_transcript(transcript, annotator="transcript_model")
 ```
 
-The `transcript_model` annotator keeps mechanism preference ordinal at tier 0; it does
-not present the built-in splice rule order as a calibrated probability.
-Canonical and exon-skip paths need only transcript annotation. A genome with
-reference FASTA additionally resolves intron retention and cryptic splice
-sites from the mutated haplotype. `predict_transcript_model_effect` accepts several
-known-cis somatic variants when a caller needs their joint product.
+The transcript model can use `germline=` and `phase_resolver=` context. Canonical
+and exon-skip paths need only transcript annotation; a genome with reference
+FASTA additionally supplies sequence for intron retention and cryptic splice
+sites. Without a calibrated scorer, mechanism preference is an ordering rule,
+not a probability. Selecting this experiment does not guarantee that every
+structural or combined input is supported.
 
-The former `realized` selection, `RealizedEffectAnnotator` class and
-`predict_realized_effect` function remain compatibility aliases. New results
-record `transcript_model` as the annotator name. This is a naming change only:
-the transcript model remains experimental and `fast` remains the default.
+### Reading sequences and alternatives
 
-Third-party annotators (isovar, Exacto) register via the registry:
+For a single effect, distinguish an effect's predicted protein from its optional
+transcript model:
+
+```python
+protein = effect.mutant_protein_sequence  # may be None
+model = effect.mutant_transcript         # may be None even when protein is available
+cdna = model.cdna_sequence if model is not None else None
+evidence = model.evidence if model is not None else None
+```
+
+`None` does not mean an unchanged protein. A model containing reference segments
+can still be partial: for example, a BND's retained fragment is labeled
+`sequence_status="retained_reference_fragment"`, with full cDNA/protein unknown.
+Do not concatenate that fragment and call it a complete allele. See
+[observed RNA structures](structural_variants.md#importing-observed-rna-structures)
+for sequence completeness and prediction-versus-observation details.
+
+The ordinary and experimental candidate wrappers are not interchangeable:
+
+| Candidate type | Shared access | Additional information |
+|---|---|---|
+| `EffectCandidate` (ordinary splice/SV/RNA outcome sets) | `candidate.effect` | `source`, `evidence`; sequences are on the effect or its optional `mutant_transcript` |
+| `RealizedEffectCandidate` (transcript-model hypothesis pipeline) | `candidate.effect` | `outcomes`, `hypotheses`, `probability`, `ordinal_key`; each outcome has `baseline` and `mutant` products with `cdna_sequence`, `protein_sequence` and `evidence` |
+
+The experiment returns an ordinary top effect with candidates attached, not
+necessarily a `MultiOutcomeEffect`. Its BND delegation uses ordinary candidates;
+early noncoding, incomplete or unresolved results may have no candidates at all.
+Inspect the returned shape rather than assuming it from the annotator name:
+
+```python
+from varcode import EffectCandidate
+from varcode.effect_hypotheses import RealizedEffectCandidate
+
+print(experimental.short_description)
+for candidate in getattr(experimental, "candidates", ()):
+    print(candidate.effect.short_description)
+    if isinstance(candidate, RealizedEffectCandidate):
+        # A merged candidate can retain several hypotheses and their products.
+        for outcome in candidate.outcomes:
+            print(outcome.baseline.protein_sequence, outcome.mutant.protein_sequence)
+            print(outcome.mutant.cdna_sequence, outcome.hypothesis.evidence)
+    elif isinstance(candidate, EffectCandidate):
+        print(candidate.source, candidate.evidence)
+        print(candidate.effect.mutant_protein_sequence)
+```
+
+An absent candidate list does not mean no effect: the returned effect still
+applies. Missing sequences and uncalibrated probabilities remain explicit unknowns.
+
+### Current boundaries and legacy names
+
+- **Combined haplotypes are not fully owned by the selected annotator.**
+  `VariantCollection.effects()` annotates individual variants, then calls the
+  shared haplotype builder when a `phase_resolver` is supplied. Selecting an
+  experiment therefore does not control all combined predictions. Relocating
+  this active behavior is tracked in [#437](https://github.com/openvax/varcode/issues/437).
+  The separate `predict_transcript_model_effect(variants, transcript, ...)`
+  function accepts explicitly known-cis variants for the experimental joint
+  pipeline; it does not change the collection workflow.
+- **The experiment can overstate what a nonlocal SV establishes.**
+  [#449](https://github.com/openvax/varcode/issues/449) tracks a DUP spanning CFTR's
+  coding sequence that is clipped to a local model and reported as `FivePrimeUTR`.
+  This is an open correctness bug, not evidence that the event is harmless.
+- **SV consequence/filtering semantics remain incomplete.** A false
+  `modifies_protein_sequence` flag is not sufficient evidence of an unchanged
+  SV protein; `drop_silent_and_noncoding()` can discard unresolved structural
+  effects ([#418](https://github.com/openvax/varcode/issues/418)). Keep those
+  results for separate review rather than treating unknown as noncoding.
+- **Old names are aliases, not another engine.** `realized`,
+  `RealizedEffectAnnotator` and `predict_realized_effect` still select the
+  transcript model; new code should use `transcript_model` names. Its
+  `RealizedEffectCandidate` product wrapper is still distinct from
+  `EffectCandidate`, as shown above; the aliases do not unify those result shapes.
+
+### Writing an annotator
+
+Custom annotators register via the registry:
 
 ```python
 varcode.register_annotator(my_annotator)

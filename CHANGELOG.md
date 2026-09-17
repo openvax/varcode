@@ -1,5 +1,13 @@
 # Change Log
 
+## [v9.2.5](https://github.com/openvax/varcode/tree/v9.2.5) (2026-09-17)
+
+**Documentation**
+- Lead the annotation guide with ordinary `effects()` usage. Explain optional
+  implementations, supported-input limits, partial transcript models, sequence
+  and candidate access, legacy aliases, and current haplotype ownership in an
+  advanced section. No annotation behavior or public APIs changed.
+
 ## [v9.2.4](https://github.com/openvax/varcode/tree/v9.2.4) (2026-09-17)
 
 **Fixed**
