@@ -1,5 +1,14 @@
 # Structural variant annotation
 
+Structural `ref`/`alt` and `original_ref`/`original_alt` expose the actual record
+alleles, including symbolic or breakend ALT. Small-edit flags (`is_snv`,
+`is_indel`, `is_insertion`, `is_deletion`, `is_transition`, `is_transversion`)
+are false; use `is_structural` and `sv_type` for event classification.
+SV-containing tables add `sv_type`, `end`, `mate_contig`, `mate_start`,
+`affected_start`, and `affected_end`. These CSVs are summaries, not lossless
+structural archives: `from_csv` rejects them. Retain original VCF/JSON variants
+and their RNA evidence; point-only and empty table columns are unchanged.
+
 Symbolic VCF span records retain `POS` as the padding/junction coordinate;
 `affected_start..affected_end` is the inclusive changed interval `POS+1..END`.
 This applies to DEL, DUP, INV and CNV (including CN0/CN3). This parser requires

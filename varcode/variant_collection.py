@@ -19,7 +19,9 @@ from .effects import EffectCollection
 from .common import memoize
 from .csv_helpers import (
     CONTIG_COLUMN_ALIASES,
+    STRUCTURAL_VARIANT_COLUMNS,
     read_metadata_header,
+    reject_structural_csv,
     resolve_contig_column,
     warn_on_version_drift,
     write_metadata_header,
@@ -434,8 +436,10 @@ class VariantCollection(Collection):
 
     def to_dataframe(self):
         """Build a DataFrame from this variant collection."""
+        structural_columns = STRUCTURAL_VARIANT_COLUMNS if any(
+            getattr(v, "is_structural", False) for v in self) else ()
         def row_from_variant(variant):
-            return OrderedDict([
+            row = OrderedDict([
                 ("chr", variant.contig),
                 ("start", variant.original_start),
                 ("ref", variant.original_ref),
@@ -443,11 +447,13 @@ class VariantCollection(Collection):
                 ("gene_name", ";".join(variant.gene_names)),
                 ("gene_id", ";".join(variant.gene_ids))
             ])
+            row.update((name, getattr(variant, name, None)) for name in structural_columns)
+            return row
         rows = [row_from_variant(v) for v in self]
         # Always return a DataFrame with the expected columns, even
         # when empty, so downstream code (CSV round-trip, joins) doesn't
         # have to special-case len == 0.
-        return pd.DataFrame.from_records(rows, columns=self._DATAFRAME_COLUMNS)
+        return pd.DataFrame.from_records(rows, columns=self._DATAFRAME_COLUMNS + structural_columns)
 
     def to_csv(self, path, include_header=True):
         """Write this collection to CSV.
@@ -541,6 +547,7 @@ class VariantCollection(Collection):
         # dtype is a no-op for whichever column is absent.
         df = pd.read_csv(
             path, comment="#", dtype={"chr": str, "contig": str})
+        reject_structural_csv(df)
         contig_col = resolve_contig_column(df.columns)
         if contig_col is None:
             raise ValueError(
