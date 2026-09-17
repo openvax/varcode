@@ -1,55 +1,90 @@
-# Unified default annotator
+# Writing an annotator
 
-This is an integration/developer contract, not a setup step. Ordinary callers
-use `variants.effects()`; see [Effect annotation](effect_annotation.md).
-For optional implementations and examples, start with the
-[advanced guide](effect_annotation.md#annotator-selection).
+An annotator predicts an effect for a variant on a transcript. Register a custom
+implementation when you want to compare your model through Varcode's public
+annotation interface. For the built-in experiments, see
+[Experimental annotators](experimental_annotators.md).
 
-## Scope
+## Required method
 
-Keep `fast` as the compatible registry name for the built-in default. It owns
-point-variant prediction, structural-variant routing, and the existing
-germline-aware point-variant path. Both explicit and implicit selection must
-use that same routing. Keep the structural implementation in its own module.
-Do not promote the experimental transcript model or change its ranking.
+An annotator needs a `name` and an `annotate_on_transcript` method. It may also
+provide a `version` for provenance.
 
-Structural prediction lives in `varcode.effects.structural` as plain internal
-helpers. The default and transcript model's fusion path call those helpers
-directly, not another annotator. The registry selects an explicitly requested
-implementation, never an implementation based on variant kind. There is no
-separate structural annotator or implicit fallback between annotators.
+Return a `MutationEffect` for a supported input, or Python's `NotImplemented`
+singleton for an input your implementation cannot handle. No capability list
+is required.
 
-## Partial annotators
+For example, this adapter takes a callable that returns an effect or `None`:
 
-The protocol requires only `name` and `annotate_on_transcript`. An annotator
-returns a `MutationEffect`, or Python's `NotImplemented` singleton when it
-cannot annotate this particular input. No capability list is required.
-An optional `annotate_with_context` method accepts patient germline context;
-without that method a nonempty context is unsupported, not silently ignored.
+```python
+class MyAnnotator:
+    name = "my_model"
 
-At public prediction boundaries, convert `NotImplemented` to
-`Unresolved(mechanism="unsupported_annotation", reason=...)`. Preserve the
-selected annotator's provenance. Never substitute another annotator after an
-experimental annotator declines. Actual exceptions retain the existing
-`raise_on_error` behavior; `None` is not a valid annotation result.
+    def __init__(self, model):
+        self.model = model
 
-`protein_diff` and `transcript_model` remain optional experimental implementations.
-Varcode 9 removes the old structural annotator class/module/registry entry and
-`UnsupportedVariantError`. Structural callers use the default; partial plugins
-use the return-value contract above. Structural mutant transcripts retain their
-historical builder provenance (`structural_variant`); effect collections record
-the selected annotator, including `fast` or `transcript_model`. A stored builder
-label is not a selectable annotator name.
+    def annotate_on_transcript(self, variant, transcript):
+        prediction = self.model(variant, transcript)
+        if prediction is None:
+            return NotImplemented
+        return prediction
+```
 
-Joint haplotype construction still occurs in `VariantCollection.effects()`
-outside the selected annotator. Moving that active behavior into the annotator
-is tracked separately in [#437](https://github.com/openvax/varcode/issues/437),
-not part of the structural-helper cleanup.
+Register an instance, then select it explicitly:
 
-## Verification
+```python
+import varcode
 
-Test default and explicit routing, direct transcript calls, partial plugins
-without capability lists, context-dependent refusal, unresolved serialization
-and provenance, and genuine errors. Keep protein-diff parity tests restricted
-to the implementations' shared domain; unsupported SV inputs must be tested
-as explicit unknowns. Run lint, the full suite, GitHub CI, then merge and deploy.
+annotator = MyAnnotator(my_model)
+varcode.register_annotator(annotator)
+effects = variant.effects(annotator=annotator.name)
+```
+
+Here `my_model` is your prediction callable and `variant` is a loaded variant.
+
+## Unsupported inputs and errors
+
+Public APIs convert `NotImplemented` into
+`Unresolved(mechanism="unsupported_annotation", reason=...)`, preserving the
+selected annotator's provenance. They do not silently fall back to the default.
+For example, selecting `protein_diff` for an SV returns `Unresolved`, including
+inside `use_annotator("protein_diff")`.
+
+Returning `None` directly is a plugin error. Exceptions retain the ordinary
+`raise_on_error` behavior; do not turn unexpected failures into unsupported inputs.
+
+## Germline context
+
+An optional `annotate_with_context(variant, transcript, germline_ctx,
+phase_resolver=None)` method has the same return contract. Without it, nonempty
+germline context produces `Unresolved` rather than being ignored or sent to
+another implementation. Empty context uses `annotate_on_transcript`.
+
+`effects()`, `effect_on_transcript()`, and
+`predict_variant_effect_on_transcript()` use the same selection rules, including
+the scoped default. Combined haplotype construction is still collection-owned;
+see the [current limitation](experimental_annotators.md#known-limitations).
+
+## Default implementation
+
+The default owns point-variant prediction, structural handling, and the existing
+germline-aware point-edit path. Structural code lives in
+`varcode.effects.structural` as internal helpers; both the default and the
+transcript model's fusion path call those helpers directly. There is no separate
+structural annotator or automatic router between implementations.
+
+Structural transcript models can retain the builder label `structural_variant`
+in their provenance, while the effect collection records the selected annotator.
+A stored builder label is not a selectable annotator name.
+
+## Testing an integration
+
+Test supported inputs, explicit refusal, context-dependent refusal, and genuine
+errors separately. Check direct transcript calls as well as collections, and
+preserve provenance and unresolved results when serializing.
+
+Compare implementations only on inputs they both support. Passing a parity
+test for point edits does not establish SV support. When sending results to
+other tools, retain candidate evidence, transcript identity, and sequence
+completeness; a protein string alone does not establish a complete expressed
+protein.

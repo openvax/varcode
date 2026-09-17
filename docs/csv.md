@@ -106,6 +106,18 @@ currently fails for several classes
 the actual result types you use, and retain source variants, reference release,
 and RNA/phase/germline evidence independently.
 
+## Annotation provenance
+
+Annotated effect collections record `annotator`, `annotator_version`, and
+`annotated_at` (an ISO-8601 UTC timestamp). Filtering and grouping preserve
+these fields. CSV export writes them into the metadata header, and loading
+recovers the original values.
+
+A mismatch between the recorded annotator and the current default raises a
+warning on load. Selecting the recorded implementation does not restore the
+original predictions: CSV loading still re-annotates. Keep the original reference
+release and evidence separately; see [CSV vs JSON](#csv-vs-json).
+
 ## Custom header fields
 
 `read_metadata_header` is available in `varcode.csv_helpers` for

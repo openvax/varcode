@@ -57,7 +57,7 @@ if protein is not None:
 Protein sequence is available through the ordinary interface; no special
 annotator selection is needed. `None` means no sequence is available for that
 effect, not that the protein is unchanged. Some effects contain several possible
-outcomes; see [reading alternatives](effect_annotation.md#reading-alternatives).
+outcomes; see [alternative outcomes](effect_annotation.md#alternative-outcomes).
 These are predictions, not evidence that a protein was expressed.
 
 ## Load a file

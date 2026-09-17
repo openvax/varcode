@@ -10,7 +10,7 @@ Do not suppress an error before understanding which predictions would be lost.
 | `GenomeBuildMismatchError` | Somatic and germline inputs must use the same assembly |
 | `SampleNotFoundError` | Inspect `variants.samples` for the available names |
 | Missing SV results | Load with `parse_structural_variants=True`; see [SV loading](structural_variants.md#basic-usage) |
-| No protein sequence | May be unresolved or noncoding, not an exception; see [result access](effect_annotation.md#read-an-effect) |
+| No protein sequence | May be unresolved or noncoding, not an exception; see [protein sequences](effect_annotation.md#protein-sequences) |
 
 The exception details below support programmatic handling. The domain-specific
 exceptions retain standard `ValueError` or `KeyError` base classes.

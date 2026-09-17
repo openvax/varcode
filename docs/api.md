@@ -94,6 +94,10 @@ signatures, parameters, and return types from the source docstrings.
 
 ## Annotators
 
+See [Experimental annotators](experimental_annotators.md) for a comparison of
+built-in implementations, or [Writing an annotator](annotator_contract.md)
+for the extension interface.
+
 ### `varcode.EffectAnnotator`
 
 ::: varcode.EffectAnnotator
@@ -170,6 +174,7 @@ signatures, parameters, and return types from the source docstrings.
 
 This annotator is opt-in with `annotator="transcript_model"`; `fast` remains
 the default. The former `realized` name and public imports remain aliases.
+See [supported inputs and results](experimental_annotators.md) before using it.
 
 ### `varcode.TranscriptModelEffectAnnotator`
 

@@ -45,6 +45,6 @@ Severity ordering across types is set by
 ## Splice outcome container
 
 `SpliceOutcomeSet` lives in a separate module. See the
-[splice guide](effect_annotation.md#splice-disrupting-variants) for usage.
+[splice guide](splice_variants.md) for usage.
 
 ::: varcode.SpliceOutcomeSet
