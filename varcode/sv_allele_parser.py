@@ -78,6 +78,17 @@ def breakend_sides(alt):
     return this_side, mate_side
 
 
+def _breakend_local_side(alt):
+    """The retained local side, including single breakends with no mate."""
+    sides = breakend_sides(alt)
+    if sides is not None:
+        return sides[0]
+    single = _SINGLE_BREAKEND_RE.match(alt or "")
+    if single is not None:
+        return "right" if single.group("joined_before") else "left"
+    return None
+
+
 def _extract_info(info, key):
     """Pull an INFO field value, handling list-of-ints from CIPOS /
     CIEND and plain ints/strings otherwise. Returns ``None`` if

@@ -232,7 +232,10 @@ class MutantTranscript(DataclassSerializable):
     strand segments), produce the mutant cDNA. ``None`` for the
     point-variant shape; a fusion's segments would be
     ``(5p_partner_segment, 3p_partner_segment)``. Coordinates are
-    in each segment's own reference system."""
+    in each segment's own reference system. A partial structural model may
+    describe only a retained reference fragment: its producer identifies this
+    in ``evidence`` and leaves the full ``cdna_sequence`` unknown. Concatenating
+    those partial segments does not establish a full allele."""
 
     cdna_sequence: Optional[str] = None
     """The mutated spliced mRNA, when computed. ``None`` if the

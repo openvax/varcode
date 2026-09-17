@@ -232,6 +232,17 @@ Effects on the transcripts at the record's own breakpoint:
 `TranslocationToIntergenic` therefore means "a breakend that doesn't form
 a gene fusion", not only "the mate is intergenic".
 
+Its reference-derived `mutant_transcript` contains only the retained local
+5' prefix or 3' suffix, including the base at an exonic breakpoint. Intronic
+breakpoints retain the corresponding annotated exons. `A.` keeps genomic left;
+`.A` keeps genomic right, even without a mate. Transcript cDNA is already
+strand-oriented, so the segment itself has `strand="+"` on either gene strand.
+The fragment is labeled `evidence["sequence_status"] = "retained_reference_fragment"`;
+full `cdna_sequence` and `mutant_protein_sequence` remain None. Concatenating this
+one fragment does not establish the full allele or prove a mature RNA/protein.
+Unknown local orientation (including mate-orientation metadata alone) leaves
+`mutant_transcript` None. A supplied `alt_assembly` still takes precedence.
+
 **Intergenic ↔ gene.** The record at the intergenic end reports
 `Intergenic`; the gene is annotated only from its own record, which
 reports `TranslocationToIntergenic`. varcode doesn't model an intergenic
