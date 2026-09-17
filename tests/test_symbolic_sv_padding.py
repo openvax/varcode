@@ -37,7 +37,7 @@ def test_no_nonempty_span_cannot_delete_or_copy_the_anchor(kind, info):
 def test_exact_mutant_cdna_on_both_strands(kind, builder, reverse):
     sequence = "ACGTTGCAAGCTTAGGCTAC"
     tx = SimpleNamespace(exons=[SimpleNamespace(start=100, end=119)],
-                         start=100, end=119, sequence=sequence,
+                         contig="1", start=100, end=119, sequence=sequence,
                          on_backward_strand=reverse)
     sv = parse_symbolic_alt("1", 109, "G", "<%s>" % kind, info={"END": 114})
     a, b = (5, 10) if reverse else (10, 15)

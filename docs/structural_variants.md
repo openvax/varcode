@@ -304,6 +304,16 @@ span_effect.affected_exons
 `INS` and `CNV` never fuse; they report `LargeDuplication` when they
 overlap exons.
 
+Local DUP/INV transcript models require every junction end to lie in the
+selected transcript. An event extending outside it (including a span enclosing
+the entire transcript) does not establish duplicated or inverted cDNA within
+that transcript. Without a fusion partner or supplied `alt_assembly`, the
+DNA-level `LargeDuplication`/`Inversion` remains but `mutant_transcript` is None.
+This means unresolved sequence, not an unchanged protein or a proven truncation.
+The same restriction applies to a span candidate attached to a fusion; it does
+not remove the fusion's own transcript model. A longer isoform of the same gene
+does not establish the shorter isoform's structure.
+
 ## Where in the gene a breakpoint lands
 
 The fused cDNA is the 5' partner's cDNA up to its breakpoint followed by
@@ -365,11 +375,6 @@ Breakpoints near exon boundaries add candidates to any SV effect:
 
 - The partner isoform isn't ranked
   ([#406](https://github.com/openvax/varcode/issues/406)).
-- A `DUP` or `INV` with one end in a transcript and no partner builds its
-  mutant transcript as if the whole event were inside
-  ([#405](https://github.com/openvax/varcode/issues/405)).
-- Symbolic `<DEL>` / `<DUP>` count the VCF padding base as part of the
-  event ([#404](https://github.com/openvax/varcode/issues/404)).
 - Chains of several SVs aren't assembled into one allele, and regulatory
   effects (promoter or enhancer hijacking) aren't modeled.
 - Annotating multi-megabase spans can be slow
