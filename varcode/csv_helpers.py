@@ -39,6 +39,18 @@ HEADER_PREFIX = "#"
 # openvax/varcode#274.
 CONTIG_COLUMN_ALIASES = ("contig", "chr")
 
+STRUCTURAL_VARIANT_COLUMNS = (
+    "sv_type", "end", "mate_contig", "mate_start", "affected_start", "affected_end",
+)
+
+
+def reject_structural_csv(df):
+    """CSV summaries do not encode enough state to restore structural effects."""
+    if "sv_type" in df and df["sv_type"].fillna("").ne("").any():
+        raise ValueError(
+            "Structural rows cannot be reconstructed from CSV summaries. "
+            "Retain the original VCF/JSON variants and RNA evidence instead.")
+
 
 def resolve_contig_column(columns):
     """Return the first of :data:`CONTIG_COLUMN_ALIASES` that appears in

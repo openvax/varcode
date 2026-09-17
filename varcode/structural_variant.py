@@ -242,6 +242,15 @@ class StructuralVariant(Variant):
         event coordinates include a retained padding base.
     """
 
+    # These flags describe literal small edits, not event classes. Consumers
+    # must use is_structural/sv_type instead of interpreting symbolic alleles.
+    is_snv = False
+    is_indel = False
+    is_insertion = False
+    is_deletion = False
+    is_transition = False
+    is_transversion = False
+
     __slots__ = (
         "sv_type",
         "mate_contig",
@@ -288,14 +297,14 @@ class StructuralVariant(Variant):
 
         # Initialize the base Variant with a placeholder ref/alt so the
         # nucleotide-normalization path doesn't reject <DEL>-style
-        # symbolic alleles. The original symbolic ALT is preserved in
-        # ``_sv_alt``; :attr:`alt` returns it via a property override.
+        # symbolic alleles. Restore the actual record fields below; placeholder
+        # normalization must not leak into public alleles or exports (#417).
         Variant.__init__(
             self,
             contig=contig,
             start=start,
             ref=ref if ref else "N",
-            alt="A" if ref == "N" else "A",  # placeholder, overridden below
+            alt="A",
             genome=genome,
             ensembl=ensembl,
             allow_extended_nucleotides=True,
@@ -325,6 +334,9 @@ class StructuralVariant(Variant):
         # Preserve the original symbolic ALT string so round-tripping
         # and downstream consumers see what the VCF said.
         self._sv_alt = alt if alt is not None else "<%s>" % sv_type
+        self.ref = self.original_ref
+        self.alt = self.original_alt = self._sv_alt
+        self.start = self.original_start = int(start)
 
         # Caches, like Variant's overlapping-gene / transcript caches:
         # the junction list derived from the fields above, and results

@@ -17,7 +17,9 @@ from sercol import Collection
 
 from ..csv_helpers import (
     CONTIG_COLUMN_ALIASES,
+    STRUCTURAL_VARIANT_COLUMNS,
     read_metadata_header,
+    reject_structural_csv,
     resolve_contig_column,
     warn_on_version_drift,
     write_metadata_header,
@@ -344,6 +346,8 @@ class EffectCollection(Collection):
 
     def to_dataframe(self):
         """Build a dataframe from the effect collection."""
+        structural_columns = STRUCTURAL_VARIANT_COLUMNS if any(
+            getattr(e.variant, "is_structural", False) for e in self) else ()
         # list of properties to extract from Variant objects if they're
         # not None
         variant_properties = [
@@ -354,7 +358,7 @@ class EffectCollection(Collection):
             "is_snv",
             "is_transversion",
             "is_transition"
-        ]
+        ] + list(structural_columns)
 
         def row_from_effect(effect):
             row = OrderedDict()
@@ -375,7 +379,7 @@ class EffectCollection(Collection):
         # CSV round-trip doesn't have to special-case len == 0.
         return pd.DataFrame.from_records(
             [row_from_effect(effect) for effect in self],
-            columns=self._DATAFRAME_COLUMNS,
+            columns=self._DATAFRAME_COLUMNS + structural_columns,
         )
 
     def to_csv(self, path, include_header=True):
@@ -485,6 +489,7 @@ class EffectCollection(Collection):
         # dtype is a no-op for whichever column is absent.
         df = pd.read_csv(
             path, comment="#", dtype={"chr": str, "contig": str})
+        reject_structural_csv(df)
         contig_col = resolve_contig_column(df.columns)
         if contig_col is None:
             raise ValueError(

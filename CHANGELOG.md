@@ -1,5 +1,14 @@
 # Change Log
 
+## [v9.2.2](https://github.com/openvax/varcode/tree/v9.2.2) (2026-09-17)
+
+**Fixed**
+- Structural variants expose their actual REF/ALT, not the constructor's
+  temporary nucleotide placeholders; small-edit flags are always false (#417).
+- Mixed/SV tables include type, endpoint, mate and affected-span columns;
+  point-only and empty table schemas remain unchanged. Structural CSV import
+  raises explicitly instead of reconstructing misleading point variants.
+
 ## [v9.2.1](https://github.com/openvax/varcode/tree/v9.2.1) (2026-09-17)
 
 **Fixed**
