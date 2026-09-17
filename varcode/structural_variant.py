@@ -179,8 +179,8 @@ class StructuralVariant(Variant):
 
     The SV position model:
 
-    * :attr:`start` — 1-based start of the affected region
-      (matches VCF POS).
+    * :attr:`start` — 1-based event/record position (matches VCF POS).
+      For parsed symbolic spans this is the retained padding base.
     * :attr:`end` — 1-based *inclusive* end. For a DEL/DUP/INV/CNV
       this is the SV endpoint on the same contig. For an INS it
       equals start (insertions are zero-width in reference coords).
@@ -188,8 +188,8 @@ class StructuralVariant(Variant):
       :attr:`mate_contig` / :attr:`mate_start`.
     * :attr:`affected_start` / :attr:`affected_end` — inclusive bases
       changed by a span event. These normally equal ``start`` / ``end``;
-      paired breakend events use them to exclude retained VCF padding
-      bases from exon and mutant-sequence annotation.
+      parsed symbolic spans and paired breakend events use them to exclude
+      retained VCF padding bases from exon and mutant-sequence annotation.
 
     Parameters
     ----------
