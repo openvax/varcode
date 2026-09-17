@@ -1,5 +1,14 @@
 # Change Log
 
+## [v9.2.6](https://github.com/openvax/varcode/tree/v9.2.6) (2026-09-17)
+
+**Documentation**
+- Shorten the effect annotation guide and split splice variants, transcript
+  models, and experimental annotators into separate pages. Consolidate plugin
+  instructions and provenance, use specific headings, and update navigation
+  and example tests. Existing section links still lead to the relevant guides.
+  No annotation behavior or public APIs changed.
+
 ## [v9.2.5](https://github.com/openvax/varcode/tree/v9.2.5) (2026-09-17)
 
 **Documentation**

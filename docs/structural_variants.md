@@ -28,7 +28,7 @@ skipped with a warning. No separate annotator selection is needed.
 
 Effects include `LargeDeletion`, `LargeDuplication`, `Inversion`, `GeneFusion`,
 and `TranslocationToIntergenic`. They may contain alternatives in `.candidates`;
-see [reading alternatives](effect_annotation.md#reading-alternatives).
+see [alternative outcomes](effect_annotation.md#alternative-outcomes).
 
 A DNA rearrangement does not by itself establish a complete expressed fusion
 protein. Sequence may be unknown or partial; `None` is not an unchanged protein.
@@ -36,7 +36,7 @@ Do not rely on `drop_silent_and_noncoding()` to retain unresolved SV effects:
 their protein-change flags remain incomplete
 ([#418](https://github.com/openvax/varcode/issues/418)).
 
-## Find the detail you need
+## Contents
 
 - [Which transcripts get annotated](#which-transcripts-get-annotated) and
   [effect classes](#effect-classes).

@@ -39,13 +39,16 @@ nav:
       - Saving & reloading results: csv.md
       - Troubleshooting: errors.md
   - Advanced workflows:
+      - Splice variants: splice_variants.md
       - Structural variants & RNA: structural_variants.md
       - Germline-aware annotation: germline.md
       - VariantCollection transforms: transforms.md
+      - Experimental annotators: experimental_annotators.md
   - Reference:
+      - Transcript models: transcript_models.md
       - Effect types: effect_types.md
       - API reference: api.md
-      - Annotator integration contract: annotator_contract.md
+      - Writing an annotator: annotator_contract.md
   - Changelog: changelog.md
 
 markdown_extensions:

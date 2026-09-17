@@ -83,15 +83,38 @@ def test_documentation_germline_scenarios():
 
 
 def test_documentation_splice_accessors():
-    text = (ROOT / "docs/effect_annotation.md").read_text()
-    section = text.split("### The `SpliceOutcomeSet` shape\n", 1)[1]
-    section = section.split("### RNA evidence reconciliation\n", 1)[0]
-    blocks = re.findall(r"```python\n(.*?)```", section, re.S)
-    namespace = _run(blocks[:1])
-    namespace["effect"] = namespace["splice_set"]
-    _run(blocks[1:], namespace)
+    namespace = _run(_blocks("docs/splice_variants.md"))
     assert isinstance(namespace["splice_set"], varcode.SpliceOutcomeSet)
     assert namespace["coding"] is not None
+    assert namespace["preferred"] is not None
+
+
+def test_documentation_moved_sections_keep_incoming_links():
+    guide = (ROOT / "docs/effect_annotation.md").read_text()
+    destinations = {
+        "splice-disrupting-variants": "splice_variants.md",
+        "how-it-composes": "transcript_models.md",
+        "annotator-selection": "experimental_annotators.md",
+        "writing-an-annotator": "annotator_contract.md",
+        "provenance": "csv.md#annotation-provenance",
+    }
+    for anchor, destination in destinations.items():
+        # Old fragment URLs land beside a link to the relocated content.
+        row = next(line for line in guide.splitlines() if f'id="{anchor}"' in line)
+        assert f"]({destination})" in row
+        assert (ROOT / "docs" / destination.split("#")[0]).is_file()
+
+
+def test_documentation_custom_annotator_adapter():
+    namespace = _run(_blocks("docs/annotator_contract.md")[:1])
+    adapter = namespace["MyAnnotator"]
+    variant = Variant("7", 117531100, "T", "A", genome=81)
+    transcript = variant.genome.transcript_by_id("ENST00000003084")
+    effect = variant.effect_on_transcript(transcript)
+    supported = adapter(lambda variant, transcript: effect)
+    unsupported = adapter(lambda variant, transcript: None)
+    assert supported.annotate_on_transcript(variant, transcript) is effect
+    assert unsupported.annotate_on_transcript(variant, transcript) is NotImplemented
 
 
 @pytest.mark.parametrize("kind", ["point", "BND", "CNV"])
@@ -109,12 +132,11 @@ def test_documentation_experimental_result_access(kind):
             "7", transcript.start + 50, "CNV", end=transcript.start + 100,
             genome=genome)
     namespace = dict(varcode=varcode, variant=variant, transcript=transcript)
-    advanced_blocks = _blocks("docs/effect_annotation.md",
-                              "## Advanced: annotators and implementation limits")
+    advanced_blocks = _blocks("docs/experimental_annotators.md")
     assert "comparison =" in advanced_blocks[0]
     assert "candidate.outcomes" in advanced_blocks[1]
     _run(advanced_blocks[:2], namespace)
-    _run(_blocks("docs/effect_annotation.md", "## Read an effect")[:1], namespace)
+    _run(_blocks("docs/transcript_models.md"), namespace)
     candidates = getattr(namespace["experimental"], "candidates", ())
     if kind == "point":
         assert candidates and all(isinstance(c, RealizedEffectCandidate)
