@@ -1,12 +1,9 @@
-# CSV round-trip and metadata headers
+# Saving and reloading results
 
-*New in varcode 2.1.0, refined in 2.2.0.*
-
-`VariantCollection` and `EffectCollection` can both round-trip through
-CSV. The CSV format is human-readable and easy to inspect in a
-spreadsheet; the JSON format (`to_json` / `from_json`) is the
-byte-for-byte exact round-trip and is considerably faster for large
-collections (it skips re-annotation on read).
+Use CSV for a table you can inspect or share. Keep original variants and
+evidence as well: a result table does not preserve every alternative, sequence,
+or annotation context. Start with writing below; see [CSV vs JSON](#csv-vs-json)
+before choosing an archive format.
 
 ## Writing
 
@@ -24,7 +21,7 @@ By default, both writers prepend `#`-prefixed provenance lines so the
 file is self-describing:
 
 ```
-# varcode_version=2.3.0
+# varcode_version=9.2.5
 # reference_name=GRCh38
 chr,start,ref,alt,gene_name,gene_id
 17,43082575,C,T,BRCA1,ENSG00000012048
@@ -40,6 +37,10 @@ vc.to_csv("plain.csv", include_header=False)
 
 ## Reading
 
+The examples here apply to ordinary point-variant tables. Structural-variant
+CSVs are summaries only: `from_csv` rejects them rather than reconstructing
+incomplete SVs. See [structural exports](structural_variants.md#alleles-coordinates-and-exports).
+
 When the header is present, `from_csv` recovers the reference genome
 automatically:
 
@@ -49,6 +50,11 @@ from varcode import VariantCollection, EffectCollection
 vc = VariantCollection.from_csv("variants.csv")
 effects = EffectCollection.from_csv("effects.csv")
 ```
+
+`EffectCollection.from_csv` re-runs annotation. It does not recover the original
+germline/phase/RNA evidence, candidate sets, or historical predictions. A
+reference-name header also does not pin the original annotation dataset; pass
+the same explicit `genome` when that matters.
 
 When the CSV has no header (written by an older varcode or with
 `include_header=False`), pass `genome` explicitly:
@@ -69,32 +75,36 @@ in the header. Neither was found at plain.csv.
 ## Column-name flexibility
 
 `VariantCollection` historically writes a `chr` column while
-`EffectCollection` writes `contig`. As of 2.2.0 both readers accept
-either alias, so CSVs from the two sides are interchangeable. Writers
-are unchanged.
+`EffectCollection` writes `contig`. Both readers accept either spelling for
+that column. This does not make their full schemas interchangeable:
+effect tables also need effect/transcript fields.
 
 ## Version drift
 
 Because `EffectCollection.from_csv` re-runs annotation on read, a
 collection serialized by one major varcode version and loaded under
-another can produce different effects. As of 2.2.0, `from_csv` emits
+another can produce different effects. `from_csv` emits
 a `UserWarning` when the header's `varcode_version` differs in major
 version from the currently-installed version. Minor and patch drift
-is silent (semver guarantees compatibility).
+is silent, but bug fixes or a different annotation dataset can still change
+predictions; API compatibility is not a guarantee of identical scientific output.
 
 ## CSV vs JSON
 
 | | CSV | JSON |
 |---|---|---|
-| Human-readable | Yes | No |
-| Byte-for-byte round-trip | **No** (re-annotates on read) | Yes |
-| Speed on large collections | Slow (per-row Variant construction + annotation) | Fast |
+| Intended use | Inspect or share a table | Serialize supported objects |
+| Reloading effects | Re-annotates on read | Restores serialized state where supported |
+| Structural variants | Export summaries; import rejected | Retain original VCF and evidence; do not assume all SV effects serialize |
 | Carries annotator version header | Yes | (via the serialized object) |
-| Preserves all effect-specific fields | No | Yes |
+| Preserves all effect-specific fields | No | Depends on the effect type and serialization support |
 
-Use CSV when you want to inspect or edit the output manually. Use
-JSON (`to_json` / `from_json`) for exact round-trip and for large
-collections.
+JSON (`to_json` / `from_json`) avoids CSV's re-annotation for supported objects,
+but is not a universal lossless archive. Structural-effect JSON serialization
+currently fails for several classes
+([#438](https://github.com/openvax/varcode/issues/438)). Test the round-trip for
+the actual result types you use, and retain source variants, reference release,
+and RNA/phase/germline evidence independently.
 
 ## Custom header fields
 
@@ -105,7 +115,7 @@ tools that want to add their own metadata lines:
 from varcode.csv_helpers import read_metadata_header, write_metadata_header
 
 meta = read_metadata_header("variants.csv")
-# OrderedDict([('varcode_version', '2.3.0'), ('reference_name', 'GRCh38')])
+# OrderedDict([('varcode_version', '9.2.5'), ('reference_name', 'GRCh38')])
 ```
 
 Annotator provenance fields (`annotator`, `annotator_version`) use

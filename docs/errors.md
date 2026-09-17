@@ -1,16 +1,21 @@
-# Error handling
+# Troubleshooting
 
-Varcode raises domain-specific exceptions for the two most common ways
-analysis can fail on real data: the variant doesn't match the
-reference genome, and a sample name doesn't exist in the loaded VCF.
-Both subclass standard Python exception types so callers that already
-catch `ValueError` or `KeyError` keep working.
+Start by checking the input build, reference alleles, and sample names.
+Do not suppress an error before understanding which predictions would be lost.
+
+| Problem | First check |
+|---|---|
+| Reference data missing | Install the release used by `genome=`; see [setup](getting_started.md#reference-data) |
+| `ReferenceMismatchError` | Input assembly, REF allele, and forward-strand convention |
+| `GenomeBuildMismatchError` | Somatic and germline inputs must use the same assembly |
+| `SampleNotFoundError` | Inspect `variants.samples` for the available names |
+| Missing SV results | Load with `parse_structural_variants=True`; see [SV loading](structural_variants.md#basic-usage) |
+| No protein sequence | May be unresolved or noncoding, not an exception; see [result access](effect_annotation.md#read-an-effect) |
+
+The exception details below support programmatic handling. The domain-specific
+exceptions retain standard `ValueError` or `KeyError` base classes.
 
 ## `ReferenceMismatchError`
-
-*New in varcode 2.2.1
-([#215](https://github.com/openvax/varcode/issues/215),
-[#246](https://github.com/openvax/varcode/issues/246)).*
 
 Raised when a variant's reported `ref` allele doesn't match the
 reference genome at the variant's position:
@@ -76,13 +81,10 @@ effects = v.effects(raise_on_error=False)
 assert any(isinstance(e, Failure) for e in effects)
 ```
 
-This is the right choice for batch pipelines that would rather log and
-skip a bad row than halt.
+Use this in batch pipelines only if you record and review the `Failure` results;
+it does not correct the input or make those rows successfully annotated.
 
 ## `GenomeBuildMismatchError`
-
-*New in varcode 4.19.0
-([#268](https://github.com/openvax/varcode/issues/268)).*
 
 Raised by `VariantCollection.effects(germline=...)` when the somatic
 collection and the germline context were called against different
@@ -99,13 +101,11 @@ except varcode.GenomeBuildMismatchError as e:
     e.germline_reference  # the germline context's reference (e.g. 'GRCh37')
 ```
 
-Subclasses `ValueError`. Pass `validate_reference=False` if you've
-explicitly lifted over and know the builds agree.
+Subclasses `ValueError`. `validate_reference=False` suppresses this check on
+`VariantCollection.effects()`; it does not lift over coordinates or verify
+that the data match. Prefer correcting the input reference metadata and builds.
 
 ## `SampleNotFoundError`
-
-*New in varcode 2.3.0
-([#267](https://github.com/openvax/varcode/issues/267)).*
 
 Raised by `VariantCollection` genotype/filter methods when the sample
 name isn't in the collection's source VCF(s):

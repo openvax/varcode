@@ -1,9 +1,21 @@
 # Effect types
 
-Every effect class varcode can attach to a `(variant, transcript)`
-pair, auto-generated from the source docstrings in
-`varcode.effects.effect_classes` — so this list never drifts from the
-code.
+Use this page to look up a class after reading the
+[effect annotation guide](effect_annotation.md). Definitions below are generated
+from the source docstrings; this is reference material, not a required first read.
+
+## Find an effect family
+
+| Question | Examples |
+|---|---|
+| Did the coding sequence change? | `Substitution`, `Insertion`, `Deletion`, `FrameShift`, `PrematureStop`, `Silent` |
+| Is the location noncoding or untranslated? | `Intronic`, `FivePrimeUTR`, `ThreePrimeUTR`, `NoncodingTranscript`, `Intergenic` |
+| Could splicing change? | `SpliceOutcomeSet`, with `NormalSplicing`, `ExonSkipping`, `IntronRetention`, or cryptic-site candidates |
+| Is this a structural event? | `LargeDeletion`, `LargeDuplication`, `Inversion`, `GeneFusion`, `TranslocationToIntergenic` |
+| Do linked variants or unknown phase matter? | `HaplotypeEffect`, `PhaseCandidateSet` |
+| Is the result unknown or failed? | `Unresolved`, `IncompleteTranscript`, `Failure` |
+
+These labels describe predictions and their limits, not clinical significance.
 
 Two distinctions are worth keeping in mind while reading:
 
@@ -23,9 +35,16 @@ Two distinctions are worth keeping in mind while reading:
   protein-level outcome isn't deterministic; each exposes
   `.candidates`, `.most_likely_effect`, and `.highest_priority_effect`.
 
-For a grouped quick-reference, see the
-[Effect Types table in the README](https://github.com/openvax/varcode#effect-types).
 Severity ordering across types is set by
 [`effect_priority`](api.md#varcode.effect_priority).
 
+## Class reference
+
 ::: varcode.effects.effect_classes
+
+## Splice outcome container
+
+`SpliceOutcomeSet` lives in a separate module. See the
+[splice guide](effect_annotation.md#splice-disrupting-variants) for usage.
+
+::: varcode.SpliceOutcomeSet

@@ -1,144 +1,54 @@
 # Structural variant annotation
 
-Structural `ref`/`alt` and `original_ref`/`original_alt` expose the actual record
-alleles, including symbolic or breakend ALT. Small-edit flags (`is_snv`,
-`is_indel`, `is_insertion`, `is_deletion`, `is_transition`, `is_transversion`)
-are false; use `is_structural` and `sv_type` for event classification.
-SV-containing tables add `sv_type`, `end`, `mate_contig`, `mate_start`,
-`affected_start`, and `affected_end`. These CSVs are summaries, not lossless
-structural archives: `from_csv` rejects them. Retain original VCF/JSON variants
-and their RNA evidence; point-only and empty table columns are unchanged.
+Load structural variants (SVs) with an explicit VCF option, then use the same
+`effects()` interface as for small variants.
 
-Symbolic VCF span records retain `POS` as the padding/junction coordinate;
-`affected_start..affected_end` is the inclusive changed interval `POS+1..END`.
-This applies to DEL, DUP, INV and CNV (including CN0/CN3). This parser requires
-a nonempty span with `END > POS`. Direct `StructuralVariant(...)` construction
-keeps its existing explicit-coordinate defaults: pass `affected_start`
-separately when `start` includes padding. Paired breakends already supply it.
-
-This page describes what varcode reports for each kind of structural
-variant (SV): which transcripts get annotated, how a fusion's direction is
-decided, what depends on strand and on where a breakpoint lands, and which
-effect class comes back in each case. Examples use Ensembl 95.
-
-Load SVs with `load_vcf(..., parse_structural_variants=True)`; see
-[Effect annotation](effect_annotation.md#structural-variants) for loading
-and [Transforms](transforms.md) for `pair_breakends`.
-
-## Importing observed RNA structures
-
-Use an existing DNA `StructuralVariant` as the anchor, so an RNA splice junction
-is not mistaken for a genomic breakpoint. Multiple observed RNA models can be
-attached to that same variant:
+## Basic usage
 
 ```python
-from varcode import load_exacto_fusions
+from varcode import load_vcf
 
-rna = load_exacto_fusions(
-    "transcript_structures.tsv", "integrated_variants.tsv",
-    variants_by_id={"42": structural_variant},
+variants = load_vcf(
+    "structural_variants.vcf",
+    genome=81,  # GRCh38; use the annotation chosen for your input
+    parse_structural_variants=True,
 )
-effects = variants.effects(rna_resolver=rna)
-for candidate in rna.candidates:
-    sequence = candidate.effect.mutant_transcript.cdna_sequence
-    model_id = candidate.evidence["transcript_model_id"]
+effects = variants.effects()
+for effect in effects:
+    if effect.variant.is_structural:
+        print(effect.variant.sv_type, effect.short_description)
+        print(effect.mutant_protein_sequence)  # may be None
 ```
 
-`variants_by_id` maps **Exacto DNA call IDs**, not assumed VCF record IDs, to
-already loaded variants. Only these IDs are selected from the integration file.
-The model key includes both `transcript_model_id` and the reference transcript
-ID set. Different models/reference interpretations and their DNA links are kept;
-duplicate integration rows do not duplicate a candidate.
+Without `parse_structural_variants=True`, symbolic alleles and breakends are
+skipped with a warning. No separate annotator selection is needed.
+[Reference setup](getting_started.md#reference-data) explains the genome argument.
 
-The adapter follows Exacto's `index` ordering and inclusive `read_start` /
-`read_end` base-row coordinates. Sequences already run 5' to 3' even for reverse
-strand genes: they are never reverse-complemented a second time. Event rows
-preserve splice structure but do not invent missing bases. The complete original
-structure and integration rows are in `candidate.evidence` and the mutant
-transcript's evidence. Row counts are **not** supporting-read counts.
+## Reading SV results
 
-This is a deliberately limited adapter for linear, two-locus, SV-linked models
-with an annotated sense 5' anchor. A missing or antisense 3' annotation gives
-`TranslocationToIntergenic`, whose existing meaning includes non-sense joins.
-Unknown transcript IDs and incomplete/unsupported structures raise errors.
-This does not implement all Exacto DNA/RNA variant formats, circular RNA,
-or multi-gene paths. Those remain in the broader
-[#260](https://github.com/openvax/varcode/issues/260) roadmap.
+Effects include `LargeDeletion`, `LargeDuplication`, `Inversion`, `GeneFusion`,
+and `TranslocationToIntergenic`. They may contain alternatives in `.candidates`;
+see [reading alternatives](effect_annotation.md#reading-alternatives).
 
-For other producers, use the same existing effect classes directly:
+A DNA rearrangement does not by itself establish a complete expressed fusion
+protein. Sequence may be unknown or partial; `None` is not an unchanged protein.
+Do not rely on `drop_silent_and_noncoding()` to retain unresolved SV effects:
+their protein-change flags remain incomplete
+([#418](https://github.com/openvax/varcode/issues/418)).
 
-```python
-from varcode import RNAEvidence, make_fusion_outcome
+## Find the detail you need
 
-candidate = make_fusion_outcome(
-    structural_variant, five_prime_transcript,
-    partner_transcript=three_prime_transcript,  # only when sense-oriented
-    sequence=observed_sequence,               # already 5' to 3'
-    transcript_model_id="assembled-model-7",
-    source="rna_assembler", read_count=6,
-    extra_evidence={"sequence_status": "junction_fragment"},
-)
-effects = variants.effects(rna_resolver=RNAEvidence([candidate]))
-```
+- [Which transcripts get annotated](#which-transcripts-get-annotated) and
+  [effect classes](#effect-classes).
+- [Pairing breakend records](#pairing-breakend-records), including when pairing
+  changes which partner transcripts appear.
+- [Alleles, coordinates, and exports](#alleles-coordinates-and-exports).
+- [Junction orientation](#junctions-which-side-of-each-breakpoint-is-kept),
+  [fusion partners](#5-and-3-roles), and [breakpoint position](#where-in-the-gene-a-breakpoint-lands).
+- [Observed RNA import](#importing-observed-rna-structures) and
+  [Exacto protein predictions](#import-exactos-protein-predictions).
 
-Do not supply a sense partner merely because a gene name appears near a
-breakpoint. Leave `partner_transcript=None` for unresolved/intergenic/antisense
-partners and record the observed loci/orientation in `extra_evidence`.
-The importer preserves the supplied sequence, including insertions, without
-appending reference exons. Read counts do not become probabilities or change
-default candidate ranking. DNA predictions and RNA observations coexist.
-
-Protein sequence is `None` by default. A caller can pass `cds_start=<0-based
-offset>` to `make_fusion_outcome`, or a `cds_starts` mapping keyed by
-`("model-id", ("sorted-reference-id-1", "sorted-reference-id-2"))` to the Exacto
-loader. This requires a valid unambiguous start-to-stop ORF in the supplied
-sequence. It produces a **sequence-predicted protein**, not evidence of
-translation, full-length RNA, tumor-cell identity, or a mature two-gene fusion.
-
-### Import Exacto's protein predictions
-
-When Exacto has already selected reading frames, supply its native
-primary-structures table instead of choosing `cds_starts` yourself:
-
-```python
-rna = load_exacto_fusions(
-    "transcript_structures.tsv", "integrated_variants.tsv",
-    variants_by_id=variants_by_id,
-    primary_structures_path="primary_structures.tsv",
-)
-for candidate in rna.candidates:
-    print(candidate.evidence.get("exacto_peptide_id"))
-    print(candidate.effect.mutant_protein_sequence)
-    print(candidate.evidence.get("protein_completeness"))
-```
-
-Each `(model, reference-transcript group, peptide_id)` remains separate. The
-loader validates native `primary_structure_index`, `amino_acid_index`, and
-`codon_index`, checks each nucleotide against its `transcript_structure_index`
-and inclusive read coordinates, and checks the amino acid against its codon.
-The amino acid repeated on all three base rows is emitted once. Terminal `*`
-is retained in provenance but omitted from `mutant_protein_sequence`.
-
-Partial peptides are available, with `protein_completeness` set to
-`partial_start`, `partial_end`, or `partial_both`; start-to-stop predictions
-are labeled `start_to_stop`. Trailing incomplete codons cannot claim an amino
-acid. Missing peptide rows leave that model's protein `None`. Per-base variant
-IDs, frameshift state and all original fields remain in `exacto_primary_structure`.
-Exacto's standard genetic-code choice is recorded as `protein_translation_table=1`.
-
-These sequences are **predictions from RNA**, not evidence of translation.
-A complete start-to-stop ORF need not cross the rearrangement or establish a
-full-length fusion transcript. Downstream users must check completeness and
-source coordinates rather than treating every protein string as a complete
-expressed fusion protein.
-
-The small osteosarc regression fixtures deliberately exercise the negative
-case: GABBR1 joins sequence upstream of SLC29A1, OTUD7A joins an antisense FMN1
-intron, and the KLF15-side reads are intronic. Their RNA junctions are retained
-without manufacturing coding fusions or protein sequences.
-
-Format reference: [Exacto's structure translation source, pinned revision
-307c086](https://github.com/pirl-unc/exacto/blob/307c08670d5e706734bddf393bcebc84db497f9f/exacto/exacto-translator/src/algorithms/translation.rs).
+The detailed biological examples below use Ensembl 95.
 
 ## Which transcripts get annotated
 
@@ -154,6 +64,24 @@ Two outcomes apply before any SV logic:
 
 - No gene at the variant's position(s) → a single `Intergenic` effect.
 - A non-coding transcript → `NoncodingTranscript`.
+
+## Alleles, coordinates, and exports
+
+Structural `ref`/`alt` and `original_ref`/`original_alt` expose the actual record
+alleles, including symbolic or breakend ALT. Small-edit flags (`is_snv`,
+`is_indel`, `is_insertion`, `is_deletion`, `is_transition`, `is_transversion`)
+are false; use `is_structural` and `sv_type` for event classification.
+SV-containing tables add `sv_type`, `end`, `mate_contig`, `mate_start`,
+`affected_start`, and `affected_end`. These CSVs are summaries, not lossless
+structural archives: `from_csv` rejects them. Retain original VCF/JSON variants
+and their RNA evidence; point-only and empty table columns are unchanged.
+
+Symbolic VCF span records retain `POS` as the padding/junction coordinate;
+`affected_start..affected_end` is the inclusive changed interval `POS+1..END`.
+This applies to DEL, DUP, INV and CNV (including CN0/CN3). This parser requires
+a nonempty span with `END > POS`. Direct `StructuralVariant(...)` construction
+keeps its existing explicit-coordinate defaults: pass `affected_start`
+separately when `start` includes padding. Paired breakends already supply it.
 
 ## Junctions: which side of each breakpoint is kept
 
@@ -306,7 +234,9 @@ When a boundary transcript gets a `GeneFusion`, what the span does to its
 exons isn't lost:
 
 ```python
-fusion = annotator.annotate_on_transcript(deletion, tmprss2)
+from varcode.effects import LargeDeletion
+
+fusion = deletion.effect_on_transcript(tmprss2)
 (span_effect,) = [c.effect for c in fusion.candidates
                   if isinstance(c.effect, LargeDeletion)]
 span_effect.affected_exons
@@ -381,6 +311,121 @@ Breakpoints near exon boundaries add candidates to any SV effect:
 | `Intronic` | A span inside the transcript that overlaps no exon. |
 | `Intergenic` | No gene at the variant's position. |
 | `NoncodingTranscript` | The transcript isn't protein-coding. |
+
+## Importing observed RNA structures
+
+Use an existing DNA `StructuralVariant` as the anchor, so an RNA splice junction
+is not mistaken for a genomic breakpoint. Multiple observed RNA models can be
+attached to that same variant:
+
+```python
+from varcode import load_exacto_fusions
+
+rna = load_exacto_fusions(
+    "transcript_structures.tsv", "integrated_variants.tsv",
+    variants_by_id={"42": structural_variant},
+)
+effects = variants.effects(rna_resolver=rna)
+for candidate in rna.candidates:
+    sequence = candidate.effect.mutant_transcript.cdna_sequence
+    model_id = candidate.evidence["transcript_model_id"]
+```
+
+`variants_by_id` maps **Exacto DNA call IDs**, not assumed VCF record IDs, to
+already loaded variants. Only these IDs are selected from the integration file.
+The model key includes both `transcript_model_id` and the reference transcript
+ID set. Different models/reference interpretations and their DNA links are kept;
+duplicate integration rows do not duplicate a candidate.
+
+The adapter follows Exacto's `index` ordering and inclusive `read_start` /
+`read_end` base-row coordinates. Sequences already run 5' to 3' even for reverse
+strand genes: they are never reverse-complemented a second time. Event rows
+preserve splice structure but do not invent missing bases. The complete original
+structure and integration rows are in `candidate.evidence` and the mutant
+transcript's evidence. Row counts are **not** supporting-read counts.
+
+This is a deliberately limited adapter for linear, two-locus, SV-linked models
+with an annotated sense 5' anchor. A missing or antisense 3' annotation gives
+`TranslocationToIntergenic`, whose existing meaning includes non-sense joins.
+Unknown transcript IDs and incomplete/unsupported structures raise errors.
+This does not implement all Exacto DNA/RNA variant formats, circular RNA,
+or multi-gene paths. Those remain in the broader
+[#260](https://github.com/openvax/varcode/issues/260) roadmap.
+
+For other producers, use the same existing effect classes directly:
+
+```python
+from varcode import RNAEvidence, make_fusion_outcome
+
+candidate = make_fusion_outcome(
+    structural_variant, five_prime_transcript,
+    partner_transcript=three_prime_transcript,  # only when sense-oriented
+    sequence=observed_sequence,               # already 5' to 3'
+    transcript_model_id="assembled-model-7",
+    source="rna_assembler", read_count=6,
+    extra_evidence={"sequence_status": "junction_fragment"},
+)
+effects = variants.effects(rna_resolver=RNAEvidence([candidate]))
+```
+
+Do not supply a sense partner merely because a gene name appears near a
+breakpoint. Leave `partner_transcript=None` for unresolved/intergenic/antisense
+partners and record the observed loci/orientation in `extra_evidence`.
+The importer preserves the supplied sequence, including insertions, without
+appending reference exons. Read counts do not become probabilities or change
+default candidate ranking. DNA predictions and RNA observations coexist.
+
+Protein sequence is `None` by default. A caller can pass `cds_start=<0-based
+offset>` to `make_fusion_outcome`, or a `cds_starts` mapping keyed by
+`("model-id", ("sorted-reference-id-1", "sorted-reference-id-2"))` to the Exacto
+loader. This requires a valid unambiguous start-to-stop ORF in the supplied
+sequence. It produces a **sequence-predicted protein**, not evidence of
+translation, full-length RNA, tumor-cell identity, or a mature two-gene fusion.
+
+### Import Exacto's protein predictions
+
+When Exacto has already selected reading frames, supply its native
+primary-structures table instead of choosing `cds_starts` yourself:
+
+```python
+rna = load_exacto_fusions(
+    "transcript_structures.tsv", "integrated_variants.tsv",
+    variants_by_id=variants_by_id,
+    primary_structures_path="primary_structures.tsv",
+)
+for candidate in rna.candidates:
+    print(candidate.evidence.get("exacto_peptide_id"))
+    print(candidate.effect.mutant_protein_sequence)
+    print(candidate.evidence.get("protein_completeness"))
+```
+
+Each `(model, reference-transcript group, peptide_id)` remains separate. The
+loader validates native `primary_structure_index`, `amino_acid_index`, and
+`codon_index`, checks each nucleotide against its `transcript_structure_index`
+and inclusive read coordinates, and checks the amino acid against its codon.
+The amino acid repeated on all three base rows is emitted once. Terminal `*`
+is retained in provenance but omitted from `mutant_protein_sequence`.
+
+Partial peptides are available, with `protein_completeness` set to
+`partial_start`, `partial_end`, or `partial_both`; start-to-stop predictions
+are labeled `start_to_stop`. Trailing incomplete codons cannot claim an amino
+acid. Missing peptide rows leave that model's protein `None`. Per-base variant
+IDs, frameshift state and all original fields remain in `exacto_primary_structure`.
+Exacto's standard genetic-code choice is recorded as `protein_translation_table=1`.
+
+These sequences are **predictions from RNA**, not evidence of translation.
+A complete start-to-stop ORF need not cross the rearrangement or establish a
+full-length fusion transcript. Downstream users must check completeness and
+source coordinates rather than treating every protein string as a complete
+expressed fusion protein.
+
+The small osteosarc regression fixtures deliberately exercise the negative
+case: GABBR1 joins sequence upstream of SLC29A1, OTUD7A joins an antisense FMN1
+intron, and the KLF15-side reads are intronic. Their RNA junctions are retained
+without manufacturing coding fusions or protein sequences.
+
+Format reference: [Exacto's structure translation source, pinned revision
+307c086](https://github.com/pirl-unc/exacto/blob/307c08670d5e706734bddf393bcebc84db497f9f/exacto/exacto-translator/src/algorithms/translation.rs).
 
 ## Limitations
 

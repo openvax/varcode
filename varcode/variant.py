@@ -464,7 +464,7 @@ class Variant(Serializable):
             :func:`varcode.use_annotator`). String names are resolved
             against the registry. See openvax/varcode#271.
 
-        phase_resolver : PhaseResolver or None
+        phase_resolver : resolver object or None
             Optional phase-evidence source (typically a
             :class:`~varcode.phasing.MolecularPhaseResolver` wrapping an
             upstream RNA-phasing tool, or
