@@ -1,5 +1,12 @@
 # Structural variant annotation
 
+Symbolic VCF span records retain `POS` as the padding/junction coordinate;
+`affected_start..affected_end` is the inclusive changed interval `POS+1..END`.
+This applies to DEL, DUP, INV and CNV (including CN0/CN3). This parser requires
+a nonempty span with `END > POS`. Direct `StructuralVariant(...)` construction
+keeps its existing explicit-coordinate defaults: pass `affected_start`
+separately when `start` includes padding. Paired breakends already supply it.
+
 This page describes what varcode reports for each kind of structural
 variant (SV): which transcripts get annotated, how a fusion's direction is
 decided, what depends on strand and on where a breakpoint lands, and which

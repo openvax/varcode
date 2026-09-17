@@ -1,5 +1,14 @@
 # Change Log
 
+## [v9.2.1](https://github.com/openvax/varcode/tree/v9.2.1) (2026-09-17)
+
+**Fixed**
+- Parsed symbolic DEL/DUP/INV/CNV spans exclude the retained VCF padding
+  base from exon and mutant-cDNA annotation (#404). POS and junctions are
+  unchanged; direct constructors retain their explicit affected-span defaults.
+- Symbolic span records with missing/non-increasing END raise instead of
+  being interpreted as a one-base event at the padding position.
+
 ## [v9.2.0](https://github.com/openvax/varcode/tree/v9.2.0) (2026-09-16)
 
 **Added**

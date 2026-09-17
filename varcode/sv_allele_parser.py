@@ -198,10 +198,20 @@ def parse_symbolic_alt(
         if copy_number is not None:
             sv_info["copy_number"] = copy_number
 
+        # VCF symbolic POS is the retained padding base before the event.
+        # Keep record/junction coordinates unchanged; span consumers already
+        # use affected_start/end for paired breakends (#404).
+        affected_start = None
+        if top in {"DEL", "DUP", "INV", "CNV"}:
+            if int(end) <= int(start):
+                raise ValueError("A symbolic %s requires END greater than POS" % top)
+            affected_start = int(start) + 1
+
         return StructuralVariant(
             contig=contig,
             start=int(start),
             end=int(end),
+            affected_start=affected_start,
             sv_type=top,
             alt=alt,
             ref=ref or "N",
