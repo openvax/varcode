@@ -1,5 +1,13 @@
 # Change Log
 
+## [v9.2.3](https://github.com/openvax/varcode/tree/v9.2.3) (2026-09-17)
+
+**Fixed**
+- DUP/INV events with junction ends outside the selected transcript no longer
+  fabricate a local duplicated/inverted transcript (#405). The DNA event class
+  remains, but its unresolved mutant transcript is None. Existing fusion
+  predictions and explicitly supplied allele assemblies are preserved.
+
 ## [v9.2.2](https://github.com/openvax/varcode/tree/v9.2.2) (2026-09-17)
 
 **Fixed**

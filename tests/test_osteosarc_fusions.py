@@ -48,7 +48,7 @@ from varcode import StructuralVariant, FastEffectAnnotator, load_vcf
 from varcode.effects.structural import (
     _build_fusion_mutant_transcript,
 )
-from varcode.effects import GeneFusion, Intronic
+from varcode.effects import GeneFusion, Intronic, Inversion, LargeDuplication
 from varcode.transforms import pair_breakends
 
 from .data import data_path
@@ -267,6 +267,10 @@ def test_esvee_vcf_otx1_kif3c_inversion_is_fusion_on_both_partners():
             assert fusion.three_prime_transcript.id == kif3c.id
             assert fusion.mutant_transcript.mutant_protein_sequence == (
                 "MMSYLKQPPYGMNGLGLAGPAMDLLHPSVGYPETS")
+            if sv.sv_type == "INV":
+                (span,) = [c.effect for c in fusion.candidates
+                           if isinstance(c.effect, Inversion)]
+                assert span.mutant_transcript is None
 
 
 def test_esvee_vcf_cpeb2_fam193a_duplication_is_fusion():
@@ -290,6 +294,10 @@ def test_esvee_vcf_cpeb2_fam193a_duplication_is_fusion():
     assert isinstance(on_fam193a, GeneFusion)
     assert on_fam193a.three_prime_transcript.id == fam193a.id
     assert on_fam193a.five_prime_transcript.gene_name == "CPEB2"
+    for fusion in (on_cpeb2, on_fam193a):
+        (span,) = [c.effect for c in fusion.candidates
+                   if isinstance(c.effect, LargeDuplication)]
+        assert span.mutant_transcript is None
 
 
 def test_esvee_vcf_sema6a_parm1_fusion_from_either_record():

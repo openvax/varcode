@@ -126,9 +126,15 @@ def _cdna_ranges_kept_after_deletion(variant, transcript):
 
 
 def _cdna_ranges_within_sv(variant, transcript):
-    """cDNA ranges that fall INSIDE the SV span (used for DUP to
-    derive the duplicated body and for INV to derive the flipped
-    middle)."""
+    """Body ranges for a local DUP/INV model, or [] if not local.
+
+    Clipping a cross-boundary event to this transcript invents a local
+    rearrangement (#405). Every junction end must be in this transcript,
+    not merely in its gene. Fusion and supplied-assembly paths are separate.
+    """
+    if any(not _contains(transcript, end)
+           for junction in variant.junctions for end in junction):
+        return []
     sv_start, sv_end = _affected_span(variant)
     inside = []
     reverse = transcript.on_backward_strand
