@@ -1,5 +1,27 @@
 # Change Log
 
+## [v9.3.3](https://github.com/openvax/varcode/tree/v9.3.3) (2026-09-18)
+
+**Fixed**
+- SV sequence-change flags no longer call unchanged selenoproteins
+  protein-changing (#468). A TGA mapped onto an annotated selenocysteine
+  (`U` in the Ensembl reference protein) is read as Sec where the model keeps
+  that transcript through its 3′ end, which holds the SECIS element. It is read
+  as a stop where no selenoprotein 3′ UTR remains (for example a fusion
+  downstream of Sec, or a deletion of the whole 3′ UTR, which truncates the
+  protein). When the SECIS may be only partly lost (a 3′ UTR deletion or
+  duplication, a fusion in the 3′ UTR, or an unmapped import), the protein flag
+  is reported only if both readings agree; otherwise it is `None`. The coding
+  flag compares CDS bases and does not depend on Sec decoding. A supplied
+  protein that ends exactly at a Sec residue no longer counts as a truncation,
+  and partial observations continue past a decoded Sec codon. All 60 complete
+  selenoprotein transcripts in Ensembl 81 now read unchanged for a
+  reference-identical model.
+- Complete-ORF comparisons read any start codon as the initiator methionine
+  on both sides. Ensembl writes CTG/TTG initiators as `L`, so the 68 complete
+  non-ATG transcripts in Ensembl 81 were previously called protein-changing
+  when unchanged.
+
 ## [v9.3.2](https://github.com/openvax/varcode/tree/v9.3.2) (2026-09-18)
 
 **Fixed**
