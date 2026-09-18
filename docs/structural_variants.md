@@ -54,6 +54,8 @@ Unresolved effects are kept by default. To test for a *known* unchanged SV, use
 
 These flags describe existing predictions; they do not establish expression.
 Partial BND fragments and assemblies without a mapped ORF stay unresolved.
+So do partial observations (`protein_completeness` other than `start_to_stop`)
+unless a mapped, in-frame observed codon differs from the reference.
 The filter does not construct missing proteins or change the effect class.
 
 ## Fusion protein candidates

@@ -118,10 +118,13 @@ full-length fusion transcript. Downstream users must check completeness and
 source coordinates rather than treating every protein string as a complete
 expressed fusion protein.
 
-Known limitation: SV sequence-change flags currently compare imported partial
-proteins with the full reference ([#462](https://github.com/openvax/varcode/issues/462)).
-Until that is fixed, a positive flag alone does not establish a change in a
-partial observation; check its mapped observed region and completeness.
+SV sequence-change flags respect `protein_completeness`. A partial peptide is
+never compared with the full reference protein: missing sequence is neither
+unchanged nor a truncation. Its flags are `True` only when the ORF bounds
+(`cds_start` / `cds_end`) and reference-transcript segments place a differing
+observed codon in frame on a reference CDS codon; otherwise they stay `None`.
+Exacto imports carry ORF bounds but no reference coordinates, so their partial
+peptides remain unresolved.
 
 The small osteosarc regression fixtures deliberately exercise the negative
 case: GABBR1 joins sequence upstream of SLC29A1, OTUD7A joins an antisense FMN1
