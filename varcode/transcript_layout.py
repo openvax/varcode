@@ -27,6 +27,7 @@ from .effects.codon_tables import (
     codon_table_for_transcript,
     translate_sequence,
 )
+from .effects.selenocysteine import layout_selenocysteine
 from .effects.effect_classes import (
     FivePrimeUTR,
     Intronic,
@@ -245,7 +246,9 @@ def realize_exon_path(transcript, layout, kept_run_keys=None):
         protein = translate_sequence(
             coding,
             codon_table=codon_table_for_transcript(transcript),
-            to_stop=True)
+            to_stop=True,
+            selenocysteine={pos - start for pos in
+                            layout_selenocysteine(transcript, run_layouts)})
         start_present = True
     return RealizedTranscriptProduct(
         transcript=transcript,
@@ -409,7 +412,9 @@ def realize_splice_plan(
         protein = translate_sequence(
             coding,
             codon_table=codon_table_for_transcript(transcript),
-            to_stop=True)
+            to_stop=True,
+            selenocysteine={pos - start_offset for pos in
+                            layout_selenocysteine(transcript, pieces)})
         start_present = True
     evidence = {
         "exon_runs": tuple(run.key for run in selected),

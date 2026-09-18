@@ -1,5 +1,26 @@
 # Change Log
 
+## [v9.3.4](https://github.com/openvax/varcode/tree/v9.3.4) (2026-09-18)
+
+**Fixed**
+- Predicted proteins no longer stop at selenocysteine (#470). Mutant
+  transcripts, splice outcomes, fusions and the experimental `transcript_model`
+  layouts now read an annotated Sec UGA (`U` in the Ensembl reference protein)
+  as Sec when no edit touches it and some selenoprotein 3′ UTR (SECIS) remains.
+  Where none remains, as in a fusion downstream of Sec, UGA still terminates.
+  Across the 60 complete selenoprotein transcripts in Ensembl 81, `protein_diff`
+  had called most coding variants `PrematureStop` (176 of 240 probes), and
+  `transcript_model` had called Sec→Trp a stop loss and missense changes after
+  Sec silent (112 of 240). Both now agree with the default annotator on all 240.
+  Opaque RNA imports without reference coordinates are still translated
+  literally. When the 3′ UTR is only partly kept, the SV change flags ignore a
+  supplied protein and stay unresolved.
+- Joint translation of several edits (germline context, phasing, splice
+  outcomes) now finds the CDS start after a 5′ UTR indel instead of reading
+  the wrong frame (#471).
+- `translate_sequence` accepts `selenocysteine=` offsets of TGA codons to
+  read as `U`.
+
 ## [v9.3.3](https://github.com/openvax/varcode/tree/v9.3.3) (2026-09-18)
 
 **Fixed**

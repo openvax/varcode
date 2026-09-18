@@ -20,6 +20,8 @@ Mutant transcripts retain the historical ``structural_variant`` builder
 provenance; their containing effect collection records the selected annotator.
 """
 
+from dataclasses import replace
+
 from .effect_classes import (
     GeneFusion,
     Intergenic,
@@ -32,6 +34,7 @@ from .effect_classes import (
     TranslocationToIntergenic,
 )
 from .effect_helpers import exon_length
+from .selenocysteine import segment_selenocysteine
 from ..mutant_transcript import MutantTranscript, ReferenceSegment
 # Existing assembled-SV pickles use this private module path.
 from ..mutant_transcript import _AssembledAllele  # noqa: F401
@@ -423,13 +426,15 @@ def _build_inversion_mutant_transcript(variant, transcript):
         annotator_name="structural_variant")
 
 
-def _translate_fused_cdna(fused_cdna, five_prime_transcript, five_prime_len):
+def _translate_fused_cdna(fused_cdna, five_prime_transcript, five_prime_len,
+                          selenocysteine=()):
     """Translate ``fused_cdna`` from the 5' partner's CDS start when
     that start codon lies in the retained 5' portion (#336).
 
     Returns the translated protein (stopping at the first stop
     codon) or ``None`` when the CDS start is past the breakpoint or
-    translation otherwise fails.
+    translation otherwise fails. TGA codons at the fused-cDNA offsets
+    in ``selenocysteine`` are read as Sec.
     """
     from .codon_tables import (
         codon_table_for_transcript,
@@ -449,7 +454,8 @@ def _translate_fused_cdna(fused_cdna, five_prime_transcript, five_prime_len):
     truncated = coding[:(len(coding) // 3) * 3]
     try:
         return translate_sequence(
-            truncated, codon_table=codon_table, to_stop=True)
+            truncated, codon_table=codon_table, to_stop=True,
+            selenocysteine={pos - cds_start for pos in selenocysteine})
     except ValueError:
         return None
 
@@ -497,13 +503,16 @@ def _build_fusion_mutant_transcript(
             start=three_prime_start, end=len(three_prime_cdna),
             strand="+", label="3p_partner"),
     )
-    return MutantTranscript(
+    model = MutantTranscript(
         reference_transcript=reference_transcript,
         reference_segments=segments,
         cdna_sequence=fused_cdna,
-        mutant_protein_sequence=_translate_fused_cdna(
-            fused_cdna, five_prime_transcript, five_prime_end),
         annotator_name="structural_variant")
+    # Read Sec where a SECIS may remain; the change flags report whether
+    # that reading is certain.
+    decoded, uncertain, _ = segment_selenocysteine(model) or (set(), set(), set())
+    return replace(model, mutant_protein_sequence=_translate_fused_cdna(
+        fused_cdna, five_prime_transcript, five_prime_end, decoded | uncertain))
 
 
 def _build_translocation_mutant_transcript(variant, transcript):
