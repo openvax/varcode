@@ -62,6 +62,12 @@ unavailable for unresolved effects.
 
 ## Learn more
 
+Varcode predicts transcript/protein consequences;
+[Isovar](https://github.com/openvax/isovar) handles RNA reconstruction and evidence;
+[Vaxrank](https://github.com/openvax/vaxrank) evaluates protein/peptide candidates.
+See [how the libraries fit together](https://openvax.github.io/varcode/library_roles/)
+for their responsibilities and current integration limits.
+
 Start with the [getting-started guide](https://openvax.github.io/varcode/getting_started/)
 for file loading, result access, and saving a table. Then follow the
 [task guides](https://openvax.github.io/varcode/#find-your-next-task) for sample

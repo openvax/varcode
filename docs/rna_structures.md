@@ -4,6 +4,11 @@ Attach observed RNA structures to [structural variants](structural_variants.md)
 without treating an RNA junction as a DNA breakpoint. The examples below assume
 that the DNA variants and relevant reference transcripts are already loaded.
 
+Varcode represents supplied structures and predicts their coding consequences;
+RNA reconstruction and read-based reconciliation belong to Isovar or another
+RNA producer. See [the library responsibilities](library_roles.md) for the split
+and the remaining end-to-end SV workflow.
+
 ## Import Exacto transcripts
 
 Use an existing DNA `StructuralVariant` as the anchor, so an RNA splice junction
@@ -112,6 +117,11 @@ A complete start-to-stop ORF need not cross the rearrangement or establish a
 full-length fusion transcript. Downstream users must check completeness and
 source coordinates rather than treating every protein string as a complete
 expressed fusion protein.
+
+Known limitation: SV sequence-change flags currently compare imported partial
+proteins with the full reference ([#462](https://github.com/openvax/varcode/issues/462)).
+Until that is fixed, a positive flag alone does not establish a change in a
+partial observation; check its mapped observed region and completeness.
 
 The small osteosarc regression fixtures deliberately exercise the negative
 case: GABBR1 joins sequence upstream of SLC29A1, OTUD7A joins an antisense FMN1

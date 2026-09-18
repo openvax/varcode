@@ -47,6 +47,7 @@ nav:
       - VariantCollection transforms: transforms.md
       - Experimental annotators: experimental_annotators.md
   - Reference:
+      - Varcode, Isovar & Vaxrank: library_roles.md
       - Transcript models: transcript_models.md
       - SV coordinates & fusion rules: sv_reference.md
       - Effect types: effect_types.md
