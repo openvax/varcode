@@ -1,5 +1,20 @@
 # Change Log
 
+## [v9.3.2](https://github.com/openvax/varcode/tree/v9.3.2) (2026-09-18)
+
+**Fixed**
+- SV sequence-change flags no longer call a partial observation
+  (`protein_completeness` of `partial_start`, `partial_end`, `partial_both`, or
+  an explicit unknown) protein-changing just because it is shorter than the
+  full reference protein (#462). Missing sequence is neither unchanged nor a
+  truncation: these flags are `True` only when ORF bounds and reference-transcript
+  segments place an observed codon in frame on a differing reference CDS codon,
+  including premature stops and stop loss, and otherwise stay `None`.
+  Only `start_to_stop`, or no label, permits a whole-protein comparison or
+  the complete-ORF fallback; any other label fails closed. Exacto partial
+  peptides, which have no reference coordinates, remain unresolved. Complete
+  predictions and 9.3.0 candidate aggregation/filtering are unchanged.
+
 ## [v9.3.1](https://github.com/openvax/varcode/tree/v9.3.1) (2026-09-18)
 
 **Documentation**

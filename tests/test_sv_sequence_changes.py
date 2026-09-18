@@ -14,6 +14,7 @@ from varcode.effects import (
     StructuralVariantEffect, TranslocationToIntergenic, Unresolved,
 )
 from varcode.effects import structural
+from varcode.effects.codon_tables import codon_table_for_transcript
 
 
 @pytest.fixture
@@ -126,6 +127,214 @@ def test_partial_fragment_and_unmapped_assembly_are_unknown(cftr):
     for effect in (partial, assembly):
         assert effect.modifies_protein_sequence is None
         assert effect.modifies_coding_sequence is None
+
+
+@pytest.mark.parametrize("completeness", [
+    "partial_start", "partial_end", "partial_both", "unknown", None,
+])
+@pytest.mark.parametrize("protein", ["reference_fragment", "different", ""])
+def test_unmapped_partial_proteins_do_not_establish_a_change(cftr, completeness, protein):
+    if protein == "reference_fragment":
+        protein = cftr.protein_sequence[:100]
+    effect = _effect(cftr)
+    effect.mutant_transcript = MutantTranscript.from_sequence(
+        cftr.sequence[:432], reference_transcript=cftr,
+        mutant_protein_sequence=protein,
+        evidence={"protein_completeness": completeness})
+    assert effect.modifies_protein_sequence is None
+    assert effect.modifies_coding_sequence is None
+    assert list(EffectCollection([effect]).drop_silent_and_noncoding()) == [effect]
+    assert len(EffectCollection([effect]).drop_silent_and_noncoding(False)) == 0
+    assert effect.mutant_protein_sequence == protein
+
+
+@pytest.mark.parametrize("completeness", ["partial_start", "partial_end", "partial_both"])
+def test_partial_label_prevents_complete_orf_fallback(cftr, completeness):
+    # A complete-looking ORF must not override the producer's explicit partial
+    # interpretation (e.g. an internal alternative start in an observed fragment).
+    effect = _effect(cftr, cdna=cftr.sequence, segments=_identity_segments(cftr),
+                     evidence={"protein_completeness": completeness})
+    assert effect.modifies_protein_sequence is None
+    assert effect.modifies_coding_sequence is None
+    evidence = dict(effect.mutant_transcript.evidence,
+                    cds_start=min(cftr.start_codon_spliced_offsets),
+                    cds_end=max(cftr.stop_codon_spliced_offsets) + 1)
+    effect.mutant_transcript = replace(effect.mutant_transcript, evidence=evidence)
+    assert effect.modifies_protein_sequence is None
+    assert effect.modifies_coding_sequence is None
+
+
+def _mapped_partial(transcript, completeness, change="none"):
+    """An observed CDS fragment mapped onto its reference, one codon changed.
+
+    Flags compare observed codons, so no protein is supplied.
+    """
+    table = codon_table_for_transcript(transcript)
+    start = min(transcript.start_codon_spliced_offsets)
+    stop = max(transcript.stop_codon_spliced_offsets) + 1
+    left = start if completeness == "partial_end" else start + 300
+    right = stop if completeness == "partial_start" else left + 300
+    cdna = transcript.sequence[left:right]
+    if change == "stop_loss":
+        pos, codon = len(cdna) - 3, "TGG"
+    else:
+        pos = next(i for i in range(3, len(cdna), 3)
+                   if table.forward_table.get(cdna[i:i + 3], "M") not in "MW")
+        original = cdna[pos:pos + 3]
+        synonyms = [c for c, aa in sorted(table.forward_table.items())
+                    if aa == table.forward_table[original] and c != original]
+        codon = {"none": original, "synonymous": synonyms[0], "missense": "TGG",
+                 "nonsense": "TAA", "ambiguous": original[:2] + "N"}[change]
+    cdna = cdna[:pos] + codon + cdna[pos + 3:]
+    return _effect(
+        transcript, cdna=cdna,
+        segments=(ReferenceSegment(transcript, left, right),),
+        evidence={"protein_completeness": completeness,
+                  "cds_start": 0, "cds_end": len(cdna)}), pos
+
+
+@pytest.mark.parametrize("transcript_id", ["ENST00000003084", "ENST00000357654"])
+@pytest.mark.parametrize("completeness", ["partial_start", "partial_end", "partial_both"])
+@pytest.mark.parametrize("change", ["none", "synonymous", "missense", "nonsense", "ambiguous"])
+def test_partial_observation_only_establishes_mapped_local_changes(
+        transcript_id, completeness, change):
+    transcript = cached_release(81).transcript_by_id(transcript_id)
+    effect, _ = _mapped_partial(transcript, completeness, change)
+    before = effect.mutant_transcript
+    assert effect.modifies_coding_sequence is (
+        True if change in ("synonymous", "missense", "nonsense") else None)
+    assert effect.modifies_protein_sequence is (
+        True if change in ("missense", "nonsense") else None)
+    assert effect.mutant_transcript == before
+
+
+@pytest.mark.parametrize("transcript_id", ["ENST00000003084", "ENST00000357654"])
+def test_mapped_stop_loss_is_a_protein_change(transcript_id):
+    transcript = cached_release(81).transcript_by_id(transcript_id)
+    effect, _ = _mapped_partial(transcript, "partial_start", "stop_loss")
+    assert effect.modifies_coding_sequence is True
+    assert effect.modifies_protein_sequence is True
+
+
+def test_mapped_reference_fragment_is_not_a_truncation(cftr):
+    # The #462 report, with reference coordinates: equal observed codons and a
+    # shorter supplied protein still leave the unobserved suffix unknown.
+    effect, _ = _mapped_partial(cftr, "partial_end")
+    effect.mutant_transcript = replace(
+        effect.mutant_transcript, mutant_protein_sequence=cftr.protein_sequence[:100])
+    assert effect.modifies_coding_sequence is None
+    assert effect.modifies_protein_sequence is None
+    assert len(EffectCollection([effect]).drop_silent_and_noncoding(False)) == 0
+
+
+def test_partial_uses_mitochondrial_table():
+    # TGA and TGG both encode tryptophan in vertebrate mitochondria.
+    transcript = cached_release(81).transcript_by_id("ENST00000361624")
+    effect, _ = _mapped_partial(transcript, "partial_both")
+    model = effect.mutant_transcript
+    cdna = model.cdna_sequence
+    pos = next(i for i in range(0, len(cdna), 3) if cdna[i:i + 3] in ("TGA", "TGG"))
+    swapped = "TGG" if cdna[pos:pos + 3] == "TGA" else "TGA"
+    effect.mutant_transcript = replace(
+        model, cdna_sequence=cdna[:pos] + swapped + cdna[pos + 3:])
+    assert effect.modifies_coding_sequence is True
+    assert effect.modifies_protein_sequence is None
+
+
+@pytest.mark.parametrize("upstream", [False, True])
+def test_alternative_start_codon_reads_as_met_only_where_the_orf_begins(cftr, upstream):
+    # A 3' partner's start codon is internal to a fused ORF, so CTG there is Leu.
+    brca1 = cached_release(81).transcript_by_id("ENST00000357654")
+    start = min(cftr.start_codon_spliced_offsets)
+    other = min(brca1.start_codon_spliced_offsets) + 3
+    segments = (ReferenceSegment(cftr, start, start + 300),)
+    cdna = "CTG" + cftr.sequence[start + 3:start + 300]
+    if upstream:
+        segments = (ReferenceSegment(brca1, other, other + 30),) + segments
+        cdna = brca1.sequence[other:other + 30] + cdna
+    effect = _effect(cftr, cdna=cdna, segments=segments, evidence={
+        "protein_completeness": "partial_both", "cds_start": 0, "cds_end": len(cdna)})
+    assert effect.modifies_coding_sequence is True
+    assert effect.modifies_protein_sequence is (True if upstream else None)
+
+
+def test_partial_bounds_accept_numpy_integers(cftr):
+    import numpy as np
+
+    effect, _ = _mapped_partial(cftr, "partial_both", "missense")
+    evidence = effect.mutant_transcript.evidence
+    effect.mutant_transcript = replace(effect.mutant_transcript, evidence=dict(
+        evidence, cds_start=np.int64(0), cds_end=np.int64(evidence["cds_end"])))
+    assert effect.modifies_coding_sequence is True
+    assert effect.modifies_protein_sequence is True
+
+
+def test_partial_mapped_change_survives_split_reference_segments(cftr):
+    effect, pos = _mapped_partial(cftr, "partial_both", "missense")
+    segment, = effect.mutant_transcript.reference_segments
+    effect.mutant_transcript = replace(effect.mutant_transcript, reference_segments=(
+        replace(segment, end=segment.start + pos + 1),
+        replace(segment, start=segment.start + pos + 1)))
+    assert effect.modifies_coding_sequence is True
+    assert effect.modifies_protein_sequence is True
+
+
+@pytest.mark.parametrize("missing", [
+    "frame", "float_frame", "offset_frame", "mapping", "reverse", "length", "edits"])
+def test_partial_local_change_requires_usable_coordinates(cftr, missing):
+    from varcode import TranscriptEdit
+
+    effect, _ = _mapped_partial(cftr, "partial_both", "missense")
+    model = effect.mutant_transcript
+    if missing == "frame":
+        model = replace(model, evidence={"protein_completeness": "partial_both"})
+    elif missing == "float_frame":
+        model = replace(model, evidence=dict(model.evidence, cds_start=0.0))
+    elif missing == "offset_frame":
+        # Codons out of frame with the reference CDS have no counterpart.
+        model = replace(model, evidence=dict(model.evidence, cds_start=1))
+    elif missing == "mapping":
+        model = replace(model, reference_segments=None)
+    elif missing == "reverse":
+        model = replace(model, reference_segments=(replace(model.reference_segments[0], strand="-"),))
+    elif missing == "length":
+        model = replace(model, cdna_sequence=model.cdna_sequence + "A")
+    else:
+        model = replace(model, edits=(TranscriptEdit(0, 0, "A"),))
+    effect.mutant_transcript = model
+    assert effect.modifies_coding_sequence is None
+    assert effect.modifies_protein_sequence is None
+
+
+@pytest.mark.parametrize("completeness", ["partial_start", "partial_end", "partial_both"])
+def test_imported_partial_peptide_without_reference_mapping_is_unknown(cftr, completeness):
+    # Exacto peptides carry observed ORF bounds but no reference coordinates.
+    variant = StructuralVariant(cftr.contig, cftr.start, "BND", genome=cftr.genome)
+    start = min(cftr.start_codon_spliced_offsets)
+    cdna = cftr.sequence[:start + 3] + "TGG" + cftr.sequence[start + 6:start + 300]
+    candidate = make_fusion_outcome(
+        variant, cftr, sequence=cdna, transcript_model_id="observed-model", source="exacto")
+    model = candidate.effect.mutant_transcript
+    candidate.effect.mutant_transcript = replace(
+        model, mutant_protein_sequence="MW" + cftr.protein_sequence[2:100],
+        evidence=dict(model.evidence or {}, protein_completeness=completeness,
+                      cds_start=start, cds_end=start + 300))
+    assert candidate.effect.modifies_coding_sequence is None
+    assert candidate.effect.modifies_protein_sequence is None
+
+
+def test_complete_protein_and_partial_alternative_remain_unknown(cftr):
+    primary = _effect(cftr, protein=cftr.protein_sequence,
+                      evidence={"protein_completeness": "start_to_stop"})
+    partial, _ = _mapped_partial(cftr, "partial_both", "none")
+    primary._extra_candidates = (EffectCandidate(partial, source="rna"),)
+    assert primary.modifies_protein_sequence is None
+    assert len(EffectCollection([primary]).drop_silent_and_noncoding()) == 1
+    assert len(EffectCollection([primary]).drop_silent_and_noncoding(False)) == 0
+    changed, _ = _mapped_partial(cftr, "partial_both", "missense")
+    primary._extra_candidates += (EffectCandidate(changed, source="rna"),)
+    assert primary.modifies_protein_sequence is True
+    assert len(EffectCollection([primary]).drop_silent_and_noncoding(False)) == 1
 
 
 @pytest.mark.parametrize("primary_status", [False, None])

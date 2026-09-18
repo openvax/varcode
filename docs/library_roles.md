@@ -48,9 +48,9 @@ predicted protein change and evidence that the RNA exists are separate facts.
   Splice/phase/SV combinations are not exhaustively composed
   ([#423](https://github.com/openvax/varcode/issues/423)); combined-haplotype
   ownership still needs cleanup ([#437](https://github.com/openvax/varcode/issues/437)).
-  Imported partial proteins also need completeness-aware change flags
-  ([#462](https://github.com/openvax/varcode/issues/462)); do not interpret an
-  unobserved suffix as a demonstrated protein deletion.
+  Change flags for imported partial proteins stay unresolved unless mapped,
+  in-frame observed codons differ from the reference; an unobserved suffix is
+  not a demonstrated protein deletion.
 - **Isovar:** the small-variant path reconstructs RNA context; the separate
   supplied-fusion path validates RNA and retains alternative frame hypotheses.
   Automated collection, alternative-path assembly, and competitive reconciliation
