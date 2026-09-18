@@ -103,6 +103,19 @@ def test_documentation_germline_with_vcf_phase(input_directory):
     assert cftr[0].short_description == "p.S159T"
 
 
+def test_documentation_fusion_protein_candidates(capsys):
+    genome = cached_release(95)
+    transcript = genome.transcript_by_id("ENST00000538197")
+    variant = StructuralVariant(
+        "4", 15012987, "BND", alt="N[4:2664478[",
+        mate_contig="4", mate_start=2664478, genome=genome)
+    namespace = {"effect": variant.effect_on_transcript(transcript)}
+    _run(_blocks("docs/structural_variants.md", "## Fusion protein candidates")[:1], namespace)
+    output = capsys.readouterr().out
+    assert "ENST00000324666" in output
+    assert "ENST00000637812" in output
+
+
 def test_documentation_effect_families_keep_all_classes():
     source = ast.parse((ROOT / "varcode/effects/effect_classes.py").read_text())
     classes = {node.name for node in source.body if isinstance(node, ast.ClassDef)}

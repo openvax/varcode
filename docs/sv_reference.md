@@ -73,9 +73,19 @@ A junction makes a `GeneFusion` for a transcript when all of these hold:
    ends (head to head) or two 3' ends (tail to tail) can't be read
    through, so they don't fuse.
 
-The partner is the first transcript at the other end that satisfies
-these, in pyensembl's order; varcode doesn't rank isoforms
-([#406](https://github.com/openvax/varcode/issues/406)).
+Every partner transcript satisfying these rules is retained as a `GeneFusion`
+candidate, across all compatible junctions. Junctions retaining the annotated
+transcript's 5' end come first, followed by pyensembl's partner order. The first
+candidate stays the primary result for compatibility; this is not a likelihood
+ranking. There is no count cap, and distinct isoforms remain separate even if
+they predict the same protein. Repeated copies of the same junction/partner
+record are deduplicated.
+
+Each candidate has its own transcript pair and reference-derived cDNA/protein,
+when sequence is available. A missing sequence leaves that candidate unresolved.
+This enumerates the current annotated-isoform model, not novel splicing, phased
+multi-SV paths, or all possible mature RNAs. A supplied `alt_assembly` still takes
+precedence over reference-derived sequence. See [candidate access](structural_variants.md#fusion-protein-candidates).
 
 `GeneFusion.transcript` is the transcript being annotated, which can be
 either partner. `five_prime_transcript` and `three_prime_transcript` say
@@ -131,9 +141,10 @@ left) joined to BRCA1 (chr17:43,120,000, `−`, keeping left):
 | `N[17:43120000[` at chr7:117,485,000 | CFTR | `TranslocationToIntergenic` (head to head) |
 | `]17:43120000]N` at chr7:117,485,000 | CFTR | `TranslocationToIntergenic` (tail to tail) |
 
-The two records' fused proteins can differ (712 aa vs 1,854 aa here),
-because each pairs its own transcript with the first matching isoform of
-the other gene.
+The two records' primary proteins can differ (712 aa vs 1,854 aa here),
+because their first transcript pairs differ. Both records now retain other
+compatible isoforms in `.candidates`; matching the same 5'/3' transcript pair
+gives the same predicted protein from either end.
 
 ## Deletions, duplications and inversions
 
@@ -143,7 +154,7 @@ Whether a span fuses the genes at its two ends depends on their strands:
 |---|---|---|
 | `DEL` | fusion: the gene upstream in transcription is 5' | no fusion |
 | `DUP` | fusion: the gene downstream in transcription is 5' | no fusion |
-| `INV` (symbolic) | no fusion | two reciprocal fusions; each gene reports the one driven by its own promoter |
+| `INV` (symbolic) | no fusion | reciprocal fusion candidates; each gene's own 5' contribution comes first |
 
 Examples from chr7, with CFTR (`+`), LSM8 (`+`, downstream) and CTTNBP2
 (`−`, downstream):

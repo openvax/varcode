@@ -473,8 +473,14 @@ def _build_fusion_mutant_transcript(
     segments. The annotator assigns the 5' / 3' roles from breakend
     orientation and strand before calling this.
     """
-    five_prime_cdna = str(five_prime_transcript.sequence)
-    three_prime_cdna = str(three_prime_transcript.sequence)
+    five_prime_cdna = five_prime_transcript.sequence
+    three_prime_cdna = three_prime_transcript.sequence
+    if not five_prime_cdna or not three_prime_cdna:
+        # The partner is still a candidate when sequence is unavailable.
+        # In particular, str(None) is not an observed or predicted cDNA.
+        return None
+    five_prime_cdna = str(five_prime_cdna)
+    three_prime_cdna = str(three_prime_cdna)
     five_prime_end = _cdna_cut(
         five_prime_transcript, five_prime_position, True)
     three_prime_start = _cdna_cut(
@@ -798,8 +804,11 @@ def _intronic_or_intergenic(variant, transcript):
 
 
 def _fusion_across_junction(variant, transcript, assembly):
-    """The :class:`GeneFusion` ``transcript`` forms at one of
-    ``variant``'s junctions, or ``None``.
+    """Fusion candidates across all compatible junctions and partner isoforms.
+
+    Return the first :class:`GeneFusion`, carrying all other fusions in its
+    primary candidates, or ``None``. Annotation order is not a likelihood
+    ranking; no compatible partner is discarded by a candidate-count limit.
 
     A junction end belongs to this transcript when the transcript
     spans it and the transcript's *gene* doesn't span the other
@@ -827,34 +836,42 @@ def _fusion_across_junction(variant, transcript, assembly):
                 continue
             ends.append((near, far))
 
+    fusions = []
+    seen = set()
     for near, far in sorted(
             ends, key=lambda pair: not keeps_five_prime(pair[0])):
         five_prime = keeps_five_prime(near)
-        partner = _fusion_partner(
-            variant, transcript, near, far, five_prime)
-        if partner is None:
-            continue
-        if five_prime:
-            five, five_position = transcript, near.position
-            three, three_position = partner, far.position
-        else:
-            five, five_position = partner, far.position
-            three, three_position = transcript, near.position
-        return GeneFusion(
-            variant=variant,
-            transcript=transcript,
-            partner_transcript=partner,
-            five_prime_transcript=five,
-            three_prime_transcript=three,
-            mutant_transcript=assembly or _build_fusion_mutant_transcript(
-                transcript, five, five_position, three, three_position))
-    return None
+        for partner in _fusion_partners(
+                variant, transcript, near, far, five_prime):
+            key = (near, far, partner.id)
+            if key in seen:
+                continue
+            seen.add(key)
+            if five_prime:
+                five, five_position = transcript, near.position
+                three, three_position = partner, far.position
+            else:
+                five, five_position = partner, far.position
+                three, three_position = transcript, near.position
+            fusions.append(GeneFusion(
+                variant=variant,
+                transcript=transcript,
+                partner_transcript=partner,
+                five_prime_transcript=five,
+                three_prime_transcript=three,
+                mutant_transcript=assembly or _build_fusion_mutant_transcript(
+                    transcript, five, five_position, three, three_position)))
+    if not fusions:
+        return None
+    primary = fusions[0]
+    primary._attach_primary_effects(fusions[1:])
+    return primary
 
 
-def _fusion_partner(
+def _fusion_partners(
         variant, transcript, near, far, transcript_is_five_prime):
-    """The protein-coding transcript at ``far`` that fuses with
-    ``transcript``, or ``None``.
+    """Yield every protein-coding transcript at ``far`` that fuses with
+    ``transcript``, in annotation order.
 
     A partner is in another gene, keeps the end opposite to
     ``transcript``'s, and — like ``transcript`` — belongs to a gene
@@ -870,8 +887,7 @@ def _fusion_partner(
         if far.keeps is None or (
                 _retains_five_prime_end(candidate, far.keeps)
                 != transcript_is_five_prime):
-            return candidate
-    return None
+            yield candidate
 
 
 def _coding_transcripts_at(variant, contig, position):

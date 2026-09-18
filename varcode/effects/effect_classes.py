@@ -1549,6 +1549,12 @@ class GeneFusion(StructuralVariantEffect):
     produce it, and so do deletions, duplications and inversions with
     one end in each gene.
 
+    The default annotator retains every compatible annotated partner isoform
+    and junction in :attr:`candidates`, with no count cap. The first is the
+    historical primary; producer order is not a probability ranking. Distinct
+    transcript pairs remain separate even when their proteins match. Missing
+    sequence leaves that candidate's transcript/protein unresolved.
+
     ``transcript`` is the transcript being annotated and
     ``partner_transcript`` the other one; ``five_prime_transcript``
     and ``three_prime_transcript`` say which is which (by default

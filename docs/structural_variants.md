@@ -36,6 +36,27 @@ Do not rely on `drop_silent_and_noncoding()` to retain unresolved SV effects:
 their protein-change flags remain incomplete
 ([#418](https://github.com/openvax/varcode/issues/418)).
 
+## Fusion protein candidates
+
+For an annotated effect, inspect every compatible partner isoform rather than
+only the protein on the first result:
+
+```python
+from varcode.effects import GeneFusion
+
+for candidate in effect.candidates:
+    fusion = candidate.effect
+    if isinstance(fusion, GeneFusion):
+        print(fusion.five_prime_transcript.id, fusion.three_prime_transcript.id)
+        print(fusion.mutant_protein_sequence)  # None when unresolved
+```
+
+There is no candidate-count cap. Distinct transcript pairs remain separate even
+when their predicted proteins match. The first candidate follows annotation
+order, not measured likelihood. These are reference-isoform predictions, not
+every possible splice/phase combination or evidence that a fusion is expressed.
+See [fusion rules](sv_reference.md#fusion-partners) and [RNA imports](rna_structures.md).
+
 ## Which transcripts get annotated
 
 `effects()` produces one effect per overlapping transcript, as for any
@@ -78,8 +99,7 @@ Two outcomes apply before any SV logic:
 
 ## Limitations
 
-- The partner isoform isn't ranked
-  ([#406](https://github.com/openvax/varcode/issues/406)).
+- Partner isoforms are enumerated but not ranked by RNA support or likelihood.
 - Chains of several SVs aren't assembled into one allele, and regulatory
   effects (promoter or enhancer hijacking) aren't modeled.
 - Annotating multi-megabase spans can be slow
