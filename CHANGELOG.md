@@ -1,5 +1,21 @@
 # Change Log
 
+## [v9.3.0](https://github.com/openvax/varcode/tree/v9.3.0) (2026-09-18)
+
+**Fixed**
+- Structural effects now report coding/protein changes from available sequence
+  and retained reference ORFs, rather than inheriting `False` (#418). Compare
+  every candidate; retain a set if any alternative predicts a protein change.
+  Coding deletions and the seven audited CPEB2–FAM193A fusion proteins survive
+  filtering, while unchanged and synonymous proteins do not.
+
+**Changed**
+- SV sequence-change flags can now be `None` for unknown, distinct from `False`
+  for unchanged. `Unresolved` and unclassified cryptic-exon candidates also use
+  `None`. `drop_silent_and_noncoding()` retains unknowns by default; pass
+  `keep_unresolved=False` to require a positive protein-change prediction.
+  Candidate ordering, evidence, effect classes, and stored proteins are unchanged.
+
 ## [v9.2.8](https://github.com/openvax/varcode/tree/v9.2.8) (2026-09-18)
 
 **Fixed**

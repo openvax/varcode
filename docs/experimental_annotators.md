@@ -85,9 +85,11 @@ for candidate in getattr(experimental, "candidates", ()):
   sequence to a local model and misclassify it as `FivePrimeUTR`
   ([#449](https://github.com/openvax/varcode/issues/449)). This is a bug, not
   evidence that the event is harmless.
-- SV filtering: `modifies_protein_sequence=False` does not reliably mean an
-  unchanged SV protein, and `drop_silent_and_noncoding()` can discard unresolved
-  SVs ([#418](https://github.com/openvax/varcode/issues/418)). Retain them for review.
+
+Unresolved results report `None`, not `False`, for sequence-change flags.
+`drop_silent_and_noncoding()` retains them by default; see
+[SV filtering](structural_variants.md#filtering-by-protein-change). This does not
+correct the experiment's misclassified outcomes described above.
 
 ## Previous names
 

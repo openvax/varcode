@@ -43,6 +43,9 @@ belongs to `effect.transcript` when a transcript applies; intergenic effects
 have none. Predicted sequence is not evidence of expression.
 
 For cDNA, partial structures, and sequence evidence, see [Transcript models](transcript_models.md).
+To remove known silent/noncoding predictions while retaining unresolved SVs,
+use `effects.drop_silent_and_noncoding()`;
+see [filtering by protein change](structural_variants.md#filtering-by-protein-change).
 
 <a id="reading-alternatives"></a>
 
