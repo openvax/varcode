@@ -1,5 +1,16 @@
 # Change Log
 
+## [v9.2.7](https://github.com/openvax/varcode/tree/v9.2.7) (2026-09-17)
+
+**Documentation**
+- Split structural annotation, SV reference rules, and observed RNA imports;
+  separate germline setup from phasing workflows. Replace the long API page
+  with an index and five topic references, without duplicate object headings.
+- Group effect definitions by family, simplify headings, and move transform
+  contributor notes out of the user guide. Preserve existing section links.
+- Correct the phased-VCF resolver example and cover it with executable tests.
+  No annotation behavior or public APIs changed (#457, #458).
+
 ## [v9.2.6](https://github.com/openvax/varcode/tree/v9.2.6) (2026-09-17)
 
 **Documentation**

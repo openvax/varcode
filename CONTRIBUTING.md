@@ -22,8 +22,29 @@ style guidelines.
 * If the work is based on an existing issue, please reference the issue in the PR.
 * All new code should be accompanied by comprehensive unit tests.
 * If the PR fixes or implements an issue, please state "Closes #XYZ" or "Fixes #XYZ", where XYZ is the issue number.
-* Please ensure that your code works under Python >= 3.7.
+* Please ensure that your code works under Python >= 3.9.
 
 Licensing
 ---------
 Varcode is licensed under the Apache 2.0 license. Your code is assumed to be as well.
+
+Writing transforms
+------------------
+
+Every transform owes three things, documented in its docstring:
+
+| Field | Meaning |
+|---|---|
+| **Cardinality** | `preserves`, `reduces`, or `increases`. |
+| **Provenance** | Every output variant carries `source_variants: tuple[Variant, ...]`. Empty tuple for pass-through; one element for derived-from-one; two or more for combined. Not part of hash/equality. |
+| **Metadata behavior** | Explicit rule for how `source_to_metadata_dict` entries flow through (which fields are inherited from which source, which require agreement, what happens on disagreement). |
+
+Transforms are **idempotent on inputs they don't recognize**. Running
+`pair_breakends` twice produces the same VC; the second pass finds no
+unpaired BNDs to combine because every combined row's `source_variants`
+is already populated.
+
+
+The proposed `combine_cis_snvs` transform is tracked in
+[#368](https://github.com/openvax/varcode/issues/368); it is not a shipped API.
+User-facing examples belong in the [transforms guide](https://openvax.github.io/varcode/transforms/).

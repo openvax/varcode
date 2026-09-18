@@ -79,7 +79,7 @@ and breakend records are skipped with a warning. See the
 
 For a MAF, use `variants = varcode.load_maf("variants.maf")` after importing
 `varcode`; the MAF's build information supplies the reference. See
-[file-loading parameters](api.md#file-loading) for format-specific options.
+[file-loading parameters](api_variants.md#file-loading) for format-specific options.
 
 ## Summarize and save results
 
@@ -106,7 +106,7 @@ for round-trip limits, especially for structural and multi-outcome effects.
 Genomic positions are 1-based and ranges are inclusive. Specify variant alleles
 on the reference genome's forward strand, even for genes on the reverse strand.
 Protein/cDNA offsets exposed for Python slicing are 0-based. Structural records
-also distinguish [junction coordinates from affected spans](structural_variants.md#alleles-coordinates-and-exports).
+also distinguish [junction coordinates from affected spans](sv_reference.md#alleles-coordinates-and-exports).
 
 ## Next steps
 

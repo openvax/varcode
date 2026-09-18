@@ -4,16 +4,18 @@ Use this page to look up a class after reading the
 [effect annotation guide](effect_annotation.md). Definitions below are generated
 from the source docstrings; this is reference material, not a required first read.
 
-## Find an effect family
+<a id="find-an-effect-family"></a>
+
+## Effect families
 
 | Question | Examples |
 |---|---|
-| Did the coding sequence change? | `Substitution`, `Insertion`, `Deletion`, `FrameShift`, `PrematureStop`, `Silent` |
-| Is the location noncoding or untranslated? | `Intronic`, `FivePrimeUTR`, `ThreePrimeUTR`, `NoncodingTranscript`, `Intergenic` |
-| Could splicing change? | `SpliceOutcomeSet`, with `NormalSplicing`, `ExonSkipping`, `IntronRetention`, or cryptic-site candidates |
-| Is this a structural event? | `LargeDeletion`, `LargeDuplication`, `Inversion`, `GeneFusion`, `TranslocationToIntergenic` |
-| Do linked variants or unknown phase matter? | `HaplotypeEffect`, `PhaseCandidateSet` |
-| Is the result unknown or failed? | `Unresolved`, `IncompleteTranscript`, `Failure` |
+| [Coding changes](#coding-effects) | `Substitution`, `Insertion`, `Deletion`, `FrameShift`, `PrematureStop`, `Silent` |
+| [Noncoding and untranslated regions](#noncoding-effects) | `Intronic`, `FivePrimeUTR`, `ThreePrimeUTR`, `NoncodingTranscript`, `Intergenic` |
+| [Splice effects](#splice-effects) | `SpliceOutcomeSet`, with `NormalSplicing`, `ExonSkipping`, `IntronRetention`, or cryptic-site candidates |
+| [Structural effects](#structural-effects) | `LargeDeletion`, `LargeDuplication`, `Inversion`, `GeneFusion`, `TranslocationToIntergenic` |
+| [Linked variants and phase](#haplotype-effects) | `HaplotypeEffect`, `PhaseCandidateSet` |
+| [Unknown results and failures](#unknown-results) | `Unresolved`, `IncompleteTranscript`, `Failure` |
 
 These labels describe predictions and their limits, not clinical significance.
 
@@ -36,15 +38,125 @@ Two distinctions are worth keeping in mind while reading:
   `.candidates`, `.most_likely_effect`, and `.highest_priority_effect`.
 
 Severity ordering across types is set by
-[`effect_priority`](api.md#varcode.effect_priority).
+[`effect_priority`](api_effects.md#varcode.effect_priority).
 
-## Class reference
+<a id="class-reference"></a>
+<a id="varcode.effects.effect_classes"></a>
 
-::: varcode.effects.effect_classes
+## Coding effects
 
-## Splice outcome container
+::: varcode.effects.effect_classes.Silent
 
-`SpliceOutcomeSet` lives in a separate module. See the
-[splice guide](splice_variants.md) for usage.
+::: varcode.effects.effect_classes.AlternateStartCodon
+
+::: varcode.effects.effect_classes.StartLoss
+
+::: varcode.effects.effect_classes.Substitution
+
+::: varcode.effects.effect_classes.ComplexSubstitution
+
+::: varcode.effects.effect_classes.Insertion
+
+::: varcode.effects.effect_classes.Deletion
+
+::: varcode.effects.effect_classes.PrematureStop
+
+::: varcode.effects.effect_classes.StopLoss
+
+::: varcode.effects.effect_classes.FrameShift
+
+::: varcode.effects.effect_classes.FrameShiftTruncation
+
+::: varcode.effects.effect_classes.ExonLoss
+
+## Noncoding effects
+
+::: varcode.effects.effect_classes.Intergenic
+
+::: varcode.effects.effect_classes.NoncodingTranscript
+
+::: varcode.effects.effect_classes.FivePrimeUTR
+
+::: varcode.effects.effect_classes.ThreePrimeUTR
+
+::: varcode.effects.effect_classes.Intronic
+
+## Splice effects
+
+<a id="splice-outcome-container"></a>
+
+See the [splice guide](splice_variants.md) for candidate access.
 
 ::: varcode.SpliceOutcomeSet
+
+::: varcode.effects.effect_classes.SpliceSite
+
+::: varcode.effects.effect_classes.IntronicSpliceSite
+
+::: varcode.effects.effect_classes.SpliceDonor
+
+::: varcode.effects.effect_classes.SpliceAcceptor
+
+::: varcode.effects.effect_classes.ExonicSpliceSite
+
+::: varcode.effects.effect_classes.SpliceMechanismEffect
+
+::: varcode.effects.effect_classes.NormalSplicing
+
+::: varcode.effects.effect_classes.ExonSkipping
+
+::: varcode.effects.effect_classes.IntronRetention
+
+::: varcode.effects.effect_classes.CrypticSpliceSiteEffect
+
+::: varcode.effects.effect_classes.CrypticDonor
+
+::: varcode.effects.effect_classes.CrypticAcceptor
+
+::: varcode.effects.effect_classes.CrypticExonCandidate
+
+## Structural effects
+
+::: varcode.effects.effect_classes.StructuralVariantEffect
+
+::: varcode.effects.effect_classes.LargeDeletion
+
+::: varcode.effects.effect_classes.LargeDuplication
+
+::: varcode.effects.effect_classes.Inversion
+
+::: varcode.effects.effect_classes.GeneFusion
+
+::: varcode.effects.effect_classes.TranslocationToIntergenic
+
+## Haplotype effects
+
+::: varcode.effects.effect_classes.HaplotypeEffect
+
+::: varcode.effects.effect_classes.PhaseCandidateSet
+
+## Unknown results
+
+::: varcode.effects.effect_classes.Unresolved
+
+::: varcode.effects.effect_classes.IncompleteTranscript
+
+::: varcode.effects.effect_classes.Failure
+
+## Base classes
+
+::: varcode.effects.effect_classes.MutationEffect
+
+::: varcode.effects.effect_classes.MultiOutcomeEffect
+
+::: varcode.effects.effect_classes.Intragenic
+
+::: varcode.effects.effect_classes.TranscriptMutationEffect
+
+::: varcode.effects.effect_classes.Exonic
+
+::: varcode.effects.effect_classes.CodingMutation
+
+::: varcode.effects.effect_classes.NonsilentCodingMutation
+
+::: varcode.effects.effect_classes.KnownAminoAcidChange

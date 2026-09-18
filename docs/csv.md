@@ -39,7 +39,7 @@ vc.to_csv("plain.csv", include_header=False)
 
 The examples here apply to ordinary point-variant tables. Structural-variant
 CSVs are summaries only: `from_csv` rejects them rather than reconstructing
-incomplete SVs. See [structural exports](structural_variants.md#alleles-coordinates-and-exports).
+incomplete SVs. See [structural exports](sv_reference.md#alleles-coordinates-and-exports).
 
 When the header is present, `from_csv` recovers the reference genome
 automatically:

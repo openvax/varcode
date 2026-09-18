@@ -122,8 +122,8 @@ Candidate evidence can include named measurements such as `read_count`,
 it does not normalize them into a probability. The ordinary `EffectCandidate`
 wrapper has no `probability` or `plausibility` field.
 
-See [germline, phase, and RNA inputs](germline.md#composing-germline-phase-rna)
-for collection-level use and the [RNA evidence API](api.md#rna-evidence)
+See [germline, phase, and RNA inputs](phasing.md#combining-evidence)
+for collection-level use and the [RNA evidence API](api_rna.md#rna-evidence)
 for integration details.
 
 ## Limitations
