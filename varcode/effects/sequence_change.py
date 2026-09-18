@@ -56,11 +56,12 @@ def _retained_start(model, transcript):
                  if p + 1 in positions[1] and p + 2 in positions[2]), None)
 
 
-def _coding_sequence(model, initiator):
-    """Read a known ORF, or the retained reference ORF; never search for one.
+def _orf_bounds(model, initiator):
+    """A known ORF, or the retained reference start; never search for one.
 
-    Return None for unmapped assemblies, partial fragments, missing sequence,
-    overlaid edits whose coordinates haven't been mapped, or an incomplete ORF.
+    Return ``(start, end)`` with ``end`` None when unbounded, or None for
+    unmapped assemblies, partial fragments, missing sequence, or overlaid
+    edits whose coordinates haven't been mapped.
     """
     if model.cdna_sequence is None:
         return None
@@ -69,19 +70,140 @@ def _coding_sequence(model, initiator):
     if start is None or end is None:
         if not initiator.complete or model.edits:
             return None
-        start = _retained_start(model, initiator)
-        end = None
-    if start is None:
-        return None
-    sequence = model.cdna_sequence[start:end].upper()
-    table = codon_table_for_transcript(initiator)
+        start, end = _retained_start(model, initiator), None
+    return None if start is None else (start, end)
+
+
+def _read_orf(sequence, start, end, table, selenocysteine):
+    """The ORF from ``start`` through its stop codon, or None if incomplete.
+
+    TGA codons at the offsets in ``selenocysteine`` are read as Sec. A
+    producer's ``end`` assumed they terminate, so reading through lifts it.
+    """
+    sequence = sequence[start:].upper()
+    limit = len(sequence) if end is None else end - start
     if sequence[:3] not in table.start_codons:
         return None
     for i in range(3, len(sequence) - 2, 3):
-        if sequence[i:i + 3] in table.stop_codons:
+        if start + i in selenocysteine:
+            limit = len(sequence)
+        elif i + 3 > limit:
+            return None
+        elif sequence[i:i + 3] in table.stop_codons:
             coding = sequence[:i + 3]
             return coding if not set(coding) - set("ACGT") else None
     return None
+
+
+def _selenocysteine_offsets(transcript):
+    """cDNA offsets of annotated Sec codons: Ensembl marks them U in the protein."""
+    protein = getattr(transcript, "protein_sequence", None)
+    if not protein or "U" not in protein or not getattr(transcript, "complete", False):
+        return ()
+    start = min(transcript.start_codon_spliced_offsets)
+    return tuple(start + 3 * i for i, aa in enumerate(protein) if aa == "U")
+
+
+def _mapped_selenocysteine(model):
+    """Observed offsets of TGA codons mapped onto annotated Sec codons.
+
+    UGA encodes Sec only with a SECIS element in the same mRNA's 3' UTR, and
+    SECIS positions aren't annotated. Return ``(decoded, uncertain)``: a codon
+    is decoded only where the model keeps its transcript contiguously from
+    that codon through the 3' end. With no selenoprotein 3' UTR sequence at
+    all, there is no SECIS, so UGA terminates. Otherwise decoding is unknown.
+    None when segments don't render the cDNA.
+    """
+    sequence = model.cdna_sequence
+    segments = model.reference_segments or ()
+    if (sequence is None or model.edits
+            or sum(s.length for s in segments) != len(sequence)):
+        return None
+    runs, offset = [], 0
+    for segment in segments:
+        if segment.strand == "+":
+            last = runs[-1] if runs else None
+            if (last and last[0] == segment.source and last[2] == segment.start
+                    and last[3] + last[2] - last[1] == offset):
+                last[2] = segment.end  # A split that continues the same reference.
+            else:
+                runs.append([segment.source, segment.start, segment.end, offset])
+        offset += segment.length
+    decoded, uncertain = set(), set()
+    secis_possible = False
+    for source, ref_start, ref_end, observed in runs:
+        selenocysteine = _selenocysteine_offsets(source)
+        if selenocysteine and ref_end > max(source.stop_codon_spliced_offsets) + 1:
+            secis_possible = True
+        for ref in selenocysteine:
+            pos = observed + ref - ref_start
+            if (ref_start <= ref and ref + 3 <= ref_end
+                    and sequence[pos:pos + 3].upper() == "TGA"):
+                (decoded if ref_end == len(source.sequence) else uncertain).add(pos)
+    return decoded, uncertain if secis_possible else set()
+
+
+def _initiated(protein):
+    # Any start codon initiates as Met; Ensembl writes CTG/TTG initiators literally.
+    return "M" + protein[1:] if protein else protein
+
+
+def _orf_changes(model, transcript, reference_protein, table, start, end, selenocysteine):
+    """Compare the ORF read with one Sec decoding against the reference."""
+    coding = _read_orf(model.cdna_sequence, start, end, table, selenocysteine)
+    if coding is None:
+        return None, None
+    reference_coding = transcript.coding_sequence
+    coding_status = None if reference_coding is None else coding != reference_coding.upper()
+    if reference_protein is None or "X" in reference_protein:
+        return coding_status, None
+    residues = translate_sequence(coding, codon_table=table, to_stop=False)
+    # Initiator methionine also applies to alternative start codons.
+    protein = "M" + "".join("U" if start + 3 * i in selenocysteine else aa
+                            for i, aa in enumerate(residues))[1:-1]
+    return coding_status, protein != reference_protein
+
+
+def _complete_sequence_changes(model, transcript, initiator):
+    """Compare a start-to-stop prediction with the whole reference.
+
+    Where a Sec codon's decoding is unknown, evaluate both readings and keep
+    a flag only when they agree.
+    """
+    supplied = None
+    protein = _initiated(model.mutant_protein_sequence)
+    reference_protein = _initiated(transcript.protein_sequence)
+    if (protein is not None and reference_protein is not None
+            and "X" not in protein and "X" not in reference_protein
+            # Ending exactly at a Sec residue is a decoding choice, not a change.
+            and not (reference_protein.startswith(protein)
+                     and reference_protein[len(protein):len(protein) + 1] == "U")):
+        # An empty protein is a known absence, not missing data.
+        supplied = protein != reference_protein
+    bounds = _orf_bounds(model, initiator)
+    if bounds is None:
+        return None, supplied
+    start, end = bounds
+    mapped = _mapped_selenocysteine(model)
+    if mapped is not None and any(s.source == transcript for s in model.reference_segments or ()):
+        decoded, uncertain = mapped
+    else:
+        # Without coordinates, a TGA at a reference Sec index of an ORF read
+        # from this transcript's own start may be Sec.
+        decoded, uncertain = set(), set()
+        if initiator == transcript and reference_protein:
+            sequence = model.cdna_sequence
+            uncertain = {pos for pos in (start + 3 * i for i, aa in enumerate(reference_protein)
+                                         if aa == "U")
+                         if sequence[pos:pos + 3].upper() == "TGA"}
+    table = codon_table_for_transcript(initiator)
+    readings = [_orf_changes(model, transcript, reference_protein, table, start, end, decoded)]
+    if uncertain:
+        readings.append(_orf_changes(
+            model, transcript, reference_protein, table, start, end, decoded | uncertain))
+    coding_status, protein_status = (
+        values[0] if len(set(values)) == 1 else None for values in zip(*readings))
+    return coding_status, supplied if supplied is not None else protein_status
 
 
 def _residue(codon, table, initiator):
@@ -125,6 +247,8 @@ def _partial_sequence_changes(model, transcript, table):
         offset += segment.length
     reference_start = min(transcript.start_codon_spliced_offsets)
     reference_coding = transcript.coding_sequence.upper()
+    reference_selenocysteine = _selenocysteine_offsets(transcript)
+    decoded, _ = _mapped_selenocysteine(model)
     coding_status = None
     for pos in range(start, end - 2, 3):
         codon = sequence[pos:pos + 3].upper()
@@ -138,9 +262,11 @@ def _partial_sequence_changes(model, transcript, table):
                 coding_status = True
                 # Only an observed ORF that begins here can initiate here.
                 observed = _residue(codon, table, k == 0 and pos == start)
-                if observed != _residue(reference_codon, table, k == 0):
+                reference = ("U" if ref in reference_selenocysteine
+                             else _residue(reference_codon, table, k == 0))
+                if observed != reference:
                     return True, True
-        if codon in table.stop_codons:
+        if codon in table.stop_codons and pos not in decoded:
             break  # Later bases are not translated in this frame.
     return coding_status, None
 
@@ -164,23 +290,8 @@ def structural_sequence_changes(effect):
         coding_status, protein_status = _partial_sequence_changes(
             model, transcript, codon_table_for_transcript(initiator))
     elif model is not None:
-        protein = model.mutant_protein_sequence
-        reference_protein = transcript.protein_sequence
-        if protein is not None and reference_protein is not None:
-            # An empty protein is a known absence, not missing data.
-            if "X" not in protein and "X" not in reference_protein:
-                protein_status = protein != reference_protein
-        coding = _coding_sequence(model, initiator)
-        if coding is not None:
-            reference_coding = transcript.coding_sequence
-            if reference_coding is not None:
-                coding_status = coding != reference_coding.upper()
-            if protein_status is None and reference_protein is not None:
-                # Initiator methionine also applies to alternative start codons.
-                protein = "M" + translate_sequence(
-                    coding[3:], codon_table=codon_table_for_transcript(initiator))
-                if "X" not in reference_protein:
-                    protein_status = protein != reference_protein
+        coding_status, protein_status = _complete_sequence_changes(
+            model, transcript, initiator)
 
     # A pure deletion can establish CDS/start loss without a translated model.
     # Do not apply DNA-span inference to a supplied assembly or an RNA outcome.
@@ -200,7 +311,11 @@ def structural_sequence_changes(effect):
             coding_status = coding_overlap
         if protein_status is None:
             if not coding_overlap:
-                protein_status = False
+                # Deleting a selenoprotein's 3' UTR may remove its SECIS element.
+                stops = _selenocysteine_offsets(transcript) and transcript.stop_codon_positions
+                if not stops or (end < min(stops) if transcript.strand == "+"
+                                 else start > max(stops)):
+                    protein_status = False
             elif (transcript.contains_start_codon
                   and any(start <= pos <= end for pos in transcript.start_codon_positions)):
                 protein_status = True
