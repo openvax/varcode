@@ -1,5 +1,18 @@
 # Change Log
 
+## [v9.2.8](https://github.com/openvax/varcode/tree/v9.2.8) (2026-09-18)
+
+**Fixed**
+- Retain all compatible fusion partner isoforms and junctions as candidates
+  instead of selecting only the first (#406). Each carries its predicted
+  protein when available; missing transcript sequence stays unresolved.
+  Preserve the primary ordering and existing span/splice/RNA candidates, with
+  no arbitrary count cap and no merging of distinct isoforms by protein alone.
+- Add the audited CPEB2–FAM193A 1,541/1,500-aa alternatives, a 257-isoform case,
+  and strand, provenance, assembly, and missing-sequence regressions. These
+  are annotated-isoform predictions, not exhaustive splice/phase hypotheses
+  or evidence of expression.
+
 ## [v9.2.7](https://github.com/openvax/varcode/tree/v9.2.7) (2026-09-17)
 
 **Documentation**

@@ -16,7 +16,7 @@ def transcript(request):
 @pytest.fixture(autouse=True)
 def no_optional_candidates(monkeypatch):
     # Isolate the span fallback; fusion preservation also has real esvee tests.
-    monkeypatch.setattr(structural, "_fusion_partner", lambda *args: None)
+    monkeypatch.setattr(structural, "_fusion_partners", lambda *args: ())
     monkeypatch.setattr(structural, "_enumerate_and_attach_cryptics", lambda *args: None)
     monkeypatch.setattr(structural, "_enumerate_and_attach_splice_outcomes", lambda *args: None)
 
