@@ -40,14 +40,23 @@ nav:
       - Troubleshooting: errors.md
   - Advanced workflows:
       - Splice variants: splice_variants.md
-      - Structural variants & RNA: structural_variants.md
+      - Structural variants: structural_variants.md
+      - Observed RNA imports: rna_structures.md
       - Germline-aware annotation: germline.md
+      - Phasing: phasing.md
       - VariantCollection transforms: transforms.md
       - Experimental annotators: experimental_annotators.md
   - Reference:
       - Transcript models: transcript_models.md
+      - SV coordinates & fusion rules: sv_reference.md
       - Effect types: effect_types.md
-      - API reference: api.md
+      - API:
+          - Index: api.md
+          - Variants & files: api_variants.md
+          - Effects: api_effects.md
+          - Phasing & germline: api_phasing.md
+          - RNA & transcripts: api_rna.md
+          - Annotators: api_annotators.md
       - Writing an annotator: annotator_contract.md
   - Changelog: changelog.md
 
@@ -77,6 +86,7 @@ plugins:
           options:
             show_source: true
             show_root_heading: true
+            heading_level: 3
             show_signature_annotations: true
             members_order: source
             docstring_style: numpy

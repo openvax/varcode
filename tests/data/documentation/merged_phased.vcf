@@ -1,0 +1,7 @@
+##fileformat=VCFv4.2
+##reference=GRCh38
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=PS,Number=1,Type=Integer,Description="Phase set">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	TUMOR
+7	117531100	cftr_somatic	T	A	60	PASS	.	GT:PS	0|1:100
+7	117531101	cftr_germline	T	C	60	PASS	.	GT:PS	0|1:100

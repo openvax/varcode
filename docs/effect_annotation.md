@@ -72,7 +72,7 @@ you report.
 
 - <a id="splice-disrupting-variants"></a><a id="when-splice-disruption-is-in-play"></a><a id="splice-and-coding-effects-can-co-occur"></a><a id="the-spliceoutcomeset-shape"></a><a id="common-questions"></a><a id="rna-evidence-reconciliation"></a><a id="candidate-provenance"></a><a id="picking-a-single-candidate"></a><a id="limitations"></a>[Splice variants](splice_variants.md): affected signals, candidate mechanisms, and RNA evidence.
 - <a id="structural-variants"></a>[Structural variants](structural_variants.md): deletions, duplications, inversions, and fusions.
-- [Germline and phasing](germline.md): patient-specific baselines and linked variants.
+- [Germline](germline.md) and [phasing](phasing.md): patient-specific baselines and linked variants.
 - <a id="how-it-composes"></a><a id="the-four-primitives"></a>[Transcript models](transcript_models.md): cDNA, partial structures, and missing sequences.
 - <a id="provenance"></a>[Saving results](csv.md#annotation-provenance): tables, provenance, and round-trip limits.
 - <a id="annotator-selection"></a><a id="advanced-annotators-and-implementation-limits"></a><a id="what-the-optional-implementations-change"></a><a id="reading-sequences-and-alternatives"></a><a id="current-boundaries-and-legacy-names"></a>[Experimental annotators](experimental_annotators.md): optional implementations and their limits.

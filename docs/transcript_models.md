@@ -32,7 +32,7 @@ not reconstruct the missing partner or establish the full allele.
 
 Likewise, a sequence supplied by an RNA assembler may be only a junction
 fragment. Keep its completeness and source information with the sequence.
-The [RNA import guide](structural_variants.md#importing-observed-rna-structures)
+The [RNA import guide](rna_structures.md)
 explains how observed structures and sequence-predicted proteins are represented;
 neither alone proves translation.
 
@@ -44,6 +44,6 @@ neither alone proves translation.
 | `MutantTranscript` | Edits or transcript structure, provenance, and optional sequences |
 | `MultiOutcomeEffect` | Several candidate effects, each with its own consequence and evidence |
 
-The [API reference](api.md#mutant-transcripts) lists model fields and construction
+The [API reference](api_rna.md#mutant-transcripts) lists model fields and construction
 helpers. The experimental transcript-model annotator uses additional baseline
 and mutant product wrappers; see [its result format](experimental_annotators.md#transcript-model-results).

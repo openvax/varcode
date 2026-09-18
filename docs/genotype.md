@@ -114,7 +114,7 @@ uses it when you explicitly provide a phase resolver or germline context:
 - **Phased effects of cis variants** — when two variants share a
   phase set, varcode builds a joint `HaplotypeEffect` via
   `effects(phase_resolver=...)`. See
-  [phasing](germline.md#how-varcode-handles-unknown-phase).
+  [phasing](phasing.md#phased-vcf).
 - **Germline-aware somatic annotation** — pass a `GermlineContext` to
   `effects(germline=...)` and somatic variants are classified against
   the patient's germline-applied transcript. See

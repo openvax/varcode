@@ -20,14 +20,13 @@ the number of records and can change which partner's transcripts are annotated.
 Left-alignment depends on available reference sequence.
 
 - [Pair breakends](#pair_breakends): usage, pairing rules, and the
-  [partner-coverage trade-off](#trade-off-one-partners-transcripts-post-collapse).
+  [partner coverage](#which-partner-gets-annotated).
 - [Left-align indels](#left_align_indels): reference requirements and partial shifts.
-- [Transform contract](#the-contract): provenance and metadata rules for authors.
 
 ## `pair_breakends`
 
 Merges MATEID-paired BND rows into a single combined
-`StructuralVariant`. **Reduces.**
+`StructuralVariant`, reducing the number of records.
 
 A VCF can represent the same translocation event two ways:
 
@@ -57,8 +56,7 @@ for v in vc:
     if v.is_structural and v.sv_type == "BND" and v.source_variants:
         bnd_a, bnd_b = v.source_variants
         print(f"{v.contig}:{v.start} <-> {v.mate_contig}:{v.mate_start} "
-              f"from rows {bnd_a.info.get('paired_with')} + "
-              f"{v.info.get('paired_with')}")
+              f"from {bnd_a.short_description} + {bnd_b.short_description}")
 
 effects = vc.effects()
 ```
@@ -96,7 +94,9 @@ either a caller bug (asymmetric filtering, separate re-genotyping per
 half) or a real analytical concern. The transform raises with both
 row IDs and both GT values so the problem surfaces.
 
-### Trade-off: one partner's transcripts post-collapse
+<a id="trade-off-one-partners-transcripts-post-collapse"></a>
+
+### Which partner gets annotated
 
 A breakend pair describes a single novel junction. Pre-pair, each half
 is annotated against the transcripts at its own position, so a fusion
@@ -123,7 +123,7 @@ in the VCF.
 ## `left_align_indels`
 
 Shifts indels to their canonical leftmost equivalent position.
-**Preserves cardinality** (1:1, value may change).
+The number of records stays the same; their coordinates may change.
 
 Two pipelines that exchange variants need a canonical representation
 per indel. `CTT→T` at position 10 inside a `CT`-repeat means the
@@ -151,7 +151,7 @@ vc = left_align_indels(vc)
 
 No `reference` parameter — `left_align_indels` reads bases via the
 genome the variants already carry (see
-[varcode.Genome](api.md#varcode.Genome)). Coverage depends on which
+[varcode.Genome](api_variants.md#varcode.Genome)). Coverage depends on which
 genome shape was passed.
 
 ### Behavior
@@ -188,30 +188,11 @@ second call — every variant is already at its canonical leftmost
 position after the first call. Composes cleanly with `pair_breakends`
 in either order; SVs and BNDs are not indels and pass through.
 
-## The contract
+<a id="the-contract"></a>
+<a id="roadmap"></a>
 
-Every transform owes three things, documented in its docstring:
+## Extending transforms
 
-| Field | Meaning |
-|---|---|
-| **Cardinality** | `preserves`, `reduces`, or `increases`. |
-| **Provenance** | Every output variant carries `source_variants: tuple[Variant, ...]`. Empty tuple for pass-through; one element for derived-from-one; two or more for combined. Not part of hash/equality. |
-| **Metadata behavior** | Explicit rule for how `source_to_metadata_dict` entries flow through (which fields are inherited from which source, which require agreement, what happens on disagreement). |
-
-Transforms are **idempotent on inputs they don't recognize**. Running
-`pair_breakends` twice produces the same VC; the second pass finds no
-unpaired BNDs to combine because every combined row's `source_variants`
-is already populated.
-
-## Roadmap
-
-Transforms planned for future PRs. Each lands as its own ticket; all
-follow the contract above.
-
-| Transform | Cardinality | Brief |
-|---|---|---|
-| `combine_cis_snvs(vc, phase_resolver)` | reduces | Adjacent in-codon SNVs sharing a phase set merge into MNVs. |
-
-See the [API reference](api.md) for
-`varcode.transforms.pair_breakends` and
-`varcode.transforms.left_align_indels`.
+For implementation rules and planned transforms, see
+[Contributing](https://github.com/openvax/varcode/blob/main/CONTRIBUTING.md#writing-transforms).
+See the [transform API](api_variants.md#variantcollection-transforms) for parameters.

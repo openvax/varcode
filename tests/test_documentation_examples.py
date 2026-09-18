@@ -1,6 +1,7 @@
 """Keep the reader-facing examples executable, using their actual Markdown."""
 
 from pathlib import Path
+import ast
 import re
 import shutil
 
@@ -9,6 +10,7 @@ from pyensembl import cached_release
 
 import varcode
 from varcode import EffectCandidate, StructuralVariant, Variant
+from varcode.effects.effect_classes import HaplotypeEffect
 from varcode.effect_hypotheses import RealizedEffectCandidate
 
 
@@ -46,6 +48,7 @@ def input_directory(tmp_path, monkeypatch):
     ("docs/structural_variants.md", 1),
     ("docs/transforms.md", 1),
     ("docs/germline.md", 1),
+    ("docs/phasing.md", 1),
 ])
 def test_documentation_first_steps(path, count, input_directory):
     namespace = _run(_blocks(path)[:count])
@@ -59,27 +62,80 @@ def test_documentation_first_steps(path, count, input_directory):
         assert (input_directory / "effects.csv").is_file()
     if path == "docs/structural_variants.md":
         assert namespace["variants"][0].is_structural
+    if path == "docs/phasing.md":
+        variants = namespace["phased_variants"]
+        assert namespace["phaser"].in_cis(*variants) is True
+        assert any(isinstance(effect, HaplotypeEffect)
+                   for effect in namespace["effects"])
 
 
 def test_documentation_germline_scenarios():
     namespace = _run(_blocks(
-        "docs/germline.md", "## Concrete example: same codon, three scenarios")[:4])
+        "docs/phasing.md", "## Two variants in one codon")[:4])
     assert namespace["eff_cis"].short_description == "p.S159T"
     assert namespace["eff_trans"].short_description == "p.L159M"
     assert {c.effect.short_description for c in namespace["eff"].candidates} == {
         "p.S159T", "p.L159M"}
 
-    _run(_blocks("docs/germline.md", "## Loss of heterozygosity (LOH)")[:1],
-         namespace)
-    assert any(getattr(effect, "is_loh", False)
-               for effect in namespace["overlap"].effects(germline=namespace["ctx"]))
+    namespace["effects"] = varcode.VariantCollection(
+        [namespace["germline"]]).effects(germline=namespace["ctx"])
+    _run(_blocks("docs/germline.md", "## Loss of heterozygosity (LOH)")[:1], namespace)
+    assert any(getattr(effect, "is_loh", False) for effect in namespace["effects"])
 
     validation = _blocks("docs/germline.md", "## Cross-VCF build mismatch")[:1]
+    namespace["somatic_variants"] = varcode.VariantCollection([namespace["somatic"]])
+    namespace["germline_ctx"] = namespace["ctx"]
     _run(validation, namespace)
-    namespace["ctx"] = varcode.GermlineContext.from_variants(
+    namespace["germline_ctx"] = varcode.GermlineContext.from_variants(
         [namespace["germline"]], reference_name="GRCh37")
     with pytest.raises(varcode.GenomeBuildMismatchError):
         _run(validation, namespace)
+
+
+def test_documentation_germline_with_vcf_phase(input_directory):
+    namespace = _run(_blocks("docs/germline.md")[:1])
+    _run(_blocks("docs/phasing.md", "## Phased VCF")[:1], namespace)
+    namespace["rna"] = varcode.NullRNAEvidenceResolver()
+    _run(_blocks("docs/phasing.md", "## Combining evidence")[:1], namespace)
+    cftr = [effect for effect in namespace["effects"]
+            if effect.transcript_id == "ENST00000003084"]
+    assert len(cftr) == 1
+    assert cftr[0].short_description == "p.S159T"
+
+
+def test_documentation_effect_families_keep_all_classes():
+    source = ast.parse((ROOT / "varcode/effects/effect_classes.py").read_text())
+    classes = {node.name for node in source.body if isinstance(node, ast.ClassDef)}
+    guide = (ROOT / "docs/effect_types.md").read_text()
+    documented = re.findall(r"^::: varcode.effects.effect_classes\.(\w+)$", guide, re.M)
+    assert set(documented) == classes
+    assert len(documented) == len(classes)
+    assert "::: varcode.SpliceOutcomeSet" in guide
+
+
+@pytest.mark.parametrize("path,anchor,destination", [
+    ("structural_variants.md", "alleles-coordinates-and-exports", "sv_reference.md"),
+    ("structural_variants.md", "importing-observed-rna-structures", "rna_structures.md"),
+    ("germline.md", "concrete-example-same-codon-three-scenarios", "phasing.md"),
+    ("germline.md", "known-deletion-haplotypes-in-rna-alignments", "phasing.md"),
+    ("api.md", "varcode.Variant.effects", "api_variants.md"),
+    ("api.md", "varcode.MutantTranscript", "api_rna.md"),
+    ("api.md", "varcode.VCFPhaseResolver", "api_phasing.md"),
+])
+def test_documentation_topic_links_preserve_old_fragments(path, anchor, destination):
+    guide = (ROOT / "docs" / path).read_text()
+    row = next(line for line in guide.splitlines() if f'id="{anchor}"' in line)
+    assert f"]({destination}" in row
+    assert (ROOT / "docs" / destination).is_file()
+
+
+def test_documentation_api_objects_have_one_heading():
+    topics = list((ROOT / "docs").glob("api_*.md"))
+    assert len(topics) == 5
+    for topic in topics:
+        text = topic.read_text()
+        assert "::: varcode." in text
+        assert not re.search(r"^### `varcode\.", text, re.M)
 
 
 def test_documentation_splice_accessors():

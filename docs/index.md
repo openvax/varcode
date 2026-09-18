@@ -33,8 +33,8 @@ effect is a useful summary, not a measure of likelihood or clinical significance
 - [Diagnose reference and sample errors](errors.md).
 - [Load structural variants and inspect fusion predictions](structural_variants.md).
 - [Interpret splice alternatives](splice_variants.md).
-- [Include patient germline and phasing](germline.md).
-- [Attach observed RNA structures or Exacto protein predictions](structural_variants.md#importing-observed-rna-structures).
+- [Include patient germline](germline.md) or [phase linked variants](phasing.md).
+- [Attach observed RNA structures or Exacto protein predictions](rna_structures.md).
 - [Pair breakends or left-align indels](transforms.md).
 
 <a id="go-deeper"></a>
