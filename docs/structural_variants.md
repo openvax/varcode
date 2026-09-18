@@ -62,8 +62,10 @@ Selenocysteine (`U` in the Ensembl reference protein) is encoded by UGA,
 which is decoded as Sec only with a SECIS element in the mRNA's 3′ UTR.
 Ensembl doesn't annotate SECIS positions. UGA is read as Sec where a model keeps
 the transcript intact from that codon through its 3′ end, and as a stop where
-no selenoprotein 3′ UTR remains. Otherwise a flag is reported only if both
-readings agree, else `None`; for example, a 3′ UTR deletion stays unresolved.
+no selenoprotein 3′ UTR remains. Otherwise the protein flag is reported only if
+both readings agree, else `None`; for example, a partial 3′ UTR deletion leaves
+the protein unresolved. The coding flag compares CDS bases, which don't depend
+on how Sec is decoded.
 A start codon other than ATG counts as the initiator methionine, even though
 Ensembl writes CTG and TTG starts as `L`.
 

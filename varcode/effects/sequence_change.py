@@ -108,11 +108,12 @@ def _mapped_selenocysteine(model):
     """Observed offsets of TGA codons mapped onto annotated Sec codons.
 
     UGA encodes Sec only with a SECIS element in the same mRNA's 3' UTR, and
-    SECIS positions aren't annotated. Return ``(decoded, uncertain)``: a codon
-    is decoded only where the model keeps its transcript contiguously from
-    that codon through the 3' end. With no selenoprotein 3' UTR sequence at
-    all, there is no SECIS, so UGA terminates. Otherwise decoding is unknown.
-    None when segments don't render the cDNA.
+    SECIS positions aren't annotated. Return ``(decoded, uncertain,
+    terminating)``: a codon is decoded only where the model keeps its
+    transcript contiguously from that codon through the 3' end. With no
+    selenoprotein 3' UTR sequence at all there is no SECIS, so UGA
+    terminates. Otherwise decoding is unknown. None when segments don't
+    render the cDNA.
     """
     sequence = model.cdna_sequence
     segments = model.reference_segments or ()
@@ -140,7 +141,9 @@ def _mapped_selenocysteine(model):
             if (ref_start <= ref and ref + 3 <= ref_end
                     and sequence[pos:pos + 3].upper() == "TGA"):
                 (decoded if ref_end == len(source.sequence) else uncertain).add(pos)
-    return decoded, uncertain if secis_possible else set()
+    if not secis_possible:
+        return decoded, set(), uncertain
+    return decoded, uncertain, set()
 
 
 def _initiated(protein):
@@ -167,8 +170,9 @@ def _orf_changes(model, transcript, reference_protein, table, start, end, seleno
 def _complete_sequence_changes(model, transcript, initiator):
     """Compare a start-to-stop prediction with the whole reference.
 
-    Where a Sec codon's decoding is unknown, evaluate both readings and keep
-    a flag only when they agree.
+    CDS bases are compared with every Sec codon read through; how Sec is
+    decoded affects only the protein. Where that is unknown, evaluate both
+    readings and keep the protein flag only when they agree.
     """
     supplied = None
     protein = _initiated(model.mutant_protein_sequence)
@@ -186,23 +190,23 @@ def _complete_sequence_changes(model, transcript, initiator):
     start, end = bounds
     mapped = _mapped_selenocysteine(model)
     if mapped is not None and any(s.source == transcript for s in model.reference_segments or ()):
-        decoded, uncertain = mapped
+        decoded, uncertain, terminating = mapped
     else:
         # Without coordinates, a TGA at a reference Sec index of an ORF read
         # from this transcript's own start may be Sec.
-        decoded, uncertain = set(), set()
+        decoded, uncertain, terminating = set(), set(), set()
         if initiator == transcript and reference_protein:
             sequence = model.cdna_sequence
             uncertain = {pos for pos in (start + 3 * i for i, aa in enumerate(reference_protein)
                                          if aa == "U")
                          if sequence[pos:pos + 3].upper() == "TGA"}
     table = codon_table_for_transcript(initiator)
-    readings = [_orf_changes(model, transcript, reference_protein, table, start, end, decoded)]
-    if uncertain:
-        readings.append(_orf_changes(
-            model, transcript, reference_protein, table, start, end, decoded | uncertain))
-    coding_status, protein_status = (
-        values[0] if len(set(values)) == 1 else None for values in zip(*readings))
+    coding_status, _ = _orf_changes(model, transcript, reference_protein, table, start, end,
+                                    decoded | uncertain | terminating)
+    proteins = {_orf_changes(model, transcript, reference_protein, table, start, end,
+                             selenocysteine)[1]
+                for selenocysteine in {frozenset(decoded), frozenset(decoded | uncertain)}}
+    protein_status = proteins.pop() if len(proteins) == 1 else None
     return coding_status, supplied if supplied is not None else protein_status
 
 
@@ -248,7 +252,7 @@ def _partial_sequence_changes(model, transcript, table):
     reference_start = min(transcript.start_codon_spliced_offsets)
     reference_coding = transcript.coding_sequence.upper()
     reference_selenocysteine = _selenocysteine_offsets(transcript)
-    decoded, _ = _mapped_selenocysteine(model)
+    decoded = _mapped_selenocysteine(model)[0]
     coding_status = None
     for pos in range(start, end - 2, 3):
         codon = sequence[pos:pos + 3].upper()

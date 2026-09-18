@@ -121,8 +121,9 @@ def test_utr_deletions_respect_secis_uncertainty(transcript_id, region, coding, 
     assert len(EffectCollection([effect]).drop_silent_and_noncoding()) == int(protein is None)
 
 
-@pytest.mark.parametrize("breakpoint,expected", [("three_prime_utr", None), ("after_sec", True)])
-def test_fusion_of_a_selenoprotein_five_prime_partner(breakpoint, expected):
+@pytest.mark.parametrize("breakpoint,coding,protein", [
+    ("three_prime_utr", False, None), ("after_sec", True, True)])
+def test_fusion_of_a_selenoprotein_five_prime_partner(breakpoint, coding, protein):
     t = _transcript("ENST00000354171")
     partner = _transcript("ENST00000003084")
     if breakpoint == "three_prime_utr":
@@ -138,7 +139,27 @@ def test_fusion_of_a_selenoprotein_five_prime_partner(breakpoint, expected):
     model = structural._build_fusion_mutant_transcript(t, t, position, partner, partner.end - 10)
     variant = StructuralVariant(t.contig, position, "BND", genome=t.genome)
     effect = GeneFusion(variant, t, partner, mutant_transcript=model)
-    assert effect.modifies_protein_sequence is expected
+    assert effect.modifies_coding_sequence is coding
+    assert effect.modifies_protein_sequence is protein
+
+
+def test_three_prime_utr_duplication_leaves_cds_unchanged(isolate_span):
+    t = _transcript("ENST00000354171")
+    start = t.exons[-1].end - 20
+    effect = StructuralVariant(t.contig, start, "DUP", end=start + 5,
+                               genome=t.genome).effect_on_transcript(t)
+    assert effect.modifies_coding_sequence is False
+    assert effect.modifies_protein_sequence is None
+
+
+def test_losing_the_whole_three_prime_utr_truncates_at_selenocysteine(isolate_span):
+    # No 3' UTR, so no SECIS: the CDS is intact, but UGA now terminates.
+    t = _transcript("ENST00000354171")
+    variant = StructuralVariant(t.contig, max(t.stop_codon_positions) + 1, "DEL",
+                                end=t.end, genome=t.genome)
+    effect = variant.effect_on_transcript(t)
+    assert effect.modifies_coding_sequence is False
+    assert effect.modifies_protein_sequence is True
 
 
 @pytest.mark.parametrize("transcript_id", SELENOPROTEINS)
@@ -149,7 +170,7 @@ def test_unmapped_import_of_selenoprotein_is_unknown_not_changed(transcript_id):
     candidate = make_fusion_outcome(variant, t, sequence=t.sequence,
                                     cds_start=min(t.start_codon_spliced_offsets),
                                     transcript_model_id="observed-model")
-    assert candidate.effect.modifies_coding_sequence is None
+    assert candidate.effect.modifies_coding_sequence is False
     assert candidate.effect.modifies_protein_sequence is None
     start = min(t.start_codon_spliced_offsets)
     missense = _with_codon(t.sequence, start + 3,
@@ -166,7 +187,7 @@ def test_peptide_ending_at_selenocysteine_is_not_a_truncation():
     effect = _effect(t, t.sequence, protein=t.protein_sequence[:(sec - start) // 3],
                      evidence={"protein_completeness": "start_to_stop",
                                "cds_start": start, "cds_end": sec + 3})
-    assert effect.modifies_coding_sequence is None
+    assert effect.modifies_coding_sequence is False
     assert effect.modifies_protein_sequence is None
 
 
