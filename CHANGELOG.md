@@ -10,7 +10,8 @@
   truncation: these flags are `True` only when ORF bounds and reference-transcript
   segments place an observed codon in frame on a differing reference CDS codon,
   including premature stops and stop loss, and otherwise stay `None`.
-  A partial label also blocks the complete-ORF fallback. Exacto partial
+  Only `start_to_stop`, or no label, permits a whole-protein comparison or
+  the complete-ORF fallback; any other label fails closed. Exacto partial
   peptides, which have no reference coordinates, remain unresolved. Complete
   predictions and 9.3.0 candidate aggregation/filtering are unchanged.
 

@@ -241,6 +241,34 @@ def test_partial_uses_mitochondrial_table():
     assert effect.modifies_protein_sequence is None
 
 
+@pytest.mark.parametrize("upstream", [False, True])
+def test_alternative_start_codon_reads_as_met_only_where_the_orf_begins(cftr, upstream):
+    # A 3' partner's start codon is internal to a fused ORF, so CTG there is Leu.
+    brca1 = cached_release(81).transcript_by_id("ENST00000357654")
+    start = min(cftr.start_codon_spliced_offsets)
+    other = min(brca1.start_codon_spliced_offsets) + 3
+    segments = (ReferenceSegment(cftr, start, start + 300),)
+    cdna = "CTG" + cftr.sequence[start + 3:start + 300]
+    if upstream:
+        segments = (ReferenceSegment(brca1, other, other + 30),) + segments
+        cdna = brca1.sequence[other:other + 30] + cdna
+    effect = _effect(cftr, cdna=cdna, segments=segments, evidence={
+        "protein_completeness": "partial_both", "cds_start": 0, "cds_end": len(cdna)})
+    assert effect.modifies_coding_sequence is True
+    assert effect.modifies_protein_sequence is (True if upstream else None)
+
+
+def test_partial_bounds_accept_numpy_integers(cftr):
+    import numpy as np
+
+    effect, _ = _mapped_partial(cftr, "partial_both", "missense")
+    evidence = effect.mutant_transcript.evidence
+    effect.mutant_transcript = replace(effect.mutant_transcript, evidence=dict(
+        evidence, cds_start=np.int64(0), cds_end=np.int64(evidence["cds_end"])))
+    assert effect.modifies_coding_sequence is True
+    assert effect.modifies_protein_sequence is True
+
+
 def test_partial_mapped_change_survives_split_reference_segments(cftr):
     effect, pos = _mapped_partial(cftr, "partial_both", "missense")
     segment, = effect.mutant_transcript.reference_segments
@@ -252,7 +280,7 @@ def test_partial_mapped_change_survives_split_reference_segments(cftr):
 
 
 @pytest.mark.parametrize("missing", [
-    "frame", "offset_frame", "mapping", "reverse", "length", "edits"])
+    "frame", "float_frame", "offset_frame", "mapping", "reverse", "length", "edits"])
 def test_partial_local_change_requires_usable_coordinates(cftr, missing):
     from varcode import TranscriptEdit
 
@@ -260,6 +288,8 @@ def test_partial_local_change_requires_usable_coordinates(cftr, missing):
     model = effect.mutant_transcript
     if missing == "frame":
         model = replace(model, evidence={"protein_completeness": "partial_both"})
+    elif missing == "float_frame":
+        model = replace(model, evidence=dict(model.evidence, cds_start=0.0))
     elif missing == "offset_frame":
         # Codons out of frame with the reference CDS have no counterpart.
         model = replace(model, evidence=dict(model.evidence, cds_start=1))

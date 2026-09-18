@@ -1,5 +1,7 @@
 """Sequence-change flags for existing SV predictions, not a new SV model."""
 
+import operator
+
 from .codon_tables import codon_table_for_transcript, translate_sequence
 
 
@@ -100,11 +102,15 @@ def _partial_sequence_changes(model, transcript, table):
     coverage is not a deletion or truncation, so this never returns False.
     """
     evidence = model.evidence or {}
-    start, end = evidence.get("cds_start"), evidence.get("cds_end")
+    try:
+        # Any integer type (e.g. numpy); not missing or fractional bounds.
+        start = operator.index(evidence.get("cds_start"))
+        end = operator.index(evidence.get("cds_end"))
+    except TypeError:
+        return None, None
     sequence = model.cdna_sequence
     segments = model.reference_segments or ()
     if (sequence is None or model.edits or not transcript.complete
-            or any(type(p) is not int for p in (start, end))
             or not 0 <= start < end <= len(sequence)
             or sum(s.length for s in segments) != len(sequence)):
         # Unmapped edits, or segments that don't render this sequence,
@@ -130,7 +136,9 @@ def _partial_sequence_changes(model, transcript, table):
             reference_codon = reference_coding[k:k + 3]
             if codon != reference_codon and not set(codon + reference_codon) - set("ACGT"):
                 coding_status = True
-                if _residue(codon, table, k == 0) != _residue(reference_codon, table, k == 0):
+                # Only an observed ORF that begins here can initiate here.
+                observed = _residue(codon, table, k == 0 and pos == start)
+                if observed != _residue(reference_codon, table, k == 0):
                     return True, True
         if codon in table.stop_codons:
             break  # Later bases are not translated in this frame.
@@ -148,11 +156,11 @@ def structural_sequence_changes(effect):
 
     transcript = effect.transcript
     model = effect.mutant_transcript
+    initiator = getattr(effect, "five_prime_transcript", transcript)
     coding_status = protein_status = None
     if model is not None and (model.evidence or {}).get(
             "protein_completeness", "start_to_stop") != "start_to_stop":
         # A fragment is not a full-length protein; a shorter one isn't truncated.
-        initiator = getattr(effect, "five_prime_transcript", transcript)
         coding_status, protein_status = _partial_sequence_changes(
             model, transcript, codon_table_for_transcript(initiator))
     elif model is not None:
@@ -162,7 +170,6 @@ def structural_sequence_changes(effect):
             # An empty protein is a known absence, not missing data.
             if "X" not in protein and "X" not in reference_protein:
                 protein_status = protein != reference_protein
-        initiator = getattr(effect, "five_prime_transcript", transcript)
         coding = _coding_sequence(model, initiator)
         if coding is not None:
             reference_coding = transcript.coding_sequence
