@@ -1,5 +1,13 @@
 # Change Log
 
+## [v9.3.1](https://github.com/openvax/varcode/tree/v9.3.1) (2026-09-18)
+
+**Documentation**
+- Explain the shared Varcode / Isovar / Vaxrank responsibility split and evidence
+  handoffs, with short README links and a focused integration guide. Distinguish
+  available functionality from planned RNA/SV reconciliation (Isovar #305) and
+  remaining downstream candidate-selection limits. No annotation behavior changed.
+
 ## [v9.3.0](https://github.com/openvax/varcode/tree/v9.3.0) (2026-09-18)
 
 **Fixed**

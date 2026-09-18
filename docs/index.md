@@ -41,6 +41,7 @@ effect is a useful summary, not a measure of likelihood or clinical significance
 
 ## Reference and extensions
 
+- [Varcode, Isovar, and Vaxrank](library_roles.md): responsibilities and evidence handoffs.
 - [Transcript models](transcript_models.md): structures and sequence completeness.
 - [Effect types](effect_types.md) and [API reference](api.md): classes and parameters.
 - [Experimental annotators](experimental_annotators.md): alternative implementations.
