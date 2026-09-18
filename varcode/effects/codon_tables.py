@@ -117,7 +117,8 @@ def codon_table_for_transcript(transcript):
 def translate_sequence(
         nucleotide_sequence,
         codon_table=STANDARD,
-        to_stop=True):
+        to_stop=True,
+        selenocysteine=()):
     """Translate a cDNA string to amino acids using ``codon_table``.
 
     Parameters
@@ -130,6 +131,10 @@ def translate_sequence(
         If True (default), stop translation at the first stop codon and
         return the protein up to (but not including) the stop. If False,
         include ``'*'`` characters for in-sequence stops.
+    selenocysteine : collection of int
+        Offsets into ``nucleotide_sequence`` of TGA codons to read as
+        selenocysteine (``'U'``), e.g. annotated Sec codons whose SECIS
+        element is retained. See :mod:`varcode.effects.selenocysteine`.
     """
     seq = str(nucleotide_sequence).upper()
     if len(seq) % 3 != 0:
@@ -141,6 +146,9 @@ def translate_sequence(
     result = []
     for i in range(0, len(seq), 3):
         codon = seq[i:i + 3]
+        if codon == "TGA" and i in selenocysteine:
+            result.append("U")
+            continue
         if codon in stops:
             if to_stop:
                 break

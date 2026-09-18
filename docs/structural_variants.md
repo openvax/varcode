@@ -60,7 +60,9 @@ The filter does not construct missing proteins or change the effect class.
 
 Selenocysteine (`U` in the Ensembl reference protein) is encoded by UGA,
 which is decoded as Sec only with a SECIS element in the mRNA's 3′ UTR.
-Ensembl doesn't annotate SECIS positions. UGA is read as Sec where a model keeps
+Ensembl doesn't annotate SECIS positions. A fusion's stored protein reads Sec
+unless no selenoprotein 3′ UTR remains ([transcript models](transcript_models.md#selenocysteine)).
+For the flags, UGA is read as Sec where a model keeps
 the transcript intact from that codon through its 3′ end, and as a stop where
 no selenoprotein 3′ UTR remains. Otherwise the protein flag is reported only if
 both readings agree, else `None`; for example, a partial 3′ UTR deletion leaves

@@ -59,6 +59,7 @@ from serializable import DataclassSerializable
 
 from .effects.classify import classify_from_protein_diff
 from .effects.codon_tables import codon_table_for_transcript, translate_sequence
+from .effects.selenocysteine import edited_selenocysteine
 from .effects.effect_helpers import exon_length
 from .effects.effect_classes import (
     CrypticAcceptor,
@@ -823,7 +824,7 @@ def _build_intron_retention_mutant_transcript(
     mutant_cdna, edits = composed
     # Translate from the canonical start codon; premature stop inside
     # the retained intron terminates the ORF.
-    mut_protein = _translate_from_cds(mutant_cdna, transcript)
+    mut_protein = _translate_from_cds(mutant_cdna, transcript, edits)
     return MutantTranscript(
         reference_transcript=transcript,
         edits=edits,
@@ -1236,7 +1237,7 @@ def _build_cryptic_site_mutant_transcript(
     if composed is None:
         return None
     mutant_cdna, edits = composed
-    mut_protein = _translate_from_cds(mutant_cdna, transcript)
+    mut_protein = _translate_from_cds(mutant_cdna, transcript, edits)
     mt = MutantTranscript(
         reference_transcript=transcript,
         edits=edits,
@@ -1357,23 +1358,26 @@ def _build_exon_skip_mutant_transcript(variant, transcript, exon):
         # Exon overlaps the CDS start → start codon lost.
         new_cds_start = None
 
-    mut_protein = ""
-    if new_cds_start is not None and new_cds_start < len(post_skip_cdna):
-        codon_table = codon_table_for_transcript(transcript)
-        coding = post_skip_cdna[new_cds_start:]
-        truncated = coding[:(len(coding) // 3) * 3]
-        try:
-            mut_protein = translate_sequence(
-                truncated, codon_table=codon_table, to_stop=True)
-        except ValueError:
-            mut_protein = ""
-
     edit = TranscriptEdit(
         cdna_start=exon_start_in_tx,
         cdna_end=exon_start_in_tx + length,
         alt_bases="",
         source_variant=variant,
     )
+
+    mut_protein = ""
+    if new_cds_start is not None and new_cds_start < len(post_skip_cdna):
+        codon_table = codon_table_for_transcript(transcript)
+        coding = post_skip_cdna[new_cds_start:]
+        truncated = coding[:(len(coding) // 3) * 3]
+        selenocysteine = {pos - new_cds_start
+                          for pos in edited_selenocysteine(transcript, (edit,))}
+        try:
+            mut_protein = translate_sequence(
+                truncated, codon_table=codon_table, to_stop=True,
+                selenocysteine=selenocysteine)
+        except ValueError:
+            mut_protein = ""
 
     return MutantTranscript(
         reference_transcript=transcript,

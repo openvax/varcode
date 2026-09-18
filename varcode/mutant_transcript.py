@@ -388,15 +388,19 @@ def _resolve_variant_edit(variant, transcript, full_sequence):
     return (edit, cdna_offset)
 
 
-def _translate_from_cds(mutant_cdna, transcript):
+def _translate_from_cds(mutant_cdna, transcript, edits=()):
     """Translate ``mutant_cdna`` from the canonical CDS start to the
-    first stop. Returns ``None`` if the CDS start is past the cDNA
-    end or translation errors."""
+    first stop. ``edits`` (in reference coordinates) locate that start,
+    and the annotated selenocysteine codons they leave intact, in the
+    mutant. Returns ``None`` if the CDS start is past the cDNA end or
+    translation errors."""
     from .effects.codon_tables import (
         codon_table_for_transcript,
         translate_sequence,
     )
-    cds_start = min(transcript.start_codon_spliced_offsets)
+    from .effects.selenocysteine import edit_shift, edited_selenocysteine
+    reference_start = min(transcript.start_codon_spliced_offsets)
+    cds_start = reference_start + edit_shift(reference_start, edits)
     if cds_start >= len(mutant_cdna):
         return None
     codon_table = codon_table_for_transcript(transcript)
@@ -404,7 +408,9 @@ def _translate_from_cds(mutant_cdna, transcript):
     truncated = coding[:(len(coding) // 3) * 3]
     try:
         return translate_sequence(
-            truncated, codon_table=codon_table, to_stop=True)
+            truncated, codon_table=codon_table, to_stop=True,
+            selenocysteine={pos - cds_start for pos in
+                            edited_selenocysteine(transcript, edits)})
     except ValueError:
         return None
 
@@ -453,7 +459,7 @@ def apply_variant_to_transcript(variant, transcript):
     mutant_protein = None
     cds_start = min(transcript.start_codon_spliced_offsets)
     if cdna_offset >= cds_start:
-        mutant_protein = _translate_from_cds(mutant_cdna, transcript)
+        mutant_protein = _translate_from_cds(mutant_cdna, transcript, (edit,))
     return MutantTranscript(
         reference_transcript=transcript,
         edits=(edit,),
@@ -533,7 +539,8 @@ def apply_variants_to_transcript(variants, transcript):
     mutant_protein = None
     cds_start = min(transcript.start_codon_spliced_offsets)
     if any(anchor >= cds_start for _, anchor in resolved):
-        mutant_protein = _translate_from_cds(mutant_cdna, transcript)
+        mutant_protein = _translate_from_cds(
+            mutant_cdna, transcript, [edit for edit, _ in resolved])
     return MutantTranscript(
         reference_transcript=transcript,
         edits=tuple(edit for edit, _ in resolved),

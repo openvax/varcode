@@ -22,6 +22,19 @@ evidence = model.evidence if model is not None else None
 `None` means unavailable. It does not establish an unchanged protein, an absent
 transcript, or a harmless variant.
 
+## Selenocysteine
+
+Ensembl marks selenocysteine (Sec) as `U` in the reference protein, encoded by
+an in-frame UGA. UGA is decoded as Sec only with a SECIS element in the same
+mRNA's 3′ UTR, whose position isn't annotated. Predicted proteins read an
+annotated Sec codon as `U` when the model still maps it (no edit touches it)
+and keeps some of a selenoprotein's 3′ UTR. Where no selenoprotein 3′ UTR
+remains, for example a fusion downstream of Sec, UGA is read as a stop.
+A sequence without reference coordinates, such as an imported RNA assembly,
+is translated literally. A partly kept 3′ UTR still gets the Sec reading; the
+[SV change flags](structural_variants.md#filtering-by-protein-change) report
+such cases as unresolved.
+
 ## Partial structures
 
 A model with reference segments is not necessarily a complete mutant RNA.
