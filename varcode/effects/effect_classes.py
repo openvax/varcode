@@ -306,6 +306,9 @@ class Unresolved(TranscriptMutationEffect):
     unresolved does not mean the variant is harmless.
     """
 
+    modifies_coding_sequence = None
+    modifies_protein_sequence = None
+
     def __init__(self, variant, transcript, mechanism, reason=None):
         TranscriptMutationEffect.__init__(self, variant, transcript)
         self.mechanism = mechanism
@@ -1425,6 +1428,25 @@ class StructuralVariantEffect(TranscriptMutationEffect, MultiOutcomeEffect):
             self.mutant_transcript, "mutant_protein_sequence", None)
 
     @property
+    def modifies_coding_sequence(self):
+        """True if any candidate changes CDS, None if unresolved, else False.
+
+        Protein equality alone does not establish coding-sequence equality.
+        """
+        from .sequence_change import modification_status
+        return modification_status(self, "modifies_coding_sequence")
+
+    @property
+    def modifies_protein_sequence(self):
+        """True if any candidate changes protein, None if unresolved, else False.
+
+        A set with an unchanged primary and a changed alternative returns True.
+        False requires every candidate to be known unchanged; None is not silent.
+        """
+        from .sequence_change import modification_status
+        return modification_status(self, "modifies_protein_sequence")
+
+    @property
     def candidates(self):
         """Unified :class:`~varcode.EffectCandidate` view over primary
         SV classifications, attached cryptic candidates, and any
@@ -1617,6 +1639,8 @@ class CrypticExonCandidate(MutationEffect):
     """
 
     short_description = "sv-cryptic-exon-candidate"
+    modifies_coding_sequence = None
+    modifies_protein_sequence = None
 
     def __init__(
             self, variant, contig, interval_start, interval_end,

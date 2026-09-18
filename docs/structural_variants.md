@@ -32,9 +32,29 @@ see [alternative outcomes](effect_annotation.md#alternative-outcomes).
 
 A DNA rearrangement does not by itself establish a complete expressed fusion
 protein. Sequence may be unknown or partial; `None` is not an unchanged protein.
-Do not rely on `drop_silent_and_noncoding()` to retain unresolved SV effects:
-their protein-change flags remain incomplete
-([#418](https://github.com/openvax/varcode/issues/418)).
+
+## Filtering by protein change
+
+```python
+retained = effects.drop_silent_and_noncoding()
+# Require a positive prediction of protein change, excluding unknowns:
+resolved_changes = effects.drop_silent_and_noncoding(keep_unresolved=False)
+```
+
+SV effects report `modifies_protein_sequence` and `modifies_coding_sequence` as
+`True` (changed), `False` (unchanged), or `None` (unresolved). A changed CDS can
+still encode the same protein. Comparisons use the transcript being annotated;
+for a fusion, the 5′ partner supplies the initiation site.
+
+The flags cover the whole candidate set: any changed alternative makes the flag
+`True`; otherwise an unresolved alternative makes it `None`. The filter retains
+the original set, including provenance, rather than selecting one candidate.
+Unresolved effects are kept by default. To test for a *known* unchanged SV, use
+`effect.modifies_protein_sequence is False`, not `not effect.modifies_protein_sequence`.
+
+These flags describe existing predictions; they do not establish expression.
+Partial BND fragments and assemblies without a mapped ORF stay unresolved.
+The filter does not construct missing proteins or change the effect class.
 
 ## Fusion protein candidates
 

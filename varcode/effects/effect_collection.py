@@ -220,11 +220,25 @@ class EffectCollection(Collection):
         return self.filter(
             lambda effect: effect_priority(effect) >= min_priority)
 
-    def drop_silent_and_noncoding(self):
+    def drop_silent_and_noncoding(self, keep_unresolved=True):
         """
-        Create a new EffectCollection containing only non-silent coding effects
+        Keep effects with a protein-changing candidate or unresolved SV outcome.
+
+        Parameters
+        ----------
+        keep_unresolved : bool
+            Keep effects whose protein-change status is None (default True).
+            False requires a positive prediction of protein change. Candidate
+            sets are retained intact if any alternative qualifies; their order
+            and provenance are unchanged.
         """
-        return self.filter(lambda effect: effect.modifies_protein_sequence)
+        from .sequence_change import modification_status
+
+        def retain(effect):
+            status = modification_status(effect, "modifies_protein_sequence")
+            return status is True or (keep_unresolved and status is None)
+
+        return self.filter(retain)
 
     def detailed_string(self):
         """

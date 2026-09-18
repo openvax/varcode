@@ -69,6 +69,14 @@ def test_documentation_first_steps(path, count, input_directory):
                    for effect in namespace["effects"])
 
 
+def test_documentation_sv_filtering(input_directory):
+    namespace = _run(_blocks("docs/structural_variants.md")[:2])
+    assert len(namespace["retained"]) > 0
+    assert len(namespace["resolved_changes"]) > 0
+    assert all(effect.modifies_protein_sequence is True
+               for effect in namespace["resolved_changes"])
+
+
 def test_documentation_germline_scenarios():
     namespace = _run(_blocks(
         "docs/phasing.md", "## Two variants in one codon")[:4])
