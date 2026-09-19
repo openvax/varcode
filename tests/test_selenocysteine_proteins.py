@@ -9,13 +9,20 @@ import pytest
 from pyensembl import cached_release
 
 from varcode import StructuralVariant, TranscriptEdit, Variant
-from varcode.effects import GeneFusion
+from varcode.effects import GeneFusion, PrematureStop
 from varcode.effects import structural
 from varcode.effects.codon_tables import translate_sequence
-from varcode.effects.selenocysteine import edited_selenocysteine, reference_selenocysteine
+from varcode.effects.selenocysteine import (
+    edited_selenocysteine,
+    layout_selenocysteine,
+    reference_selenocysteine,
+)
 from varcode.effects.sequence_change import structural_sequence_changes
+from varcode.genomic_layout import GenomicLayout, LayoutSegment
 from varcode.mutant_transcript import apply_variant_to_transcript, apply_variants_to_transcript
 from varcode.splice_outcomes import _build_exon_skip_mutant_transcript
+from varcode.transcript_layout import realize_exon_path
+from varcode.transcript_model import _provider_for_genome
 
 # GPX1 (-), GPX4 (+), SEPP1 (-, ten Sec), TXNRD1 (+, Sec is the penultimate residue).
 SELENOPROTEINS = ["ENST00000419783", "ENST00000354171", "ENST00000514985", "ENST00000525566"]
@@ -120,6 +127,58 @@ def test_edited_selenocysteine_codon_is_translated_literally():
     assert edited_selenocysteine(t, (TranscriptEdit(sec, sec, "AAA"),)) == {sec + 3}
 
 
+def test_insertion_disrupting_sec_codon_creates_a_stop():
+    t = _transcript("ENST00000354171")
+    variant = Variant("19", 1105403, "", "GAC", t.genome)
+    layout = GenomicLayout.from_transcript(
+        t, sequence_provider=_provider_for_genome(t.genome))
+    product = realize_exon_path(t, layout.apply_point_variant(variant))
+    # The new TGA retains only the annotated Sec codon's first base.
+    assert product.protein_sequence == t.protein_sequence[:72]
+    for annotator in ("fast", "protein_diff", "transcript_model"):
+        effect = variant.effect_on_transcript(t, annotator=annotator)
+        assert isinstance(effect, PrematureStop)
+        assert effect.short_description == "p.U73*"
+
+
+@pytest.mark.parametrize("transcript_id", SELENOPROTEINS[:2])
+@pytest.mark.parametrize("change", [
+    "intact", "inserted", "deleted", "inverted", "foreign", "truncated", "duplicated",
+])
+def test_layout_sec_requires_three_contiguous_origins(transcript_id, change):
+    t = _transcript(transcript_id)
+    sec, = reference_selenocysteine(t)
+    utr = max(t.stop_codon_spliced_offsets) + 1
+
+    def base(offset, contig=None, kind="reference"):
+        position = _genomic(t, offset)
+        return LayoutSegment(
+            contig or t.contig, position, position, strand=t.strand,
+            sequence=t.sequence[offset], origin_kind=kind)
+
+    segments = [base(sec + i) for i in range(3)]
+    expected = {0}
+    if change == "inserted":
+        segments.insert(1, LayoutSegment(None, None, None, sequence="GA"))
+        expected = set()
+    elif change == "deleted":
+        segments = [segments[0], base(sec + 3), base(sec + 4)]
+        expected = set()
+    elif change in ("inverted", "foreign"):
+        segments[1] = base(sec + 1, kind="inverted") if change == "inverted" else base(sec + 1, contig="other")
+        expected = set()
+    elif change == "truncated":
+        segments = segments[:2]
+        expected = set()
+    elif change == "duplicated":
+        segments += [base(sec + i, kind="duplicated") for i in range(3)]
+        expected = {0, 3}
+    segments.append(base(utr))
+    # Preserve continuity across layout boundaries, including on the minus strand.
+    layouts = tuple(GenomicLayout((segment,)) for segment in segments)
+    assert layout_selenocysteine(t, layouts) == expected
+
+
 def test_deleting_the_whole_three_prime_utr_leaves_uga_a_stop():
     t = _transcript("ENST00000354171")
     utr = max(t.stop_codon_spliced_offsets) + 1
@@ -187,4 +246,3 @@ def test_fusion_that_drops_the_selenoprotein_utr_stops_at_selenocysteine():
     model, effect = _fusion(gpx4, breakpoint, cftr, cftr.end - 10)
     assert model.mutant_protein_sequence == gpx4.protein_sequence[:gpx4.protein_sequence.index("U")]
     assert effect.modifies_protein_sequence is True
-

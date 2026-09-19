@@ -1,5 +1,21 @@
 # Change Log
 
+## [v9.3.5](https://github.com/openvax/varcode/tree/v9.3.5) (2026-09-19)
+
+**Fixed**
+- Genomic-layout translation only recodes an annotated selenocysteine when
+  all three codon origins remain contiguous. Insertions or deletions that
+  create a new TGA from part of that codon now terminate translation (#473).
+- `protein_diff` inspects the mutant start codon at the same mapped CDS
+  offset used for translation. An insertion immediately before the retained
+  start codon is classified as 5′ UTR, without a false alternate-start or
+  coding-sequence-change call (#473).
+
+**Testing**
+- Optional offline corpus checks use `osteosarc==0.1.0` and a pinned public
+  snapshot, preserving native alleles and provenance and distinguishing the
+  corrected MAP2 complex allele from the older deletion (#464).
+
 ## [v9.3.4](https://github.com/openvax/varcode/tree/v9.3.4) (2026-09-18)
 
 **Fixed**

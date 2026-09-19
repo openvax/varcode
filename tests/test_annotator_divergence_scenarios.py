@@ -331,6 +331,20 @@ def test_alternate_start_codon_atg_to_ctg_agrees(dual_annotator):
     assert effect.short_description == "alternate-start-codon (ATG>CTG)"
 
 
+@pytest.mark.parametrize("alt", ["CAG", "CAA", "CAT", "TTT"])
+def test_insertion_before_retained_start_codon_is_five_prime_utr(alt):
+    from varcode.mutant_transcript import apply_variant_to_transcript
+
+    t = ensembl_grch38.transcript_by_id(BRCA1_ID)
+    variant = Variant("17", 43124096, "", alt, ensembl_grch38)
+    mt = apply_variant_to_transcript(variant, t)
+    assert mt.mutant_protein_sequence == t.protein_sequence
+    effect = _PDIFF.annotate_on_transcript(variant, t)
+    assert isinstance(effect, FivePrimeUTR)
+    assert effect.modifies_coding_sequence is False
+    assert effect.modifies_protein_sequence is False
+
+
 def test_divergence_frameshift_immediate_stop():
     """Frameshift that creates a stop codon at (or very near) the
     insertion point. Fast may report FrameShift with a short
