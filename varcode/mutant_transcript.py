@@ -388,6 +388,14 @@ def _resolve_variant_edit(variant, transcript, full_sequence):
     return (edit, cdna_offset)
 
 
+def _mutant_cds_start(transcript, edits=()):
+    """Map the reference CDS start past edits wholly upstream of it."""
+    from .effects.selenocysteine import edit_shift
+
+    reference_start = min(transcript.start_codon_spliced_offsets)
+    return reference_start + edit_shift(reference_start, edits)
+
+
 def _translate_from_cds(mutant_cdna, transcript, edits=()):
     """Translate ``mutant_cdna`` from the canonical CDS start to the
     first stop. ``edits`` (in reference coordinates) locate that start,
@@ -398,9 +406,8 @@ def _translate_from_cds(mutant_cdna, transcript, edits=()):
         codon_table_for_transcript,
         translate_sequence,
     )
-    from .effects.selenocysteine import edit_shift, edited_selenocysteine
-    reference_start = min(transcript.start_codon_spliced_offsets)
-    cds_start = reference_start + edit_shift(reference_start, edits)
+    from .effects.selenocysteine import edited_selenocysteine
+    cds_start = _mutant_cds_start(transcript, edits)
     if cds_start >= len(mutant_cdna):
         return None
     codon_table = codon_table_for_transcript(transcript)

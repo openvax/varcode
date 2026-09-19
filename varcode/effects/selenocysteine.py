@@ -103,25 +103,31 @@ def layout_selenocysteine(transcript, layouts):
     """cDNA offsets of annotated Sec codons in concatenated genomic layouts.
 
     Each layout exposes ``origins()`` as ``(contig, position, kind)`` per base,
-    in transcript orientation. Empty when no base of an annotated 3' UTR
-    remains.
+    in transcript orientation. All three bases must map consecutively to the
+    annotated codon, including across layout boundaries. Empty when no base
+    of an annotated 3' UTR remains.
     """
     offsets = set(reference_selenocysteine(transcript))
     if not offsets:
         return set()
     utr_start = _three_prime_utr_start(transcript)
     found, index = set(), 0
+    previous = (None, None)
     utr_present = utr_start >= len(transcript.sequence)
     for layout in layouts:
         for contig, position, kind in layout.origins():
+            reference = None
             if contig == transcript.contig and kind != "inverted":
                 try:
                     reference = transcript.spliced_offset(position)
                 except ValueError:
                     reference = None
-                if reference in offsets:
-                    found.add(index)
-                elif reference is not None and reference >= utr_start:
+            if reference is not None:
+                if (reference - 2 in offsets
+                        and previous == (reference - 2, reference - 1)):
+                    found.add(index - 2)
+                if reference >= utr_start:
                     utr_present = True
+            previous = (previous[1], reference)
             index += 1
     return found if utr_present else set()
