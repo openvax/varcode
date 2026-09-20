@@ -331,18 +331,42 @@ def test_alternate_start_codon_atg_to_ctg_agrees(dual_annotator):
     assert effect.short_description == "alternate-start-codon (ATG>CTG)"
 
 
-@pytest.mark.parametrize("alt", ["CAG", "CAA", "CAT", "TTT"])
-def test_insertion_before_retained_start_codon_is_five_prime_utr(alt):
-    from varcode.mutant_transcript import apply_variant_to_transcript
+@pytest.mark.parametrize("annotator", ["fast", "protein_diff", "transcript_model"])
+@pytest.mark.parametrize("transcript_id", [BRCA1_ID, CFTR_ID])
+@pytest.mark.parametrize("alt", ["CAG", "CAA", "CAT", "TTT", "A", "AG"])
+def test_insertion_before_retained_start_codon_is_five_prime_utr(
+        annotator, transcript_id, alt):
+    from varcode.mutant_transcript import _translate_from_cds, apply_variant_to_transcript
 
-    t = ensembl_grch38.transcript_by_id(BRCA1_ID)
-    variant = Variant("17", 43124096, "", alt, ensembl_grch38)
+    t = ensembl_grch38.transcript_by_id(transcript_id)
+    anchor = (max(t.start_codon_positions) if t.on_backward_strand
+              else min(t.start_codon_positions) - 1)
+    variant = Variant(t.contig, anchor, "", alt, ensembl_grch38)
     mt = apply_variant_to_transcript(variant, t)
-    assert mt.mutant_protein_sequence == t.protein_sequence
-    effect = _PDIFF.annotate_on_transcript(variant, t)
+    assert _translate_from_cds(mt.cdna_sequence, t, mt.edits) == t.protein_sequence
+    effect = variant.effect_on_transcript(t, annotator=annotator)
     assert isinstance(effect, FivePrimeUTR)
     assert effect.modifies_coding_sequence is False
     assert effect.modifies_protein_sequence is False
+
+
+@pytest.mark.parametrize("annotator", ["fast", "protein_diff", "transcript_model"])
+@pytest.mark.parametrize("transcript_id", [BRCA1_ID, CFTR_ID])
+@pytest.mark.parametrize("case", ["first_base_substitution", "internal_insertion"])
+def test_edit_touching_start_codon_remains_coding(annotator, transcript_id, case):
+    t = ensembl_grch38.transcript_by_id(transcript_id)
+    first = (max(t.start_codon_positions) if t.on_backward_strand
+             else min(t.start_codon_positions))
+    if case == "first_base_substitution":
+        ref, alt = ("T", "G") if t.on_backward_strand else ("A", "C")
+        variant = Variant(t.contig, first, ref, alt, ensembl_grch38)
+    else:
+        # Insert after the first base of ATG in transcript orientation.
+        anchor = first - 1 if t.on_backward_strand else first
+        variant = Variant(t.contig, anchor, "", "AAA", ensembl_grch38)
+    effect = variant.effect_on_transcript(t, annotator=annotator)
+    assert effect.modifies_coding_sequence is True
+    assert not isinstance(effect, FivePrimeUTR)
 
 
 def test_divergence_frameshift_immediate_stop():

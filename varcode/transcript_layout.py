@@ -467,7 +467,11 @@ def _unchanged_product_effect(variant, transcript, mutant):
     stop_offsets = tuple(transcript.stop_codon_spliced_offsets)
     cds_end = max(stop_offsets) + 1 if stop_offsets else (
         cds_start + 3 * len(str(transcript.protein_sequence)))
-    if first_offset < cds_start:
+    # On the reverse strand, inserted bases precede their genomic anchor.
+    # Anchoring on the retained first CDS base leaves the insertion in the UTR.
+    if (first_offset < cds_start
+            or (getattr(variant, "is_insertion", False)
+                and transcript.on_backward_strand and first_offset == cds_start)):
         return FivePrimeUTR(variant, transcript)
     if first_offset >= cds_end:
         return ThreePrimeUTR(variant, transcript)

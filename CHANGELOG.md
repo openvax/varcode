@@ -1,5 +1,13 @@
 # Change Log
 
+## [v9.3.6](https://github.com/openvax/varcode/tree/v9.3.6) (2026-09-19)
+
+**Fixed**
+- The `fast` and `transcript_model` annotators now classify an insertion
+  immediately before the retained CDS start on a reverse-strand transcript
+  as 5′ UTR. The insertion no longer produces a false coding- or
+  protein-sequence-change flag; all three annotators agree (#474).
+
 ## [v9.3.5](https://github.com/openvax/varcode/tree/v9.3.5) (2026-09-19)
 
 **Fixed**
