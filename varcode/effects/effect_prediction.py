@@ -535,8 +535,11 @@ def exonic_transcript_effect(variant, exon, exon_number, transcript):
 
     utr5_length = min(transcript.start_codon_spliced_offsets)
 
-    # does the variant start inside the 5' UTR?
-    if utr5_length > transcript_offset:
+    # A reverse-strand insertion goes before its anchor base. An anchor
+    # on the first CDS base therefore still places the insertion in the UTR.
+    if (utr5_length > transcript_offset
+            or (n_ref == 0 and transcript.on_backward_strand
+                and utr5_length == transcript_offset)):
         # does the variant end after the 5' UTR, within the coding region?
         if utr5_length < transcript_offset + n_ref:
             # TODO: we *might* lose the Kozak sequence or the start codon
