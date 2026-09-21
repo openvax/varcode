@@ -1,4 +1,55 @@
-# Optional osteosarc corpus checks
+# Osteosarc test variants
+
+`tests/data/osteosarc_variants.json` contains 177 ready site variants and five
+unresolved entries collected through `osteosarc==0.1.0` from the pinned public
+snapshot below. The ready variants comprise 158 SNVs, 13 deletions, three
+insertions, and three complex alleles. Original alleles, assemblies, source
+IDs, correction IDs, source receipts, and hashes of complete osteosarc entries
+are retained. The fixture is approximately 115 KiB; large count and peptide
+tables remain in the source snapshot.
+
+Use the collection in tests without installing osteosarc or opening its cache:
+
+```python
+from tests.osteosarc_variants import load_variants, read_fixture
+
+variants = load_variants()  # native VariantCollection, GRCh38 / Ensembl 81
+for variant in variants:
+    source_entries = variants.metadata[variant]["entries"]
+unresolved = [entry for entry in read_fixture()["entries"]
+              if entry["status"] != "ready"]
+```
+
+The ordinary suite annotates every ready allele with both `fast` and
+`protein_diff` and checks for errors or unresolved annotator results. These
+are real-input coverage checks; they do not certify source somatic status or
+use source protein labels as expected consequences. Dedicated regressions
+still provide independent expected effects.
+
+The mitochondrial allele keeps its original `chrM` spelling; Varcode's
+explicit UCSC conversion maps it to `MT`. The separate osteosarc
+`to_varcode` adapter's prefix-stripping bug is tracked in
+[osteosarc #8](https://github.com/iskandr/osteosarc/issues/8). Corrected MAP2
+and its separately published split representation retain distinct source IDs
+and correction notes; they are not assumed to be independent events.
+
+## Regenerate from the verified snapshot
+
+Install the pinned optional dependency on Python 3.10+, then collect offline:
+
+```sh
+python -m pip install -e '.[test-data]'
+python -m tests.collect_osteosarc_variants \
+  --cache /path/to/shared/cache --snapshot 2026-09-18t
+```
+
+The exporter checks the package version and snapshot identity before writing
+the fixture. `--output` selects a different destination. To collect a new
+snapshot deliberately, supply its identity with `--expected-snapshot-id`,
+review the changed data, and update the test pins. Source acquisition remains
+separate from export and tests.
+
+## Optional snapshot integration checks
 
 The targeted GPX4 and BRCA1 regressions use Ensembl 81. Additional offline
 integration checks use the public osteosarc dataset through the published
@@ -21,7 +72,8 @@ guarantee this pinned identity. Tests never download data or refresh sources.
 Without `OSTEOSARC_TEST_SNAPSHOT`, these optional checks are skipped; when
 it is set, a missing package, cache object, or mismatched snapshot fails.
 
-The checks preserve all 177 ready site entries and their source provenance
+These additional checks reproduce the checked-in fixture byte for byte and
+preserve all 177 ready site entries and their source provenance
 through native Varcode conversion, using an explicit GRCh38 Ensembl release.
 They also distinguish the corrected MAP2 complex allele from the old deletion.
 They do not treat upstream peptide annotations or vaccine membership as a
@@ -29,5 +81,5 @@ protein oracle, or change the existing RNA-read fixtures. Broader RNA fixture
 adoption is tracked in [#464](https://github.com/openvax/varcode/issues/464).
 
 Dataset: [osteosarc.com](https://osteosarc.com/data/), snapshot acquired
-2026-09-18, checked 2026-09-19; public data listed as CC0-1.0 by the
+2026-09-18, collected 2026-09-21; public data listed as CC0-1.0 by the
 [AWS Open Data Registry](https://registry.opendata.aws/sid-osteosarc/).

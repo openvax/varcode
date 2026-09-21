@@ -1,5 +1,16 @@
 # Change Log
 
+## [v9.3.7](https://github.com/openvax/varcode/tree/v9.3.7) (2026-09-21)
+
+**Testing**
+- Collect 177 real site variants and five unresolved entries from the pinned
+  osteosarc snapshot into a portable fixture. Ordinary offline tests now
+  annotate every ready allele with `fast` and `protein_diff`, including the
+  mitochondrial variant and corrected MAP2 complex allele (#464).
+- Add an explicit offline regeneration command and native test-variant loader,
+  preserving original alleles, reference identity, correction notes, and
+  source hashes. Optional snapshot checks verify byte-for-byte regeneration.
+
 ## [v9.3.6](https://github.com/openvax/varcode/tree/v9.3.6) (2026-09-19)
 
 **Fixed**
