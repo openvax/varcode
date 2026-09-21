@@ -13,8 +13,9 @@ from pyensembl import cached_release
 from varcode import Variant
 from varcode.mutant_transcript import apply_variant_to_transcript
 
+from .collect_osteosarc_variants import collect_variants, render_fixture
+from .osteosarc_variants import FIXTURE_PATH, SNAPSHOT_ID
 
-SNAPSHOT_ID = "9b34ea0e13f9c1c35c3c88b7e646c0e608b86a143dee0e668bf3f74b909f815c"
 
 
 @pytest.fixture(scope="module")
@@ -67,3 +68,7 @@ def test_osteosarc_corrected_map2_is_a_distinct_complex_allele(dataset):
     assert model is not None
     assert model.mutant_protein_sequence is not None
     assert model.mutant_protein_sequence != t.protein_sequence
+
+
+def test_collected_fixture_matches_verified_snapshot(dataset):
+    assert render_fixture(collect_variants(dataset)) == FIXTURE_PATH.read_text()
