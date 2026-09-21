@@ -29,6 +29,7 @@ from .effects.codon_tables import (
 )
 from .effects.selenocysteine import layout_selenocysteine
 from .effects.effect_classes import (
+    AlternateStartCodon,
     FivePrimeUTR,
     Intronic,
     Silent,
@@ -221,8 +222,29 @@ def _start_offset(layout, selected_runs, transcript):
     return None
 
 
+def _translate_from_start(transcript, cdna, start, pieces):
+    """Return protein, start presence and codon at the mapped CDS start."""
+    if start is None:
+        return "", False, None
+    coding = cdna[start:]
+    start_codon = coding[:3].upper()
+    codon_table = codon_table_for_transcript(transcript)
+    if start_codon not in codon_table.start_codons:
+        return "", False, start_codon
+    coding = coding[:len(coding) // 3 * 3]
+    protein = translate_sequence(
+        coding,
+        codon_table=codon_table,
+        to_stop=True,
+        selenocysteine={pos - start for pos in
+                        layout_selenocysteine(transcript, pieces)})
+    # NCBI's recognized initiation codons encode Met at the CDS start,
+    # even when their internal translation is another residue (e.g. CTG).
+    return "M" + protein[1:], True, start_codon
+
+
 def realize_exon_path(transcript, layout, kept_run_keys=None):
-    """Splice selected exon runs and translate from the surviving ATG."""
+    """Splice selected exon runs and translate from the mapped CDS start."""
     runs = build_exon_runs(transcript, layout)
     if kept_run_keys is None:
         selected = runs
@@ -237,19 +259,8 @@ def realize_exon_path(transcript, layout, kept_run_keys=None):
         for run_layout in run_layouts
         for _, position, _ in run_layout.origins())
     start = _start_offset(layout, selected, transcript)
-    if start is None:
-        protein = ""
-        start_present = False
-    else:
-        coding = cdna[start:]
-        coding = coding[:len(coding) // 3 * 3]
-        protein = translate_sequence(
-            coding,
-            codon_table=codon_table_for_transcript(transcript),
-            to_stop=True,
-            selenocysteine={pos - start for pos in
-                            layout_selenocysteine(transcript, run_layouts)})
-        start_present = True
+    protein, start_present, start_codon = _translate_from_start(
+        transcript, cdna, start, run_layouts)
     return RealizedTranscriptProduct(
         transcript=transcript,
         cdna_sequence=cdna,
@@ -257,6 +268,7 @@ def realize_exon_path(transcript, layout, kept_run_keys=None):
         junction_signature=junction_signature(transcript, selected),
         start_codon_present=start_present,
         evidence={
+            "start_codon": start_codon,
             "exon_runs": tuple(run.key for run in selected),
             "genomic_positions": genomic_positions,
         })
@@ -403,20 +415,10 @@ def realize_splice_plan(
             if start_offset is not None:
                 break
             consumed += piece.length
-    if start_offset is None:
-        protein = ""
-        start_present = False
-    else:
-        coding = cdna[start_offset:]
-        coding = coding[:len(coding) // 3 * 3]
-        protein = translate_sequence(
-            coding,
-            codon_table=codon_table_for_transcript(transcript),
-            to_stop=True,
-            selenocysteine={pos - start_offset for pos in
-                            layout_selenocysteine(transcript, pieces)})
-        start_present = True
+    protein, start_present, start_codon = _translate_from_start(
+        transcript, cdna, start_offset, pieces)
     evidence = {
+        "start_codon": start_codon,
         "exon_runs": tuple(run.key for run in selected),
         "genomic_positions": genomic_positions,
         "splice_choices": tuple(
@@ -494,6 +496,12 @@ def classify_products(variant, transcript, baseline, mutant):
     if baseline.start_codon_present and not mutant.start_codon_present:
         return StartLoss(variant, transcript)
     if baseline.protein_sequence == mutant.protein_sequence:
+        ref_codon = baseline.evidence.get("start_codon")
+        alt_codon = mutant.evidence.get("start_codon")
+        if (baseline.start_codon_present and mutant.start_codon_present
+                and ref_codon and alt_codon and ref_codon != alt_codon):
+            return AlternateStartCodon(
+                variant, transcript, ref_codon=ref_codon, alt_codon=alt_codon)
         return _unchanged_product_effect(variant, transcript, mutant)
     mutant_transcript = MutantTranscript(
         reference_transcript=transcript,
