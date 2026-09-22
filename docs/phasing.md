@@ -21,6 +21,14 @@ Use one resolver per sample. Phase-set tags are local to their source VCF:
 matching tags in independently produced tumor and normal files do not establish
 relative phase. A joint call set or molecular evidence is needed.
 
+Individual effects remain alongside joint results. The selected annotator owns
+the joint prediction: the default returns `HaplotypeEffect` for supported point
+edits, while `annotator="transcript_model"` returns classified phase/splice
+candidates. Unsupported groups are retained as `Unresolved` with their
+`variants` and `phase_source`; they are never silently dropped. The default
+declines joint germline composition rather than ignoring the patient baseline.
+See the [annotator contract](annotator_contract.md#joint-haplotypes).
+
 For germline-aware somatic annotation, the resolver's collection should contain
 both sets of alleles, but call `somatic_variants.effects(germline=...,
 phase_resolver=phaser)` on the somatic variants you want to classify.

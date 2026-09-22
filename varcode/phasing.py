@@ -26,6 +26,7 @@ produces the evidence (Isovar, long-read callers, custom assemblers,
 test stubs).
 """
 
+import logging
 from typing import Optional, Protocol, Sequence, runtime_checkable
 
 
@@ -340,29 +341,24 @@ def apply_phase_resolver_to_effects(effects, phase_resolver):
     return effects
 
 
-def build_haplotype_effects(variant_collection, effects, phase_resolver):
-    """Enrich ``effects`` with :class:`HaplotypeEffect` entries when
-    ``phase_resolver`` groups two or more cis variants on the same
-    transcript (#269).
+def build_haplotype_effects(
+        variant_collection, effects, phase_resolver, annotator=None,
+        germline=None, raise_on_error=True):
+    """Ask the selected annotator to predict each known-cis group.
 
-    Additive — per-variant effects stay on the collection. Returns a
-    flat list of new :class:`HaplotypeEffect` objects the caller can
-    concatenate onto the existing :class:`EffectCollection`.
-
-    Groups variants by transcript first, then uses
-    ``phase_resolver.in_cis(v_i, v_j, transcript)`` to partition each
-    transcript's variants into cis sets. Any cis set with ≥ 2
-    resolvable edits becomes one HaplotypeEffect via
-    :func:`apply_variants_to_transcript`.
-
-    Edit conflicts (overlapping cDNA ranges) cause the joint build
-    to return ``None`` — the group is skipped silently (the
-    per-variant effects still describe each variant individually).
+    Return additive joint effects; individual effects stay in the collection.
+    The optional ``annotate_haplotype`` hook accepts the group's variants,
+    transcript, germline context and phase resolver. A missing hook or
+    ``NotImplemented`` produces an explicit :class:`Unresolved` group,
+    never a fallback prediction or a silently omitted group.
     """
     if phase_resolver is None or not hasattr(phase_resolver, "in_cis"):
         return []
-    from .effects.effect_classes import HaplotypeEffect
-    from .mutant_transcript import apply_variants_to_transcript
+    from .annotators.registry import resolve_annotator
+    from .effects.effect_classes import Failure, MutationEffect, Unresolved
+
+    annotator = resolve_annotator(annotator)
+    annotate = getattr(annotator, "annotate_haplotype", None)
 
     # Group variants by transcript via existing per-variant effects —
     # each effect already knows its transcript, which avoids
@@ -418,25 +414,31 @@ def build_haplotype_effects(variant_collection, effects, phase_resolver):
         for members in groups.values():
             if len(members) < 2:
                 continue
-            # Prefer a resolver-provided MutantTranscript (RNA assembly,
-            # long-read, etc.) when available — it's the actual
-            # observed molecule, not inferred from reference + edits.
-            # Members of a cis group share a contig by definition, so
-            # any member's contig covers the whole group.
-            mt = None
-            if hasattr(phase_resolver, "mutant_transcript"):
-                for v in members:
-                    mt = phase_resolver.mutant_transcript(v, transcript)
-                    if mt is not None:
-                        break
-            if mt is None:
-                mt = apply_variants_to_transcript(members, transcript)
-            if mt is None:
-                continue
-            haplotype_effects.append(HaplotypeEffect(
-                variants=members,
-                transcript=transcript,
-                mutant_transcript=mt,
-                phase_source=getattr(phase_resolver, "phase_source", None),
-            ))
+            members = tuple(members)
+            try:
+                result = NotImplemented if annotate is None else annotate(
+                    members, transcript, germline_ctx=germline,
+                    phase_resolver=phase_resolver)
+            except (AssertionError, ValueError) as error:
+                if raise_on_error:
+                    raise
+                logging.getLogger(__name__).warning(
+                    "Encountered error annotating cis group %s for %s: %s",
+                    members, transcript, error)
+                result = Failure(members[0], transcript)
+            if result is NotImplemented:
+                result = Unresolved(
+                    members[0], transcript, mechanism="unsupported_haplotype",
+                    reason="Annotator %r does not implement this cis group%s" % (
+                        getattr(annotator, "name", type(annotator).__name__),
+                        " with germline context" if germline else ""))
+            if not isinstance(result, MutationEffect):
+                raise TypeError(
+                    "Annotators must return a MutationEffect or NotImplemented, got %r"
+                    % (result,))
+            result.variants = members
+            result.phase_source = getattr(phase_resolver, "phase_source", None)
+            result.annotator = getattr(annotator, "name", None)
+            result.annotator_version = getattr(annotator, "version", None)
+            haplotype_effects.append(result)
     return haplotype_effects

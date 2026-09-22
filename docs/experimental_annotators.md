@@ -75,12 +75,11 @@ for candidate in getattr(experimental, "candidates", ()):
 
 ## Known limitations
 
-- Combined variants: `VariantCollection.effects()` still builds joint haplotype
-  effects outside the selected annotator when given a `phase_resolver`
-  ([#437](https://github.com/openvax/varcode/issues/437)). The separate
-  `predict_transcript_model_effect(variants, transcript, ...)` function accepts
-  known-cis variants, but selecting the experiment does not replace that
-  collection-level step.
+- Combined variants: the selected annotator now owns known-cis predictions
+  through `VariantCollection.effects(phase_resolver=...)`. The default and
+  `protein_diff` retain their point-edit haplotypes; joint germline and structural
+  composition requires the opt-in `transcript_model`. Unsupported groups remain
+  explicit unresolved results. See the [joint contract](annotator_contract.md#joint-haplotypes).
 - Cross-boundary SVs: the experiment can clip a DUP spanning CFTR's coding
   sequence to a local model and misclassify it as `FivePrimeUTR`
   ([#449](https://github.com/openvax/varcode/issues/449)). This is a bug, not

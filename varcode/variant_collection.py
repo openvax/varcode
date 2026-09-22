@@ -192,7 +192,7 @@ class VariantCollection(Collection):
             for variant in self
             for effect in variant.effects(
                 raise_on_error=raise_on_error,
-                annotator=annotator,
+                annotator=annotator_instance,
                 germline=germline,
                 phase_resolver=phase_resolver,
             )
@@ -204,7 +204,8 @@ class VariantCollection(Collection):
             # need; top-priority sort still reflects the highest
             # individual effect severity.
             per_variant.extend(build_haplotype_effects(
-                self, per_variant, phase_resolver))
+                self, per_variant, phase_resolver, annotator=annotator_instance,
+                germline=germline, raise_on_error=raise_on_error))
         if rna_resolver is not None:
             from .rna_evidence import apply_rna_evidence_to_effects
             apply_rna_evidence_to_effects(per_variant, rna_resolver)

@@ -276,9 +276,33 @@ class Intragenic(MutationEffect):
 
 
 class TranscriptMutationEffect(Intragenic):
+    _haplotype_fields = (
+        "variants", "phase_source", "annotator", "annotator_version",
+        "observed_mutant_transcripts")
+
     def __init__(self, variant, transcript):
         Intragenic.__init__(self, variant, gene=transcript.gene)
         self.transcript = transcript
+
+    def to_dict(self):
+        state = super().to_dict()
+        # Annotators may return any ordinary effect class for a cis group.
+        # Preserve the group independently of that class's constructor fields.
+        if len(getattr(self, "variants", ())) > 1:
+            state["_haplotype_context"] = tuple(
+                (key, getattr(self, key)) for key in self._haplotype_fields
+                if hasattr(self, key))
+        return state
+
+    @classmethod
+    def from_dict(cls, state_dict):
+        state = dict(state_dict)
+        context = dict(state.pop("_haplotype_context", ()))
+        result = super().from_dict(state)
+        for key in cls._haplotype_fields:
+            if key in context:
+                setattr(result, key, context[key])
+        return result
 
     def __str__(self):
         return "%s(variant=%s, transcript_name=%s, transcript_id=%s)" % (

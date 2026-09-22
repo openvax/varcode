@@ -1,5 +1,20 @@
 # Change Log
 
+## [v9.4.0](https://github.com/openvax/varcode/tree/v9.4.0) (2026-09-22)
+
+**Fixed**
+- Delegate known-cis groups to the selected annotator's optional
+  `annotate_haplotype` method (#437). Retain unsupported groups as unresolved
+  effects instead of silently dropping them or predicting with another backend.
+- Route experimental transcript-model joint effects through its existing
+  multi-variant engine, including patient germline context from every member's
+  window and separately retained observed RNA models. The default retains
+  point-edit haplotypes and explicitly declines joint germline composition.
+
+**Testing**
+- Update the optional `test-data` extra to Osteosarc 0.1.4, retaining Python 3.10+
+  compatibility and the historical fixture's package/snapshot provenance (#478).
+
 ## [v9.3.7](https://github.com/openvax/varcode/tree/v9.3.7) (2026-09-21)
 
 **Testing**

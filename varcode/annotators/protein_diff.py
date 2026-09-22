@@ -85,6 +85,13 @@ class ProteinDiffEffectAnnotator:
             self, variant, transcript, germline_ctx,
             phase_resolver=phase_resolver)
 
+    def annotate_haplotype(
+            self, variants, transcript, germline_ctx=None, phase_resolver=None):
+        """Use the shared point-edit builder for joint predictions."""
+        return FastEffectAnnotator.annotate_haplotype(
+            self, variants, transcript, germline_ctx=germline_ctx,
+            phase_resolver=phase_resolver)
+
     def annotate_on_transcript(self, variant, transcript):
         """Classify the effect of ``variant`` on ``transcript``.
 
