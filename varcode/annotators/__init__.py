@@ -61,6 +61,11 @@ class EffectAnnotator(Protocol):
     Without it, nonempty germline context is unsupported. Empty context
     calls ``annotate_on_transcript`` as usual.
 
+    Optionally implement ``annotate_haplotype(variants, transcript,
+    germline_ctx=None, phase_resolver=None)`` with the same return contract.
+    Collections delegate each known-cis group to this method. A missing hook
+    or refusal leaves an explicit unresolved group alongside individual effects.
+
     The contract is duck-typed (``@runtime_checkable``) so third-party annotators
     don't need to inherit from varcode just to register.
     """

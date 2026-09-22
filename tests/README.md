@@ -27,18 +27,18 @@ use source protein labels as expected consequences. Dedicated regressions
 still provide independent expected effects.
 
 The mitochondrial allele keeps its original `chrM` spelling; Varcode's
-explicit UCSC conversion maps it to `MT`. The separate osteosarc
-`to_varcode` adapter's prefix-stripping bug is tracked in
-[osteosarc #8](https://github.com/iskandr/osteosarc/issues/8). Corrected MAP2
-and its separately published split representation retain distinct source IDs
+explicit UCSC conversion maps it to `MT`. Osteosarc 0.1.4's native
+`to_varcode` adapter uses the same conversion and preserves the source name.
+Corrected MAP2 and its separately published split representation retain distinct source IDs
 and correction notes; they are not assumed to be independent events.
 
 ## Regenerate from the verified snapshot
 
-Install the pinned optional dependency on Python 3.10+, then collect offline:
+The historical fixture records Osteosarc 0.1.0. To reproduce it byte for byte,
+install that version in a separate environment on Python 3.10+, then collect offline:
 
 ```sh
-python -m pip install -e '.[test-data]'
+python -m pip install -e . 'osteosarc==0.1.0'
 python -m tests.collect_osteosarc_variants \
   --cache /path/to/shared/cache --snapshot 2026-09-18t
 ```
@@ -53,7 +53,7 @@ separate from export and tests.
 
 The targeted GPX4 and BRCA1 regressions use Ensembl 81. Additional offline
 integration checks use the public osteosarc dataset through the published
-`osteosarc==0.1.0` adapter (Python 3.10+):
+`osteosarc==0.1.4` adapter from the optional `test-data` extra (Python 3.10+):
 
 ```sh
 python -m pip install -e '.[test-data]'
@@ -72,10 +72,13 @@ guarantee this pinned identity. Tests never download data or refresh sources.
 Without `OSTEOSARC_TEST_SNAPSHOT`, these optional checks are skipped; when
 it is set, a missing package, cache object, or mismatched snapshot fails.
 
-These additional checks reproduce the checked-in fixture byte for byte and
-preserve all 177 ready site entries and their source provenance
-through native Varcode conversion, using an explicit GRCh38 Ensembl release.
-They also distinguish the corrected MAP2 complex allele from the old deletion.
+These additional checks preserve the historical fixture's 177 ready alleles
+and verify native conversion of all 179 entries now ready in the same snapshot
+(182 total). The two newly resolved entries are not silently added to the
+checked-in scientific corpus. Checks preserve source provenance and reference
+identity, exercise mitochondrial annotation and the corrected MAP2 allele,
+reopen the shared cache offline, and reject missing or tampered objects using
+a private copy. Package updates do not change the pinned snapshot identity.
 They do not treat upstream peptide annotations or vaccine membership as a
 protein oracle, or change the existing RNA-read fixtures. Broader RNA fixture
 adoption is tracked in [#464](https://github.com/openvax/varcode/issues/464).

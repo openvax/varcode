@@ -62,3 +62,31 @@ class FastEffectAnnotator:
         return predict_germline_aware_effect(
             variant, transcript, germline_ctx, annotator=self,
             phase_resolver=phase_resolver)
+
+    def annotate_haplotype(
+            self, variants, transcript, germline_ctx=None, phase_resolver=None):
+        """Build the established point-edit or observed joint transcript.
+
+        Patient-baseline and structural composition require the experimental
+        transcript model. Decline them rather than silently ignoring context.
+        """
+        from ..effects.effect_classes import HaplotypeEffect
+        from ..mutant_transcript import apply_variants_to_transcript
+
+        if germline_ctx:
+            return NotImplemented
+        mt = None
+        if hasattr(phase_resolver, "mutant_transcript"):
+            for variant in variants:
+                mt = phase_resolver.mutant_transcript(variant, transcript)
+                if mt is not None:
+                    break
+        if mt is None:
+            if any(getattr(v, "is_structural", False) for v in variants):
+                return NotImplemented
+            mt = apply_variants_to_transcript(variants, transcript)
+        if mt is None:
+            return NotImplemented
+        return HaplotypeEffect(
+            variants=variants, transcript=transcript, mutant_transcript=mt,
+            phase_source=getattr(phase_resolver, "phase_source", None))

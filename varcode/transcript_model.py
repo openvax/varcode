@@ -306,33 +306,47 @@ class TranscriptModelEffectAnnotator:
 
     @staticmethod
     def _predict(variant, transcript, **kwargs):
+        return TranscriptModelEffectAnnotator._predict_variants(
+            (variant,), transcript, **kwargs)
+
+    @staticmethod
+    def _predict_variants(variants, transcript, **kwargs):
         from .genomic_layout import SequenceUnavailable, UnsupportedLayoutEdit
         try:
-            return predict_transcript_model_effect((variant,), transcript, **kwargs)
+            return predict_transcript_model_effect(variants, transcript, **kwargs)
         except UnsupportedLayoutEdit:
             return NotImplemented
         except SequenceUnavailable as error:
             return Unresolved(
-                variant, transcript, mechanism="sequence_unavailable",
+                variants[0], transcript, mechanism="sequence_unavailable",
                 reason=str(error))
 
     def annotate_with_context(
             self, variant, transcript, germline_ctx, phase_resolver=None):
         """Annotate through the same pipeline with patient germline edits."""
+        return self._annotate_with_context(
+            (variant,), transcript, germline_ctx, phase_resolver)
+
+    def _annotate_with_context(
+            self, variants, transcript, germline_ctx, phase_resolver):
         from .germline import Completeness, detect_loh
 
-        if getattr(variant, "is_structural", False):
-            start = variant.affected_start
-            end = variant.affected_end
-        else:
-            start = variant.trimmed_base1_start
-            end = variant.trimmed_base1_end
-        start = max(transcript.start, start - 90)
-        end = min(transcript.end, end + 90)
-        germline = tuple(germline_ctx.variants_in_window(
-            variant.contig, start, end))
-        result = self._predict(
-            variant, transcript,
+        germline = {}
+        for variant in variants:
+            if getattr(variant, "is_structural", False):
+                start = variant.affected_start
+                end = variant.affected_end
+            else:
+                start = variant.trimmed_base1_start
+                end = variant.trimmed_base1_end
+            start = max(transcript.start, start - 90)
+            end = min(transcript.end, end + 90)
+            for allele in germline_ctx.variants_in_window(
+                    variant.contig, start, end):
+                germline[allele] = None
+        germline = tuple(germline)
+        result = self._predict_variants(
+            variants, transcript,
             germline_variants=germline,
             phase_resolver=phase_resolver)
         if result is NotImplemented:
@@ -340,6 +354,29 @@ class TranscriptModelEffectAnnotator:
         if (not germline and germline_ctx.completeness in (
                 Completeness.SPARSE, Completeness.HOTSPOTS_ONLY)):
             result.germline_unknown = True
-        if detect_loh(variant, germline):
+        if any(detect_loh(variant, germline) for variant in variants):
             result.is_loh = True
+        return result
+
+    def annotate_haplotype(
+            self, variants, transcript, germline_ctx=None, phase_resolver=None):
+        """Realize the whole cis group with phase/splice alternatives.
+
+        Keep supplied RNA models as observations alongside modeled candidates;
+        a per-variant observation need not cover every edit in the group.
+        """
+        if germline_ctx:
+            result = self._annotate_with_context(
+                variants, transcript, germline_ctx, phase_resolver)
+        else:
+            result = self._predict_variants(variants, transcript)
+        if result is not NotImplemented:
+            observed = getattr(phase_resolver, "mutant_transcript", None)
+            observations = []
+            if observed is not None:
+                for variant in variants:
+                    mt = observed(variant, transcript)
+                    if mt is not None:
+                        observations.append((variant, mt))
+            result.observed_mutant_transcripts = tuple(observations)
         return result
