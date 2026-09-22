@@ -1,5 +1,13 @@
 # Change Log
 
+## [v9.4.1](https://github.com/openvax/varcode/tree/v9.4.1) (2026-09-22)
+
+**Testing**
+- Bundle the verified historical Osteosarc metadata snapshot and run the
+  native 0.1.4 adapter checks in CI on Python 3.10+. A fresh checkout with
+  `.[test-data]` now runs these tests offline without a manually prepared
+  cache or local sibling repository (#483).
+
 ## [v9.4.0](https://github.com/openvax/varcode/tree/v9.4.0) (2026-09-22)
 
 **Fixed**

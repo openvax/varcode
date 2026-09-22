@@ -1,13 +1,16 @@
-"""Opt-in, offline checks against the pinned public osteosarc snapshot.
+"""Offline checks against the bundled, pinned public osteosarc snapshot.
 
 See tests/README.md for acquisition and invocation. Source annotations are
 provenance, not an independent oracle for protein consequences.
 """
 
+import hashlib
 import os
 import shutil
+import zipfile
 from dataclasses import replace
 from importlib.metadata import version
+from pathlib import Path
 
 import pytest
 from pyensembl import cached_release
@@ -18,17 +21,30 @@ from varcode.mutant_transcript import apply_variant_to_transcript
 from .osteosarc_variants import SNAPSHOT_ID, read_fixture
 
 
+SNAPSHOT_NAME = "2026-09-18t"
+SNAPSHOT_ARCHIVE = Path(__file__).parent / "data" / "osteosarc_snapshot_2026-09-18t.zip"
+SNAPSHOT_ARCHIVE_SHA256 = "cbb688ca5cbe775fc4e6a826124f861d6d605c65e34473582c5d86853a6018fa"
+
 
 @pytest.fixture(scope="module")
-def dataset():
+def dataset(tmp_path_factory):
     snapshot = os.environ.get("OSTEOSARC_TEST_SNAPSHOT")
+    cache_root = os.environ.get("OSTEOSARC_TEST_CACHE")
     if not snapshot:
-        pytest.skip("set OSTEOSARC_TEST_SNAPSHOT to enable the offline corpus checks")
-    # Once explicitly requested, missing dependencies/cache entries must fail.
+        pytest.importorskip("osteosarc", reason="install .[test-data] on Python 3.10+")
+        # Hash before unpacking the trusted fixture into an isolated cache.
+        # Dataset.open additionally verifies every source receipt and object.
+        assert hashlib.sha256(SNAPSHOT_ARCHIVE.read_bytes()).hexdigest() == SNAPSHOT_ARCHIVE_SHA256
+        cache_root = tmp_path_factory.mktemp("osteosarc-snapshot")
+        with zipfile.ZipFile(SNAPSHOT_ARCHIVE) as archive:
+            archive.extractall(cache_root)
+        snapshot = SNAPSHOT_NAME
+    # Once an external snapshot is requested, missing dependencies/cache
+    # entries fail rather than skipping or falling back to the fixture.
     from osteosarc import Cache, Dataset
 
     assert version("osteosarc") == "0.1.4"
-    cache = Cache(os.environ.get("OSTEOSARC_TEST_CACHE"), offline=True)
+    cache = Cache(cache_root, offline=True)
     data = Dataset.open(snapshot, cache=cache, offline=True)
     assert data.id == SNAPSHOT_ID
     return data
@@ -101,8 +117,8 @@ def test_shared_cache_offline_reuse_and_integrity(dataset, tmp_path):
     from osteosarc import Cache, Dataset, IntegrityError, OfflineError
     from osteosarc.cache import Receipt
 
-    shared = Cache(os.environ.get("OSTEOSARC_TEST_CACHE"), offline=True)
-    reopened = Dataset.open(os.environ["OSTEOSARC_TEST_SNAPSHOT"],
+    shared = Cache(dataset.cache.root, offline=True)
+    reopened = Dataset.open(dataset.manifest["name"],
                             cache=shared, offline=True)
     assert reopened.id == dataset.id
     receipt = Receipt(**dataset.variants().source["receipts"]["source_variants"])

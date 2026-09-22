@@ -35,12 +35,14 @@ and correction notes; they are not assumed to be independent events.
 ## Regenerate from the verified snapshot
 
 The historical fixture records Osteosarc 0.1.0. To reproduce it byte for byte,
-install that version in a separate environment on Python 3.10+, then collect offline:
+install that version in a separate environment on Python 3.10+, unpack the
+bundled snapshot into a new cache directory, then collect offline:
 
 ```sh
 python -m pip install -e . 'osteosarc==0.1.0'
+python -m zipfile -e tests/data/osteosarc_snapshot_2026-09-18t.zip /path/to/new/cache
 python -m tests.collect_osteosarc_variants \
-  --cache /path/to/shared/cache --snapshot 2026-09-18t
+  --cache /path/to/new/cache --snapshot 2026-09-18t
 ```
 
 The exporter checks the package version and snapshot identity before writing
@@ -49,28 +51,46 @@ snapshot deliberately, supply its identity with `--expected-snapshot-id`,
 review the changed data, and update the test pins. Source acquisition remains
 separate from export and tests.
 
-## Optional snapshot integration checks
+## Snapshot integration checks
 
-The targeted GPX4 and BRCA1 regressions use Ensembl 81. Additional offline
-integration checks use the public osteosarc dataset through the published
+The targeted GPX4 and BRCA1 regressions use Ensembl 81. Offline integration
+checks use the public osteosarc dataset through the published
 `osteosarc==0.1.4` adapter from the optional `test-data` extra (Python 3.10+):
 
 ```sh
 python -m pip install -e '.[test-data]'
-OSTEOSARC_TEST_CACHE=/path/to/shared/cache \
-OSTEOSARC_TEST_SNAPSHOT=2026-09-18t \
 pytest -q tests/test_osteosarc_dataset.py
 ```
 
-The cache must already contain snapshot
+These five tests run in the ordinary suite and in CI on Python 3.10/3.11.
+They unpack `tests/data/osteosarc_snapshot_2026-09-18t.zip` into a pytest
+temporary directory, check the archive SHA256, and open it offline through
+Osteosarc, which verifies all source objects against their receipts. No
+sibling checkout, pre-existing Osteosarc cache, or environment variables are
+required. As elsewhere in the suite, Ensembl 81 reference data must already
+be installed; CI provisions this in its existing reference-data step.
+
+The archive contains the unchanged snapshot manifest and its 20 public
+metadata objects in the standard OpenVax cache layout. It is approximately
+3.6 MiB compressed (53 MiB unpacked), with SHA256
+`cbb688ca5cbe775fc4e6a826124f861d6d605c65e34473582c5d86853a6018fa`.
+The manifest retains original URLs, acquisition timestamps, sizes and hashes.
+It contains no BAMs, generated reads, local cache bookkeeping, or absolute
+paths. Its snapshot identity remains
 `9b34ea0e13f9c1c35c3c88b7e646c0e608b86a143dee0e668bf3f74b909f815c`.
-The snapshot name is local; its content identity is checked independently.
-Acquisition is explicit and separate from testing: use osteosarc's
-`Dataset.sync` for new snapshots, or reuse the verified shared cache for this
-snapshot. Creating a new snapshot from current remote sources does not
-guarantee this pinned identity. Tests never download data or refresh sources.
-Without `OSTEOSARC_TEST_SNAPSHOT`, these optional checks are skipped; when
-it is set, a missing package, cache object, or mismatched snapshot fails.
+
+To test an existing shared cache explicitly, set both
+`OSTEOSARC_TEST_CACHE=/path/to/shared/cache` and
+`OSTEOSARC_TEST_SNAPSHOT=2026-09-18t`. The name may differ, but the content
+identity must match. Missing packages, objects, or a mismatched snapshot then
+fail; the tests never fall back to the bundled snapshot. Without an explicit
+snapshot, these checks skip only when the optional Osteosarc dependency is
+absent (including Python 3.9, which Osteosarc does not support).
+
+Tests never download data or refresh sources. `Dataset.sync` acquires new
+snapshots separately; current remote sources do not reproduce the historical
+identity. Change this fixture only by deliberately reviewing a new snapshot
+and updating its source provenance, identity, archive hash, and expectations.
 
 These additional checks preserve the historical fixture's 177 ready alleles
 and verify native conversion of all 179 entries now ready in the same snapshot
