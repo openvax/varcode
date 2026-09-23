@@ -89,6 +89,26 @@ def _breakend_local_side(alt):
     return None
 
 
+def breakend_inserted_sequence(ref, alt):
+    """Inserted bases in the local forward strand, or ``None`` if unknown.
+
+    VCF 4.5 section 5.4.1 places the retained REF anchor before the insert
+    in a prefix ALT and after it in a suffix ALT. Only single-base anchors
+    are supported here: a longer replacement needs explicit reference-span
+    handling. An empty string denotes a known absence of inserted bases.
+    """
+    sides = breakend_sides(alt)
+    if sides is None or not ref or len(ref) != 1:
+        return None
+    match = _BREAKEND_RE.match(alt)
+    ref = ref.upper()
+    if sides[0] == "left":
+        bases = match.group("prefix").upper()
+        return bases[1:] if bases.startswith(ref) else None
+    bases = match.group("suffix").upper()
+    return bases[:-1] if bases.endswith(ref) else None
+
+
 def _extract_info(info, key):
     """Pull an INFO field value, handling list-of-ints from CIPOS /
     CIEND and plain ints/strings otherwise. Returns ``None`` if
