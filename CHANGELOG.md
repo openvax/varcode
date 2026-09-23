@@ -1,6 +1,6 @@
 # Change Log
 
-## [v9.4.2](https://github.com/openvax/varcode/tree/v9.4.2) (2026-09-22)
+## [v9.4.2](https://github.com/openvax/varcode/tree/v9.4.2) (2026-09-23)
 
 **Fixed**
 - Retain inserted junction bases when translating exonic breakend fusions
