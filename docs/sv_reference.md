@@ -210,6 +210,22 @@ does not establish the shorter isoform's structure.
 The fused cDNA is the 5' partner's cDNA up to its breakpoint followed by
 the 3' partner's from its breakpoint on.
 
+For an exonic join, bases inserted in the VCF breakend ALT are retained
+between the two transcript segments, in transcriptional orientation.
+Reciprocal records contribute the insertion once, including after
+`pair_breakends`. `variant.junction_inserted_sequence(junction)` returns
+the sequence while traversing the ordered junction, `""` for no insertion,
+or `None` when the records are unreadable or disagree. This follows
+[VCF 4.5 sections 5.4–5.4.1](https://samtools.github.io/hts-specs/VCFv4.5.pdf).
+
+At two intronic breakpoints, the model excludes the insert under reference
+splicing and records `junction_insertion_status="excluded_by_reference_splicing"`
+in its evidence. With one exonic and one intronic breakpoint, insertion
+retention requires RNA evidence: both cDNA and protein are `None`, with
+`sequence_status="unresolved_insertion_retention"`. Unknown/conflicting
+insert sequence similarly gives `sequence_status="unresolved_junction_insertion"`.
+A supplied `alt_assembly` still takes precedence.
+
 | Breakpoint | What's kept |
 |---|---|
 | In an intron | The 5' side ends with the last complete exon before it; the 3' side starts with the first exon after it. For CFTR intron 1 that's exon 1's 185 bases. |

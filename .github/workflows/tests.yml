@@ -55,7 +55,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/pyensembl
-          key: pyensembl-${{ runner.os }}-grch37.75-grch38.81-grch38.95-grcm38.95-${{ hashFiles('requirements.txt') }}-v1
+          key: pyensembl-${{ runner.os }}-grch37.75-grch38.81-grch38.95-grcm38.95-${{ hashFiles('requirements.txt') }}-v2
+          # Reuse existing sequences, then cache the complete 2.11 GTFs.
+          restore-keys: |
+            pyensembl-${{ runner.os }}-grch37.75-grch38.81-grch38.95-grcm38.95-${{ hashFiles('requirements.txt') }}-v1
       - name: Install Ensembl data
         run: |
           echo "Before installing Ensembl releases" && df -h

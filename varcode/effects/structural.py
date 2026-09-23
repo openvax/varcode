@@ -463,7 +463,7 @@ def _translate_fused_cdna(fused_cdna, five_prime_transcript, five_prime_len,
 def _build_fusion_mutant_transcript(
         reference_transcript,
         five_prime_transcript, five_prime_position,
-        three_prime_transcript, three_prime_position):
+        three_prime_transcript, three_prime_position, inserted_sequence=""):
     """Build a :class:`MutantTranscript` for a :class:`GeneFusion`
     (#336).
 
@@ -471,7 +471,9 @@ def _build_fusion_mutant_transcript(
     followed by the 3' partner's from its breakpoint on, each keeping
     the base at its breakpoint. When the 5' partner's start codon lies
     in the retained portion, the protein is translated through the
-    junction.
+    junction. Inserted bases are retained at exonic joins. At two intronic
+    breakpoints they are excluded under the reference-splicing assumption;
+    mixed exonic/intronic retention, or unknown insert sequence, is unresolved.
 
     ``reference_transcript`` is the transcript being annotated, which
     may be either partner, so an effect and its mutant transcript
@@ -491,9 +493,6 @@ def _build_fusion_mutant_transcript(
         five_prime_transcript, five_prime_position, True)
     three_prime_start = _cdna_cut(
         three_prime_transcript, three_prime_position, False)
-    fused_cdna = (
-        five_prime_cdna[:five_prime_end]
-        + three_prime_cdna[three_prime_start:])
     segments = (
         ReferenceSegment(
             source=five_prime_transcript, start=0, end=five_prime_end,
@@ -503,10 +502,35 @@ def _build_fusion_mutant_transcript(
             start=three_prime_start, end=len(three_prime_cdna),
             strand="+", label="3p_partner"),
     )
+    evidence = {}
+    if inserted_sequence is None:
+        evidence["sequence_status"] = "unresolved_junction_insertion"
+    elif inserted_sequence:
+        exonic = [any(e.start <= pos <= e.end for e in t.exons)
+                  for t, pos in ((five_prime_transcript, five_prime_position),
+                                 (three_prime_transcript, three_prime_position))]
+        evidence["junction_inserted_sequence"] = inserted_sequence
+        if all(exonic):
+            insertion = ReferenceSegment(
+                source=_AssembledAllele(inserted_sequence), start=0,
+                end=len(inserted_sequence), label="junction_insertion")
+            segments = segments[:1] + (insertion,) + segments[1:]
+            evidence["junction_insertion_status"] = "retained"
+        elif any(exonic):
+            evidence["sequence_status"] = "unresolved_insertion_retention"
+        else:
+            evidence["junction_insertion_status"] = "excluded_by_reference_splicing"
+    if "sequence_status" in evidence:
+        return MutantTranscript(
+            reference_transcript=reference_transcript,
+            reference_segments=segments, evidence=evidence,
+            annotator_name="structural_variant")
+    fused_cdna = "".join(s.source.sequence[s.start:s.end] for s in segments)
     model = MutantTranscript(
         reference_transcript=reference_transcript,
         reference_segments=segments,
         cdna_sequence=fused_cdna,
+        evidence=evidence,
         annotator_name="structural_variant")
     # Read Sec where a SECIS may remain; the change flags report whether
     # that reading is certain.
@@ -862,6 +886,9 @@ def _fusion_across_junction(variant, transcript, assembly):
             else:
                 five, five_position = partner, far.position
                 three, three_position = transcript, near.position
+            junction = (near, far) if five_prime else (far, near)
+            inserted = (variant.junction_inserted_sequence(junction)
+                        if hasattr(variant, "junction_inserted_sequence") else None)
             fusions.append(GeneFusion(
                 variant=variant,
                 transcript=transcript,
@@ -869,7 +896,8 @@ def _fusion_across_junction(variant, transcript, assembly):
                 five_prime_transcript=five,
                 three_prime_transcript=three,
                 mutant_transcript=assembly or _build_fusion_mutant_transcript(
-                    transcript, five, five_position, three, three_position)))
+                    transcript, five, five_position, three, three_position,
+                    inserted_sequence=inserted)))
     if not fusions:
         return None
     primary = fusions[0]

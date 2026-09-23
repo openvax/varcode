@@ -1,5 +1,15 @@
 # Change Log
 
+## [v9.4.2](https://github.com/openvax/varcode/tree/v9.4.2) (2026-09-23)
+
+**Fixed**
+- Retain inserted junction bases when translating exonic breakend fusions
+  (#485), with strand-correct sequence from either reciprocal record and
+  paired structural events. Mixed exon/intron insertion retention and
+  conflicting or unreadable inserted alleles remain explicitly unresolved.
+- Record the reference-splicing assumption when an insertion between two
+  intronic breakpoints is excluded from the predicted fusion transcript.
+
 ## [v9.4.1](https://github.com/openvax/varcode/tree/v9.4.1) (2026-09-22)
 
 **Testing**

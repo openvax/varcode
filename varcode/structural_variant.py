@@ -419,6 +419,42 @@ class StructuralVariant(Variant):
             return (keeping_left, keeping_right)
         return ()
 
+    def junction_inserted_sequence(self, junction):
+        """Bases inserted while traversing ``junction[0]`` to ``junction[1]``.
+
+        The sequence is oriented away from the retained first end towards
+        the retained second end. Reciprocal records therefore give the same
+        answer for the same ordered junction. Paired events use their original
+        breakends, whose coordinates can differ from the combined span.
+        Conflicting or unreadable alleles return ``None``; ``""`` means no
+        insertion. Simple symbolic DEL/DUP/INV alleles have no insertion.
+        """
+        from .nucleotides import reverse_complement
+        from .sv_allele_parser import breakend_inserted_sequence, breakend_sides
+
+        if junction not in self.junctions and junction[::-1] not in self.junctions:
+            raise ValueError("Junction does not belong to this variant")
+        sequences = set()
+        sources = getattr(self, "source_variants", ()) or (self,)
+        for source in sources:
+            sides = breakend_sides(source.symbolic_alt)
+            if sides is None:
+                if source.sv_type in {"DEL", "DUP", "INV"}:
+                    sequences.add("")
+                    continue
+                return None
+            if (junction not in source.junctions
+                    and junction[::-1] not in source.junctions):
+                return None
+            inserted = breakend_inserted_sequence(source.ref, source.symbolic_alt)
+            if inserted is None:
+                return None
+            local = Breakend(source.contig, source.start, sides[0])
+            if (local.keeps == "right") != (local == junction[1]):
+                inserted = reverse_complement(inserted)
+            sequences.add(inserted)
+        return sequences.pop() if len(sequences) == 1 else None
+
     @property
     def breakpoints(self) -> Tuple[Tuple[str, int], ...]:
         """Distinct ``(contig, position)`` breakpoints of this variant's
