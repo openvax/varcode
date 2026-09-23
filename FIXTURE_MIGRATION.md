@@ -7,4 +7,6 @@ version; regeneration of that artifact remains intentionally pinned separately.
 
 Varcode currently has no BAM-subset builder. Ordinary allele/protein-only tests
 continue without Osteosarc or BAM acquisition. Run the optional snapshot suite
-offline against the shared release before publishing this patch.
+offline against the shared release before publishing this patch. The optional
+extra supports Python 3.9+, matching Varcode and Osteosarc; CI exercises it on
+every supported interpreter in the test matrix.

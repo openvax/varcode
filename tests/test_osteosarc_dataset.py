@@ -31,7 +31,7 @@ def dataset(tmp_path_factory):
     snapshot = os.environ.get("OSTEOSARC_TEST_SNAPSHOT")
     cache_root = os.environ.get("OSTEOSARC_TEST_CACHE")
     if not snapshot:
-        pytest.importorskip("osteosarc", reason="install .[test-data] on Python 3.10+")
+        pytest.importorskip("osteosarc", reason="install .[test-data]")
         # Hash before unpacking the trusted fixture into an isolated cache.
         # Dataset.open additionally verifies every source receipt and object.
         assert hashlib.sha256(SNAPSHOT_ARCHIVE.read_bytes()).hexdigest() == SNAPSHOT_ARCHIVE_SHA256
