@@ -1,4 +1,13 @@
-"""VCF 4.5 junction inserts must survive fusion assembly (#485)."""
+"""VCF 4.5 junction inserts must survive fusion assembly (#485).
+
+Fixture construction is inline: each test writes a minimal VCF and loads it
+through the public loader. The real one-base ZNF236::GALR1 allele is from
+Osteosarc T0 Personalis ESVEE records 42280/42296; the zero/two-base controls
+alter only the insert. Source:
+https://sid-sijbrandij-osteosarc-dataset.s3.us-west-2.amazonaws.com/kamil/oncoanalyser/IPISRC044_T0_personalis/esvee/IPISRC044_tumor_T0_personalis.esvee.somatic.vcf.gz
+SHA256: c1ccf669accc0ba33ebaa139a4752700310c44f42ecf50dbfe72d9171928b281
+No download or local report is needed to regenerate the fixture.
+"""
 
 from types import SimpleNamespace
 
