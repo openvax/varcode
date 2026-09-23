@@ -1,5 +1,13 @@
 # Change Log
 
+## [v9.5.0](https://github.com/openvax/varcode/tree/v9.5.0) (2026-09-23)
+
+**Added**
+- Compare SV call tables across samples and callers with a reusable API and
+  command. Preserve every input record, distinguish exact reported alleles
+  from nearby candidates, and export breakpoint/insertion disagreements,
+  source IDs, unresolved calls, and reproducible run provenance.
+
 ## [v9.4.2](https://github.com/openvax/varcode/tree/v9.4.2) (2026-09-23)
 
 **Fixed**

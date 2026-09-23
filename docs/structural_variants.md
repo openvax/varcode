@@ -149,3 +149,5 @@ Two outcomes apply before any SV logic:
 - <a id="breakends-every-combination"></a><a id="deletions-duplications-and-inversions"></a><a id="where-in-the-gene-a-breakpoint-lands"></a>[Breakend, span, and protein outcomes](sv_reference.md#breakend-outcomes).
 - <a id="importing-observed-rna-structures"></a>[Import observed RNA structures](rna_structures.md).
 - <a id="import-exactos-protein-predictions"></a>[Import Exacto protein predictions](rna_structures.md#import-exactos-protein-predictions).
+
+For exhaustive callset reconciliation, see [Compare SV calls](sv_comparison.md).
