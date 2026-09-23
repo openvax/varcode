@@ -55,7 +55,7 @@ def _normalize(row):
     if row.get("end") and "END" not in info:
         info["END"] = int(row["end"])
     sv = parse_symbolic_alt(row["chrom"], int(row["pos"]), row["ref"], row["alt"],
-                            info=info, genome=assembly)
+                            info=info, genome=assembly, convert_ucsc_contig_names=True)
     adjacencies = []
     kind = "adjacency"
     if sv is not None:
@@ -75,7 +75,8 @@ def _normalize(row):
     else:
         if not row["ref"] or not row["alt"] or set((row["ref"] + row["alt"]).upper()) - set("ACGTN"):
             raise ValueError("Unsupported explicit allele")
-        v = Variant(row["chrom"], int(row["pos"]), row["ref"], row["alt"], genome=assembly)
+        v = Variant(row["chrom"], int(row["pos"]), row["ref"], row["alt"], genome=assembly,
+                    convert_ucsc_contig_names=True)
         if not v.ref and not v.alt:
             raise ValueError("Reference-only allele")
         if len(v.ref) == len(v.alt):

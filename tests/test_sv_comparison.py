@@ -101,3 +101,13 @@ def test_portable_cli_exports_every_input_and_hash(tmp_path):
     assert result["provenance"]["call_count"] == 2
     assert len(result["provenance"]["input_sha256"]) == 64
     assert len(list(csv.DictReader((destination / "members.csv").open()))) == 2
+
+
+def test_ucsc_and_ensembl_contig_names_match_at_both_ends():
+    result = compare_sv_calls([row("a", chrom="chr1", alt="C[chr2:200["),
+                               row("b", chrom="2", pos=200, alt="]1:100]C")])
+    group, = result["groups"]
+    assert len(group["exact_ids"]) == 1
+    indels = compare_sv_calls([row("a", chrom="chr1", ref="CAAA", alt="C"),
+                              row("b", chrom="1", alt="C[1:104[")])
+    assert len(indels["groups"][0]["exact_ids"]) == 1
