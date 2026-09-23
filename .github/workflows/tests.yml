@@ -30,8 +30,8 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install flake8 pytest pytest-cov coveralls ruff
           pip install -r requirements.txt
-          # Python 3.10+ runs the native adapter checks using the bundled
-          # historical snapshot. The extra's marker preserves Python 3.9.
+          # Osteosarc 0.2.3 supports every Python version in this matrix;
+          # run native adapter checks against the bundled historical snapshot.
           pip install '.[test-data]'
       - name: Lint with flake8
         run: |
