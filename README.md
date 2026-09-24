@@ -17,7 +17,8 @@ sequence can be determined, it also gives the mutant protein.
   as coding changes (substitution, frameshift, premature stop, and others) or
   by where they fall (UTR, intron, splice site, intergenic).
 - **Splice variants:** returns the possible outcomes, such as exon skipping,
-  intron retention, or a cryptic splice site, each with its own protein.
+  intron retention, or a cryptic splice site, each with its own predicted
+  protein when it can be determined.
 - **Structural variants:** deletions, duplications, inversions, and breakends
   get transcript consequences and gene-fusion candidates.
 - **Patient context (optional):** germline variants, phase from a phased VCF
