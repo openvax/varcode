@@ -186,6 +186,16 @@ def predict_transcript_model_effect(
         raise ValueError("predict_transcript_model_effect requires a somatic variant")
     germline_variants = tuple(germline_variants)
     primary = variants[0]
+    if (getattr(primary, "sv_type", None) in ("DUP", "INV")
+            and primary.alt_assembly):
+        if len(variants) != 1 or germline_variants:
+            return Unresolved(
+                primary, transcript, mechanism="assembled_structural_haplotype",
+                reason="Composition with an assembled allele requires mapped variant coordinates")
+        # Preserve supplied full transcript assemblies using the same path as
+        # the structural annotator; never replace them with a clipped layout.
+        from .effects.structural import predict_structural_variant_effect
+        return predict_structural_variant_effect(primary, transcript)
     if getattr(primary, "sv_type", None) == "BND":
         if len(variants) != 1 or germline_variants:
             return Unresolved(
@@ -214,8 +224,14 @@ def predict_transcript_model_effect(
     for phase_hypothesis in phase_hypotheses:
         reference = GenomicLayout.from_transcript(
             transcript, flank=50, sequence_provider=sequence_provider)
-        baseline_layout = reference.apply_variants(phase_hypothesis.cis)
-        mutant_layout = baseline_layout.apply_variants(variants)
+        from .genomic_layout import NonlocalStructuralEdit
+        try:
+            baseline_layout = reference.apply_variants(phase_hypothesis.cis)
+            mutant_layout = baseline_layout.apply_variants(variants)
+        except NonlocalStructuralEdit as error:
+            return Unresolved(
+                primary, transcript, mechanism="nonlocal_structural_variant",
+                reason=str(error))
         baseline_runs, baseline_statuses = _status_map(
             transcript, baseline_layout)
         mutant_runs, mutant_statuses = _status_map(transcript, mutant_layout)
