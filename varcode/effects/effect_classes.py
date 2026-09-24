@@ -34,6 +34,26 @@ class MutationEffect(Serializable):
     def __init__(self, variant):
         self.variant = variant
 
+    def to_dict(self):
+        if getattr(self.variant, "is_structural", False):
+            from .structural_serialization import structural_effect_to_dict
+            return structural_effect_to_dict(self)
+        return super().to_dict()
+
+    @classmethod
+    def from_dict(cls, state_dict):
+        if "structural_effect_schema" in state_dict:
+            from .structural_serialization import structural_effect_from_dict
+            return structural_effect_from_dict(cls, state_dict)
+        return super().from_dict(state_dict)
+
+    def __hash__(self):
+        if getattr(self.variant, "is_structural", False):
+            # Evidence contains dictionaries and candidates can point back
+            # to this effect. Equal effects have equal identity fields.
+            return hash((type(self), self.variant, self.transcript))
+        return super().__hash__()
+
     def __str__(self):
         return "%s(variant=%s)" % (self.__class__.__name__, self.variant)
 

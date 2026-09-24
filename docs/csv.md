@@ -95,16 +95,23 @@ predictions; API compatibility is not a guarantee of identical scientific output
 |---|---|---|
 | Intended use | Inspect or share a table | Serialize supported objects |
 | Reloading effects | Re-annotates on read | Restores serialized state where supported |
-| Structural variants | Export summaries; import rejected | Retain original VCF and evidence; do not assume all SV effects serialize |
+| Structural variants | Export summaries; import rejected | Restore effect/candidate graphs and mutant transcript models |
 | Carries annotator version header | Yes | (via the serialized object) |
 | Preserves all effect-specific fields | No | Depends on the effect type and serialization support |
 
-JSON (`to_json` / `from_json`) avoids CSV's re-annotation for supported objects,
-but is not a universal lossless archive. Structural-effect JSON serialization
-currently fails for several classes
-([#438](https://github.com/openvax/varcode/issues/438)). Test the round-trip for
-the actual result types you use, and retain source variants, reference release,
-and RNA/phase/germline evidence independently.
+JSON (`to_json` / `from_json`) avoids CSV's re-annotation for supported objects.
+Structural results use a versioned effect graph: self candidates and shared
+effect links survive, as do primary, cryptic, splice, and external candidates,
+their source/evidence fields, fusion partners, affected exons, and attached
+mutant transcript sequences/segments. Collection annotator provenance is also
+preserved. Deserialization restores recorded predictions without recomputing
+them. Older Varcode versions cannot read this graph format.
+
+This remains an object archive with Python class and reference-dataset
+dependencies. Arbitrary extra attributes and third-party sequence providers
+need their own serialization support. Test the round-trip for the actual result
+types you use, and retain source variants, reference release, and original
+RNA/phase/germline evidence independently.
 
 ## Annotation provenance
 

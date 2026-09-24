@@ -1,5 +1,11 @@
 # Change Log
 
+## [v10.0.3](https://github.com/openvax/varcode/tree/v10.0.3) (2026-09-23)
+
+- Archive structural effects as versioned graphs so self candidates, fusion
+  partners, primary/cryptic/splice/external candidates, mutant transcript
+  models, and annotation provenance survive JSON round trips (#438).
+
 ## [v10.0.2](https://github.com/openvax/varcode/tree/v10.0.2) (2026-09-23)
 
 - Load structural variants from both CLIs, normalize explicit chr contigs,
