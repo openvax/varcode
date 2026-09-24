@@ -1,5 +1,12 @@
 # Change Log
 
+## [v10.1.1](https://github.com/openvax/varcode/tree/v10.1.1) (2026-09-24)
+
+- Do not infer protein truncation from an internal-Met reference suffix when
+  an observed transcript's 5′ completeness is unknown (#467). Preserve the
+  start-to-stop ORF, its evidence and mapped local changes, while retaining
+  full comparisons for predictions with a mapped annotated initiator.
+
 ## [v10.1.0](https://github.com/openvax/varcode/tree/v10.1.0) (2026-09-23)
 
 - Report identical inherited alleles as `GermlineAlleleOverlap`, without
