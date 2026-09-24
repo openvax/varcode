@@ -139,6 +139,8 @@ Legacy event-type classes remain importable; the default annotator emits
 
 ::: varcode.effects.effect_classes.PhaseCandidateSet
 
+::: varcode.effects.effect_classes.GermlineAlleleOverlap
+
 ## Unknown results
 
 ::: varcode.effects.effect_classes.Unresolved
