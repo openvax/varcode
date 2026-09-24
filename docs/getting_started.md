@@ -133,6 +133,7 @@ also distinguish [junction coordinates from affected spans](sv_reference.md#alle
 
 - [Effect annotation](effect_annotation.md): inspect results, sequences, and alternatives.
 - [Sample-aware queries](genotype.md): filter a multi-sample VCF.
+- [Sample identity checks](sample_identity.md): compare donor genotypes and somatic tumor calls.
 - [Structural variants](structural_variants.md): SVs, fusions, and observed RNA.
 - [Germline and phasing](germline.md): use a patient's baseline and linked variants.
 - [Troubleshooting](errors.md): check genome build, alleles, and sample names.
