@@ -434,6 +434,7 @@ def dataframes_to_variant_collection(
                     'info': info,
                     'sample_info': sample_info,
                     'alt_allele_index': alt_num,
+                    'vcf_alt_alleles': tuple(alts.split(',')),
                 }
                 if max_variants is not None and len(variants) >= max_variants:
                     limit_reached = True

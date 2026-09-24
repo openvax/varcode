@@ -31,7 +31,7 @@ domain-specific reviews and independent scientific oracles.
 
 | Priority | Finding and evidence | Disposition |
 |---|---|---|
-| High | VCF export derives header sample order from a set but writes row values in dictionary order. A two-row reproduction assigns tumor GT/DP to normal and emits `44:0/1` under `GT:DP`. Differing sample sets also discard sample data; headers and allele-indexed metadata lack a complete preservation contract. | Filed [#502](https://github.com/openvax/varcode/issues/502); documented in [saving results](csv.md#vcf-export-limitations). |
+| High | VCF export derives header sample order from a set but writes row values in dictionary order. A two-row reproduction assigns tumor GT/DP to normal and emits `44:0/1` under `GT:DP`. Differing sample sets also discard sample data; headers and allele-indexed metadata lack a complete preservation contract. | Filed [#502](https://github.com/openvax/varcode/issues/502); resolved in 10.1.3 with explicit [export guarantees and limits](csv.md#vcf-export). |
 | High | The phase cap returns an all-cis placeholder that the consumer classifies as a precise effect. The existing CFTR pair yields cis/trans alternatives at cap 8 but only `p.S159T` at cap 1, with no molecular evidence resolving phase. Four unphased germline alleles exceed the default cap. | Filed [#503](https://github.com/openvax/varcode/issues/503); documented in [germline annotation](germline.md). |
 | High | `deploy.sh` lacks the branch/clean-tree guards, version handling, tagging, and pushing described in AGENTS.md. It can upload from the wrong checkout if invoked without independent checks. | Existing [#414](https://github.com/openvax/varcode/issues/414); release instructions now describe the actual script and required manual checks. |
 | Medium | The test cache probe accesses `EnsemblRelease.db`, which can download missing reference data while supposedly checking local installation. | Existing [#493](https://github.com/openvax/varcode/issues/493); contributor instructions distinguish reference provisioning from offline snapshot tests. |
@@ -77,8 +77,8 @@ files or rewrite all experimental-annotator documentation.
 
 ## Follow-up sequence
 
-Fix sample identity/FORMAT export integrity (#502) and phase-cap uncertainty
-(#503) first. Then make release guards executable (#414) and make reference
+Sample identity/FORMAT export integrity (#502) was fixed in 10.1.3.
+Phase-cap uncertainty (#503) is the next scientific correctness priority. Then make release guards executable (#414) and make reference
 cache checks truly local (#493). Broader uncertainty composition (#421/#423),
 shared RNA fixture adoption (#464), and test-oracle cleanup (#479) remain
 foundational work; they should be reviewed as their own changes.
