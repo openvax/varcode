@@ -201,3 +201,11 @@ def test_merged_variant_collection_serialization():
 
     union = ov_wustle_variants.union(tcga_ov_variants)
     eq_(union, pickle.loads(pickle.dumps(union)))
+
+
+def test_default_source_metadata_is_independent():
+    first = VariantCollection([])
+    second = VariantCollection([])
+    first.source_to_metadata_dict["first.vcf"] = {}
+    assert second.source_to_metadata_dict == {}
+    assert VariantCollection([]).source_to_metadata_dict == {}

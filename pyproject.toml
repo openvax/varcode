@@ -48,7 +48,7 @@ markers = [
 
 [tool.ruff.lint]
 select = ["E", "F"]
-ignore = ["F821", "E501", "F841", "E731", "E741", "E722", "E721"]
+ignore = ["E501", "F841", "E731", "E741", "E722", "E721"]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]

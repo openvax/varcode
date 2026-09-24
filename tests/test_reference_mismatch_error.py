@@ -101,3 +101,20 @@ def test_reference_mismatch_error_exposed_at_package_level():
     # Users should be able to catch varcode.ReferenceMismatchError
     # without importing from a submodule.
     assert varcode.ReferenceMismatchError is ReferenceMismatchError
+
+
+def test_transcript_failure_helper_retains_error():
+    from varcode.effects.effect_prediction import (
+        predict_variant_effect_on_transcript_or_failure,
+    )
+    from varcode.effects import Failure
+
+    variant = Variant("7", 117531114, "T", "A", genome=81)
+    transcript = variant.genome.transcript_by_id("ENST00000003084")
+    with pytest.raises(ReferenceMismatchError) as exc_info:
+        variant.effect_on_transcript(transcript)
+    effect = predict_variant_effect_on_transcript_or_failure(variant, transcript)
+    assert isinstance(effect, Failure)
+    assert effect.variant == variant
+    assert effect.transcript is transcript
+    assert effect.error == str(exc_info.value)

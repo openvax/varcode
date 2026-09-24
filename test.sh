@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Run the varcode test suite with a memory- and CPU-aware pytest-xdist
-# worker count. See ~/code/trufflepig/test.sh for the rationale: running
-# several sibling repos' suites concurrently can fork-bomb the laptop,
+# worker count. Running several suites concurrently can exhaust memory,
 # so we cap workers at min(cpu_reserve, available_RAM / PER_WORKER_GB).
 # xdist is optional — fall back to serial pytest when it isn't installed.
 #
@@ -99,10 +98,10 @@ XDIST_FLAGS=()
 if python -c "import xdist" 2>/dev/null; then
     XDIST_FLAGS=(-n "$WORKERS")
     log "platform=${OS} cpus=${CPUS} cpu_cap=${CPU_CAP} ${mem_note} per_worker=${PER_WORKER_GB}GB"
-    log "workers=${WORKERS} → exec pytest -n ${WORKERS} --cov=varcode/ --cov-report=term-missing tests $*"
+    log "workers=${WORKERS} → exec python -m pytest -n ${WORKERS} --cov=varcode/ --cov-report=term-missing tests $*"
 else
     log "platform=${OS} cpus=${CPUS} (pytest-xdist not installed; running serial)"
-    log "→ exec pytest --cov=varcode/ --cov-report=term-missing tests $*"
+    log "→ exec python -m pytest --cov=varcode/ --cov-report=term-missing tests $*"
 fi
 
-exec pytest "${XDIST_FLAGS[@]}" --cov=varcode/ --cov-report=term-missing tests "$@"
+exec python -m pytest "${XDIST_FLAGS[@]}" --cov=varcode/ --cov-report=term-missing tests "$@"

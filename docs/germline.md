@@ -4,6 +4,14 @@ Use patient germline calls when you want a somatic variant classified against
 the patient's baseline rather than only the reference. Nearby germline changes
 can alter the predicted amino-acid consequence.
 
+!!! warning "Phase enumeration limit"
+    When the phase-hypothesis cap is exceeded, the current implementation
+    classifies one all-cis assignment and marks
+    `germline_phase_state="too_many_hypotheses"`. That result does not resolve
+    phase and should not be treated as a definitive consequence. The default
+    cap is eight hypotheses. A correction that preserves uncertainty is
+    tracked in [#503](https://github.com/openvax/varcode/issues/503).
+
 ## Basic usage
 
 ```python

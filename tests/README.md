@@ -1,4 +1,19 @@
-# Osteosarc test variants
+# Test data and reproducibility
+
+Keep small synthetic fixture constructors in the test module or a shared
+helper under `tests/`. Document the expected behavior and why the inputs
+exercise it. For captured public data, check in the acquisition/subsetting
+recipe, source identifiers, reference release, and integrity hashes with the
+fixture. Do not make an untracked local cache or sibling checkout a test
+requirement. RNA fixture harmonization is tracked in
+[#464](https://github.com/openvax/varcode/issues/464).
+
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for environment and reference setup.
+The reference-cache probe has a separate download issue
+([#493](https://github.com/openvax/varcode/issues/493)); the offline guarantees
+below apply to the bundled Osteosarc snapshot checks.
+
+## Osteosarc test variants
 
 `tests/data/osteosarc_variants.json` contains 177 ready site variants and five
 unresolved entries collected through `osteosarc==0.1.0` from the pinned public
@@ -55,14 +70,14 @@ separate from export and tests.
 
 The targeted GPX4 and BRCA1 regressions use Ensembl 81. Offline integration
 checks use the public osteosarc dataset through the published
-`osteosarc==0.1.4` adapter from the optional `test-data` extra (Python 3.10+):
+`osteosarc==0.2.3` adapter from the optional `test-data` extra (Python 3.9+):
 
 ```sh
 python -m pip install -e '.[test-data]'
-pytest -q tests/test_osteosarc_dataset.py
+python -m pytest -q tests/test_osteosarc_dataset.py
 ```
 
-These five tests run in the ordinary suite and in CI on Python 3.10/3.11.
+These five tests run in the ordinary suite and in CI on Python 3.9/3.10/3.11.
 They unpack `tests/data/osteosarc_snapshot_2026-09-18t.zip` into a pytest
 temporary directory, check the archive SHA256, and open it offline through
 Osteosarc, which verifies all source objects against their receipts. No
@@ -85,9 +100,9 @@ To test an existing shared cache explicitly, set both
 identity must match. Missing packages, objects, or a mismatched snapshot then
 fail; the tests never fall back to the bundled snapshot. Without an explicit
 snapshot, these checks skip only when the optional Osteosarc dependency is
-absent (including Python 3.9, which Osteosarc does not support).
+absent. Osteosarc 0.2.3 supports every Python version in the CI matrix.
 
-Tests never download data or refresh sources. `Dataset.sync` acquires new
+These snapshot integration tests never download data or refresh sources. `Dataset.sync` acquires new
 snapshots separately; current remote sources do not reproduce the historical
 identity. Change this fixture only by deliberately reviewing a new snapshot
 and updating its source provenance, identity, archive hash, and expectations.

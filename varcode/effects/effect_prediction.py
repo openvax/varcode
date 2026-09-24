@@ -176,7 +176,7 @@ def predict_variant_effects(
                         try:
                             effect = annotate(variant, transcript)
                         except Exception as error:
-                            logger.warn(
+                            logger.warning(
                                 "Encountered error annotating %s for %s: %s",
                                 variant, transcript, error)
                             effect = Failure(variant, transcript, error=str(error))
@@ -206,12 +206,12 @@ def predict_variant_effect_on_transcript_or_failure(variant, transcript):
             variant=variant,
             transcript=transcript)
     except (AssertionError, ValueError) as error:
-        logger.warn(
+        logger.warning(
             "Encountered error annotating %s for %s: %s",
             variant,
             transcript,
             error)
-        return Failure(variant, transcript)
+        return Failure(variant, transcript, error=str(error))
 
 
 def predict_variant_effect_on_transcript(

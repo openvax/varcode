@@ -113,6 +113,17 @@ need their own serialization support. Test the round-trip for the actual result
 types you use, and retain source variants, reference release, and original
 RNA/phase/germline evidence independently.
 
+## VCF export limitations
+
+`varcode.vcf_output.variants_to_vcf` is a legacy export helper, not a lossless
+archive. In particular, differing sample or FORMAT dictionary orders can
+misassign sample identities or field values; mismatched sample sets can drop
+sample data. Header definitions and allele-indexed metadata are also not fully
+preserved. These issues are tracked in
+[#502](https://github.com/openvax/varcode/issues/502). Retain the original VCF
+for genotype evidence and do not rely on this helper for sample-sensitive
+round trips.
+
 ## Annotation provenance
 
 Annotated effect collections record `annotator`, `annotator_version`, and
