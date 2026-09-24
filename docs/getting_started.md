@@ -81,6 +81,27 @@ For a MAF, use `variants = varcode.load_maf("variants.maf")` after importing
 `varcode`; the MAF's build information supplies the reference. See
 [file-loading parameters](api_variants.md#file-loading) for format-specific options.
 
+## Command line
+
+```bash
+varcode --genome GRCh38 --vcf variants.vcf --output-csv effects.csv
+varcode-genes --genome GRCh38 --variant chr12 25245350 C T --output-csv genes.csv
+```
+
+Both commands load structural variants automatically and accept repeated
+`--vcf`, `--maf`, `--variant`, and `--json-variants` inputs. VCF records with
+FILTER other than `PASS` or `.` are skipped with a record count; use
+`--include-filtered` to include them. The Python loader retains its explicit
+`parse_structural_variants=True` opt-in.
+
+Annotation errors stop the command by default. `--skip-errors` continues and
+keeps failed annotations: effects CSVs contain `Failure` rows and an
+`annotation_error` column; gene CSVs add `annotation_status` and
+`annotation_error`, with missing gene fields for failures. Input parsing errors
+still stop the command. Failures remain visible even with `--only-coding` and
+`--one-per-variant`; the latter selects one successful effect per variant and
+also retains each failed transcript. SV CSVs include structural coordinates.
+
 ## Summarize and save results
 
 Choose one effect per variant when you need a compact report:

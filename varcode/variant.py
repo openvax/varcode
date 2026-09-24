@@ -454,7 +454,7 @@ class Variant(Serializable):
         raise_on_error : bool
             If True, raise on annotation errors; if False, capture
             per-transcript errors as Failure effects. Failed initial
-            gene/transcript lookups return an empty EffectCollection
+            gene/transcript lookups return a transcript-free Failure
             and log the error.
 
         annotator : str, EffectAnnotator, or None

@@ -1,5 +1,12 @@
 # Change Log
 
+## [v10.0.2](https://github.com/openvax/varcode/tree/v10.0.2) (2026-09-23)
+
+- Load structural variants from both CLIs, normalize explicit chr contigs,
+  report filtered VCF record counts, and add `--include-filtered` (#433).
+- Add `--skip-errors` with retained Failure rows and error details, including
+  failed initial annotation lookups and failures alongside coding filters.
+
 ## [v10.0.1](https://github.com/openvax/varcode/tree/v10.0.1) (2026-09-23)
 
 - Reconstruct inserted junction bases in local DEL/DUP transcripts on both
