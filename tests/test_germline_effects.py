@@ -35,6 +35,7 @@ from varcode import (
     VariantCollection,
     apply_germline_to_transcript,
     detect_loh,
+    detect_germline_overlap,
     enumerate_phase_hypotheses,
     load_vcf,
     predict_germline_aware_effect,
@@ -267,36 +268,40 @@ class TestPhaseResolverCollapses:
 
 
 # --------------------------------------------------------------------
-# LOH detection
+# Germline overlap does not establish LOH
 # --------------------------------------------------------------------
 
 
-class TestLOH:
-    def test_loh_detector_matches_position_and_alt(self):
+class TestGermlineOverlap:
+    def test_overlap_detector_matches_position_and_alt(self):
         s = _somatic()
-        # Same position+alt → LOH.
+        # Same allele establishes overlap only.
         match = Variant(contig="7", start=SOMATIC_POS, ref=SOMATIC_REF,
                         alt=SOMATIC_ALT, genome=ensembl_grch38)
-        assert detect_loh(s, [match]) is True
-        # Same position, different alt → not LOH.
+        assert detect_germline_overlap(s, [match]) is True
+        # Same position, different alt is a different allele.
         diff_alt = Variant(contig="7", start=SOMATIC_POS, ref=SOMATIC_REF,
                            alt="G", genome=ensembl_grch38)
-        assert detect_loh(s, [diff_alt]) is False
-        # Different position → not LOH.
+        assert detect_germline_overlap(s, [diff_alt]) is False
+        # Different position does not match.
         diff_pos = Variant(contig="7", start=SOMATIC_POS + 5,
                            ref="A", alt="T", genome=ensembl_grch38)
-        assert detect_loh(s, [diff_pos]) is False
-        # No germline → not LOH.
-        assert detect_loh(s, []) is False
+        assert detect_germline_overlap(s, [diff_pos]) is False
+        assert detect_germline_overlap(s, []) is False
 
-    def test_loh_flag_set_on_effect_when_somatic_matches_germline(self):
+    def test_matching_germline_is_not_a_new_somatic_allele_or_loh(self):
         ann = get_default_annotator()
         ctx = GermlineContext.from_variants(
             [Variant(contig="7", start=SOMATIC_POS, ref=SOMATIC_REF,
                      alt=SOMATIC_ALT, genome=ensembl_grch38)],
             reference_name="GRCh38")
         e = predict_germline_aware_effect(_somatic(), _cftr(), ctx, ann)
-        assert getattr(e, "is_loh", False) is True
+        from varcode import GermlineAlleleOverlap
+        assert isinstance(e, GermlineAlleleOverlap)
+        assert e.is_germline_overlap is True
+        assert e.is_loh is None
+        assert e.loh_status == "not_assessed"
+        assert e.modifies_protein_sequence is False
 
     def test_loh_flag_not_set_when_alt_differs(self):
         ann = get_default_annotator()
@@ -307,6 +312,11 @@ class TestLOH:
             reference_name="GRCh38")
         e = predict_germline_aware_effect(_somatic(), _cftr(), ctx, ann)
         assert getattr(e, "is_loh", False) is False
+
+    def test_legacy_loh_query_is_explicitly_unassessed(self):
+        for germline in ([], [_somatic()]):
+            with pytest.warns(DeprecationWarning, match="cannot infer LOH"):
+                assert detect_loh(_somatic(), germline) is None
 
 
 # --------------------------------------------------------------------

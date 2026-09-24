@@ -88,7 +88,8 @@ def test_documentation_germline_scenarios():
     namespace["effects"] = varcode.VariantCollection(
         [namespace["germline"]]).effects(germline=namespace["ctx"])
     _run(_blocks("docs/germline.md", "## Loss of heterozygosity (LOH)")[:1], namespace)
-    assert any(getattr(effect, "is_loh", False) for effect in namespace["effects"])
+    assert any(getattr(effect, "is_germline_overlap", False) for effect in namespace["effects"])
+    assert not any(getattr(effect, "is_loh", False) for effect in namespace["effects"])
 
     validation = _blocks("docs/germline.md", "## Cross-VCF build mismatch")[:1]
     namespace["somatic_variants"] = varcode.VariantCollection([namespace["somatic"]])

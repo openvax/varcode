@@ -334,6 +334,19 @@ class TranscriptMutationEffect(Intragenic):
             self.transcript.id)
 
 
+class GermlineAlleleOverlap(TranscriptMutationEffect):
+    """This reported allele is already present in the supplied germline.
+
+    No new allele sequence is established. This does not assess allele dosage,
+    loss of the other allele, expression, or the allele's pathogenicity.
+    """
+
+    short_description = "germline-allele-overlap"
+    is_germline_overlap = True
+    is_loh = None
+    loh_status = "not_assessed"
+
+
 class Failure(TranscriptMutationEffect):
     """
     Special placeholder effect for when we want to suppress errors but still

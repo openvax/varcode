@@ -1,5 +1,13 @@
 # Change Log
 
+## [v10.1.0](https://github.com/openvax/varcode/tree/v10.1.0) (2026-09-23)
+
+- Report identical inherited alleles as `GermlineAlleleOverlap`, without
+  manufacturing a new somatic sequence change or claiming LOH (#454).
+- Add `detect_germline_overlap`; deprecate the allele-only `detect_loh` query,
+  which now returns `None` (not assessed). LOH needs independent allelic-state
+  evidence. Mixed inherited/somatic transcript-model groups remain unresolved.
+
 ## [v10.0.4](https://github.com/openvax/varcode/tree/v10.0.4) (2026-09-23)
 
 - Leave overlapping DUP/INV events unresolved in the experimental transcript

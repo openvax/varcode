@@ -566,8 +566,8 @@ class GermlineContext:
 #      the reference at this locus. Annotate normally. (When the
 #      context is SPARSE / HOTSPOTS_ONLY, flag the resulting effect with
 #      ``germline_unknown=True`` so consumers see the uncertainty.)
-#   3. Detect LOH — ``somatic`` shares (position, alt) with a germline
-#      het call. Sets ``effect.is_loh = True`` and proceeds.
+#   3. Detect an identical germline allele and report overlap without
+#      inventing a new somatic sequence change or a zygosity claim.
 #   4. Resolve phase between somatic and each germline-in-window via
 #      ``phase_resolver``. Hemizygous variants (chrX/Y/M) → automatic
 #      cis. PS-tagged variants → use the resolver's answer. Unknown
@@ -692,27 +692,39 @@ def default_germline_window(somatic_variant, transcript) -> Tuple[str, int, int]
     return contig, max(1, start), end
 
 
-def detect_loh(somatic_variant, germline_in_window) -> bool:
-    """True when ``somatic_variant`` is identical at (position, alt)
-    to a germline variant in the window.
+def detect_germline_overlap(somatic_variant, germline_in_window) -> bool:
+    """Whether the same allele occurs in the supplied germline variants.
 
-    LOH is the most common "looks somatic but isn't really" case —
-    the patient was germline het at this position, and the tumor lost
-    the reference allele, so the variant call says "alt" in tumor and
-    "het" in normal but the alt itself is the germline allele. We
-    flag the resulting effect with ``is_loh=True`` so consumers can
-    distinguish a true somatic mutation from a zygosity change.
-
-    Only same-position-and-alt counts. A position where germline and
-    somatic disagree on alt is a different mutation, not LOH.
+    Match reference assembly, contig, normalized position, REF, and ALT. This
+    says nothing about genotype, allele balance, copy number, or LOH.
     """
     for g in germline_in_window:
-        if (g.contig == somatic_variant.contig
-                and g.start == somatic_variant.start
-                and g.ref == somatic_variant.ref
-                and g.alt == somatic_variant.alt):
+        if getattr(g, "is_structural", False) or getattr(somatic_variant, "is_structural", False):
+            if g == somatic_variant:
+                return True
+            continue
+        if (getattr(g, "reference_name", None) == getattr(somatic_variant, "reference_name", None)
+                and g.contig == somatic_variant.contig
+                and g.trimmed_base1_start == somatic_variant.trimmed_base1_start
+                and g.trimmed_ref == somatic_variant.trimmed_ref
+                and g.trimmed_alt == somatic_variant.trimmed_alt):
             return True
     return False
+
+
+def detect_loh(somatic_variant, germline_in_window) -> Optional[bool]:
+    """Deprecated: these allele-only inputs cannot establish LOH.
+
+    Returns ``None`` (not assessed), never a positive or negative LOH call.
+    Use :func:`detect_germline_overlap` for the previous overlap query. LOH
+    requires an independently supported tumor/normal allelic-state assessment;
+    this annotation API does not perform that analysis.
+    """
+    warnings.warn(
+        "detect_loh cannot infer LOH from allele overlap; returning None. "
+        "Use detect_germline_overlap for allele matching.",
+        DeprecationWarning, stacklevel=2)
+    return None
 
 
 @dataclass(frozen=True)
@@ -976,8 +988,8 @@ def predict_germline_aware_effect(
       (capped via ``max_hypotheses``), classify each, wrap in
       :class:`~varcode.effects.effect_classes.PhaseCandidateSet`.
 
-    LOH (``somatic`` matches germline at position+alt with het zygosity)
-    sets ``effect.is_loh = True`` regardless of which branch ran.
+    An identical germline allele returns a ``GermlineAlleleOverlap`` without
+    inferring zygosity, LOH, or a new allele sequence.
 
     ``window_fn`` is the pluggable window selector — defaults to
     :func:`default_germline_window` (codon-level, with splice-signal
@@ -992,7 +1004,9 @@ def predict_germline_aware_effect(
 
     contig, start, end = window_fn(somatic_variant, transcript)
     germline_in_window = germline_ctx.variants_in_window(contig, start, end)
-    is_loh = detect_loh(somatic_variant, germline_in_window)
+    if detect_germline_overlap(somatic_variant, germline_in_window):
+        from .effects.effect_classes import GermlineAlleleOverlap
+        return GermlineAlleleOverlap(somatic_variant, transcript)
 
     if not germline_in_window:
         effect = annotator.annotate_on_transcript(
@@ -1002,8 +1016,6 @@ def predict_germline_aware_effect(
         if germline_ctx.completeness in (
                 Completeness.SPARSE, Completeness.HOTSPOTS_ONLY):
             effect.germline_unknown = True
-        if is_loh:
-            effect.is_loh = True
         return effect
 
     hypotheses = enumerate_phase_hypotheses(
@@ -1020,8 +1032,6 @@ def predict_germline_aware_effect(
         # need a possibility set, but the evidence is still useful.
         effect.germline_phase_state = hypotheses[0].phase_state
         effect.germline_variants_in_window = tuple(germline_in_window)
-        if is_loh:
-            effect.is_loh = True
         return effect
 
     # Multiple hypotheses → possibility set.
@@ -1036,6 +1046,4 @@ def predict_germline_aware_effect(
         candidates=candidates,
         hypotheses=hypotheses,
         germline_variants=tuple(germline_in_window))
-    if is_loh:
-        effect.is_loh = True
     return effect

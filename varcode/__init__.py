@@ -35,6 +35,7 @@ from .germline import (
     apply_germline_to_transcript,
     default_germline_window,
     detect_loh,
+    detect_germline_overlap,
     enumerate_phase_hypotheses,
     predict_germline_aware_effect,
 )
@@ -104,6 +105,7 @@ from .effects import (
     MutationEffect,
     NonsilentCodingMutation,
     Unresolved,
+    GermlineAlleleOverlap,
 )
 from .version import __version__
 
@@ -213,6 +215,8 @@ __all__ = [
     "apply_germline_to_transcript",
     "default_germline_window",
     "detect_loh",
+    "detect_germline_overlap",
+    "GermlineAlleleOverlap",
     "enumerate_phase_hypotheses",
     "predict_germline_aware_effect",
 
