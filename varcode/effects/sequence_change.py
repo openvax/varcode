@@ -101,19 +101,31 @@ def _initiated(protein):
     return "M" + protein[1:] if protein else protein
 
 
-def _orf_changes(model, transcript, reference_protein, table, start, end, selenocysteine):
+def _proper_reference_suffix(sequence, reference):
+    """Could missing 5' coverage alone explain this shorter sequence?"""
+    return (bool(sequence) and reference is not None
+            and sequence != reference and reference.endswith(sequence))
+
+
+def _orf_changes(model, transcript, reference_protein, table, start, end, selenocysteine,
+                 partial_start=False):
     """Compare the ORF read with one Sec decoding against the reference."""
     coding = _read_orf(model.cdna_sequence, start, end, table, selenocysteine)
     if coding is None:
         return None, None
     reference_coding = transcript.coding_sequence
     coding_status = None if reference_coding is None else coding != reference_coding.upper()
+    if partial_start and _proper_reference_suffix(
+            coding, reference_coding.upper() if reference_coding is not None else None):
+        coding_status = None
     if reference_protein is None or "X" in reference_protein:
         return coding_status, None
     residues = translate_sequence(coding, codon_table=table, to_stop=False,
                                   selenocysteine={pos - start for pos in selenocysteine})
     # Initiator methionine also applies to alternative start codons.
     protein = "M" + residues[1:-1]
+    if partial_start and _proper_reference_suffix(protein, reference_protein):
+        return _partial_sequence_changes(model, transcript, table)
     return coding_status, protein != reference_protein
 
 
@@ -123,10 +135,25 @@ def _complete_sequence_changes(model, transcript, initiator):
     CDS bases are compared with every Sec codon read through; how Sec is
     decoded affects only the protein. Where that is unknown, evaluate both
     readings and keep the protein flag only when they agree.
+
+    ORF boundaries do not establish transcript completeness. An unanchored
+    observed reference suffix is compared as partial when its producer marks
+    the transcript's completeness unknown.
     """
     supplied = None
     protein = _initiated(model.mutant_protein_sequence)
     reference_protein = _initiated(transcript.protein_sequence)
+    bounds = _orf_bounds(model, initiator)
+    partial_start = (model.evidence or {}).get(
+        "sequence_status") == "observed_model_completeness_unknown" and not (
+            bounds is not None and not model.edits and initiator.complete
+            and sum(s.length for s in model.reference_segments or ()) == len(model.cdna_sequence)
+            and bounds[0] == _retained_start(model, initiator))
+    table = codon_table_for_transcript(initiator)
+    if partial_start and _proper_reference_suffix(protein, reference_protein):
+        # An observed internal Met-to-stop ORF may only be missing 5' coverage.
+        # Keep its ORF boundaries; use mapped codons to establish any change.
+        return _partial_sequence_changes(model, transcript, table)
     if (protein is not None and reference_protein is not None
             and "X" not in protein and "X" not in reference_protein
             # Ending exactly at a Sec residue is a decoding choice, not a change.
@@ -134,7 +161,6 @@ def _complete_sequence_changes(model, transcript, initiator):
                      and reference_protein[len(protein):len(protein) + 1] == "U")):
         # An empty protein is a known absence, not missing data.
         supplied = protein != reference_protein
-    bounds = _orf_bounds(model, initiator)
     if bounds is None:
         return None, supplied
     start, end = bounds
@@ -150,11 +176,10 @@ def _complete_sequence_changes(model, transcript, initiator):
             uncertain = {pos for pos in (start + 3 * i for i, aa in enumerate(reference_protein)
                                          if aa == "U")
                          if sequence[pos:pos + 3].upper() == "TGA"}
-    table = codon_table_for_transcript(initiator)
     coding_status, _ = _orf_changes(model, transcript, reference_protein, table, start, end,
-                                    decoded | uncertain | terminating)
+                                    decoded | uncertain | terminating, partial_start)
     proteins = {_orf_changes(model, transcript, reference_protein, table, start, end,
-                             selenocysteine)[1]
+                             selenocysteine, partial_start)[1]
                 for selenocysteine in {frozenset(decoded), frozenset(decoded | uncertain)}}
     protein_status = proteins.pop() if len(proteins) == 1 else None
     if uncertain:

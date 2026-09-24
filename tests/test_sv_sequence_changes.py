@@ -323,6 +323,92 @@ def test_imported_partial_peptide_without_reference_mapping_is_unknown(cftr, com
     assert candidate.effect.modifies_protein_sequence is None
 
 
+@pytest.mark.parametrize("transcript_id", ["ENST00000003084", "ENST00000357654"])
+@pytest.mark.parametrize("supplied_protein", [False, True])
+@pytest.mark.parametrize("mapped", [False, True])
+def test_unknown_transcript_start_with_complete_internal_orf(
+        transcript_id, supplied_protein, mapped):
+    transcript = cached_release(81).transcript_by_id(transcript_id)
+    i = transcript.protein_sequence.index("M", 1)
+    start = min(transcript.start_codon_spliced_offsets) + 3 * i
+    stop = max(transcript.stop_codon_spliced_offsets) + 1
+    cdna = transcript.sequence[start:stop]
+    effect = _effect(
+        transcript, cdna=cdna,
+        protein=transcript.protein_sequence[i:] if supplied_protein else None,
+        segments=(ReferenceSegment(transcript, start, stop),) if mapped else None,
+        evidence={"protein_completeness": "start_to_stop", "cds_start": 0,
+                  "cds_end": len(cdna), "sequence_status": "observed_model_completeness_unknown"})
+    assert effect.modifies_coding_sequence is None
+    assert effect.modifies_protein_sequence is None
+    assert len(EffectCollection([effect]).drop_silent_and_noncoding(False)) == 0
+
+
+@pytest.mark.parametrize("retained_start", [False, True])
+def test_unknown_completeness_preserves_mapped_changes_and_annotated_start(cftr, retained_start):
+    start = min(cftr.start_codon_spliced_offsets)
+    stop = max(cftr.stop_codon_spliced_offsets) + 1
+    internal = start + 3 * cftr.protein_sequence.index("M", 1)
+    if retained_start:
+        # The known initiator followed by a deletion can coincidentally produce
+        # the same amino acids as an internal-Met reference suffix.
+        segments = (ReferenceSegment(cftr, start, start + 3),
+                    ReferenceSegment(cftr, internal + 3, stop))
+    else:
+        segments = (ReferenceSegment(cftr, internal, stop),)
+    cdna = "".join(cftr.sequence[s.start:s.end] for s in segments)
+    if not retained_start:
+        # A mapped synonymous change still establishes a CDS change even
+        # though the shorter protein remains compatible with missing coverage.
+        pos = next(i for i in range(3, len(cdna), 3) if cdna[i:i + 3] == "GCT")
+        cdna = cdna[:pos] + "GCC" + cdna[pos + 3:]
+    effect = _effect(cftr, cdna=cdna, segments=segments,
+                     protein=cftr.protein_sequence[(internal - start) // 3:],
+                     evidence={"protein_completeness": "start_to_stop", "cds_start": 0,
+                               "cds_end": len(cdna),
+                               "sequence_status": "observed_model_completeness_unknown"})
+    assert effect.modifies_coding_sequence is True
+    assert effect.modifies_protein_sequence is (True if retained_start else None)
+
+
+def test_reference_suffix_without_cdna_needs_transcript_completeness(cftr):
+    protein = cftr.protein_sequence[cftr.protein_sequence.index("M", 1):]
+    complete = _effect(cftr, protein=protein)
+    assert complete.modifies_protein_sequence is True
+    unknown = _effect(cftr, protein=protein, evidence={
+        "sequence_status": "observed_model_completeness_unknown"})
+    assert unknown.modifies_protein_sequence is None
+    assert unknown.modifies_coding_sequence is None
+
+
+def test_unrendered_mapping_cannot_establish_an_observed_initiator(cftr):
+    i = cftr.protein_sequence.index("M", 1)
+    sequence = cftr.coding_sequence[3 * i:]
+    start = min(cftr.start_codon_spliced_offsets)
+    stop = max(cftr.stop_codon_spliced_offsets) + 1
+    effect = _effect(cftr, cdna=sequence, protein=cftr.protein_sequence[i:],
+                     # This stale mapping still includes the missing prefix.
+                     segments=(ReferenceSegment(cftr, start, stop),), evidence={
+                         "sequence_status": "observed_model_completeness_unknown",
+                         "cds_start": 0, "cds_end": len(sequence)})
+    assert effect.modifies_coding_sequence is None
+    assert effect.modifies_protein_sequence is None
+
+
+def test_reference_cds_suffix_without_reference_protein_stays_unknown():
+    from types import SimpleNamespace
+
+    transcript = SimpleNamespace(
+        id="missing-protein", name="missing-protein", gene=SimpleNamespace(id="gene"),
+        protein_sequence=None, coding_sequence="ATGGCTATGAAATAA", complete=False,
+        contig="1", start=100, genome=cached_release(81))
+    effect = _effect(transcript, cdna="ATGAAATAA", evidence={
+        "sequence_status": "observed_model_completeness_unknown",
+        "cds_start": 0, "cds_end": 9})
+    assert effect.modifies_protein_sequence is None
+    assert effect.modifies_coding_sequence is None
+
+
 def test_complete_protein_and_partial_alternative_remain_unknown(cftr):
     primary = _effect(cftr, protein=cftr.protein_sequence,
                       evidence={"protein_completeness": "start_to_stop"})

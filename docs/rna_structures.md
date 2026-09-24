@@ -126,6 +126,18 @@ observed codon in frame on a reference CDS codon; otherwise they stay `None`.
 Exacto imports carry ORF bounds but no reference coordinates, so their partial
 peptides remain unresolved.
 
+The same caution applies to `start_to_stop` when `sequence_status` is
+`observed_model_completeness_unknown`: an internal methionine followed by the
+unchanged reference-protein suffix can reflect missing 5′ coverage. Without
+the annotated initiator mapped to the observed ORF start, that suffix leaves
+change flags `None`, except for changes established by mapped observed codons.
+It retains its `start_to_stop` label, sequence and provenance, and is retained
+by default but excluded by `drop_silent_and_noncoding(keep_unresolved=False)`.
+This does not demote a different fusion N terminus or an observed premature
+stop merely because transcript completeness is unknown. A mapped annotated
+start can establish that a shorter prediction reflects an actual sequence
+change; initiation and translation still remain predictions.
+
 The small osteosarc regression fixtures deliberately exercise the negative
 case: GABBR1 joins sequence upstream of SLC29A1, OTUD7A joins an antisense FMN1
 intron, and the KLF15-side reads are intronic. Their RNA junctions are retained

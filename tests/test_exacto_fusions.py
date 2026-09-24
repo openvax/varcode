@@ -137,6 +137,67 @@ def test_native_primary_structure_import(context):
     assert candidate.effect.mutant_transcript.evidence == candidate.evidence
 
 
+@pytest.mark.parametrize("reference_side", ["five_prime", "three_prime"])
+@pytest.mark.parametrize("protein_input", ["native", "explicit_start"])
+@pytest.mark.parametrize("reference_coding,reference_protein,changed", [
+    ("ATGCCAATGAAAGGGTAA", "MPMKG", None),
+    ("ATGCCACAATAA", "MPQ", True),
+    ("ATGAAAGGGTAA", "MKG", False),
+    ("ATGAAAGGGTGGTAA", "MKGW", True),
+])
+def test_start_to_stop_import_does_not_infer_missing_five_prime_coverage(
+        context, reference_side, protein_input, reference_coding, reference_protein, changed):
+    from varcode.effects import EffectCollection
+
+    for transcript in context[1:]:
+        transcript.protein_sequence = reference_protein
+        transcript.coding_sequence = transcript.sequence = reference_coding
+        transcript.complete = True
+        transcript.start_codon_spliced_offsets = [0, 1, 2]
+    options = ({"primary_structures_path": table(primary_rows())} if protein_input == "native"
+               else {"cds_starts": {("1", ("T1", "T2")): 0}})
+    candidate, = load(context, **options).candidates
+    effect = candidate.effect
+    if reference_side == "three_prime":
+        effect = GeneFusion(context[0], context[2], context[1],
+                            mutant_transcript=effect.mutant_transcript,
+                            five_prime_transcript=context[1], three_prime_transcript=context[2])
+    before = dict(candidate.evidence)
+    assert effect.modifies_coding_sequence is changed
+    assert effect.modifies_protein_sequence is changed
+    assert effect.mutant_protein_sequence == "MKG"
+    assert candidate.evidence == before == effect.mutant_transcript.evidence
+    if protein_input == "native":
+        assert candidate.evidence["protein_completeness"] == "start_to_stop"
+    assert candidate.evidence["sequence_status"] == "observed_model_completeness_unknown"
+    assert len(EffectCollection([effect]).drop_silent_and_noncoding()) == (changed is not False)
+    assert len(EffectCollection([effect]).drop_silent_and_noncoding(False)) == (changed is True)
+
+
+@pytest.mark.parametrize("partner_coding,partner_protein,changed", [
+    ("ATGCCAATGAAAGGGTAA", "MPMKG", None),
+    ("ATGCCACAATAA", "MPQ", True),
+])
+def test_observed_fusion_comparison_uses_each_partners_own_reference(
+        context, partner_coding, partner_protein, changed):
+    for transcript, coding, protein in [
+            (context[1], "ATGAAAGGGTAA", "MKG"),
+            (context[2], partner_coding, partner_protein)]:
+        transcript.protein_sequence = protein
+        transcript.coding_sequence = transcript.sequence = coding
+        transcript.complete = True
+        transcript.start_codon_spliced_offsets = [0, 1, 2]
+    candidate, = load(context, primary_structures_path=table(primary_rows())).candidates
+    five_prime = candidate.effect
+    three_prime = GeneFusion(context[0], context[2], context[1],
+                             mutant_transcript=five_prime.mutant_transcript,
+                             five_prime_transcript=context[1], three_prime_transcript=context[2])
+    assert five_prime.modifies_coding_sequence is False
+    assert five_prime.modifies_protein_sequence is False
+    assert three_prime.modifies_coding_sequence is changed
+    assert three_prime.modifies_protein_sequence is changed
+
+
 def test_primary_structure_keeps_multiple_orfs(context):
     rows = primary_rows() + primary_rows("AAAGGGTAA", peptide="2", start=3)
     candidates = load(context, primary_structures_path=table(rows)).candidates
