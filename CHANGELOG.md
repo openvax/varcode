@@ -1,5 +1,17 @@
 # Change Log
 
+## [v10.2.1](https://github.com/openvax/varcode/tree/v10.2.1) (2026-09-24)
+
+- Documentation readability pass: the README and docs home now describe what
+  Varcode does and how to read its results (per-transcript predictions,
+  severity vs. likelihood, `None` as unknown). Getting started gains a
+  glossary of the main objects.
+- Reorganize troubleshooting, sample identity checks, VCF export, SV results,
+  and RNA imports around plain-language summaries, with status/threshold tables
+  and collapsible notes for edge cases.
+- Remove stale limitations already fixed in #437 and #449, note that
+  genotype set operations treat uncalled normals as absent, and move the dated
+  quality audit out of the user reference section.
 ## [v10.2.0](https://github.com/openvax/varcode/tree/v10.2.0) (2026-09-24)
 
 - Add `varcode check-samples` and a Python API for pairwise donor genotype

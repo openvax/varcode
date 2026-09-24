@@ -1,7 +1,8 @@
 # Getting started
 
-This guide takes you from installation to a predicted effect and protein sequence,
-then shows how to annotate a file. The examples use Python 3.9 or later.
+This guide takes you from installation to a predicted effect and protein
+sequence, then shows how to annotate a file and read the results. The examples
+use Python 3.9 or later.
 
 ## Install
 
@@ -18,15 +19,16 @@ and transcript/protein sequences. Download the release used in these examples:
 pyensembl install --release 81 --species human
 ```
 
-This is a one-time download and indexing step. These examples pin Ensembl 81
-(GRCh38) so the transcript and coordinates are reproducible; it is not a
-recommendation to use that historical release for every analysis.
+This is a one-time download. The examples pin Ensembl 81 (GRCh38) so their
+coordinates and transcript IDs are reproducible; you don't need to use that
+release for your own data.
 
-For your own data, match the annotation to the reference assembly used for
-variant calling. Pass an explicit release number or PyEnsembl genome object
-when reproducibility matters. An assembly name such as `genome="GRCh38"` is
-also accepted, but does not itself pin an annotation release. GRCh37 input
-needs a GRCh37 annotation, such as Ensembl 75, installed separately.
+For your own data, use an annotation that matches the genome build your
+variants were called against. GRCh37 input, for example, needs a GRCh37
+annotation such as Ensembl 75, installed separately. Pass a release number
+(`genome=81`) or a PyEnsembl genome object to pin the annotation exactly. An
+assembly name such as `genome="GRCh38"` also works, but does not by itself pin
+an annotation release.
 
 ## Annotate one variant
 
@@ -54,11 +56,9 @@ if protein is not None:
     print(protein[158])  # M: Python offsets start at zero
 ```
 
-Protein sequence is available through the ordinary interface; no special
-annotator selection is needed. `None` means no sequence is available for that
-effect, not that the protein is unchanged. Some effects contain several possible
-outcomes; see [alternative outcomes](effect_annotation.md#alternative-outcomes).
-These are predictions, not evidence that a protein was expressed.
+`None` means the sequence could not be determined for that effect, not that
+the protein is unchanged. Some effects contain several possible outcomes, each
+with its own protein; see [alternative outcomes](effect_annotation.md#alternative-outcomes).
 
 ## Load a file
 
@@ -81,27 +81,6 @@ For a MAF, use `variants = varcode.load_maf("variants.maf")` after importing
 `varcode`; the MAF's build information supplies the reference. See
 [file-loading parameters](api_variants.md#file-loading) for format-specific options.
 
-## Command line
-
-```bash
-varcode --genome GRCh38 --vcf variants.vcf --output-csv effects.csv
-varcode-genes --genome GRCh38 --variant chr12 25245350 C T --output-csv genes.csv
-```
-
-Both commands load structural variants automatically and accept repeated
-`--vcf`, `--maf`, `--variant`, and `--json-variants` inputs. VCF records with
-FILTER other than `PASS` or `.` are skipped with a record count; use
-`--include-filtered` to include them. The Python loader retains its explicit
-`parse_structural_variants=True` opt-in.
-
-Annotation errors stop the command by default. `--skip-errors` continues and
-keeps failed annotations: effects CSVs contain `Failure` rows and an
-`annotation_error` column; gene CSVs add `annotation_status` and
-`annotation_error`, with missing gene fields for failures. Input parsing errors
-still stop the command. Failures remain visible even with `--only-coding` and
-`--one-per-variant`; the latter selects one successful effect per variant and
-also retains each failed transcript. SV CSVs include structural coordinates.
-
 ## Summarize and save results
 
 Choose one effect per variant when you need a compact report:
@@ -113,14 +92,59 @@ for variant, effect in effects.top_priority_effect_per_variant().items():
 effects.to_csv("effects.csv")
 ```
 
-The summary uses Varcode's consequence priority, not the likelihood of an outcome
-or a pathogenicity assessment. Keep the full `effects` collection when you need
-all transcript predictions or alternatives. `effects.top_priority_effect()`
-returns just one effect across the entire collection, not one per variant.
+Keep the full `effects` collection when you need every transcript's prediction
+or the alternative outcomes. Note that `effects.top_priority_effect()` (without
+`_per_variant`) returns a single effect for the entire collection.
 
-CSV is an inspection/report format, not a complete archive of every prediction.
-Keep your input variants and evidence. See [saving and reloading results](csv.md)
-for round-trip limits, especially for structural and multi-outcome effects.
+CSV is a report format, not a complete archive: it does not keep every
+alternative outcome or the evidence behind it. Keep your input files too. See
+[saving and reloading results](csv.md) for what survives a round trip.
+
+## How to read results
+
+Varcode's main objects:
+
+| Object | What it is |
+|---|---|
+| `Variant` | One alternate allele at a genomic position. A VCF row with two ALT alleles becomes two variants. |
+| `VariantCollection` | The variants loaded from your files, with their sample genotypes and source metadata. |
+| Effect | The predicted consequence of one variant on one transcript, such as `Substitution` (`p.L159M`), `FrameShift`, or `Intronic`. All effects subclass `MutationEffect`. |
+| `EffectCollection` | The effects for a collection of variants. Filter, summarize, or save it. |
+| Multi-outcome effect | An effect with several possible `candidates`, used for splice variants, structural variants, and unknown phase. See [alternative outcomes](effect_annotation.md#alternative-outcomes). |
+| `Unresolved` | Varcode could not determine the consequence from the available sequence and annotation. |
+
+When interpreting them:
+
+- **Predictions are per transcript.** Keep the transcript with each result;
+  the same variant can be missense on one isoform and noncoding on another.
+- **Priority means severity.** `top_priority_effect_per_variant()` uses
+  Varcode's consequence ordering. It is not the likeliest outcome, a
+  pathogenicity score, or a clinical classification.
+- **`None` means unknown.** A missing protein sequence, or a `None` answer to
+  "does this change the protein?", is not the same as "unchanged".
+- **Predictions are not observations.** A predicted protein is not evidence
+  that the transcript or protein is expressed.
+
+## Command line
+
+The `varcode` command annotates files without writing Python, and
+`varcode-genes` lists the genes each variant overlaps:
+
+```bash
+varcode --genome GRCh38 --vcf variants.vcf --output-csv effects.csv
+varcode-genes --genome GRCh38 --variant chr12 25245350 C T --output-csv genes.csv
+```
+
+Inputs can be combined and repeated: `--vcf`, `--maf`, `--variant`, and
+`--json-variants`. The commands differ from `load_vcf` in two ways:
+
+- They load structural variants automatically.
+- They skip records whose FILTER is not `PASS` or `.`, and report how many were
+  skipped. Use `--include-filtered` to keep them.
+
+An annotation error stops the command. `--skip-errors` continues and records
+each failure in the output; see [continuing past errors](errors.md#continuing-past-errors).
+For sample mix-up screening, see [`varcode check-samples`](sample_identity.md).
 
 ## Coordinate conventions
 

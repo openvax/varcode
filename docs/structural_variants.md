@@ -1,6 +1,8 @@
 # Structural variant annotation
 
-Load structural variants (SVs) with an explicit VCF option, then use the same
+Structural variants (SVs) are deletions, duplications, inversions,
+insertions, copy-number changes, and breakends (translocations and other novel
+junctions). Load them with an explicit VCF option, then use the same
 `effects()` interface as for small variants.
 
 ## Basic usage
@@ -26,39 +28,50 @@ skipped with a warning. No separate annotator selection is needed.
 
 ## Reading SV results
 
-Local deletion and tandem-duplication models are translated and classified as
-`StartLoss`, `Deletion`, `Insertion`, `FrameShift`, or another protein consequence.
-The annotated start is mapped through the retained transcript segments; a
-remaining downstream ATG does not rescue a deleted start. UTR-only edits retain
-`FivePrimeUTR` / `ThreePrimeUTR` labels when their protein is unchanged.
+Varcode reports what an SV does to each transcript, not just the type of DNA
+event. The event type is always available as `effect.variant.sv_type`
+(`DEL`, `DUP`, `INV`, `BND`, ...); the effect class describes the consequence:
 
-A single resolved model returns its consequence directly. When a breakpoint cuts
-an exon, or motif/splice alternatives exist, a `StructuralVariantEffect` contains
-the consequences in `.candidates`. Its description and priority reflect those
-consequences. Candidate evidence records `sv_type`, `splice_ambiguous`, and the
-`reference_splicing` assumption; DUP models also record `tandem_duplication`.
-`mutant_transcript` retains the modeled cDNA, translated protein, and evidence.
-See [alternative outcomes](effect_annotation.md#alternative-outcomes).
+- **One clear consequence.** Local deletions and tandem duplications are
+  modeled, translated, and classified like small variants: `StartLoss`,
+  `Deletion`, `Insertion`, `FrameShift`, or another protein consequence.
+  UTR-only edits keep `FivePrimeUTR` / `ThreePrimeUTR` labels when the protein
+  is unchanged.
+- **Several possible consequences.** When a breakpoint cuts an exon, or
+  splice/motif alternatives exist, a `StructuralVariantEffect` holds each
+  consequence in `.candidates`, and its description and priority reflect them.
+  See [alternative outcomes](effect_annotation.md#alternative-outcomes).
+- **Gene fusions.** `GeneFusion` and `TranslocationToIntergenic`; see
+  [fusion protein candidates](#fusion-protein-candidates).
+- **Unknown.** Unmaterialized inversions, unspecified insertions/CNVs, and
+  assemblies without a mapped CDS give `Unresolved` candidates. A deletion on
+  an incompletely annotated coding transcript falls back to `ExonLoss`.
 
-`GeneFusion` and `TranslocationToIntergenic` remain distinct consequences.
-Unmaterialized inversions, unspecified insertions/CNVs, and assemblies without a
-mapped CDS return `Unresolved` candidates. A deletion on an incompletely annotated
-coding transcript falls back to `ExonLoss`.
+For example, on CFTR (`ENST00000003084`, Ensembl 81), deleting exons 1–3 loses
+the annotated start, deleting exon 5 yields an in-frame `Deletion`
+(1480 → 1450 aa), and deleting exons 5–6 yields a `FrameShift` (171 aa).
+Reading-frame classification uses the spliced edit, consistent with
+[Ensembl's consequence definitions](https://www.ensembl.org/info/genome/variation/prediction/predicted_data.html).
+
+Also note:
+
+- The annotated start codon is mapped through the retained transcript
+  segments; a downstream ATG that survives a deletion does not rescue a
+  deleted start.
+- Candidate evidence records `sv_type`, `splice_ambiguous`, and the
+  `reference_splicing` assumption; DUP models also record `tandem_duplication`.
+  `mutant_transcript` holds the modeled cDNA, translated protein, and evidence.
+- A DNA rearrangement does not by itself establish a complete expressed fusion
+  protein. Sequence may be unknown or partial; `None` is not an unchanged protein.
 
 **Migrating to 10.0:** `LargeDeletion`, `LargeDuplication`, and `Inversion` remain
 importable for legacy objects but are no longer emitted. Read the DNA event from
 `effect.variant.sv_type`; use the consequence or its candidates for protein impact.
 Not every SV effect has `.candidates`: check `isinstance(effect, MultiOutcomeEffect)`.
 
-For CFTR (`ENST00000003084`, Ensembl 81), deleting exons 1–3 loses the annotated
-start, deleting exon 5 yields an in-frame `Deletion` (1480 → 1450 aa), and deleting
-exons 5–6 yields `FrameShift` (171 aa). Reading-frame classification uses the
-spliced edit, consistent with [Ensembl's consequence definitions](https://www.ensembl.org/info/genome/variation/prediction/predicted_data.html).
-
-A DNA rearrangement does not by itself establish a complete expressed fusion
-protein. Sequence may be unknown or partial; `None` is not an unchanged protein.
-
 ## Filtering by protein change
+
+To drop SV effects known not to change the protein:
 
 ```python
 retained = effects.drop_silent_and_noncoding()
@@ -83,18 +96,22 @@ So do partial observations (`protein_completeness` other than `start_to_stop`)
 unless a mapped, in-frame observed codon differs from the reference.
 The filter does not construct missing proteins or change the effect class.
 
-Selenocysteine (`U` in the Ensembl reference protein) is encoded by UGA,
-which is decoded as Sec only with a SECIS element in the mRNA's 3′ UTR.
-Ensembl doesn't annotate SECIS positions. A fusion's stored protein reads Sec
-unless no selenoprotein 3′ UTR remains ([transcript models](transcript_models.md#selenocysteine)).
-For the flags, UGA is read as Sec where a model keeps
-the transcript intact from that codon through its 3′ end, and as a stop where
-no selenoprotein 3′ UTR remains. Otherwise the protein flag is reported only if
-both readings agree, else `None`; for example, a partial 3′ UTR deletion leaves
-the protein unresolved. The coding flag compares CDS bases, which don't depend
-on how Sec is decoded.
-A start codon other than ATG counts as the initiator methionine, even though
-Ensembl writes CTG and TTG starts as `L`.
+??? note "Selenocysteine and non-ATG start codons"
+    Selenocysteine (`U` in the Ensembl reference protein) is encoded by UGA,
+    which is decoded as Sec only with a SECIS element in the mRNA's 3′ UTR.
+    Ensembl doesn't annotate SECIS positions. A fusion's stored protein reads
+    Sec unless no selenoprotein 3′ UTR remains
+    ([transcript models](transcript_models.md#selenocysteine)).
+
+    For the flags, UGA is read as Sec where a model keeps the transcript intact
+    from that codon through its 3′ end, and as a stop where no selenoprotein
+    3′ UTR remains. Otherwise the protein flag is reported only if both
+    readings agree, else `None`; for example, a partial 3′ UTR deletion leaves
+    the protein unresolved. The coding flag compares CDS bases, which don't
+    depend on how Sec is decoded.
+
+    A start codon other than ATG counts as the initiator methionine, even
+    though Ensembl writes CTG and TTG starts as `L`.
 
 ## Fusion protein candidates
 

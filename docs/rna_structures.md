@@ -1,8 +1,12 @@
 # Importing observed RNA structures
 
-Attach observed RNA structures to [structural variants](structural_variants.md)
-without treating an RNA junction as a DNA breakpoint. The examples below assume
-that the DNA variants and relevant reference transcripts are already loaded.
+If an RNA tool such as Exacto or a transcript assembler has reconstructed the
+transcript a [structural variant](structural_variants.md) produces, you can
+attach that observed structure to the DNA variant. Varcode then predicts the
+coding consequences of the observed RNA alongside its own DNA-based
+predictions, without treating an RNA splice junction as a DNA breakpoint. The
+examples below assume that the DNA variants and relevant reference transcripts
+are already loaded.
 
 Varcode represents supplied structures and predicts their coding consequences;
 RNA reconstruction and read-based reconciliation belong to Isovar or another
@@ -112,36 +116,42 @@ acid. Missing peptide rows leave that model's protein `None`. Per-base variant
 IDs, frameshift state and all original fields remain in `exacto_primary_structure`.
 Exacto's standard genetic-code choice is recorded as `protein_translation_table=1`.
 
-These sequences are **predictions from RNA**, not evidence of translation.
-A complete start-to-stop ORF need not cross the rearrangement or establish a
-full-length fusion transcript. Downstream users must check completeness and
-source coordinates rather than treating every protein string as a complete
-expressed fusion protein.
+!!! warning "Check completeness before using a protein"
+    These sequences are **predictions from RNA**, not evidence of translation.
+    A complete start-to-stop ORF need not cross the rearrangement or establish
+    a full-length fusion transcript. Check `protein_completeness` and the
+    source coordinates rather than treating every protein string as a complete
+    expressed fusion protein.
 
-SV sequence-change flags respect `protein_completeness`. A partial peptide is
-never compared with the full reference protein: missing sequence is neither
-unchanged nor a truncation. Its flags are `True` only when the ORF bounds
-(`cds_start` / `cds_end`) and reference-transcript segments place a differing
-observed codon in frame on a reference CDS codon; otherwise they stay `None`.
-Exacto imports carry ORF bounds but no reference coordinates, so their partial
-peptides remain unresolved.
+SV sequence-change flags respect `protein_completeness`: a partial peptide is
+never compared with the full reference protein, because missing sequence is
+neither unchanged nor a truncation. Exacto imports carry ORF bounds but no
+reference coordinates, so their partial peptides stay unresolved (`None`).
 
-The same caution applies to `start_to_stop` when `sequence_status` is
-`observed_model_completeness_unknown`: an internal methionine followed by the
-unchanged reference-protein suffix can reflect missing 5′ coverage. Without
-the annotated initiator mapped to the observed ORF start, that suffix leaves
-change flags `None`, except for changes established by mapped observed codons.
-It retains its `start_to_stop` label, sequence and provenance, and is retained
-by default but excluded by `drop_silent_and_noncoding(keep_unresolved=False)`.
-This does not demote a different fusion N terminus or an observed premature
-stop merely because transcript completeness is unknown. A mapped annotated
-start can establish that a shorter prediction reflects an actual sequence
-change; initiation and translation still remain predictions.
+??? note "Exact rules for partial and completeness-unknown observations"
+    A partial peptide's flags are `True` only when the ORF bounds
+    (`cds_start` / `cds_end`) and reference-transcript segments place a
+    differing observed codon in frame on a reference CDS codon; otherwise they
+    stay `None`.
 
-The small osteosarc regression fixtures deliberately exercise the negative
-case: GABBR1 joins sequence upstream of SLC29A1, OTUD7A joins an antisense FMN1
-intron, and the KLF15-side reads are intronic. Their RNA junctions are retained
-without manufacturing coding fusions or protein sequences.
+    The same caution applies to `start_to_stop` when `sequence_status` is
+    `observed_model_completeness_unknown`: an internal methionine followed by
+    the unchanged reference-protein suffix can reflect missing 5′ coverage.
+    Without the annotated initiator mapped to the observed ORF start, that
+    suffix leaves change flags `None`, except for changes established by
+    mapped observed codons. The prediction keeps its `start_to_stop` label,
+    sequence and provenance, and is retained by default but excluded by
+    `drop_silent_and_noncoding(keep_unresolved=False)`.
+
+    This does not demote a different fusion N terminus or an observed
+    premature stop merely because transcript completeness is unknown. A mapped
+    annotated start can establish that a shorter prediction reflects an actual
+    sequence change; initiation and translation still remain predictions.
+
+Not every RNA junction produces a coding fusion. In the osteosarcoma
+regression fixtures, GABBR1 joins sequence upstream of SLC29A1, OTUD7A joins
+an antisense FMN1 intron, and the KLF15-side reads are intronic. Varcode keeps
+these RNA junctions without inventing coding fusions or protein sequences.
 
 Format reference: [Exacto's structure translation source, pinned revision
 307c086](https://github.com/pirl-unc/exacto/blob/307c08670d5e706734bddf393bcebc84db497f9f/exacto/exacto-translator/src/algorithms/translation.rs).

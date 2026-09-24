@@ -1,18 +1,24 @@
 # Check sample identities
 
-`varcode check-samples` screens a cohort for possible sample mix-ups. It reports
-two separate kinds of evidence for every pair:
+`varcode check-samples` screens a cohort of VCFs for possible sample mix-ups,
+such as a tumor labelled with the wrong patient or two swapped samples. For
+every pair of samples it reports two separate kinds of evidence:
 
-- **Donor:** compatibility of shared, explicitly called germline SNP genotypes.
-- **Tumor:** overlap of reported somatic alleles, including precise SV adjacencies.
+- **Donor:** do the samples' germline SNP genotypes look like they come from
+  the same person?
+- **Tumor:** do two tumor samples share somatic mutations, including precise
+  SV junctions?
 
-This is an uncalibrated heuristic screen, not a probability of identity, a kinship
-test, a contamination estimate or a definitive swap assignment. “Compatible”
-means the available evidence did not distinguish the samples. Relatives and
-identical twins can remain compatible. Check suspected mix-ups with an informative
-SNP panel and a validated identity workflow.
+This is a screening heuristic with uncalibrated thresholds. It does not give a
+probability of identity, test kinship, estimate contamination, or decide which
+samples were swapped. "Compatible" means only that the available evidence did
+not distinguish the samples; relatives and identical twins can be compatible.
+Confirm a suspected mix-up with an informative SNP panel and a validated
+identity workflow.
 
-## CLI
+<a id="cli"></a>
+
+## Run a check
 
 ```bash
 varcode check-samples \
@@ -21,23 +27,35 @@ varcode check-samples \
   --assembly GRCh38 --json checks.json --tsv pairs.tsv
 ```
 
-Each file contributes all its sample columns. Repeat `--germline`, `--somatic`,
-or `--mixed` as needed. `--somatic` declares that records are caller-reported
-somatic calls. Use `--mixed` for a combined germline/somatic callset. These flags
-do not imply a tumor/normal role from a column's name. Multi-sample somatic or
-mixed VCFs need `##tumor_sample` / `##normal_sample` header declarations or roles
-in a manifest. A single-sample somatic VCF defaults to a tumor.
+Each file contributes all of its sample columns. Declare what each file
+contains, repeating a flag as often as needed:
 
-JSON goes to stdout unless `--json` is supplied; the short summary goes to stderr.
-The optional TSV contains every pair, statuses, counts, concordance, somatic
-overlap and flags. JSON also contains reasons for inconclusive results, QC counts,
-absolute source paths, input SHA-256 hashes, sample roles, Varcode version and all
-thresholds. It does not export individual genotypes or mutation lists.
+| Flag | Use for |
+|---|---|
+| `--germline` | Germline calls, such as a normal sample's VCF. |
+| `--somatic` | Caller-reported somatic calls. A single-sample somatic VCF is treated as a tumor. |
+| `--mixed` | A combined germline/somatic callset. |
 
-### Declare expected identities
+A sample's role is never guessed from its column name. Multi-sample somatic or
+mixed VCFs need `##tumor_sample` / `##normal_sample` header lines, or roles
+in a [manifest](#declare-expected-identities).
 
-A CSV or `.tsv` manifest selects exact sample columns and records expectations.
-Paths are relative to the manifest, not the shell's working directory:
+Outputs:
+
+- A short summary on stderr.
+- A JSON report, written to stdout unless you pass `--json`. It includes every
+  pair's statuses and counts, reasons for inconclusive results, QC counts,
+  absolute input paths and SHA-256 hashes, sample roles, the Varcode version,
+  and all thresholds. It does not export individual genotypes or mutation lists.
+- With `--tsv`, a table with one row per pair: statuses, counts, concordance,
+  somatic overlap, and flags.
+
+## Declare expected identities
+
+To check samples against what you expect, list them in a CSV or `.tsv`
+manifest. It selects exact sample columns and records which donor and tumor
+each should belong to. Paths are relative to the manifest, not the shell's
+working directory:
 
 ```csv
 path,sample,kind,role,label,donor_id,tumor_id,normal_sample,assembly
@@ -52,14 +70,42 @@ varcode check-samples --manifest samples.csv \
   --json checks.json --tsv pairs.tsv --fail-on-mismatch
 ```
 
-Only `path` and `sample` are required columns. `kind` defaults to `germline`.
-Labels must be unique; otherwise they default to `absolute-path::sample`.
-The same file/sample cannot be supplied twice. A tumor's `normal_sample` names a
-column in the same VCF, even if that normal is not selected for output. A single
-declared normal is paired automatically; multiple normals require an explicit
-selection. Names are never guessed from words such as `TUMOR` or `NORMAL`.
+- Only `path` and `sample` are required. `kind` defaults to `germline`.
+- `label` names the sample in reports and must be unique. It defaults to
+  `absolute-path::sample`.
+- The same file and sample can't be listed twice.
+- A tumor's `normal_sample` names a column in the same VCF, even if that
+  normal isn't selected for output. A single declared normal is paired
+  automatically; with several normals, name one explicitly.
+- Roles are never guessed from words such as `TUMOR` or `NORMAL`.
 
-Expected identities only affect flags, never the scores:
+Expected identities never change the scores. They only add
+[flags](#flags) where the results contradict your expectations.
+
+## Reading the results
+
+Each pair gets a donor status and a tumor status. An inconclusive status comes
+with `reasons` in the JSON report.
+
+| Donor status | Meaning |
+|---|---|
+| `compatible` | Genotypes agree closely enough that the samples may come from the same person. Relatives and identical twins can also be compatible. |
+| `discordant` | Genotypes disagree enough to suggest different people. |
+| `inconclusive` | Too little usable shared evidence, a result between the compatible and discordant thresholds, or different genome builds. |
+
+| Tumor status | Meaning |
+|---|---|
+| `shared_somatic_support` | Both samples are tumors, and they share enough somatic alleles to suggest a common tumor. |
+| `low_overlap` | Both tumors have enough somatic alleles, but few are shared. On its own, this does not show a different tumor or donor. |
+| `inconclusive` | One sample isn't a tumor, a tumor has too few somatic alleles, or the genome builds differ. |
+
+Somatic overlap cannot prove that two samples came from the same tumor.
+Recurrent drivers, germline leakage, assay overlap, purity, copy number, and
+caller sensitivity can all raise or lower it.
+
+<a id="flags"></a>
+
+When you've declared expected identities, these flags mark results to review:
 
 | Flag | Meaning |
 | --- | --- |
@@ -70,10 +116,10 @@ Expected identities only affect flags, never the scores:
 | `unexpected_tumor_overlap` | Shared somatic support despite different tumor IDs; review shared origins, recurrent mutations or possible duplicate/mislabelled samples. |
 | `same_tumor_has_different_donor_labels` | Equal tumor IDs conflict with different donor IDs. |
 
-`--fail-on-mismatch` returns exit 1 only for `expected_donor_mismatch`. Successful
-inconclusive analyses return 0; invalid inputs return 2. A low somatic overlap is
-not sufficient to call a different donor or tumor. Without expectations, the
-report provides pairwise evidence rather than declaring an automatic swap.
+Exit codes: with `--fail-on-mismatch`, the command returns 1 only for
+`expected_donor_mismatch`. A completed analysis otherwise returns 0, even when
+results are inconclusive; invalid inputs return 2. Without declared
+expectations, the report gives pairwise evidence and never declares a swap.
 
 ## Python API
 
@@ -97,115 +143,148 @@ report = check_sample_identity(normals + paired)
 ```
 
 `load_vcf_samples` returns `SampleFingerprint` objects. `compare_samples` and
-`check_sample_identity` return JSON-compatible dictionaries. Use the same config
-when loading every sample. No transcript annotation or reference sequence download
-is needed. Local VCF and gzip-compressed VCF are supported, not BCF or remote URLs.
-Assemblies must be GRCh37/hg19/b37 or GRCh38/hg38/b38. Recognized `##reference`
-values are used unless explicitly supplied; contradictions are errors. Different
-builds produce inconclusive comparisons. There is no liftover.
+`check_sample_identity` return JSON-compatible dictionaries. Use the same
+config when loading every sample.
 
-## Evidence and thresholds
+Requirements and limits:
+
+- No transcript annotation or reference sequence download is needed.
+- Local VCF and gzip-compressed VCF files are supported, not BCF or remote URLs.
+- Assemblies must be GRCh37/hg19/b37 or GRCh38/hg38/b38. A recognized
+  `##reference` header is used unless you supply the assembly explicitly;
+  contradictions are errors.
+- Samples on different builds give inconclusive comparisons. There is no liftover.
+
+<a id="evidence-and-thresholds"></a>
+
+## How the evidence is judged
+
+The numbers below are defaults; each can be [changed](#configure-and-reproduce).
 
 ### Donor checks
 
-Only complete diploid GTs at individually represented autosomal SNP positions
-(chromosomes 1–22) are used. Comparison uses actual base genotypes, so phase and
-ALT order do not change identity. `chr1` and `1` are equivalent. Missing records,
-partial/haploid GTs, gVCF blocks, indels and SVs do not supply donor genotypes.
-Individually called SNPs remain usable when an uncalled `<NON_REF>` or indel ALT
-is also listed; a GT that actually calls such an allele is excluded.
-An absent call is **never** imputed as homozygous reference.
+**Which genotypes count.** Only complete diploid genotypes at individually
+represented SNPs on autosomes (chromosomes 1–22; `chr1` and `1` are
+equivalent). Genotypes are compared as actual bases, so phase and ALT order
+don't matter.
 
-Record FILTER and sample FT must be PASS or missing. Available depth must be at
-least 10 and available GQ at least 20. Complete AD can supply depth when DP is
-absent. Missing quality is counted and accepted by default; set
-`require_quality=True` to require both depth and GQ. Malformed GT indexes,
-nonfinite/negative quality and invalid AD/AF cardinality stop analysis with a file
-and line number. Conflicting passing SNP records at a locus exclude that locus;
-reference-base disagreements between samples are separately counted and excluded.
+- The record FILTER and sample FT must be `PASS` or missing.
+- Depth must be at least 10 and GQ at least 20 where available. Complete AD
+  can supply depth when DP is absent. Missing values are counted and accepted
+  by default; set `require_quality=True` to require both.
+- Missing records, partial or haploid GTs, gVCF blocks, indels, and SVs don't
+  count. A missing call is **never** assumed to be homozygous reference.
+- An individually called SNP stays usable when an uncalled `<NON_REF>` or
+  indel ALT is also listed; a GT that actually calls such an allele is excluded.
+- Loci with conflicting passing SNP records are excluded. Reference-base
+  disagreements between samples are counted separately and excluded.
+- Malformed GT indexes, non-finite or negative quality values, and AD/AF with
+  the wrong number of values stop the analysis with a file and line number.
 
-Default evidence requirements are 100 shared callable SNPs, 20 nonreference SNPs
-in each sample, at least two reference/heterozygous/homozygous-ALT genotype categories
-in each, and 20 distinct 100 kb genomic bins. These are screening safeguards,
-not a claim that the sites are independent or population-informative.
+**Minimum evidence.** Without all of these, the status is `inconclusive`:
 
-For two non-tumor samples, exact genotype concordance of at least 0.98 and IBS0
-(no shared allele) at most 0.01 is compatible. Concordance below 0.90 or IBS0 at
-least 0.05 is discordant; intermediate results are inconclusive.
+- 100 shared callable SNPs;
+- 20 non-reference SNPs in each sample;
+- at least two of the three genotype categories (homozygous reference,
+  heterozygous, homozygous ALT) in each sample;
+- SNPs spread over at least 20 distinct 100 kb genomic bins.
 
-For a comparison involving a tumor, heterozygous-to-homozygous changes can reflect
-loss of heterozygosity. The score uses allele sharing (`1 - IBS0 rate`) instead
-of exact genotype concordance, while reporting both. It additionally requires
-20 jointly homozygous sites and 20 explicit homozygous-reference calls in **each**
-sample at shared sites. Without reference calls, biallelic variant-only VCFs
-automatically share ALT at every overlapping site, making this tolerant test
-uninformative. Such data can still contribute somatic evidence. Normal columns
-containing only `0/0` calls at somatic sites also remain inconclusive for identity.
+These are screening safeguards, not a claim that the sites are independent or
+population-informative.
 
-Up to 50,000 SNP loci per sample are retained by a deterministic SHA-256 bottom-k
-sketch keyed only by assembly and position. This bounds memory and is independent
-of genotype and record order. Comparisons report the actual retained intersection,
-not estimated whole-genome counts; omissions and conflicting loci are in QC.
+**Decision.** IBS0 is the fraction of sites where the two genotypes share no
+allele.
+
+| Comparison | Score | Compatible | Discordant |
+|---|---|---|---|
+| Two non-tumor samples | Exact genotype concordance | score ≥ 0.98 and IBS0 ≤ 0.01 | score < 0.90 or IBS0 ≥ 0.05 |
+| Either sample is a tumor | Allele sharing (`1 - IBS0`) | score ≥ 0.98 and IBS0 ≤ 0.01 | score < 0.90 or IBS0 ≥ 0.05 |
+
+Anything in between is `inconclusive`.
+
+**Comparisons involving a tumor.** Loss of heterozygosity can turn a
+heterozygous genotype into a homozygous one, so exact concordance would
+penalize a true match. Allele sharing tolerates that change; both measures are
+reported. These comparisons also require 20 sites that are homozygous in both
+samples, and 20 explicit homozygous-reference calls in **each** sample at
+shared sites. Without reference calls, two variant-only VCFs automatically
+share an ALT allele at every overlapping site, which would make the test
+meaningless. Such data can still contribute somatic evidence. A normal column
+containing only `0/0` calls at somatic sites also stays inconclusive for
+identity.
+
+**Sampling.** Up to 50,000 SNP loci per sample are kept, chosen by a
+deterministic SHA-256 bottom-k sketch keyed only by assembly and position.
+This bounds memory and doesn't depend on genotypes or record order.
+Comparisons report counts for the loci actually retained, not whole-genome
+estimates; omitted and conflicting loci are listed in QC.
 
 ### Somatic checks
 
-Only tumor samples contribute somatic alleles. The allele must be present in a
-complete GT; without a called GT it needs AD support of at least 3 ALT reads,
-VAF at least 0.03 and depth at least 10. GT takes precedence over contradictory AD.
-AF is retained for VAF comparison but AF alone does not establish a call.
+**Which alleles count.** Only tumor samples contribute somatic alleles.
 
-When a matched normal is declared, that allele must be absent from its GT, with
-adequate normal depth. If AD is available, at most 1 ALT read and VAF at most 0.02
-are required. Missing or filtered normal evidence cannot establish absence.
-Otherwise, a `somatic` input declaration or a VCF `SOMATIC` flag is required.
-Unlabelled nonreference alleles in a mixed tumor VCF are not assumed somatic.
-QC distinguishes paired-normal contrasts from caller-reported evidence.
+- The allele must be present in a complete GT. Without a called GT, it needs
+  at least 3 ALT reads in AD, VAF at least 0.03, and depth at least 10. GT
+  takes precedence over contradictory AD. AF is kept for VAF comparison, but
+  AF alone does not establish a call.
+- The allele must also be shown to be somatic:
+    - With a declared matched normal, the allele must be absent from the
+      normal's GT with adequate normal depth and, if AD is available, at most
+      1 ALT read and VAF at most 0.02. Missing or filtered normal evidence
+      cannot establish absence.
+    - Otherwise, the input must be declared `somatic` or the record must carry
+      a VCF `SOMATIC` flag. Unlabelled non-reference alleles in a mixed tumor
+      VCF are not assumed to be somatic.
+- QC distinguishes paired-normal contrasts from caller-reported evidence.
 
-Small alleles are minimally trimmed, without repeat left-alignment. Precise,
-sequence-resolved SVs use the existing [SV comparison normalizer](sv_comparison.md),
-including reciprocal-BND deduplication. Imprecise, unknown-insertion and unsupported
-SVs are excluded with counts; nearby breakpoints are not treated as identical.
-Equivalent repeats or caller representations may consequently underlap.
-Explicit sequence alleles and symbolic SVs use separate keys; comparisons across
-those representations require the dedicated SV comparison workflow.
+**Matching alleles.** Small alleles are minimally trimmed, without repeat
+left-alignment. Precise, sequence-resolved SVs use the
+[SV comparison normalizer](sv_comparison.md), including reciprocal-BND
+deduplication. Imprecise, unknown-insertion, and unsupported SVs are excluded
+with counts, and nearby breakpoints are not treated as identical. As a result,
+equivalent repeats or caller representations may undercount overlap. Explicit
+sequence alleles and symbolic SVs use separate keys; comparing across those
+representations requires the dedicated SV comparison workflow.
 
-The report includes shared/total counts, both directional shared fractions,
-Jaccard similarity and the overlap coefficient (`shared / min(count_a, count_b)`).
-At least 10 alleles in each tumor, 5 shared alleles and an overlap coefficient of
-0.20 are required for `shared_somatic_support`. Adequately sized sets below those
-overlap thresholds are `low_overlap`; smaller sets are inconclusive. VAF Pearson
-correlation is descriptive only, requires at least 5 shared VAFs and nonzero
-variance, and does not determine status. Repeated alleles count once; conflicting
-duplicate VAFs are omitted from correlation. A 100,000-allele limit raises an
-explicit error rather than silently truncating sets.
+**Decision.** The report includes shared and total counts, the shared fraction
+in each direction, Jaccard similarity, and the overlap coefficient
+(`shared / min(count_a, count_b)`). The overlap coefficient tolerates
+branching evolution and callsets of different sizes.
 
-Somatic overlap tolerates branching evolution and differing callset sizes; it
-cannot prove that two samples came from the same tumor. Recurrent drivers,
-germline leakage, assay overlap, purity, copy number and caller sensitivity can
-confound both high and low overlap. Coverage/callable-region modeling and
-population allele frequencies are not included.
+| Tumor status | Requirement |
+|---|---|
+| `shared_somatic_support` | At least 10 alleles in each tumor, at least 5 shared, and an overlap coefficient of at least 0.20 |
+| `low_overlap` | At least 10 alleles in each tumor, but fewer than 5 shared or an overlap coefficient below 0.20 |
+| `inconclusive` | Fewer than 10 alleles in either tumor |
+
+VAF Pearson correlation is descriptive only and never determines status. It
+requires at least 5 shared VAFs with nonzero variance. Repeated alleles count
+once, and conflicting duplicate VAFs are left out of the correlation. A sample
+with more than 100,000 somatic alleles raises an explicit error rather than
+being silently truncated. Coverage and callable regions are not modeled, and
+population allele frequencies are not used.
 
 ### Configure and reproduce
 
-Every threshold is a `SampleCheckConfig` field and appears in report `config`.
-The CLI accepts the same names in a JSON object, for example:
+Every threshold is a `SampleCheckConfig` field and appears in the report's
+`config`. The CLI accepts the same names in a JSON object, for example:
 
 ```json
 {"require_quality": true, "min_shared_snps": 200, "max_snps": 100000}
 ```
 
-Pass it with `--config thresholds.json`. Changing thresholds changes the evidence
-requirements; the defaults have **not** been calibrated on an independent clinical
-cohort. Synthetic ground-truth VCF generators and regression cases are checked in
-as `tests/test_sample_identity.py` alongside the tests.
+Pass it with `--config thresholds.json`. Changing thresholds changes the
+evidence requirements; the defaults have **not** been calibrated on an
+independent clinical cohort. Synthetic ground-truth VCF generators and
+regression cases are in `tests/test_sample_identity.py`.
 
 The distinction between genotype concordance and tumor-specific allele-fraction
 changes is informed by the primary [Somalier paper](https://pmc.ncbi.nlm.nih.gov/articles/PMC7362544/)
 and its [cancer concordance guidance](https://github.com/brentp/somalier/blob/master/cancer-concordance-contamination.md).
 [NGSCheckMate](https://pmc.ncbi.nlm.nih.gov/articles/PMC5499645/) illustrates a
-validated SNP-panel allele-fraction approach. This implementation does not reproduce
-their calibrated models, panels or accuracy claims. Input semantics follow the
-[VCF specification](https://samtools.github.io/hts-specs/VCFv4.5.pdf).
+validated SNP-panel allele-fraction approach. This implementation does not
+reproduce their calibrated models, panels, or accuracy claims. Input semantics
+follow the [VCF specification](https://samtools.github.io/hts-specs/VCFv4.5.pdf).
 
 ## API reference
 

@@ -46,8 +46,7 @@ predicted protein change and evidence that the RNA exists are separate facts.
 
 - **Varcode:** structural partner candidates and supplied RNA imports exist.
   Splice/phase/SV combinations are not exhaustively composed
-  ([#423](https://github.com/openvax/varcode/issues/423)); combined-haplotype
-  ownership still needs cleanup ([#437](https://github.com/openvax/varcode/issues/437)).
+  ([#423](https://github.com/openvax/varcode/issues/423)).
   Change flags for imported partial proteins stay unresolved unless mapped,
   in-frame observed codons differ from the reference; an unobserved suffix is
   not a demonstrated protein deletion.

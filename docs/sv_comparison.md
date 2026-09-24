@@ -1,19 +1,26 @@
 # Compare SV calls across samples and callers
 
+Different SV callers, and different samples, often report the same event in
+different forms: a pair of reciprocal breakends or a symbolic `<DEL>`,
+explicit or symbolic alleles, slightly different coordinates.
+`varcode.sv_comparison` groups calls that report the same junctions, or nearby
+ones, so you can see where callers agree and disagree. It compares what was
+reported; it does not validate the calls.
+
 ```sh
 python -m varcode.sv_comparison --calls calls.csv --output comparison --max-distance 100
 ```
 
 `calls.csv` has one row per source ALT allele, with unique `call_id` and columns
 `caller,sample,build,chrom,pos,ref,alt`. Coordinates are one-based VCF coordinates.
-Use `GRCh37` or `GRCh38` for `build`; the original report's parenthesized source
-note is accepted and preserved. Optional `info` is the original VCF INFO text;
+Use `GRCh37` or `GRCh38` for `build`; a trailing parenthesized note, such as
+`GRCh38 (from caller header)`, is accepted and preserved. Optional `info` is the original VCF INFO text;
 `end` supplies END when absent from INFO. Include `record_id`, `mate_id`,
 `source_url`, `source_id`, filter status and `duplicate_export_of` to retain
 source provenance. All additional columns survive unchanged in each member's
 `raw` mapping. No PASS filter or record deduplication is applied.
 
-Outputs:
+Outputs, written to the `--output` directory:
 
 - `groups.csv`: comparison group, exact representation IDs, samples, callers,
   original call IDs, per-breakpoint range/spread, insertion disagreement and

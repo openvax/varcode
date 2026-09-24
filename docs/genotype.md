@@ -1,9 +1,8 @@
 # Genotypes and sample-aware queries
 
-When you load a multi-sample VCF, varcode captures each sample's genotype
-(GT, AD, DP, GQ, PS) automatically. This data is available
-as structured `Genotype` objects and via sample-aware filtering helpers
-on `VariantCollection`.
+When you load a multi-sample VCF, Varcode keeps each sample's genotype
+fields (GT, AD, DP, GQ, PS). You can read them as `Genotype` objects, or use
+them to select the variants a particular sample carries.
 
 ## The basics
 
@@ -93,6 +92,13 @@ de_novo = (set(vc.for_sample("child"))
            - set(vc.for_sample("dad")))
 ```
 
+These are genotype comparisons, not somatic or de novo calling. A variant
+counts as absent from the normal whenever the normal doesn't carry it,
+including when the normal has no call at that site (`MISSING`). Check
+`vc.zygosity(variant, "normal")` if that distinction matters. To check whether
+samples are labelled with the right donor, see
+[sample identity checks](sample_identity.md).
+
 ## Multi-allelic sites
 
 VCF rows like `REF=A ALT=T,G` are split into two `Variant` objects
@@ -120,7 +126,5 @@ uses it when you explicitly provide a phase resolver or germline context:
   the patient's germline-applied transcript. See
   [Germline-aware annotation](germline.md).
 
-Dedicated joint-analysis helpers like `vc.de_novo_in(...)` or
-`vc.somatic(...)` aren't shipped — the set-operation pattern above
-covers them, and shortcuts get added only when a clear use case
-shows up.
+There are no dedicated helpers such as `vc.de_novo_in(...)` or
+`vc.somatic(...)`; use the set operations above.
