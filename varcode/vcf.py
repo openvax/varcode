@@ -12,6 +12,7 @@
 
 
 import os
+from operator import index
 import urllib
 import logging
 from collections import OrderedDict
@@ -112,7 +113,9 @@ def load_vcf(
         Number of records to load in memory at once.
 
     max_variants : int, optional
-        If specified, return only the first max_variants variants.
+        Maximum number of successfully loaded alleles, before sorting or
+        deduplication. Applies to small and structural variants. Must be a
+        nonnegative integer; zero loads no alleles and None means no limit.
 
     sort_key : fn
         Function which maps each element to a sorting criterion.
@@ -279,8 +282,8 @@ def dataframes_to_variant_collection(
         max_variants=None,
         sample_names=None,
         sample_info_parser=None,
-        variant_kwargs={},
-        variant_collection_kwargs={},
+        variant_kwargs=None,
+        variant_collection_kwargs=None,
         parse_structural_variants=False,
         warn_on_filtered=False):
     """
@@ -295,7 +298,7 @@ def dataframes_to_variant_collection(
     dataframes
         Iterable of dataframes (e.g. a generator). Expected columns are:
             ["CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER"]
-        and 'INFO' if `info_parser` is not Null. Columns must be in this
+        and 'INFO' if `info_parser` is not None. Columns must be in this
         order.
 
     source_path : str
@@ -309,7 +312,9 @@ def dataframes_to_variant_collection(
         dropped.
 
     max_variants : int, optional
-        If specified, return only the first max_variants variants.
+        Maximum number of successfully loaded alleles, before sorting or
+        deduplication. Applies to small and structural variants. Must be a
+        nonnegative integer; zero loads no alleles and None means no limit.
 
     sample_names : list of strings, optional
         Sample names. The final columns of the dataframe should match these.
@@ -320,11 +325,23 @@ def dataframes_to_variant_collection(
         Callable to parse per-sample info columns.
 
     variant_kwargs : dict, optional
-        Additional keyword paramters to pass to Variant.__init__
+        Additional keyword parameters to pass to Variant.__init__
 
     variant_collection_kwargs : dict, optional
         Additional keyword parameters to pass to VariantCollection.__init__.
     """
+
+    if max_variants is not None:
+        try:
+            max_variants = index(max_variants)
+        except TypeError:
+            raise ValueError("max_variants must be a nonnegative integer or None") from None
+        if max_variants < 0:
+            raise ValueError("max_variants must be a nonnegative integer or None")
+    if variant_kwargs is None:
+        variant_kwargs = {}
+    if variant_collection_kwargs is None:
+        variant_collection_kwargs = {}
 
     expected_columns = (
         ["CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER"] +
@@ -353,112 +370,78 @@ def dataframes_to_variant_collection(
     n_skipped_flag_off = 0
     n_skipped_unparseable = 0
     n_filtered_records = 0
-    try:
-        for chunk in dataframes:
-            assert chunk.columns.tolist() == expected_columns,\
+    limit_reached = max_variants == 0
+    for chunk in (() if limit_reached else dataframes):
+        if chunk.columns.tolist() != expected_columns:
+            raise ValueError(
                 "dataframe columns (%s) do not match expected columns (%s)" % (
-                    chunk.columns, expected_columns)
+                    chunk.columns, expected_columns))
 
-            for tpl in chunk.itertuples():
-                (i, chrom, pos, id_, ref, alts, qual, flter) = tpl[:8]
-                if flter == ".":
-                    flter = None
-                elif flter == "PASS":
-                    flter = []
-                elif only_passing:
-                    n_filtered_records += 1
+        for tpl in chunk.itertuples():
+            (i, chrom, pos, id_, ref, alts, qual, flter) = tpl[:8]
+            if flter == ".":
+                flter = None
+            elif flter == "PASS":
+                flter = []
+            elif only_passing:
+                n_filtered_records += 1
+                continue
+            else:
+                flter = flter.split(';')
+            if id_ == ".":
+                id_ = None
+            qual = float(qual) if qual != "." else None
+            info = sample_info = None
+            for alt_num, alt in enumerate(alts.split(",")):
+                # Missing ALT and spanning-deletion placeholders are not
+                # independently annotatable alleles and do not count toward
+                # the limit. enumerate preserves the original VCF ALT index.
+                if alt in (".", "*"):
                     continue
-                else:
-                    flter = flter.split(';')
-                if id_ == ".":
-                    id_ = None
-                qual = float(qual) if qual != "." else None
-                alt_num = 0
-                info = sample_info = None
-                for alt in alts.split(","):
-                    if alt != ".":
-                        if _is_symbolic_allele(alt):
-                            # Spanning-deletion placeholder is a cross-row
-                            # reference, not an allele to annotate. Drop
-                            # silently regardless of the flag.
-                            if alt == "*":
-                                alt_num += 1
-                                continue
-                            if not parse_structural_variants:
-                                n_skipped_flag_off += 1
-                                alt_num += 1
-                                continue
-                            # Parse symbolic / breakend ALT into a
-                            # StructuralVariant. Falls back to skipping if
-                            # the parser can't recognize the ALT shape.
-                            from .sv_allele_parser import (
-                                parse_symbolic_alt)
-                            if info_parser is not None and info is None:
-                                info = info_parser(tpl[8])
-                                if sample_names and sample_info is None:
-                                    # SV rows from somatic callers (Manta,
-                                    # DELLY, GRIDSS) ship FORMAT/sample
-                                    # data — parse it like the simple-ALT
-                                    # branch does so it isn't silently
-                                    # dropped from metadata.
-                                    sample_info = sample_info_parser(
-                                        list(tpl[10:]),
-                                        tpl[9])
-                            sv = parse_symbolic_alt(
-                                contig=chrom,
-                                start=int(pos),
-                                ref=ref,
-                                alt=alt,
-                                info=info,
-                                genome=structural_variant_genome,
-                                normalize_contig_names=variant_kwargs.get(
-                                    "normalize_contig_names", True),
-                                convert_ucsc_contig_names=variant_kwargs.get(
-                                    "convert_ucsc_contig_names"),
-                            )
-                            if sv is None:
-                                n_skipped_unparseable += 1
-                                alt_num += 1
-                                continue
-                            variants.append(sv)
-                            metadata[sv] = {
-                                "id": id_,
-                                "qual": qual,
-                                "filter": flter,
-                                "info": info,
-                                "sample_info": sample_info,
-                            }
-                            alt_num += 1
-                            continue
-                        if info_parser is not None and info is None:
-                            info = info_parser(tpl[8])  # INFO column
-                            if sample_names:
-                                # Sample name -> field -> value dict.
-                                sample_info = sample_info_parser(
-                                    list(tpl[10:]),  # sample info columns
-                                    tpl[9],    # FORMAT column
-                                )
+                symbolic = _is_symbolic_allele(alt)
+                if symbolic and not parse_structural_variants:
+                    n_skipped_flag_off += 1
+                    continue
+                if info_parser is not None and info is None:
+                    info = info_parser(tpl[8])
+                    if sample_names:
+                        sample_info = sample_info_parser(list(tpl[10:]), tpl[9])
 
-                        variant = Variant(
-                            chrom,
-                            int(pos),  # want a Python int not numpy.int64
-                            ref,
-                            alt,
-                            **variant_kwargs)
-                        variants.append(variant)
-                        metadata[variant] = {
-                            'id': id_,
-                            'qual': qual,
-                            'filter': flter,
-                            'info': info,
-                            'sample_info': sample_info,
-                            'alt_allele_index': alt_num,
-                        }
-                        if max_variants and len(variants) > max_variants:
-                            raise StopIteration
-                    alt_num += 1
-    except StopIteration:
-        pass
+                if symbolic:
+                    from .sv_allele_parser import parse_symbolic_alt
+                    variant = parse_symbolic_alt(
+                        contig=chrom,
+                        start=int(pos),
+                        ref=ref,
+                        alt=alt,
+                        info=info,
+                        genome=structural_variant_genome,
+                        normalize_contig_names=variant_kwargs.get(
+                            "normalize_contig_names", True),
+                        convert_ucsc_contig_names=variant_kwargs.get(
+                            "convert_ucsc_contig_names"),
+                    )
+                    if variant is None:
+                        n_skipped_unparseable += 1
+                        continue
+                else:
+                    variant = Variant(chrom, int(pos), ref, alt, **variant_kwargs)
+                variants.append(variant)
+                metadata[variant] = {
+                    'id': id_,
+                    'qual': qual,
+                    'filter': flter,
+                    'info': info,
+                    'sample_info': sample_info,
+                    'alt_allele_index': alt_num,
+                }
+                if max_variants is not None and len(variants) >= max_variants:
+                    limit_reached = True
+                    break
+            if limit_reached:
+                break
+        if limit_reached:
+            break
 
     if warn_on_filtered and n_filtered_records:
         warn(

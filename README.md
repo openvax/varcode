@@ -1,6 +1,6 @@
 [![Tests](https://github.com/openvax/varcode/actions/workflows/tests.yml/badge.svg)](https://github.com/openvax/varcode/actions/workflows/tests.yml)
 [![Coverage Status](https://coveralls.io/repos/openvax/varcode/badge.svg?branch=main&service=github)](https://coveralls.io/github/openvax/varcode?branch=main)
-[![PyPI](https://img.shields.io/pypi/v/varcode.svg?maxAge=1000)](https://pypi.python.org/pypi/varcode/)
+[![PyPI](https://img.shields.io/pypi/v/varcode.svg?maxAge=1000)](https://pypi.org/project/varcode//)
 [![PyPI downloads](https://img.shields.io/pypi/dm/varcode.svg)](https://pypistats.org/packages/varcode)
 
 # Varcode

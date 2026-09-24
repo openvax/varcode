@@ -11,6 +11,7 @@
 # limitations under the License.
 
 import tempfile
+from pathlib import Path
 
 import pytest 
 
@@ -70,36 +71,22 @@ def _do_roundtrip_test(filenames, convert_ucsc_to_grch37=False):
     if convert_ucsc_to_grch37:
         variants = variants.clone_without_ucsc_data()
 
-    with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
-        metadata = _merge_metadata_naive(variants)
-        variants_to_vcf(variants, metadata, out=f)
-        tmp_name = f.name
-    reparsed_variants = load_vcf(tmp_name)
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / "roundtrip.vcf"
+        with path.open("w") as out:
+            metadata = _merge_metadata_naive(variants)
+            variants_to_vcf(variants, metadata, out=out)
+        reparsed_variants = load_vcf(str(path))
 
-    # `==` checks the reference genome, which won't necessarily match.
-    for (v1, v2) in zip(variants, reparsed_variants):
-        assert (
-            v1.contig == v2.contig and
-            v1.start == v2.start and
-            v1.ref == v2.ref and
-            v1.start == v2.start), (v1, v2)
+    # Compare every allele and the total count. Genome objects may differ
+    # after reference-name resolution; metadata preservation is a separate
+    # contract (see #502).
+    def alleles(collection):
+        return sorted((v.contig, v.start, v.ref, v.alt) for v in collection)
+
+    assert alleles(variants) == alleles(reparsed_variants)
 
     return (variants, reparsed_variants)
-
-    # TODO:
-    #   There is definitely more opportunity here to compare metadata
-    #   fields, with caveats.
-    #   ---
-    #   First, any variants from non-VCF sources (e.g., MAF files) will inevitably
-    #   lose some information through the change in representation (more importantly,
-    #   even if there is no loss in data, that data will be in a different format in
-    #   the new metadata dictionary). Thus, we should either ignore such variants
-    #   or only check certain fields.
-    #   ---
-    #   Second, without the original metadata headers in the VCF file, all metadata
-    #   information will be parsed as strings. Thus, for a simple comparison between
-    #   metadata (without the need to individually convert fields), we'd need to add
-    #   these headers to the output VCF file. See `vcf_output.py` for more info.
 
 
 @pytest.mark.parametrize(['filename'], [(f,) for f in TEST_FILENAMES])

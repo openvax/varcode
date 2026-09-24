@@ -67,8 +67,6 @@ def load_maf_dataframe(path, nrows=None, raise_on_error=True, encoding=None):
 
     n_basic_columns = len(MAF_COLUMN_NAMES)
 
-    # pylint: disable=no-member
-    # pylint gets confused by read_csv
     df = pandas.read_csv(
         path,
         comment="#",
@@ -86,7 +84,7 @@ def load_maf_dataframe(path, nrows=None, raise_on_error=True, encoding=None):
         if raise_on_error:
             raise ValueError(error_message)
         else:
-            logging.warn(error_message)
+            logging.warning(error_message)
 
     # check each pair of expected/actual column names to make sure they match
     for expected, actual in zip(MAF_COLUMN_NAMES, df.columns):
@@ -94,24 +92,20 @@ def load_maf_dataframe(path, nrows=None, raise_on_error=True, encoding=None):
             # MAFs in the wild have capitalization differences in their
             # column names, normalize them to always use the names above
             if expected.lower() == actual.lower():
-                # using DataFrame.rename in Python 2.7.x doesn't seem to
-                # work for some files, possibly because Pandas treats
-                # unicode vs. str columns as different?
-                df[expected] = df[actual]
-                del df[actual]
+                df.rename(columns={actual: expected}, inplace=True)
             else:
                 error_message = (
                     "Expected column %s but got %s" % (expected, actual))
                 if raise_on_error:
                     raise ValueError(error_message)
                 else:
-                    logging.warn(error_message)
+                    logging.warning(error_message)
 
     return df
 
 def load_maf(
         path,
-        optional_cols=[],
+        optional_cols=None,
         sort_key=variant_ascending_position_sort_key,
         distinct=True,
         raise_on_error=True,
@@ -146,8 +140,8 @@ def load_maf(
     nrows : int, optional
         Limit to number of rows loaded
     """
-    # pylint: disable=no-member
-    # pylint gets confused by read_csv inside load_maf_dataframe
+    if optional_cols is None:
+        optional_cols = ()
     maf_df = load_maf_dataframe(
         path,
         nrows=nrows,
@@ -167,7 +161,7 @@ def load_maf(
             if raise_on_error:
                 raise ValueError(error_message)
             else:
-                logging.warn(error_message)
+                logging.warning(error_message)
                 continue
 
         start_pos = x.Start_Position
@@ -199,7 +193,7 @@ def load_maf(
                 if raise_on_error:
                     raise ValueError(error_message)
                 else:
-                    logging.warn(error_message)
+                    logging.warning(error_message)
                     continue
             alt = x.Tumor_Seq_Allele2
 

@@ -51,7 +51,7 @@ class EffectCollection(Collection):
             effects,
             distinct=False,
             sort_key=None,
-            sources=set([]),
+            sources=None,
             annotator=None,
             annotator_version=None,
             annotated_at=None):
@@ -93,6 +93,8 @@ class EffectCollection(Collection):
             sort_key = _default_effect_sort_key
         elif sort_key is False:
             sort_key = None
+        if sources is None:
+            sources = set()
         Collection.__init__(
             self,
             elements=effects,

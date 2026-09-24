@@ -9,7 +9,7 @@ Do not suppress an error before understanding which predictions would be lost.
 | `ReferenceMismatchError` | Input assembly, REF allele, and forward-strand convention |
 | `GenomeBuildMismatchError` | Somatic and germline inputs must use the same assembly |
 | `SampleNotFoundError` | Inspect `variants.samples` for the available names |
-| Missing SV results | Load with `parse_structural_variants=True`; see [SV loading](structural_variants.md#basic-usage) |
+| Missing SV results | Python: pass `parse_structural_variants=True`. The CLIs already load SVs; inspect skip warnings. See [SV loading](structural_variants.md#basic-usage) |
 | No protein sequence | May be unresolved or noncoding, not an exception; see [protein sequences](effect_annotation.md#protein-sequences) |
 
 The exception details below support programmatic handling. The domain-specific
@@ -18,12 +18,12 @@ exceptions retain standard `ValueError` or `KeyError` base classes.
 ## `ReferenceMismatchError`
 
 Raised when a variant's reported `ref` allele doesn't match the
-reference genome at the variant's position:
+reference transcript sequence at the variant's position:
 
 ```python
 import varcode
 
-v = varcode.Variant("7", 117531114, "T", "A", "GRCh38")
+v = varcode.Variant("7", 117531114, "T", "A", genome=81)
 # The real + strand ref at chr7:117531114 is G, not T.
 v.effects()
 ```
@@ -51,10 +51,15 @@ try:
 except varcode.ReferenceMismatchError as e:
     e.variant           # the Variant
     e.transcript        # the Transcript being compared against
-    e.expected_ref      # what the genome has
-    e.observed_ref      # what the variant claims
+    e.expected_ref      # reference bases in transcript orientation
+    e.observed_ref      # variant REF bases in transcript orientation
     e.transcript_offset # position in the transcript
 ```
+
+On minus-strand transcripts these fields contain reverse-complemented bases,
+so they do not directly match the forward-strand REF text in a VCF. The
+current error message calls them genome bases; that misleading wording is
+tracked in [#434](https://github.com/openvax/varcode/issues/434).
 
 ### Three common causes
 
@@ -72,17 +77,23 @@ except varcode.ReferenceMismatchError as e:
 
 If you'd rather continue past these errors instead of surfacing them,
 pass `raise_on_error=False` to `.effects()`. Each mismatched variant
-produces a `Failure` effect instead of raising:
+produces a `Failure` for the failed annotation instead of raising. Other
+transcripts can still annotate successfully:
 
 ```python
 from varcode.effects import Failure
 
 effects = v.effects(raise_on_error=False)
-assert any(isinstance(e, Failure) for e in effects)
+failures = [e for e in effects if isinstance(e, Failure)]
+assert failures
+print(failures[0].error)  # retained diagnostic
 ```
 
 Use this in batch pipelines only if you record and review the `Failure` results;
 it does not correct the input or make those rows successfully annotated.
+The CLI equivalent is `--skip-errors`; its output retains Failure rows and
+their error text. FILTER exclusions are separate: use `--include-filtered`
+only when you intend to annotate those records.
 
 ## `GenomeBuildMismatchError`
 
@@ -126,8 +137,9 @@ name is misspelled would hide real bugs in analysis scripts.
 
 ## Debugging tips
 
-Both errors include the specific variant and the transcript that
-triggered them. When investigating:
+`ReferenceMismatchError` identifies the variant and transcript. Build and
+sample errors instead identify the incompatible references or sample names.
+When investigating:
 
 1. Check the genome build. `v.reference_name` (e.g. `"GRCh38"`) should
    match what the VCF was called against.

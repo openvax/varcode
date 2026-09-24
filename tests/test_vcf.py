@@ -145,7 +145,7 @@ def generate_vcf_gene_names():
     for variant in variants:
         yield (variants, variant)
 
-@pytest.mark.parametrize(['collection', 'variant'], generate_vcf_gene_names())
+@pytest.mark.parametrize(['collection', 'variant'], list(generate_vcf_gene_names()))
 def test_vcf_gene_names(collection, variant):
     expected_gene_names = collection.metadata[variant]['info']['GE']
     assert variant.gene_names == expected_gene_names, \

@@ -69,3 +69,13 @@ def test_effect_collection_filter_by_effect_priority():
 def test_effect_collection_drop_silent_and_noncoding():
     # some of the predicted effects are non-coding so should get dropped
     assert len(tcga_ov_effects) > len(tcga_ov_effects.drop_silent_and_noncoding())
+
+
+def test_default_sources_are_independent():
+    from varcode.effects import EffectCollection
+
+    first = EffectCollection([])
+    second = EffectCollection([])
+    first.sources.add("first.vcf")
+    assert second.sources == set()
+    assert EffectCollection([]).sources == set()

@@ -1,5 +1,18 @@
 # Change Log
 
+## [v10.1.2](https://github.com/openvax/varcode/tree/v10.1.2) (2026-09-24)
+
+- Enforce VCF allele limits across simple and structural calls and retain
+  structural ALT indexes; propagate parser failures instead of silently
+  truncating input (#504).
+- Isolate default collection metadata (#505), preserve transcript failure
+  diagnostics (#506), and run pytest with the interpreter used to probe
+  optional plugins (#490).
+- Enable undefined-name lint checks, remove mutable parser defaults and
+  deprecated logging calls, and preserve column order during MAF normalization.
+- Update developer/release instructions, fixture provenance guidance,
+  Osteosarc compatibility, API navigation, and documented export/phase limits.
+
 ## [v10.1.1](https://github.com/openvax/varcode/tree/v10.1.1) (2026-09-24)
 
 - Do not infer protein truncation from an internal-Met reference suffix when

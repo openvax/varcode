@@ -67,7 +67,7 @@ def generate_maf_aa_changes():
         expected = expected_changes[key]
         yield (variant, expected)
 
-@pytest.mark.parametrize(['variant', 'expected_aa_change'], generate_maf_aa_changes())
+@pytest.mark.parametrize(['variant', 'expected_aa_change'], list(generate_maf_aa_changes()))
 def test_maf_aa_changes(variant, expected_aa_change):
     effect = variant.effects().top_priority_effect()
     change = effect.short_description
@@ -121,3 +121,12 @@ def test_load_utf8():
         # Make sure we avoid "TypeError: character mapping must return integer, None or unicode"
         # from Bio.Seq.
         _ = variants.effects()
+
+
+def test_maf_column_case_normalization_preserves_order(tmp_path):
+    from varcode.maf import MAF_COLUMN_NAMES
+
+    path = tmp_path / "lowercase.maf"
+    columns = [MAF_COLUMN_NAMES[0].lower()] + MAF_COLUMN_NAMES[1:]
+    path.write_text("\t".join(columns) + "\n")
+    assert load_maf_dataframe(str(path)).columns.tolist() == MAF_COLUMN_NAMES

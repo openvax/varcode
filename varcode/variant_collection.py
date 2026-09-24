@@ -39,7 +39,7 @@ class VariantCollection(Collection):
             distinct=True,
             sort_key=variant_ascending_position_sort_key,
             sources=None,
-            source_to_metadata_dict={}):
+            source_to_metadata_dict=None):
         """
         Construct a VariantCollection from a list of Variant records.
 
@@ -59,8 +59,10 @@ class VariantCollection(Collection):
 
         source_to_metadata_dict : dict
             Dictionary mapping each source name (e.g. VCF path) to a dictionary
-            from metadata attributes to values.
+            from variants to their metadata dictionaries.
         """
+        if source_to_metadata_dict is None:
+            source_to_metadata_dict = {}
         self.source_to_metadata_dict = source_to_metadata_dict
         if sources is None:
             sources = set(source_to_metadata_dict.keys())
