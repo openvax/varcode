@@ -69,7 +69,8 @@ def load_vcf(
         normalize_contig_names=True,
         convert_ucsc_contig_names=True,
         parse_structural_variants=False,
-        genome_fasta=None):
+        genome_fasta=None,
+        warn_on_filtered=False):
     """
     Load reference name and Variant objects from the given VCF filename.
 
@@ -95,6 +96,10 @@ def load_vcf(
     only_passing : bool, optional
         If true, any entries whose FILTER field is not one of "." or "PASS" is
         dropped.
+
+    warn_on_filtered : bool, default False
+        Warn with the number of records skipped by FILTER (before splitting
+        multiallelic records). The CLI enables this by default.
 
     allow_extended_nucleotides : bool, default False
         Allow characters other that A,C,T,G in the ref and alt strings.
@@ -173,7 +178,8 @@ def load_vcf(
                 distinct=distinct,
                 normalize_contig_names=normalize_contig_names,
                 convert_ucsc_contig_names=convert_ucsc_contig_names,
-                parse_structural_variants=parse_structural_variants)
+                parse_structural_variants=parse_structural_variants,
+                warn_on_filtered=warn_on_filtered)
         finally:
             logger.info("Removing temporary file: %s", filename)
             os.unlink(filename)
@@ -250,7 +256,8 @@ def load_vcf(
         sample_info_parser=sample_info_parser,
         variant_kwargs=variant_kwargs,
         variant_collection_kwargs=variant_collection_kwargs,
-        parse_structural_variants=parse_structural_variants)
+        parse_structural_variants=parse_structural_variants,
+        warn_on_filtered=warn_on_filtered)
 
 
 
@@ -274,7 +281,8 @@ def dataframes_to_variant_collection(
         sample_info_parser=None,
         variant_kwargs={},
         variant_collection_kwargs={},
-        parse_structural_variants=False):
+        parse_structural_variants=False,
+        warn_on_filtered=False):
     """
     Load a VariantCollection from an iterable of pandas dataframes.
 
@@ -344,6 +352,7 @@ def dataframes_to_variant_collection(
     # drops it and warning every time would just be noise.
     n_skipped_flag_off = 0
     n_skipped_unparseable = 0
+    n_filtered_records = 0
     try:
         for chunk in dataframes:
             assert chunk.columns.tolist() == expected_columns,\
@@ -357,6 +366,7 @@ def dataframes_to_variant_collection(
                 elif flter == "PASS":
                     flter = []
                 elif only_passing:
+                    n_filtered_records += 1
                     continue
                 else:
                     flter = flter.split(';')
@@ -450,6 +460,11 @@ def dataframes_to_variant_collection(
     except StopIteration:
         pass
 
+    if warn_on_filtered and n_filtered_records:
+        warn(
+            "Skipped %d VCF record(s) with FILTER other than PASS or '.' in %s. "
+            "Use --include-filtered on the CLI (only_passing=False in Python) "
+            "to include them." % (n_filtered_records, source_path))
     if n_skipped_flag_off > 0:
         warn(
             "Skipped %d symbolic/breakend allele(s) in %s "

@@ -435,26 +435,44 @@ class VariantCollection(Collection):
         "chr", "start", "ref", "alt", "gene_name", "gene_id",
     )
 
-    def to_dataframe(self):
-        """Build a DataFrame from this variant collection."""
+    def to_dataframe(self, raise_on_error=True):
+        """Build a DataFrame from this variant collection.
+
+        With ``raise_on_error=False``, retain variants whose gene lookup fails
+        and add ``annotation_status`` / ``annotation_error`` diagnostic columns.
+        """
         structural_columns = STRUCTURAL_VARIANT_COLUMNS if any(
             getattr(v, "is_structural", False) for v in self) else ()
         def row_from_variant(variant):
+            error = None
+            try:
+                gene_names = ";".join(variant.gene_names)
+                gene_ids = ";".join(variant.gene_ids)
+            except Exception as exc:
+                if raise_on_error:
+                    raise
+                gene_names = gene_ids = None
+                error = str(exc)
             row = OrderedDict([
                 ("chr", variant.contig),
                 ("start", variant.original_start),
                 ("ref", variant.original_ref),
                 ("alt", variant.original_alt),
-                ("gene_name", ";".join(variant.gene_names)),
-                ("gene_id", ";".join(variant.gene_ids))
+                ("gene_name", gene_names),
+                ("gene_id", gene_ids)
             ])
             row.update((name, getattr(variant, name, None)) for name in structural_columns)
+            if not raise_on_error:
+                row.update(annotation_status="Failure" if error is not None else "ok",
+                           annotation_error=error)
             return row
         rows = [row_from_variant(v) for v in self]
         # Always return a DataFrame with the expected columns, even
         # when empty, so downstream code (CSV round-trip, joins) doesn't
         # have to special-case len == 0.
-        return pd.DataFrame.from_records(rows, columns=self._DATAFRAME_COLUMNS + structural_columns)
+        diagnostics = () if raise_on_error else ("annotation_status", "annotation_error")
+        return pd.DataFrame.from_records(
+            rows, columns=self._DATAFRAME_COLUMNS + structural_columns + diagnostics)
 
     def to_csv(self, path, include_header=True):
         """Write this collection to CSV.

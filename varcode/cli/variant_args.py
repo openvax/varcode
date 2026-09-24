@@ -35,13 +35,20 @@ def add_variant_args(arg_parser):
         "--vcf",
         default=[],
         action="append",
-        help="Genomic variants in VCF format")
+        help="Genomic variants in VCF format, including SVs (repeatable)")
+
+    variant_arg_group.add_argument(
+        "--include-filtered", action="store_true",
+        help="Include VCF records with FILTER values other than PASS or '.'")
+    variant_arg_group.add_argument(
+        "--skip-errors", action="store_true",
+        help="Continue after annotation errors, retaining Failure rows in the output")
 
     variant_arg_group.add_argument(
         "--maf",
         default=[],
         action="append",
-        help="Genomic variants in TCGA's MAF format",)
+        help="Genomic variants in TCGA's MAF format (repeatable)",)
 
     variant_arg_group.add_argument(
         "--variant",
@@ -50,20 +57,20 @@ def add_variant_args(arg_parser):
         nargs=4,
         metavar=("CHR", "POS", "REF", "ALT"),
         help=(
-            "Individual variant as 4 arguments giving chromsome, position, ref,"
+            "Individual variant as 4 arguments giving chromosome, position, ref,"
             " and alt. Example: chr1 3848 C G. Use '.' to indicate empty alleles"
-            " for insertions or deletions."))
+            " for insertions or deletions. Repeatable."))
 
     variant_arg_group.add_argument(
         "--genome",
         type=str,
         help=(
             "What reference assembly your variant coordinates are using. "
-            "Examples: 'hg19', 'GRCh38', or 'mm9'. "
+            "Examples: 'hg19', 'GRCh38', or 'GRCm38'. "
             "This argument is ignored for MAF files, since each row includes "
             "the reference. "
             "For VCF files, this is used if specified, and otherwise is guessed from "
-            "the header. For variants specfied on the commandline with --variant, "
+            "the header. For variants specified on the commandline with --variant, "
             "this option is required."))
 
     variant_arg_group.add_argument(
@@ -80,7 +87,7 @@ def add_variant_args(arg_parser):
         "--json-variants",
         default=[],
         action="append",
-        help="Path to Varcode.VariantCollection object serialized as a JSON file.")
+        help="Path to a VariantCollection JSON file (repeatable).")
 
     return variant_arg_group
 
@@ -117,7 +124,9 @@ def variant_collection_from_args(args, required=True):
 
     for vcf_path in args.vcf:
         variant_collections.append(
-            load_vcf(vcf_path, genome=args.genome))
+            load_vcf(
+                vcf_path, genome=args.genome, parse_structural_variants=True,
+                only_passing=not args.include_filtered, warn_on_filtered=True))
 
     for maf_path in args.maf:
         variant_collections.append(load_maf(maf_path))
@@ -133,7 +142,8 @@ def variant_collection_from_args(args, required=True):
                 start=position,
                 ref=ref,
                 alt=alt,
-                genome=args.genome)
+                genome=args.genome,
+                convert_ucsc_contig_names=True)
             for (chromosome, position, ref, alt)
             in args.variant
         ]

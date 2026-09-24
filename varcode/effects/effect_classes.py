@@ -319,7 +319,15 @@ class Failure(TranscriptMutationEffect):
     Special placeholder effect for when we want to suppress errors but still
     need to create a non-empty list of effects for each variant.
     """
-    pass
+    def __init__(self, variant, transcript=None, error=None):
+        MutationEffect.__init__(self, variant)
+        self.transcript = transcript
+        self.gene = transcript.gene if transcript is not None else None
+        self.error = error
+
+    def __str__(self):
+        return "Failure(variant=%s, transcript_id=%s, error=%s)" % (
+            self.variant, self.transcript_id, self.error)
 
 
 class Unresolved(TranscriptMutationEffect):

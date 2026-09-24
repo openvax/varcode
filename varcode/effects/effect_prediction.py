@@ -95,7 +95,7 @@ def predict_variant_effects(
         Raise an exception if we encounter an error while trying to
         determine the effect of this variant on a transcript, or simply
         log the error and continue. If the initial gene/transcript lookup
-        fails, return an empty EffectCollection with annotator provenance.
+        fails, return a transcript-free Failure with annotator provenance.
 
     annotator : str, EffectAnnotator, or None
         Which registered :class:`EffectAnnotator` to use per-transcript.
@@ -142,7 +142,7 @@ def predict_variant_effects(
         else:
             logger.warning("Encountered error looking up %s: %s", variant, error)
             return EffectCollection(
-                [],
+                [Failure(variant, error=str(error))],
                 annotator=annotator_name,
                 annotator_version=annotator_version,
                 annotated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -175,11 +175,11 @@ def predict_variant_effects(
                     else:
                         try:
                             effect = annotate(variant, transcript)
-                        except (AssertionError, ValueError) as error:
+                        except Exception as error:
                             logger.warn(
                                 "Encountered error annotating %s for %s: %s",
                                 variant, transcript, error)
-                            effect = Failure(variant, transcript)
+                            effect = Failure(variant, transcript, error=str(error))
                     effects.append(effect)
     annotated_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
     collection = EffectCollection(

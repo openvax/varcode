@@ -28,7 +28,8 @@ logger = logging.getLogger(__name__)
 
 arg_parser = make_variants_parser(
     description="Annotate variants with overlapping gene names")
-arg_parser.add_argument("--output-csv", help="Output path to CSV")
+arg_parser.add_argument(
+    "--output-csv", help="CSV output: chr, start, ref, alt, gene_name, gene_id, plus SV fields")
 
 def main(args_list=None):
     """
@@ -47,7 +48,7 @@ def main(args_list=None):
         args_list = sys.argv[1:]
     args = arg_parser.parse_args(args_list)
     variants = variant_collection_from_args(args)
-    variants_dataframe = variants.to_dataframe()
+    variants_dataframe = variants.to_dataframe(raise_on_error=not args.skip_errors)
     logger.info('\n%s', variants_dataframe)
     if args.output_csv:
         variants_dataframe.to_csv(args.output_csv, index=False)

@@ -4,6 +4,7 @@ import pytest
 from pyensembl import Genome as AnnotationGenome, cached_release
 
 from varcode import EffectCollection, Genome, Variant
+from varcode.effects import Failure
 
 
 @pytest.fixture
@@ -71,7 +72,10 @@ def test_invalid_contig_effects_preserve_collection_contract(make_genome, caplog
 
     effects = variant.effects(raise_on_error=False, annotator="fast")
     assert isinstance(effects, EffectCollection)
-    assert len(effects) == 0
+    assert len(effects) == 1
+    assert isinstance(effects[0], Failure)
+    assert effects[0].transcript is None
+    assert "Invalid contig name '99'" in effects[0].error
     assert effects.annotator == "fast"
     assert effects.annotator_version
     assert effects.annotated_at
