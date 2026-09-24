@@ -1,5 +1,16 @@
 # Change Log
 
+## [v10.2.0](https://github.com/openvax/varcode/tree/v10.2.0) (2026-09-24)
+
+- Add `varcode check-samples` and a Python API for pairwise donor genotype
+  concordance and somatic tumor overlap (#510), with explicit sample roles,
+  matched-normal evidence, expected identity flags, JSON and TSV reports.
+- Report sparse or uninformative evidence as inconclusive; never infer reference
+  genotypes from missing records. Tolerate tumor LOH and partial somatic overlap
+  with documented, configurable screening heuristics and provenance/QC counts.
+- Include reproducible synthetic VCF builders and checks for swaps, mixed
+  tumor/normal inputs, missing quality, allele ordering and precise SV matching.
+
 ## [v10.1.3](https://github.com/openvax/varcode/tree/v10.1.3) (2026-09-24)
 
 - Preserve sample identities, per-sample FORMAT values, missing samples, and

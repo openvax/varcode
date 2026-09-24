@@ -39,7 +39,7 @@ test-data = ["osteosarc==0.2.3"]
 
 [project.scripts]
 varcode-genes = "varcode.cli.genes_script:main"
-varcode = "varcode.cli.effects_script:main"
+varcode = "varcode.cli.main:main"
 
 [tool.pytest.ini_options]
 markers = [

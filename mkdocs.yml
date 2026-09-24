@@ -36,6 +36,7 @@ nav:
   - Everyday tasks:
       - Effect annotation: effect_annotation.md
       - Genotypes & sample queries: genotype.md
+      - Sample identity checks: sample_identity.md
       - Saving & reloading results: csv.md
       - Troubleshooting: errors.md
   - Advanced workflows:
