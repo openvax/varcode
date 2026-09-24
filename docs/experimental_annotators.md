@@ -1,5 +1,12 @@
 # Experimental annotators
 
+The transcript-model backend leaves overlapping DUP/INV events unresolved
+when either boundary extends beyond its finite genomic layout. A clipped copy
+of the affected interval cannot establish the complete rearranged transcript
+or an unchanged protein. Fully represented local events still use the layout
+model; supplied transcript assemblies retain their sequence through the shared
+structural builder, with unmapped CDS/translation uncertainty preserved.
+
 Varcode includes two opt-in implementations for comparing predictions:
 `protein_diff` and `transcript_model`. They do not support every input handled
 by the default. For ordinary annotation, use [effects()](effect_annotation.md)

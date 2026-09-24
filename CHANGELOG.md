@@ -1,5 +1,12 @@
 # Change Log
 
+## [v10.0.4](https://github.com/openvax/varcode/tree/v10.0.4) (2026-09-23)
+
+- Leave overlapping DUP/INV events unresolved in the experimental transcript
+  model when their junctions exceed its finite layout, instead of classifying
+  a clipped allele as a UTR-only or unchanged product (#449). Preserve supplied
+  assemblies and fully represented local rearrangements.
+
 ## [v10.0.3](https://github.com/openvax/varcode/tree/v10.0.3) (2026-09-23)
 
 - Archive structural effects as versioned graphs so self candidates, fusion

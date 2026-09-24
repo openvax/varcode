@@ -39,6 +39,10 @@ class SequenceUnavailable(ValueError):
     """Raised when a lazy reference segment is materialized without FASTA."""
 
 
+class NonlocalStructuralEdit(UnsupportedLayoutEdit):
+    """An overlapping DUP/INV needs junctions beyond this finite layout."""
+
+
 @dataclass(frozen=True)
 class LayoutSegment:
     """One contiguous piece of a rearranged genomic molecule.
@@ -443,6 +447,19 @@ class GenomicLayout:
             and segment.origin_kind in ("reference", "alternate")]
         if not covered:
             return self
+        layout_start = min(segment.start for segment in covered)
+        layout_end = max(segment.end for segment in covered)
+        if end < layout_start or start > layout_end:
+            return self
+        # A DUP or INV needs the whole affected body and its junctions.
+        # Clipping changes the allele into a different local rearrangement.
+        # A DEL can still remove just the intersecting reference sequence.
+        if kind in ("DUP", "INV") and (
+                start < layout_start or end > layout_end):
+            raise NonlocalStructuralEdit(
+                "%s %s:%d-%d extends beyond layout %d-%d; "
+                "the complete rearrangement junctions are unavailable" % (
+                    kind, variant.contig, start, end, layout_start, layout_end))
         start = max(start, min(segment.start for segment in covered))
         end = min(end, max(segment.end for segment in covered))
         if start > end:
