@@ -1,5 +1,18 @@
 # Change Log
 
+## [v10.0.0](https://github.com/openvax/varcode/tree/v10.0.0) (2026-09-23)
+
+**Changed**
+- Classify local SV transcript models by their protein consequence (#420):
+  start loss, in-frame deletion/insertion, frameshift, and other changes now
+  replace event-type labels. Preserve conditional consequences in candidate
+  sets with splice assumptions, event provenance, and mutant sequences.
+- Return unresolved candidates for unspecified insertion/CNV structure,
+  unmaterialized inversions, and unmapped assemblies. Keep fusion consequences
+  and legacy class imports; callers should read DNA type from `variant.sv_type`.
+- Map retained CDS starts on both strands and preserve selenocysteine/SECIS
+  uncertainty and independent coding/protein change flags.
+
 ## [v9.5.0](https://github.com/openvax/varcode/tree/v9.5.0) (2026-09-23)
 
 **Added**

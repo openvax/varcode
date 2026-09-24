@@ -64,6 +64,8 @@ class MutationEffect(Serializable):
         """Amino acid sequence of a coding transcript (without the nucleotide
         variant/mutation)
         """
+        if hasattr(self, "_original_protein_sequence"):
+            return self._original_protein_sequence
         if self.transcript:
             return self.transcript.protein_sequence
         else:
@@ -939,7 +941,9 @@ class CodingMutation(Exonic):
 
     @property
     def modifies_coding_sequence(self):
-        return True
+        # A structural model can alter translation (e.g. SECIS loss)
+        # while preserving every annotated CDS base.
+        return getattr(self, "_modifies_coding_sequence", True)
 
 
 class Silent(CodingMutation):
@@ -1410,8 +1414,10 @@ class FrameShiftTruncation(PrematureStop, FrameShift):
 
 class StructuralVariantEffect(TranscriptMutationEffect, MultiOutcomeEffect):
     """Base class for effects of a :class:`StructuralVariant` on a
-    specific transcript. Subclasses set ``short_description``; the
-    :attr:`candidates` tuple is what downstream callers read.
+    specific transcript. Local models contain consequence effects in
+    :attr:`candidates`; their description follows the first prediction and
+    their priority follows the highest-priority candidate. Gene fusions and
+    translocations retain their specialized descriptions.
 
     :attr:`candidates` always returns a tuple of
     :class:`~varcode.effect_candidates.EffectCandidate` objects.
@@ -1420,6 +1426,21 @@ class StructuralVariantEffect(TranscriptMutationEffect, MultiOutcomeEffect):
     ``source="varcode_motif"``; splice-outcome candidates attached
     via :meth:`_attach_splice_outcomes` carry ``source="varcode_splice"``.
     """
+
+    candidate_evidence = None
+
+    @property
+    def short_description(self):
+        if self._primary_effects and self._primary_effects[0] is not self:
+            return self._primary_effects[0].short_description
+        return "unresolved-structural-transcript"
+
+    @property
+    def priority_class(self):
+        if self._primary_effects and self._primary_effects[0] is not self:
+            highest = self.highest_priority_effect
+            return getattr(highest, "priority_class", None) or type(highest)
+        return type(self) if type(self) is not StructuralVariantEffect else Unresolved
 
     def __init__(
             self, variant, transcript,
@@ -1484,7 +1505,9 @@ class StructuralVariantEffect(TranscriptMutationEffect, MultiOutcomeEffect):
         """
         from ..effect_candidates import EffectCandidate
         sv_type = getattr(self.variant, "sv_type", None)
-        base_evidence = {"sv_type": sv_type} if sv_type is not None else {}
+        base_evidence = dict(self.candidate_evidence or {})
+        if sv_type is not None:
+            base_evidence["sv_type"] = sv_type
         primary = tuple(
             EffectCandidate(
                 effect=effect,

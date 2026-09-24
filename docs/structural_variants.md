@@ -26,9 +26,34 @@ skipped with a warning. No separate annotator selection is needed.
 
 ## Reading SV results
 
-Effects include `LargeDeletion`, `LargeDuplication`, `Inversion`, `GeneFusion`,
-and `TranslocationToIntergenic`. They may contain alternatives in `.candidates`;
-see [alternative outcomes](effect_annotation.md#alternative-outcomes).
+Local deletion and tandem-duplication models are translated and classified as
+`StartLoss`, `Deletion`, `Insertion`, `FrameShift`, or another protein consequence.
+The annotated start is mapped through the retained transcript segments; a
+remaining downstream ATG does not rescue a deleted start. UTR-only edits retain
+`FivePrimeUTR` / `ThreePrimeUTR` labels when their protein is unchanged.
+
+A single resolved model returns its consequence directly. When a breakpoint cuts
+an exon, or motif/splice alternatives exist, a `StructuralVariantEffect` contains
+the consequences in `.candidates`. Its description and priority reflect those
+consequences. Candidate evidence records `sv_type`, `splice_ambiguous`, and the
+`reference_splicing` assumption; DUP models also record `tandem_duplication`.
+`mutant_transcript` retains the modeled cDNA, translated protein, and evidence.
+See [alternative outcomes](effect_annotation.md#alternative-outcomes).
+
+`GeneFusion` and `TranslocationToIntergenic` remain distinct consequences.
+Unmaterialized inversions, unspecified insertions/CNVs, and assemblies without a
+mapped CDS return `Unresolved` candidates. A deletion on an incompletely annotated
+coding transcript falls back to `ExonLoss`.
+
+**Migrating to 10.0:** `LargeDeletion`, `LargeDuplication`, and `Inversion` remain
+importable for legacy objects but are no longer emitted. Read the DNA event from
+`effect.variant.sv_type`; use the consequence or its candidates for protein impact.
+Not every SV effect has `.candidates`: check `isinstance(effect, MultiOutcomeEffect)`.
+
+For CFTR (`ENST00000003084`, Ensembl 81), deleting exons 1–3 loses the annotated
+start, deleting exon 5 yields an in-frame `Deletion` (1480 → 1450 aa), and deleting
+exons 5–6 yields `FrameShift` (171 aa). Reading-frame classification uses the
+spliced edit, consistent with [Ensembl's consequence definitions](https://www.ensembl.org/info/genome/variation/prediction/predicted_data.html).
 
 A DNA rearrangement does not by itself establish a complete expressed fusion
 protein. Sequence may be unknown or partial; `None` is not an unchanged protein.
@@ -125,9 +150,12 @@ Two outcomes apply before any SV logic:
 |---|---|
 | `GeneFusion` | The SV joins this transcript sense-to-sense with a coding transcript in another gene. |
 | `TranslocationToIntergenic` | A breakend in this transcript that doesn't form a gene fusion. |
-| `LargeDeletion` | A deletion (or `<CN0>`) removing one or more exons. |
-| `LargeDuplication` | A duplication, insertion or CNV overlapping exons. |
-| `Inversion` | An inversion overlapping exons. |
+| `StartLoss` | The annotated initiation codon is not retained. |
+| `Deletion` / `Insertion` | An in-frame protein deletion / insertion. |
+| `FrameShift` | A spliced coding edit changes the reading frame. |
+| `StructuralVariantEffect` | A set of conditional consequences or unresolved models. |
+| `Unresolved` | Available sequence/coordinates cannot establish the consequence. |
+| `ExonLoss` | Deleted exons on a transcript whose CDS annotation is incomplete. |
 | `Intronic` | A span inside the transcript that overlaps no exon. |
 | `Intergenic` | No gene at the variant's position. |
 | `NoncodingTranscript` | The transcript isn't protein-coding. |
@@ -135,6 +163,10 @@ Two outcomes apply before any SV logic:
 ## Limitations
 
 - Partner isoforms are enumerated but not ranked by RNA support or likelihood.
+- Local DEL/DUP models with inserted or unreadable paired-breakend alleles
+  remain unresolved until their junction bases can be incorporated
+  ([#491](https://github.com/openvax/varcode/issues/491)). Fusion models already
+  retain resolved exonic junction inserts.
 - Chains of several SVs aren't assembled into one allele, and regulatory
   effects (promoter or enhancer hijacking) aren't modeled.
 - Annotating multi-megabase spans can be slow

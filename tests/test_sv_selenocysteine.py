@@ -115,7 +115,7 @@ def test_utr_deletions_respect_secis_uncertainty(transcript_id, region, coding, 
     start, end = (exon.start, exon.start + 9) if at_low_end else (exon.end - 9, exon.end)
     variant = StructuralVariant(t.contig, start, "DEL", end=end, genome=t.genome)
     effect = variant.effect_on_transcript(t)
-    assert isinstance(effect, LargeDeletion)
+    assert effect.affected_exons
     assert effect.modifies_coding_sequence is coding
     assert effect.modifies_protein_sequence is protein
     assert len(EffectCollection([effect]).drop_silent_and_noncoding()) == int(protein is None)

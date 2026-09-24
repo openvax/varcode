@@ -35,9 +35,10 @@ from varcode import (
 from varcode.effects import (
     GeneFusion,
     Intronic,
-    Inversion,
-    LargeDeletion,
-    LargeDuplication,
+    FrameShift,
+    StartLoss,
+    StructuralVariantEffect,
+    Unresolved,
     MultiOutcomeEffect,
     TranslocationToIntergenic,
 )
@@ -87,10 +88,10 @@ def test_sv_large_deletion_spans_cftr_exons():
         genome=ensembl_grch38,
     )
     effect = _ANNOTATOR.annotate_on_transcript(sv, transcript)
-    assert isinstance(effect, LargeDeletion)
+    assert isinstance(effect, StructuralVariantEffect)
     assert isinstance(effect, MultiOutcomeEffect)
     assert len(effect.affected_exons) >= 1
-    assert effect.short_description == "sv-deletion"
+    assert isinstance(effect.most_likely_effect, StartLoss)
 
 
 def test_sv_large_deletion_outcomes_shape():
@@ -145,7 +146,7 @@ def test_sv_duplication_on_cftr_exons():
         genome=ensembl_grch38,
     )
     effect = _ANNOTATOR.annotate_on_transcript(sv, transcript)
-    assert isinstance(effect, LargeDuplication)
+    assert isinstance(effect, StructuralVariantEffect)
 
 
 def test_sv_inversion_on_cftr_exons():
@@ -158,7 +159,7 @@ def test_sv_inversion_on_cftr_exons():
         genome=ensembl_grch38,
     )
     effect = _ANNOTATOR.annotate_on_transcript(sv, transcript)
-    assert isinstance(effect, Inversion)
+    assert isinstance(effect.most_likely_effect, Unresolved)
 
 
 # --------------------------------------------------------------------
@@ -281,7 +282,7 @@ def test_sv_annotator_honors_alt_assembly_hook():
         genome=ensembl_grch38,
     )
     effect = _ANNOTATOR.annotate_on_transcript(sv, transcript)
-    assert isinstance(effect, LargeDeletion)
+    assert isinstance(effect, StructuralVariantEffect)
     mt = effect.mutant_transcript
     assert mt is not None
     assert mt.cdna_sequence == assembled_allele
@@ -289,7 +290,7 @@ def test_sv_annotator_honors_alt_assembly_hook():
     segment = mt.reference_segments[0]
     assert segment.label == "alt_assembly"
     assert segment.source.sequence == assembled_allele
-    assert mt.evidence == {"source": "alt_assembly"}
+    assert mt.evidence["source"] == "alt_assembly"
 
 
 def test_sv_annotator_attaches_cryptic_outcomes_from_assembly():
@@ -811,7 +812,7 @@ def test_paired_deletion_retains_exonic_anchor_base():
         low_position + 1, high_position - 1)
     assert deletion.length == high_position - low_position - 1
     effect = _ANNOTATOR.annotate_on_transcript(deletion, transcript)
-    assert isinstance(effect, LargeDeletion)
+    assert isinstance(effect, StructuralVariantEffect)
     assert exon1 not in effect.affected_exons
     assert exon2 in effect.affected_exons
 
@@ -848,7 +849,7 @@ def test_paired_duplication_excludes_low_padding_base():
         low_position, high_position)
     assert duplication.length == high_position - low_position + 1
     effect = _ANNOTATOR.annotate_on_transcript(duplication, transcript)
-    assert isinstance(effect, LargeDuplication)
+    assert isinstance(effect, StructuralVariantEffect)
 
     exon1_length = exon1.end - exon1.start + 1
     cdna = str(transcript.sequence)
@@ -1007,7 +1008,7 @@ def test_deletion_between_two_genes_is_fusion_on_both_partners():
     # What the deletion does to TMPRSS2's own exons follows the fusion.
     (deletion,) = [
         c.effect for c in on_tmprss2.candidates
-        if isinstance(c.effect, LargeDeletion)]
+        if type(c.effect) is StructuralVariantEffect]
     assert deletion.affected_exons
 
     on_erg = _ANNOTATOR.annotate_on_transcript(sv, erg)
@@ -1016,7 +1017,7 @@ def test_deletion_between_two_genes_is_fusion_on_both_partners():
     assert on_erg.five_prime_transcript.gene_name == "TMPRSS2"
 
     assert isinstance(
-        _ANNOTATOR.annotate_on_transcript(sv, ets2), LargeDeletion)
+        _ANNOTATOR.annotate_on_transcript(sv, ets2), StartLoss)
 
 
 # --------------------------------------------------------------------
@@ -1029,7 +1030,7 @@ def test_sv_breakpoint_at_acceptor_attaches_splice_outcomes():
     """A DEL whose 5' breakpoint sits at intronic −1 of CFTR exon 2
     disrupts the canonical acceptor. The SV effect should carry
     ``varcode_splice`` candidates for ExonSkipping and IntronRetention
-    alongside the primary ``LargeDeletion`` classification."""
+    alongside the conditional protein consequence."""
     from varcode import ExonSkipping, IntronRetention, NormalSplicing
     transcript = _cftr()
     # CFTR exon 2: 117504253-117504363 (forward strand). Acceptor
@@ -1037,11 +1038,11 @@ def test_sv_breakpoint_at_acceptor_attaches_splice_outcomes():
     sv = StructuralVariant(
         contig="7",
         start=117_504_252,
-        end=117_504_400,  # inside exon 2 — LargeDeletion classification
+        end=117_504_400,  # downstream of exon 2
         sv_type="DEL",
         genome=ensembl_grch38)
     effect = _ANNOTATOR.annotate_on_transcript(sv, transcript)
-    assert isinstance(effect, LargeDeletion)
+    assert isinstance(effect, StructuralVariantEffect)
     splice = [o for o in effect.candidates if o.source == "varcode_splice"]
     assert splice, "Expected at least one varcode_splice candidate"
     splice_kinds = {type(o.effect) for o in splice}
@@ -1067,7 +1068,7 @@ def test_sv_breakpoint_at_donor_attaches_splice_outcomes():
         sv_type="DEL",
         genome=ensembl_grch38)
     effect = _ANNOTATOR.annotate_on_transcript(sv, transcript)
-    assert isinstance(effect, LargeDeletion)
+    assert isinstance(effect, StructuralVariantEffect)
     splice_kinds = {
         type(o.effect) for o in effect.candidates
         if o.source == "varcode_splice"}
@@ -1088,12 +1089,8 @@ def test_sv_breakpoint_away_from_splice_sites_has_no_splice_outcomes():
         sv_type="DEL",
         genome=ensembl_grch38)
     effect = _ANNOTATOR.annotate_on_transcript(sv, transcript)
-    if not isinstance(effect, LargeDeletion):
-        # Intronic span — no splice outcomes expected. That's fine;
-        # this test is about the LargeDeletion case, skip.
-        pytest.skip("DEL didn't overlap any exon in this fixture")
-    assert not any(
-        o.source == "varcode_splice" for o in effect.candidates)
+    assert isinstance(effect, FrameShift)
+    assert len(effect.mutant_transcript.mutant_protein_sequence) > 0
 
 
 def test_sv_splice_outcome_effects_are_mutation_effects():
@@ -1127,7 +1124,7 @@ def test_sv_breakpoint_in_intronic_splice_window_donor_side():
     # within the 3-6 window).
     sv = StructuralVariant(
         contig="7",
-        start=117_504_300,  # inside exon 2 — anchor for LargeDeletion
+        start=117_504_300,  # inside exon 2
         end=117_504_367,    # intronic +4 on donor side
         sv_type="DEL",
         genome=ensembl_grch38)

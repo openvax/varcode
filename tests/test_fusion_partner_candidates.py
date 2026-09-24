@@ -6,7 +6,7 @@ import pytest
 from pyensembl import cached_release
 
 from varcode import EffectCandidate, StructuralVariant
-from varcode.effects import GeneFusion, LargeDeletion, TranslocationToIntergenic
+from varcode.effects import GeneFusion, StructuralVariantEffect, TranslocationToIntergenic
 from varcode.effects import structural
 
 
@@ -164,7 +164,7 @@ def test_span_effect_is_retained_after_all_fusion_partners(fusion_case):
                                 end=midpoint(tmprss2, 2) - 1, genome=genome)
     effect = variant.effect_on_transcript(tmprss2)
     assert len(_fusions(effect)) > 1
-    assert isinstance(effect.candidates[-1].effect, LargeDeletion)
+    assert isinstance(effect.candidates[-1].effect, StructuralVariantEffect)
     assert effect.candidates[-1].effect.affected_exons
 
 
