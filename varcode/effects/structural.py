@@ -91,43 +91,17 @@ def _affected_span(variant):
     return min(start, end), max(start, end)
 
 
-def _cdna_ranges_kept_after_deletion(variant, transcript):
-    """Compute the cDNA ranges of ``transcript`` that survive after
-    the genomic deletion described by ``variant``.
+def _deletion_cdna_bounds(variant, transcript):
+    """Half-open cDNA span removed by a deletion, including an empty span.
 
-    Returns a merged list of ``(cdna_start, cdna_end)`` tuples in
-    transcript order. Handles both forward and reverse strand
-    transcripts and the case where the deletion cuts through the
-    middle of an exon.
+    An intron-only deletion removes no reference cDNA but can still insert
+    bases at an exonic junction. Keep its position even when start == end.
     """
-    del_start, del_end = _affected_span(variant)
-    kept = []
-    reverse = transcript.on_backward_strand
-    for exon, c_s, c_e in _exon_cdna_ranges(transcript):
-        ex_s, ex_e = exon.start, exon.end
-        # Exon entirely outside the deletion.
-        if ex_e < del_start or ex_s > del_end:
-            kept.append((c_s, c_e))
-            continue
-        # Exon fully covered by the deletion.
-        if del_start <= ex_s and del_end >= ex_e:
-            continue
-        # Partial overlap: preserve the genomic bases outside the
-        # deletion and map them to cDNA. The direction of the map
-        # depends on strand — on the forward strand cDNA position
-        # 0 of the exon corresponds to ``ex_s``; on the reverse
-        # strand it corresponds to ``ex_e``.
-        if reverse:
-            if del_end < ex_e:
-                kept.append((c_s, c_s + (ex_e - del_end)))
-            if del_start > ex_s:
-                kept.append((c_e - (del_start - ex_s), c_e))
-        else:
-            if del_start > ex_s:
-                kept.append((c_s, c_s + (del_start - ex_s)))
-            if del_end < ex_e:
-                kept.append((c_s + (del_end + 1 - ex_s), c_e))
-    return _merge_adjacent_ranges(sorted(kept))
+    low, high = _affected_span(variant)
+    first, last = (high, low) if transcript.on_backward_strand else (low, high)
+    start, _ = _exonic_bases_before(transcript, first)
+    end, exonic = _exonic_bases_before(transcript, last)
+    return start, end + int(exonic)
 
 
 def _cdna_ranges_within_sv(variant, transcript):
@@ -332,26 +306,20 @@ def _build_deletion_mutant_transcript(variant, transcript):
     needed. The consequence classifier maps the surviving CDS start
     and translates this model before returning it to callers.
     """
-    kept = _cdna_ranges_kept_after_deletion(variant, transcript)
-    if not kept:
-        # Whole transcript deleted — express as a single zero-length
-        # segment so the MutantTranscript still has a well-defined
-        # shape (consumers see reference_segments=() and cdna="").
-        return MutantTranscript(
-            reference_transcript=transcript,
-            reference_segments=(),
-            cdna_sequence="",
-            annotator_name="structural_variant")
-    segments = tuple(
-        ReferenceSegment(
-            source=transcript, start=s, end=e, strand="+", label="del_kept")
-        for s, e in kept)
-    cdna = str(transcript.sequence)
-    joined = "".join(cdna[s:e] for s, e in kept)
+    start, end = _deletion_cdna_bounds(variant, transcript)
+    insertion, evidence = _local_junction_insertion(variant, transcript)
+    prefix = (ReferenceSegment(transcript, 0, start, label="del_kept"),) if start else ()
+    full_len = len(str(transcript.sequence))
+    suffix = ((ReferenceSegment(transcript, end, full_len, label="del_kept"),)
+              if end < full_len else ())
+    segments = prefix + insertion + suffix
+    joined = None if "sequence_status" in evidence else "".join(
+        s.source.sequence[s.start:s.end] for s in segments)
     return MutantTranscript(
         reference_transcript=transcript,
         reference_segments=segments,
         cdna_sequence=joined,
+        evidence=evidence,
         annotator_name="structural_variant")
 
 
@@ -374,21 +342,23 @@ def _build_duplication_mutant_transcript(variant, transcript):
             source=transcript, start=s, end=e,
             strand="+", label="dup_body_copy")
         for s, e in inside)
+    insertion, evidence = _local_junction_insertion(variant, transcript)
     segments = (
         ReferenceSegment(
             source=transcript, start=0, end=last_inside,
             strand="+", label="pre_dup_including_body"),
-    ) + body_segments + (
+    ) + insertion + body_segments + (
         ReferenceSegment(
             source=transcript, start=last_inside, end=full_len,
             strand="+", label="post_dup"),
     )
-    dup_body = "".join(full_cdna[s:e] for s, e in inside)
-    joined = full_cdna[:last_inside] + dup_body + full_cdna[last_inside:]
+    joined = None if "sequence_status" in evidence else "".join(
+        s.source.sequence[s.start:s.end] for s in segments)
     return MutantTranscript(
         reference_transcript=transcript,
         reference_segments=segments,
         cdna_sequence=joined,
+        evidence=evidence,
         annotator_name="structural_variant")
 
 
@@ -461,6 +431,49 @@ def _translate_fused_cdna(fused_cdna, five_prime_transcript, five_prime_len,
         return None
 
 
+def _junction_insertion(inserted_sequence, transcript_positions):
+    """Insertion segments and retention evidence for a spliced junction.
+
+    ``inserted_sequence`` must already be oriented from the 5' retained
+    portion to the 3' retained portion. Positions name retained anchors,
+    rather than the affected span's first/last bases.
+    """
+    evidence = {}
+    insertion = ()
+    if inserted_sequence is None:
+        evidence["sequence_status"] = "unresolved_junction_insertion"
+    elif inserted_sequence:
+        exonic = [any(e.start <= pos <= e.end for e in t.exons)
+                  for t, pos in transcript_positions]
+        evidence["junction_inserted_sequence"] = inserted_sequence
+        if all(exonic):
+            insertion = (ReferenceSegment(
+                source=_AssembledAllele(inserted_sequence), start=0,
+                end=len(inserted_sequence), label="junction_insertion"),)
+            evidence["junction_insertion_status"] = "retained"
+        elif any(exonic):
+            evidence["sequence_status"] = "unresolved_insertion_retention"
+        else:
+            evidence["junction_insertion_status"] = "excluded_by_reference_splicing"
+    return insertion, evidence
+
+
+def _local_junction_insertion(variant, transcript):
+    """Orient a local DEL/DUP junction in transcript direction."""
+    junction, = variant.junctions
+    if variant.junction_inserted_sequence(junction) == "":
+        return (), {}
+    if not _retains_five_prime_end(transcript, junction[0].keeps):
+        junction = junction[::-1]
+    inserted = variant.junction_inserted_sequence(junction)
+    if inserted and not all(_contains(transcript, end) for end in junction):
+        # An exterior breakpoint is not an intron of this transcript.
+        return (), {"junction_inserted_sequence": inserted,
+                    "sequence_status": "unresolved_insertion_retention"}
+    return _junction_insertion(
+        inserted, ((transcript, end.position) for end in junction))
+
+
 def _build_fusion_mutant_transcript(
         reference_transcript,
         five_prime_transcript, five_prime_position,
@@ -503,24 +516,10 @@ def _build_fusion_mutant_transcript(
             start=three_prime_start, end=len(three_prime_cdna),
             strand="+", label="3p_partner"),
     )
-    evidence = {}
-    if inserted_sequence is None:
-        evidence["sequence_status"] = "unresolved_junction_insertion"
-    elif inserted_sequence:
-        exonic = [any(e.start <= pos <= e.end for e in t.exons)
-                  for t, pos in ((five_prime_transcript, five_prime_position),
-                                 (three_prime_transcript, three_prime_position))]
-        evidence["junction_inserted_sequence"] = inserted_sequence
-        if all(exonic):
-            insertion = ReferenceSegment(
-                source=_AssembledAllele(inserted_sequence), start=0,
-                end=len(inserted_sequence), label="junction_insertion")
-            segments = segments[:1] + (insertion,) + segments[1:]
-            evidence["junction_insertion_status"] = "retained"
-        elif any(exonic):
-            evidence["sequence_status"] = "unresolved_insertion_retention"
-        else:
-            evidence["junction_insertion_status"] = "excluded_by_reference_splicing"
+    insertion, evidence = _junction_insertion(
+        inserted_sequence, ((five_prime_transcript, five_prime_position),
+                            (three_prime_transcript, three_prime_position)))
+    segments = segments[:1] + insertion + segments[1:]
     if "sequence_status" in evidence:
         return MutantTranscript(
             reference_transcript=reference_transcript,
@@ -729,7 +728,10 @@ def _enumerate_and_attach_cryptics(variant, effect):
 def _annotate_deletion(variant, transcript, assembly=None):
     """Classify the surviving spliced transcript after a deletion."""
     affected = _overlapping_exons(variant, transcript)
-    if not affected:
+    if not affected and not any(
+            variant.junction_inserted_sequence(junction) != ""
+            and any(_contains(exon, end) for end in junction for exon in transcript.exons)
+            for junction in variant.junctions):
         return _intronic_or_intergenic(variant, transcript)
     return _local_consequence(
         variant, transcript, affected,
@@ -766,10 +768,8 @@ def _annotate_insertion(variant, transcript, assembly=None):
 
 def _local_consequence(variant, transcript, affected, model):
     """Consequence plus evidence for an existing local transcript model."""
-    # The local segment builders describe reference loss/copying only.
-    # A paired breakend may also insert bases; until those are placed in
-    # this spliced model it cannot establish a protein consequence.
-    if (model is not None and not variant.alt_assembly
+    # Inversion reconstruction still cannot place inserted junction bases.
+    if (variant.sv_type == "INV" and model is not None and not variant.alt_assembly
             and any(variant.junction_inserted_sequence(junction) != ""
                     for junction in variant.junctions)):
         model = replace(
@@ -856,15 +856,16 @@ def _classify_structural_transcript(variant, transcript, model, affected):
     # genomic span crosses introns. Give the diff classifier that edit's
     # provenance, without representing it as a second edit over the segments.
     reference = str(transcript.sequence)
+    inserted = "".join(s.source.sequence[s.start:s.end]
+                       for s in model.reference_segments
+                       if s.label == "junction_insertion")
     if variant.sv_type in ("DEL", "CN0"):
-        kept = _cdna_ranges_kept_after_deletion(variant, transcript)
-        start = kept[0][1] if kept and kept[0][0] == 0 else 0
-        end = start + len(reference) - len(sequence)
-        edit = TranscriptEdit(start, end, "", variant)
+        start, end = _deletion_cdna_bounds(variant, transcript)
+        edit = TranscriptEdit(start, end, inserted, variant)
     elif variant.sv_type == "DUP":
         inside = _cdna_ranges_within_sv(variant, transcript)
         start = inside[-1][1]
-        edit = TranscriptEdit(start, start, "".join(
+        edit = TranscriptEdit(start, start, inserted + "".join(
             reference[s:e] for s, e in inside), variant)
     else:
         return unresolved("No mapped coding edit is available")

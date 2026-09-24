@@ -738,7 +738,7 @@ def test_deletion_with_partial_exon_overlap():
     """A DEL that cuts mid-exon must produce segments whose cDNA
     concatenation equals the reference cDNA minus the deleted
     exonic bases. Exercises the partial-exon branches of
-    :func:`_cdna_ranges_kept_after_deletion`."""
+    :func:`_deletion_cdna_bounds`."""
     transcript = _cftr()
     exon1 = transcript.exons[0]
     # Deletion that starts 50 bp into CFTR exon 1 and extends 10 kb
