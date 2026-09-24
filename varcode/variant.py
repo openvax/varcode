@@ -492,8 +492,8 @@ class Variant(Serializable):
             Codons / splice signals where germline overlaps the
             somatic and phase is unknown produce a
             :class:`PhaseCandidateSet` with one outcome per
-            haplotype hypothesis; LOH at germline het positions sets
-            ``effect.is_loh = True``. ``None`` or
+            haplotype hypothesis; an identical inherited allele returns
+            ``GermlineAlleleOverlap`` with LOH unassessed. ``None`` or
             :meth:`GermlineContext.empty` falls through to today's
             reference-relative behaviour byte-identically. See
             openvax/varcode#268.

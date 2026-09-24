@@ -21,6 +21,7 @@ from .effect_hypotheses import (
     order_realized_candidates,
 )
 from .effects.effect_classes import (
+    GermlineAlleleOverlap,
     IncompleteTranscript,
     NoncodingTranscript,
     Unresolved,
@@ -28,7 +29,7 @@ from .effects.effect_classes import (
 from .effects.effect_ordering import effect_priority
 from .genome_sequence import reference_range
 from .genomic_layout import GenomicLayout
-from .germline import enumerate_phase_hypotheses
+from .germline import detect_germline_overlap, enumerate_phase_hypotheses
 from .splice_graph import disrupted_splice_sites, splice_axes
 from .transcript_layout import (
     build_exon_runs,
@@ -186,6 +187,16 @@ def predict_transcript_model_effect(
         raise ValueError("predict_transcript_model_effect requires a somatic variant")
     germline_variants = tuple(germline_variants)
     primary = variants[0]
+    if any(detect_germline_overlap(v, germline_variants) for v in variants):
+        if len(variants) == 1:
+            return GermlineAlleleOverlap(primary, transcript)
+        result = Unresolved(
+            primary, transcript, mechanism="germline_overlap_haplotype",
+            reason="A mixed inherited/somatic group requires an allele-aware baseline")
+        result.is_germline_overlap = True
+        result.is_loh = None
+        result.loh_status = "not_assessed"
+        return result
     if (getattr(primary, "sv_type", None) in ("DUP", "INV")
             and primary.alt_assembly):
         if len(variants) != 1 or germline_variants:
@@ -345,7 +356,7 @@ class TranscriptModelEffectAnnotator:
 
     def _annotate_with_context(
             self, variants, transcript, germline_ctx, phase_resolver):
-        from .germline import Completeness, detect_loh
+        from .germline import Completeness
 
         germline = {}
         for variant in variants:
@@ -370,8 +381,6 @@ class TranscriptModelEffectAnnotator:
         if (not germline and germline_ctx.completeness in (
                 Completeness.SPARSE, Completeness.HOTSPOTS_ONLY)):
             result.germline_unknown = True
-        if any(detect_loh(variant, germline) for variant in variants):
-            result.is_loh = True
         return result
 
     def annotate_haplotype(

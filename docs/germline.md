@@ -101,20 +101,32 @@ pair is resolved.
 
 ## Loss of heterozygosity (LOH)
 
-When a somatic call matches a germline allele, Varcode attaches an `is_loh`
-flag. This is an allele-overlap heuristic, not evidence on its own that a tumor
-lost the other allele; interpreting LOH requires additional data. This naming
-limitation is tracked in [#454](https://github.com/openvax/varcode/issues/454).
+When a reported somatic allele matches the supplied germline, Varcode returns
+`GermlineAlleleOverlap` with `is_germline_overlap=True`, `is_loh=None`, and
+`loh_status="not_assessed"`. It does not apply the inherited allele a second
+time or claim a new somatic protein sequence. The allele may still have a
+functional effect relative to the genome reference.
+
+LOH requires evidence about loss of an allele previously present in the normal
+sample ([NCI definition](https://www.cancer.gov/publications/dictionaries/genetics-dictionary/def/loss-of-heterozygosity)).
+Varcode's sequence annotation does not perform that tumor/normal allelic-state
+analysis. An allele match, including unchanged heterozygous or inherited
+homozygous calls, cannot establish LOH. Integrate a dedicated LOH caller's
+evidence separately.
 
 ```python
 for effect in effects:
-    if getattr(effect, "is_loh", False):
+    if getattr(effect, "is_germline_overlap", False):
         print("Germline-overlap flag:", effect.short_description)
 ```
 
 Here `effects` is the collection annotated with germline context above.
 The check requires `germline=`; annotation without that context cannot attach
-the flag.
+the flag. Use `detect_germline_overlap` for an allele-match query. The deprecated
+`detect_loh` now returns `None` (not assessed) and warns, rather than making a
+zygosity claim. Mixed inherited/somatic groups in the experimental transcript
+model remain explicitly unresolved until their allele-aware baseline can be
+represented.
 
 ## Limitations
 

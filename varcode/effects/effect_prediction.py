@@ -110,8 +110,8 @@ def predict_variant_effects(
         applied transcript instead of the reference. Codons / splice
         signals where germline overlaps the somatic produce per-
         haplotype possibility sets when phase is unknown (a
-        :class:`PhaseCandidateSet`); LOH at germline het positions
-        is flagged. ``None`` or :meth:`GermlineContext.empty` falls
+        :class:`PhaseCandidateSet`); identical inherited alleles are
+        reported as germline overlap, without inferring LOH. ``None`` or :meth:`GermlineContext.empty` falls
         through to today's reference-relative behaviour byte-
         identically. See openvax/varcode#268.
 

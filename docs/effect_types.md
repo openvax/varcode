@@ -15,6 +15,7 @@ from the source docstrings; this is reference material, not a required first rea
 | [Splice effects](#splice-effects) | `SpliceOutcomeSet`, with `NormalSplicing`, `ExonSkipping`, `IntronRetention`, or cryptic-site candidates |
 | [Structural effects](#structural-effects) | `StructuralVariantEffect`, `GeneFusion`, `TranslocationToIntergenic` |
 | [Linked variants and phase](#haplotype-effects) | `HaplotypeEffect`, `PhaseCandidateSet` |
+| [Inherited allele overlap](germline.md#loss-of-heterozygosity-loh) | `GermlineAlleleOverlap`: no new allele sequence; LOH unassessed |
 | [Unknown results and failures](#unknown-results) | `Unresolved`, `IncompleteTranscript`, `Failure` |
 
 These labels describe predictions and their limits, not clinical significance.
