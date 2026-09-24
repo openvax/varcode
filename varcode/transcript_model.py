@@ -29,7 +29,9 @@ from .effects.effect_classes import (
 from .effects.effect_ordering import effect_priority
 from .genome_sequence import reference_range
 from .genomic_layout import GenomicLayout
-from .germline import detect_germline_overlap, enumerate_phase_hypotheses
+from .germline import (
+    _phase_limit_unresolved, _validate_max_hypotheses,
+    detect_germline_overlap, enumerate_phase_hypotheses)
 from .splice_graph import disrupted_splice_sites, splice_axes
 from .transcript_layout import (
     build_exon_runs,
@@ -54,8 +56,6 @@ def _provider_for_genome(genome):
 def _phase_probability(phase_hypotheses, hypothesis):
     if hypothesis.phase_state == "unknown":
         return 1.0 / len(phase_hypotheses)
-    if hypothesis.phase_state == "too_many_hypotheses":
-        return None
     return 1.0
 
 
@@ -182,6 +182,7 @@ def predict_transcript_model_effect(
     candidates at sequence-free tier 0. Rule order is never mislabeled as
     probability.
     """
+    _validate_max_hypotheses(max_hypotheses)
     variants = tuple(variants)
     if not variants:
         raise ValueError("predict_transcript_model_effect requires a somatic variant")
@@ -230,6 +231,12 @@ def predict_transcript_model_effect(
     phase_hypotheses = enumerate_phase_hypotheses(
         primary, germline_variants, phase_resolver=phase_resolver,
         max_hypotheses=max_hypotheses)
+    if phase_hypotheses[0].phase_state == "too_many_hypotheses":
+        result = _phase_limit_unresolved(
+            primary, transcript, phase_hypotheses[0], germline_variants,
+            max_hypotheses)
+        result.variants = variants
+        return result
     outcomes = []
     enumeration_index = 0
     for phase_hypothesis in phase_hypotheses:

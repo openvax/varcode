@@ -1,5 +1,19 @@
 # Change Log
 
+## [v10.3.0](https://github.com/openvax/varcode/tree/v10.3.0) (2026-09-24)
+
+- Exceeding the germline phase-hypothesis cap now returns
+  `Unresolved(mechanism="phase_hypothesis_limit")` instead of classifying an
+  assumed all-cis haplotype as a precise consequence (#503). This applies to
+  the default path and the experimental `transcript_model`. The effect's new
+  `evidence` records the cap, the required count, and the known cis, known
+  trans, and unphased germline variants, and survives priority selection and
+  JSON round trips.
+- `enumerate_phase_hypotheses` keeps a resolver's partial cis/trans answers
+  and enumerates only the unanswered germline variants. Its capped placeholder
+  records known phase plus a new `PhaseHypothesis.unphased` field rather than
+  marking every variant cis.
+- `max_hypotheses` must be a positive integer; other values raise `ValueError`.
 ## [v10.2.1](https://github.com/openvax/varcode/tree/v10.2.1) (2026-09-24)
 
 - Documentation readability pass: the README and docs home now describe what

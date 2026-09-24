@@ -369,17 +369,24 @@ class Unresolved(TranscriptMutationEffect):
     Unlike :class:`Failure`, this is not an annotation error. A hypothesis
     may require missing genomic sequence or an RNA assembly. Alternatively,
     ``mechanism="unsupported_annotation"`` means the selected annotator
-    returned ``NotImplemented`` for this input. ``reason`` explains why;
-    unresolved does not mean the variant is harmless.
+    returned ``NotImplemented`` for this input. ``reason`` explains why and
+    the optional ``evidence`` mapping records structured inputs to that
+    decision; unresolved does not mean the variant is harmless.
     """
 
     modifies_coding_sequence = None
     modifies_protein_sequence = None
 
-    def __init__(self, variant, transcript, mechanism, reason=None):
+    def __init__(self, variant, transcript, mechanism, reason=None, evidence=None):
         TranscriptMutationEffect.__init__(self, variant, transcript)
         self.mechanism = mechanism
         self.reason = reason
+        self.evidence = dict(evidence or {})
+
+    def __hash__(self):
+        # Evidence is an unhashable mapping; equal effects still hash equally.
+        return hash((type(self), self.variant, self.transcript,
+                     self.mechanism, self.reason))
 
     @property
     def short_description(self):
@@ -1902,7 +1909,7 @@ class PhaseCandidateSet(TranscriptMutationEffect, MultiOutcomeEffect):
         (#259, #382).
 
         ``evidence`` keys: ``phase_state`` (``"phased"`` /
-        ``"implicit"`` / ``"unknown"`` / ``"too_many_hypotheses"``),
+        ``"implicit"`` / ``"unknown"``),
         ``haplotype`` (opaque tag), ``germline_variants`` (tuple of
         the cis germline variants on that hypothesis's haplotype).
         """
