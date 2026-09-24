@@ -4,7 +4,7 @@ import pytest
 from pyensembl import cached_release
 
 from varcode import StructuralVariant, parse_symbolic_alt
-from varcode.effects import Inversion, LargeDuplication
+from varcode.effects import Unresolved
 from varcode.effects import structural
 
 
@@ -36,14 +36,15 @@ def make_sv(transcript, kind, outside, symbolic=False, assembly=None):
         genome=transcript.genome, alt_assembly=assembly)
 
 
-@pytest.mark.parametrize("kind,cls", [("DUP", LargeDuplication), ("INV", Inversion)])
+@pytest.mark.parametrize("kind", ["DUP", "INV"])
 @pytest.mark.parametrize("outside", ["left", "right", "both"])
 @pytest.mark.parametrize("symbolic", [False, True])
 def test_nonlocal_event_keeps_type_without_inventing_transcript(
-        transcript, kind, cls, outside, symbolic):
+        transcript, kind, outside, symbolic):
     sv = make_sv(transcript, kind, outside, symbolic)
     effect = sv.effect_on_transcript(transcript)
-    assert isinstance(effect, cls)
+    assert isinstance(effect.most_likely_effect, Unresolved)
+    assert effect.candidates[0].evidence["sv_type"] == kind
     assert effect.mutant_transcript is None
     assert all(c.effect.mutant_transcript is None for c in effect.candidates)
 
@@ -79,5 +80,5 @@ def test_gene_containment_does_not_establish_short_isoform_structure(transcript_
     assert all(structural._contains(tx.gene, end) for end in ends)
     assert any(not structural._contains(tx, end) for end in ends)
     effect = sv.effect_on_transcript(tx)
-    assert isinstance(effect, (LargeDuplication, Inversion))
+    assert isinstance(effect.most_likely_effect, Unresolved)
     assert effect.mutant_transcript is None

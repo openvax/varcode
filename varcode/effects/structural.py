@@ -23,19 +23,21 @@ provenance; their containing effect collection records the selected annotator.
 from dataclasses import replace
 
 from .effect_classes import (
+    ExonLoss,
+    FivePrimeUTR,
     GeneFusion,
     Intergenic,
     Intronic,
-    Inversion,
-    LargeDeletion,
-    LargeDuplication,
     NoncodingTranscript,
+    StartLoss,
     StructuralVariantEffect,
+    ThreePrimeUTR,
     TranslocationToIntergenic,
+    Unresolved,
 )
 from .effect_helpers import exon_length
 from .selenocysteine import segment_selenocysteine
-from ..mutant_transcript import MutantTranscript, ReferenceSegment
+from ..mutant_transcript import MutantTranscript, ReferenceSegment, TranscriptEdit
 # Existing assembled-SV pickles use this private module path.
 from ..mutant_transcript import _AssembledAllele  # noqa: F401
 from ..sv_allele_parser import breakend_sides, _breakend_local_side
@@ -327,9 +329,8 @@ def _build_deletion_mutant_transcript(variant, transcript):
     The cDNA of the surviving transcript is the concatenation of
     cDNA ranges outside the deleted span. cDNA is derivable entirely
     from pyensembl-cached transcript sequence — no genomic FASTA
-    needed. ``mutant_protein_sequence`` is left to downstream
-    consumers (translation requires knowing whether the CDS start
-    survives, frame preservation across the junction, etc.).
+    needed. The consequence classifier maps the surviving CDS start
+    and translates this model before returning it to callers.
     """
     kept = _cdna_ranges_kept_after_deletion(variant, transcript)
     if not kept:
@@ -614,6 +615,13 @@ def predict_structural_variant_effect(variant, transcript):
     # (#341). They show up as additional EffectCandidate entries with
     # source="varcode_splice".
     _enumerate_and_attach_splice_outcomes(variant, transcript, effect)
+    # A resolved local model with no alternatives can expose its actual
+    # consequence directly. Uncertain models retain the candidate protocol.
+    if (type(effect) is StructuralVariantEffect
+            and len(effect.candidates) == 1
+            and not effect.candidate_evidence.get("splice_ambiguous")
+            and not isinstance(effect.most_likely_effect, Unresolved)):
+        return effect.most_likely_effect
     return effect
 
 
@@ -719,53 +727,168 @@ def _enumerate_and_attach_cryptics(variant, effect):
 
 
 def _annotate_deletion(variant, transcript, assembly=None):
-    """A deletion overlapping a transcript: :class:`LargeDeletion`
-    when it covers one or more exons, :class:`Intronic` when it's
-    purely intronic."""
+    """Classify the surviving spliced transcript after a deletion."""
     affected = _overlapping_exons(variant, transcript)
     if not affected:
         return _intronic_or_intergenic(variant, transcript)
-    return LargeDeletion(
-        variant=variant,
-        transcript=transcript,
-        affected_exons=affected,
-        mutant_transcript=assembly or _build_deletion_mutant_transcript(
-            variant, transcript))
+    return _local_consequence(
+        variant, transcript, affected,
+        assembly or _build_deletion_mutant_transcript(variant, transcript))
 
 
 def _annotate_duplication(variant, transcript, assembly=None):
     affected = _overlapping_exons(variant, transcript)
     if not affected:
         return _intronic_or_intergenic(variant, transcript)
-    return LargeDuplication(
-        variant=variant,
-        transcript=transcript,
-        affected_exons=affected,
-        mutant_transcript=assembly or _build_duplication_mutant_transcript(
-            variant, transcript))
+    return _local_consequence(
+        variant, transcript, affected,
+        assembly or _build_duplication_mutant_transcript(variant, transcript))
 
 
 def _annotate_inversion(variant, transcript, assembly=None):
     affected = _overlapping_exons(variant, transcript)
     if not affected:
         return _intronic_or_intergenic(variant, transcript)
-    return Inversion(
-        variant=variant,
-        transcript=transcript,
-        mutant_transcript=assembly or _build_inversion_mutant_transcript(
-            variant, transcript))
+    return _local_consequence(
+        variant, transcript, affected,
+        assembly or _build_inversion_mutant_transcript(variant, transcript))
 
 
 def _annotate_insertion(variant, transcript, assembly=None):
     affected = _overlapping_exons(variant, transcript)
     if not affected:
         return _intronic_or_intergenic(variant, transcript)
-    return LargeDuplication(
-        variant=variant,
-        transcript=transcript,
-        affected_exons=affected,
-        mutant_transcript=assembly or _build_duplication_mutant_transcript(
-            variant, transcript))
+    # Neither an unknown insertion nor a copy-number call specifies a
+    # tandem-duplicated sequence. Preserve supplied assemblies without
+    # guessing their ORF or replacing them with a reference exon copy.
+    return _local_consequence(variant, transcript, affected, assembly)
+
+
+def _local_consequence(variant, transcript, affected, model):
+    """Consequence plus evidence for an existing local transcript model."""
+    # The local segment builders describe reference loss/copying only.
+    # A paired breakend may also insert bases; until those are placed in
+    # this spliced model it cannot establish a protein consequence.
+    if (model is not None and not variant.alt_assembly
+            and any(variant.junction_inserted_sequence(junction) != ""
+                    for junction in variant.junctions)):
+        model = replace(
+            model, cdna_sequence=None, mutant_protein_sequence=None,
+            evidence={**dict(model.evidence or {}),
+                      "sequence_status": "unresolved_junction_insertion"})
+    effect, model = _classify_structural_transcript(
+        variant, transcript, model, affected)
+    affected_start, affected_end = _affected_span(variant)
+    ambiguous = any(
+        exon.start < affected_start <= exon.end
+        or exon.start <= affected_end < exon.end
+        for exon in affected)
+    evidence = {
+        "sv_type": variant.sv_type,
+        "splice_ambiguous": ambiguous,
+        "assumption": "reference_splicing",
+    }
+    if variant.sv_type == "DUP":
+        evidence["structure_assumption"] = "tandem_duplication"
+    if model is not None:
+        model = replace(model, evidence={**dict(model.evidence or {}), **evidence})
+    effect.mutant_transcript = model
+    effect.affected_exons = tuple(affected)
+    result = StructuralVariantEffect(
+        variant, transcript, primary_effects=(effect,), mutant_transcript=model)
+    result.affected_exons = tuple(affected)
+    result.candidate_evidence = evidence
+    return result
+
+
+def _classify_structural_transcript(variant, transcript, model, affected):
+    """Translate a mapped local DEL/DUP and classify its protein consequence.
+
+    Segment coordinates establish the annotated start; an unmapped assembly
+    or unmaterialized inversion must not acquire a guessed reading frame.
+    """
+    from .classify import classify_from_protein_diff
+    from .codon_tables import codon_table_for_transcript, translate_sequence
+    from .sequence_change import _retained_start, structural_sequence_changes
+
+    def unresolved(reason):
+        return Unresolved(variant, transcript, "structural_transcript", reason), model
+
+    if model is None or model.cdna_sequence is None:
+        return unresolved("No complete spliced sequence is available")
+    if not transcript.complete:
+        if variant.sv_type in ("DEL", "CN0") and not variant.alt_assembly:
+            return ExonLoss(variant, transcript, exons=tuple(affected)), model
+        return unresolved("Reference transcript has no complete annotated CDS")
+    if (variant.alt_assembly or model.reference_segments is None
+            or model.edits):
+        return unresolved("The assembled sequence has no mapped annotated CDS")
+
+    cds_start = _retained_start(model, transcript)
+    if cds_start is None:
+        # The annotated initiation is lost; alternative initiation is not
+        # modeled, so no mutant protein is asserted.
+        return StartLoss(variant, transcript), model
+    reference_start = min(transcript.start_codon_spliced_offsets)
+    sequence = model.cdna_sequence
+    mapped_sec = segment_selenocysteine(model)
+    if mapped_sec is None:
+        return unresolved("Transcript segments do not map the spliced sequence")
+    decoded, uncertain, _ = mapped_sec
+    if uncertain:
+        effect, _ = unresolved("Selenocysteine decoding depends on the retained SECIS")
+        effect.modifies_coding_sequence, effect.modifies_protein_sequence = (
+            structural_sequence_changes(StructuralVariantEffect(
+                variant, transcript, mutant_transcript=model)))
+        return effect, model
+    coding = sequence[cds_start:]
+    if set(coding.upper()) - set("ACGT"):
+        return unresolved("The coding sequence contains ambiguous bases")
+    table = codon_table_for_transcript(transcript)
+    protein = translate_sequence(
+        coding[:len(coding) // 3 * 3], codon_table=table, to_stop=True,
+        selenocysteine={pos - cds_start for pos in decoded})
+    protein = "M" + protein[1:] if protein else protein
+    model = replace(model, mutant_protein_sequence=protein,
+                    evidence={**dict(model.evidence or {}), "cds_start": cds_start})
+
+    # A local DEL or tandem DUP is one contiguous cDNA edit even when its
+    # genomic span crosses introns. Give the diff classifier that edit's
+    # provenance, without representing it as a second edit over the segments.
+    reference = str(transcript.sequence)
+    if variant.sv_type in ("DEL", "CN0"):
+        kept = _cdna_ranges_kept_after_deletion(variant, transcript)
+        start = kept[0][1] if kept and kept[0][0] == 0 else 0
+        end = start + len(reference) - len(sequence)
+        edit = TranscriptEdit(start, end, "", variant)
+    elif variant.sv_type == "DUP":
+        inside = _cdna_ranges_within_sv(variant, transcript)
+        start = inside[-1][1]
+        edit = TranscriptEdit(start, start, "".join(
+            reference[s:e] for s, e in inside), variant)
+    else:
+        return unresolved("No mapped coding edit is available")
+
+    stop = max(transcript.stop_codon_spliced_offsets) + 1
+    reference_protein = str(transcript.protein_sequence)
+    reference_protein = "M" + reference_protein[1:]
+    if edit.cdna_end <= reference_start:
+        effect = FivePrimeUTR(variant, transcript)
+    elif edit.cdna_start >= stop and protein == reference_protein:
+        effect = ThreePrimeUTR(variant, transcript)
+    else:
+        diff_model = replace(model, reference_segments=None, edits=(edit,))
+        effect = classify_from_protein_diff(
+            variant, transcript, reference_protein, protein,
+            length_delta=edit.length_delta if edit.cdna_start < stop else 0,
+            mutant_transcript=diff_model)
+        # Concrete effects reconstruct their protein from the reference.
+        # Use the same initiated reference passed to the diff classifier
+        # (Ensembl can spell a CTG/TTG initiator as L).
+        effect._original_protein_sequence = reference_protein
+        if edit.cdna_start >= stop:
+            effect._modifies_coding_sequence = False
+    return effect, model
 
 
 def _annotate_breakend(variant, transcript, assembly=None):
@@ -948,11 +1071,10 @@ def _coding_transcripts_at(variant, contig, position):
 
 
 # Reference-span events share the same implementation regardless of caller.
-# Preserve the existing CNV-gain and symbolic-insertion interpretations.
 _SPAN_EFFECTS = {
     "DEL": _annotate_deletion,
     "DUP": _annotate_duplication,
     "INV": _annotate_inversion,
-    "CNV": _annotate_duplication,
+    "CNV": _annotate_insertion,
     "INS": _annotate_insertion,
 }

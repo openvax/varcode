@@ -37,7 +37,6 @@ from varcode import (
     load_vcf,
 )
 from varcode.effects.effect_classes import (
-    LargeDeletion,
     MultiOutcomeEffect,
     StructuralVariantEffect,
     Substitution,
@@ -178,10 +177,10 @@ class TestApplyAttaches:
             sv_type="DEL",
             genome=ensembl_grch38)
         effect = sv.effect_on_transcript(_cftr())
-        # Sanity: the SV annotator returns a LargeDeletion (a
+        # Sanity: the SV annotator returns a StructuralVariantEffect (a
         # StructuralVariantEffect, which is a MultiOutcomeEffect),
         # so it has an ``outcomes`` view that should pick up extras.
-        assert isinstance(effect, LargeDeletion)
+        assert isinstance(effect, StructuralVariantEffect)
         assert isinstance(effect, MultiOutcomeEffect)
         return effect
 
@@ -189,7 +188,7 @@ class TestApplyAttaches:
         effect = self._sv_effect()
         baseline = tuple(effect.candidates)
         # Construct a stand-in observed outcome (the effect can be
-        # whatever — for this test we recycle the LargeDeletion's own
+        # whatever — for this test we recycle the StructuralVariantEffect's own
         # most-likely candidate, since we just need a MutationEffect
         # to wrap).
         observed = make_rna_outcome(

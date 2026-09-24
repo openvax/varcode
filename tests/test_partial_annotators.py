@@ -14,7 +14,7 @@ from varcode import (
     get_annotator,
     use_annotator,
 )
-from varcode.effects import Failure, LargeDeletion, Silent, Unresolved
+from varcode.effects import Failure, StructuralVariantEffect, Silent, Unresolved
 from varcode.effects.effect_prediction import predict_variant_effect_on_transcript
 
 
@@ -56,17 +56,17 @@ def test_default_routes_sv_for_all_selection_forms(selection, transcript):
     with use_annotator("fast"):
         direct = variant.effect_on_transcript(transcript, annotator=selection)
         effects = variant.effects(annotator=selection, raise_on_error=True)
-    assert isinstance(direct, LargeDeletion)
-    assert isinstance(effects[0], LargeDeletion)
+    assert isinstance(direct, StructuralVariantEffect)
+    assert isinstance(effects[0], StructuralVariantEffect)
     assert effects.annotator == "fast"
     assert isinstance(FastEffectAnnotator().annotate_on_transcript(
-        variant, transcript), LargeDeletion)
+        variant, transcript), StructuralVariantEffect)
 
 
 def test_low_level_public_predictor_routes_sv(transcript):
     result = predict_variant_effect_on_transcript(
         structural_variant(), transcript, annotator="fast")
-    assert isinstance(result, LargeDeletion)
+    assert isinstance(result, StructuralVariantEffect)
 
 
 def test_partial_plugin_needs_no_capability_metadata(point_variant, transcript):

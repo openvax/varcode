@@ -76,7 +76,7 @@ def test_deletion_flags_on_both_strands(transcript_id, region, isolate_span):
     variant = StructuralVariant(transcript.contig, start, "DEL", end=end,
                                 genome=transcript.genome)
     effect = variant.effect_on_transcript(transcript)
-    assert isinstance(effect, LargeDeletion)
+    assert effect.affected_exons
     expected = region in ("coding", "start", "whole")
     assert effect.modifies_coding_sequence is expected
     assert effect.modifies_protein_sequence is expected

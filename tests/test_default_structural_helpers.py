@@ -9,9 +9,7 @@ from pyensembl import cached_release
 import varcode
 from varcode import FastEffectAnnotator, StructuralVariant, get_annotator
 from varcode.effects import (
-    Inversion,
-    LargeDeletion,
-    LargeDuplication,
+    StructuralVariantEffect,
     TranslocationToIntergenic,
 )
 from varcode.effects.structural import predict_structural_variant_effect
@@ -34,11 +32,11 @@ def structural_variant(kind, assembly=None):
 
 
 @pytest.mark.parametrize("kind, expected", [
-    ("DEL", LargeDeletion),
-    ("DUP", LargeDuplication),
-    ("INV", Inversion),
-    ("CNV", LargeDuplication),
-    ("INS", LargeDuplication),
+    ("DEL", StructuralVariantEffect),
+    ("DUP", StructuralVariantEffect),
+    ("INV", StructuralVariantEffect),
+    ("CNV", StructuralVariantEffect),
+    ("INS", StructuralVariantEffect),
     ("BND", TranslocationToIntergenic),
 ])
 @pytest.mark.parametrize("assembly", [None, "ATG" + "GCT" * 20 + "TAA"])
@@ -52,6 +50,11 @@ def test_default_uses_structural_helpers(kind, expected, assembly, transcript, m
     assert effect.short_description == direct.short_description
     actual_mt = effect.mutant_transcript
     expected_mt = direct.mutant_transcript
+    if actual_mt is None:
+        assert kind in ("INS", "CNV") and assembly is None
+        assert expected_mt is None
+        assert effect.modifies_protein_sequence is None
+        return
     assert actual_mt.annotator_name == expected_mt.annotator_name == "structural_variant"
     assert actual_mt.cdna_sequence == expected_mt.cdna_sequence
     assert actual_mt.mutant_protein_sequence == expected_mt.mutant_protein_sequence

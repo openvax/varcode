@@ -48,7 +48,7 @@ from varcode import StructuralVariant, FastEffectAnnotator, load_vcf
 from varcode.effects.structural import (
     _build_fusion_mutant_transcript,
 )
-from varcode.effects import GeneFusion, Intronic, Inversion, LargeDuplication
+from varcode.effects import GeneFusion, Intronic, StructuralVariantEffect
 from varcode.transforms import pair_breakends
 
 from .data import data_path
@@ -269,7 +269,7 @@ def test_esvee_vcf_otx1_kif3c_inversion_is_fusion_on_both_partners():
                 "MMSYLKQPPYGMNGLGLAGPAMDLLHPSVGYPETS")
             if sv.sv_type == "INV":
                 (span,) = [c.effect for c in fusion.candidates
-                           if isinstance(c.effect, Inversion)]
+                           if type(c.effect) is StructuralVariantEffect]
                 assert span.mutant_transcript is None
 
 
@@ -296,7 +296,7 @@ def test_esvee_vcf_cpeb2_fam193a_duplication_is_fusion():
     assert on_fam193a.five_prime_transcript.gene_name == "CPEB2"
     for fusion in (on_cpeb2, on_fam193a):
         (span,) = [c.effect for c in fusion.candidates
-                   if isinstance(c.effect, LargeDuplication)]
+                   if type(c.effect) is StructuralVariantEffect]
         assert span.mutant_transcript is None
 
 

@@ -13,7 +13,7 @@ from the source docstrings; this is reference material, not a required first rea
 | [Coding changes](#coding-effects) | `Substitution`, `Insertion`, `Deletion`, `FrameShift`, `PrematureStop`, `Silent` |
 | [Noncoding and untranslated regions](#noncoding-effects) | `Intronic`, `FivePrimeUTR`, `ThreePrimeUTR`, `NoncodingTranscript`, `Intergenic` |
 | [Splice effects](#splice-effects) | `SpliceOutcomeSet`, with `NormalSplicing`, `ExonSkipping`, `IntronRetention`, or cryptic-site candidates |
-| [Structural effects](#structural-effects) | `LargeDeletion`, `LargeDuplication`, `Inversion`, `GeneFusion`, `TranslocationToIntergenic` |
+| [Structural effects](#structural-effects) | `StructuralVariantEffect`, `GeneFusion`, `TranslocationToIntergenic` |
 | [Linked variants and phase](#haplotype-effects) | `HaplotypeEffect`, `PhaseCandidateSet` |
 | [Unknown results and failures](#unknown-results) | `Unresolved`, `IncompleteTranscript`, `Failure` |
 
@@ -118,6 +118,9 @@ See the [splice guide](splice_variants.md) for candidate access.
 ## Structural effects
 
 ::: varcode.effects.effect_classes.StructuralVariantEffect
+
+Legacy event-type classes remain importable; the default annotator emits
+[transcript consequences](structural_variants.md#reading-sv-results).
 
 ::: varcode.effects.effect_classes.LargeDeletion
 

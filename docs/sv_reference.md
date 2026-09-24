@@ -126,9 +126,8 @@ reports `TranslocationToIntergenic`. varcode doesn't model an intergenic
 promoter or enhancer driving a gene.
 
 **Same gene.** A breakend pair with both ends in one gene is intragenic,
-so it isn't a fusion. To get `LargeDeletion` / `LargeDuplication` /
-`Inversion` instead, pair the records with `pair_breakends` so the
-caller's `SVTYPE` types the event.
+so it isn't a fusion. Pair the records with `pair_breakends` so the caller's
+`SVTYPE` types the event and enables local transcript consequence prediction.
 
 **Direction.** Both records of a junction report the same fusion
 direction, each on its own gene. For CFTR (chr7:117,485,000, `+`, keeping
@@ -163,9 +162,9 @@ Examples from chr7, with CFTR (`+`), LSM8 (`+`, downstream) and CTTNBP2
 |---|---|---|
 | `DEL` CFTR..LSM8 | `GeneFusion` CFTR → LSM8 | `GeneFusion` CFTR → LSM8 |
 | `DUP` CFTR..LSM8 | `GeneFusion` LSM8 → CFTR | `GeneFusion` LSM8 → CFTR |
-| `INV` CFTR..LSM8 | `Inversion` | `Inversion` |
-| `DEL` CFTR..CTTNBP2 | `LargeDeletion` | `LargeDeletion` |
-| `DUP` CFTR..CTTNBP2 | `LargeDuplication` | `LargeDuplication` |
+| `INV` CFTR..LSM8 | `Unresolved` candidate | `Unresolved` candidate |
+| `DEL` CFTR..CTTNBP2 | deletion consequence | deletion consequence |
+| `DUP` CFTR..CTTNBP2 | `Unresolved` candidate | `Unresolved` candidate |
 | `INV` CFTR..CTTNBP2 | `GeneFusion` CFTR → CTTNBP2 | `GeneFusion` CTTNBP2 → CFTR |
 
 On the reverse strand the same rules give TMPRSS2 → ERG for the chr21
@@ -175,31 +174,32 @@ Per transcript:
 
 | Transcript | Effect |
 |---|---|
-| Wholly inside the span | `LargeDeletion` / `LargeDuplication` / `Inversion` |
-| Holds both ends | the same, or `Intronic` if no exon overlaps |
+| Wholly inside the span | `StartLoss` for complete transcript deletion; unresolved DUP/INV model |
+| Holds both ends | translated local consequence, unresolved model, or `Intronic` if no exon overlaps |
 | Holds one end, fusion conditions met | `GeneFusion`, with the span's effect as a further candidate |
-| Holds one end, no partner | the span's effect (e.g. a truncating `LargeDeletion`) |
+| Holds one end, no partner | the span's consequence (e.g. `FrameShift` or `StartLoss`) |
 
 When a boundary transcript gets a `GeneFusion`, what the span does to its
 exons isn't lost:
 
 ```python
-from varcode.effects import LargeDeletion
+from varcode.effects import StructuralVariantEffect
 
 fusion = deletion.effect_on_transcript(tmprss2)
 (span_effect,) = [c.effect for c in fusion.candidates
-                  if isinstance(c.effect, LargeDeletion)]
+                  if type(c.effect) is StructuralVariantEffect]
 span_effect.affected_exons
 ```
 
-`INS` and `CNV` never fuse; they report `LargeDuplication` when they
-overlap exons.
+`INS` and `CNV` never fuse. When they overlap exons, unspecified sequence or
+copy-number structure yields an `Unresolved` candidate; it does not establish a
+tandem duplication.
 
 Local DUP/INV transcript models require every junction end to lie in the
 selected transcript. An event extending outside it (including a span enclosing
 the entire transcript) does not establish duplicated or inverted cDNA within
 that transcript. Without a fusion partner or supplied `alt_assembly`, the
-DNA-level `LargeDuplication`/`Inversion` remains but `mutant_transcript` is None.
+result contains an `Unresolved` candidate and `mutant_transcript` is None.
 This means unresolved sequence, not an unchanged protein or a proven truncation.
 The same restriction applies to a span candidate attached to a fusion; it does
 not remove the fusion's own transcript model. A longer isoform of the same gene
