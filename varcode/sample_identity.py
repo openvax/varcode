@@ -260,16 +260,20 @@ def compare_samples(a, b, *, config=None):
         germline, somatic = _germline(a, b, config), _somatic(a, b, config)
     paired = a.path == b.path and (a.normal_sample == b.sample or b.normal_sample == a.sample)
     same_donor = a.donor_id == b.donor_id if a.donor_id and b.donor_id else None
+    same_tumor = a.tumor_id == b.tumor_id if a.tumor_id and b.tumor_id else None
     flags = []
     if paired and same_donor is False:
         flags.append("paired_normal_has_different_donor_label")
-    if (same_donor is True or paired) and germline["status"] == "discordant":
+    if same_tumor is True and same_donor is False:
+        flags.append("same_tumor_has_different_donor_labels")
+    if (same_donor is True or paired or same_tumor is True) and germline["status"] == "discordant":
         flags.append("expected_donor_mismatch")
     if same_donor is False and germline["status"] == "compatible":
         flags.append("unexpected_donor_compatibility")
-    same_tumor = a.tumor_id == b.tumor_id if a.tumor_id and b.tumor_id else None
     if same_tumor is True and somatic["status"] == "low_overlap":
         flags.append("expected_tumor_low_overlap")
+    if same_tumor is False and somatic["status"] == "shared_somatic_support":
+        flags.append("unexpected_tumor_overlap")
     return dict(sample_a=a.label, sample_b=b.label, expected_same_donor=same_donor,
                 paired_tumor_normal=paired, expected_same_tumor=same_tumor,
                 germline=germline, somatic=somatic, flags=flags,

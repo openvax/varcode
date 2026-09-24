@@ -190,6 +190,8 @@ def test_somatic_branch_overlap_is_separate_from_donor_identity(tmp_path):
     assert somatic["fraction_a"] == .5
     assert somatic["fraction_b"] == pytest.approx(1 / 7)
     assert somatic["jaccard"] == .125
+    a.tumor_id, b.tumor_id = "first tumor", "second tumor"
+    assert compare_samples(a, b)["flags"] == ["unexpected_tumor_overlap"]
     a.tumor_id = b.tumor_id = "same tumor"
     b.somatic.clear()
     b.somatic.update({("small", "2", i, "A", "C"): None for i in range(20)})
@@ -197,6 +199,14 @@ def test_somatic_branch_overlap_is_separate_from_donor_identity(tmp_path):
     assert result["somatic"]["status"] == "low_overlap"
     assert result["flags"] == ["expected_tumor_low_overlap"]
     assert not result["identity_conflict"]
+
+
+def test_same_tumor_expectation_implies_same_donor(tmp_path):
+    a = _donor(tmp_path, "a.vcf", role="tumor", tumor_id="tumor-A")
+    b = _donor(tmp_path, "b.vcf", swapped=True, role="tumor", tumor_id="tumor-A")
+    assert compare_samples(a, b)["identity_conflict"]
+    a.donor_id, b.donor_id = "donor-A", "donor-B"
+    assert "same_tumor_has_different_donor_labels" in compare_samples(a, b)["flags"]
 
 
 def test_mixed_tumor_normal_uses_germline_and_somatic_evidence(tmp_path):

@@ -63,10 +63,12 @@ Expected identities only affect flags, never the scores:
 
 | Flag | Meaning |
 | --- | --- |
-| `expected_donor_mismatch` | Discordant donor evidence despite equal donor IDs or a declared tumor/normal pairing. |
+| `expected_donor_mismatch` | Discordant donor evidence despite equal donor or tumor IDs, or a declared tumor/normal pairing. |
 | `unexpected_donor_compatibility` | Compatible evidence despite different donor IDs; review potential swaps, relatedness and evidence limitations. |
 | `expected_tumor_low_overlap` | Equal tumor IDs but low somatic overlap; review coverage, purity, calling and tumor evolution. |
 | `paired_normal_has_different_donor_label` | The declared pairing and donor labels disagree. |
+| `unexpected_tumor_overlap` | Shared somatic support despite different tumor IDs; review shared origins, recurrent mutations or possible duplicate/mislabelled samples. |
+| `same_tumor_has_different_donor_labels` | Equal tumor IDs conflict with different donor IDs. |
 
 `--fail-on-mismatch` returns exit 1 only for `expected_donor_mismatch`. Successful
 inconclusive analyses return 0; invalid inputs return 2. A low somatic overlap is
