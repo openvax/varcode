@@ -1,8 +1,14 @@
 # Phasing
 
-Pass `phase_resolver=` when you have evidence linking variants on the same
-allele. Varcode can then predict combined effects; patient-baseline annotation
-also takes [germline context](germline.md).
+Two nearby variants, for example in the same codon, can have a different
+combined effect than either one alone, but only if they sit on the same copy
+of the chromosome (*in cis*). Variants on different copies (*in trans*) act
+separately. Phasing evidence tells Varcode which is the case.
+
+Pass `phase_resolver=` when you have that evidence, from a phased VCF or RNA
+reads. Varcode then predicts combined effects for variants in cis. To classify
+somatic variants against the patient's own germline sequence, also pass
+[germline context](germline.md).
 
 ## Phased VCF
 
@@ -110,14 +116,8 @@ inner classified `MutationEffect`s are needed.
 ### With known phase
 
 A real pipeline gets the cis/trans answer from a phased VCF or an
-RNA assembly. For this demo, a small resolver makes the
-collapse visible:
-
-These stubs only implement `in_cis(...)`, which is all the
-codon-collapse path consults. Richer pipelines implement more of
-the duck-typed resolver interface, including `mutant_transcript` and
-`phased_partners`. The [phasing API](api_phasing.md#phasing) documents the built-in
-resolvers and source protocols; no public `PhaseResolver` class is required.
+RNA assembly. For this demo, two stub resolvers force each answer so you can
+see the candidate set collapse to a single effect:
 
 ```python
 class ForceCis:
@@ -140,7 +140,11 @@ print("trans ->", type(eff_trans).__name__, eff_trans.short_description)
 ```
 
 For real evidence, use the [phased VCF](#phased-vcf) or [RNA](#rna-evidence)
-examples above; these stubs only demonstrate the two possible answers.
+resolvers above. The stubs implement only `in_cis(...)`, which is all the
+codon-collapse path consults. Richer resolvers implement more of the
+duck-typed interface, including `mutant_transcript` and `phased_partners`; the
+[phasing API](api_phasing.md#phasing) documents the built-in resolvers and
+source protocols. No public `PhaseResolver` base class is required.
 
 ## Combining evidence
 
@@ -198,8 +202,6 @@ exon skip lacks the required local anchors and is not supporting evidence.
 
 ## Implementation limits
 
-Combined haplotype effects are currently built by `VariantCollection.effects()`,
-outside the selected annotator ([#437](https://github.com/openvax/varcode/issues/437)).
-Switching to an experimental annotator does not give it ownership of that step.
-See [germline limitations](germline.md#limitations) for hypothesis limits and
-normalization requirements, and the [phasing API](api_phasing.md) for custom sources.
+See [germline limitations](germline.md#limitations) for the phase-hypothesis
+cap and normalization requirements, and the [phasing API](api_phasing.md) for
+custom sources.

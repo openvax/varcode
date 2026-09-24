@@ -16,13 +16,12 @@ for variant, effect in effects.top_priority_effect_per_variant().items():
     print(variant.short_description, effect.short_description)
 ```
 
-The collection contains predictions for the relevant transcripts of each variant.
-A variant can have different effects on different transcripts; the loop above
-prints one summary per variant. `effects.top_priority_effect()` instead selects
-one effect from the entire collection.
-
-Priority is Varcode's consequence ordering, not a probability or a clinical
-classification. Keep the full collection when you need all transcript predictions.
+The collection holds one prediction per variant per overlapping transcript,
+and a variant's effect can differ between transcripts. The loop above prints
+one summary per variant, picking the most severe effect by Varcode's
+consequence ordering, not by likelihood or clinical significance.
+`effects.top_priority_effect()` instead selects one effect from the entire
+collection. See [how to read results](getting_started.md#how-to-read-results).
 
 The same interface handles structural variants. To include them when loading
 a VCF, pass `parse_structural_variants=True`; see [SV loading](structural_variants.md#basic-usage).
@@ -37,21 +36,24 @@ Given an effect from the collection:
 protein = effect.mutant_protein_sequence  # may be None
 ```
 
-You do not need a different annotator to get a protein sequence. `None` means
-the sequence is unavailable, not that the protein is unchanged. The prediction
-belongs to `effect.transcript` when a transcript applies; intergenic effects
-have none. Predicted sequence is not evidence of expression.
+`None` means the sequence could not be determined, not that the protein is
+unchanged. The prediction belongs to `effect.transcript`; intergenic effects
+have no transcript. For cDNA, partial structures, and sequence evidence, see
+[Transcript models](transcript_models.md).
 
-For cDNA, partial structures, and sequence evidence, see [Transcript models](transcript_models.md).
-To remove known silent/noncoding predictions while retaining unresolved SVs,
-use `effects.drop_silent_and_noncoding()`;
-see [filtering by protein change](structural_variants.md#filtering-by-protein-change).
+To keep only effects that may change the protein, use
+`effects.drop_silent_and_noncoding()`. It removes known silent and noncoding
+predictions but keeps unresolved ones by default; see
+[filtering by protein change](structural_variants.md#filtering-by-protein-change).
 
 <a id="reading-alternatives"></a>
 
 ## Alternative outcomes
 
-Splice, structural, and phase-dependent effects may contain several candidates:
+When Varcode can't decide between several possible consequences, it returns a
+`MultiOutcomeEffect` holding every candidate instead of guessing. This happens
+for splice variants, structural variants, and variants whose phase relative to
+a nearby germline variant is unknown:
 
 ```python
 from varcode import MultiOutcomeEffect
@@ -63,11 +65,15 @@ if isinstance(effect, MultiOutcomeEffect):
         print(candidate.source, candidate.evidence)
 ```
 
-`most_likely_effect` returns the producer's first candidate;
-`highest_priority_effect` selects by consequence severity. The first candidate
-is not necessarily the most disruptive, and its position is not a calibrated
-probability. Keep `candidate.source` and `candidate.evidence` with any sequence
-you report.
+Two shortcuts pick a single candidate, and they answer different questions:
+
+- `most_likely_effect` returns the first candidate in the order the predictor
+  listed them. That order reflects the predictor's preference; it is not a
+  calibrated probability.
+- `highest_priority_effect` returns the most severe candidate.
+
+When you report a candidate's sequence, keep its `candidate.source` (which
+predictor or evidence produced it) and `candidate.evidence` alongside it.
 
 <a id="choose-a-deeper-topic"></a>
 

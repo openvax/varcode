@@ -1,8 +1,9 @@
 # Splice variants
 
-Variants near an exon–intron boundary can change splicing. Varcode returns a
-`SpliceOutcomeSet` containing possible outcomes, rather than treating one
-mechanism as an observed result.
+Variants near an exon–intron boundary can change how a transcript is spliced,
+for example by skipping an exon or keeping an intron. DNA alone doesn't show
+which will happen, so Varcode returns a `SpliceOutcomeSet` listing the possible
+outcomes, each with its own predicted protein where it can be determined.
 
 ## Example
 

@@ -1,9 +1,10 @@
 # Saving and reloading results
 
-Use CSV for a table you can inspect or share. Keep original variants and
-evidence as well: a result table does not preserve every alternative, sequence,
-or annotation context. Start with writing below; see [CSV vs JSON](#csv-vs-json)
-before choosing an archive format.
+Save results as CSV for a table you can inspect or share, as
+[JSON](#csv-vs-json) to archive supported objects, or write variants back to
+[VCF](#vcf-export). Whichever you choose, keep the original inputs and
+evidence too: a results table does not preserve every alternative outcome,
+sequence, or annotation context.
 
 ## Writing
 
@@ -21,7 +22,7 @@ By default, both writers prepend `#`-prefixed provenance lines so the
 file is self-describing:
 
 ```
-# varcode_version=9.2.5
+# varcode_version=10.2.1
 # reference_name=GRCh38
 chr,start,ref,alt,gene_name,gene_id
 17,43082575,C,T,BRCA1,ENSG00000012048
@@ -117,10 +118,7 @@ RNA/phase/germline evidence independently.
 
 ## VCF export
 
-`varcode.vcf_output.variants_to_vcf` writes small variants with a deterministic
-sample order. Each sample value is looked up by sample name and FORMAT key;
-GT comes first, missing fields are written as `.`, and samples present in only
-some records remain in the output. Positions sort numerically within contigs.
+`varcode.vcf_output.variants_to_vcf` writes small variants back to VCF:
 
 ```python
 from varcode import load_vcf
@@ -133,24 +131,36 @@ with open("export.vcf", "w") as out:
     variants_to_vcf(variants, variants.metadata, out=out, header=header)
 ```
 
-Pass the original `VCFHeader` to retain INFO/FORMAT declarations. Otherwise,
-standard FORMAT definitions and observed value types determine new declarations;
-original custom cardinality and descriptions cannot be recovered from values
-alone. Other source header lines are not archived by this helper.
+What is preserved:
 
-`load_vcf` retains original ALT lists and indexes. Export reconstructs complete
-multi-allelic records in that order, preserving GT and allele-indexed values.
-A subset missing an original ALT is rejected before output is written: retain
-all alleles or explicitly remap genotype/allele-indexed metadata first. Records
-are not merged solely because their IDs agree. Indexed metadata from older versions must be reloaded from its source VCF
-to recover the full ALT list. Hand-constructed records without an ALT index
-are treated as explicitly biallelic; GT and standard allele-depth/likelihood
-fields must agree with that representation.
+- **Sample identities.** Each value is looked up by sample name and FORMAT key,
+  so values can't shift between sample columns. Sample order is deterministic,
+  GT comes first, missing values are written as `.`, and samples present in
+  only some records are kept.
+- **Multi-allelic records.** `load_vcf` remembers each record's original ALT
+  list and indexes, so export rebuilds the complete record in its original
+  order, with GT and allele-indexed values intact.
+- **INFO/FORMAT declarations,** when you pass the original `VCFHeader` as
+  above. Without it, standard FORMAT definitions and the observed value types
+  determine new declarations; custom descriptions and cardinalities can't be
+  recovered from values alone.
+- **Ordering.** Positions sort numerically within each contig.
 
-These sample/FORMAT and ALT-order protections resolve
-[#502](https://github.com/openvax/varcode/issues/502) in 10.1.3. Retain original
-VCFs as the source of record; the helper does not archive all header metadata,
-resolve conflicting source records, or export StructuralVariant objects.
+What is refused or not kept:
+
+- A subset that drops one of a record's original ALT alleles is rejected
+  before any output is written. Keep all alleles, or explicitly remap the
+  genotype and allele-indexed fields first.
+- Records are not merged just because their IDs match.
+- Hand-constructed records without an ALT index are treated as biallelic;
+  their GT and standard allele-depth/likelihood fields must agree with that.
+- Metadata saved by older Varcode versions lacks the full ALT list; reload it
+  from the source VCF.
+- Header lines other than INFO/FORMAT declarations are not archived,
+  conflicting source records are not resolved, and `StructuralVariant`
+  objects are not exported.
+
+Keep the original VCF as the source of record.
 
 ## Annotation provenance
 
@@ -173,7 +183,7 @@ tools that want to add their own metadata lines:
 from varcode.csv_helpers import read_metadata_header, write_metadata_header
 
 meta = read_metadata_header("variants.csv")
-# OrderedDict([('varcode_version', '9.2.5'), ('reference_name', 'GRCh38')])
+# OrderedDict([('varcode_version', '10.2.1'), ('reference_name', 'GRCh38')])
 ```
 
 Annotator provenance fields (`annotator`, `annotator_version`) use

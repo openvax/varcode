@@ -1,16 +1,12 @@
 # Experimental annotators
 
-The transcript-model backend leaves overlapping DUP/INV events unresolved
-when either boundary extends beyond its finite genomic layout. A clipped copy
-of the affected interval cannot establish the complete rearranged transcript
-or an unchanged protein. Fully represented local events still use the layout
-model; supplied transcript assemblies retain their sequence through the shared
-structural builder, with unmapped CDS/translation uncertainty preserved.
+**Most users don't need this page.** The default annotator already predicts
+protein sequences and handles structural variants; use
+[effects()](effect_annotation.md) without selecting an implementation.
 
-Varcode includes two opt-in implementations for comparing predictions:
-`protein_diff` and `transcript_model`. They do not support every input handled
-by the default. For ordinary annotation, use [effects()](effect_annotation.md)
-without selecting an implementation.
+Varcode also includes two opt-in implementations, `protein_diff` and
+`transcript_model`, for comparing predictions. They do not support every input
+the default handles.
 
 ## Supported inputs
 
@@ -21,13 +17,12 @@ without selecting an implementation.
 | `annotator="transcript_model"` | Builds transcripts for phase/splice hypotheses, compares each with the patient baseline, and merges equivalent results | Small variants and local DEL/DUP/INV. Insertions need `alt_assembly`; CNVs are unsupported. |
 
 The transcript-model experiment delegates BNDs to the structural helper; it does
-not resolve BND-plus-haplotype combinations. SVs extending beyond the selected
-transcript also have a known classification problem; see [limitations](#known-limitations).
+not resolve BND-plus-haplotype combinations. DUP/INV events that extend beyond
+its layout are left unresolved; see [limitations](#known-limitations).
 
 The default's registry name is `fast`; it appears in provenance but need not be
-passed explicitly. It already predicts protein sequences and handles structural
-variants. `protein_diff` is an alternative implementation, not a protein-output
-option.
+passed explicitly. `protein_diff` is an alternative implementation, not an
+option you need for protein output.
 
 ## Comparing annotators
 
@@ -82,20 +77,22 @@ for candidate in getattr(experimental, "candidates", ()):
 
 ## Known limitations
 
-- Combined variants: the selected annotator now owns known-cis predictions
+- Combined variants: the selected annotator makes known-cis joint predictions
   through `VariantCollection.effects(phase_resolver=...)`. The default and
-  `protein_diff` retain their point-edit haplotypes; joint germline and structural
+  `protein_diff` build point-edit haplotypes; joint germline and structural
   composition requires the opt-in `transcript_model`. Unsupported groups remain
   explicit unresolved results. See the [joint contract](annotator_contract.md#joint-haplotypes).
-- Cross-boundary SVs: the experiment can clip a DUP spanning CFTR's coding
-  sequence to a local model and misclassify it as `FivePrimeUTR`
-  ([#449](https://github.com/openvax/varcode/issues/449)). This is a bug, not
-  evidence that the event is harmless.
+- Rearrangements beyond the layout: the transcript model leaves an overlapping
+  DUP/INV unresolved when either boundary extends beyond its finite genomic
+  layout, because a clipped copy of the interval cannot establish the complete
+  rearranged transcript or an unchanged protein
+  ([#449](https://github.com/openvax/varcode/issues/449)). Fully represented
+  local events still use the layout model, and supplied transcript assemblies
+  keep their sequence, with unmapped CDS/translation uncertainty preserved.
 
 Unresolved results report `None`, not `False`, for sequence-change flags.
 `drop_silent_and_noncoding()` retains them by default; see
-[SV filtering](structural_variants.md#filtering-by-protein-change). This does not
-correct the experiment's misclassified outcomes described above.
+[SV filtering](structural_variants.md#filtering-by-protein-change).
 
 ## Previous names
 

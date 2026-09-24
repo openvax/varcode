@@ -1,8 +1,12 @@
 # Germline-aware annotation
 
-Use patient germline calls when you want a somatic variant classified against
-the patient's baseline rather than only the reference. Nearby germline changes
-can alter the predicted amino-acid consequence.
+By default, Varcode compares each variant with the reference genome. Pass the
+patient's germline calls to classify somatic variants against the patient's
+own sequence instead. This matters when an inherited variant sits nearby: if
+it already changed a codon, a somatic mutation in that codon can produce a
+different amino acid than the reference codon would suggest.
+
+<a id="phase-enumeration-limit"></a>
 
 !!! warning "Phase enumeration limit"
     When the phase-hypothesis cap is exceeded, the current implementation
@@ -145,6 +149,8 @@ represented.
   somatic variant is treated as 100% present.
 - **Hypothesis cap of 8** by default when phase is unknown across
   multiple germline variants in a window. Raise via `max_hypotheses=`.
+  Above the cap, the result is not a definitive consequence; see the
+  [phase enumeration limit](#phase-enumeration-limit).
 - **Normalization mismatch** between germline and somatic VCFs
   (left-alignment, MNV split) causes apparent position mismatches.
   Normalize both with the same tool first.
