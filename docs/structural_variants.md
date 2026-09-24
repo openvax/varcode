@@ -160,13 +160,19 @@ Two outcomes apply before any SV logic:
 | `Intergenic` | No gene at the variant's position. |
 | `NoncodingTranscript` | The transcript isn't protein-coding. |
 
+Local DEL/DUP and fusion models retain known inserted junction bases when both
+retained breakend anchors are exonic, in transcript orientation. Local consequences
+use the net spliced edit, including those bases, to distinguish in-frame changes
+from frameshifts. Insertions at two intronic anchors are excluded under the
+reference-splicing assumption. The model records `junction_inserted_sequence`
+and `junction_insertion_status` in its evidence.
+
 ## Limitations
 
 - Partner isoforms are enumerated but not ranked by RNA support or likelihood.
-- Local DEL/DUP models with inserted or unreadable paired-breakend alleles
-  remain unresolved until their junction bases can be incorporated
-  ([#491](https://github.com/openvax/varcode/issues/491)). Fusion models already
-  retain resolved exonic junction inserts.
+- Inserted junction bases with mixed exonic/intronic retention, conflicting or
+  unreadable reciprocal alleles, or unknown local retention remain unresolved.
+  Ambiguous coding bases are preserved in cDNA without asserting a protein.
 - Chains of several SVs aren't assembled into one allele, and regulatory
   effects (promoter or enhancer hijacking) aren't modeled.
 - Annotating multi-megabase spans can be slow

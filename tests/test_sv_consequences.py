@@ -137,10 +137,12 @@ def test_local_paired_deletion_does_not_drop_inserted_bases(cftr, local_model, t
     ])
     variant, = pair_breakends(variants)
     effect = variant.effect_on_transcript(cftr)
-    assert isinstance(effect.most_likely_effect, Unresolved)
-    assert effect.mutant_transcript.cdna_sequence is None
-    assert effect.mutant_transcript.mutant_protein_sequence is None
-    assert effect.mutant_transcript.evidence["sequence_status"] == "unresolved_junction_insertion"
+    assert isinstance(effect.most_likely_effect, FrameShift)
+    expected = (cftr.sequence[:cftr.spliced_offset(low) + 1] + insert
+                + cftr.sequence[cftr.spliced_offset(high):])
+    assert effect.mutant_transcript.cdna_sequence == expected
+    assert effect.mutant_transcript.mutant_protein_sequence is not None
+    assert effect.mutant_transcript.evidence["junction_insertion_status"] == "retained"
 
 
 def test_incomplete_coding_transcript_retains_exon_loss(local_model):

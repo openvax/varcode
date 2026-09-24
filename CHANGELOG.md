@@ -1,5 +1,14 @@
 # Change Log
 
+## [v10.0.1](https://github.com/openvax/varcode/tree/v10.0.1) (2026-09-23)
+
+- Reconstruct inserted junction bases in local DEL/DUP transcripts on both
+  strands, including insertions at exon anchors flanking a deleted intron (#491).
+  Protein consequences now use the net spliced edit with the retained insert.
+- Share insertion-retention rules with fusion models: retain exonic inserts,
+  exclude intronic inserts under reference splicing, and preserve uncertainty
+  for mixed retention or conflicting/unreadable reciprocal alleles.
+
 ## [v10.0.0](https://github.com/openvax/varcode/tree/v10.0.0) (2026-09-23)
 
 **Changed**
