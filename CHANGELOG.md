@@ -1,5 +1,14 @@
 # Change Log
 
+## [v10.1.3](https://github.com/openvax/varcode/tree/v10.1.3) (2026-09-24)
+
+- Preserve sample identities, per-sample FORMAT values, missing samples, and
+  original multi-allelic ALT order during VCF export (#502).
+- Write INFO/FORMAT declarations, accept original field definitions, and reject
+  incomplete/ambiguous ALT reconstructions before writing output.
+- Support generator/empty exports, numeric position ordering, missing list
+  elements, and per-sample filters; add independent identity round-trip tests.
+
 ## [v10.1.2](https://github.com/openvax/varcode/tree/v10.1.2) (2026-09-24)
 
 - Enforce VCF allele limits across simple and structural calls and retain

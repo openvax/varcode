@@ -113,16 +113,44 @@ need their own serialization support. Test the round-trip for the actual result
 types you use, and retain source variants, reference release, and original
 RNA/phase/germline evidence independently.
 
-## VCF export limitations
+<a id="vcf-export-limitations"></a>
 
-`varcode.vcf_output.variants_to_vcf` is a legacy export helper, not a lossless
-archive. In particular, differing sample or FORMAT dictionary orders can
-misassign sample identities or field values; mismatched sample sets can drop
-sample data. Header definitions and allele-indexed metadata are also not fully
-preserved. These issues are tracked in
-[#502](https://github.com/openvax/varcode/issues/502). Retain the original VCF
-for genotype evidence and do not rely on this helper for sample-sensitive
-round trips.
+## VCF export
+
+`varcode.vcf_output.variants_to_vcf` writes small variants with a deterministic
+sample order. Each sample value is looked up by sample name and FORMAT key;
+GT comes first, missing fields are written as `.`, and samples present in only
+some records remain in the output. Positions sort numerically within contigs.
+
+```python
+from varcode import load_vcf
+from varcode.vcf_parsing import VCFHeader
+from varcode.vcf_output import variants_to_vcf
+
+variants = load_vcf("input.vcf", genome=81)
+header = VCFHeader.from_path("input.vcf")
+with open("export.vcf", "w") as out:
+    variants_to_vcf(variants, variants.metadata, out=out, header=header)
+```
+
+Pass the original `VCFHeader` to retain INFO/FORMAT declarations. Otherwise,
+standard FORMAT definitions and observed value types determine new declarations;
+original custom cardinality and descriptions cannot be recovered from values
+alone. Other source header lines are not archived by this helper.
+
+`load_vcf` retains original ALT lists and indexes. Export reconstructs complete
+multi-allelic records in that order, preserving GT and allele-indexed values.
+A subset missing an original ALT is rejected before output is written: retain
+all alleles or explicitly remap genotype/allele-indexed metadata first. Records
+are not merged solely because their IDs agree. Indexed metadata from older versions must be reloaded from its source VCF
+to recover the full ALT list. Hand-constructed records without an ALT index
+are treated as explicitly biallelic; GT and standard allele-depth/likelihood
+fields must agree with that representation.
+
+These sample/FORMAT and ALT-order protections resolve
+[#502](https://github.com/openvax/varcode/issues/502) in 10.1.3. Retain original
+VCFs as the source of record; the helper does not archive all header metadata,
+resolve conflicting source records, or export StructuralVariant objects.
 
 ## Annotation provenance
 

@@ -126,16 +126,15 @@ def test_same_samples_produce_samples():
         for d in reparsed_metadata.values())
 
 
-def test_different_samples_produce_no_samples():
-    """test_different_samples_produce_no_samples
-
-    Ensures that, if a set of variants have different samples, the reparsed
-    collection will not output any samples.
-
-    See `vcf_output.py` for details as to why this is the way it's done for now.
-    """
-    (_, reparsed_variants) = _do_roundtrip_test(
+def test_different_samples_are_preserved():
+    variants, reparsed = _do_roundtrip_test(
         ['different-samples.1.vcf', 'different-samples.2.vcf'])
-
-    metadata = _merge_metadata_naive(reparsed_variants)
-    assert all(d.get('sample_info') is None for d in metadata.values())
+    original = _merge_metadata_naive(variants)
+    exported = _merge_metadata_naive(reparsed)
+    assert reparsed.samples == ["metastasis", "normal"]
+    for variant in variants:
+        for sample, fields in original[variant]["sample_info"].items():
+            assert exported[variant]["sample_info"][sample]["GT"] == fields["GT"]
+        absent = set(reparsed.samples) - set(original[variant]["sample_info"])
+        for sample in absent:
+            assert exported[variant]["sample_info"][sample]["GT"] == "."
