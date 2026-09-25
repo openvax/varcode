@@ -67,7 +67,7 @@ def add_variant_args(arg_parser):
         help=(
             "What reference assembly your variant coordinates are using. "
             "Examples: 'hg19', 'GRCh38', or 'GRCm38'. "
-            "Add ':RELEASE' to choose an Ensembl release, e.g. 'GRCh38:93'; "
+            "Add a release to choose it, e.g. 'GRCh38:93' or 'GRCh38.93'; "
             "otherwise the most recent installed release is used. "
             "This argument is ignored for MAF files, since each row includes "
             "the reference. "

@@ -26,7 +26,8 @@ release for your own data.
 For your own data, use an annotation that matches the genome build your
 variants were called against. GRCh37 input, for example, needs a GRCh37
 annotation such as Ensembl 75, installed separately. Pass a release number
-(`genome=81`), an assembly with a release (`genome="GRCh38:93"`), or a
+(`genome=81`), an assembly with a release (`genome="GRCh38:93"` or
+`"GRCh38.93"`), or a
 PyEnsembl genome object to pin the annotation exactly. An assembly name alone,
 such as `genome="GRCh38"`, uses the most recent installed release of that
 assembly. A release that does not provide the assembly, such as `"GRCh38:75"`,

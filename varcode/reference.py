@@ -286,9 +286,42 @@ def infer_reference_name(reference_name_or_path):
     return match
 
 
-# An assembly name with an explicit Ensembl release, such as "GRCh38:93".
-# Paths and URLs (which contain "/") never match.
-_RELEASE_SUFFIX = re.compile(r"^\s*([^:/\\\s]+)\s*:\s*(\d+)\s*$")
+# An assembly name followed by an Ensembl release: "GRCh38:93", or
+# "GRCh38.93" as in Ensembl's file names. Paths (which contain "/") never match.
+_RELEASE_SUFFIX = re.compile(r"^\s*([^:/\\\s]+?)\s*([:._\-\s])\s*(\d+)\s*$")
+
+
+def _exact_reference_names():
+    """Each known assembly name and alias, normalized, to the name inference returns."""
+    names = {}
+    for assembly_name in canonical_reference_names:
+        for candidate in [assembly_name] + alias_dict_with_ucsc.get(assembly_name, []):
+            names[normalize_reference_name(candidate)] = (
+                candidate if is_ucsc_reference_name(candidate) else assembly_name)
+    return names
+
+
+_exact_names = _exact_reference_names()
+
+
+def _split_release(reference_name):
+    """
+    The assembly name and requested Ensembl release in ``reference_name``,
+    or ``(reference_name, None)`` when it names no release.
+
+    A colon always introduces a release ("GRCh38.p13:93"). Other separators
+    do only after an exact assembly name or alias, so names that end in
+    digits, such as "Felis_catus_9.0", keep their meaning.
+    """
+    if normalize_reference_name(reference_name) in _exact_names:
+        return reference_name, None
+    match = _RELEASE_SUFFIX.match(reference_name)
+    if match is None:
+        return reference_name, None
+    name, separator, release = match.groups()
+    if separator != ":" and normalize_reference_name(name) not in _exact_names:
+        return reference_name, None
+    return name, int(release)
 
 
 @memoize
@@ -298,10 +331,10 @@ def infer_genome_for_reference_name(reference_name):
     (e.g. hg19 or GRCh37) and if it's a UCSC genome then map it
     to the equivalent in Ensembl.
 
-    A name may end in ``:RELEASE`` to choose that Ensembl release, e.g.
-    ``"GRCh38:93"`` or ``"hg19:75"``. Otherwise the most recent locally
-    installed release of the assembly is used, or the newest release if
-    none is installed.
+    A name may end in a release to choose that Ensembl release, e.g.
+    ``"GRCh38:93"``, ``"GRCh38.93"`` or ``"hg19:75"``. Otherwise the most
+    recent locally installed release of the assembly is used, or the newest
+    release if none is installed.
 
     Parameters
     ----------
@@ -319,10 +352,7 @@ def infer_genome_for_reference_name(reference_name):
         provide that assembly.
     """
     converted_ucsc_to_ensembl = False
-    match = _RELEASE_SUFFIX.match(reference_name)
-    release = None
-    if match:
-        reference_name, release = match.group(1), int(match.group(2))
+    reference_name, release = _split_release(reference_name)
     reference_name = infer_reference_name(reference_name)
     if is_ucsc_reference_name(reference_name):
         if reference_name not in ucsc_to_ensembl_reference_names:
