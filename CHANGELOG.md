@@ -1,5 +1,12 @@
 # Change Log
 
+## [v10.4.1](https://github.com/openvax/varcode/tree/v10.4.1) (2026-09-25)
+
+- Ranking a structural candidate set that lists itself as a candidate, for
+  example through attached RNA evidence, no longer recurses without end. The
+  self-candidate ranks as the set's own class. Found while running Vaxrank on
+  Varcode 10.
+
 ## [v10.4.0](https://github.com/openvax/varcode/tree/v10.4.0) (2026-09-25)
 
 - `MolecularPhaseResolver` no longer reports trans from a source's partner
