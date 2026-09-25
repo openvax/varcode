@@ -174,7 +174,8 @@ def _attach_candidate_set(ordered):
 
 def predict_transcript_model_effect(
         variants, transcript, germline_variants=(), phase_resolver=None,
-        sequence_provider=None, max_hypotheses=64, max_phase_hypotheses=8):
+        sequence_provider=None, max_hypotheses=64, max_phase_hypotheses=None,
+        homozygous_germline=()):
     """Predict one ordinary top effect with alternatives in ``.candidates``.
 
     Canonical and exon-skip paths resolve from transcript annotation alone.
@@ -183,12 +184,15 @@ def predict_transcript_model_effect(
     candidates at sequence-free tier 0. Rule order is never mislabeled as
     probability.
 
-    More than ``max_phase_hypotheses`` phase hypotheses, or more than
-    ``max_hypotheses`` combined phase/splice outcomes, gives a
-    :class:`~varcode.HypothesisLimit` instead of a partial candidate set.
+    More than ``max_phase_hypotheses`` phase hypotheses (default
+    ``max_hypotheses``), or more than ``max_hypotheses`` combined
+    phase/splice outcomes, gives a :class:`~varcode.HypothesisLimit`
+    instead of a partial candidate set. ``homozygous_germline`` lists
+    germline variants on both haplotypes, which are always cis.
     """
-    _check_max_hypotheses(max_hypotheses)
-    _check_max_hypotheses(max_phase_hypotheses, "max_phase_hypotheses")
+    max_hypotheses = _check_max_hypotheses(max_hypotheses)
+    max_phase_hypotheses = max_hypotheses if max_phase_hypotheses is None else (
+        _check_max_hypotheses(max_phase_hypotheses, "max_phase_hypotheses"))
     variants = tuple(variants)
     if not variants:
         raise ValueError("predict_transcript_model_effect requires a somatic variant")
@@ -235,7 +239,8 @@ def predict_transcript_model_effect(
         sequence_provider = _provider_for_genome(primary.genome)
 
     phase = partition_germline_by_phase(
-        primary, germline_variants, phase_resolver)
+        primary, germline_variants, phase_resolver,
+        homozygous=homozygous_germline)
     try:
         outcomes = _realize_outcomes(
             variants, transcript, phase.hypotheses(max_phase_hypotheses),
@@ -245,11 +250,10 @@ def predict_transcript_model_effect(
             primary, transcript, mechanism="nonlocal_structural_variant",
             reason=str(error))
     except HypothesisLimitError as error:
-        reference = predict_transcript_model_effect(
-            variants, transcript, sequence_provider=sequence_provider,
-            max_hypotheses=max_hypotheses) if germline_variants else None
         result = HypothesisLimit(
-            primary, transcript, error.max_hypotheses, phase, reference)
+            primary, transcript, error.max_hypotheses, phase,
+            _reference_effect(variants, transcript, germline_variants,
+                              sequence_provider, max_hypotheses))
         result.variants = variants
         return result
     candidates = merge_classified_outcomes(outcomes)
@@ -338,6 +342,22 @@ def _realize_outcomes(
     return outcomes
 
 
+def _reference_effect(
+        variants, transcript, germline_variants, sequence_provider,
+        max_hypotheses):
+    """The prediction without germline context, as ``effects()`` returns it,
+    or ``None`` when that prediction is itself over the limit."""
+    from .splice_outcomes import enumerate_splice_outcomes
+    if not germline_variants:
+        return None
+    reference = predict_transcript_model_effect(
+        variants, transcript, sequence_provider=sequence_provider,
+        max_hypotheses=max_hypotheses)
+    if isinstance(reference, HypothesisLimit):
+        return None
+    return enumerate_splice_outcomes(reference)
+
+
 class TranscriptModelEffectAnnotator:
     """Experimental, opt-in annotator backed by the transcript model."""
 
@@ -392,7 +412,8 @@ class TranscriptModelEffectAnnotator:
             variants, transcript,
             germline_variants=germline,
             phase_resolver=phase_resolver,
-            max_phase_hypotheses=germline_ctx.max_phase_hypotheses)
+            max_phase_hypotheses=germline_ctx.max_phase_hypotheses,
+            homozygous_germline=germline_ctx.homozygous(germline))
         if result is NotImplemented:
             return result
         if (not germline and germline_ctx.completeness in (

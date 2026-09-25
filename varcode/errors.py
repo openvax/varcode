@@ -83,7 +83,10 @@ class HypothesisLimitError(ValueError):
     """
 
     def __init__(self, max_hypotheses):
+        super().__init__(max_hypotheses)
         self.max_hypotheses = max_hypotheses
-        super().__init__(
+
+    def __str__(self):
+        return (
             "More than max_hypotheses=%d alternative outcomes"
-            % max_hypotheses)
+            % self.max_hypotheses)

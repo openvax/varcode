@@ -19,9 +19,11 @@ the ref alleles fail loudly rather than silently mis-classifying.
 """
 from __future__ import annotations
 
+import copy
 import dataclasses
 import math
 import os
+import pickle
 import tempfile
 import warnings
 
@@ -51,6 +53,10 @@ from varcode import (
     predict_germline_aware_effect,
 )
 from varcode.annotators.registry import get_default_annotator
+from varcode.effects.effect_ordering import (
+    select_between_exonic_splice_site_and_alternate_effect,
+)
+from varcode.splice_outcomes import SpliceOutcomeSet
 from varcode.effects.effect_classes import (
     IncompleteTranscript,
     PhaseCandidateSet,
@@ -426,13 +432,27 @@ def _somatic_at(pos=100, contig="7"):
 
 
 class _PartialPhaseResolver:
-    """Places some germline variants by position; others stay unknown."""
+    """Answers somatic-germline phase by germline position and
+    germline-germline phase by position pair; everything else is unknown."""
 
-    def __init__(self, answers):
+    def __init__(self, answers, links=None):
         self._answers = answers
+        self._links = links or {}
 
-    def in_cis(self, somatic, germline):
-        return self._answers.get(germline.start)
+    def in_cis(self, v1, v2):
+        if v1.start == 100:
+            return self._answers.get(v2.start)
+        return self._links.get((v1.start, v2.start))
+
+
+def _germline_vcf(genotype):
+    return _write_vcf(
+        "##fileformat=VCFv4.2\n"
+        "##contig=<ID=7>\n"
+        '##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">\n'
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tNORMAL\n"
+        "7\t%d\t.\t%s\t%s\t.\tPASS\t.\tGT\t%s\n" % (
+            GERMLINE_POS, GERMLINE_REF, GERMLINE_ALT, genotype))
 
 
 class TestPartitionGermlineByPhase:
@@ -457,14 +477,46 @@ class TestPartitionGermlineByPhase:
         assert phase == PhasePartition(
             germline=tuple(germ), cis=tuple(germ), implicit=True)
 
-    def test_resolver_errors_propagate(self):
+    def test_homozygous_germline_is_cis_without_evidence(self):
+        germ = (_germline_at(101), _germline_at(102))
+        phase = partition_germline_by_phase(
+            _somatic_at(), germ, homozygous=germ[:1])
+        assert phase.cis == germ[:1]
+        assert phase.unphased == germ[1:]
+
+    def test_germline_to_germline_phase_links_unphased_variants(self):
+        germ = tuple(_germline_at(p) for p in range(101, 105))
+        links = {(101, 102): True, (101, 103): False, (103, 104): True}
+        phase = partition_germline_by_phase(
+            _somatic_at(), germ, _PartialPhaseResolver({}, links))
+        assert phase.linked == ((germ[:2], germ[2:]),)
+        assert phase.hypothesis_count == 2
+        assert {h.cis for h in phase.hypotheses()} == {germ[:2], germ[2:]}
+
+    def test_phase_follows_through_another_germline_variant(self):
+        germ = (_germline_at(101), _germline_at(102))
+        phase = partition_germline_by_phase(
+            _somatic_at(), germ,
+            _PartialPhaseResolver({101: True}, {(101, 102): False}))
+        assert (phase.cis, phase.trans) == (germ[:1], germ[1:])
+
+    def test_contradicting_answer_is_ignored_with_warning(self, caplog):
+        germ = (_germline_at(101), _germline_at(102))
+        resolver = _PartialPhaseResolver(
+            {101: True, 102: True}, {(101, 102): False})
+        phase = partition_germline_by_phase(_somatic_at(), germ, resolver)
+        assert phase.cis == germ
+        assert "contradicts" in caplog.text
+
+    def test_resolver_errors_are_logged_as_unknown(self, caplog):
         class Broken:
-            def in_cis(self, somatic, germline):
+            def in_cis(self, v1, v2):
                 raise KeyError("contig naming mismatch")
 
-        with pytest.raises(KeyError):
-            partition_germline_by_phase(
-                _somatic_at(), [_germline_at(101)], Broken())
+        phase = partition_germline_by_phase(
+            _somatic_at(), [_germline_at(101)], Broken())
+        assert phase.unphased == (_germline_at(101),)
+        assert "contig naming mismatch" in caplog.text
 
 
 class TestPhasePartitionHypotheses:
@@ -473,6 +525,7 @@ class TestPhasePartitionHypotheses:
         (h,) = PhasePartition(
             germline=(g1, g2), cis=(g1,), trans=(g2,)).hypotheses()
         assert (h.cis, h.trans, h.phase_state) == ((g1,), (g2,), "phased")
+        assert h.haplotype == "A_mixed_1"
         (h,) = PhasePartition(
             germline=(g1,), cis=(g1,), implicit=True).hypotheses()
         assert h.phase_state == "implicit"
@@ -504,6 +557,14 @@ class TestPhasePartitionHypotheses:
     def test_numpy_integer_cap_is_accepted(self):
         phase = PhasePartition(germline=(_germline_at(101),))
         assert len(phase.hypotheses(np.int64(2))) == 2
+        ctx = dataclasses.replace(
+            GermlineContext.empty(), max_phase_hypotheses=np.int64(2))
+        assert type(ctx.max_phase_hypotheses) is int
+
+    def test_limit_error_survives_pickle_and_copy(self):
+        error = pickle.loads(pickle.dumps(HypothesisLimitError(8)))
+        assert error.max_hypotheses == copy.deepcopy(error).max_hypotheses == 8
+        assert "max_hypotheses=8" in str(error)
 
     @pytest.mark.parametrize("cap", [0, -1, True, 2.0, math.inf, "8", None])
     def test_invalid_cap_is_rejected(self, cap):
@@ -605,6 +666,41 @@ class TestHypothesisLimit:
             _somatic(), ensembl_grch38.transcript_by_id("ENST00000426809"))
         effects = EffectCollection([sibling_utr, e])
         assert effects.top_priority_effect_per_variant()[_somatic()] is e
+
+    def test_phase_candidate_set_ranks_as_its_most_severe_candidate(self):
+        e = self._predict(self._ctx())
+        assert effect_priority(e) == effect_priority(e.highest_priority_effect)
+        sibling = IncompleteTranscript(
+            _somatic(), ensembl_grch38.transcript_by_id("ENST00000426809"))
+        assert EffectCollection([sibling, e]).top_priority_effect() is e
+
+    def test_splice_reference_is_wrapped_and_ranked_as_selected(self):
+        splice_variant = Variant(
+            "7", 117_531_114, "G", "T", genome=ensembl_grch38)
+        germline = Variant("7", 117_531_113, "A", "G", genome=ensembl_grch38)
+        ctx = dataclasses.replace(
+            GermlineContext.from_variants([germline], reference_name="GRCh38"),
+            max_phase_hypotheses=1)
+        e = predict_germline_aware_effect(
+            splice_variant, _cftr(), ctx, get_default_annotator())
+        assert isinstance(e, HypothesisLimit)
+        assert isinstance(e.reference_effect, SpliceOutcomeSet)
+        assert effect_priority(e) == effect_priority(
+            select_between_exonic_splice_site_and_alternate_effect(
+                e.reference_effect))
+
+    def test_homozygous_germline_resolves_phase(self):
+        ctx = GermlineContext.from_germline_vcf(
+            _germline_vcf("1/1"), genome=ensembl_grch38)
+        assert ctx.homozygous(ctx.variants) == tuple(ctx.variants)
+        e = self._predict(dataclasses.replace(ctx, max_phase_hypotheses=1))
+        assert e.short_description == "p.S159T"
+        assert e.germline_phase_state == "phased"
+
+    def test_heterozygous_germline_is_not_homozygous(self):
+        ctx = GermlineContext.from_germline_vcf(
+            _germline_vcf("0/1"), genome=ensembl_grch38)
+        assert ctx.homozygous(ctx.variants) == ()
 
     def test_json_round_trip(self):
         e = self._predict(self._ctx(max_phase_hypotheses=1))

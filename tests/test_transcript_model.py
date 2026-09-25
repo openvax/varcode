@@ -5,11 +5,13 @@ import pickle
 import subprocess
 import sys
 
+import numpy as np
 import pytest
 from pyensembl import cached_release
 
 from varcode import (
     Completeness,
+    EffectCollection,
     GermlineContext,
     HypothesisLimit,
     PhasePartition,
@@ -227,6 +229,47 @@ def test_transcript_model_uses_context_phase_cap():
         somatic, transcript, ctx)
 
     assert isinstance(result, HypothesisLimit)
+
+
+def test_direct_phase_cap_defaults_to_max_hypotheses():
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    somatic = Variant("7", 117531100, "T", "A", ensembl_grch38)
+    germline = Variant("7", 117531101, "T", "C", ensembl_grch38)
+
+    capped = predict_transcript_model_effect(
+        (somatic,), transcript, germline_variants=(germline,), max_hypotheses=1)
+    enumerated = predict_transcript_model_effect(
+        (somatic,), transcript, germline_variants=(germline,))
+
+    assert isinstance(capped, HypothesisLimit)
+    assert not isinstance(enumerated, HypothesisLimit)
+
+
+def test_splice_limit_without_germline_leaves_no_reference():
+    transcript = Transcript()
+    somatic = point(11, "G", "A")
+    germline = point(9, "A", "G")
+
+    result = predict_transcript_model_effect(
+        (somatic,), transcript, germline_variants=(germline,),
+        sequence_provider=provider(), max_hypotheses=1)
+
+    assert isinstance(result, HypothesisLimit)
+    assert result.reference_effect is None
+
+
+def test_numpy_cap_result_exports_to_json():
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    somatic = Variant("7", 117531100, "T", "A", ensembl_grch38)
+    germline = Variant("7", 117531101, "T", "C", ensembl_grch38)
+
+    result = predict_transcript_model_effect(
+        (somatic,), transcript, germline_variants=(germline,),
+        max_hypotheses=np.int64(1))
+
+    assert type(result.max_hypotheses) is int
+    restored = EffectCollection.from_json(EffectCollection([result]).to_json())
+    assert restored[0] == result
 
 
 @pytest.mark.parametrize("cap", ["max_hypotheses", "max_phase_hypotheses"])

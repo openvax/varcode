@@ -19,6 +19,7 @@ openvax/isovar) — verifying the plumbing without tying the test suite
 to any one upstream's release cadence.
 """
 
+import numpy as np
 from pyensembl import cached_release
 
 from varcode import (
@@ -30,6 +31,7 @@ from varcode import (
     Variant,
     VariantCollection,
     apply_phase_resolver_to_effects,
+    query_in_cis,
 )
 
 
@@ -110,16 +112,16 @@ def test_in_cis_false_when_observed_on_different_molecules():
     assert resolver.in_cis(v1, v2, transcript=transcript) is False
 
 
-def test_in_cis_none_when_only_one_variant_has_evidence():
-    """A variant without evidence may be uncovered, so its absence from
-    the other variant's partners is not evidence of trans."""
+def test_in_cis_false_when_only_one_variant_has_evidence():
+    """Without its own ``in_cis``, a source's reads are assumed to span
+    nearby variants, so absence from the partners is read as trans."""
     transcript = _cftr()
     v1 = Variant("7", 117531100, "T", "A", ensembl_grch38)
     v2 = Variant("7", 117531114, "G", "T", ensembl_grch38)
     source = StubReadPhasingSource(phasing={v1: (v1,)})
     resolver = ReadPhaseResolver(source)
-    assert resolver.in_cis(v1, v2, transcript=transcript) is None
-    assert resolver.in_cis(v2, v1, transcript=transcript) is None
+    assert resolver.in_cis(v1, v2, transcript=transcript) is False
+    assert resolver.in_cis(v2, v1, transcript=transcript) is False
 
 
 def test_in_cis_none_when_no_evidence():
@@ -288,3 +290,51 @@ def test_user_example_shape_works():
             found_protein = e.mutant_transcript.mutant_protein_sequence
             break
     assert found_protein == stub_mt.mutant_protein_sequence
+
+
+# --------------------------------------------------------------------
+# query_in_cis: one policy for asking any resolver
+# --------------------------------------------------------------------
+
+
+class _Answer:
+    def __init__(self, answer):
+        self.answer = answer
+
+    def in_cis(self, v1, v2):
+        return self.answer
+
+
+def test_query_in_cis_normalizes_answers():
+    v1 = Variant("7", 117531100, "T", "A", ensembl_grch38)
+    v2 = Variant("7", 117531114, "G", "T", ensembl_grch38)
+    assert query_in_cis(_Answer(np.True_), v1, v2) is True
+    assert query_in_cis(_Answer(np.False_), v1, v2) is False
+    assert query_in_cis(_Answer("maybe"), v1, v2) is None
+    assert query_in_cis(None, v1, v2) is None
+
+
+def test_query_in_cis_passes_transcript_only_when_given():
+    seen = []
+
+    class WithTranscript:
+        def in_cis(self, v1, v2, transcript=None):
+            seen.append(transcript)
+            return True
+
+    v1 = Variant("7", 117531100, "T", "A", ensembl_grch38)
+    v2 = Variant("7", 117531114, "G", "T", ensembl_grch38)
+    assert query_in_cis(_Answer(True), v1, v2) is True
+    assert query_in_cis(WithTranscript(), v1, v2, transcript=_cftr()) is True
+    assert seen == [_cftr()]
+
+
+def test_query_in_cis_logs_resolver_errors(caplog):
+    class Broken:
+        def in_cis(self, v1, v2):
+            raise KeyError("chr prefix")
+
+    v1 = Variant("7", 117531100, "T", "A", ensembl_grch38)
+    v2 = Variant("7", 117531114, "G", "T", ensembl_grch38)
+    assert query_in_cis(Broken(), v1, v2) is None
+    assert "chr prefix" in caplog.text

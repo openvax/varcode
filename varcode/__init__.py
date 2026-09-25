@@ -67,6 +67,7 @@ from .phasing import (
     ReadPhasingSource,
     VCFPhaseResolver,
     apply_phase_resolver_to_effects,
+    query_in_cis,
 )
 from .rna_read_phasing import RNAReadPhasingSource
 from .rna_evidence import (
@@ -186,6 +187,7 @@ __all__ = [
     "RNAReadPhasingSource",
     "VCFPhaseResolver",
     "apply_phase_resolver_to_effects",
+    "query_in_cis",
 
     # RNA-evidence resolver (openvax/varcode#259)
     "RNAEvidenceResolver",

@@ -412,10 +412,14 @@ class HypothesisLimit(Unresolved):
 
     @property
     def priority_class(self):
+        """Rank as ``reference_effect`` would in top-priority selection."""
+        from .effect_ordering import (
+            select_between_exonic_splice_site_and_alternate_effect)
         if self.reference_effect is None:
             return Unresolved
-        return (getattr(self.reference_effect, "priority_class", None)
-                or type(self.reference_effect))
+        ranked = select_between_exonic_splice_site_and_alternate_effect(
+            self.reference_effect)
+        return getattr(ranked, "priority_class", None) or type(ranked)
 
 
 class NoncodingTranscript(TranscriptMutationEffect):
@@ -1971,6 +1975,12 @@ class PhaseCandidateSet(TranscriptMutationEffect, MultiOutcomeEffect):
         ambiguity. Consumers wanting the full possibility set read
         :attr:`candidates`."""
         return "?" + self.most_likely_effect.short_description
+
+    @property
+    def priority_class(self):
+        """Rank as the most severe hypothesis, like other outcome sets."""
+        highest = self.highest_priority_effect
+        return getattr(highest, "priority_class", None) or type(highest)
 
     @property
     def mutant_protein_sequence(self):

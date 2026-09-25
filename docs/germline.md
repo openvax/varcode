@@ -15,8 +15,9 @@ different amino acid than the reference codon would suggest.
     It returns a `HypothesisLimit` effect, a kind of `Unresolved`. Its `phase`
     records which germline variants are known cis, known trans, or unphased,
     and its `reference_effect` is the effect without germline context, which
-    it ranks like. Phase evidence for some of the variants reduces the count.
-    To raise the cap, set it on the context:
+    it ranks like. Homozygous germline variants are always cis, and variants
+    phased to each other (for example in one VCF phase set) count once, so
+    both reduce the count. To raise the cap, set it on the context:
     `dataclasses.replace(ctx, max_phase_hypotheses=16)`.
 
 ## Basic usage
