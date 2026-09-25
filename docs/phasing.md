@@ -53,7 +53,11 @@ effects = variants.effects(phase_resolver=phaser)
 
 Here `variants` is the loaded collection to annotate. Short- and long-read
 data can both leave phase unknown; coverage and linked alleles determine whether
-a pair is resolved. Raw BAM phasing does not provide an assembled
+a pair is resolved. Trans needs fragments that carry one variant's alt allele
+and the other's reference allele. A source that only reports co-observed
+partners establishes cis, and leaves every other pair unknown; sources that see
+reference alleles too, such as `RNAReadPhasingSource`, report trans through
+their own `in_cis`. Raw BAM phasing does not provide an assembled
 `MutantTranscript`. Assembly-backed sources can provide one; see the
 [source protocols](api_phasing.md#phasing).
 `ReadPhaseResolver` remains a compatibility name for `MolecularPhaseResolver`.
