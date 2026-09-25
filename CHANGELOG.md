@@ -1,5 +1,13 @@
 # Change Log
 
+## [v10.4.2](https://github.com/openvax/varcode/tree/v10.4.2) (2026-09-25)
+
+- Allow osteosarc `>=0.2.3,<0.3` in the `test-data` extra, the range Isovar and
+  Vaxrank also require. The 0.7.0 pin in 10.3.1 made a development environment
+  with Varcode's test data and Isovar impossible to install. The snapshot check
+  accepts any version in the range, so osteosarc patch releases no longer
+  break it.
+
 ## [v10.4.1](https://github.com/openvax/varcode/tree/v10.4.1) (2026-09-25)
 
 - Ranking a structural candidate set that lists itself as a candidate, for
