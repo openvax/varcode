@@ -43,7 +43,8 @@ def dataset(tmp_path_factory):
     # entries fail rather than skipping or falling back to the fixture.
     from osteosarc import Cache, Dataset
 
-    assert version("osteosarc") == "0.7.0"
+    installed = tuple(int(part) for part in version("osteosarc").split(".")[:3])
+    assert (0, 2, 3) <= installed < (0, 3, 0)  # the test-data extra's range
     cache = Cache(cache_root, offline=True)
     data = Dataset.open(snapshot, cache=cache, offline=True)
     assert data.id == SNAPSHOT_ID
