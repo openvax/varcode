@@ -26,9 +26,11 @@ release for your own data.
 For your own data, use an annotation that matches the genome build your
 variants were called against. GRCh37 input, for example, needs a GRCh37
 annotation such as Ensembl 75, installed separately. Pass a release number
-(`genome=81`) or a PyEnsembl genome object to pin the annotation exactly. An
-assembly name such as `genome="GRCh38"` also works, but does not by itself pin
-an annotation release.
+(`genome=81`), an assembly with a release (`genome="GRCh38:93"`), or a
+PyEnsembl genome object to pin the annotation exactly. An assembly name alone,
+such as `genome="GRCh38"`, uses the most recent installed release of that
+assembly. A release that does not provide the assembly, such as `"GRCh38:75"`,
+is an error.
 
 ## Annotate one variant
 
@@ -136,7 +138,7 @@ varcode-genes --genome GRCh38 --variant chr12 25245350 C T --output-csv genes.cs
 ```
 
 Inputs can be combined and repeated: `--vcf`, `--maf`, `--variant`, and
-`--json-variants`. The commands differ from `load_vcf` in two ways:
+`--json-variants`. `--genome GRCh38:93` pins Ensembl release 93, as in Python. The commands differ from `load_vcf` in two ways:
 
 - They load structural variants automatically.
 - They skip records whose FILTER is not `PASS` or `.`, and report how many were

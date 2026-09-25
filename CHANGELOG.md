@@ -1,5 +1,16 @@
 # Change Log
 
+## [v10.5.0](https://github.com/openvax/varcode/tree/v10.5.0) (2026-09-25)
+
+- A reference name can choose an Ensembl release: `"GRCh38:93"`, or
+  `--genome GRCh38:93` on the command line, gives Ensembl 93. Previously the
+  release was silently dropped and the most recent release used instead
+  (#512). The release must provide the assembly, so `"GRCh38:75"` (a GRCh37
+  release) is an error. UCSC names work too (`"hg19:75"`). Names without a
+  release, and paths in VCF headers, resolve as before. This also serves
+  Isovar, Vaxrank and other tools that take Varcode's `--genome`
+  (openvax/isovar#122).
+
 ## [v10.4.2](https://github.com/openvax/varcode/tree/v10.4.2) (2026-09-25)
 
 - Allow osteosarc `>=0.2.3,<0.3` in the `test-data` extra, the range Isovar and
