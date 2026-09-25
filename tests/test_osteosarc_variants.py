@@ -25,10 +25,10 @@ def test_collected_variants_keep_provenance_and_unresolved_entries():
     assert FIXTURE["source"]["snapshot_id"] == SNAPSHOT_ID
     assert FIXTURE["osteosarc_version"] == OSTEOSARC_VERSION
     assert FIXTURE["selection"] == {"set": "site", "corrections": True}
-    assert len(READY) == 177
-    assert len(UNRESOLVED) == 5
+    assert len(READY) == 179
+    assert len(UNRESOLVED) == 3
     assert Counter(entry["status"] for entry in UNRESOLVED) == {
-        "missing_literal_allele": 3, "non_literal_allele": 2}
+        "missing_literal_allele": 1, "non_literal_allele": 2}
     assert len({entry["id"] for entry in FIXTURE["entries"]}) == 182
     assert all(len(entry["osteosarc_entry_sha256"]) == 64 for entry in FIXTURE["entries"])
     assert all(receipt["url"] and len(receipt["sha256"]) == 64

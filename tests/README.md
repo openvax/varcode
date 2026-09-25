@@ -15,12 +15,12 @@ below apply to the bundled Osteosarc snapshot checks.
 
 ## Osteosarc test variants
 
-`tests/data/osteosarc_variants.json` contains 177 ready site variants and five
-unresolved entries collected through `osteosarc==0.1.0` from the pinned public
-snapshot below. The ready variants comprise 158 SNVs, 13 deletions, three
+`tests/data/osteosarc_variants.json` contains 179 ready site variants and three
+unresolved entries collected through `osteosarc==0.7.0` from the pinned public
+snapshot below. The ready variants comprise 158 SNVs, 14 deletions, four
 insertions, and three complex alleles. Original alleles, assemblies, source
 IDs, correction IDs, source receipts, and hashes of complete osteosarc entries
-are retained. The fixture is approximately 115 KiB; large count and peptide
+are retained. The fixture is approximately 122 KiB; large count and peptide
 tables remain in the source snapshot.
 
 Use the collection in tests without installing osteosarc or opening its cache:
@@ -49,12 +49,12 @@ and correction notes; they are not assumed to be independent events.
 
 ## Regenerate from the verified snapshot
 
-The historical fixture records Osteosarc 0.1.0. To reproduce it byte for byte,
-install that version in a separate environment on Python 3.10+, unpack the
-bundled snapshot into a new cache directory, then collect offline:
+The fixture records Osteosarc 0.7.0. To reproduce it byte for byte, install
+that version, unpack the bundled snapshot into a new cache directory, then
+collect offline:
 
 ```sh
-python -m pip install -e . 'osteosarc==0.1.0'
+python -m pip install -e . 'osteosarc==0.7.0'
 python -m zipfile -e tests/data/osteosarc_snapshot_2026-09-18t.zip /path/to/new/cache
 python -m tests.collect_osteosarc_variants \
   --cache /path/to/new/cache --snapshot 2026-09-18t
@@ -70,8 +70,8 @@ separate from export and tests.
 
 The targeted GPX4 and BRCA1 regressions use Ensembl 81. Offline integration
 checks use the public osteosarc dataset through the published
-osteosarc 0.2.x adapter (`>=0.2.3,<0.3`, the range Isovar and Vaxrank also
-require) from the optional `test-data` extra (Python 3.9+):
+osteosarc 0.7.x adapter (`>=0.7.0,<0.8`) from the optional `test-data` extra
+(Python 3.9+):
 
 ```sh
 python -m pip install -e '.[test-data]'
@@ -101,17 +101,18 @@ To test an existing shared cache explicitly, set both
 identity must match. Missing packages, objects, or a mismatched snapshot then
 fail; the tests never fall back to the bundled snapshot. Without an explicit
 snapshot, these checks skip only when the optional Osteosarc dependency is
-absent. Osteosarc 0.2.x supports every Python version in the CI matrix.
+absent. Osteosarc 0.7.x supports every Python version in the CI matrix.
 
 These snapshot integration tests never download data or refresh sources. `Dataset.sync` acquires new
 snapshots separately; current remote sources do not reproduce the historical
 identity. Change this fixture only by deliberately reviewing a new snapshot
 and updating its source provenance, identity, archive hash, and expectations.
 
-These additional checks preserve the historical fixture's 177 ready alleles
-and verify native conversion of all 179 entries now ready in the same snapshot
-(182 total). The two newly resolved entries are not silently added to the
-checked-in scientific corpus. Checks preserve source provenance and reference
+These additional checks compare every ready fixture allele with the dataset
+and verify native conversion of all 179 ready entries in the snapshot (182
+total). Osteosarc 0.7.0's allele corrections resolve two entries the original
+0.1.0 export left unresolved, `COL3A1-Splice` and `FAM157A-p_W70_Q71ins_14`;
+their correction IDs are recorded in the fixture. Checks preserve source provenance and reference
 identity, exercise mitochondrial annotation and the corrected MAP2 allele,
 reopen the shared cache offline, and reject missing or tampered objects using
 a private copy. Package updates do not change the pinned snapshot identity.
