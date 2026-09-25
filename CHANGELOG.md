@@ -1,5 +1,11 @@
 # Change Log
 
+## [v10.3.1](https://github.com/openvax/varcode/tree/v10.3.1) (2026-09-25)
+
+- Pin the optional `test-data` extra to osteosarc 0.7.0, the current release.
+  The bundled snapshot checks pass unchanged on it; the 0.2.3 pin made them
+  fail in any environment with a newer osteosarc.
+
 ## [v10.3.0](https://github.com/openvax/varcode/tree/v10.3.0) (2026-09-24)
 
 - Unenumerated phase no longer becomes a precise all-cis consequence (#503).

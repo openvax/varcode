@@ -43,7 +43,7 @@ def dataset(tmp_path_factory):
     # entries fail rather than skipping or falling back to the fixture.
     from osteosarc import Cache, Dataset
 
-    assert version("osteosarc") == "0.2.3"
+    assert version("osteosarc") == "0.7.0"
     cache = Cache(cache_root, offline=True)
     data = Dataset.open(snapshot, cache=cache, offline=True)
     assert data.id == SNAPSHOT_ID
