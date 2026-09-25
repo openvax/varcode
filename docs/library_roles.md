@@ -24,6 +24,10 @@ Use the ordinary `effects()` interface; no special annotator selection is needed
 Keep candidate sets when a variant has several plausible consequences. Candidate
 order and effect severity are not RNA support or calibrated probabilities.
 
+Phase evidence follows the same split. Isovar's `IsovarReadPhasing` reports cis
+or trans only from RNA fragments that cover both variants, and Varcode treats
+every other pair as unknown; see [RNA phase from Isovar](phasing.md#rna-phase-from-isovar).
+
 Isovar can return a structure that changes the original hypothesis, including a
 previously unmodeled junction. Varcode's job is to represent that structure and
 predict its coding consequences, not force it into the first reference isoform.
@@ -57,11 +61,25 @@ predicted protein change and evidence that the RNA exists are separate facts.
   [Isovar #305](https://github.com/openvax/isovar/issues/305).
 - **Vaxrank:** the ordinary RNA path selects Isovar's top protein; a separate
   supplied-fusion adapter retains coding hypotheses. The opt-in DNA fallback
-  still collapses fusion candidates too early
+  checks each structural candidate's protein before ranking
   ([Vaxrank #482](https://github.com/openvax/vaxrank/issues/482)).
+  `--germline-vcf` reaches Isovar, so matched germline edits in assembled RNA
+  are labelled rather than left unexplained.
 
 A DNA-only fallback remains a prediction without RNA confirmation. It must not
 silently discard alternatives or relabel missing RNA as evidence of absence.
+
+## Compatible versions
+
+| Package | Requires |
+|---|---|
+| Vaxrank 3.22 | Varcode ≥10.4.1, <11 and Isovar 1.37 |
+| Isovar 1.37 | Varcode 10 |
+| Isovar ≥1.36 | Needed for `IsovarReadPhasing.in_cis`; older versions report cis only |
+
+Varcode 10.4.1 fixes a structural-effect ranking crash that Vaxrank's DNA
+fallback hits on earlier Varcode 10 releases. Isovar, Vaxrank and Varcode's
+optional test data share osteosarc 0.2.x.
 
 ## Other library guides
 
