@@ -70,7 +70,7 @@ separate from export and tests.
 
 The targeted GPX4 and BRCA1 regressions use Ensembl 81. Offline integration
 checks use the public osteosarc dataset through the published
-`osteosarc==0.2.3` adapter from the optional `test-data` extra (Python 3.9+):
+`osteosarc==0.7.0` adapter from the optional `test-data` extra (Python 3.9+):
 
 ```sh
 python -m pip install -e '.[test-data]'
@@ -100,7 +100,7 @@ To test an existing shared cache explicitly, set both
 identity must match. Missing packages, objects, or a mismatched snapshot then
 fail; the tests never fall back to the bundled snapshot. Without an explicit
 snapshot, these checks skip only when the optional Osteosarc dependency is
-absent. Osteosarc 0.2.3 supports every Python version in the CI matrix.
+absent. Osteosarc 0.7.0 supports every Python version in the CI matrix.
 
 These snapshot integration tests never download data or refresh sources. `Dataset.sync` acquires new
 snapshots separately; current remote sources do not reproduce the historical
