@@ -15,7 +15,9 @@ import warnings
 
 import pytest 
 
-from varcode.reference import infer_reference_name, ensembl_reference_aliases, most_recent_assembly_name
+from varcode import Variant
+from varcode.reference import (
+    ensembl_reference_aliases, infer_genome, infer_reference_name, most_recent_assembly_name)
 from .common import eq_
 
 ## test cases are given as 
@@ -65,3 +67,37 @@ def generate_reference_name_fasta_filenames():
 def test_reference_name_fasta_filenames(candidate, assembly_name):
     eq_(infer_reference_name(candidate), assembly_name)
 
+
+
+@pytest.mark.parametrize(["name", "release", "species", "was_ucsc"], [
+    ("GRCh38:93", 93, "homo_sapiens", False),
+    (" GRCh38 : 93 ", 93, "homo_sapiens", False),
+    ("B37:75", 75, "homo_sapiens", False),
+    ("hg19:75", 75, "homo_sapiens", True),
+    ("GRCm38:95", 95, "mus_musculus", False),
+])
+def test_reference_name_with_release_chooses_that_release(name, release, species, was_ucsc):
+    genome, converted = infer_genome(name)
+    assert (genome.release, genome.species.latin_name, converted) == (release, species, was_ucsc)
+
+
+@pytest.mark.parametrize(["name", "message"], [
+    ("GRCh38:75", "release 75 of homo_sapiens provides GRCh37, not GRCh38"),
+    ("GRCh37:93", "release 93 of homo_sapiens provides GRCh38, not GRCh37"),
+    ("GRCh38:40", "No genome for homo_sapiens in Ensembl release 40"),
+])
+def test_release_that_does_not_provide_the_assembly_is_rejected(name, message):
+    # Previously the release was dropped and the latest release used instead (#512).
+    with pytest.raises(ValueError, match=message):
+        infer_genome(name)
+
+
+def test_variant_keeps_the_chosen_release_through_serialization():
+    variant = Variant("7", 140753336, "A", "T", genome="GRCh38:93")
+    assert variant.genome.release == 93 and variant.reference_name == "GRCh38"
+    assert Variant.from_json(variant.to_json()).genome.release == 93
+
+
+def test_paths_are_not_read_as_releases():
+    genome, _ = infer_genome("##reference=file:///var/lib/cwl/job367935311_index_001zdr/GRCh38.d1.vd1.fa")
+    assert genome.reference_name == "GRCh38"

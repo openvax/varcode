@@ -286,12 +286,22 @@ def infer_reference_name(reference_name_or_path):
     return match
 
 
+# An assembly name with an explicit Ensembl release, such as "GRCh38:93".
+# Paths and URLs (which contain "/") never match.
+_RELEASE_SUFFIX = re.compile(r"^\s*([^:/\\\s]+)\s*:\s*(\d+)\s*$")
+
+
 @memoize
 def infer_genome_for_reference_name(reference_name):
     """
     First infer a canonical Ensembl or UCSC reference name
     (e.g. hg19 or GRCh37) and if it's a UCSC genome then map it
     to the equivalent in Ensembl.
+
+    A name may end in ``:RELEASE`` to choose that Ensembl release, e.g.
+    ``"GRCh38:93"`` or ``"hg19:75"``. Otherwise the most recent locally
+    installed release of the assembly is used, or the newest release if
+    none is installed.
 
     Parameters
     ----------
@@ -301,8 +311,18 @@ def infer_genome_for_reference_name(reference_name):
     -------
     pyensembl.EnsemblRelease and a boolean flag indicating whether
     UCSC genome was converted to Ensembl.
+
+    Raises
+    ------
+    ValueError
+        If the name is not recognized, or the requested release does not
+        provide that assembly.
     """
     converted_ucsc_to_ensembl = False
+    match = _RELEASE_SUFFIX.match(reference_name)
+    release = None
+    if match:
+        reference_name, release = match.group(1), int(match.group(2))
     reference_name = infer_reference_name(reference_name)
     if is_ucsc_reference_name(reference_name):
         if reference_name not in ucsc_to_ensembl_reference_names:
@@ -310,7 +330,17 @@ def infer_genome_for_reference_name(reference_name):
                 "Unrecognized UCSC reference name '%s'" % reference_name)
         reference_name = ucsc_to_ensembl_reference_names[reference_name]
         converted_ucsc_to_ensembl = True
-    genome =  get_genome_for_ensembl_reference_name(reference_name)
+    if release is None:
+        genome = get_genome_for_ensembl_reference_name(reference_name)
+    else:
+        species = pyensembl.species.Species._reference_names_to_species[reference_name]
+        # Raises ValueError when the species has no genome in that release.
+        provided = species.which_reference(release)
+        if provided != reference_name:
+            raise ValueError(
+                "Ensembl release %d of %s provides %s, not %s" % (
+                    release, species.latin_name, provided, reference_name))
+        genome = cached_ensembl_release(release, species=species)
     return genome, converted_ucsc_to_ensembl
 
 @memoize
@@ -319,9 +349,10 @@ def infer_genome(genome_object_string_or_int):
     If given an integer, get the human EnsemblRelease object for that
     Ensembl version.
 
-    If given a string, return latest EnsemblRelease which has an equivalent
-    reference. If the given name is a UCSC genome (e.g. hg19) then convert
-    it to the equivalent Ensembl reference (e.g. GRCh37).
+    If given a string, return the most recent installed EnsemblRelease
+    which has an equivalent reference, or the release the string names
+    (e.g. "GRCh38:93"). If the given name is a UCSC genome (e.g. hg19) then
+    convert it to the equivalent Ensembl reference (e.g. GRCh37).
 
     If given a PyEnsembl Genome, simply use it.
 

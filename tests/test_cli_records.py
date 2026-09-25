@@ -37,6 +37,14 @@ def test_filter_record_count_and_cli_sv_default(mixed_vcf):
     assert {v.contig for v in variants} == {"12"}
 
 
+def test_genome_argument_can_choose_an_ensembl_release(mixed_vcf):
+    parser = make_variants_parser()
+    args = ["--genome", "GRCh38:93", "--vcf", mixed_vcf, "--variant", "chr7", "140753336", "A", "T"]
+    with pytest.warns(UserWarning, match="Skipped 1 VCF record"):
+        variants = variant_collection_from_args(parser.parse_args(args))
+    assert {v.genome.release for v in variants} == {93}
+
+
 @pytest.mark.parametrize("main", [effects_main, genes_main])
 def test_all_esvee_structural_records_reach_output(main, tmp_path):
     output = tmp_path / "sv.csv"
