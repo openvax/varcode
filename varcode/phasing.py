@@ -59,11 +59,17 @@ def query_in_cis(phase_resolver, v1, v2, transcript=None) -> Optional[bool]:
 class ReadPhasingSource(Protocol):
     """Reports per-variant read-level evidence and co-occurring partners.
 
-    The minimum interface needed to answer ``in_cis(v1, v2)`` from
-    read-level data — co-observation on the same supporting reads,
-    same long-read fragment, same assembled contig, etc. Implementations
-    decide how strong the evidence is; consumers only see a boolean
-    membership question.
+    The minimum interface needed to establish cis from read-level data —
+    co-observation on the same supporting reads, same long-read fragment,
+    same assembled contig, etc. Implementations decide how strong the
+    evidence is; consumers only see a boolean membership question.
+
+    Partners alone never establish trans: a variant missing from another's
+    partners may simply be uncovered or outside the source's input. A
+    source that observes one variant's alt allele together with the
+    other's reference allele reports trans by also implementing
+    ``in_cis(v1, v2, transcript=None)``, which returns ``True``, ``False``
+    or ``None``.
     """
 
     def has_evidence(self, variant) -> bool:
@@ -102,7 +108,9 @@ class MolecularPhaseResolver:
     """Phase resolver backed by a :class:`ReadPhasingSource` (#269, #259).
 
     Two variants are cis if the source reports them as co-observed.
-    That's direct molecular evidence — not a probabilistic call.
+    That's direct molecular evidence — not a probabilistic call. Not
+    being co-observed is not evidence of trans, so without the source's
+    own ``in_cis`` the answer is then ``None``.
 
     Usage::
 
@@ -120,8 +128,8 @@ class MolecularPhaseResolver:
     Sources may also expose their own ``in_cis(v1, v2, transcript=None)``
     method. When present, the resolver delegates to that method instead
     of reducing through :meth:`ReadPhasingSource.partners_in_cis`. This
-    lets direct-read sources return ``None`` for pairs without enough
-    co-covering evidence.
+    is how direct-read sources report trans from co-covering fragments
+    and ``None`` for pairs without enough of them.
     """
 
     #: Provenance tag flowing into :attr:`HaplotypeEffect.phase_source`
@@ -150,33 +158,25 @@ class MolecularPhaseResolver:
         return get(variant, transcript)
 
     def in_cis(self, v1, v2, transcript=None) -> Optional[bool]:
-        """Return ``True`` if ``v1`` and ``v2`` are co-observed by the
-        wrapped source, ``False`` if either has evidence but they are
-        never co-observed (distinct physical molecules — trans), and
-        ``None`` when neither has evidence.
+        """Return the source's own ``in_cis`` answer when it has one.
 
-        ``False`` assumes the evidence-bearing reads span the other
-        variant's locus, which holds for nearby variants. Sources that
-        know their coverage should implement ``in_cis`` themselves and
-        return ``None`` for uncovered pairs, as
-        :class:`RNAReadPhasingSource` does.
+        Otherwise ``True`` when the source reports ``v1`` and ``v2`` as
+        co-observed and ``None`` when it doesn't: a variant missing from
+        the other's partners may be uncovered, so partners alone never
+        establish trans.
 
         ``transcript`` is accepted for interface symmetry with
-        :class:`VCFPhaseResolver.in_cis` but isn't consulted at the
-        Protocol layer — isoform-specific sources are not yet a
-        first-class concern. Reintroducible later as an optional
-        Protocol extension.
+        :class:`VCFPhaseResolver.in_cis` and passed to the source's own
+        ``in_cis``; the partners fallback is isoform-agnostic.
         """
-        source_in_cis = getattr(self.phasing_source, "in_cis", None)
+        source = self.phasing_source
+        source_in_cis = getattr(source, "in_cis", None)
         if source_in_cis is not None:
             return source_in_cis(v1, v2, transcript=transcript)
-        v1_has = self.phasing_source.has_evidence(v1)
-        v2_has = self.phasing_source.has_evidence(v2)
-        if not v1_has and not v2_has:
-            return None
-        if v1_has:
-            return v2 in self.phasing_source.partners_in_cis(v1)
-        return v1 in self.phasing_source.partners_in_cis(v2)
+        if ((source.has_evidence(v1) and v2 in source.partners_in_cis(v1))
+                or (source.has_evidence(v2) and v1 in source.partners_in_cis(v2))):
+            return True
+        return None
 
     def phased_partners(self, variant, transcript=None) -> Sequence:
         """Variants co-observed with ``variant`` — i.e. the cis set.

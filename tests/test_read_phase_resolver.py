@@ -103,25 +103,38 @@ def test_in_cis_true_when_both_observed_together():
     assert resolver.in_cis(v1, v2, transcript=transcript) is True
 
 
-def test_in_cis_false_when_observed_on_different_molecules():
+def test_in_cis_none_when_never_co_observed():
+    """Separate supporting reads don't show that either read covered the
+    other locus, so partners alone can't establish trans (#517)."""
     transcript = _cftr()
     v1 = Variant("7", 117531100, "T", "A", ensembl_grch38)
     v2 = Variant("7", 117531114, "G", "T", ensembl_grch38)
     source = StubReadPhasingSource(phasing={v1: (v1,), v2: (v2,)})
     resolver = ReadPhaseResolver(source)
-    assert resolver.in_cis(v1, v2, transcript=transcript) is False
+    assert resolver.in_cis(v1, v2, transcript=transcript) is None
 
 
-def test_in_cis_false_when_only_one_variant_has_evidence():
-    """Without its own ``in_cis``, a source's reads are assumed to span
-    nearby variants, so absence from the partners is read as trans."""
+def test_trans_comes_from_the_source_in_cis():
+    class CoveringSource(StubReadPhasingSource):
+        def in_cis(self, v1, v2, transcript=None):
+            return False
+
+    v1 = Variant("7", 117531100, "T", "A", ensembl_grch38)
+    v2 = Variant("7", 117531114, "G", "T", ensembl_grch38)
+    resolver = ReadPhaseResolver(CoveringSource(phasing={v1: (v1,)}))
+    assert resolver.in_cis(v1, v2, transcript=_cftr()) is False
+
+
+def test_in_cis_none_when_only_one_variant_has_evidence():
+    """A variant outside the source's input, such as a germline SNP an
+    RNA tool never examined, is unknown rather than trans (#517)."""
     transcript = _cftr()
     v1 = Variant("7", 117531100, "T", "A", ensembl_grch38)
     v2 = Variant("7", 117531114, "G", "T", ensembl_grch38)
     source = StubReadPhasingSource(phasing={v1: (v1,)})
     resolver = ReadPhaseResolver(source)
-    assert resolver.in_cis(v1, v2, transcript=transcript) is False
-    assert resolver.in_cis(v2, v1, transcript=transcript) is False
+    assert resolver.in_cis(v1, v2, transcript=transcript) is None
+    assert resolver.in_cis(v2, v1, transcript=transcript) is None
 
 
 def test_in_cis_none_when_no_evidence():

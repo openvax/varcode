@@ -1,5 +1,16 @@
 # Change Log
 
+## [v10.4.0](https://github.com/openvax/varcode/tree/v10.4.0) (2026-09-25)
+
+- `MolecularPhaseResolver` no longer reports trans from a source's partner
+  lists (#517). Variants that are not co-observed are unknown (`None`) unless
+  the source implements its own `in_cis` from fragments that show one alt
+  allele with the other's reference allele. Previously a germline variant
+  outside an RNA source's input, which the source never examined, was
+  reported as trans and collapsed germline-aware annotation to the
+  reference-relative result. Co-observation still establishes cis, so
+  haplotype grouping is unchanged.
+
 ## [v10.3.1](https://github.com/openvax/varcode/tree/v10.3.1) (2026-09-25)
 
 - Pin the optional `test-data` extra to osteosarc 0.7.0, the current release.
