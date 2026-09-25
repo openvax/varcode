@@ -386,6 +386,42 @@ class Unresolved(TranscriptMutationEffect):
         return "unresolved-%s" % self.mechanism.replace("_", "-")
 
 
+class HypothesisLimit(Unresolved):
+    """More alternative outcomes than ``max_hypotheses``, left unenumerated.
+
+    Choosing some of the outcomes would present a guess as a prediction, so
+    this effect records what is known instead. ``phase`` is the
+    :class:`~varcode.PhasePartition` of nearby germline variants (known cis,
+    known trans, unphased), and ``reference_effect`` is the variant's effect
+    without germline context. It ranks like ``reference_effect``, so germline
+    context that cannot be resolved does not change which transcript's
+    effect is selected.
+    """
+
+    def __init__(self, variant, transcript, max_hypotheses, phase,
+                 reference_effect=None):
+        reason = "More than %d alternative outcomes" % max_hypotheses
+        if phase.unphased:
+            reason += " (%d unphased germline variants)" % len(phase.unphased)
+        Unresolved.__init__(
+            self, variant, transcript, mechanism="hypothesis_limit",
+            reason=reason)
+        self.max_hypotheses = max_hypotheses
+        self.phase = phase
+        self.reference_effect = reference_effect
+
+    @property
+    def priority_class(self):
+        """Rank as ``reference_effect`` would in top-priority selection."""
+        from .effect_ordering import (
+            select_between_exonic_splice_site_and_alternate_effect)
+        if self.reference_effect is None:
+            return Unresolved
+        ranked = select_between_exonic_splice_site_and_alternate_effect(
+            self.reference_effect)
+        return getattr(ranked, "priority_class", None) or type(ranked)
+
+
 class NoncodingTranscript(TranscriptMutationEffect):
     """
     Any mutation to a transcript with a non-coding biotype
@@ -1902,7 +1938,7 @@ class PhaseCandidateSet(TranscriptMutationEffect, MultiOutcomeEffect):
         (#259, #382).
 
         ``evidence`` keys: ``phase_state`` (``"phased"`` /
-        ``"implicit"`` / ``"unknown"`` / ``"too_many_hypotheses"``),
+        ``"implicit"`` / ``"unknown"``),
         ``haplotype`` (opaque tag), ``germline_variants`` (tuple of
         the cis germline variants on that hypothesis's haplotype).
         """
@@ -1939,6 +1975,12 @@ class PhaseCandidateSet(TranscriptMutationEffect, MultiOutcomeEffect):
         ambiguity. Consumers wanting the full possibility set read
         :attr:`candidates`."""
         return "?" + self.most_likely_effect.short_description
+
+    @property
+    def priority_class(self):
+        """Rank as the most severe hypothesis, like other outcome sets."""
+        highest = self.highest_priority_effect
+        return getattr(highest, "priority_class", None) or type(highest)
 
     @property
     def mutant_protein_sequence(self):

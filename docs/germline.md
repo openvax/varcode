@@ -8,13 +8,17 @@ different amino acid than the reference codon would suggest.
 
 <a id="phase-enumeration-limit"></a>
 
-!!! warning "Phase enumeration limit"
-    When the phase-hypothesis cap is exceeded, the current implementation
-    classifies one all-cis assignment and marks
-    `germline_phase_state="too_many_hypotheses"`. That result does not resolve
-    phase and should not be treated as a definitive consequence. The default
-    cap is eight hypotheses. A correction that preserves uncertainty is
-    tracked in [#503](https://github.com/openvax/varcode/issues/503).
+!!! note "Phase enumeration limit"
+    Each germline variant of unknown phase doubles the number of cis/trans
+    combinations. When they exceed the cap (default eight, so more than three
+    unphased germline variants in a window), Varcode does not guess a phase.
+    It returns a `HypothesisLimit` effect, a kind of `Unresolved`. Its `phase`
+    records which germline variants are known cis, known trans, or unphased,
+    and its `reference_effect` is the effect without germline context, which
+    it ranks like. Homozygous germline variants are always cis, and variants
+    phased to each other (for example in one VCF phase set) count once, so
+    both reduce the count. To raise the cap, set it on the context:
+    `dataclasses.replace(ctx, max_phase_hypotheses=16)`.
 
 ## Basic usage
 
@@ -148,9 +152,9 @@ represented.
 - **Subclonal somatic and CNV dosage are not modeled.** Every
   somatic variant is treated as 100% present.
 - **Hypothesis cap of 8** by default when phase is unknown across
-  multiple germline variants in a window. Raise via `max_hypotheses=`.
-  Above the cap, the result is not a definitive consequence; see the
-  [phase enumeration limit](#phase-enumeration-limit).
+  multiple germline variants in a window; above it the effect is
+  [unresolved](#phase-enumeration-limit). Change it with
+  `GermlineContext.max_phase_hypotheses`.
 - **Normalization mismatch** between germline and somatic VCFs
   (left-alignment, MNV split) causes apparent position mismatches.
   Normalize both with the same tool first.

@@ -29,6 +29,8 @@ import itertools
 from dataclasses import dataclass, field
 from typing import Any, Mapping, Optional, Tuple
 
+from .errors import HypothesisLimitError
+
 
 @dataclass(frozen=True, order=True)
 class SpliceSiteKey:
@@ -153,8 +155,7 @@ def enumerate_splice_plans(axes, run_keys, max_plans=64):
             continue
         plans.append(SplicePlan(tuple(choices), kept))
         if len(plans) > max_plans:
-            raise ValueError(
-                "Splice hypothesis count exceeds max_plans=%d" % max_plans)
+            raise HypothesisLimitError(max_plans)
     return tuple(plans)
 
 

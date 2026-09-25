@@ -25,6 +25,7 @@ is optional.
 - <a id="varcode.ReferenceMismatchError"></a>[ReferenceMismatchError](api_variants.md#varcode.ReferenceMismatchError)
 - <a id="varcode.SampleNotFoundError"></a>[SampleNotFoundError](api_variants.md#varcode.SampleNotFoundError)
 - <a id="varcode.GenomeBuildMismatchError"></a>[GenomeBuildMismatchError](api_variants.md#varcode.GenomeBuildMismatchError)
+- [HypothesisLimitError](api_variants.md#varcode.HypothesisLimitError)
 
 ## Effects
 
@@ -48,11 +49,14 @@ is optional.
 - <a id="varcode.ReadPhaseResolver"></a>[ReadPhaseResolver](api_phasing.md#varcode.ReadPhaseResolver)
 - <a id="varcode.RNAReadPhasingSource"></a><a id="varcode.RNAReadPhasingSource.close"></a><a id="varcode.RNAReadPhasingSource.register_variants"></a><a id="varcode.RNAReadPhasingSource.register_haplotype"></a><a id="varcode.RNAReadPhasingSource.supports_variant"></a><a id="varcode.RNAReadPhasingSource.has_evidence"></a><a id="varcode.RNAReadPhasingSource.in_cis"></a><a id="varcode.RNAReadPhasingSource.partners_in_cis"></a>[RNAReadPhasingSource](api_phasing.md#varcode.RNAReadPhasingSource)
 - <a id="varcode.VCFPhaseResolver"></a><a id="varcode.VCFPhaseResolver.in_cis"></a><a id="varcode.VCFPhaseResolver.phased_partners"></a>[VCFPhaseResolver](api_phasing.md#varcode.VCFPhaseResolver)
+- [query_in_cis](api_phasing.md#varcode.query_in_cis)
 - <a id="varcodeapply_phase_resolver_to_effects"></a><a id="varcode.apply_phase_resolver_to_effects"></a>[apply_phase_resolver_to_effects](api_phasing.md#varcode.apply_phase_resolver_to_effects)
 - <a id="varcode.GermlineContext"></a><a id="varcode.GermlineContext.from_germline_vcf"></a><a id="varcode.GermlineContext.from_multi_sample_vcf"></a><a id="varcode.GermlineContext.from_variants"></a><a id="varcode.GermlineContext.empty"></a><a id="varcode.GermlineContext.__bool__"></a><a id="varcode.GermlineContext.validate_against"></a><a id="varcode.GermlineContext.variants_in_window"></a>[GermlineContext](api_phasing.md#varcode.GermlineContext)
 - <a id="varcode.Completeness"></a>[Completeness](api_phasing.md#varcode.Completeness)
 - <a id="varcodepredict_germline_aware_effect"></a><a id="varcode.predict_germline_aware_effect"></a>[predict_germline_aware_effect](api_phasing.md#varcode.predict_germline_aware_effect)
 - <a id="varcodeapply_germline_to_transcript"></a><a id="varcode.apply_germline_to_transcript"></a>[apply_germline_to_transcript](api_phasing.md#varcode.apply_germline_to_transcript)
+- [partition_germline_by_phase](api_phasing.md#varcode.partition_germline_by_phase)
+- [PhasePartition](api_phasing.md#varcode.PhasePartition)
 - <a id="varcodeenumerate_phase_hypotheses"></a><a id="varcode.enumerate_phase_hypotheses"></a>[enumerate_phase_hypotheses](api_phasing.md#varcode.enumerate_phase_hypotheses)
 - <a id="varcode.detect_germline_overlap"></a>[detect_germline_overlap](api_phasing.md#varcode.detect_germline_overlap)
 - <a id="varcode.GermlineAlleleOverlap"></a>[GermlineAlleleOverlap](api_phasing.md#varcode.GermlineAlleleOverlap)

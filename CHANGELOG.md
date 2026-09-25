@@ -1,5 +1,31 @@
 # Change Log
 
+## [v10.3.0](https://github.com/openvax/varcode/tree/v10.3.0) (2026-09-24)
+
+- Unenumerated phase no longer becomes a precise all-cis consequence (#503).
+  When germline phase needs more hypotheses than the cap, the default path and
+  the experimental `transcript_model` return a new `HypothesisLimit` effect (a
+  kind of `Unresolved`). It records the phase partition and the effect without
+  germline context, ranks as that effect would in top-priority selection, and
+  round-trips through JSON.
+- New public helpers: `partition_germline_by_phase` returns a `PhasePartition`
+  whose `hypotheses()` enumerates only what is unknown. Homozygous germline
+  variants are always cis, phase follows through germline-to-germline answers,
+  and variants phased to each other flip as one block, so partial evidence is
+  kept and impossible combinations are not generated. `query_in_cis` gives
+  every caller one policy for asking a resolver (NumPy booleans accepted;
+  resolver errors logged and treated as unknown). Exceeding the cap raises a
+  picklable `HypothesisLimitError`; `enumerate_phase_hypotheses` now raises it
+  instead of returning an all-cis placeholder.
+- The phase cap is `GermlineContext.max_phase_hypotheses` (default 8), so
+  `effects(germline=...)` can raise it. Caps must be positive integers (NumPy
+  integers accepted). `transcript_model` uses the context's cap through
+  `effects()`, and its combined phase/splice overflow now returns
+  `HypothesisLimit` instead of raising.
+- `PhaseCandidateSet` now ranks as its most severe candidate instead of below
+  every other effect. Noncoding and incompletely annotated transcripts skip
+  phase enumeration, and haplotype labels depend only on the cis set.
+
 ## [v10.2.1](https://github.com/openvax/varcode/tree/v10.2.1) (2026-09-24)
 
 - Documentation readability pass: the README and docs home now describe what

@@ -46,3 +46,5 @@ For examples, see [file loading](getting_started.md#load-a-file),
 ::: varcode.SampleNotFoundError
 
 ::: varcode.GenomeBuildMismatchError
+
+::: varcode.HypothesisLimitError

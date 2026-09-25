@@ -19,6 +19,8 @@ for input requirements and examples.
 
 ::: varcode.apply_phase_resolver_to_effects
 
+::: varcode.query_in_cis
+
 ## Germline-aware annotation
 
 ::: varcode.GermlineContext
@@ -28,6 +30,10 @@ for input requirements and examples.
 ::: varcode.predict_germline_aware_effect
 
 ::: varcode.apply_germline_to_transcript
+
+::: varcode.partition_germline_by_phase
+
+::: varcode.PhasePartition
 
 ::: varcode.enumerate_phase_hypotheses
 

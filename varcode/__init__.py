@@ -24,7 +24,11 @@ from .annotators import (
     set_default_annotator,
     use_annotator,
 )
-from .errors import ReferenceMismatchError, SampleNotFoundError
+from .errors import (
+    HypothesisLimitError,
+    ReferenceMismatchError,
+    SampleNotFoundError,
+)
 from .genome import Genome
 from .genome_sequence import reference_base, reference_range
 from .germline import (
@@ -32,11 +36,13 @@ from .germline import (
     GermlineContext,
     Completeness,
     PhaseHypothesis,
+    PhasePartition,
     apply_germline_to_transcript,
     default_germline_window,
     detect_loh,
     detect_germline_overlap,
     enumerate_phase_hypotheses,
+    partition_germline_by_phase,
     predict_germline_aware_effect,
 )
 from .genotype import Genotype, Zygosity
@@ -61,6 +67,7 @@ from .phasing import (
     ReadPhasingSource,
     VCFPhaseResolver,
     apply_phase_resolver_to_effects,
+    query_in_cis,
 )
 from .rna_read_phasing import RNAReadPhasingSource
 from .rna_evidence import (
@@ -104,6 +111,7 @@ from .effects import (
     MultiOutcomeEffect,
     MutationEffect,
     NonsilentCodingMutation,
+    HypothesisLimit,
     Unresolved,
     GermlineAlleleOverlap,
 )
@@ -179,6 +187,7 @@ __all__ = [
     "RNAReadPhasingSource",
     "VCFPhaseResolver",
     "apply_phase_resolver_to_effects",
+    "query_in_cis",
 
     # RNA-evidence resolver (openvax/varcode#259)
     "RNAEvidenceResolver",
@@ -206,6 +215,7 @@ __all__ = [
     "top_priority_effect",
     "MultiOutcomeEffect",
     "MutationEffect",
+    "HypothesisLimit",
     "Unresolved",
     "NonsilentCodingMutation",
 
@@ -213,17 +223,20 @@ __all__ = [
     "ReferenceMismatchError",
     "SampleNotFoundError",
     "GenomeBuildMismatchError",
+    "HypothesisLimitError",
 
     # Germline-aware annotation (openvax/varcode#268)
     "GermlineContext",
     "Completeness",
     "PhaseHypothesis",
+    "PhasePartition",
     "apply_germline_to_transcript",
     "default_germline_window",
     "detect_loh",
     "detect_germline_overlap",
     "GermlineAlleleOverlap",
     "enumerate_phase_hypotheses",
+    "partition_germline_by_phase",
     "predict_germline_aware_effect",
 
     # Genome wrapper + tiered reference lookup (openvax/varcode#372)

@@ -29,6 +29,31 @@ test stubs).
 import logging
 from typing import Optional, Protocol, Sequence, runtime_checkable
 
+logger = logging.getLogger(__name__)
+
+
+def query_in_cis(phase_resolver, v1, v2, transcript=None) -> Optional[bool]:
+    """Ask ``phase_resolver`` whether ``v1`` and ``v2`` are in cis.
+
+    Returns ``True`` (cis), ``False`` (trans) or ``None`` (unknown). NumPy
+    booleans count as booleans. No resolver, a non-boolean answer, or a
+    resolver error gives ``None``; errors are logged as warnings so a
+    broken resolver is visible without failing annotation. ``transcript``
+    is passed only when given, so two-argument resolvers keep working.
+    """
+    in_cis = getattr(phase_resolver, "in_cis", None)
+    if in_cis is None:
+        return None
+    try:
+        answer = (in_cis(v1, v2) if transcript is None
+                  else in_cis(v1, v2, transcript=transcript))
+    except Exception as error:
+        logger.warning(
+            "Phase resolver %s failed for %s and %s: %s",
+            type(phase_resolver).__name__, v1, v2, error)
+        return None
+    return bool(answer) if answer in (True, False) else None
+
 
 @runtime_checkable
 class ReadPhasingSource(Protocol):
@@ -126,9 +151,15 @@ class MolecularPhaseResolver:
 
     def in_cis(self, v1, v2, transcript=None) -> Optional[bool]:
         """Return ``True`` if ``v1`` and ``v2`` are co-observed by the
-        wrapped source, ``False`` if exactly one has evidence (so they
-        are on distinct physical molecules — trans), ``None`` when
-        neither has evidence.
+        wrapped source, ``False`` if either has evidence but they are
+        never co-observed (distinct physical molecules — trans), and
+        ``None`` when neither has evidence.
+
+        ``False`` assumes the evidence-bearing reads span the other
+        variant's locus, which holds for nearby variants. Sources that
+        know their coverage should implement ``in_cis`` themselves and
+        return ``None`` for uncovered pairs, as
+        :class:`RNAReadPhasingSource` does.
 
         ``transcript`` is accepted for interface symmetry with
         :class:`VCFPhaseResolver.in_cis` but isn't consulted at the
@@ -401,12 +432,8 @@ def build_haplotype_effects(
 
         for i in range(len(unique)):
             for j in range(i + 1, len(unique)):
-                try:
-                    cis = phase_resolver.in_cis(
-                        unique[i], unique[j], transcript=transcript)
-                except Exception:
-                    cis = None
-                if cis is True:
+                if query_in_cis(
+                        phase_resolver, unique[i], unique[j], transcript):
                     union(i, j)
         groups = {}
         for i in range(len(unique)):
@@ -422,7 +449,7 @@ def build_haplotype_effects(
             except (AssertionError, ValueError) as error:
                 if raise_on_error:
                     raise
-                logging.getLogger(__name__).warning(
+                logger.warning(
                     "Encountered error annotating cis group %s for %s: %s",
                     members, transcript, error)
                 result = Failure(members[0], transcript)
