@@ -1,5 +1,12 @@
 # Change Log
 
+## [v10.5.1](https://github.com/openvax/varcode/tree/v10.5.1) (2026-09-25)
+
+- Document Isovar as an RNA phase source (`IsovarReadPhasing` with
+  `MolecularPhaseResolver`, Isovar ≥1.36), what it can and cannot resolve, and
+  compatible Varcode/Isovar/Vaxrank versions. Remove the stale note that
+  Vaxrank's DNA fallback collapses fusion candidates.
+
 ## [v10.5.0](https://github.com/openvax/varcode/tree/v10.5.0) (2026-09-25)
 
 - A reference name can choose an Ensembl release: `"GRCh38:93"`, or

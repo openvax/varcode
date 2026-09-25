@@ -62,6 +62,33 @@ their own `in_cis`. Raw BAM phasing does not provide an assembled
 [source protocols](api_phasing.md#phasing).
 `ReadPhaseResolver` remains a compatibility name for `MolecularPhaseResolver`.
 
+<a id="rna-phase-from-isovar"></a>
+
+### RNA phase from Isovar
+
+Isovar's results can serve as the phasing source. Give `run_isovar` the matched
+germline variants so they are recognized in the assembled RNA:
+
+```python
+from isovar import IsovarReadPhasing, run_isovar
+from varcode import MolecularPhaseResolver
+
+results = run_isovar(
+    variants=somatic_variants,
+    alignment_file="tumor.rna.bam",
+    germline_variants=germline_ctx.variants,
+)
+phaser = MolecularPhaseResolver(IsovarReadPhasing(results))
+effects = somatic_variants.effects(germline=germline_ctx, phase_resolver=phaser)
+```
+
+With Isovar 1.36 or later, `IsovarReadPhasing.in_cis` answers from fragments
+that cover both variants: cis when they carry both alt alleles, trans when they
+carry one alt allele with the other's reference allele. A matched germline
+variant is cis when its edit is in the somatic variant's assembled RNA.
+Otherwise it stays unknown, because Isovar only examines the variants in its
+run, so Varcode keeps every phase hypothesis for it.
+
 ## Unknown phase
 
 When a somatic and germline variant share a codon and relative phase is unknown,
