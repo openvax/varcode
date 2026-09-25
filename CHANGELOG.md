@@ -2,18 +2,28 @@
 
 ## [v10.3.0](https://github.com/openvax/varcode/tree/v10.3.0) (2026-09-24)
 
-- Exceeding the germline phase-hypothesis cap now returns
-  `Unresolved(mechanism="phase_hypothesis_limit")` instead of classifying an
-  assumed all-cis haplotype as a precise consequence (#503). This applies to
-  the default path and the experimental `transcript_model`. The effect's new
-  `evidence` records the cap, the required count, and the known cis, known
-  trans, and unphased germline variants, and survives priority selection and
-  JSON round trips.
-- `enumerate_phase_hypotheses` keeps a resolver's partial cis/trans answers
-  and enumerates only the unanswered germline variants. Its capped placeholder
-  records known phase plus a new `PhaseHypothesis.unphased` field rather than
-  marking every variant cis.
-- `max_hypotheses` must be a positive integer; other values raise `ValueError`.
+- Unenumerated phase no longer becomes a precise all-cis consequence (#503).
+  When unphased germline variants need more cis/trans hypotheses than the
+  cap, the default path and the experimental `transcript_model` return a new
+  `HypothesisLimit` effect (a kind of `Unresolved`). It records the phase
+  partition and the effect without germline context, ranks like that
+  reference effect, and round-trips through JSON.
+- New public helpers: `partition_germline_by_phase` returns a `PhasePartition`
+  (known cis, known trans, unphased) whose `hypotheses()` enumerates only the
+  unphased variants, so partial phase evidence is kept rather than discarded.
+  Exceeding the cap raises `HypothesisLimitError`; `enumerate_phase_hypotheses`
+  now raises it instead of returning an all-cis placeholder.
+- The phase cap is `GermlineContext.max_phase_hypotheses` (default 8), so
+  `effects(germline=...)` can raise it. Caps must be positive integers (NumPy
+  integers accepted). `transcript_model` uses the same phase cap, and its
+  combined phase/splice overflow now returns `HypothesisLimit` instead of
+  raising.
+- Noncoding and incompletely annotated transcripts skip phase enumeration.
+  Haplotype labels depend only on the cis set. Phase resolver errors now
+  propagate instead of being treated as unknown phase.
+- `MolecularPhaseResolver.in_cis` no longer reports trans when only one
+  variant has read evidence; that pair is now unknown.
+
 ## [v10.2.1](https://github.com/openvax/varcode/tree/v10.2.1) (2026-09-24)
 
 - Documentation readability pass: the README and docs home now describe what

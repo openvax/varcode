@@ -25,6 +25,7 @@ is optional.
 - <a id="varcode.ReferenceMismatchError"></a>[ReferenceMismatchError](api_variants.md#varcode.ReferenceMismatchError)
 - <a id="varcode.SampleNotFoundError"></a>[SampleNotFoundError](api_variants.md#varcode.SampleNotFoundError)
 - <a id="varcode.GenomeBuildMismatchError"></a>[GenomeBuildMismatchError](api_variants.md#varcode.GenomeBuildMismatchError)
+- [HypothesisLimitError](api_variants.md#varcode.HypothesisLimitError)
 
 ## Effects
 
@@ -53,6 +54,8 @@ is optional.
 - <a id="varcode.Completeness"></a>[Completeness](api_phasing.md#varcode.Completeness)
 - <a id="varcodepredict_germline_aware_effect"></a><a id="varcode.predict_germline_aware_effect"></a>[predict_germline_aware_effect](api_phasing.md#varcode.predict_germline_aware_effect)
 - <a id="varcodeapply_germline_to_transcript"></a><a id="varcode.apply_germline_to_transcript"></a>[apply_germline_to_transcript](api_phasing.md#varcode.apply_germline_to_transcript)
+- [partition_germline_by_phase](api_phasing.md#varcode.partition_germline_by_phase)
+- [PhasePartition](api_phasing.md#varcode.PhasePartition)
 - <a id="varcodeenumerate_phase_hypotheses"></a><a id="varcode.enumerate_phase_hypotheses"></a>[enumerate_phase_hypotheses](api_phasing.md#varcode.enumerate_phase_hypotheses)
 - <a id="varcode.detect_germline_overlap"></a>[detect_germline_overlap](api_phasing.md#varcode.detect_germline_overlap)
 - <a id="varcode.GermlineAlleleOverlap"></a>[GermlineAlleleOverlap](api_phasing.md#varcode.GermlineAlleleOverlap)

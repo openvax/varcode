@@ -19,33 +19,43 @@ the ref alleles fail loudly rather than silently mis-classifying.
 """
 from __future__ import annotations
 
+import dataclasses
+import math
 import os
 import tempfile
 import warnings
 
+import numpy as np
 import pytest
 
 from pyensembl import cached_release
 
 from varcode import (
     Completeness,
+    EffectCollection,
     GenomeBuildMismatchError,
     GermlineContext,
+    HypothesisLimit,
+    HypothesisLimitError,
+    PhasePartition,
+    Unresolved,
     Variant,
     VariantCollection,
     apply_germline_to_transcript,
     detect_loh,
     detect_germline_overlap,
+    effect_priority,
     enumerate_phase_hypotheses,
     load_vcf,
+    partition_germline_by_phase,
     predict_germline_aware_effect,
 )
 from varcode.annotators.registry import get_default_annotator
-from varcode.effects import EffectCollection
 from varcode.effects.effect_classes import (
+    IncompleteTranscript,
     PhaseCandidateSet,
     Substitution,
-    Unresolved,
+    ThreePrimeUTR,
 )
 
 
@@ -405,57 +415,18 @@ class TestHemizygous:
 # --------------------------------------------------------------------
 
 
-class TestHypothesisCap:
-    """When 2^n exceeds the cap, emit a single too_many_hypotheses
-    placeholder that records known and unknown phase without assuming
-    either. Default cap is 8 ⇒ up to 3 unphased germline variants."""
+def _germline_at(pos, contig="7"):
+    return Variant(contig=contig, start=pos, ref="A", alt="T",
+                   genome=ensembl_grch38)
 
-    def _germline(self, pos):
-        return Variant(contig="7", start=pos, ref="A", alt="T",
-                       genome=ensembl_grch38)
 
-    def _somatic(self):
-        return Variant(contig="7", start=100, ref="A", alt="T",
-                       genome=ensembl_grch38)
-
-    def test_under_cap_enumerates(self):
-        germ = [self._germline(101), self._germline(102)]
-        # 2 germline → 4 hypotheses, under default cap of 8.
-        hyps = enumerate_phase_hypotheses(self._somatic(), germ)
-        assert len(hyps) == 4
-
-    def test_over_cap_placeholder_does_not_assume_phase(self):
-        # 4 germline → 16 hypotheses, over default cap (#503).
-        germ = [self._germline(p) for p in range(101, 105)]
-        hyps = enumerate_phase_hypotheses(self._somatic(), germ)
-        assert len(hyps) == 1
-        assert hyps[0].phase_state == "too_many_hypotheses"
-        assert hyps[0].cis == ()
-        assert hyps[0].trans == ()
-        assert hyps[0].unphased == tuple(germ)
-
-    def test_caller_can_raise_cap(self):
-        germ = [self._germline(p) for p in range(101, 105)]
-        # Raise the cap to 32 → 16 hypotheses now fit.
-        hyps = enumerate_phase_hypotheses(
-            self._somatic(), germ, max_hypotheses=32)
-        assert len(hyps) == 16
-
-    @pytest.mark.parametrize("cap", [0, -1, True, 2.0, "8", None])
-    def test_invalid_cap_rejected(self, cap):
-        with pytest.raises(ValueError, match="max_hypotheses"):
-            enumerate_phase_hypotheses(
-                self._somatic(), [self._germline(101)], max_hypotheses=cap)
-        ctx = GermlineContext.from_variants(
-            [_same_codon_germline()], reference_name="GRCh38")
-        with pytest.raises(ValueError, match="max_hypotheses"):
-            predict_germline_aware_effect(
-                _somatic(), _cftr(), ctx, get_default_annotator(),
-                max_hypotheses=cap)
+def _somatic_at(pos=100, contig="7"):
+    return Variant(contig=contig, start=pos, ref="A", alt="T",
+                   genome=ensembl_grch38)
 
 
 class _PartialPhaseResolver:
-    """Places some germline variants and leaves the others unknown."""
+    """Places some germline variants by position; others stay unknown."""
 
     def __init__(self, answers):
         self._answers = answers
@@ -464,90 +435,156 @@ class _PartialPhaseResolver:
         return self._answers.get(germline.start)
 
 
-class TestKnownPhaseConstraints:
-    """Resolver answers for some pairs fix those pairs in every
-    hypothesis; only the unanswered pairs are enumerated (#503)."""
+class TestPartitionGermlineByPhase:
+    def test_without_resolver_everything_is_unphased(self):
+        germ = [_germline_at(101), _germline_at(102)]
+        phase = partition_germline_by_phase(_somatic_at(), germ)
+        assert phase == PhasePartition(germline=tuple(germ))
+        assert phase.unphased == tuple(germ)
 
-    def _germline(self, pos):
-        return Variant(contig="7", start=pos, ref="A", alt="T",
-                       genome=ensembl_grch38)
+    def test_resolver_answers_split_cis_trans_and_unphased(self):
+        germ = [_germline_at(p) for p in (101, 102, 103)]
+        phase = partition_germline_by_phase(
+            _somatic_at(), germ,
+            _PartialPhaseResolver({101: True, 102: False, 103: "maybe"}))
+        assert phase.cis == (germ[0],)
+        assert phase.trans == (germ[1],)
+        assert phase.unphased == (germ[2],)
 
-    def _somatic(self):
-        return Variant(contig="7", start=100, ref="A", alt="T",
-                       genome=ensembl_grch38)
+    def test_hemizygous_contig_is_implicitly_cis(self):
+        germ = [_germline_at(101, contig="MT")]
+        phase = partition_germline_by_phase(_somatic_at(contig="MT"), germ)
+        assert phase == PhasePartition(
+            germline=tuple(germ), cis=tuple(germ), implicit=True)
 
-    def test_partial_answers_constrain_enumeration(self):
-        germ = [self._germline(p) for p in (101, 102, 103)]
+    def test_resolver_errors_propagate(self):
+        class Broken:
+            def in_cis(self, somatic, germline):
+                raise KeyError("contig naming mismatch")
+
+        with pytest.raises(KeyError):
+            partition_germline_by_phase(
+                _somatic_at(), [_germline_at(101)], Broken())
+
+
+class TestPhasePartitionHypotheses:
+    def test_known_phase_gives_one_hypothesis(self):
+        g1, g2 = _germline_at(101), _germline_at(102)
+        (h,) = PhasePartition(
+            germline=(g1, g2), cis=(g1,), trans=(g2,)).hypotheses()
+        assert (h.cis, h.trans, h.phase_state) == ((g1,), (g2,), "phased")
+        (h,) = PhasePartition(
+            germline=(g1,), cis=(g1,), implicit=True).hypotheses()
+        assert h.phase_state == "implicit"
+
+    def test_enumerates_only_unphased_variants(self):
+        g1, g2, g3 = (_germline_at(p) for p in (101, 102, 103))
+        phase = PhasePartition(germline=(g1, g2, g3), cis=(g1,), trans=(g2,))
+        hyps = phase.hypotheses()
+        assert phase.hypothesis_count == len(hyps) == 2
+        assert all(g1 in h.cis and g2 in h.trans for h in hyps)
+        assert {g3 in h.cis for h in hyps} == {True, False}
+        assert {h.phase_state for h in hyps} == {"unknown"}
+
+    def test_labels_depend_only_on_the_cis_set(self):
+        germ = tuple(_germline_at(p) for p in (101, 102, 103))
+        unknown = {h.cis: h.haplotype
+                   for h in PhasePartition(germline=germ).hypotheses()}
+        partly_known = PhasePartition(germline=germ, trans=germ[:1])
+        for h in partly_known.hypotheses():
+            assert h.haplotype == unknown[h.cis]
+
+    def test_exceeding_the_cap_raises(self):
+        germ = tuple(_germline_at(p) for p in range(101, 105))
+        with pytest.raises(HypothesisLimitError) as error:
+            PhasePartition(germline=germ).hypotheses()
+        assert error.value.max_hypotheses == 8
+        assert len(PhasePartition(germline=germ).hypotheses(16)) == 16
+
+    def test_numpy_integer_cap_is_accepted(self):
+        phase = PhasePartition(germline=(_germline_at(101),))
+        assert len(phase.hypotheses(np.int64(2))) == 2
+
+    @pytest.mark.parametrize("cap", [0, -1, True, 2.0, math.inf, "8", None])
+    def test_invalid_cap_is_rejected(self, cap):
+        with pytest.raises(ValueError, match="max_hypotheses"):
+            PhasePartition().hypotheses(cap)
+        with pytest.raises(ValueError, match="max_phase_hypotheses"):
+            dataclasses.replace(
+                GermlineContext.empty(), max_phase_hypotheses=cap)
+
+
+class TestEnumeratePhaseHypotheses:
+    def test_under_cap_enumerates(self):
+        germ = [_germline_at(101), _germline_at(102)]
+        assert len(enumerate_phase_hypotheses(_somatic_at(), germ)) == 4
+
+    def test_partial_resolver_answers_avoid_the_cap(self):
+        germ = [_germline_at(p) for p in range(101, 105)]
+        with pytest.raises(HypothesisLimitError):
+            enumerate_phase_hypotheses(_somatic_at(), germ)
         resolver = _PartialPhaseResolver({101: True, 102: False})
         hyps = enumerate_phase_hypotheses(
-            self._somatic(), germ, phase_resolver=resolver)
-        assert len(hyps) == 2
-        for h in hyps:
-            assert germ[0] in h.cis
-            assert germ[1] in h.trans
-            assert h.phase_state == "unknown"
-        assert {germ[2] in h.cis for h in hyps} == {True, False}
-
-    def test_partial_answers_can_avoid_the_cap(self):
-        # Four germline variants would need 16 hypotheses, but two are
-        # phased, so only 4 remain.
-        germ = [self._germline(p) for p in range(101, 105)]
-        resolver = _PartialPhaseResolver({101: True, 102: False})
-        hyps = enumerate_phase_hypotheses(
-            self._somatic(), germ, phase_resolver=resolver)
+            _somatic_at(), germ, phase_resolver=resolver)
         assert len(hyps) == 4
 
-    def test_capped_placeholder_keeps_known_phase(self):
-        germ = [self._germline(p) for p in range(101, 105)]
-        resolver = _PartialPhaseResolver({101: True, 102: False})
-        (h,) = enumerate_phase_hypotheses(
-            self._somatic(), germ, phase_resolver=resolver, max_hypotheses=2)
-        assert h.phase_state == "too_many_hypotheses"
-        assert h.cis == (germ[0],)
-        assert h.trans == (germ[1],)
-        assert h.unphased == (germ[2], germ[3])
 
-
-class TestHypothesisCapEndToEnd:
-    """An exceeded cap must stay unresolved rather than become the cis
+class TestHypothesisLimit:
+    """Unenumerated phase stays unresolved instead of becoming the cis
     consequence (#503). The CFTR pair has differing alternatives:
     p.L159M in trans and p.S159T in cis."""
 
-    def _ctx(self):
-        return GermlineContext.from_variants(
-            [_same_codon_germline()], reference_name="GRCh38")
+    def _ctx(self, max_phase_hypotheses=8):
+        return dataclasses.replace(
+            GermlineContext.from_variants(
+                [_same_codon_germline()], reference_name="GRCh38"),
+            max_phase_hypotheses=max_phase_hypotheses)
+
+    def _predict(self, ctx, transcript=None, **kwargs):
+        return predict_germline_aware_effect(
+            _somatic(), transcript or _cftr(), ctx, get_default_annotator(),
+            **kwargs)
 
     def test_under_cap_keeps_both_alternatives(self):
-        e = predict_germline_aware_effect(
-            _somatic(), _cftr(), self._ctx(), get_default_annotator())
+        e = self._predict(self._ctx())
         assert isinstance(e, PhaseCandidateSet)
         assert {c.effect.short_description for c in e.candidates} == {
             "p.L159M", "p.S159T"}
 
-    def test_exceeded_cap_is_unresolved(self):
-        e = predict_germline_aware_effect(
-            _somatic(), _cftr(), self._ctx(), get_default_annotator(),
-            max_hypotheses=1)
+    def test_exceeded_cap_records_phase_and_reference(self):
+        e = self._predict(self._ctx(max_phase_hypotheses=1))
+        assert isinstance(e, HypothesisLimit)
         assert isinstance(e, Unresolved)
-        assert e.mechanism == "phase_hypothesis_limit"
+        assert e.short_description == "unresolved-hypothesis-limit"
         assert e.modifies_protein_sequence is None
-        assert e.germline_phase_state == "too_many_hypotheses"
-        assert e.evidence["max_hypotheses"] == 1
-        assert e.evidence["required_hypotheses"] == 2
-        assert e.evidence["unphased"] == (_same_codon_germline(),)
-        assert e.evidence["cis"] == ()
-        assert e.evidence["trans"] == ()
+        assert e.mutant_protein_sequence is None
+        assert e.max_hypotheses == 1
+        assert e.phase == PhasePartition(germline=(_same_codon_germline(),))
+        assert e.reference_effect.short_description == "p.L159M"
+
+    def test_effects_uses_the_context_cap(self):
+        variant = _somatic()
+        (e,) = [e for e in variant.effects(germline=self._ctx(1))
+                if e.transcript.id == CFTR_ID]
+        assert isinstance(e, HypothesisLimit)
+
+    def test_explicit_cap_overrides_the_context(self):
+        e = self._predict(self._ctx(max_phase_hypotheses=1), max_hypotheses=2)
+        assert isinstance(e, PhaseCandidateSet)
 
     def test_known_phase_under_small_cap_still_classifies(self):
-        e = predict_germline_aware_effect(
-            _somatic(), _cftr(), self._ctx(), get_default_annotator(),
-            phase_resolver=_StubPhaseResolver(in_cis_answer=True),
-            max_hypotheses=1)
+        e = self._predict(
+            self._ctx(max_phase_hypotheses=1),
+            phase_resolver=_StubPhaseResolver(in_cis_answer=True))
         assert e.short_description == "p.S159T"
         assert e.germline_phase_state == "phased"
 
+    def test_phase_independent_transcript_ignores_the_cap(self):
+        incomplete = ensembl_grch38.transcript_by_id("ENST00000426809")
+        e = self._predict(self._ctx(max_phase_hypotheses=1), incomplete)
+        assert isinstance(e, IncompleteTranscript)
+
     def test_four_unphased_variants_exceed_default_cap(self):
-        transcript = _cftr()
         germline = [
             Variant(contig="7", start=pos, ref="A", alt="G",
                     genome=ensembl_grch38)
@@ -557,37 +594,27 @@ class TestHypothesisCapEndToEnd:
         def whole_transcript(variant, transcript):
             return transcript.contig, transcript.start, transcript.end
 
-        e = predict_germline_aware_effect(
-            _somatic(), transcript, ctx, get_default_annotator(),
-            window_fn=whole_transcript)
-        assert isinstance(e, Unresolved)
-        assert e.evidence["required_hypotheses"] == 16
-        assert e.evidence["unphased"] == tuple(germline)
+        e = self._predict(ctx, window_fn=whole_transcript)
+        assert isinstance(e, HypothesisLimit)
+        assert e.phase.unphased == tuple(germline)
 
-    def test_unresolved_survives_priority_selection_and_json(self):
-        e = predict_germline_aware_effect(
-            _somatic(), _cftr(), self._ctx(), get_default_annotator(),
-            max_hypotheses=1)
-        collection = EffectCollection([e])
-        assert collection.top_priority_effect() is e
-        restored = EffectCollection.from_json(collection.to_json())[0]
+    def test_ranks_like_the_reference_effect(self):
+        e = self._predict(self._ctx(max_phase_hypotheses=1))
+        assert effect_priority(e) == effect_priority(e.reference_effect)
+        sibling_utr = ThreePrimeUTR(
+            _somatic(), ensembl_grch38.transcript_by_id("ENST00000426809"))
+        effects = EffectCollection([sibling_utr, e])
+        assert effects.top_priority_effect_per_variant()[_somatic()] is e
+
+    def test_json_round_trip(self):
+        e = self._predict(self._ctx(max_phase_hypotheses=1))
+        restored = EffectCollection.from_json(
+            EffectCollection([e]).to_json())[0]
         assert restored == e
         assert hash(restored) == hash(e)
-        assert restored.mechanism == "phase_hypothesis_limit"
+        assert restored.phase == e.phase
         assert restored.reason == e.reason
-        assert restored.evidence == e.evidence
-
-    def test_transcript_model_exceeded_cap_is_unresolved(self):
-        from varcode.transcript_model import predict_transcript_model_effect
-        e = predict_transcript_model_effect(
-            [_somatic()], _cftr(), germline_variants=[_same_codon_germline()],
-            max_hypotheses=1)
-        assert isinstance(e, Unresolved)
-        assert e.mechanism == "phase_hypothesis_limit"
-        assert e.evidence["unphased"] == (_same_codon_germline(),)
-        with pytest.raises(ValueError, match="max_hypotheses"):
-            predict_transcript_model_effect(
-                [_somatic()], _cftr(), max_hypotheses=0)
+        assert restored.reference_effect == e.reference_effect
 
 
 # --------------------------------------------------------------------

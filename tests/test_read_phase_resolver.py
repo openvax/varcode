@@ -110,6 +110,18 @@ def test_in_cis_false_when_observed_on_different_molecules():
     assert resolver.in_cis(v1, v2, transcript=transcript) is False
 
 
+def test_in_cis_none_when_only_one_variant_has_evidence():
+    """A variant without evidence may be uncovered, so its absence from
+    the other variant's partners is not evidence of trans."""
+    transcript = _cftr()
+    v1 = Variant("7", 117531100, "T", "A", ensembl_grch38)
+    v2 = Variant("7", 117531114, "G", "T", ensembl_grch38)
+    source = StubReadPhasingSource(phasing={v1: (v1,)})
+    resolver = ReadPhaseResolver(source)
+    assert resolver.in_cis(v1, v2, transcript=transcript) is None
+    assert resolver.in_cis(v2, v1, transcript=transcript) is None
+
+
 def test_in_cis_none_when_no_evidence():
     transcript = _cftr()
     v1 = Variant("7", 117531100, "T", "A", ensembl_grch38)

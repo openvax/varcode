@@ -1,5 +1,6 @@
 """End-to-end tests for the experimental transcript model."""
 
+import dataclasses
 import pickle
 import subprocess
 import sys
@@ -10,9 +11,12 @@ from pyensembl import cached_release
 from varcode import (
     Completeness,
     GermlineContext,
+    HypothesisLimit,
+    PhasePartition,
     StructuralVariant,
     TranscriptModelEffectAnnotator,
     Variant,
+    effect_priority,
     get_default_annotator,
     get_annotator,
     predict_transcript_model_effect,
@@ -184,10 +188,53 @@ def test_combined_phase_and_splice_hypotheses_obey_global_cap():
     somatic = point(11, "G", "A")
     germline = point(9, "A", "G")
 
-    with pytest.raises(ValueError, match="Combined phase/splice"):
-        predict_transcript_model_effect(
-            (somatic,), transcript, germline_variants=(germline,),
-            sequence_provider=provider(), max_hypotheses=7)
+    result = predict_transcript_model_effect(
+        (somatic,), transcript, germline_variants=(germline,),
+        sequence_provider=provider(), max_hypotheses=7)
+
+    assert isinstance(result, HypothesisLimit)
+    assert result.max_hypotheses == 7
+    assert result.phase == PhasePartition(germline=(germline,))
+    assert result.reference_effect == predict_transcript_model_effect(
+        (somatic,), transcript, sequence_provider=provider(), max_hypotheses=7)
+
+
+def test_phase_cap_gives_hypothesis_limit_ranked_like_reference():
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    somatic = Variant("7", 117531100, "T", "A", ensembl_grch38)
+    germline = Variant("7", 117531101, "T", "C", ensembl_grch38)
+
+    result = predict_transcript_model_effect(
+        (somatic,), transcript, germline_variants=(germline,),
+        max_phase_hypotheses=1)
+
+    assert isinstance(result, HypothesisLimit)
+    assert result.max_hypotheses == 1
+    assert result.reference_effect.short_description == "p.L159M"
+    assert effect_priority(result) == effect_priority(result.reference_effect)
+
+
+def test_transcript_model_uses_context_phase_cap():
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    somatic = Variant("7", 117531100, "T", "A", ensembl_grch38)
+    ctx = dataclasses.replace(
+        GermlineContext.from_variants(
+            [Variant("7", 117531101, "T", "C", ensembl_grch38)],
+            reference_name="GRCh38"),
+        max_phase_hypotheses=1)
+
+    result = TranscriptModelEffectAnnotator().annotate_with_context(
+        somatic, transcript, ctx)
+
+    assert isinstance(result, HypothesisLimit)
+
+
+@pytest.mark.parametrize("cap", ["max_hypotheses", "max_phase_hypotheses"])
+def test_transcript_model_rejects_invalid_caps(cap):
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    somatic = Variant("7", 117531100, "T", "A", ensembl_grch38)
+    with pytest.raises(ValueError, match=cap):
+        predict_transcript_model_effect((somatic,), transcript, **{cap: 0})
 
 
 def test_real_cftr_missense_matches_existing_varcode_result():

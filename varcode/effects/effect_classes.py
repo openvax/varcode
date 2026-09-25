@@ -369,28 +369,53 @@ class Unresolved(TranscriptMutationEffect):
     Unlike :class:`Failure`, this is not an annotation error. A hypothesis
     may require missing genomic sequence or an RNA assembly. Alternatively,
     ``mechanism="unsupported_annotation"`` means the selected annotator
-    returned ``NotImplemented`` for this input. ``reason`` explains why and
-    the optional ``evidence`` mapping records structured inputs to that
-    decision; unresolved does not mean the variant is harmless.
+    returned ``NotImplemented`` for this input. ``reason`` explains why;
+    unresolved does not mean the variant is harmless.
     """
 
     modifies_coding_sequence = None
     modifies_protein_sequence = None
 
-    def __init__(self, variant, transcript, mechanism, reason=None, evidence=None):
+    def __init__(self, variant, transcript, mechanism, reason=None):
         TranscriptMutationEffect.__init__(self, variant, transcript)
         self.mechanism = mechanism
         self.reason = reason
-        self.evidence = dict(evidence or {})
-
-    def __hash__(self):
-        # Evidence is an unhashable mapping; equal effects still hash equally.
-        return hash((type(self), self.variant, self.transcript,
-                     self.mechanism, self.reason))
 
     @property
     def short_description(self):
         return "unresolved-%s" % self.mechanism.replace("_", "-")
+
+
+class HypothesisLimit(Unresolved):
+    """More alternative outcomes than ``max_hypotheses``, left unenumerated.
+
+    Choosing some of the outcomes would present a guess as a prediction, so
+    this effect records what is known instead. ``phase`` is the
+    :class:`~varcode.PhasePartition` of nearby germline variants (known cis,
+    known trans, unphased), and ``reference_effect`` is the variant's effect
+    without germline context. It ranks like ``reference_effect``, so germline
+    context that cannot be resolved does not change which transcript's
+    effect is selected.
+    """
+
+    def __init__(self, variant, transcript, max_hypotheses, phase,
+                 reference_effect=None):
+        reason = "More than %d alternative outcomes" % max_hypotheses
+        if phase.unphased:
+            reason += " (%d unphased germline variants)" % len(phase.unphased)
+        Unresolved.__init__(
+            self, variant, transcript, mechanism="hypothesis_limit",
+            reason=reason)
+        self.max_hypotheses = max_hypotheses
+        self.phase = phase
+        self.reference_effect = reference_effect
+
+    @property
+    def priority_class(self):
+        if self.reference_effect is None:
+            return Unresolved
+        return (getattr(self.reference_effect, "priority_class", None)
+                or type(self.reference_effect))
 
 
 class NoncodingTranscript(TranscriptMutationEffect):

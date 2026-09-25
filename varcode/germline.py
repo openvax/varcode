@@ -50,6 +50,7 @@ from __future__ import annotations
 
 import bisect
 import enum
+import numbers
 import warnings
 from dataclasses import dataclass, field
 from typing import (
@@ -61,6 +62,10 @@ from typing import (
     Optional,
     Tuple,
 )
+
+from serializable import DataclassSerializable
+
+from .errors import HypothesisLimitError
 
 if TYPE_CHECKING:
     from .variant_collection import VariantCollection
@@ -206,6 +211,12 @@ class GermlineContext:
         caller name, sample identifier, normalization tool, etc.).
         Not interpreted by varcode; rides along for downstream
         consumers and serialization.
+    max_phase_hypotheses
+        Most cis/trans phase hypotheses to enumerate for one somatic
+        variant (default 8, i.e. up to three unphased germline variants
+        nearby). Beyond it, effects are
+        :class:`~varcode.HypothesisLimit`. Change it with
+        ``dataclasses.replace(ctx, max_phase_hypotheses=16)``.
 
     Examples
     --------
@@ -235,6 +246,10 @@ class GermlineContext:
     completeness: Completeness = Completeness.COMPLETE
     reference_name: Optional[str] = None
     metadata: Mapping[str, Any] = field(default_factory=dict)
+    max_phase_hypotheses: int = 8
+
+    def __post_init__(self):
+        _check_max_hypotheses(self.max_phase_hypotheses, "max_phase_hypotheses")
 
     # --- Constructors -------------------------------------------------------
 
@@ -745,24 +760,112 @@ class PhaseHypothesis:
 
     ``phase_state`` mirrors the table in #268: ``"phased"``,
     ``"implicit"`` (hemizygous), or ``"unknown"`` (enumerated).
-    ``"too_many_hypotheses"`` marks an enumeration that was not performed:
-    ``cis`` and ``trans`` then hold only known phase and ``unphased`` holds
-    the rest. It is not a phase assignment and must not be classified.
     """
     cis: Tuple = ()
     trans: Tuple = ()
     haplotype: str = "unknown"
     phase_state: str = "unknown"
-    unphased: Tuple = ()
 
 
-def _validate_max_hypotheses(max_hypotheses):
-    if (isinstance(max_hypotheses, bool)
-            or not isinstance(max_hypotheses, int)
-            or max_hypotheses < 1):
-        raise ValueError(
-            "max_hypotheses must be a positive integer, got %r"
-            % (max_hypotheses,))
+def _check_max_hypotheses(value, name="max_hypotheses"):
+    """Return ``value`` as an int if it is a positive integer (NumPy
+    integers included, booleans excluded); otherwise raise ValueError."""
+    if (isinstance(value, numbers.Integral) and not isinstance(value, bool)
+            and value >= 1):
+        return int(value)
+    raise ValueError("%s must be a positive integer, got %r" % (name, value))
+
+
+@dataclass(frozen=True)
+class PhasePartition(DataclassSerializable):
+    """Germline variants near a somatic variant, split by what is known
+    about their phase relative to it.
+
+    ``germline`` holds every nearby germline variant in input order;
+    ``cis`` and ``trans`` are those whose phase is known, and
+    :attr:`unphased` is the rest. ``implicit`` is true on hemizygous
+    contigs (chrM, chrY), where every germline variant is cis without
+    needing evidence. Build one with :func:`partition_germline_by_phase`.
+    """
+    germline: Tuple = ()
+    cis: Tuple = ()
+    trans: Tuple = ()
+    implicit: bool = False
+
+    @property
+    def unphased(self) -> Tuple:
+        return tuple(
+            v for v in self.germline if v not in self.cis and v not in self.trans)
+
+    @property
+    def hypothesis_count(self) -> int:
+        """One hypothesis per cis/trans assignment of the unphased variants."""
+        return 2 ** len(self.unphased)
+
+    def hypotheses(self, max_hypotheses: int = 8) -> Tuple[PhaseHypothesis, ...]:
+        """Enumerate phase hypotheses, keeping known phase fixed in each.
+
+        Known phase gives one hypothesis (``phase_state`` ``"phased"``,
+        or ``"implicit"`` on hemizygous contigs). Otherwise there is one
+        ``"unknown"`` hypothesis per assignment of the unphased variants.
+        Haplotype labels depend only on the cis set, so the same
+        assignment gets the same label however much phase is known.
+
+        Raises
+        ------
+        HypothesisLimitError
+            When :attr:`hypothesis_count` exceeds ``max_hypotheses``.
+        """
+        max_hypotheses = _check_max_hypotheses(max_hypotheses)
+        unphased = self.unphased
+        if not unphased:
+            return (PhaseHypothesis(
+                cis=self.cis,
+                trans=self.trans,
+                haplotype="A",
+                phase_state="implicit" if self.implicit else "phased"),)
+        if self.hypothesis_count > max_hypotheses:
+            raise HypothesisLimitError(max_hypotheses)
+        hypotheses = []
+        for mask in range(self.hypothesis_count):
+            cis = self.cis + tuple(
+                v for i, v in enumerate(unphased) if mask >> i & 1)
+            in_cis = [v in cis for v in self.germline]
+            if all(in_cis):
+                haplotype = "A"
+            elif not any(in_cis):
+                haplotype = "B"
+            else:
+                haplotype = "A_mixed_%d" % sum(
+                    1 << i for i, c in enumerate(in_cis) if c)
+            hypotheses.append(PhaseHypothesis(
+                cis=tuple(v for v, c in zip(self.germline, in_cis) if c),
+                trans=tuple(v for v, c in zip(self.germline, in_cis) if not c),
+                haplotype=haplotype,
+                phase_state="unknown"))
+        return tuple(hypotheses)
+
+
+def partition_germline_by_phase(
+        somatic_variant, germline_variants, phase_resolver=None) -> PhasePartition:
+    """Split ``germline_variants`` by their phase relative to ``somatic_variant``.
+
+    On hemizygous contigs (chrM, chrY) every germline variant is cis.
+    chrX is treated as diploid, since Varcode has no sex information.
+    Otherwise ``phase_resolver.in_cis(somatic_variant, g)`` places each
+    variant: ``True`` is cis, ``False`` is trans, and anything else,
+    including having no resolver, leaves it unphased. Resolver errors
+    propagate.
+    """
+    germline = tuple(germline_variants)
+    if str(somatic_variant.contig).lstrip("chr").upper() in ("M", "MT", "Y"):
+        return PhasePartition(germline=germline, cis=germline, implicit=True)
+    in_cis = getattr(phase_resolver, "in_cis", None)
+    answers = [in_cis(somatic_variant, g) if in_cis else None for g in germline]
+    return PhasePartition(
+        germline=germline,
+        cis=tuple(g for g, a in zip(germline, answers) if a is True),
+        trans=tuple(g for g, a in zip(germline, answers) if a is False))
 
 
 def enumerate_phase_hypotheses(
@@ -770,134 +873,18 @@ def enumerate_phase_hypotheses(
         germline_in_window,
         phase_resolver=None,
         max_hypotheses: int = 8) -> Tuple[PhaseHypothesis, ...]:
-    """Enumerate plausible phase configurations of ``somatic_variant``
+    """Enumerate the phase configurations of ``somatic_variant``
     relative to ``germline_in_window``.
 
-    Four regimes:
-
-    * **Hemizygous chromosome** (chrM, chrY) — single haplotype;
-      all germline-in-window is implicitly cis. One hypothesis.
-    * **Resolver answers for every pair** (``phase_resolver.in_cis``
-      returns True/False for each ``(somatic, germline_v)``) — a
-      single deterministic hypothesis with cis/trans assigned per
-      the resolver. ``phase_state="phased"``.
-    * **Phase unknown** — enumerate all 2^u cis/trans assignments of the
-      u germline variants the resolver could not place, keeping every
-      answered pair fixed. ``phase_state="unknown"``.
-    * **Too many hypotheses** — when 2^u exceeds ``max_hypotheses``,
-      return one placeholder with ``phase_state="too_many_hypotheses"``.
-      It records known phase in ``cis``/``trans`` and the rest in
-      ``unphased``; it does not assume a phase. Consumers must report
-      an unresolved effect rather than classify it.
-
-    The cap is configurable so downstream pipelines that tolerate more
-    hypotheses (long-read with rich phasing, manual analyses) can
-    raise it. Default 8 = up to 3 unphased germline variants in a window.
+    Shorthand for :func:`partition_germline_by_phase` followed by
+    :meth:`PhasePartition.hypotheses`. Raises
+    :class:`~varcode.HypothesisLimitError` when the unphased variants
+    need more than ``max_hypotheses`` hypotheses (default 8, i.e. up to
+    three unphased germline variants).
     """
-    _validate_max_hypotheses(max_hypotheses)
-    germline_tuple = tuple(germline_in_window)
-
-    # Hemizygous: chrX (in males), chrY, chrM. Detection is
-    # heuristic since varcode doesn't carry sex info — the X
-    # chromosome detection conservatively requires the genome to
-    # claim hemizygosity. For v1 we treat chrM (mitochondrial) and
-    # chrY as definitely hemizygous; chrX is treated as diploid
-    # by default (the female case; the male case undergenerates
-    # but doesn't misgenerate).
-    contig = str(somatic_variant.contig).lstrip("chr").upper()
-    if contig in ("M", "MT", "Y"):
-        return (PhaseHypothesis(
-            cis=germline_tuple,
-            trans=(),
-            haplotype="A",
-            phase_state="implicit"),)
-
-    # Ask the resolver about each germline variant: True (cis),
-    # False (trans), or anything else (unknown).
-    answers = []
-    for g in germline_tuple:
-        answer = None
-        if phase_resolver is not None and hasattr(phase_resolver, "in_cis"):
-            try:
-                answer = phase_resolver.in_cis(somatic_variant, g)
-            except Exception:
-                answer = None
-        answers.append(answer if answer is True or answer is False else None)
-    unphased = tuple(g for g, a in zip(germline_tuple, answers) if a is None)
-
-    if not unphased:
-        # Every pair answered (or no germline in window) — single
-        # deterministic hypothesis.
-        return (PhaseHypothesis(
-            cis=tuple(g for g, a in zip(germline_tuple, answers) if a),
-            trans=tuple(g for g, a in zip(germline_tuple, answers) if a is False),
-            haplotype="A",
-            phase_state="phased"),)
-
-    if 2 ** len(unphased) > max_hypotheses:
-        return (PhaseHypothesis(
-            cis=tuple(g for g, a in zip(germline_tuple, answers) if a),
-            trans=tuple(g for g, a in zip(germline_tuple, answers) if a is False),
-            haplotype="unknown",
-            phase_state="too_many_hypotheses",
-            unphased=unphased),)
-
-    hypotheses: List[PhaseHypothesis] = []
-    for mask in range(2 ** len(unphased)):
-        cis = []
-        trans = []
-        bit = 0
-        for g, answer in zip(germline_tuple, answers):
-            if answer is None:
-                answer = bool(mask & (1 << bit))
-                bit += 1
-            (cis if answer else trans).append(g)
-        # Label haplotype "A" for the all-cis case, "B" for all-trans,
-        # "mixed" otherwise. These are opaque tags consumers use for
-        # cross-axis matching with RNA evidence.
-        if not trans:
-            hap = "A"
-        elif not cis:
-            hap = "B"
-        else:
-            hap = "A_mixed_%d" % mask
-        hypotheses.append(PhaseHypothesis(
-            cis=tuple(cis),
-            trans=tuple(trans),
-            haplotype=hap,
-            phase_state="unknown"))
-    return tuple(hypotheses)
-
-
-def _phase_limit_unresolved(
-        somatic_variant, transcript, hypothesis, germline_variants,
-        max_hypotheses):
-    """Report an enumeration that exceeded ``max_hypotheses`` as unresolved.
-
-    Choosing any single assignment would turn unknown phase into a
-    biological claim, so the effect keeps the known and unknown phase
-    instead of a consequence.
-    """
-    from .effects.effect_classes import Unresolved
-    required = 2 ** len(hypothesis.unphased)
-    effect = Unresolved(
-        somatic_variant, transcript, mechanism="phase_hypothesis_limit",
-        reason=(
-            "%d unphased germline variant(s) need %d phase hypotheses, "
-            "more than max_hypotheses=%d" % (
-                len(hypothesis.unphased), required, max_hypotheses)),
-        evidence={
-            "phase_state": hypothesis.phase_state,
-            "max_hypotheses": max_hypotheses,
-            "required_hypotheses": required,
-            "germline_variants": tuple(germline_variants),
-            "cis": hypothesis.cis,
-            "trans": hypothesis.trans,
-            "unphased": hypothesis.unphased,
-        })
-    effect.germline_phase_state = hypothesis.phase_state
-    effect.germline_variants_in_window = tuple(germline_variants)
-    return effect
+    return partition_germline_by_phase(
+        somatic_variant, germline_in_window, phase_resolver
+    ).hypotheses(max_hypotheses)
 
 
 def _classify_against_patient_baseline(
@@ -919,16 +906,7 @@ def _classify_against_patient_baseline(
     would produce on its own.
     """
     from .effects.classify import classify_from_protein_diff
-    from .effects.effect_classes import (
-        IncompleteTranscript,
-        NoncodingTranscript,
-    )
     from .mutant_transcript import apply_variants_to_transcript
-
-    if not transcript.is_protein_coding:
-        return NoncodingTranscript(somatic_variant, transcript)
-    if not transcript.complete:
-        return IncompleteTranscript(somatic_variant, transcript)
 
     cis_germline = list(hypothesis.cis)
 
@@ -992,7 +970,7 @@ def predict_germline_aware_effect(
         annotator,
         phase_resolver=None,
         window_fn=default_germline_window,
-        max_hypotheses: int = 8):
+        max_hypotheses: Optional[int] = None):
     """Predict the effect of ``somatic_variant`` on ``transcript``
     against the patient's germline-applied transcript.
 
@@ -1004,33 +982,37 @@ def predict_germline_aware_effect(
 
     Behaviour by case:
 
-    * **No germline in the somatic's window** — patient transcript ≡
-      reference transcript at this locus; delegate to ``annotator``
-      directly. SPARSE / HOTSPOTS_ONLY contexts mark the result with
-      ``effect.germline_unknown = True`` so consumers can see the
-      uncertainty.
-    * **Germline in window, phase known** (resolver answers, or
-      hemizygous, or all-cis-by-zygosity) — single patient haplotype;
-      classify against it via :func:`_classify_against_patient_baseline`.
-    * **Germline in window, phase unknown** — enumerate hypotheses,
-      classify each, wrap in
+    * **Somatic allele matches a germline allele** — a
+      ``GermlineAlleleOverlap``, without inferring zygosity, LOH, or a
+      new allele sequence.
+    * **Phase cannot matter** (no germline in the somatic's window, or a
+      noncoding or incompletely annotated transcript) — delegate to
+      ``annotator``. With no germline nearby, SPARSE / HOTSPOTS_ONLY
+      contexts mark the result ``effect.germline_unknown = True``.
+    * **Phase known** (resolver answers, or hemizygous) — classify
+      against the single patient haplotype via
+      :func:`_classify_against_patient_baseline`.
+    * **Phase unknown** — classify each hypothesis and wrap them in a
       :class:`~varcode.effects.effect_classes.PhaseCandidateSet`.
-    * **More than** ``max_hypotheses`` **phase assignments** — return
-      :class:`~varcode.effects.effect_classes.Unresolved` with
-      ``mechanism="phase_hypothesis_limit"``. Its ``evidence`` records the
-      cap, the required count, and the known cis/trans and unphased
-      germline variants. No phase is assumed.
+    * **Too many hypotheses** — a :class:`~varcode.HypothesisLimit`
+      recording the phase partition and the reference-relative effect.
 
-    An identical germline allele returns a ``GermlineAlleleOverlap`` without
-    inferring zygosity, LOH, or a new allele sequence.
-
+    ``max_hypotheses`` overrides ``germline_ctx.max_phase_hypotheses``.
     ``window_fn`` is the pluggable window selector — defaults to
     :func:`default_germline_window` (codon-level, with splice-signal
     expansion when the somatic is splice-adjacent). Callers that
     need different windows pass their own.
     """
     from pyensembl import Transcript
-    _validate_max_hypotheses(max_hypotheses)
+    from .effects.effect_classes import (
+        GermlineAlleleOverlap,
+        HypothesisLimit,
+        PhaseCandidateSet,
+    )
+
+    limit = _check_max_hypotheses(
+        germline_ctx.max_phase_hypotheses if max_hypotheses is None
+        else max_hypotheses)
     if not isinstance(transcript, Transcript):
         # Mirrors annotator entry: SVs and other non-Transcript
         # consumers don't go through germline-aware prediction.
@@ -1039,29 +1021,27 @@ def predict_germline_aware_effect(
     contig, start, end = window_fn(somatic_variant, transcript)
     germline_in_window = germline_ctx.variants_in_window(contig, start, end)
     if detect_germline_overlap(somatic_variant, germline_in_window):
-        from .effects.effect_classes import GermlineAlleleOverlap
         return GermlineAlleleOverlap(somatic_variant, transcript)
 
-    if not germline_in_window:
-        effect = annotator.annotate_on_transcript(
-            somatic_variant, transcript)
+    if not (germline_in_window and transcript.is_protein_coding
+            and transcript.complete):
+        effect = annotator.annotate_on_transcript(somatic_variant, transcript)
         if effect is NotImplemented:
             return effect
-        if germline_ctx.completeness in (
+        if not germline_in_window and germline_ctx.completeness in (
                 Completeness.SPARSE, Completeness.HOTSPOTS_ONLY):
             effect.germline_unknown = True
         return effect
 
-    hypotheses = enumerate_phase_hypotheses(
-        somatic_variant,
-        germline_in_window,
-        phase_resolver=phase_resolver,
-        max_hypotheses=max_hypotheses)
-
-    if hypotheses[0].phase_state == "too_many_hypotheses":
-        return _phase_limit_unresolved(
-            somatic_variant, transcript, hypotheses[0], germline_in_window,
-            max_hypotheses)
+    phase = partition_germline_by_phase(
+        somatic_variant, germline_in_window, phase_resolver)
+    try:
+        hypotheses = phase.hypotheses(limit)
+    except HypothesisLimitError:
+        reference = annotator.annotate_on_transcript(somatic_variant, transcript)
+        if reference is NotImplemented:
+            return reference
+        return HypothesisLimit(somatic_variant, transcript, limit, phase, reference)
 
     if len(hypotheses) == 1:
         effect = _classify_against_patient_baseline(
@@ -1073,16 +1053,11 @@ def predict_germline_aware_effect(
         effect.germline_variants_in_window = tuple(germline_in_window)
         return effect
 
-    # Multiple hypotheses → possibility set.
-    candidates = tuple(
-        _classify_against_patient_baseline(
-            somatic_variant, transcript, h)
-        for h in hypotheses)
-    from .effects.effect_classes import PhaseCandidateSet
-    effect = PhaseCandidateSet(
+    return PhaseCandidateSet(
         variant=somatic_variant,
         transcript=transcript,
-        candidates=candidates,
+        candidates=tuple(
+            _classify_against_patient_baseline(somatic_variant, transcript, h)
+            for h in hypotheses),
         hypotheses=hypotheses,
         germline_variants=tuple(germline_in_window))
-    return effect

@@ -22,16 +22,17 @@ from .effect_hypotheses import (
 )
 from .effects.effect_classes import (
     GermlineAlleleOverlap,
+    HypothesisLimit,
     IncompleteTranscript,
     NoncodingTranscript,
     Unresolved,
 )
 from .effects.effect_ordering import effect_priority
+from .errors import HypothesisLimitError
 from .genome_sequence import reference_range
-from .genomic_layout import GenomicLayout
+from .genomic_layout import GenomicLayout, NonlocalStructuralEdit
 from .germline import (
-    _phase_limit_unresolved, _validate_max_hypotheses,
-    detect_germline_overlap, enumerate_phase_hypotheses)
+    _check_max_hypotheses, detect_germline_overlap, partition_germline_by_phase)
 from .splice_graph import disrupted_splice_sites, splice_axes
 from .transcript_layout import (
     build_exon_runs,
@@ -173,7 +174,7 @@ def _attach_candidate_set(ordered):
 
 def predict_transcript_model_effect(
         variants, transcript, germline_variants=(), phase_resolver=None,
-        sequence_provider=None, max_hypotheses=64):
+        sequence_provider=None, max_hypotheses=64, max_phase_hypotheses=8):
     """Predict one ordinary top effect with alternatives in ``.candidates``.
 
     Canonical and exon-skip paths resolve from transcript annotation alone.
@@ -181,8 +182,13 @@ def predict_transcript_model_effect(
     sequence is available, and remain explicit :class:`Unresolved`
     candidates at sequence-free tier 0. Rule order is never mislabeled as
     probability.
+
+    More than ``max_phase_hypotheses`` phase hypotheses, or more than
+    ``max_hypotheses`` combined phase/splice outcomes, gives a
+    :class:`~varcode.HypothesisLimit` instead of a partial candidate set.
     """
-    _validate_max_hypotheses(max_hypotheses)
+    _check_max_hypotheses(max_hypotheses)
+    _check_max_hypotheses(max_phase_hypotheses, "max_phase_hypotheses")
     variants = tuple(variants)
     if not variants:
         raise ValueError("predict_transcript_model_effect requires a somatic variant")
@@ -228,28 +234,45 @@ def predict_transcript_model_effect(
     if sequence_provider is None:
         sequence_provider = _provider_for_genome(primary.genome)
 
-    phase_hypotheses = enumerate_phase_hypotheses(
-        primary, germline_variants, phase_resolver=phase_resolver,
-        max_hypotheses=max_hypotheses)
-    if phase_hypotheses[0].phase_state == "too_many_hypotheses":
-        result = _phase_limit_unresolved(
-            primary, transcript, phase_hypotheses[0], germline_variants,
-            max_hypotheses)
+    phase = partition_germline_by_phase(
+        primary, germline_variants, phase_resolver)
+    try:
+        outcomes = _realize_outcomes(
+            variants, transcript, phase.hypotheses(max_phase_hypotheses),
+            sequence_provider, max_hypotheses)
+    except NonlocalStructuralEdit as error:
+        return Unresolved(
+            primary, transcript, mechanism="nonlocal_structural_variant",
+            reason=str(error))
+    except HypothesisLimitError as error:
+        reference = predict_transcript_model_effect(
+            variants, transcript, sequence_provider=sequence_provider,
+            max_hypotheses=max_hypotheses) if germline_variants else None
+        result = HypothesisLimit(
+            primary, transcript, error.max_hypotheses, phase, reference)
         result.variants = variants
         return result
+    candidates = merge_classified_outcomes(outcomes)
+    ordered = order_realized_candidates(candidates, effect_priority)
+    return _attach_candidate_set(ordered)
+
+
+def _realize_outcomes(
+        variants, transcript, phase_hypotheses, sequence_provider,
+        max_hypotheses):
+    """Classify every phase hypothesis × splice plan.
+
+    Raises :class:`~varcode.HypothesisLimitError` past ``max_hypotheses``
+    outcomes and ``NonlocalStructuralEdit`` for edits the layout cannot hold.
+    """
+    primary = variants[0]
     outcomes = []
     enumeration_index = 0
     for phase_hypothesis in phase_hypotheses:
         reference = GenomicLayout.from_transcript(
             transcript, flank=50, sequence_provider=sequence_provider)
-        from .genomic_layout import NonlocalStructuralEdit
-        try:
-            baseline_layout = reference.apply_variants(phase_hypothesis.cis)
-            mutant_layout = baseline_layout.apply_variants(variants)
-        except NonlocalStructuralEdit as error:
-            return Unresolved(
-                primary, transcript, mechanism="nonlocal_structural_variant",
-                reason=str(error))
+        baseline_layout = reference.apply_variants(phase_hypothesis.cis)
+        mutant_layout = baseline_layout.apply_variants(variants)
         baseline_runs, baseline_statuses = _status_map(
             transcript, baseline_layout)
         mutant_runs, mutant_statuses = _status_map(transcript, mutant_layout)
@@ -258,21 +281,12 @@ def predict_transcript_model_effect(
             tuple(run.key for run in baseline_runs),
             tuple(run.key for run in mutant_runs))
         if axes:
-            remaining = max_hypotheses - len(outcomes)
-            if remaining < 1:
-                raise ValueError(
-                    "Combined phase/splice hypothesis count exceeds "
-                    "max_hypotheses=%d" % max_hypotheses)
             try:
                 plans = enumerate_splice_plans(
                     axes, tuple(run.key for run in mutant_runs),
-                    max_plans=remaining)
-            except ValueError as error:
-                if "exceeds max_plans" not in str(error):
-                    raise
-                raise ValueError(
-                    "Combined phase/splice hypothesis count exceeds "
-                    "max_hypotheses=%d" % max_hypotheses) from error
+                    max_plans=max_hypotheses - len(outcomes))
+            except HypothesisLimitError as error:
+                raise HypothesisLimitError(max_hypotheses) from error
         else:
             plans = (SplicePlan(
                 choices=(),
@@ -320,13 +334,8 @@ def predict_transcript_model_effect(
             outcomes.append(outcome)
             enumeration_index += 1
             if len(outcomes) > max_hypotheses:
-                raise ValueError(
-                    "Combined phase/splice hypothesis count exceeds "
-                    "max_hypotheses=%d" % max_hypotheses)
-
-    candidates = merge_classified_outcomes(outcomes)
-    ordered = order_realized_candidates(candidates, effect_priority)
-    return _attach_candidate_set(ordered)
+                raise HypothesisLimitError(max_hypotheses)
+    return outcomes
 
 
 class TranscriptModelEffectAnnotator:
@@ -382,7 +391,8 @@ class TranscriptModelEffectAnnotator:
         result = self._predict_variants(
             variants, transcript,
             germline_variants=germline,
-            phase_resolver=phase_resolver)
+            phase_resolver=phase_resolver,
+            max_phase_hypotheses=germline_ctx.max_phase_hypotheses)
         if result is NotImplemented:
             return result
         if (not germline and germline_ctx.completeness in (

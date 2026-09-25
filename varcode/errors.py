@@ -72,3 +72,18 @@ class ReferenceMismatchError(ValueError):
                 variant, transcript, location, observed_ref, expected_ref)
         )
         super().__init__(message)
+
+
+class HypothesisLimitError(ValueError):
+    """Raised when a variant has more alternative outcomes than
+    ``max_hypotheses`` allows, so they were not enumerated.
+
+    Annotators catch this and return a :class:`~varcode.HypothesisLimit`
+    effect instead of choosing among the outcomes.
+    """
+
+    def __init__(self, max_hypotheses):
+        self.max_hypotheses = max_hypotheses
+        super().__init__(
+            "More than max_hypotheses=%d alternative outcomes"
+            % max_hypotheses)

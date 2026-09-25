@@ -29,6 +29,10 @@ for input requirements and examples.
 
 ::: varcode.apply_germline_to_transcript
 
+::: varcode.partition_germline_by_phase
+
+::: varcode.PhasePartition
+
 ::: varcode.enumerate_phase_hypotheses
 
 ::: varcode.detect_loh

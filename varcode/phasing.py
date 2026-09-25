@@ -126,9 +126,10 @@ class MolecularPhaseResolver:
 
     def in_cis(self, v1, v2, transcript=None) -> Optional[bool]:
         """Return ``True`` if ``v1`` and ``v2`` are co-observed by the
-        wrapped source, ``False`` if exactly one has evidence (so they
-        are on distinct physical molecules — trans), ``None`` when
-        neither has evidence.
+        wrapped source, ``False`` if both have evidence but never
+        together (distinct physical molecules — trans), and ``None``
+        otherwise. A variant without evidence may simply be uncovered,
+        so one-sided evidence does not establish trans.
 
         ``transcript`` is accepted for interface symmetry with
         :class:`VCFPhaseResolver.in_cis` but isn't consulted at the
@@ -141,11 +142,10 @@ class MolecularPhaseResolver:
             return source_in_cis(v1, v2, transcript=transcript)
         v1_has = self.phasing_source.has_evidence(v1)
         v2_has = self.phasing_source.has_evidence(v2)
-        if not v1_has and not v2_has:
-            return None
-        if v1_has:
-            return v2 in self.phasing_source.partners_in_cis(v1)
-        return v1 in self.phasing_source.partners_in_cis(v2)
+        if ((v1_has and v2 in self.phasing_source.partners_in_cis(v1))
+                or (v2_has and v1 in self.phasing_source.partners_in_cis(v2))):
+            return True
+        return False if v1_has and v2_has else None
 
     def phased_partners(self, variant, transcript=None) -> Sequence:
         """Variants co-observed with ``variant`` — i.e. the cis set.

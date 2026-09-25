@@ -16,7 +16,7 @@ from the source docstrings; this is reference material, not a required first rea
 | [Structural effects](#structural-effects) | `StructuralVariantEffect`, `GeneFusion`, `TranslocationToIntergenic` |
 | [Linked variants and phase](#haplotype-effects) | `HaplotypeEffect`, `PhaseCandidateSet` |
 | [Inherited allele overlap](germline.md#loss-of-heterozygosity-loh) | `GermlineAlleleOverlap`: no new allele sequence; LOH unassessed |
-| [Unknown results and failures](#unknown-results) | `Unresolved`, `IncompleteTranscript`, `Failure` |
+| [Unknown results and failures](#unknown-results) | `Unresolved`, `HypothesisLimit`, `IncompleteTranscript`, `Failure` |
 
 These labels describe predictions and their limits, not clinical significance.
 
@@ -144,6 +144,8 @@ Legacy event-type classes remain importable; the default annotator emits
 ## Unknown results
 
 ::: varcode.effects.effect_classes.Unresolved
+
+::: varcode.effects.effect_classes.HypothesisLimit
 
 ::: varcode.effects.effect_classes.IncompleteTranscript
 

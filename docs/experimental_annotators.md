@@ -41,6 +41,12 @@ sites. Without a calibrated scorer, mechanism preference is an ordering rule,
 not a probability. Selecting this experiment does not guarantee that every
 structural or combined input is supported.
 
+The transcript model uses the same phase cap as the default path
+(`GermlineContext.max_phase_hypotheses`, default 8). It also caps the combined
+phase × splice outcomes at `max_hypotheses=64`. Exceeding either returns a
+[`HypothesisLimit`](germline.md#phase-enumeration-limit) rather than a partial
+set of candidates.
+
 ## Transcript-model results
 
 Use the [sequence accessors](transcript_models.md#sequence-access) for a single
