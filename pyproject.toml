@@ -35,7 +35,7 @@ include = ["varcode", "varcode.*"]
 
 [project.optional-dependencies]
 rna = ["pysam>=0.21"]
-test-data = ["osteosarc>=0.2.3,<0.3"]
+test-data = ["osteosarc>=0.7.0,<0.8"]
 
 [project.scripts]
 varcode-genes = "varcode.cli.genes_script:main"

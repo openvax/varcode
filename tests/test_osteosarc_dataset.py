@@ -44,7 +44,7 @@ def dataset(tmp_path_factory):
     from osteosarc import Cache, Dataset
 
     installed = tuple(int(part) for part in version("osteosarc").split(".")[:3])
-    assert (0, 2, 3) <= installed < (0, 3, 0)  # the test-data extra's range
+    assert (0, 7, 0) <= installed < (0, 8, 0)  # the test-data extra's range
     cache = Cache(cache_root, offline=True)
     data = Dataset.open(snapshot, cache=cache, offline=True)
     assert data.id == SNAPSHOT_ID
@@ -90,9 +90,9 @@ def test_osteosarc_corrected_map2_is_a_distinct_complex_allele(dataset):
     assert model.mutant_protein_sequence != t.protein_sequence
 
 
-def test_historical_fixture_alleles_survive_package_update(dataset):
-    # The checked-in corpus remains the 0.1.0 export. New curation can resolve
-    # additional entries or enrich provenance without rewriting that history.
+def test_fixture_alleles_match_the_dataset(dataset):
+    # The checked-in corpus is the export from the pinned osteosarc version;
+    # every ready allele must match what that version reads from the snapshot.
     fixture = read_fixture()
     entries = dataset.variants()
     assert {entry.id for entry in entries} == {entry["id"] for entry in fixture["entries"]}

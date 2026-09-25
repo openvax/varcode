@@ -1,5 +1,15 @@
 # Change Log
 
+## [v10.5.3](https://github.com/openvax/varcode/tree/v10.5.3) (2026-09-25)
+
+- Generate the osteosarc test corpus with osteosarc 0.7.0 (#524). Re-collected
+  offline from the same pinned snapshot, it has 179 ready and 3 unresolved
+  entries instead of 177 and 5: 0.7.0's curation resolves `COL3A1-Splice` and
+  `FAM157A-p_W70_Q71ins_14` and adds transcript, source and count corrections.
+  All ready alleles annotate without errors under both implementations. The
+  `test-data` extra now requires osteosarc `>=0.7.0,<0.8`, together with
+  Isovar, Vaxrank and Topiary.
+
 ## [v10.5.2](https://github.com/openvax/varcode/tree/v10.5.2) (2026-09-25)
 
 - A release after a dot, as in Ensembl's file names (`"GRCh38.93"`), or
