@@ -1514,10 +1514,22 @@ class StructuralVariantEffect(TranscriptMutationEffect, MultiOutcomeEffect):
 
     @property
     def priority_class(self):
-        if self._primary_effects and self._primary_effects[0] is not self:
-            highest = self.highest_priority_effect
-            return getattr(highest, "priority_class", None) or type(highest)
-        return type(self) if type(self) is not StructuralVariantEffect else Unresolved
+        own = type(self) if type(self) is not StructuralVariantEffect else Unresolved
+        if not self._primary_effects or self._primary_effects[0] is self:
+            return own
+        from .effect_ordering import effect_priority, transcript_effect_priority_dict
+
+        def rank(candidate):
+            # A candidate that is this set stands for its own class; ranking
+            # it through this property would never terminate.
+            if candidate.effect is self:
+                return transcript_effect_priority_dict.get(own, -1)
+            return effect_priority(candidate.effect)
+
+        highest = max(self.candidates, key=rank).effect
+        if highest is self:
+            return own
+        return getattr(highest, "priority_class", None) or type(highest)
 
     def __init__(
             self, variant, transcript,

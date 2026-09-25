@@ -60,6 +60,18 @@ def test_partial_exon_keeps_conditional_consequence(cftr, local_model):
     assert effect.mutant_transcript is candidate.effect.mutant_transcript
 
 
+def test_self_candidate_does_not_recurse_when_ranking(cftr, local_model):
+    """Attached evidence can list the set itself as a candidate. Ranking
+    must treat that as the set's own class instead of recursing."""
+    from varcode import EffectCandidate
+
+    exon = cftr.exons[4]
+    effect = _annotate(cftr, "DEL", exon.start + 10, exon.start + 13)
+    effect._extra_candidates = (EffectCandidate(effect, "RNA", {}),)
+    assert effect_priority(effect) == effect_priority(effect.candidates[0].effect)
+    assert isinstance(effect.highest_priority_effect, FrameShift)
+
+
 @pytest.mark.parametrize("tx_id", ["ENST00000003084", "ENST00000357654"])
 @pytest.mark.parametrize("region,cls", [("5utr", FivePrimeUTR), ("3utr", ThreePrimeUTR)])
 def test_utr_deletion_preserves_mapped_protein(tx_id, region, cls, local_model):
