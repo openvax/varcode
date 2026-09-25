@@ -1,5 +1,14 @@
 # Change Log
 
+## [v10.5.2](https://github.com/openvax/varcode/tree/v10.5.2) (2026-09-25)
+
+- A release after a dot, as in Ensembl's file names (`"GRCh38.93"`), or
+  after `_`, `-` or a space, now chooses that release like `"GRCh38:93"`.
+  In 10.5.0 only the colon worked; the other spellings still silently gave
+  the most recent release (#512). A release after one of these separators
+  is read only when what precedes it is exactly a known assembly name or
+  alias, so `"GRCh38.p13"` and `"Felis_catus_9.0"` keep their meaning.
+
 ## [v10.5.1](https://github.com/openvax/varcode/tree/v10.5.1) (2026-09-25)
 
 - Document Isovar as an RNA phase source (`IsovarReadPhasing` with

@@ -75,6 +75,14 @@ def test_reference_name_fasta_filenames(candidate, assembly_name):
     ("B37:75", 75, "homo_sapiens", False),
     ("hg19:75", 75, "homo_sapiens", True),
     ("GRCm38:95", 95, "mus_musculus", False),
+    ("GRCh38.p13:93", 93, "homo_sapiens", False),
+    # Ensembl's file names put the release after a dot; other separators work too.
+    ("GRCh38.93", 93, "homo_sapiens", False),
+    ("GRCh38_93", 93, "homo_sapiens", False),
+    ("GRCh38-93", 93, "homo_sapiens", False),
+    ("GRCh38 93", 93, "homo_sapiens", False),
+    ("hg38.93", 93, "homo_sapiens", True),
+    ("mm10.95", 95, "mus_musculus", True),
 ])
 def test_reference_name_with_release_chooses_that_release(name, release, species, was_ucsc):
     genome, converted = infer_genome(name)
@@ -83,6 +91,7 @@ def test_reference_name_with_release_chooses_that_release(name, release, species
 
 @pytest.mark.parametrize(["name", "message"], [
     ("GRCh38:75", "release 75 of homo_sapiens provides GRCh37, not GRCh38"),
+    ("GRCh38.75", "release 75 of homo_sapiens provides GRCh37, not GRCh38"),
     ("GRCh37:93", "release 93 of homo_sapiens provides GRCh38, not GRCh37"),
     ("GRCh38:40", "No genome for homo_sapiens in Ensembl release 40"),
 ])
@@ -96,6 +105,16 @@ def test_variant_keeps_the_chosen_release_through_serialization():
     variant = Variant("7", 140753336, "A", "T", genome="GRCh38:93")
     assert variant.genome.release == 93 and variant.reference_name == "GRCh38"
     assert Variant.from_json(variant.to_json()).genome.release == 93
+
+
+@pytest.mark.parametrize(["name", "reference_name"], [
+    ("GRCh38.p13", "GRCh38"),
+    ("grch38.d1.vd1", "GRCh38"),
+    ("Felis_catus_9.0", "Felis_catus_9.0"),
+])
+def test_names_ending_in_digits_are_not_read_as_releases(name, reference_name):
+    genome, _ = infer_genome(name)
+    assert genome.reference_name == reference_name
 
 
 def test_paths_are_not_read_as_releases():
