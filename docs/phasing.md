@@ -84,10 +84,20 @@ effects = somatic_variants.effects(germline=germline_ctx, phase_resolver=phaser)
 
 With Isovar 1.36 or later, `IsovarReadPhasing.in_cis` answers from fragments
 that cover both variants: cis when they carry both alt alleles, trans when they
-carry one alt allele with the other's reference allele. A matched germline
-variant is cis when its edit is in the somatic variant's assembled RNA.
-Otherwise it stays unknown, because Isovar only examines the variants in its
-run, so Varcode keeps every phase hypothesis for it.
+carry one alt allele with the other's reference allele. A call needs at least
+`min_shared_fragments_for_phasing` fragments and a majority.
+
+For a matched germline variant, Isovar 1.38 or later reads the germline site
+in fragments that carry the somatic alt allele: the germline alt allele there
+means cis, its reference allele trans. Fragments with the somatic reference
+allele are not counted, since the germline alt allele also comes from normal
+cells and homozygous sites. When those fragments do not decide, a germline edit
+in the somatic variant's assembled RNA is cis; when they say trans but the
+assembly has the edit, the answer is unknown. Isovar 1.36 and 1.37 only give
+the assembly-based cis.
+
+Any pair Isovar cannot call stays unknown, and Varcode keeps every phase
+hypothesis for it.
 
 ## Unknown phase
 
