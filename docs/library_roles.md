@@ -73,13 +73,14 @@ silently discard alternatives or relabel missing RNA as evidence of absence.
 
 | Package | Requires |
 |---|---|
-| Vaxrank 3.22 | Varcode ≥10.4.1, <11 and Isovar 1.37 |
-| Isovar 1.37 | Varcode 10 |
+| Vaxrank 3.23 | Varcode ≥10.4.1, <11 and Isovar ≥1.37, <1.39 |
+| Isovar 1.37.3, 1.38 | Varcode ≥10.5.2, <11 |
+| Isovar ≥1.38 | Needed for germline trans from RNA reads; 1.36 and 1.37 report germline cis only |
 | Isovar ≥1.36 | Needed for `IsovarReadPhasing.in_cis`; older versions report cis only |
 
 Varcode 10.4.1 fixes a structural-effect ranking crash that Vaxrank's DNA
-fallback hits on earlier Varcode 10 releases. Isovar, Vaxrank and Varcode's
-optional test data share osteosarc 0.2.x.
+fallback hits on earlier Varcode 10 releases. Isovar, Vaxrank, Topiary 5.72 and
+later, and Varcode's optional test data share osteosarc 0.7.x.
 
 ## Other library guides
 
