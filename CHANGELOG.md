@@ -1,5 +1,11 @@
 # Change Log
 
+## [v10.5.5](https://github.com/openvax/varcode/tree/v10.5.5) (2026-09-25)
+
+- The `test-data` extra requires osteosarc `>=0.9.0,<0.10`, in step with
+  Isovar, Topiary and Vaxrank. The osteosarc test corpus was re-collected with
+  0.9.0 from the same snapshot; only its recorded osteosarc version changed.
+
 ## [v10.5.4](https://github.com/openvax/varcode/tree/v10.5.4) (2026-09-25)
 
 - Document Isovar 1.38's germline phase calls: fragments carrying the somatic
