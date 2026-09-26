@@ -1,5 +1,13 @@
 # Change Log
 
+## [v10.5.8](https://github.com/openvax/varcode/tree/v10.5.8) (2026-09-26)
+
+- Check the three observed-junction fixtures against their ONT reads in
+  `openvax-v1`, the OpenVax libraries' shared Sid test data (#528). Varcode
+  keeps no read copies; the new test confirms each record's read name, source
+  sequence hash and junction window. It runs with the `test-data` extra and
+  downloads the bundle (28 MB) once.
+
 ## [v10.5.7](https://github.com/openvax/varcode/tree/v10.5.7) (2026-09-26)
 
 - The `test-data` extra requires osteosarc `>=0.11.1,<0.12`, in step with
