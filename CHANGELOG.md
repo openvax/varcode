@@ -1,5 +1,11 @@
 # Change Log
 
+## [v10.5.7](https://github.com/openvax/varcode/tree/v10.5.7) (2026-09-26)
+
+- The `test-data` extra requires osteosarc `>=0.11.1,<0.12`, in step with
+  Isovar, Topiary and Vaxrank. The osteosarc test corpus was re-collected with
+  0.11.1 from the same snapshot; only its recorded osteosarc version changed.
+
 ## [v10.5.6](https://github.com/openvax/varcode/tree/v10.5.6) (2026-09-25)
 
 - List Vaxrank 3.24 in the compatible versions: it accepts Isovar 1.38.1 and

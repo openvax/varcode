@@ -16,7 +16,7 @@ below apply to the bundled Osteosarc snapshot checks.
 ## Osteosarc test variants
 
 `tests/data/osteosarc_variants.json` contains 179 ready site variants and three
-unresolved entries collected through `osteosarc==0.9.0` from the pinned public
+unresolved entries collected through `osteosarc==0.11.1` from the pinned public
 snapshot below. The ready variants comprise 158 SNVs, 14 deletions, four
 insertions, and three complex alleles. Original alleles, assemblies, source
 IDs, correction IDs, source receipts, and hashes of complete osteosarc entries
@@ -49,12 +49,12 @@ and correction notes; they are not assumed to be independent events.
 
 ## Regenerate from the verified snapshot
 
-The fixture records Osteosarc 0.9.0. To reproduce it byte for byte, install
+The fixture records Osteosarc 0.11.1. To reproduce it byte for byte, install
 that version, unpack the bundled snapshot into a new cache directory, then
 collect offline:
 
 ```sh
-python -m pip install -e . 'osteosarc==0.9.0'
+python -m pip install -e . 'osteosarc==0.11.1'
 python -m zipfile -e tests/data/osteosarc_snapshot_2026-09-18t.zip /path/to/new/cache
 python -m tests.collect_osteosarc_variants \
   --cache /path/to/new/cache --snapshot 2026-09-18t
@@ -70,7 +70,7 @@ separate from export and tests.
 
 The targeted GPX4 and BRCA1 regressions use Ensembl 81. Offline integration
 checks use the public osteosarc dataset through the published
-osteosarc 0.9.x adapter (`>=0.9.0,<0.10`) from the optional `test-data` extra
+osteosarc 0.11.x adapter (`>=0.11.1,<0.12`) from the optional `test-data` extra
 (Python 3.9+):
 
 ```sh
