@@ -16,7 +16,7 @@ below apply to the bundled Osteosarc snapshot checks.
 ## Osteosarc test variants
 
 `tests/data/osteosarc_variants.json` contains 179 ready site variants and three
-unresolved entries collected through `osteosarc==0.11.1` from the pinned public
+unresolved entries collected through `osteosarc==0.12.0` from the pinned public
 snapshot below. The ready variants comprise 158 SNVs, 14 deletions, four
 insertions, and three complex alleles. Original alleles, assemblies, source
 IDs, correction IDs, source receipts, and hashes of complete osteosarc entries
@@ -49,12 +49,12 @@ and correction notes; they are not assumed to be independent events.
 
 ## Regenerate from the verified snapshot
 
-The fixture records Osteosarc 0.11.1. To reproduce it byte for byte, install
+The fixture records Osteosarc 0.12.0. To reproduce it byte for byte, install
 that version, unpack the bundled snapshot into a new cache directory, then
 collect offline:
 
 ```sh
-python -m pip install -e . 'osteosarc==0.11.1'
+python -m pip install -e . 'osteosarc==0.12.0'
 python -m zipfile -e tests/data/osteosarc_snapshot_2026-09-18t.zip /path/to/new/cache
 python -m tests.collect_osteosarc_variants \
   --cache /path/to/new/cache --snapshot 2026-09-18t
@@ -70,7 +70,7 @@ separate from export and tests.
 
 The targeted GPX4 and BRCA1 regressions use Ensembl 81. Offline integration
 checks use the public osteosarc dataset through the published
-osteosarc 0.11.x adapter (`>=0.11.1,<0.12`) from the optional `test-data` extra
+osteosarc 0.12.x adapter (`>=0.12.0,<0.13`) from the optional `test-data` extra
 (Python 3.9+):
 
 ```sh
@@ -132,14 +132,14 @@ Varcode stores no reads of its own. Each record in
 `tests/data/osteosarc_observed_junctions.json` keeps a 40-base junction window
 and its annotations, and the `openvax-v1` member
 `varcode/osteosarc_observed_junctions.json#<label>` holds the ONT read behind
-it. `tests/test_osteosarc_shared_reads.py` exports those three members and
-checks each record's read name, source sequence hash and window against them:
+it. `tests/test_osteosarc_shared_reads.py` reads those three members through
+`osteosarc.bundle_file` and checks each record's read name, source sequence hash and window against them:
 
 ```sh
 python -m pip install -e '.[test-data]'
 python -m pytest -q tests/test_osteosarc_shared_reads.py
 ```
 
-The first run downloads and verifies the bundle (28 MB) into the osteosarc
-cache (`OSTEOSARC_CACHE`, else the shared OpenVax cache); later runs reuse it
-offline.
+The first run downloads and verifies the bundle (28 MB) and exports its
+members into the osteosarc cache (`OSTEOSARC_CACHE`, else the shared OpenVax
+cache); later runs reuse them offline.

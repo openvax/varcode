@@ -5068,7 +5068,7 @@
       "vaccines": []
     }
   ],
-  "osteosarc_version": "0.11.1",
+  "osteosarc_version": "0.12.0",
   "schema_version": 1,
   "selection": {
     "corrections": true,
