@@ -73,6 +73,7 @@ silently discard alternatives or relabel missing RNA as evidence of absence.
 
 | Package | Requires |
 |---|---|
+| Vaxrank 3.24 | Varcode ≥10.4.1, <11 and Isovar ≥1.38.1, <1.39 |
 | Vaxrank 3.22, 3.23 | Varcode ≥10.4.1, <11 and Isovar 1.37 |
 | Isovar 1.37.2 or later | Varcode ≥10.5.2, <11 |
 | Isovar ≥1.38 | Needed for germline trans from RNA reads; 1.36 and 1.37 report germline cis only |
