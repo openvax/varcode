@@ -123,3 +123,23 @@ adoption is tracked in [#464](https://github.com/openvax/varcode/issues/464).
 Dataset: [osteosarc.com](https://osteosarc.com/data/), snapshot acquired
 2026-09-18, collected 2026-09-21; public data listed as CC0-1.0 by the
 [AWS Open Data Registry](https://registry.opendata.aws/sid-osteosarc/).
+
+## Shared test reads (openvax-v1)
+
+The OpenVax libraries share one set of Sid test reads, `openvax-v1`, published
+by osteosarc 0.11 ([iskandr/osteosarc#56](https://github.com/iskandr/osteosarc/issues/56)).
+Varcode stores no reads of its own. Each record in
+`tests/data/osteosarc_observed_junctions.json` keeps a 40-base junction window
+and its annotations, and the `openvax-v1` member
+`varcode/osteosarc_observed_junctions.json#<label>` holds the ONT read behind
+it. `tests/test_osteosarc_shared_reads.py` exports those three members and
+checks each record's read name, source sequence hash and window against them:
+
+```sh
+python -m pip install -e '.[test-data]'
+python -m pytest -q tests/test_osteosarc_shared_reads.py
+```
+
+The first run downloads and verifies the bundle (28 MB) into the osteosarc
+cache (`OSTEOSARC_CACHE`, else the shared OpenVax cache); later runs reuse it
+offline.
