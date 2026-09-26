@@ -1,5 +1,10 @@
 # Change Log
 
+## [v10.5.6](https://github.com/openvax/varcode/tree/v10.5.6) (2026-09-25)
+
+- List Vaxrank 3.24 in the compatible versions: it accepts Isovar 1.38.1 and
+  later 1.38 releases, so it can use Isovar's germline trans calls.
+
 ## [v10.5.5](https://github.com/openvax/varcode/tree/v10.5.5) (2026-09-25)
 
 - The `test-data` extra requires osteosarc `>=0.9.0,<0.10`, in step with
