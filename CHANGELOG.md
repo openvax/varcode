@@ -5,7 +5,7 @@
 - Document Isovar 1.38's germline phase calls: fragments carrying the somatic
   alt allele now show a matched germline variant in cis or trans, instead of
   only cis from the assembled RNA. Update the compatible versions for Vaxrank
-  3.23 and Isovar 1.37.3/1.38, and the shared osteosarc range (0.7.x).
+  3.23 and Isovar 1.37.2 and later, and drop the stale shared-osteosarc note.
 
 ## [v10.5.3](https://github.com/openvax/varcode/tree/v10.5.3) (2026-09-25)
 
