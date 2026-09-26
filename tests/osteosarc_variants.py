@@ -10,7 +10,7 @@ from varcode import Variant, VariantCollection
 
 FIXTURE_PATH = Path(__file__).parent / "data" / "osteosarc_variants.json"
 SNAPSHOT_ID = "9b34ea0e13f9c1c35c3c88b7e646c0e608b86a143dee0e668bf3f74b909f815c"
-OSTEOSARC_VERSION = "0.11.1"
+OSTEOSARC_VERSION = "0.12.0"
 
 
 def read_fixture(path=FIXTURE_PATH):

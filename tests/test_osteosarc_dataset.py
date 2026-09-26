@@ -44,7 +44,7 @@ def dataset(tmp_path_factory):
     from osteosarc import Cache, Dataset
 
     installed = tuple(int(part) for part in version("osteosarc").split(".")[:3])
-    assert (0, 11, 1) <= installed < (0, 12, 0)  # the test-data extra's range
+    assert (0, 12, 0) <= installed < (0, 13, 0)  # the test-data extra's range
     cache = Cache(cache_root, offline=True)
     data = Dataset.open(snapshot, cache=cache, offline=True)
     assert data.id == SNAPSHOT_ID

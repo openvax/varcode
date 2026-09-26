@@ -1,5 +1,14 @@
 # Change Log
 
+## [v10.5.9](https://github.com/openvax/varcode/tree/v10.5.9) (2026-09-26)
+
+- The `test-data` extra requires osteosarc `>=0.12.0,<0.13`, in step with
+  Isovar, Topiary and Vaxrank. The osteosarc test corpus was re-collected with
+  0.12.0 from the same snapshot; only its recorded osteosarc version changed.
+- The observed-junction check reads its openvax-v1 members with
+  `osteosarc.bundle_file`, which exports them into the osteosarc cache once,
+  instead of exporting them into a temporary directory on every run.
+
 ## [v10.5.8](https://github.com/openvax/varcode/tree/v10.5.8) (2026-09-26)
 
 - Check the three observed-junction fixtures against their ONT reads in
