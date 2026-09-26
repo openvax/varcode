@@ -30,7 +30,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install flake8 pytest pytest-cov coveralls ruff
           pip install -r requirements.txt
-          # Osteosarc 0.9.x supports every Python version in this matrix;
+          # Osteosarc 0.11.x supports every Python version in this matrix;
           # run native adapter checks against the bundled historical snapshot.
           pip install '.[test-data]'
       - name: Lint with flake8
