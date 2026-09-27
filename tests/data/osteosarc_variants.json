@@ -5068,7 +5068,7 @@
       "vaccines": []
     }
   ],
-  "osteosarc_version": "0.13.0",
+  "osteosarc_version": "0.14.0",
   "schema_version": 1,
   "selection": {
     "corrections": true,
@@ -5077,14 +5077,9 @@
   "source": {
     "corrections": [
       "tempus-grch37-counts",
-      "viewer-label-BG009368",
-      "viewer-label-SARC0277",
       "provider-IPISRC044-T1-rna",
       "gene-symbol-TRMO",
       "pvac-2025-detection",
-      "pvac-header-only-filtered-reports",
-      "pvac-rna-fields-na",
-      "pvac-extended-run-no-class-i",
       "muc3a-grch38-placement",
       "allele-CABLES1-chr18-23135500",
       "allele-CCDC40-chr17-80058951",
@@ -5101,15 +5096,6 @@
       "allele-FAM157A-p_W70_Q71ins_14",
       "allele-COL3A1-Splice",
       "otud4-source-unavailable",
-      "specimen-T1-site",
-      "specimen-T2-date-site",
-      "specimen-T3-site",
-      "pbmc-capture-dates",
-      "events-duplicate-rows",
-      "tempus-timepoint",
-      "tempus-file-labels",
-      "apheresis-date",
-      "reyagel-end-date",
       "natera-alleles-unavailable"
     ],
     "receipts": {
