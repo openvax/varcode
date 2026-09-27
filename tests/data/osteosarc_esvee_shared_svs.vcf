@@ -1,0 +1,53 @@
+##fileformat=VCFv4.2
+##EsveeVersion=1.2
+##INFO=<ID=AF,Number=A,Type=Float,Description="Allele Frequency, for each ALT allele, in the same order as listed">
+##INFO=<ID=ALTALN,Number=1,Type=String,Description="Alternative alignments for low map-qual breakends">
+##INFO=<ID=ASMID,Number=.,Type=Integer,Description="Unique id(s) of assembly(s) containing the breakend">
+##INFO=<ID=ASMLEN,Number=1,Type=Integer,Description="Assembly sequence length">
+##INFO=<ID=ASMLNKS,Number=.,Type=Integer,Description="Id(s) of breakend(s) linked by assembly">
+##INFO=<ID=ASMSEG,Number=.,Type=Integer,Description="Segment indices in assembly(s) containing the breakend">
+##INFO=<ID=AVGLEN,Number=1,Type=Integer,Description="Average variant fragment length">
+##INFO=<ID=BEAOR,Number=.,Type=Integer,Description="Breakend orientation(s) in assembly(s)">
+##INFO=<ID=BEAPOS,Number=.,Type=Integer,Description="Breakend position(s) in assembly(s)">
+##INFO=<ID=BEOR,Number=.,Type=Integer,Description="Breakend orientation(s) in reference genome">
+##INFO=<ID=CIPOS,Number=2,Type=Integer,Description="Confidence interval around position">
+##INFO=<ID=DF,Number=1,Type=Integer,Description="Count of discordant fragments with a read either side of the breakend">
+##INFO=<ID=HOMSEQ,Number=1,Type=String,Description="Sequence of base pair identical micro-homology at event breakpoints">
+##INFO=<ID=HOTSPOT,Number=0,Type=Flag,Description="Variant is a hotspot">
+##INFO=<ID=IHOMPOS,Number=2,Type=Integer,Description="Position of inexact homology">
+##INFO=<ID=INSALN,Number=1,Type=String,Description="Alternative alignments of insert sequence">
+##INFO=<ID=INSRMP,Number=1,Type=Float,Description="Portion of inserted sequence whose alignment overlaps the repeatmasker repeat">
+##INFO=<ID=INSRMRC,Number=1,Type=String,Description="Inserted sequence repeatmasker repeat class">
+##INFO=<ID=INSRMRT,Number=1,Type=String,Description="Inserted sequence repeatmasker repeat type">
+##INFO=<ID=LINE,Number=0,Type=Flag,Description="LINE insertion site">
+##INFO=<ID=MATEID,Number=1,Type=String,Description="Mate breakend ID">
+##INFO=<ID=MLR,Number=1,Type=Integer,Description="Max local indel repeat round breakend">
+##INFO=<ID=PON_COUNT,Number=1,Type=Integer,Description="PON count if in PON">
+##INFO=<ID=REF,Number=1,Type=Integer,Description="Count of reads mapping across this breakend">
+##INFO=<ID=REFPAIR,Number=1,Type=Integer,Description="Count of reference read pairs spanning this breakend supporting the reference allele">
+##INFO=<ID=SEGALEN,Number=1,Type=Integer,Description="Aligned length of segment(s) in reference genome">
+##INFO=<ID=SEGID,Number=.,Type=Integer,Description="Unique id(s) of segment(s) containing the breakend">
+##INFO=<ID=SEGMAPQ,Number=1,Type=Integer,Description="MAPQ of segment containing the breakend with highest QUAL contribution">
+##INFO=<ID=SEGRL,Number=1,Type=Integer,Description="Repeat length of segment with highest QUAL contribution">
+##INFO=<ID=SEGSCO,Number=1,Type=Integer,Description="Alignment score of segments containing the breakend with highest QUAL contribution">
+##INFO=<ID=SF,Number=1,Type=Integer,Description="Count of fragments supporting the breakend with a read overlapping the breakend">
+##INFO=<ID=SVID,Number=1,Type=String,Description="ID shared by two breakends">
+##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">
+##INFO=<ID=UFP,Number=1,Type=Integer,Description="Distinct fragment positions">
+##INFO=<ID=VF,Number=1,Type=Integer,Description="Total variant fragments supporting the breakend">
+##varcodeTestSource=Somatic esvee calls (nf-core/oncoanalyser) from the public osteosarc.com dataset (s3://sid-sijbrandij-osteosarc-dataset/kamil/oncoanalyser/IPISRC044_T2_ucla/esvee/IPISRC044_tumor_T2_ucla.esvee.somatic.vcf.gz, sha256 996940ce200f624c6fcda69a7d61203de2e2e54e39ab361d94d505b3c9606136)
+##varcodeTestSource=IDs 23175/23378 (SV0055), 15481/15487 (SV0175), 43636/43709 (SV0402), 43635/43762 (SV0461), 4820/4844 (SV0499) and 26313/26315 (DLG5 deletion): openvax-v1 SV targets that osteosarc_esvee_somatic.vcf lacks
+##varcodeTestSource=FORMAT and sample columns removed; records otherwise unmodified
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+chr2	84414540	4820	T	T[chr2:86146851[	55	PASS	ASMID=44309;ASMLEN=518;ASMSEG=0;AVGLEN=301;BEAOR=1;BEAPOS=0;BEOR=1;CIPOS=-1,0;DF=0;HOMSEQ=T;IHOMPOS=-1,0;MATEID=4844;REF=200;REFPAIR=30;SEGALEN=223;SEGID=44309_0;SEGMAPQ=60;SEGRL=206;SEGSCO=223;SF=5;SVID=4820_4844;SVTYPE=DEL;UFP=3;VF=5
+chr2	86146851	4844	C	]chr2:84414540]C	55	PASS	ASMID=44309;ASMLEN=518;ASMSEG=1;AVGLEN=301;BEAOR=1;BEAPOS=222;BEOR=-1;CIPOS=-1,0;DF=0;HOMSEQ=T;IHOMPOS=-1,0;MATEID=4820;REF=228;REFPAIR=24;SEGALEN=296;SEGID=44309_1;SEGMAPQ=60;SEGRL=289;SEGSCO=296;SF=5;SVID=4820_4844;SVTYPE=DEL;UFP=2;VF=5
+chr6	29141010	15481	C	]chr6:29630820]C	76	PASS	ASMID=37645;ASMLEN=670;ASMSEG=1;AVGLEN=317;BEAOR=1;BEAPOS=365;BEOR=-1;CIPOS=-1,1;DF=0;HOMSEQ=AC;IHOMPOS=-1,1;MATEID=15487;REF=216;REFPAIR=28;SEGALEN=305;SEGID=37645_1;SEGMAPQ=60;SEGRL=284;SEGSCO=305;SF=15;SVID=15481_15487;SVTYPE=DUP;UFP=11;VF=15
+chr6	29630820	15487	A	A[chr6:29141010[	76	PASS	ASMID=37645;ASMLEN=670;ASMSEG=0;AVGLEN=317;BEAOR=1;BEAPOS=0;BEOR=1;CIPOS=-1,1;DF=0;HOMSEQ=AC;IHOMPOS=-1,1;MATEID=15481;REF=242;REFPAIR=41;SEGALEN=367;SEGID=37645_0;SEGMAPQ=60;SEGRL=328;SEGSCO=353;SF=15;SVID=15481_15487;SVTYPE=DUP;UFP=14;VF=15
+chr9	22510295	23175	A	A[chr9:35428809[	84	PASS	ASMID=9836;ASMLEN=608;ASMSEG=0;AVGLEN=323;BEAOR=1;BEAPOS=0;BEOR=1;CIPOS=-3,3;DF=2;HOMSEQ=ATATAA;IHOMPOS=-3,3;MATEID=23378;REF=214;REFPAIR=15;SEGALEN=318;SEGID=9836_0;SEGMAPQ=60;SEGRL=282;SEGSCO=318;SF=17;SVID=23175_23378;SVTYPE=DEL;UFP=14;VF=19
+chr9	35428809	23378	T	]chr9:22510295]T	84	PASS	ASMID=9836;ASMLEN=608;ASMSEG=1;AVGLEN=323;BEAOR=1;BEAPOS=312;BEOR=-1;CIPOS=-3,3;DF=2;HOMSEQ=ATATAA;IHOMPOS=-3,3;MATEID=23175;REF=191;REFPAIR=27;SEGALEN=296;SEGID=9836_1;SEGMAPQ=60;SEGRL=282;SEGSCO=296;SF=17;SVID=23175_23378;SVTYPE=DEL;UFP=15;VF=19
+chr10	77850914	26313	G	GCTTCTCTGAAATGATGCTTCTCCA[chr10:77930461[	62	PASS	ASMID=23763;ASMLEN=613;ASMSEG=0;AVGLEN=349;BEAOR=1;BEAPOS=0;BEOR=1;CIPOS=0,0;DF=1;IHOMPOS=0,0;MATEID=26315;REF=191;REFPAIR=16;SEGALEN=372;SEGID=23763_0;SEGMAPQ=60;SEGRL=364;SEGSCO=372;SF=6;SVID=26313_26315;SVTYPE=DEL;UFP=4;VF=7
+chr10	77930461	26315	C	]chr10:77850914]CTTCTCTGAAATGATGCTTCTCCAC	62	PASS	ASMID=23763;ASMLEN=613;ASMSEG=1;AVGLEN=349;BEAOR=1;BEAPOS=396;BEOR=-1;CIPOS=0,0;DF=1;IHOMPOS=0,0;MATEID=26313;REF=195;REFPAIR=14;SEGALEN=217;SEGID=23763_1;SEGMAPQ=60;SEGRL=198;SEGSCO=210;SF=6;SVID=26313_26315;SVTYPE=DEL;UFP=4;VF=7
+chr20	52859903	43635	C	]chr20:58208346]ATAC	58	PASS	ASMID=3396;ASMLEN=535;ASMSEG=1;AVGLEN=317;BEAOR=1;BEAPOS=255;BEOR=-1;CIPOS=0,0;DF=1;IHOMPOS=0,0;MATEID=43762;REF=224;REFPAIR=23;SEGALEN=280;SEGID=3396_1;SEGMAPQ=60;SEGRL=252;SEGSCO=273;SF=6;SVID=43635_43762;SVTYPE=DUP;UFP=5;VF=7
+chr20	52863939	43636	T	T]chr20:55876748]	76	PASS	ASMID=14517;ASMLEN=1008;ASMSEG=3;AVGLEN=333;BEAOR=-1;BEAPOS=779;BEOR=1;CIPOS=-1,0;DF=1;HOMSEQ=T;IHOMPOS=-1,0;MATEID=43709;REF=207;REFPAIR=15;SEGALEN=229;SEGID=14517_3;SEGMAPQ=60;SEGRL=211;SEGSCO=229;SF=14;SVID=43636_43709;SVTYPE=INV;UFP=6;VF=15
+chr20	55876748	43709	T	T]chr20:52863939]	76	PASS	ASMID=14517;ASMLEN=1008;ASMLNKS=43708;ASMSEG=2;AVGLEN=333;BEAOR=1;BEAPOS=417;BEOR=1;CIPOS=0,1;DF=1;HOMSEQ=A;IHOMPOS=0,1;MATEID=43636;REF=200;REFPAIR=31;SEGALEN=363;SEGID=14517_2;SEGMAPQ=60;SEGRL=328;SEGSCO=349;SF=14;SVID=43636_43709;SVTYPE=INV;UFP=8;VF=15
+chr20	58208346	43762	C	CATA[chr20:52859903[	58	PASS	ASMID=3396;ASMLEN=535;ASMSEG=0;AVGLEN=317;BEAOR=1;BEAPOS=0;BEOR=1;CIPOS=0,0;DF=1;IHOMPOS=0,0;MATEID=43635;REF=205;REFPAIR=20;SEGALEN=252;SEGID=3396_0;SEGMAPQ=60;SEGRL=231;SEGSCO=245;SF=6;SVID=43635_43762;SVTYPE=DUP;UFP=5;VF=7

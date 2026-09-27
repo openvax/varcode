@@ -144,6 +144,12 @@ hg19's `chrM` is not the rCRS sequence Ensembl uses, so Varcode raises
 `ReferenceMismatchError` for the hg19 coordinate rather than annotate a
 different base; the test pins that.
 
+The recipe's 12 SV targets are tested with the esvee calls behind them. Six
+come from `tests/data/osteosarc_esvee_somatic.vcf` and esvee alleles written
+into the fusion tests. `tests/test_osteosarc_shared_svs.py` covers the other
+six with the records in `tests/data/osteosarc_esvee_shared_svs.vcf`, checking
+the genes at each breakend against LINX's. That module needs no download.
+
 Five targets have newer IDs than the fixture's pinned 2026-09-18 snapshot
 gives them, but the same alleles. For example, the fixture's
 `CABLES1-chr18-23135500` is the recipe's `CABLES1-chr18-23135764`.

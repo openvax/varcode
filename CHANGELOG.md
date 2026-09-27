@@ -1,5 +1,17 @@
 # Change Log
 
+## [v10.5.14](https://github.com/openvax/varcode/tree/v10.5.14) (2026-09-27)
+
+- Test the six openvax-v1 SV targets Varcode's esvee tests lacked (#528). The
+  somatic esvee records for SV0055, SV0175, SV0402, SV0461, SV0499 and Isovar's
+  DLG5 deletion (IPISRC044_tumor_T2_ucla, each with its mate) are in
+  `tests/data/osteosarc_esvee_shared_svs.vcf`. They load as mated breakends and
+  pair into the caller's DEL/DUP/INV events. Every record and event annotates
+  without failure. The genes Varcode finds at each breakend agree with LINX's.
+  The DLG5 deletion removes DLG5-201's start codon and 5' end, leaving its
+  product unresolved, as Isovar concludes. Whole transcripts inside these
+  deletions are classified inconsistently (#541).
+
 ## [v10.5.13](https://github.com/openvax/varcode/tree/v10.5.13) (2026-09-27)
 
 - Test every small variant the OpenVax libraries share (#528). A new test reads
