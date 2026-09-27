@@ -223,6 +223,16 @@ def predict_in_frame_coding_effect(
         aa_ref = protein_seq[
             aa_mutation_start_offset:
             aa_mutation_start_offset + n_aa_ref]
+    # The same rule for in-frame insertions: while the next reference
+    # residue equals the first inserted one, the insertion can slide one
+    # residue C-terminal with its residues rotated. Example: inserting AA
+    # after M1 of MAAAAAAAT is canonically p.8insAA. Closes #538.
+    elif n_aa_ref == 0 and n_aa_alt > 0 and not mutant_codons_contain_stop:
+        protein_seq = transcript.protein_sequence
+        while (aa_mutation_start_offset < len(protein_seq)
+                and protein_seq[aa_mutation_start_offset] == aa_alt[0]):
+            aa_alt = aa_alt[1:] + aa_alt[0]
+            aa_mutation_start_offset += 1
 
     if mutation_affects_start_codon and (aa_ref == aa_alt):
             # Substitution between start codons gets special treatment since,

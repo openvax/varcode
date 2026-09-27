@@ -1,5 +1,22 @@
 # Change Log
 
+## [v10.5.12](https://github.com/openvax/varcode/tree/v10.5.12) (2026-09-27)
+
+- `protein_diff` no longer calls every coding variant `StartLoss` on a
+  transcript whose annotated start codon isn't ATG (#537). It reads a
+  recognised start codon (e.g. CTG, TTG) at the CDS start as Met in both the
+  reference and the mutant protein. Ensembl writes such initiators as Met in
+  some proteins and literally in others (91 complete transcripts in Ensembl
+  115, among them FGF2, VEGFA and WT1). For example, BAG1-210 (CTG start)
+  chr9:33262750 C>G is `p.E178Q`, as `fast` reports, and CTG→CAG at such a
+  start is `StartLoss` under either convention. The default annotator (`fast`)
+  was not affected.
+- `fast` places an in-frame insertion within a run of identical residues at
+  its HGVS 3'-most position, as it already did for deletions (#321), and so
+  agrees with `protein_diff` (#538). For example, two alanines inserted into
+  CABLES1's poly-alanine stretch are `p.8insAA`, not `p.1insAA`; the mutant
+  protein is unchanged.
+
 ## [v10.5.11](https://github.com/openvax/varcode/tree/v10.5.11) (2026-09-27)
 
 - The `test-data` extra requires osteosarc `>=0.14.0,<0.15`, in step with

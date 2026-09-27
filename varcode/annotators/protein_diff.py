@@ -60,6 +60,14 @@ from ..version import __version__ as _varcode_version
 from .fast import FastEffectAnnotator
 
 
+def _initiator_as_met(protein, first_codon, codon_table):
+    """``protein`` with its first residue read as Met when ``first_codon``
+    is a start codon of ``codon_table``, as the initiator tRNA reads it."""
+    if protein and first_codon in codon_table.start_codons:
+        return "M" + protein[1:]
+    return protein
+
+
 class ProteinDiffEffectAnnotator:
     """Classify effects by diffing translated mutant protein against
     the reference protein.
@@ -157,30 +165,22 @@ class ProteinDiffEffectAnnotator:
             # UTR, ref-mismatch, splice-junction-spanning, etc.
             return fast_effect
 
-        ref_protein = str(transcript.protein_sequence)
-        mut_protein = mt.mutant_protein_sequence
-
-        # Alternate start codon rewrite: if the first codon changed to
-        # another recognised start codon in the transcript's codon
-        # table (e.g. ATG→CTG/GTG/TTG, or MT ATG→GTG under table 2),
-        # the initiator tRNA still loads Met regardless of what the
-        # codon would decode to internally. Rewrite the mutant
-        # protein's first residue to 'M' so the shared diff classifier
-        # sees the biologically correct protein. Closes #320.
+        # A recognised start codon at the CDS start (e.g. CTG/TTG, or MT
+        # ATA/GTG under table 2) initiates as Met, whatever it decodes to
+        # internally. Ensembl writes such initiators literally in some
+        # proteins and as Met in others, so read both proteins' first
+        # codons the same way before diffing them (#320, #537).
+        codon_table = codon_table_for_transcript(transcript)
         cds_start = min(transcript.start_codon_spliced_offsets)
         ref_first_codon = str(
-            transcript.sequence)[cds_start:cds_start + 3]
+            transcript.sequence)[cds_start:cds_start + 3].upper()
         mutant_cds_start = _mutant_cds_start(transcript, mt.edits)
         mut_first_codon = mt.cdna_sequence[
             mutant_cds_start:mutant_cds_start + 3].upper()
-        if (mut_first_codon != ref_first_codon
-                and mut_protein
-                and mut_protein[0] != "M"
-                and ref_protein
-                and ref_protein[0] == "M"):
-            codon_table = codon_table_for_transcript(transcript)
-            if mut_first_codon in codon_table.start_codons:
-                mut_protein = "M" + mut_protein[1:]
+        ref_protein = _initiator_as_met(
+            str(transcript.protein_sequence), ref_first_codon, codon_table)
+        mut_protein = _initiator_as_met(
+            mt.mutant_protein_sequence, mut_first_codon, codon_table)
 
         # Proteins match → Silent or AlternateStartCodon. Handle
         # both here because the shared classifier doesn't have
@@ -191,7 +191,6 @@ class ProteinDiffEffectAnnotator:
             if mt.edits and all(e.cdna_end <= cds_start for e in mt.edits):
                 return FivePrimeUTR(variant, transcript)
             if ref_first_codon != mut_first_codon:
-                codon_table = codon_table_for_transcript(transcript)
                 if mut_first_codon in codon_table.start_codons:
                     return AlternateStartCodon(
                         variant=variant,
