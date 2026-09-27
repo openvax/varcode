@@ -644,6 +644,29 @@ def test_mt_alternate_start_atg_to_gtg_agrees(dual_annotator):
     assert effect.short_description == "alternate-start-codon (ATG>GTG)"
 
 
+# Ensembl 95 writes some CTG/TTG initiators as Met and others literally.
+NPW_ID = "ENST00000329610"     # NPW-201, chr16 + strand, CTG start written 'M'
+UBE2D2_ID = "ENST00000253815"  # UBE2D2-201, chr5 + strand, CTG start written 'L'
+
+
+@pytest.mark.parametrize("transcript_id, contig, position, ref, alt, effect_class, expected", [
+    (NPW_ID, "16", 2019962, "C", "A", Substitution, "p.L21M"),
+    (UBE2D2_ID, "5", 139600408, "T", "G", Substitution, "p.C21G"),
+    (NPW_ID, "16", 2019903, "T", "A", StartLoss, "p.M1? (start-loss)"),
+    (UBE2D2_ID, "5", 139599563, "T", "A", StartLoss, "p.L1? (start-loss)"),
+])
+def test_unchanged_non_atg_initiator_agrees(
+        dual_annotator, transcript_id, contig, position, ref, alt,
+        effect_class, expected):
+    """A CTG initiator reads as Met whether Ensembl writes the reference
+    protein's first residue as 'M' or literally as 'L'. A codon 21 change
+    is a Substitution, not a StartLoss, and CTG->CAG at the start codon is
+    a StartLoss under either convention (#537)."""
+    variant = Variant(contig, position, ref, alt, cached_release(95))
+    annotator = _FAST if dual_annotator == "fast" else _PDIFF
+    _pin(variant, transcript_id, annotator, effect_class, expected)
+
+
 # ----- Pattern D: trimming / offset conventions -----
 
 
@@ -662,6 +685,22 @@ def test_deletion_in_repeat_residue_stretch_agrees_hgvs_canonical(
     effect = _annotate(variant, CFTR_ID, annotator)
     assert isinstance(effect, Deletion)
     assert effect.short_description == "p.L101del"
+
+
+def test_insertion_in_repeat_residue_stretch_agrees_hgvs_canonical(
+        dual_annotator):
+    """Two alanines inserted into CABLES1's N-terminal poly-alanine
+    stretch (MAAAAAAAT...). Both annotators report ``p.8insAA``, the
+    HGVS 3'-rule position after the last equivalent residue, and the
+    same mutant protein (#538)."""
+    cables1_id = "ENST00000256925"
+    variant = Variant("18", 23135764, "T", "TGGCGGC", ensembl_grch38)
+    annotator = _FAST if dual_annotator == "fast" else _PDIFF
+    effect = _annotate(variant, cables1_id, annotator)
+    assert isinstance(effect, Insertion)
+    assert effect.short_description == "p.8insAA"
+    reference = ensembl_grch38.transcript_by_id(cables1_id).protein_sequence
+    assert effect.mutant_protein_sequence == reference[:8] + "AA" + reference[8:]
 
 
 def test_penultimate_codon_snv_agrees(dual_annotator):
