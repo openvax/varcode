@@ -1,5 +1,15 @@
 # Change Log
 
+## [v10.5.11](https://github.com/openvax/varcode/tree/v10.5.11) (2026-09-27)
+
+- The `test-data` extra requires osteosarc `>=0.14.0,<0.15`, in step with
+  Isovar, Topiary and Vaxrank. The osteosarc test corpus was re-collected with
+  0.14.0 from the same snapshot, and every entry is unchanged (179 ready, 3
+  unresolved). Its `source.corrections` now lists only the corrections that
+  change the variant sources (21 of the snapshot's 35), as osteosarc does since
+  0.13.1; the 14 it no longer lists edit BAM, specimen, event and bucket
+  metadata, not variants.
+
 ## [v10.5.10](https://github.com/openvax/varcode/tree/v10.5.10) (2026-09-26)
 
 - The `test-data` extra requires osteosarc `>=0.13.0,<0.14`, in step with
