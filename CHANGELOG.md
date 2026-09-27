@@ -1,5 +1,18 @@
 # Change Log
 
+## [v10.5.13](https://github.com/openvax/varcode/tree/v10.5.13) (2026-09-27)
+
+- Test every small variant the OpenVax libraries share (#528). A new test reads
+  the targets from openvax-v1's recipe and annotates all 187 with both
+  annotators, which must agree on every transcript. That is the 179 current
+  catalogue alleles, confirmed identical to the ready alleles of
+  `tests/data/osteosarc_variants.json`, plus the 8 other libraries depend on:
+  the historical MAP2 deletion, NTF3's compound, the ACSL6/EPPK1/KTN1
+  count-export indels, NR2F2 on GRCh37 and MT_ND5 in rCRS and hg19
+  coordinates. The hg19 `chrM` coordinate is refused with
+  `ReferenceMismatchError`, since hg19's chrM is not rCRS. Before 10.5.12 the
+  CABLES1 insertion failed this test (#538).
+
 ## [v10.5.12](https://github.com/openvax/varcode/tree/v10.5.12) (2026-09-27)
 
 - `protein_diff` no longer calls every coding variant `StartLoss` on a

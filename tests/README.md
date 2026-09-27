@@ -124,10 +124,30 @@ Dataset: [osteosarc.com](https://osteosarc.com/data/), snapshot acquired
 2026-09-18, collected 2026-09-21; public data listed as CC0-1.0 by the
 [AWS Open Data Registry](https://registry.opendata.aws/sid-osteosarc/).
 
-## Shared test reads (openvax-v1)
+## Shared test data (openvax-v1)
 
-The OpenVax libraries share one set of Sid test reads, `openvax-v1`, published
+The OpenVax libraries share one set of Sid test data, `openvax-v1`, published
 by osteosarc 0.11 ([iskandr/osteosarc#56](https://github.com/iskandr/osteosarc/issues/56)).
+
+Its recipe lists every target the libraries test.
+`tests/test_osteosarc_shared_targets.py` checks that its 179 current catalogue
+alleles are exactly the ready alleles of `tests/data/osteosarc_variants.json`.
+It then annotates all 187 small-variant targets with both annotators, which
+must agree on every transcript. The other 8 targets are alleles the other
+libraries depend on:
+- the historical MAP2 deletion and NTF3's compound substitution;
+- three count-export indels (ACSL6, EPPK1, KTN1);
+- NR2F2 at its GRCh37 position;
+- MT_ND5 in rCRS (`MT:12994`) and hg19 (`chrM:12995`) coordinates.
+
+hg19's `chrM` is not the rCRS sequence Ensembl uses, so Varcode raises
+`ReferenceMismatchError` for the hg19 coordinate rather than annotate a
+different base; the test pins that.
+
+Five targets have newer IDs than the fixture's pinned 2026-09-18 snapshot
+gives them, but the same alleles. For example, the fixture's
+`CABLES1-chr18-23135500` is the recipe's `CABLES1-chr18-23135764`.
+
 Varcode stores no reads of its own. Each record in
 `tests/data/osteosarc_observed_junctions.json` keeps a 40-base junction window
 and its annotations, and the `openvax-v1` member
@@ -137,7 +157,7 @@ it. `tests/test_osteosarc_shared_reads.py` reads those three members through
 
 ```sh
 python -m pip install -e '.[test-data]'
-python -m pytest -q tests/test_osteosarc_shared_reads.py
+python -m pytest -q tests/test_osteosarc_shared_targets.py tests/test_osteosarc_shared_reads.py
 ```
 
 The first run downloads and verifies the bundle (28 MB) and exports its
