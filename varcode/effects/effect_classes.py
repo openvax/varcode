@@ -1705,7 +1705,9 @@ class GeneFusion(StructuralVariantEffect):
     """A structural variant joining ``transcript`` to a sense-oriented
     transcript in another gene — the canonical fusion shape. Breakends
     produce it, and so do deletions, duplications and inversions with
-    one end in each gene.
+    one end in each gene. A 3' partner that starts just past a junction
+    end, rather than spanning it, is joined from its second exon and is
+    only ever a further candidate behind the primary classification.
 
     The default annotator retains every compatible annotated partner isoform
     and junction in :attr:`candidates`, with no count cap. The first is the
@@ -1752,9 +1754,9 @@ class TranslocationToIntergenic(StructuralVariantEffect):
     can't read sense-to-sense into it (e.g. two genes' 5' ends joined
     head to head). The downstream consequence depends on whether the
     sequence beyond the breakpoint contains cryptic splice / ORF
-    signals — reported as a single outcome here, with PR 11's
-    cryptic-exon enumerator adding candidate outcomes when
-    applicable."""
+    signals. Fusions with a coding transcript that starts just past the
+    mate follow as further candidates, and PR 11's cryptic-exon
+    enumerator adds candidate outcomes when applicable."""
 
     short_description = "sv-translocation-intergenic"
 

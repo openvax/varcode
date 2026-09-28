@@ -1,5 +1,25 @@
 # Change Log
 
+## [v10.7.0](https://github.com/openvax/varcode/tree/v10.7.0) (2026-09-28)
+
+- A structural effect gains `GeneFusion` candidates for 3' partners that start
+  just past a junction end, rather than spanning it (#550). When the annotated
+  transcript keeps its 5' end and the junction continues into the 10 kb
+  (`MAX_UPSTREAM_PARTNER_DISTANCE`) before a protein-coding transcript on the
+  strand it reads, the fused cDNA joins that transcript's second exon, because
+  its first has no splice acceptor. This is LINX's rule, with LINX's limit for
+  fusions other than known pairs. Each model records
+  `three_prime_breakend="upstream"` and `three_prime_upstream_distance`.
+- These fusions follow the primary classification and never replace it, since
+  RNA need not splice that way. openvax-v2's GABBR1--SLC29A1 junction lands 597
+  bases before SLC29A1. There, Isovar's long reads run from GABBR1 intronic
+  sequence into the intergenic stretch and end in poly(A) before SLC29A1. So
+  that breakend stays `TranslocationToIntergenic`, whose priority is its own,
+  with one candidate per SLC29A1 isoform. A DEL, DUP or INV gains the same
+  candidates behind its local consequence. Its `most_likely_effect` is
+  unchanged, but its priority follows its most disruptive candidate, as for any
+  structural effect set, so it can rise to `GeneFusion`.
+
 ## [v10.6.3](https://github.com/openvax/varcode/tree/v10.6.3) (2026-09-28)
 
 - A directly constructed BND `StructuralVariant` takes `mate_contig`,

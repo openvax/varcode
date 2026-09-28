@@ -160,8 +160,8 @@ The five junctions esvee called must match its records. ATP5MG--KMT2A and
 TPST1--CRCP must fuse every coding isoform of the 5' gene, and ATP5MG--KMT2A's
 fusion protein must be the one Isovar translates from its junction reads. The
 other five have no sense-oriented coding partner, so the 5' gene keeps its 5'
-fragment. For GABBR1--SLC29A1, whose junction lies just upstream of SLC29A1,
-that result is a known gap (#550).
+fragment. GABBR1--SLC29A1's junction lies 597 bases before SLC29A1 starts, so
+SLC29A1's isoforms follow that fragment as fusion candidates (#550).
 
 Five targets have newer IDs than the fixture's pinned 2026-09-18 snapshot
 gives them, but the same alleles. For example, the fixture's

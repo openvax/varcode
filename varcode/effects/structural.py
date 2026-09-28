@@ -43,6 +43,11 @@ from ..mutant_transcript import _AssembledAllele  # noqa: F401
 from ..sv_allele_parser import breakend_sides, _breakend_local_side
 
 
+# How far past a junction end a sense-oriented coding transcript may
+# start and still be a 3' fusion partner: LINX's limit for fusions other
+# than known pairs and high-impact promiscuous partners (#550).
+MAX_UPSTREAM_PARTNER_DISTANCE = 10_000
+
 # --------------------------------------------------------------------
 # MutantTranscript builders (#335).
 #
@@ -477,13 +482,15 @@ def _local_junction_insertion(variant, transcript):
 def _build_fusion_mutant_transcript(
         reference_transcript,
         five_prime_transcript, five_prime_position,
-        three_prime_transcript, three_prime_position, inserted_sequence=""):
+        three_prime_transcript, three_prime_position, inserted_sequence="",
+        three_prime_start=None):
     """Build a :class:`MutantTranscript` for a :class:`GeneFusion`
     (#336).
 
     The fused cDNA is the 5' partner's cDNA up to its breakpoint
     followed by the 3' partner's from its breakpoint on, each keeping
-    the base at its breakpoint. When the 5' partner's start codon lies
+    the base at its breakpoint, unless ``three_prime_start`` gives the
+    3' partner's first cDNA offset. When the 5' partner's start codon lies
     in the retained portion, the protein is translated through the
     junction. Inserted bases are retained at exonic joins. At two intronic
     breakpoints they are excluded under the reference-splicing assumption;
@@ -505,8 +512,9 @@ def _build_fusion_mutant_transcript(
     three_prime_cdna = str(three_prime_cdna)
     five_prime_end = _cdna_cut(
         five_prime_transcript, five_prime_position, True)
-    three_prime_start = _cdna_cut(
-        three_prime_transcript, three_prime_position, False)
+    if three_prime_start is None:
+        three_prime_start = _cdna_cut(
+            three_prime_transcript, three_prime_position, False)
     segments = (
         ReferenceSegment(
             source=five_prime_transcript, start=0, end=five_prime_end,
@@ -604,6 +612,11 @@ def predict_structural_variant_effect(variant, transcript):
             effect = span_effect
         elif isinstance(span_effect, StructuralVariantEffect):
             effect._attach_primary_effects((span_effect,))
+    # A partner starting just past a junction end is a further candidate
+    # after the primary classification, whatever it is (#550).
+    if isinstance(effect, StructuralVariantEffect):
+        effect._attach_primary_effects(
+            _upstream_fusions(variant, transcript, assembly))
 
     # Attach cryptic-exon candidates enumerated from flanking
     # sequence / long-read assembly (#337). They show up as
@@ -981,36 +994,23 @@ def _fusion_across_junction(variant, transcript, assembly):
     primary candidates, or ``None``. Annotation order is not a likelihood
     ranking; no compatible partner is discarded by a candidate-count limit.
 
-    A junction end belongs to this transcript when the transcript
-    spans it and the transcript's *gene* doesn't span the other
-    end: an event with both ends in one gene is intragenic, however
-    short the isoform being annotated. The kept side and the strand
-    then give the transcript's role — keeping its 5' end makes it
+    Junction ends are those of :func:`_junction_ends`. The kept side
+    and the strand give the transcript's role — keeping its 5' end makes it
     the 5' partner — and the partner at the other end has to keep
     the opposite end, which is what makes the join sense-to-sense.
     Junctions where this transcript is the 5' partner are tried
     first. A kept side of ``None`` (unreadable ALT) treats the
     transcript as the 5' partner and accepts any partner.
     """
-    gene = transcript.gene
-
     def keeps_five_prime(breakend):
         return breakend.keeps is None or _retains_five_prime_end(
             transcript, breakend.keeps)
 
-    ends = []
-    for junction in getattr(variant, "junctions", ()):
-        for near, far in (junction, junction[::-1]):
-            if not _contains(transcript, near):
-                continue
-            if _contains(gene, far):
-                continue
-            ends.append((near, far))
-
     fusions = []
     seen = set()
     for near, far in sorted(
-            ends, key=lambda pair: not keeps_five_prime(pair[0])):
+            _junction_ends(variant, transcript),
+            key=lambda pair: not keeps_five_prime(pair[0])):
         five_prime = keeps_five_prime(near)
         for partner in _fusion_partners(
                 variant, transcript, near, far, five_prime):
@@ -1041,6 +1041,92 @@ def _fusion_across_junction(variant, transcript, assembly):
     primary = fusions[0]
     primary._attach_primary_effects(fusions[1:])
     return primary
+
+
+def _junction_ends(variant, transcript):
+    """``(near, far)`` for each junction end that belongs to
+    ``transcript``: the transcript spans ``near`` and its *gene* doesn't
+    span ``far``. An event with both ends in one gene is intragenic,
+    however short the isoform being annotated."""
+    gene = transcript.gene
+    return [(near, far)
+            for junction in getattr(variant, "junctions", ())
+            for near, far in (junction, junction[::-1])
+            if _contains(transcript, near) and not _contains(gene, far)]
+
+
+def _upstream_fusions(variant, transcript, assembly):
+    """:class:`GeneFusion` candidates with 3' partners that start just
+    past a junction end rather than spanning it (#550).
+
+    When ``transcript`` keeps its 5' end and the junction continues, on
+    a partner's strand, into the stretch at most
+    :data:`MAX_UPSTREAM_PARTNER_DISTANCE` bases before that partner
+    starts, the whole partner is retained. Its first exon has no splice
+    acceptor, so the fusion joins its second exon, as in LINX. Whether
+    RNA splices that way is uncertain, so the annotator adds these after
+    its primary classification rather than in place of it. Each model
+    records the distance in its evidence.
+    """
+    fusions = []
+    for near, far in _junction_ends(variant, transcript):
+        if (near.keeps is None or far.keeps is None
+                or not _retains_five_prime_end(transcript, near.keeps)):
+            continue
+        inserted = (variant.junction_inserted_sequence((near, far))
+                    if hasattr(variant, "junction_inserted_sequence") else None)
+        for partner, distance in _upstream_partners(variant, far):
+            if (partner.gene_id == transcript.gene_id
+                    or _contains(partner.gene, near)):
+                continue
+            model = assembly or _build_fusion_mutant_transcript(
+                transcript, transcript, near.position, partner, far.position,
+                inserted_sequence=inserted,
+                three_prime_start=exon_length(partner.exons[0]))
+            if model is not None and not assembly:
+                model = replace(model, evidence={
+                    **dict(model.evidence or {}),
+                    "three_prime_breakend": "upstream",
+                    "three_prime_upstream_distance": distance})
+            fusions.append(GeneFusion(
+                variant=variant,
+                transcript=transcript,
+                partner_transcript=partner,
+                five_prime_transcript=transcript,
+                three_prime_transcript=partner,
+                mutant_transcript=model))
+    return fusions
+
+
+def _upstream_partners(variant, far):
+    """``(transcript, distance)`` for each protein-coding transcript with
+    a second exon that starts on ``far``'s kept side, at most
+    :data:`MAX_UPSTREAM_PARTNER_DISTANCE` bases past it, and is read away
+    from it. Cached like :func:`_coding_transcripts_at`."""
+    def lookup():
+        position = int(far.position)
+        forward = far.keeps == "right"
+        low, high = ((position + 1, position + MAX_UPSTREAM_PARTNER_DISTANCE)
+                     if forward else
+                     (max(1, position - MAX_UPSTREAM_PARTNER_DISTANCE), position - 1))
+        try:
+            transcripts = variant.genome.transcripts_at_locus(
+                str(far.contig), low, high)
+        except ValueError:
+            return []
+        partners = []
+        for transcript in transcripts:
+            distance = (transcript.start - position if forward
+                        else position - transcript.end)
+            if (transcript.is_protein_coding and len(transcript.exons) > 1
+                    and transcript.strand == ("+" if forward else "-")
+                    and 0 < distance <= MAX_UPSTREAM_PARTNER_DISTANCE):
+                partners.append((transcript, distance))
+        return partners
+
+    return _cached(
+        variant, ("upstream_partners", str(far.contig), int(far.position), far.keeps),
+        lookup)
 
 
 def _fusion_partners(
