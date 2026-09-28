@@ -58,6 +58,8 @@ downstream integrations without forcing them into the core class:
 
 from typing import Any, Mapping, NamedTuple, Optional, Tuple
 
+from pyensembl.locus import normalize_chromosome
+
 from .variant import Variant
 
 
@@ -205,22 +207,28 @@ class StructuralVariant(Variant):
     alt : str, optional
         Original ALT field from the VCF — ``<DEL>``, ``<INS:ME:ALU>``,
         ``G]17:198982]``, etc. Kept so round-trip to VCF is possible.
-        Defaults to ``"<{sv_type}>"``.
+        Defaults to ``"<{sv_type}>"``. A BND's breakend ALT also
+        supplies any of ``mate_contig``, ``mate_start`` and
+        ``mate_orientation`` left unset; a set one it contradicts
+        raises ``ValueError``.
     ref : str, optional
         Original REF base (usually one nucleotide, the anchor).
         Defaults to ``"N"``.
     mate_contig : str, optional
         For BND: the mate breakpoint's chromosome. Normalized the same
         way as ``contig`` (e.g. "chr4" -> "4" when converting UCSC names).
+        Defaults to the contig a breakend ``alt`` names.
     mate_start : int, optional
-        For BND: the mate breakpoint's position.
+        For BND: the mate breakpoint's position. Defaults to the
+        position a breakend ``alt`` names.
     mate_orientation : str, optional
         For BND: one of ``"[["``, ``"[]"``, ``"][``, ``"]]"``
         encoding the VCF 4.1 breakend strand + direction shorthand
         (first bracket = preceding; second = following). See VCF
-        §5.4 for the full grammar. When ``alt`` isn't a breakend,
-        ``"[["`` / ``"]]"`` still tell the annotator which side of the
-        mate is kept.
+        §5.4 for the full grammar. Defaults to the brackets of a
+        breakend ``alt``. When ``alt`` isn't a breakend, ``"[["`` /
+        ``"]]"`` still tell the annotator which side of the mate is
+        kept.
     ci_start : (int, int), optional
         Confidence interval around ``start`` (VCF CIPOS).
     ci_end : (int, int), optional
@@ -326,6 +334,8 @@ class StructuralVariant(Variant):
             if mate_contig is not None else None)
         self.mate_start = int(mate_start) if mate_start is not None else None
         self.mate_orientation = mate_orientation
+        if sv_type == "BND":
+            self._take_mate_from_alt(alt)
         self.ci_start = tuple(ci_start) if ci_start is not None else None
         self.ci_end = tuple(ci_end) if ci_end is not None else None
         self.alt_assembly = alt_assembly
@@ -345,6 +355,37 @@ class StructuralVariant(Variant):
         # recomputed for every transcript the variant is annotated on.
         self._junctions = None
         self._annotation_cache = {}
+
+    def _take_mate_from_alt(self, alt):
+        """Fill the mate fields a breakend ALT names and the caller left
+        unset, and reject set ones that contradict it (#553). Contigs
+        compare by their Ensembl-style names, since the ALT keeps the
+        caller's spelling while :attr:`mate_contig` may be converted."""
+        # Local import: sv_allele_parser imports this module.
+        from .sv_allele_parser import breakend_mate
+        named = breakend_mate(alt)
+        if named is None:
+            return
+        contig, start, orientation = named
+        if self.mate_contig is None:
+            self.mate_contig = self._normalize_contig_name(contig)
+        elif self._ensembl_contig_name(self.mate_contig) != (
+                self._ensembl_contig_name(contig)):
+            raise ValueError(
+                "mate_contig=%r contradicts breakend ALT %r"
+                % (self.mate_contig, alt))
+        for field, value in (
+                ("mate_start", start), ("mate_orientation", orientation)):
+            given = getattr(self, field)
+            if given is None:
+                setattr(self, field, value)
+            elif given != value:
+                raise ValueError(
+                    "%s=%r contradicts breakend ALT %r" % (field, given, alt))
+
+    def _ensembl_contig_name(self, contig):
+        return self._convert_ucsc_contig_name_to_ensembl(
+            normalize_chromosome(contig))
 
     @property
     def is_structural(self) -> bool:

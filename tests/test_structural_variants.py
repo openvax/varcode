@@ -672,6 +672,59 @@ def test_sv_mate_contig_follows_contig_normalization():
     assert (kept.contig, kept.mate_contig) == ("chr5", "chr4")
 
 
+def test_bnd_takes_mate_from_breakend_alt():
+    """A hand-built BND gets its mate from the ALT, as the parser gives
+    it, so annotation sees the junction (#553). Without the mate,
+    SEMA6A's side of this esvee fusion was reported as a translocation
+    to intergenic space."""
+    from pyensembl import cached_release
+    from varcode.effects import GeneFusion
+    genome = cached_release(95)
+    record = dict(contig="chr5", start=116_474_281, ref="C",
+                  alt="[chr4:75037126[C", genome=genome)
+    built = StructuralVariant(sv_type="BND", convert_ucsc_contig_names=True, **record)
+    parsed = parse_symbolic_alt(convert_ucsc_contig_names=True, **record)
+    assert (built.mate_contig, built.mate_start, built.mate_orientation) == (
+        "4", 75_037_126, "[[")
+    assert built.junctions == parsed.junctions
+    assert built == parsed
+    fusion = built.effect_on_transcript(genome.transcript_by_id("ENST00000343348"))
+    assert isinstance(fusion, GeneFusion)
+    assert fusion.three_prime_transcript.gene_name == "PARM1"
+
+
+def test_bnd_fills_only_unset_mate_fields():
+    sv = StructuralVariant("4", 15012987, "BND", alt="N[4:2664478[",
+                           mate_contig="4", genome="GRCh38")
+    assert (sv.mate_contig, sv.mate_start) == ("4", 2664478)
+
+
+def test_bnd_mate_contig_may_be_spelled_differently_from_alt():
+    """``pair_breakends`` passes an already converted mate contig with
+    the caller's ALT text."""
+    sv = StructuralVariant("5", 116_474_281, "BND", alt="[chr4:75037126[C",
+                           mate_contig="4", mate_start=75_037_126,
+                           genome="GRCh38", normalize_contig_names=False)
+    assert sv.mate_contig == "4"
+
+
+@pytest.mark.parametrize("field,value", [
+    ("mate_contig", "5"),
+    ("mate_start", 2664479),
+    ("mate_orientation", "]]"),
+])
+def test_bnd_rejects_mate_fields_contradicting_alt(field, value):
+    with pytest.raises(ValueError, match=field):
+        StructuralVariant("4", 15012987, "BND", alt="N[4:2664478[",
+                          genome="GRCh38", **{field: value})
+
+
+@pytest.mark.parametrize("alt", [None, "<BND>", "N[4:2664478]", "N.", "N[?:?["])
+def test_bnd_without_breakend_alt_has_no_mate(alt):
+    sv = StructuralVariant("4", 15012987, "BND", alt=alt, genome="GRCh38")
+    assert (sv.mate_contig, sv.mate_start, sv.junctions) == (None, None, ())
+
+
 def test_vcf_loader_svs_use_requested_genome():
     """SV rows get the genome passed to ``load_vcf``, like SNV rows."""
     body = (

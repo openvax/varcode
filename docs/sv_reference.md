@@ -21,6 +21,9 @@ This applies to DEL, DUP, INV and CNV (including CN0/CN3). This parser requires
 a nonempty span with `END > POS`. Direct `StructuralVariant(...)` construction
 keeps its existing explicit-coordinate defaults: pass `affected_start`
 separately when `start` includes padding. Paired breakends already supply it.
+A directly constructed BND takes `mate_contig`, `mate_start` and
+`mate_orientation` from a breakend ALT when they aren't passed, and raises
+`ValueError` when a passed one contradicts it.
 
 ## Junction orientation
 
