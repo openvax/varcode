@@ -229,6 +229,39 @@ def test_most_likely_for_exonic_splice_site_is_normal_splicing():
     assert isinstance(target.most_likely_effect, NormalSplicing)
 
 
+@pytest.mark.parametrize("contig, position, ref, alt, transcript_id, cryptic", [
+    ("17", 43125270, "C", "A", BRCA1_TRANSCRIPT_ID, CrypticDonor),    # exon 1 donor, - strand
+    ("7", 117480148, "G", "A", CFTR_TRANSCRIPT_ID, CrypticDonor),     # exon 1 donor, + strand
+    ("7", 117666907, "G", "A", CFTR_TRANSCRIPT_ID, CrypticAcceptor),  # exon 27 of 27 acceptor
+])
+def test_terminal_exons_are_never_skipped(
+        contig, position, ref, alt, transcript_id, cryptic):
+    """Skipping joins the donor before an exon to the acceptor after it,
+    so a transcript's first and last exons can't be skipped; intron
+    retention leads instead (#543)."""
+    variant = Variant(contig, position, ref, alt, ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(transcript_id)
+    target = next(e for e in variant.effects() if e.transcript is transcript)
+    assert [type(c.effect) for c in target.candidates] == [
+        IntronRetention, cryptic, NormalSplicing]
+    assert isinstance(target.most_likely_effect, IntronRetention)
+
+
+def test_first_exon_donor_variant_is_not_headlined_as_exon_skip():
+    top = Variant("17", 43125270, "C", "A", ensembl_grch38).effects().top_priority_effect()
+    assert isinstance(top, SpliceOutcomeSet)
+    assert not isinstance(top.most_likely_effect, ExonSkipping)
+
+
+def test_internal_exon_next_to_the_first_is_still_skipped_first():
+    """CFTR exon 2's donor: an internal exon, so skipping still leads."""
+    variant = Variant("7", 117504364, "G", "A", ensembl_grch38)
+    transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
+    target = next(e for e in variant.effects() if e.transcript is transcript)
+    assert isinstance(target.most_likely_effect, ExonSkipping)
+    assert target.short_description == "splice-set:exon-skip ENSE00003635654 (p.S18_E54del)"
+
+
 # --------------------------------------------------------------------
 # Splice signal back-reference (#382): each mechanism carries
 # .splice_signal pointing to the underlying SpliceDonor / etc.

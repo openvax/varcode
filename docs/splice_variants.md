@@ -33,7 +33,9 @@ for candidate in splice_set.candidates:
 ```
 
 Candidates can include `NormalSplicing`, `ExonSkipping`, `IntronRetention`,
-`CrypticDonor`, and `CrypticAcceptor`. Their sequences and amino-acid changes
+`CrypticDonor`, and `CrypticAcceptor`. `ExonSkipping` is offered only for
+internal exons: skipping joins the donor before an exon to the acceptor after
+it, so a transcript's first and last exons can't be skipped. Their sequences and amino-acid changes
 are available when the required sequence can be resolved; otherwise the
 fields may be `None`. Intron retention and cryptic-site predictions can need
 genomic sequence beyond the annotated transcript.

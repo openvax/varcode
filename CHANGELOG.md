@@ -1,5 +1,16 @@
 # Change Log
 
+## [v10.5.15](https://github.com/openvax/varcode/tree/v10.5.15) (2026-09-27)
+
+- Splice outcomes no longer propose skipping a transcript's first or last exon
+  (#543). Skipping joins the donor before an exon to the acceptor after it, so
+  a terminal exon can't be skipped. For a donor variant in exon 1, or an
+  acceptor variant in the last exon, intron retention now leads the candidates.
+  Example: BRCA1's exon 1 donor (17:43125270 C>A) was headlined
+  `splice-set:exon-skip`, also as the variant's top effect. CFTR's exon 1
+  donor and last-exon acceptor offered `p.M1fs` and `p.V1415_L1480del` skips.
+  Internal exons are unchanged.
+
 ## [v10.5.14](https://github.com/openvax/varcode/tree/v10.5.14) (2026-09-27)
 
 - Test the six openvax-v1 SV targets Varcode's esvee tests lacked (#528). The

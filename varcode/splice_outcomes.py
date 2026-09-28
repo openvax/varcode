@@ -575,18 +575,39 @@ def _mechanism_order_for(splice_effect):
     additionally needs a runtime side check to choose between a cryptic
     donor and a cryptic acceptor, which is why it can't share a fixed
     table entry with the others.
+
+    Skipping an exon joins the donor before it to the acceptor after
+    it, so a transcript's first and last exons can't be skipped. When
+    the affected exon is one of them, ``ExonSkipping`` is left out and
+    the next mechanism leads (#543).
     """
     if isinstance(splice_effect, SpliceDonor):          # intron +1/+2
-        return _MECHANISM_ORDER_SPLICE_DONOR
-    if isinstance(splice_effect, SpliceAcceptor):       # intron -1/-2
-        return _MECHANISM_ORDER_SPLICE_ACCEPTOR
-    if isinstance(splice_effect, ExonicSpliceSite):     # last 3 of exon
-        return _MECHANISM_ORDER_EXONIC_SPLICE_SITE
-    if isinstance(splice_effect, IntronicSpliceSite):   # intron +3..+6 / -3
+        order = _MECHANISM_ORDER_SPLICE_DONOR
+    elif isinstance(splice_effect, SpliceAcceptor):     # intron -1/-2
+        order = _MECHANISM_ORDER_SPLICE_ACCEPTOR
+    elif isinstance(splice_effect, ExonicSpliceSite):   # last 3 of exon
+        order = _MECHANISM_ORDER_EXONIC_SPLICE_SITE
+    elif isinstance(splice_effect, IntronicSpliceSite):  # intron +3..+6 / -3
         if _intronic_splice_side_is_acceptor(splice_effect):
-            return _MECHANISM_ORDER_INTRONIC_SPLICE_SITE_ACCEPTOR
-        return _MECHANISM_ORDER_INTRONIC_SPLICE_SITE_DONOR
-    return None
+            order = _MECHANISM_ORDER_INTRONIC_SPLICE_SITE_ACCEPTOR
+        else:
+            order = _MECHANISM_ORDER_INTRONIC_SPLICE_SITE_DONOR
+    else:
+        return None
+    if _affects_terminal_exon(splice_effect):
+        order = tuple(m for m in order if m is not ExonSkipping)
+    return order
+
+
+def _affects_terminal_exon(splice_effect):
+    """True if the splice signal belongs to its transcript's first or
+    last exon."""
+    transcript = getattr(splice_effect, "transcript", None)
+    exon = _affected_exon(splice_effect)
+    if transcript is None or exon is None:
+        return False
+    exons = transcript.exons
+    return exon.id in (exons[0].id, exons[-1].id)
 
 
 # ---------------------------------------------------------------------
