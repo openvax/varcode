@@ -1,5 +1,16 @@
 # Change Log
 
+## [v10.9.0](https://github.com/openvax/varcode/tree/v10.9.0) (2026-09-28)
+
+- Map Exacto's verified sense exonic runs to reference-transcript segments,
+  retaining other bases as observed sequence and preserving producer ORFs and
+  source rows (#499). Native mismatch and insertion flanks no longer cause
+  valid linear imports to be rejected as overlapping paths (#558).
+- Partial structural observations can establish local coding/protein changes
+  across junctions and indels from an in-frame reference anchor (#466). Missing
+  coverage alone remains unresolved. This adds sequence comparisons, without
+  completing transcript ends or inferring initiation at new start codons.
+
 ## [v10.8.0](https://github.com/openvax/varcode/tree/v10.8.0) (2026-09-28)
 
 - A breakend junction with both ends in one gene is annotated, on that gene's

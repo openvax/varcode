@@ -196,14 +196,15 @@ def _residue(codon, table, initiator):
 
 
 def _partial_sequence_changes(model, transcript, table):
-    """Compare only the mapped, in-frame codons of a partial observation.
+    """Compare observed codons using mapped, in-frame reference anchors.
 
     ``cds_start`` / ``cds_end`` place the producer's reading frame in the
     observed cDNA; transcript segments give each base's reference offset.
-    A codon is compared only when its three bases map contiguously onto one
-    reference CDS codon. A difference there proves a local change. Equal
-    codons cannot show that unobserved sequence is unchanged, and missing
-    coverage is not a deletion or truncation, so this never returns False.
+    A mapped codon anchors comparison across an observed junction or indel:
+    subsequent/preceding codons can be compared with the reference in that
+    frame, even when their bases come from another source. Only covered CDS
+    codons are compared. Equal codons cannot show that unobserved sequence is
+    unchanged, so this never returns False or infers loss from missing ends.
     """
     evidence = model.evidence or {}
     try:
@@ -230,26 +231,46 @@ def _partial_sequence_changes(model, transcript, table):
     reference_start = min(transcript.start_codon_spliced_offsets)
     reference_coding = transcript.coding_sequence.upper()
     reference_sec = reference_selenocysteine(transcript)
-    decoded = segment_selenocysteine(model)[0]
-    coding_status = None
+    decoded, uncertain, _ = segment_selenocysteine(model)
+    # The first in-frame codon of this transcript anchors its continuation.
+    # Later offsets may jump across a deletion/duplication; those jumps are
+    # precisely why comparing each mapped codon only with itself is insufficient.
+    anchor = None
+    translated_positions = []
     for pos in range(start, end - 2, 3):
         codon = sequence[pos:pos + 3].upper()
+        translated_positions.append(pos)
         ref = reference_offsets.get(pos)
-        k = None if ref is None else ref - reference_start
-        if (k is not None and k % 3 == 0 and 0 <= k < len(reference_coding)
+        if (ref is not None and (ref - reference_start) % 3 == 0
+                and reference_start <= ref < reference_start + len(reference_coding)
                 and reference_offsets.get(pos + 1) == ref + 1
                 and reference_offsets.get(pos + 2) == ref + 2):
+            if anchor is None:
+                anchor = ref - pos
+        if codon in table.stop_codons and pos not in decoded:
+            break
+    if anchor is None:
+        return None, None
+    coding_status = None
+    for pos in translated_positions:
+        codon = sequence[pos:pos + 3].upper()
+        # A junction or frameshift can depart from the reference without
+        # changing any of the individually mapped codons. The retained frame
+        # still establishes a coordinate for its observed continuation.
+        ref = pos + anchor
+        k = ref - reference_start
+        if 0 <= k < len(reference_coding):
             reference_codon = reference_coding[k:k + 3]
             if codon != reference_codon and not set(codon + reference_codon) - set("ACGT"):
                 coding_status = True
                 # Only an observed ORF that begins here can initiate here.
-                observed = _residue(codon, table, k == 0 and pos == start)
+                observed = ({"U", "*"} if pos in uncertain else
+                            {"U"} if pos in decoded else
+                            {_residue(codon, table, k == 0 and pos == start)})
                 reference = ("U" if ref in reference_sec
                              else _residue(reference_codon, table, k == 0))
-                if observed != reference:
+                if reference not in observed:
                     return True, True
-        if codon in table.stop_codons and pos not in decoded:
-            break  # Later bases are not translated in this frame.
     return coding_status, None
 
 
