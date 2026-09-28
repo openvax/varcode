@@ -1,5 +1,23 @@
 # Change Log
 
+## [v10.8.0](https://github.com/openvax/varcode/tree/v10.8.0) (2026-09-28)
+
+- A breakend junction with both ends in one gene is annotated, on that gene's
+  transcripts, as the local DEL, DUP or INV its kept sides describe (#551).
+  Before, those transcripts got `TranslocationToIntergenic` with a retained
+  fragment, although the junction's other end is in the same gene. A transcript
+  read across the junction carries exactly that local event, and it is what
+  `pair_breakends` types a caller-labeled pair as. So a single record now
+  annotates as its labeled pair does, while its effects still report the
+  record, with `sv_type="BND"` and `junction_event` in their evidence.
+- Example: openvax-v2's ATP5MG--KMT2A junction is exactly intron 1 of Ensembl's
+  ATP5MG-KMT2A readthrough transcript AP001267.5-202, which is now `Intronic`.
+  AP001267.5-201 loses its 3' end, as the equivalent DEL gives, and the ATP5MG
+  isoforms still fuse with KMT2A.
+- The local models read their span from a small event object, so the effects
+  of a span record are unchanged. `structural_variant.junction_span_details`
+  gives the DEL/DUP/INV span of a single junction.
+
 ## [v10.7.0](https://github.com/openvax/varcode/tree/v10.7.0) (2026-09-28)
 
 - A structural effect gains `GeneFusion` candidates for 3' partners that start
