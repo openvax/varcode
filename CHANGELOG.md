@@ -1,5 +1,16 @@
 # Change Log
 
+## [v10.5.16](https://github.com/openvax/varcode/tree/v10.5.16) (2026-09-27)
+
+- `RNAReadPhasingSource.in_cis` no longer calls a cis pair trans when one
+  variant is germline or arose first in a larger clone (#527). Trans evidence
+  was the sum of reads showing either variant's alt allele with the other's
+  reference, but a cis pair fills one of those combinations from cells carrying
+  only the earlier (or germline) variant. Trans evidence is now the smaller of
+  the two, following the infinite-sites argument (Nik-Zainal et al. 2012,
+  *Cell* 149:994) that Isovar also uses (openvax/isovar#409). A pair with only
+  one of those combinations seen is now unknown (`None`) instead of trans.
+
 ## [v10.5.15](https://github.com/openvax/varcode/tree/v10.5.15) (2026-09-27)
 
 - Splice outcomes no longer propose skipping a transcript's first or last exon
