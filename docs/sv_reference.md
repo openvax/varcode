@@ -127,7 +127,7 @@ Effects on the transcripts at the record's own breakpoint:
 | In a coding gene | in a non-coding gene only (e.g. MALAT1) | `TranslocationToIntergenic` |
 | In a coding gene | in a coding gene, opposite roles | `GeneFusion` |
 | In a coding gene | in a coding gene, head to head or tail to tail | `TranslocationToIntergenic` |
-| In a coding gene | in the same gene | `TranslocationToIntergenic` |
+| In a coding gene | in the same gene | the local DEL, DUP or INV its kept sides describe (see **Same gene** below) |
 | In a coding gene | single breakend (no mate) | `TranslocationToIntergenic` |
 | In a coding gene | ALT isn't a breakend | `GeneFusion` treating this transcript as the 5' partner, with a warning |
 
@@ -151,9 +151,26 @@ reports `TranslocationToIntergenic`. Fusions with a transcript starting
 just past the intergenic end are its only further candidates; varcode
 doesn't model an intergenic promoter or enhancer driving a gene.
 
-**Same gene.** A breakend pair with both ends in one gene is intragenic,
-so it isn't a fusion. Pair the records with `pair_breakends` so the caller's
-`SVTYPE` types the event and enables local transcript consequence prediction.
+**Same gene.** A junction with both ends in one gene is intragenic, so it isn't
+a fusion for that gene's transcripts. A transcript read across it carries the
+DEL, DUP or INV its kept sides describe, so varcode annotates each of those
+transcripts as that local event:
+
+- keeping the left side of the lower position and the right side of the higher
+  one is a DEL between them;
+- keeping the right side of the lower and the left side of the higher is a
+  tandem DUP;
+- keeping the same side at both is an INV.
+
+This is also what a labeled breakend pair gives once `pair_breakends` types it
+by the caller's `SVTYPE`. A single record annotates exactly as its labeled pair
+would, but its effects still report the record. Their evidence gives
+`sv_type="BND"` and `junction_event`, the local event it was read as.
+
+For example, openvax-v2's ATP5MG--KMT2A junction, chr11:118,401,717 to
+118,468,775, is exactly intron 1 of Ensembl's ATP5MG-KMT2A readthrough
+transcript AP001267.5-202. A breakend there reports that transcript as
+`Intronic`, and the ATP5MG isoforms, whose gene doesn't reach KMT2A, as fusions.
 
 **Direction.** Both records of a junction report the same fusion
 direction, each on its own gene. For CFTR (chr7:117,485,000, `+`, keeping

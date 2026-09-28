@@ -1752,7 +1752,8 @@ class TranslocationToIntergenic(StructuralVariantEffect):
     """A breakend that doesn't form a gene fusion: its mate lies in
     intergenic space, or the join meets a gene in an orientation that
     can't read sense-to-sense into it (e.g. two genes' 5' ends joined
-    head to head). The downstream consequence depends on whether the
+    head to head). A junction with both ends in the transcript's gene is
+    annotated as the local DEL, DUP or INV it describes instead. The downstream consequence depends on whether the
     sequence beyond the breakpoint contains cryptic splice / ORF
     signals. Fusions with a coding transcript that starts just past the
     mate follow as further candidates, and PR 11's cryptic-exon

@@ -132,17 +132,26 @@ def _typed_event_details_from_breakends(a, b):
             return None
         sides[variant.start] = variant_sides[0]
     low, high = sorted((a.start, b.start))
-    low_keeps_left = sides[low] == "left"
-    high_keeps_left = sides[high] == "left"
-    if sv_type == "DEL" and low_keeps_left and not high_keeps_left:
+    return _span_details(sv_type, low, sides[low], high, sides[high])
+
+
+def _span_details(sv_type, low, low_keeps, high, high_keeps):
+    """``(sv_type, start, end, affected_start, affected_end)`` of the
+    DEL, DUP or INV whose junction joins positions ``low < high`` on one
+    contig, keeping sides ``low_keeps`` and ``high_keeps``, or ``None``
+    when the sides don't fit ``sv_type``. A ``sv_type`` of ``None``
+    takes whichever event the sides describe."""
+    low_keeps_left = low_keeps == "left"
+    high_keeps_left = high_keeps == "left"
+    if sv_type in (None, "DEL") and low_keeps_left and not high_keeps_left:
         # Adjacent breakpoints delete nothing — that's an insertion
         # point, not a deletion.
         details = (
             "DEL", low, high - 1, low + 1, high - 1
         ) if high - low > 1 else None
-    elif sv_type == "DUP" and not low_keeps_left and high_keeps_left:
+    elif sv_type in (None, "DUP") and not low_keeps_left and high_keeps_left:
         details = ("DUP", low - 1, high, low, high)
-    elif sv_type == "INV" and low_keeps_left == high_keeps_left:
+    elif sv_type in (None, "INV") and low_keeps_left == high_keeps_left:
         details = (
             ("INV", low, high, low + 1, high) if low_keeps_left
             else ("INV", low - 1, high - 1, low, high - 1))
@@ -153,6 +162,20 @@ def _typed_event_details_from_breakends(a, b):
     if details is None or details[1] < 1:
         return None
     return details
+
+
+def junction_span_details(junction):
+    """The DEL, DUP or INV span a single same-contig junction describes,
+    as ``(sv_type, start, end, affected_start, affected_end)`` in the
+    coordinates of an equivalent symbolic record, or ``None`` for a
+    junction across contigs or with an unknown kept side."""
+    near, far = junction
+    if (near.contig != far.contig or near.position == far.position
+            or near.keeps is None or far.keeps is None):
+        return None
+    (low, low_keeps), (high, high_keeps) = sorted(
+        ((near.position, near.keeps), (far.position, far.keeps)))
+    return _span_details(None, low, low_keeps, high, high_keeps)
 
 
 def typed_event_from_breakends(a, b):
