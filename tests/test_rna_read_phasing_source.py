@@ -19,6 +19,7 @@ from varcode import (
     RNAReadPhasingSource,
     Variant,
 )
+from varcode.rna_read_phasing import four_gamete_phase
 
 pysam = pytest.importorskip("pysam")
 
@@ -174,6 +175,55 @@ def test_one_mixed_combination_alone_is_unknown(tmp_path):
     subclone of v1 carrying v2, and an unexpressed v2 all fit, so the
     answer is unknown rather than trans."""
     assert _phase_call(tmp_path, {("alt", "ref"): 6}) is None
+
+
+def test_read_errors_on_many_v1_alt_fragments_are_not_cis(tmp_path):
+    """v2 isn't expressed; two of 200 v1-alt fragments show its alt allele
+    by error. Taking the smaller mixed arm as trans evidence called this
+    cis (#547)."""
+    assert _phase_call(
+        tmp_path, {("alt", "alt"): 2, ("alt", "ref"): 198, ("ref", "ref"): 20}) is None
+
+
+def test_all_three_combinations_fit_no_single_lineage(tmp_path):
+    """Both alts together and each alone (a four-gamete table): unknown."""
+    assert _phase_call(tmp_path, {("alt", "alt"): 3, ("alt", "ref"): 10,
+                                  ("ref", "alt"): 2, ("ref", "ref"): 5}) is None
+
+
+def test_one_stray_fragment_per_arm_does_not_veto_cis(tmp_path):
+    assert _phase_call(
+        tmp_path, {("alt", "alt"): 3, ("alt", "ref"): 1, ("ref", "alt"): 1}) is True
+
+
+@pytest.mark.parametrize("parameter", ["phasing_error_rate", "max_p_value_for_phasing"])
+@pytest.mark.parametrize("value", [0, 1, -0.1])
+def test_phasing_probabilities_must_be_between_zero_and_one(tmp_path, parameter, value):
+    with pytest.raises(ValueError, match=parameter):
+        RNAReadPhasingSource(_write_bam(tmp_path, []), **{parameter: value})
+
+
+@pytest.mark.parametrize("both, first, second, neither, expected", [
+    (2, 5, 0, 50, True),            # nested cis
+    (3, 10, 0, 5, True),            # nested cis, few fragments
+    (2, 0, 6, 6, True),             # germline partner, cis
+    (3500, 100, 100, 6300, True),   # clonal cis at depth, errors pooled
+    (2, 0, 0, 0, True),
+    (0, 2, 2, 0, False),
+    (0, 4, 12, 8, False),           # germline partner, trans
+    (10, 990, 6, 94, False),        # trans, v1's copy amplified
+    (70, 3500, 3500, 3000, False),  # trans at depth despite error both-alt reads
+    (2, 198, 0, 20, None),          # unexpressed v2, error reads only
+    (2, 200, 1, 100, None),
+    (3, 10, 2, 5, None),            # four-gamete
+    (0, 10, 1, 0, None),
+    (0, 6, 0, 0, None),
+])
+def test_four_gamete_phase(both, first, second, neither, expected):
+    """The same answers as Isovar 1.39.7's IsovarReadPhasing (#547), in
+    either variant order."""
+    assert four_gamete_phase(both, first, second, neither) is expected
+    assert four_gamete_phase(both, second, first, neither) is expected
 
 
 def test_read_phase_resolver_returns_none_below_threshold(tmp_path):

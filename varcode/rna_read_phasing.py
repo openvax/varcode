@@ -18,6 +18,7 @@ generic phasing protocols and resolvers.
 """
 
 from collections import defaultdict
+from math import exp, lgamma, log, log1p
 from typing import Optional, Sequence
 
 
@@ -43,6 +44,59 @@ _CONSUMES_QUERY = {
     _CIGAR_EQUAL,
     _CIGAR_DIFF,
 }
+
+
+def _binomial_tail(count, trials, rate):
+    """P(X >= count) for X ~ Binomial(trials, rate), with 0 < rate < 1."""
+    if count <= 0:
+        return 1.0
+    total, scale = 0.0, lgamma(trials + 1)
+    for successes in range(count, trials + 1):
+        term = exp(scale - lgamma(successes + 1) - lgamma(trials - successes + 1)
+                   + successes * log(rate) + (trials - successes) * log1p(-rate))
+        total += term
+        # Past the mean the terms only shrink.
+        if successes > trials * rate and term <= 1e-17 * total:
+            break
+    return min(total, 1.0)
+
+
+def four_gamete_phase(both, first, second, neither, *, min_fragments=2,
+                      error_rate=0.01, max_p_value=0.05) -> Optional[bool]:
+    """Cis (``True``), trans (``False``) or unknown (``None``) for two
+    variants, from the fragments covering both loci: ``both`` carry both
+    alt alleles, ``first`` and ``second`` one variant's alt allele alone,
+    ``neither`` neither.
+
+    A combination is present when it's on at least ``min_fragments``
+    fragments, more than reads showing the wrong allele at either locus
+    (``error_rate``) leak into it from its two neighbouring combinations
+    together, by a one-sided binomial test at ``max_p_value``. The pair is
+    cis when both alt alleles are present together and not each alone, and
+    trans when each is present alone and not together. Otherwise, including
+    when all three are present, it's unknown.
+
+    This is the four-gamete test (Hudson and Kaplan 1985) read as Nik-Zainal
+    et al. 2012 (*Cell* 149:994) read phased mutation pairs. A variant that
+    arose later on the other's copy is always with it, while the earlier
+    one also appears alone, which isn't trans (#527). Reads showing a
+    variant's alt allele in error put it on a small fraction of the other's
+    alt fragments, which isn't cis (#547). A germline partner is the earlier
+    variant, so the same rule applies. It matches ``IsovarReadPhasing`` in
+    Isovar 1.39.7.
+    """
+    def present(count, neighbour, other_neighbour):
+        return (count >= min_fragments and _binomial_tail(
+            count, count + neighbour + other_neighbour, error_rate) <= max_p_value)
+
+    together = present(both, first, second)
+    first_alone = present(first, neither, both)
+    second_alone = present(second, neither, both)
+    if together and not (first_alone and second_alone):
+        return True
+    if first_alone and second_alone and not together:
+        return False
+    return None
 
 
 class RNAReadPhasingSource:
@@ -76,8 +130,15 @@ class RNAReadPhasingSource:
         Minimum base quality for SNV/MNV and insertion allele calls.
     min_alt_reads : int
         Minimum alt-supporting reads/fragments required for
-        ``has_evidence`` and minimum co-occurring fragments required for
-        a cis/trans call.
+        ``has_evidence``, and fragments an allele combination needs to
+        count toward a cis/trans call.
+    phasing_error_rate : float
+        Chance that a read shows the wrong allele at a variant's locus,
+        from sequencing error, RNA editing or mismapping. Raise it for
+        error-prone reads, such as ONT's.
+    max_p_value_for_phasing : float
+        One-sided binomial p-value at or below which :meth:`in_cis`
+        counts an allele combination as more than such errors.
     max_distance_from_read_edge : int, optional
         Discard allele calls whose queried bases are closer than this
         many bases to either read edge. Set to ``None`` to disable.
@@ -98,6 +159,8 @@ class RNAReadPhasingSource:
             min_mapping_quality: int = 20,
             min_base_quality: int = 20,
             min_alt_reads: int = 2,
+            phasing_error_rate: float = 0.01,
+            max_p_value_for_phasing: float = 0.05,
             max_distance_from_read_edge: Optional[int] = 5,
             require_proper_pair: bool = True,
             skip_duplicates: bool = True,
@@ -109,11 +172,17 @@ class RNAReadPhasingSource:
             raise ImportError(
                 "RNAReadPhasingSource requires pysam. Install with "
                 "`pip install varcode[rna]`.") from e
+        for name, value in (("phasing_error_rate", phasing_error_rate),
+                            ("max_p_value_for_phasing", max_p_value_for_phasing)):
+            if not 0 < value < 1:
+                raise ValueError("%s must be between 0 and 1, not %r" % (name, value))
         self._pysam = pysam
         self._bam = pysam.AlignmentFile(bam_path, "rb")
         self.min_mapping_quality = min_mapping_quality
         self.min_base_quality = min_base_quality
         self.min_alt_reads = min_alt_reads
+        self.phasing_error_rate = phasing_error_rate
+        self.max_p_value_for_phasing = max_p_value_for_phasing
         self.max_distance_from_read_edge = max_distance_from_read_edge
         self.require_proper_pair = require_proper_pair
         self.skip_duplicates = skip_duplicates
@@ -494,34 +563,25 @@ class RNAReadPhasingSource:
         self._register_variant(v1)
         self._register_variant(v2)
         fragments = self._fragment_alleles_for_pair(v1, v2)
-        both_alt = fragments.count(("alt", "alt"))
-        # Trans needs each alt allele seen with the other's reference. A
-        # cis pair fills at most one of these arms: cells carrying only the
-        # earlier variant (or only a germline one) give (earlier alt, later
-        # ref) reads, never the reverse. Summing the arms called such pairs
-        # trans, so trans evidence is the smaller arm (#527).
-        trans = min(fragments.count(("alt", "ref")),
-                    fragments.count(("ref", "alt")))
-        counts = both_alt, trans
+        # Both alt, v1 alt alone, v2 alt alone, neither; the phase call is
+        # symmetric in the two variants, so a cached pair can be reversed.
+        counts = tuple(fragments.count(combination) for combination in (
+            ("alt", "alt"), ("alt", "ref"), ("ref", "alt"), ("ref", "ref")))
         self._phase_cache[key] = counts
         return counts
 
     def in_cis(self, v1, v2, transcript=None) -> Optional[bool]:
         """Return cis/trans from RNA read or fragment co-occurrence.
 
-        ``True`` means enough fragments support both alts. ``False``
-        means enough fragments show *each* alt with the other's reference
-        allele: a cis pair can only show one of these combinations, from
-        cells carrying just the earlier (or germline) variant. ``None``
-        means the BAM does not contain enough co-covering evidence to
-        decide, including when only one of the combinations is seen.
+        Decided by :func:`four_gamete_phase` from the fragments covering
+        both loci: ``True`` when both alt alleles are seen together beyond
+        read errors and not each alone, ``False`` when each is seen alone
+        and not together, ``None`` otherwise.
         """
-        both_alt, trans = self._phase_counts(v1, v2)
-        if both_alt >= self.min_alt_reads and both_alt > trans:
-            return True
-        if trans >= self.min_alt_reads and trans > both_alt:
-            return False
-        return None
+        return four_gamete_phase(
+            *self._phase_counts(v1, v2), min_fragments=self.min_alt_reads,
+            error_rate=self.phasing_error_rate,
+            max_p_value=self.max_p_value_for_phasing)
 
     def partners_in_cis(self, variant) -> Sequence:
         """Known registered variants observed in cis with ``variant``."""

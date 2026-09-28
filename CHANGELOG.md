@@ -1,5 +1,21 @@
 # Change Log
 
+## [v10.6.0](https://github.com/openvax/varcode/tree/v10.6.0) (2026-09-27)
+
+- `RNAReadPhasingSource.in_cis` decides from which allele combinations are
+  really present, not from the smaller mixed arm (#547). 10.5.16's rule could
+  call a pair cis from read errors: with a variant that isn't expressed, two of
+  200 other-variant fragments showing its allele by error were cis. Each
+  combination (both alts, either alone, neither) now counts only with at least
+  `min_alt_reads` fragments and more than errors would leak into it, by a
+  one-sided binomial test at the new `phasing_error_rate` (0.01) and
+  `max_p_value_for_phasing` (0.05). The pair is cis when both alts are
+  together and not each alone, trans when each is alone and not together, and
+  unknown otherwise, including four-gamete tables. This is the four-gamete
+  test, as in Isovar 1.39.7 (openvax/isovar#410); nested-subclone and germline
+  pairs stay cis (#527). The rule is also available as
+  `varcode.rna_read_phasing.four_gamete_phase`.
+
 ## [v10.5.17](https://github.com/openvax/varcode/tree/v10.5.17) (2026-09-27)
 
 - A deletion that contains a whole coding transcript is `ExonLoss` of every

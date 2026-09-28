@@ -53,11 +53,18 @@ effects = variants.effects(phase_resolver=phaser)
 
 Here `variants` is the loaded collection to annotate. Short- and long-read
 data can both leave phase unknown; coverage and linked alleles determine whether
-a pair is resolved. Trans needs fragments that show *each* variant's alt
-allele with the other's reference allele. A cis pair shows at most one of those
-combinations, from cells carrying only the earlier (or germline) variant, so
-`RNAReadPhasingSource` counts the smaller of the two as trans evidence and
-reports unknown when only one is seen. A source that only reports co-observed
+a pair is resolved. `RNAReadPhasingSource` sorts the fragments covering both
+loci into four combinations: both alt alleles, either variant's alt allele
+alone, or neither. A combination counts when it has at least `min_alt_reads`
+fragments and is more than reads showing the wrong allele (`phasing_error_rate`,
+1%) would leak into it, by a one-sided binomial test at
+`max_p_value_for_phasing` (0.05). The pair is cis when both alts are seen
+together and not each alone, and trans when each is seen alone and not
+together; anything else, including all three, is unknown. A variant that arose
+later on the other's copy, or next to a germline variant, is always with it,
+while the earlier one also appears alone; that is cis, not trans. The rule,
+from `varcode.rna_read_phasing.four_gamete_phase`, matches Isovar 1.39.7. A
+source that only reports co-observed
 partners establishes cis, and leaves every other pair unknown; sources that see
 reference alleles too, such as `RNAReadPhasingSource`, report trans through
 their own `in_cis`. Raw BAM phasing does not provide an assembled
@@ -86,9 +93,11 @@ effects = somatic_variants.effects(germline=germline_ctx, phase_resolver=phaser)
 ```
 
 With Isovar 1.36 or later, `IsovarReadPhasing.in_cis` answers from fragments
-that cover both variants: cis when they carry both alt alleles, trans when they
-carry one alt allele with the other's reference allele. A call needs at least
-`min_shared_fragments_for_phasing` fragments and a majority.
+that cover both variants. Since Isovar 1.39.7 it uses the same four-combination
+rule as `RNAReadPhasingSource` above, with `min_shared_fragments_for_phasing`
+fragments, `phasing_error_rate` and `max_p_value_for_phasing`. Earlier versions
+called cis or trans by majority, which could call a nested subclone's pair
+trans or a read-error pattern cis.
 
 For a matched germline variant, Isovar 1.38 or later reads the germline site
 in fragments that carry the somatic alt allele: the germline alt allele there
