@@ -18,8 +18,13 @@ protein.
 
 At the far end of the other five, no protein-coding transcript is read in
 the direction the junction continues. The 5' gene then keeps only its 5'
-fragment. The first run downloads the bundle (28 MB) into the osteosarc
-cache; later runs reuse it offline.
+fragment. GABBR1--SLC29A1's junction continues into the 597 bases before
+SLC29A1 starts, so each SLC29A1 isoform also follows as a fusion candidate
+from its second exon, as LINX would fuse it (#550). Isovar's long reads
+there run from GABBR1 intronic sequence into that intergenic stretch and
+end in poly(A) before SLC29A1, so the fragment stays the primary result.
+The first run downloads the bundle (28 MB) into the osteosarc cache; later
+runs reuse it offline.
 """
 
 import json
@@ -45,7 +50,7 @@ NO_PARTNER = {
     # The junction reads chr17's + strand; CCDC47 and AC046185.1 are on -.
     "FOXO3--STRADA-CCDC47": "FOXO3",
     # The junction reads chr6's + strand from 597 bases before SLC29A1
-    # starts. LINX would fuse SLC29A1 from exon 2 (#550).
+    # starts (see UPSTREAM_PARTNERS).
     "GABBR1--SLC29A1": "GABBR1",
     # Intergenic; PIK3CB, the next gene to the right, is on -.
     "KLF15--PPIAP72": "KLF15",
@@ -55,6 +60,9 @@ NO_PARTNER = {
     # transcript is NMD.
     "PARD3B--CDKN2B-AS1-CDKN2B": "PARD3B",
 }
+# target -> the gene whose isoforms start within 10 kb past the far end and
+# follow the 5' fragment as fusion candidates (#550)
+UPSTREAM_PARTNERS = {"GABBR1--SLC29A1": "SLC29A1"}
 # target -> the esvee record (CHROM, POS, REF, ALT) at its 5' breakend
 ESVEE_RECORDS = {
     "FOXO3--STRADA-CCDC47": ("chr6", 108_611_245, "G", "G[chr17:63745980["),  # 16765
@@ -147,3 +155,7 @@ def test_junction_without_sense_partner_keeps_five_prime_fragment(fusion_targets
         assert type(effect) is TranslocationToIntergenic
         segment, = effect.mutant_transcript.reference_segments
         assert segment.label == "translocation_5p"
+        partners = {candidate.effect.three_prime_transcript.gene_name
+                    for candidate in effect.candidates
+                    if isinstance(candidate.effect, GeneFusion)}
+        assert partners == ({UPSTREAM_PARTNERS[name]} if name in UPSTREAM_PARTNERS else set())

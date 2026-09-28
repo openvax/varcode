@@ -94,6 +94,28 @@ precedence over reference-derived sequence. See [candidate access](structural_va
 either partner. `five_prime_transcript` and `three_prime_transcript` say
 which is which, and `partner_transcript` is the other one.
 
+### Partners starting just past the other end
+
+When the annotated transcript is the 5' partner and no transcript at the other
+end needs to span it, a protein-coding transcript can still be joined whole: one
+that starts on the other end's kept side, at most
+`MAX_UPSTREAM_PARTNER_DISTANCE` (10 kb) past it, on the strand the junction
+continues along, and that has a second exon. Its first exon has no splice
+acceptor, so the fused cDNA continues from its second exon. This follows LINX's
+rule for 3' breakends upstream of a gene, with LINX's limit for fusions other
+than known pairs.
+
+These fusions are further candidates after the effect's primary classification,
+never the primary one, because RNA need not splice that way. In the Sid
+osteosarcoma, the GABBR1--SLC29A1 junction lands 597 bases before SLC29A1's
+first transcript starts. Isovar's long reads there run from GABBR1 intronic
+sequence into the intergenic stretch and end in poly(A) before SLC29A1. So a
+breakend there stays `TranslocationToIntergenic`, with one fusion candidate per
+SLC29A1 isoform. The model's evidence records `three_prime_breakend="upstream"`
+and `three_prime_upstream_distance`. A DEL, DUP or INV gains the same candidates
+behind its local consequence. Its `most_likely_effect` is unchanged, but, like
+any structural effect set, its priority follows its most disruptive candidate.
+
 ## Breakend outcomes
 
 Effects on the transcripts at the record's own breakpoint:
@@ -101,7 +123,7 @@ Effects on the transcripts at the record's own breakpoint:
 | This breakpoint | Mate | Effect |
 |---|---|---|
 | Intergenic | anything | `Intergenic` |
-| In a coding gene | intergenic | `TranslocationToIntergenic` |
+| In a coding gene | intergenic | `TranslocationToIntergenic`, plus fusion candidates for [partners starting just past the mate](#partners-starting-just-past-the-other-end) |
 | In a coding gene | in a non-coding gene only (e.g. MALAT1) | `TranslocationToIntergenic` |
 | In a coding gene | in a coding gene, opposite roles | `GeneFusion` |
 | In a coding gene | in a coding gene, head to head or tail to tail | `TranslocationToIntergenic` |
@@ -125,8 +147,9 @@ Unknown local orientation (including mate-orientation metadata alone) leaves
 
 **Intergenic ↔ gene.** The record at the intergenic end reports
 `Intergenic`; the gene is annotated only from its own record, which
-reports `TranslocationToIntergenic`. varcode doesn't model an intergenic
-promoter or enhancer driving a gene.
+reports `TranslocationToIntergenic`. Fusions with a transcript starting
+just past the intergenic end are its only further candidates; varcode
+doesn't model an intergenic promoter or enhancer driving a gene.
 
 **Same gene.** A breakend pair with both ends in one gene is intragenic,
 so it isn't a fusion. Pair the records with `pair_breakends` so the caller's
