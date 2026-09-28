@@ -78,6 +78,18 @@ def breakend_sides(alt):
     return this_side, mate_side
 
 
+def breakend_mate(alt):
+    """``(mate_contig, mate_position, mate_orientation)`` named by a
+    well-formed VCF breakend ALT, or ``None``. The contig is as
+    written; the orientation is the two brackets, ``"[["`` or
+    ``"]]"``."""
+    if breakend_sides(alt) is None:
+        return None
+    m = _BREAKEND_RE.match(alt)
+    return (m.group("mate_contig"), int(m.group("mate_pos")),
+            m.group("open") + m.group("close"))
+
+
 def _breakend_local_side(alt):
     """The retained local side, including single breakends with no mate."""
     sides = breakend_sides(alt)

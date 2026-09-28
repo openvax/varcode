@@ -1,5 +1,17 @@
 # Change Log
 
+## [v10.6.3](https://github.com/openvax/varcode/tree/v10.6.3) (2026-09-28)
+
+- A directly constructed BND `StructuralVariant` takes `mate_contig`,
+  `mate_start` and `mate_orientation` from its breakend ALT when they aren't
+  passed, as `parse_symbolic_alt` and `load_vcf` already did (#553). Before,
+  `StructuralVariant("5", 116474281, "BND", alt="[chr4:75037126[C")` had no
+  junction, so SEMA6A's side of this fusion was reported as
+  `TranslocationToIntergenic` with no warning. A passed mate field the ALT
+  contradicts now raises `ValueError`; contigs compare by their Ensembl-style
+  names, so `pair_breakends` can still pass a converted `mate_contig` with the
+  caller's ALT text.
+
 ## [v10.6.2](https://github.com/openvax/varcode/tree/v10.6.2) (2026-09-28)
 
 - Test all seven fusion targets in `openvax-v2`, the OpenVax libraries' shared
