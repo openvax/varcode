@@ -152,6 +152,17 @@ into the fusion tests. `tests/test_osteosarc_shared_svs.py` covers the other
 six with the records in `tests/data/osteosarc_esvee_shared_svs.vcf`, checking
 the genes at each breakend against LINX's. That module needs no download.
 
+`tests/test_osteosarc_shared_fusions.py` builds each of the recipe's seven
+fusion targets as a breakend record from its breakends. Where a target gives
+`orientation` rather than `retained_side`, the side comes from the strand the
+fusion follows ([iskandr/osteosarc#96](https://github.com/iskandr/osteosarc/issues/96)).
+The five junctions esvee called must match its records. ATP5MG--KMT2A and
+TPST1--CRCP must fuse every coding isoform of the 5' gene, and ATP5MG--KMT2A's
+fusion protein must be the one Isovar translates from its junction reads. The
+other five have no sense-oriented coding partner, so the 5' gene keeps its 5'
+fragment. For GABBR1--SLC29A1, whose junction lies just upstream of SLC29A1,
+that result is a known gap (#550).
+
 Five targets have newer IDs than the fixture's pinned 2026-09-18 snapshot
 gives them, but the same alleles. For example, the fixture's
 `CABLES1-chr18-23135500` is the recipe's `CABLES1-chr18-23135764`.
@@ -165,7 +176,8 @@ it. `tests/test_osteosarc_shared_reads.py` reads those three members through
 
 ```sh
 python -m pip install -e '.[test-data]'
-python -m pytest -q tests/test_osteosarc_shared_targets.py tests/test_osteosarc_shared_reads.py
+python -m pytest -q tests/test_osteosarc_shared_targets.py tests/test_osteosarc_shared_reads.py \
+    tests/test_osteosarc_shared_fusions.py
 ```
 
 The first run downloads and verifies the bundle (28 MB) and exports its

@@ -1,5 +1,20 @@
 # Change Log
 
+## [v10.6.2](https://github.com/openvax/varcode/tree/v10.6.2) (2026-09-28)
+
+- Test all seven fusion targets in `openvax-v2`, the OpenVax libraries' shared
+  Sid test data (part of #528), in `tests/test_osteosarc_shared_fusions.py`.
+  Each junction is built from the recipe's breakends; where only `orientation`
+  is given, the kept side comes from the strand the fusion follows
+  (iskandr/osteosarc#96). The five junctions esvee called match its records.
+  ATP5MG--KMT2A and TPST1--CRCP fuse every coding isoform of the 5' gene, and
+  ATP5MG--KMT2A's fusion protein is MAQFVRNLVEKTPALVNG, as Isovar translates
+  from its junction reads. The other five have no sense-oriented coding
+  partner and keep the 5' fragment. Filed #550 (a 3' breakend just upstream of
+  the partner gene, as in GABBR1--SLC29A1) and #551 (a junction with both ends
+  in one gene is labeled `TranslocationToIntergenic`). No library code
+  changes.
+
 ## [v10.6.1](https://github.com/openvax/varcode/tree/v10.6.1) (2026-09-28)
 
 - Test against `openvax-v2`, the OpenVax libraries' current shared Sid test
