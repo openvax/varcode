@@ -308,7 +308,7 @@ def test_partial_local_change_requires_usable_coordinates(cftr, missing):
 
 @pytest.mark.parametrize("completeness", ["partial_start", "partial_end", "partial_both"])
 def test_imported_partial_peptide_without_reference_mapping_is_unknown(cftr, completeness):
-    # Exacto peptides carry observed ORF bounds but no reference coordinates.
+    # A generic supplied sequence has no native Exacto coordinate rows.
     variant = StructuralVariant(cftr.contig, cftr.start, "BND", genome=cftr.genome)
     start = min(cftr.start_codon_spliced_offsets)
     cdna = cftr.sequence[:start + 3] + "TGG" + cftr.sequence[start + 6:start + 300]

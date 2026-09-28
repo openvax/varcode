@@ -19,6 +19,7 @@ import os
 
 from .rna_evidence import RNAEvidence, make_fusion_outcome
 from .effects.codon_tables import STANDARD
+from .mutant_transcript import ReferenceSegment, _AssembledAllele
 
 
 def _rows(path, required):
@@ -104,15 +105,72 @@ def _validate_path(bases, genome):
         lo, hi = sorted([int(row["position_1"]), int(row["position_2"])])
         if lo < 1:
             raise ValueError("Genomic positions must be positive")
+        # Exacto identify_records uses inclusive bounds for matches, but
+        # flanking reference positions for mismatches and insertions.
+        if row["kind"] == "mismatch":
+            lo, hi = lo + 1, hi - 1
+            if hi - lo + 1 != len(row["sequence"]):
+                raise ValueError("Mismatch sequence disagrees with flanking genomic positions")
+        insertion = row["kind"] == "insertion"
+        if insertion and hi != lo + 1:
+            raise ValueError("Insertion requires adjacent flanking genomic positions")
         direction = 1 if strand == "+" else -1
         start, end = (lo, hi) if strand == "+" else (hi, lo)
         if not runs or owner != runs[-1]:
             runs.append(owner)
             if len(runs) > 2:
                 raise ValueError("More than two loci/orientations in an observed fusion path")
-        elif previous_end is not None and direction * (start - previous_end) <= 0 and row["kind"] != "insertion":
+        elif (previous_end is not None
+              and direction * (start - previous_end) < (0 if insertion else 1)):
             raise ValueError("Overlapping or back-spliced genomic path is not a linear fusion")
-        previous_end = end
+        previous_end = end - direction if insertion else end
+
+
+def _reference_segments(bases, genome, sequence):
+    """Map only coordinate- and sequence-verified reference runs.
+
+    Exacto sequences already run in transcript orientation. Non-reference
+    bases keep their observed sequence, even when the row claims a match.
+    Original rows, including unverified annotations, remain in evidence.
+    """
+    observed = _AssembledAllele(sequence.upper())
+    segments, offset = [], 0
+    for row in bases:
+        sequence = row["sequence"].upper()
+        transcript = _transcript(genome, row["transcript_id_1"])
+        origins = [None] * len(sequence)
+        reference = getattr(transcript, "sequence", None)
+        lo, hi = sorted((int(row["position_1"]), int(row["position_2"])))
+        if (transcript is not None and row["kind"] == "match"
+                and row["strand_1"] == transcript.strand and reference is not None
+                and hi - lo + 1 == len(sequence)):
+            reference = reference.upper()
+            cdna_offset = 0
+            for exon_start, exon_end in sorted(
+                    getattr(transcript, "exon_intervals", ()), reverse=transcript.strand == "-"):
+                for position in range(max(lo, exon_start), min(hi, exon_end) + 1):
+                    if transcript.strand == "+":
+                        i, ref = position - lo, cdna_offset + position - exon_start
+                    else:
+                        i, ref = hi - position, cdna_offset + exon_end - position
+                    if sequence[i] in "ACGT" and reference[ref:ref + 1] == sequence[i]:
+                        origins[i] = ref
+                cdna_offset += exon_end - exon_start + 1
+        start = 0
+        while start < len(sequence):
+            end = start + 1
+            ref = origins[start]
+            while end < len(sequence) and origins[end] == (
+                    None if ref is None else ref + end - start):
+                end += 1
+            segments.append(ReferenceSegment(
+                source=observed if ref is None else transcript,
+                start=offset + start if ref is None else ref,
+                end=offset + end if ref is None else ref + end - start,
+                label="exacto_row_%s" % row["index"]))
+            start = end
+        offset += len(sequence)
+    return tuple(segments)
 
 
 def _primary_protein(rows, structure):
@@ -210,6 +268,8 @@ def load_exacto_fusions(structures_path, integrated_path, *, variants_by_id,
         ``.candidates`` retains every selected variant/model/reference-ID group.
         Pass the result to ``effects(rna_resolver=...)``. Original structure and
         integration rows, including RNA and DNA call IDs, remain in evidence.
+        Matching sense exonic bases become reference-transcript segments;
+        other bases remain observed sequence. No reference bases are appended.
 
     Notes
     -----
@@ -267,6 +327,7 @@ def load_exacto_fusions(structures_path, integrated_path, *, variants_by_id,
         variant = variants[dna_id]
         rows, bases, sequence = _sequence(models[(model_id, refs)])
         _validate_path(bases, variant.genome)
+        segments = _reference_segments(bases, variant.genome, sequence)
         if any("circular" in row["kind"].lower() or "circular" in row["context"].lower()
                for row in rows):
             raise ValueError("Circular RNA requires a separate model, not a linear fusion")
@@ -297,6 +358,8 @@ def load_exacto_fusions(structures_path, integrated_path, *, variants_by_id,
                 partner_transcript=partner, source="exacto",
                 cds_start=(cds_starts or {}).get((model_id, refs)),
                 extra_evidence=evidence)
+            candidate.effect.mutant_transcript = replace(
+                candidate.effect.mutant_transcript, reference_segments=segments)
             if primary_rows is not None:
                 protein, primary_evidence = _primary_protein(primary_rows, rows)
                 combined = dict(candidate.evidence, **primary_evidence)

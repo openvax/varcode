@@ -45,6 +45,17 @@ preserve splice structure but do not invent missing bases. The complete original
 structure and integration rows are in `candidate.evidence` and the mutant
 transcript's evidence. Row counts are **not** supporting-read counts.
 
+The imported model's `reference_segments` maps matching, sense-oriented exonic
+bases to the row's annotated transcript. Genomic position and reference cDNA
+sequence must agree; a `match` label alone is insufficient. Mismatches,
+insertions, intronic/intergenic bases and antisense sequence remain observed
+sequence segments. No reference sequence is substituted or appended, and the
+original versioned transcript IDs remain in the evidence.
+
+Exacto uses inclusive genomic bounds for matching runs and flanking genomic
+positions for mismatches and insertions. Both strands follow this convention;
+the importer excludes those flanks when validating the observed path.
+
 This is a deliberately limited adapter for linear, two-locus, SV-linked models
 with an annotated sense 5' anchor. A missing or antisense 3' annotation gives
 `TranslocationToIntergenic`, whose existing meaning includes non-sense joins.
@@ -125,14 +136,23 @@ Exacto's standard genetic-code choice is recorded as `protein_translation_table=
 
 SV sequence-change flags respect `protein_completeness`: a partial peptide is
 never compared with the full reference protein, because missing sequence is
-neither unchanged nor a truncation. Exacto imports carry ORF bounds but no
-reference coordinates, so their partial peptides stay unresolved (`None`).
+neither unchanged nor a truncation. With native primary structures, the imported
+ORF bounds and verified transcript segments can establish a local change even
+when the protein is partial. A junction into different sequence or a frameshift
+can therefore have `modifies_protein_sequence=True`. Unchanged observed
+fragments and observations without a usable reference frame stay unresolved
+(`None`).
 
 ??? note "Exact rules for partial and completeness-unknown observations"
-    A partial peptide's flags are `True` only when the ORF bounds
-    (`cds_start` / `cds_end`) and reference-transcript segments place a
-    differing observed codon in frame on a reference CDS codon; otherwise they
-    stay `None`.
+    The ORF bounds (`cds_start` / `cds_end`) define the producer's reading
+    frame. The first codon mapped contiguously and in frame onto the reference
+    CDS anchors comparison of the observed sequence on either side, including
+    sequence across a junction or indel. Only positions within the reference
+    CDS and the observed ORF are compared, through the observed stop. A known
+    nucleotide difference establishes a coding-sequence change; a known
+    amino-acid difference establishes a protein change. Equal codons and
+    ambiguous bases do not establish a protein change. Missing sequence before
+    or after the observation is never compared.
 
     The same caution applies to `start_to_stop` when `sequence_status` is
     `observed_model_completeness_unknown`: an internal methionine followed by
@@ -148,6 +168,11 @@ reference coordinates, so their partial peptides stay unresolved (`None`).
     annotated start can establish that a shorter prediction reflects an actual
     sequence change; initiation and translation still remain predictions.
 
+Mapping does not choose a new ORF or establish initiation at an internal or
+upstream ATG. Reference-completed candidates remain future work in
+[#499](https://github.com/openvax/varcode/issues/499); initiation-dependent
+extensions remain under [#466](https://github.com/openvax/varcode/issues/466).
+
 Not every RNA junction produces a coding fusion. In the osteosarcoma
 regression fixtures, GABBR1 joins sequence upstream of SLC29A1, OTUD7A joins
 an antisense FMN1 intron, and the KLF15-side reads are intronic. Varcode keeps
@@ -155,6 +180,7 @@ these RNA junctions without inventing coding fusions or protein sequences.
 
 Format reference: [Exacto's structure translation source, pinned revision
 307c086](https://github.com/pirl-unc/exacto/blob/307c08670d5e706734bddf393bcebc84db497f9f/exacto/exacto-translator/src/algorithms/translation.rs).
+Genomic bounds: [Exacto's native record writer at the same revision](https://github.com/pirl-unc/exacto/blob/307c08670d5e706734bddf393bcebc84db497f9f/exacto/exacto-caller/src/structs/alignment_structure.rs#L765).
 
 ## Related reference
 
