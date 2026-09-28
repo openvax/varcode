@@ -8,7 +8,8 @@ import pytest
 from pyensembl import cached_release
 
 from varcode import StructuralVariant
-from varcode.effects import FivePrimeUTR, FrameShift, StartLoss, ThreePrimeUTR, Unresolved
+from varcode.effects import (
+    ExonLoss, FivePrimeUTR, FrameShift, StartLoss, ThreePrimeUTR, Unresolved)
 from varcode.effects import structural
 from varcode.effects.codon_tables import translate_sequence
 from varcode.nucleotides import reverse_complement
@@ -200,9 +201,13 @@ def test_ambiguous_insert_is_preserved_without_guessing_protein(tx, kind):
 
 
 def test_nonlocal_insertion_retention_is_not_assumed(tx):
+    """Both breakpoints lie outside the transcript, so the junction insert
+    isn't placed in it: the whole transcript is deleted (#541) and no
+    mutant cDNA is asserted."""
     variant = _paired(tx, "DEL", tx.start - 20, tx.end + 20)
     effect = variant.effect_on_transcript(tx)
-    assert isinstance(effect.most_likely_effect, Unresolved)
+    assert isinstance(effect, ExonLoss)
+    assert effect.exons == tuple(tx.exons)
     assert effect.mutant_transcript.cdna_sequence is None
 
 

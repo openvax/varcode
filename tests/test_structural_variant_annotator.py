@@ -33,6 +33,7 @@ from varcode import (
     get_annotator,
 )
 from varcode.effects import (
+    ExonLoss,
     GeneFusion,
     Intronic,
     FrameShift,
@@ -989,7 +990,7 @@ def test_deletion_between_two_genes_is_fusion_on_both_partners():
     genes are on the reverse strand: the deletion keeps ERG's left side
     (its 3' end) and TMPRSS2's right side (its 5' end), so both
     transcripts get a fusion with TMPRSS2 as 5' partner, while ETS2,
-    wholly inside the deletion, is still deleted."""
+    wholly inside the deletion, loses every exon (#541)."""
     tmprss2 = _longest_coding_transcript("TMPRSS2")
     erg = _longest_coding_transcript("ERG")
     ets2 = _longest_coding_transcript("ETS2")
@@ -1016,8 +1017,9 @@ def test_deletion_between_two_genes_is_fusion_on_both_partners():
     assert on_erg.three_prime_transcript.id == erg.id
     assert on_erg.five_prime_transcript.gene_name == "TMPRSS2"
 
-    assert isinstance(
-        _ANNOTATOR.annotate_on_transcript(sv, ets2), StartLoss)
+    on_ets2 = _ANNOTATOR.annotate_on_transcript(sv, ets2)
+    assert isinstance(on_ets2, ExonLoss)
+    assert on_ets2.exons == tuple(ets2.exons)
 
 
 # --------------------------------------------------------------------

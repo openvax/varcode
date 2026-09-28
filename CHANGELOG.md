@@ -1,5 +1,17 @@
 # Change Log
 
+## [v10.5.17](https://github.com/openvax/varcode/tree/v10.5.17) (2026-09-27)
+
+- A deletion that contains a whole coding transcript is `ExonLoss` of every
+  exon, whether or not the transcript is annotated complete (#541). A complete
+  transcript used to come out as `StartLoss` (`p.M1?`), which implies the rest
+  of the transcript remains, while an incomplete one was `ExonLoss`. On the
+  public osteosarc SV0055 deletion (chr9:22510296-35428808, Ensembl 95), 185
+  of the 242 protein-coding transcripts wholly inside it were `StartLoss` and
+  57 `ExonLoss`; all are now `ExonLoss`. `ExonLoss` ranks above `StartLoss`, so
+  such deletions now lead with it. Partial deletions are unchanged: losing the
+  start codon while keeping later exons is still `StartLoss`.
+
 ## [v10.5.16](https://github.com/openvax/varcode/tree/v10.5.16) (2026-09-27)
 
 - `RNAReadPhasingSource.in_cis` no longer calls a cis pair trans when one

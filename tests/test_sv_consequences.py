@@ -157,6 +157,21 @@ def test_local_paired_deletion_does_not_drop_inserted_bases(cftr, local_model, t
     assert effect.mutant_transcript.evidence["junction_insertion_status"] == "retained"
 
 
+@pytest.mark.parametrize("tx_id, complete", [
+    ("ENST00000003084", True), ("ENST00000446805", False)])
+def test_deletion_of_whole_transcript_loses_every_exon(tx_id, complete, local_model):
+    """Nothing of a transcript inside the deleted span remains, so every
+    exon is lost whether or not it is annotated complete. A complete one
+    used to come out as StartLoss, an incomplete one as ExonLoss (#541)."""
+    from varcode.effects import ExonLoss
+
+    tx = cached_release(81).transcript_by_id(tx_id)
+    assert tx.complete is complete
+    effect = _annotate(tx, "DEL", tx.start - 100, tx.end + 100)
+    assert isinstance(effect, ExonLoss)
+    assert effect.exons == tuple(tx.exons)
+
+
 def test_incomplete_coding_transcript_retains_exon_loss(local_model):
     from varcode.effects import ExonLoss
 

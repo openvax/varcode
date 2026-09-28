@@ -814,6 +814,10 @@ def _classify_structural_transcript(variant, transcript, model, affected):
     def unresolved(reason):
         return Unresolved(variant, transcript, "structural_transcript", reason), model
 
+    if _deletes_whole_transcript(variant, transcript):
+        # Nothing of the transcript remains, whatever its annotated
+        # completeness, so every exon is lost (#541).
+        return ExonLoss(variant, transcript, exons=tuple(transcript.exons)), model
     if model is None or model.cdna_sequence is None:
         return unresolved("No complete spliced sequence is available")
     if not transcript.complete:
@@ -917,6 +921,16 @@ def _annotate_breakend(variant, transcript, assembly=None):
                 variant, transcript)))
 
 # -- utilities ------------------------------------------------------
+
+
+def _deletes_whole_transcript(variant, transcript):
+    """True for a DEL/CN0, without a supplied assembly, whose deleted
+    reference span contains the entire transcript."""
+    if (variant.sv_type not in ("DEL", "CN0") or variant.alt_assembly
+            or str(variant.contig) != str(transcript.contig)):
+        return False
+    start, end = _affected_span(variant)
+    return start <= transcript.start and transcript.end <= end
 
 
 def _overlapping_exons(variant, transcript):

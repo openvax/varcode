@@ -174,7 +174,7 @@ Per transcript:
 
 | Transcript | Effect |
 |---|---|
-| Wholly inside the span | `StartLoss` for complete transcript deletion; unresolved DUP/INV model |
+| Wholly inside the span | `ExonLoss` of every exon for a deletion; unresolved DUP/INV model |
 | Holds both ends | translated local consequence, unresolved model, or `Intronic` if no exon overlaps |
 | Holds one end, fusion conditions met | `GeneFusion`, with the span's effect as a further candidate |
 | Holds one end, no partner | the span's consequence (e.g. `FrameShift` or `StartLoss`) |
