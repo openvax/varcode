@@ -1,5 +1,15 @@
 # Change Log
 
+## [v10.6.1](https://github.com/openvax/varcode/tree/v10.6.1) (2026-09-28)
+
+- Test against `openvax-v2`, the OpenVax libraries' current shared Sid test
+  data (osteosarc 0.14.4), instead of `openvax-v1`. Varcode's three junction
+  members and all 187 small-variant targets are identical in both, so no
+  expectation changes. The `test-data` extra requires osteosarc
+  `>=0.14.4,<0.15`, the first release that resolves `openvax-v2`, and the
+  osteosarc test corpus was re-collected with 0.14.4; only its recorded version
+  changed.
+
 ## [v10.6.0](https://github.com/openvax/varcode/tree/v10.6.0) (2026-09-27)
 
 - `RNAReadPhasingSource.in_cis` decides from which allele combinations are

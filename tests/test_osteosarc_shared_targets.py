@@ -1,6 +1,6 @@
 """Varcode annotates every small variant the OpenVax libraries share.
 
-openvax-v1, the OpenVax libraries' shared Sid test data published by
+openvax-v2, the OpenVax libraries' shared Sid test data published by
 osteosarc (iskandr/osteosarc#56), lists in its recipe each target the
 libraries test. Its 179 current catalogue alleles are the ready alleles of
 ``tests/data/osteosarc_variants.json``. The rest are alleles Isovar, Topiary
@@ -35,7 +35,7 @@ HG19_MITOCHONDRIAL = "MT_ND5-chrM-12994-hg19"
 def small_variant_targets():
     osteosarc = pytest.importorskip("osteosarc", reason="install .[test-data]")
     recipe = json.loads(
-        (Path(osteosarc.fetch_bundle("openvax-v1")) / "recipe.json").read_text())
+        (Path(osteosarc.fetch_bundle("openvax-v2")) / "recipe.json").read_text())
     return {name: target for name, target in recipe["targets"].items()
             if target["kind"] == "small_variant"}
 
