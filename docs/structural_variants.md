@@ -44,8 +44,9 @@ event. The event type is always available as `effect.variant.sv_type`
 - **Gene fusions.** `GeneFusion` and `TranslocationToIntergenic`; see
   [fusion protein candidates](#fusion-protein-candidates).
 - **Unknown.** Unmaterialized inversions, unspecified insertions/CNVs, and
-  assemblies without a mapped CDS give `Unresolved` candidates. A deletion on
-  an incompletely annotated coding transcript falls back to `ExonLoss`.
+  assemblies without a mapped CDS give `Unresolved` candidates. A deletion that
+  contains a whole transcript, or cuts an incompletely annotated coding
+  transcript, is `ExonLoss`.
 
 For example, on CFTR (`ENST00000003084`, Ensembl 81), deleting exons 1–3 loses
 the annotated start, deleting exon 5 yields an in-frame `Deletion`
@@ -172,7 +173,7 @@ Two outcomes apply before any SV logic:
 | `FrameShift` | A spliced coding edit changes the reading frame. |
 | `StructuralVariantEffect` | A set of conditional consequences or unresolved models. |
 | `Unresolved` | Available sequence/coordinates cannot establish the consequence. |
-| `ExonLoss` | Deleted exons on a transcript whose CDS annotation is incomplete. |
+| `ExonLoss` | Deleted exons: every exon of a transcript wholly inside a deletion, or those of a transcript whose CDS annotation is incomplete. |
 | `Intronic` | A span inside the transcript that overlaps no exon. |
 | `Intergenic` | No gene at the variant's position. |
 | `NoncodingTranscript` | The transcript isn't protein-coding. |
