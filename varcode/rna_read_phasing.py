@@ -493,15 +493,16 @@ class RNAReadPhasingSource:
             return self._phase_cache[key]
         self._register_variant(v1)
         self._register_variant(v2)
-        both_alt = 0
-        mixed = 0
-        for a1, a2 in self._fragment_alleles_for_pair(v1, v2):
-            if a1 == "alt" and a2 == "alt":
-                both_alt += 1
-            elif ((a1 == "alt" and a2 == "ref") or
-                    (a1 == "ref" and a2 == "alt")):
-                mixed += 1
-        counts = both_alt, mixed
+        fragments = self._fragment_alleles_for_pair(v1, v2)
+        both_alt = fragments.count(("alt", "alt"))
+        # Trans needs each alt allele seen with the other's reference. A
+        # cis pair fills at most one of these arms: cells carrying only the
+        # earlier variant (or only a germline one) give (earlier alt, later
+        # ref) reads, never the reverse. Summing the arms called such pairs
+        # trans, so trans evidence is the smaller arm (#527).
+        trans = min(fragments.count(("alt", "ref")),
+                    fragments.count(("ref", "alt")))
+        counts = both_alt, trans
         self._phase_cache[key] = counts
         return counts
 
@@ -509,14 +510,16 @@ class RNAReadPhasingSource:
         """Return cis/trans from RNA read or fragment co-occurrence.
 
         ``True`` means enough fragments support both alts. ``False``
-        means enough fragments support one alt with the other's reference
-        allele. ``None`` means the BAM does not contain enough
-        co-covering evidence to decide.
+        means enough fragments show *each* alt with the other's reference
+        allele: a cis pair can only show one of these combinations, from
+        cells carrying just the earlier (or germline) variant. ``None``
+        means the BAM does not contain enough co-covering evidence to
+        decide, including when only one of the combinations is seen.
         """
-        both_alt, mixed = self._phase_counts(v1, v2)
-        if both_alt >= self.min_alt_reads and both_alt > mixed:
+        both_alt, trans = self._phase_counts(v1, v2)
+        if both_alt >= self.min_alt_reads and both_alt > trans:
             return True
-        if mixed >= self.min_alt_reads and mixed > both_alt:
+        if trans >= self.min_alt_reads and trans > both_alt:
             return False
         return None
 

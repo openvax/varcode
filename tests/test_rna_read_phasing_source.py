@@ -132,22 +132,48 @@ def test_read_phase_resolver_reports_cis_from_same_read_alt_cooccurrence(tmp_pat
         source.close()
 
 
-def test_read_phase_resolver_reports_trans_from_mixed_reads(tmp_path):
-    v1 = Variant("1", 120, "A", "T")
-    v2 = Variant("1", 140, "A", "G")
-    bam_path = _write_bam(tmp_path, [
-        _snv_read("r1", 100, {120: "T", 140: "A"}),
-        _snv_read("r2", 100, {120: "T", 140: "A"}),
-    ])
+def _phase_call(tmp_path, arms):
+    """``in_cis`` for v1 = 1:120 A>T and v2 = 1:140 A>G from reads whose
+    (v1, v2) alleles are given as ``{(allele1, allele2): n_reads}``."""
+    bases = {"ref": {120: "A", 140: "A"}, "alt": {120: "T", 140: "G"}}
+    reads = [
+        _snv_read("%s-%s-%d" % (a1, a2, i), 100,
+                  {120: bases[a1][120], 140: bases[a2][140]})
+        for (a1, a2), n in arms.items() for i in range(n)]
     source = RNAReadPhasingSource(
-        bam_path,
-        max_distance_from_read_edge=0,
-    )
+        _write_bam(tmp_path, reads), max_distance_from_read_edge=0)
     try:
-        resolver = MolecularPhaseResolver(source)
-        assert resolver.in_cis(v1, v2) is False
+        return MolecularPhaseResolver(source).in_cis(
+            Variant("1", 120, "A", "T"), Variant("1", 140, "A", "G"))
     finally:
         source.close()
+
+
+def test_read_phase_resolver_reports_trans_from_both_mixed_combinations(tmp_path):
+    """Each alt allele seen with the other's reference, never together."""
+    assert _phase_call(tmp_path, {("alt", "ref"): 2, ("ref", "alt"): 2}) is False
+
+
+def test_nested_subclone_pair_is_cis_not_trans(tmp_path):
+    """v2 arose on v1's haplotype in a subclone. Cells with only v1 give
+    many (alt, ref) reads, and no read has v2 without v1. Summing the mixed
+    reads called this trans (#527)."""
+    assert _phase_call(
+        tmp_path, {("alt", "alt"): 3, ("alt", "ref"): 10, ("ref", "ref"): 5}) is True
+
+
+def test_germline_partner_expressed_in_normal_cells_stays_cis(tmp_path):
+    """v2 is germline (in every cell); somatic v1 sits on its haplotype.
+    Cells without v1 give (ref, alt) reads, which aren't trans evidence."""
+    assert _phase_call(
+        tmp_path, {("alt", "alt"): 3, ("ref", "alt"): 10, ("ref", "ref"): 8}) is True
+
+
+def test_one_mixed_combination_alone_is_unknown(tmp_path):
+    """v1's alt with v2's reference, and v2's alt never seen: trans, a
+    subclone of v1 carrying v2, and an unexpressed v2 all fit, so the
+    answer is unknown rather than trans."""
+    assert _phase_call(tmp_path, {("alt", "ref"): 6}) is None
 
 
 def test_read_phase_resolver_returns_none_below_threshold(tmp_path):
