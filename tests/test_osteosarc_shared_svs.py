@@ -1,6 +1,6 @@
-"""The openvax-v1 SV targets Varcode's other esvee tests lack.
+"""The openvax-v2 SV targets Varcode's other esvee tests lack.
 
-openvax-v1, the OpenVax libraries' shared Sid test data (iskandr/osteosarc#56),
+openvax-v2, the OpenVax libraries' shared Sid test data (iskandr/osteosarc#56),
 lists 12 SV targets. Varcode already tests SV0009, SV0324 and SV0384 through
 ``osteosarc_esvee_somatic.vcf``, and SV0030, SV0178 and SV0186 through esvee
 alleles written into ``test_fusion_insertions.py`` and
@@ -13,10 +13,11 @@ each with its mate, with only the FORMAT and sample columns removed:
 - SV0175, a chr6 duplication (15481/15487), and SV0461, a chr20 duplication
   (43635/43762);
 - SV0402, a chr20 inversion (43636/43709);
-- Isovar's DLG5 deletion (26313/26315). DRAGEN's nominal breakends put it at
-  chr10:77850921-77930452. esvee resolves the junction 7-9 bases further out
-  with a 24-base insertion, and Isovar finds that junction sequence, as
-  PURPLE reports it, in every DRAGEN assembled contig.
+- Isovar's DLG5 deletion (26313/26315): the junction chr10:77850914 to
+  77930461 with a 24-base insertion, which openvax-v2's recipe now records
+  (openvax-v1 had DRAGEN's nominal breakends, 7-9 bases inward). Isovar finds
+  that junction sequence, as PURPLE reports it, in every DRAGEN assembled
+  contig.
 
 LINX, run on the same calls, names a gene at one breakend each of SV0055
 (ATP8B5P), SV0175 (GABBR1) and SV0499 (IMMT) and none at the others. Varcode
@@ -50,7 +51,7 @@ RECORDS = {
     "43636": ("20", 52_863_939, "20", 55_876_748, "INV"),
     "43709": ("20", 55_876_748, "20", 52_863_939, "INV"),
 }
-# Genes LINX names at a breakend of an openvax-v1 catalogue target; it names
+# Genes LINX names at a breakend of an openvax-v2 catalogue target; it names
 # none at the other catalogue breakends. (DLG5's records have no LINX row.)
 LINX_BREAKEND_GENES = {"23378": {"ATP8B5P"}, "15487": {"GABBR1"}, "4844": {"IMMT"}}
 DLG5_RECORDS = {"26313", "26315"}

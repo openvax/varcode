@@ -16,7 +16,7 @@ below apply to the bundled Osteosarc snapshot checks.
 ## Osteosarc test variants
 
 `tests/data/osteosarc_variants.json` contains 179 ready site variants and three
-unresolved entries collected through `osteosarc==0.14.0` from the pinned public
+unresolved entries collected through `osteosarc==0.14.4` from the pinned public
 snapshot below. The ready variants comprise 158 SNVs, 14 deletions, four
 insertions, and three complex alleles. Original alleles, assemblies, source
 IDs, correction IDs, source receipts, and hashes of complete osteosarc entries
@@ -49,12 +49,12 @@ and correction notes; they are not assumed to be independent events.
 
 ## Regenerate from the verified snapshot
 
-The fixture records Osteosarc 0.14.0. To reproduce it byte for byte, install
+The fixture records Osteosarc 0.14.4. To reproduce it byte for byte, install
 that version, unpack the bundled snapshot into a new cache directory, then
 collect offline:
 
 ```sh
-python -m pip install -e . 'osteosarc==0.14.0'
+python -m pip install -e . 'osteosarc==0.14.4'
 python -m zipfile -e tests/data/osteosarc_snapshot_2026-09-18t.zip /path/to/new/cache
 python -m tests.collect_osteosarc_variants \
   --cache /path/to/new/cache --snapshot 2026-09-18t
@@ -70,7 +70,7 @@ separate from export and tests.
 
 The targeted GPX4 and BRCA1 regressions use Ensembl 81. Offline integration
 checks use the public osteosarc dataset through the published
-osteosarc 0.14.x adapter (`>=0.14.0,<0.15`) from the optional `test-data` extra
+osteosarc 0.14.x adapter (`>=0.14.4,<0.15`) from the optional `test-data` extra
 (Python 3.9+):
 
 ```sh
@@ -124,10 +124,12 @@ Dataset: [osteosarc.com](https://osteosarc.com/data/), snapshot acquired
 2026-09-18, collected 2026-09-21; public data listed as CC0-1.0 by the
 [AWS Open Data Registry](https://registry.opendata.aws/sid-osteosarc/).
 
-## Shared test data (openvax-v1)
+## Shared test data (openvax-v2)
 
-The OpenVax libraries share one set of Sid test data, `openvax-v1`, published
-by osteosarc 0.11 ([iskandr/osteosarc#56](https://github.com/iskandr/osteosarc/issues/56)).
+The OpenVax libraries share one set of Sid test data, `openvax-v2`, published
+by osteosarc 0.14.4 ([iskandr/osteosarc#56](https://github.com/iskandr/osteosarc/issues/56)).
+It replaced `openvax-v1` (osteosarc 0.11) with the same members; Varcode's
+reads and small-variant targets are identical in both.
 
 Its recipe lists every target the libraries test.
 `tests/test_osteosarc_shared_targets.py` checks that its 179 current catalogue
@@ -156,7 +158,7 @@ gives them, but the same alleles. For example, the fixture's
 
 Varcode stores no reads of its own. Each record in
 `tests/data/osteosarc_observed_junctions.json` keeps a 40-base junction window
-and its annotations, and the `openvax-v1` member
+and its annotations, and the `openvax-v2` member
 `varcode/osteosarc_observed_junctions.json#<label>` holds the ONT read behind
 it. `tests/test_osteosarc_shared_reads.py` reads those three members through
 `osteosarc.bundle_file` and checks each record's read name, source sequence hash and window against them:

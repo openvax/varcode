@@ -1,9 +1,9 @@
-"""Varcode's observed-junction fixtures match their reads in openvax-v1.
+"""Varcode's observed-junction fixtures match their reads in openvax-v2.
 
-openvax-v1 is the OpenVax libraries' shared Sid test data, published by
+openvax-v2 is the OpenVax libraries' shared Sid test data, published by
 osteosarc (iskandr/osteosarc#56). Each record in
 ``tests/data/osteosarc_observed_junctions.json`` keeps only the junction
-window and its annotations; the openvax-v1 member named after it holds the ONT
+window and its annotations; the openvax-v2 member named after it holds the ONT
 read the window came from. The first run downloads the bundle (28 MB) and
 exports its members into the osteosarc cache; later runs reuse them offline.
 """
@@ -25,8 +25,8 @@ def junction_records():
 
 
 def shared_read_fields(osteosarc, label):
-    """SAM fields of each record in one junction's openvax-v1 member."""
-    path = osteosarc.bundle_file("openvax-v1", MEMBER_PREFIX + label, format="sam")
+    """SAM fields of each record in one junction's openvax-v2 member."""
+    path = osteosarc.bundle_file("openvax-v2", MEMBER_PREFIX + label, format="sam")
     return [line.split("\t") for line in Path(path).read_text().splitlines()
             if not line.startswith("@")]
 
