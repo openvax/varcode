@@ -18,12 +18,12 @@ from pyensembl import Genome, EnsemblRelease
 from .data import data_path
 
 MOUSE_ENSEMBL_RELEASE = 95
-SERVER = "ftp://ftp.ensembl.org"
+SERVER = "https://ftp.ensembl.org"
 MOUSE_GTF_PATH = \
-    SERVER + "/pub/release-%d/gtf/mus_musculus/Mus_musculus.GRCm38.%d.gtf.gz" % (
+    SERVER + "/pub/release-%d/gtf/mus_musculus/Mus_musculus.GRCm38.%d.chr_patch_hapl_scaff.gtf.gz" % (
         MOUSE_ENSEMBL_RELEASE, MOUSE_ENSEMBL_RELEASE)
 MOUSE_TRANSCRIPT_FASTA_PATH = \
-    SERVER + "/pub/release-%d/fasta/mus_musculus/cdna/Mus_musculus.GRCm38.cdna.all.fa.gz"
+    SERVER + "/pub/release-%d/fasta/mus_musculus/cdna/Mus_musculus.GRCm38.cdna.all.fa.gz" % MOUSE_ENSEMBL_RELEASE
 MOUSE_PROTEIN_FASTA_PATH = \
     SERVER + "/pub/release-%d/fasta/mus_musculus/pep/Mus_musculus.GRCm38.pep.all.fa.gz" % (
         MOUSE_ENSEMBL_RELEASE)
