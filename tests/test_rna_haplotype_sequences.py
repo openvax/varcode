@@ -143,3 +143,30 @@ def test_no_transitive_join_of_registered_haplotypes(tmp_path):
         assert s.in_cis(a, b) is None
     finally:
         s.close()
+
+
+@pytest.mark.parametrize("quality,expected", [(40, None), (5, True)])
+def test_anchored_match_cannot_override_an_informative_contradictory_mate(tmp_path, variants, quality, expected):
+    matching = read("9M28N6M")
+    contradictory = read("%dM" % len(REFERENCE), REFERENCE, quality=quality)
+    matching.flag, contradictory.flag = 99, 147
+    s = source(tmp_path, [matching, contradictory])
+    try:
+        s.register_haplotype(variants)
+        assert s.in_cis(variants[0], variants[-1]) is expected
+        assert s.supports_variant(variants[-1]) == (1 if expected else 0)
+    finally:
+        s.close()
+
+
+def test_independent_anchored_fragment_rescues_a_conflicted_pair(tmp_path, variants):
+    matching = read("9M28N6M")
+    contradictory = read("9M28N6M", "AAGACCTGGCCCATT")
+    matching.flag, contradictory.flag = 99, 147
+    s = source(tmp_path, [matching, contradictory, read("9M28N6M", name="clean")])
+    try:
+        s.register_haplotype(variants)
+        assert s.in_cis(variants[0], variants[-1]) is True
+        assert s.supports_variant(variants[-1]) == 1
+    finally:
+        s.close()
