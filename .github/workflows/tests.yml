@@ -6,7 +6,10 @@
 # - get a badge for tests passing
 # - download binary dependencies from conda
 name: Tests
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+  pull_request:
 
 jobs:
   build:
