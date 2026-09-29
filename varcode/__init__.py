@@ -79,6 +79,7 @@ from .rna_evidence import (
     make_rna_outcome,
 )
 from .exacto import load_exacto_fusions
+from .reference_completion import reference_completion_hypotheses
 from .realized_effects import predict_realized_effect
 from .transcript_model import predict_transcript_model_effect
 from .splice_outcomes import (
@@ -197,6 +198,7 @@ __all__ = [
     "make_rna_outcome",
     "make_fusion_outcome",
     "load_exacto_fusions",
+    "reference_completion_hypotheses",
 
     "EffectAnnotator",
     "FastEffectAnnotator",
