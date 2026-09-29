@@ -1,5 +1,17 @@
 # Change Log
 
+## [v10.10.0](https://github.com/openvax/varcode/tree/v10.10.0) (2026-09-29)
+
+- Add `reference_completion_hypotheses` for mapped Exacto and other RNA
+  observations (#499). Explicitly requested hypotheses prepend/append compatible
+  reference sequence, retaining the original observation and producer peptide.
+  Alternative reference isoforms remain separate; evidence distinguishes
+  observed bases, assumed spans and the original read support.
+- Completion respects known RNA ends and predicts from the retained annotated
+  start using existing genetic-code/selenocysteine rules. Missing starts,
+  ambiguous coding sequence and missing stops remain explicit. Completion does
+  not establish RNA coverage, initiation, translation or expression.
+
 ## [v10.9.0](https://github.com/openvax/varcode/tree/v10.9.0) (2026-09-28)
 
 - Map Exacto's verified sense exonic runs to reference-transcript segments,

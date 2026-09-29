@@ -19,6 +19,10 @@ See [Transcript models](transcript_models.md) for sequence access and
 
 ::: varcode.RNAEvidence
 
+## Reference-completion hypotheses
+
+::: varcode.reference_completion_hypotheses
+
 ## RNA evidence
 
 ::: varcode.RNAEvidenceResolver

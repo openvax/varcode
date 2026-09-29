@@ -169,9 +169,87 @@ fragments and observations without a usable reference frame stay unresolved
     sequence change; initiation and translation still remain predictions.
 
 Mapping does not choose a new ORF or establish initiation at an internal or
-upstream ATG. Reference-completed candidates remain future work in
-[#499](https://github.com/openvax/varcode/issues/499); initiation-dependent
-extensions remain under [#466](https://github.com/openvax/varcode/issues/466).
+upstream ATG. Initiation-dependent extensions remain under
+[#466](https://github.com/openvax/varcode/issues/466).
+
+## Make explicit reference-completion hypotheses
+
+An observed fragment may omit the annotated start or end of a transcript.
+Use `reference_completion_hypotheses` to ask what protein a compatible
+reference continuation would predict:
+
+```python
+from varcode import reference_completion_hypotheses
+
+# `rna` is the result of load_exacto_fusions above. Keep these collections
+# separate: inferred continuations are not RNA-observed outcomes.
+observations = rna.candidates
+hypotheses = tuple(
+    hypothesis
+    for observation in observations
+    for hypothesis in reference_completion_hypotheses(observation)
+)
+for hypothesis in hypotheses:
+    model = hypothesis.effect.mutant_transcript
+    spans = hypothesis.evidence["reference_completion"]
+    start, end = spans["observed_span"]
+    observed_sequence = model.cdna_sequence[start:end]
+    print(model.mutant_protein_sequence, spans["assumed_spans"])
+```
+
+The helper adds a reference prefix and/or suffix only when that terminal
+observed base is mapped to its sense transcript. It preserves every observed
+base and internal junction, insertion or mismatch. An unmapped end remains
+uncompleted. No candidate is returned when no reference bases can be added.
+To request one end, use `ends=("five_prime",)` or `ends=("three_prime",)`.
+
+By default, each end uses the transcript already named by the observation.
+To consider alternative 5′ isoforms, pass
+`five_prime_transcripts=observation.effect.five_prime_transcript.gene.transcripts`;
+`three_prime_transcripts` works the same way for a sense partner. Only isoforms
+that agree with all mapped donor runs in genomic coordinates, sequence and
+splice path survive. The reference build, gene, contig and strand must agree.
+Different transcript pairs remain distinct even when their proteins match.
+An explicitly empty list of choices produces no hypotheses for an eligible end.
+
+Each result has source `varcode_reference_completion`. Its `reference_completion`
+evidence records selected transcript IDs, the half-open `observed_span` in
+completed cDNA, and `assumed_spans` with their cDNA and reference coordinates.
+Assumed segments are labeled `assumed_reference_five_prime` or
+`assumed_reference_three_prime`. Original candidate/model evidence and peptide
+are retained in `observed_evidence`, `observed_model_evidence` and
+`observed_protein_sequence`; `observed_source` identifies the producer. Read
+counts and abundance stay nested with the original observation. They provide
+no extra support for a completed isoform, and must not be summed across its
+alternative completions. Candidate JSON serialization preserves this provenance.
+
+RNA producers can set `rna_five_prime_complete=True` and/or
+`rna_three_prime_complete=True` in candidate or model evidence when they have
+actual transcript-end evidence. Completion never extends those ends. False or
+None leaves the end eligible. Exacto's ORF-completeness labels and read endpoints
+alone do not establish transcript ends; native rows retain their original scope.
+
+Translation starts only at the retained annotated 5′ initiator, recorded as
+`initiation_status="assumed_reference_start"`. There is no search for a new
+internal/upstream ATG. The original Exacto ORF is unchanged, even when its
+reading frame differs; `observed_orf_frame` reports its frame relative to the
+completed CDS when both starts are known. A mapped start can span observed and
+assumed segments. Missing/partial start annotation or ambiguous coding bases
+leave the protein None. A missing stop gives `protein_completeness="partial_end"`;
+adding a reference 3′ end does not guarantee an in-frame stop after a frameshift.
+Existing transcript-specific genetic codes and mapped selenocysteine/3′-UTR
+rules apply, including explicit uncertain Sec offsets in the hypothesis evidence.
+
+For example, the observed fusion fragment `CCC GGG AAA TTT` predicts `PGKF`
+in its supplied frame. A compatible reference prefix `ATG AAA` and suffix
+`CCC TAA` produce a separate `MKPGKFP` hypothesis. Those added bases remain
+assumptions. Its sequence-change flags describe that hypothesis; neither a
+start-to-stop prediction nor a changed-protein flag establishes observed
+initiation, translation, full-length RNA, tumor specificity or abundance.
+
+This distinction follows the producer's [observed-sequence ORF selection](https://github.com/pirl-unc/exacto/blob/307c08670d5e706734bddf393bcebc84db497f9f/exacto/exacto-translator/src/algorithms/translation.rs),
+the [experimental dependence of initiation on sequence context](https://pubmed.ncbi.nlm.nih.gov/2601709/),
+and the [3′-UTR requirement for selenocysteine decoding](https://www.nature.com/articles/353273a0).
 
 Not every RNA junction produces a coding fusion. In the osteosarcoma
 regression fixtures, GABBR1 joins sequence upstream of SLC29A1, OTUD7A joins
