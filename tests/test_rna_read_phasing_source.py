@@ -541,3 +541,37 @@ def test_splice_junction_skip_does_not_support_intronic_variant(tmp_path):
         assert source.has_evidence(variant) is False
     finally:
         source.close()
+
+
+@pytest.mark.parametrize("locus", [120, 140])
+@pytest.mark.parametrize("conflict", ["A", "C"])
+@pytest.mark.parametrize("clean_count", [0, 1, 2])
+def test_conflicting_mates_are_not_definitive_fragments(tmp_path, locus, conflict, clean_count):
+    variants = [Variant("1", 120, "A", "T"), Variant("1", 140, "A", "G")]
+    reads = []
+    for i in range(2):
+        name = "conflict%d" % i
+        reads.append(_snv_read(name, 100, {120: "T", 140: "G"}, flag=99))
+        calls = {120: "T", 140: "G", locus: conflict}
+        reads.append(_snv_read(name, 100, calls, flag=147))
+    reads.extend(_snv_read("clean%d" % i, 100, {120: "T", 140: "G"}) for i in range(clean_count))
+    source = RNAReadPhasingSource(_write_bam(tmp_path, reads), max_distance_from_read_edge=0)
+    try:
+        assert source.supports_variant(variants[locus == 140]) == clean_count
+        assert source.in_cis(*variants) is (True if clean_count >= 2 else None)
+        assert source.in_cis(*reversed(variants)) is (True if clean_count >= 2 else None)
+    finally:
+        source.close()
+
+
+def test_low_quality_disagreement_does_not_override_clean_mate(tmp_path):
+    v1, v2 = Variant("1", 120, "A", "T"), Variant("1", 140, "A", "G")
+    reads = [r for i in range(2) for r in (
+        _snv_read("q%d" % i, 100, {120: "T", 140: "G"}, flag=99),
+        _snv_read("q%d" % i, 100, {120: "T", 140: "A"}, low_quality_pos=140, flag=147))]
+    source = RNAReadPhasingSource(_write_bam(tmp_path, reads), max_distance_from_read_edge=0)
+    try:
+        assert source.in_cis(v1, v2) is True
+        assert source.supports_variant(v2) == 2
+    finally:
+        source.close()

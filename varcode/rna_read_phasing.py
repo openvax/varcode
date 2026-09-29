@@ -228,6 +228,8 @@ class RNAReadPhasingSource:
         alignment, with the configured base-quality and read-edge filters.
         Equivalent D/N/split-gap encodings can then support the same known
         sequence. This does not establish a genomic deletion from an RNA skip.
+        A fully covered high-quality mate with a different sequence vetoes that
+        fragment's support. Missing coverage and low-quality context do not.
         Reference is fetched from the variants' genome; unavailable sequence,
         overlapping edits and reference mismatches raise ValueError. No BAM
         bases are corrected, no missing bases filled, and no mates assembled.
@@ -268,7 +270,7 @@ class RNAReadPhasingSource:
             self._support_cache.clear()
             self._phase_cache.clear()
 
-    def _matches_haplotype(self, read, left0, right0, sequence):
+    def _haplotype_allele(self, read, left0, right0, sequence):
         anchors = {}
         for operation, start, end, query, _ in self._cigar_events(read):
             if operation in (_CIGAR_MATCH, _CIGAR_EQUAL, _CIGAR_DIFF):
@@ -276,12 +278,13 @@ class RNAReadPhasingSource:
                     if start <= position < end:
                         anchors[position] = query + position - start
         if left0 not in anchors or right0 not in anchors:
-            return False
+            return None
         left, right = anchors[left0], anchors[right0]
-        if right < left or right - left + 1 != len(sequence):
-            return False
-        return (self._base_calls_ok(read, range(left, right + 1))
-                and read.query_sequence[left:right + 1].upper() == sequence)
+        if right < left or not self._base_calls_ok(read, range(left, right + 1)):
+            return None
+        # A fully observed, high-quality nonmatch can contradict another mate,
+        # but must never be interpreted as reference/trans evidence.
+        return "alt" if read.query_sequence[left:right + 1].upper() == sequence else "other"
 
     def _register_variant(self, variant):
         key = self._variant_key(variant)
@@ -389,7 +392,7 @@ class RNAReadPhasingSource:
             return "alt"
         if observed.upper() == variant.ref.upper():
             return "ref"
-        return None
+        return "other"
 
     def _has_exact_deletion(self, read, start0, end0):
         for operation, ref_start, ref_end, _, _ in self._cigar_events(read):
@@ -421,7 +424,7 @@ class RNAReadPhasingSource:
         observed = "".join(read.query_sequence[pos] for pos in query_positions)
         if observed.upper() == variant.ref.upper():
             return "ref"
-        return None
+        return "other"
 
     def _inserted_positions_after_anchor(self, read, anchor0):
         inserted = []
@@ -449,7 +452,7 @@ class RNAReadPhasingSource:
             inserted = "".join(read.query_sequence[pos] for pos in inserted_positions)
             if inserted.upper() == variant.alt.upper():
                 return "alt"
-            return None
+            return "other"
         if self._base_calls_ok(read, [anchor_query]):
             return "ref"
         return None
@@ -458,14 +461,12 @@ class RNAReadPhasingSource:
         if not self._passes_read_filters(read) or read.query_sequence is None:
             return None
         key = self._variant_key(variant)
-        registered = False
-        for keys, left, right, sequence in self._haplotypes:
-            if key in keys:
-                registered = True
-                if self._matches_haplotype(read, left, right, sequence):
-                    return "alt"
-        if registered:
-            return None
+        haplotype_calls = [self._haplotype_allele(read, left, right, sequence)
+                           for keys, left, right, sequence in self._haplotypes if key in keys]
+        if haplotype_calls:
+            if "alt" in haplotype_calls:
+                return "alt"
+            return "other" if "other" in haplotype_calls else None
         if variant.is_insertion:
             return self._insertion_allele(read, variant)
         if variant.is_deletion:
@@ -495,12 +496,13 @@ class RNAReadPhasingSource:
         if reads is None:
             self._support_cache[key] = None
             return None
-        supporting_fragments = set()
+        calls_by_fragment = defaultdict(set)
         for read in reads:
-            if self._read_allele(read, variant) == "alt":
-                supporting_fragments.add((
-                    read.get_tag("RG") if read.has_tag("RG") else "", read.query_name))
-        count = len(supporting_fragments)
+            call = self._read_allele(read, variant)
+            if call is not None:
+                key = (read.get_tag("RG") if read.has_tag("RG") else "", read.query_name)
+                calls_by_fragment[key].add(call)
+        count = sum(calls == {"alt"} for calls in calls_by_fragment.values())
         self._support_cache[key] = count
         return count
 
@@ -532,27 +534,19 @@ class RNAReadPhasingSource:
         anchored = any(self._variant_key(v) in keys
                        for v in (v1, v2) for keys, _, _, _ in self._haplotypes)
         for fragment_reads in grouped.values():
-            if anchored:
-                # Never assemble a new anchored haplotype from mates or from
-                # different registered combinations through a shared allele.
-                pairs = {tuple(self._read_allele(read, v) for v in (v1, v2))
-                         for read in fragment_reads}
-                fragments.append(("alt", "alt") if ("alt", "alt") in pairs
-                                 else (None, None))
-                continue
+            pairs = [tuple(self._read_allele(read, v) for v in (v1, v2))
+                     for read in fragment_reads]
             alleles = []
-            for variant in (v1, v2):
-                calls = [
-                    self._read_allele(read, variant)
-                    for read in fragment_reads
-                ]
-                if "alt" in calls:
-                    alleles.append("alt")
-                elif "ref" in calls:
-                    alleles.append("ref")
-                else:
-                    alleles.append(None)
-            fragments.append(tuple(alleles))
+            for calls in zip(*pairs):
+                informative = set(calls) - {None}
+                alleles.append(next(iter(informative)) if len(informative) == 1 else None)
+            if anchored:
+                # Require one full-context alignment, and no informative mate
+                # contradicting either allele. Never assemble partial contexts.
+                unambiguous_match = tuple(alleles) == ("alt", "alt") and ("alt", "alt") in pairs
+                fragments.append(("alt", "alt") if unambiguous_match else (None, None))
+            else:
+                fragments.append(tuple(alleles))
         return fragments
 
     def _phase_counts(self, v1, v2):
