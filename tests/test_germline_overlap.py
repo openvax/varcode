@@ -7,7 +7,7 @@ from varcode import (
     Completeness, EffectCollection, GermlineAlleleOverlap, GermlineContext,
     Variant, detect_germline_overlap,
 )
-from varcode.effects import Unresolved
+from varcode.effects import Substitution
 from varcode.transcript_model import predict_transcript_model_effect
 
 
@@ -62,6 +62,9 @@ def test_mixed_group_does_not_apply_inherited_allele_twice(allele):
     novel = Variant("7", 117531100, "T", "A", genome=81)
     effect = predict_transcript_model_effect(
         (novel, allele), transcript, germline_variants=(allele,))
-    assert isinstance(effect, Unresolved)
-    assert effect.mechanism == "germline_overlap_haplotype"
-    assert effect.is_germline_overlap and effect.is_loh is None
+    assert isinstance(effect, Substitution)
+    assert effect.short_description == "p.S159T"
+    outcome, = effect.candidates[0].outcomes
+    assert outcome.hypothesis.phase == ((allele, "cis"),)
+    assert outcome.baseline.protein_sequence[158] == "S"
+    assert outcome.mutant.protein_sequence[158] == "T"

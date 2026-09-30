@@ -1,5 +1,14 @@
 # Change Log
 
+## [v10.11.1](https://github.com/openvax/varcode/tree/v10.11.1) (2026-09-30)
+
+- Compose mixed inherited/somatic cis groups in the experimental transcript
+  model (#500). Inherited alleles anchor the patient baseline and are edited
+  once; only novel alleles contribute new somatic edits. Repeated normalized
+  alleles are deduplicated without losing the supplied group membership.
+- Resolve germline phase through any member of a known-cis group, preserving
+  uncertainty for unlinked alleles and phase provenance on each hypothesis.
+
 ## [v10.11.0](https://github.com/openvax/varcode/tree/v10.11.0) (2026-09-29)
 
 - `Genome(native_genome)` inherits optional native PyEnsembl reference DNA

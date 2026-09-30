@@ -888,7 +888,7 @@ class PhasePartition(DataclassSerializable):
 
 def partition_germline_by_phase(
         somatic_variant, germline_variants, phase_resolver=None,
-        homozygous=()) -> PhasePartition:
+        homozygous=(), cis_variants=()) -> PhasePartition:
     """Split ``germline_variants`` by their phase relative to ``somatic_variant``.
 
     Variants in ``homozygous`` sit on both haplotypes and are always cis,
@@ -899,16 +899,30 @@ def partition_germline_by_phase(
     germline variant. Variants whose phase is known only relative to each
     other become ``linked`` groups. An answer that contradicts earlier
     ones is ignored with a warning.
+
+    ``cis_variants`` supplies additional variants known to be in cis with
+    the somatic variant. They anchor the phase graph before resolver answers,
+    so germline phase can follow through any member of that group.
+    Homozygous alleles do not link the two haplotypes through this graph.
     """
     germline = tuple(germline_variants)
+    homozygous = tuple(homozygous)
     if str(somatic_variant.contig).lstrip("chr").upper() in ("M", "MT", "Y"):
         return PhasePartition(germline=germline, cis=germline, implicit=True)
     rest = [g for g in germline if g not in homozygous]
-    # Union-find over the somatic variant (node 0) and ``rest``; parity is
-    # 0 for the same haplotype as the parent node and 1 for the other one.
+    # Union-find over the somatic variant (node 0), ``rest``, and any
+    # additional cis-group members. Parity is 0 for the same haplotype
+    # as the parent node and 1 for the other one.
     nodes = [somatic_variant] + rest
+    cis_variants = tuple(cis_variants)
+    for variant in cis_variants:
+        if not detect_germline_overlap(variant, nodes + list(homozygous)):
+            nodes.append(variant)
     parent = list(range(len(nodes)))
     parity = [0] * len(nodes)
+    for i, variant in enumerate(nodes):
+        if detect_germline_overlap(variant, cis_variants):
+            parent[i] = 0
 
     def find(i):
         if parent[i] != i:

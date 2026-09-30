@@ -48,6 +48,27 @@ the phase cap too when `predict_transcript_model_effect` is called directly.
 Exceeding either returns a [`HypothesisLimit`](germline.md#phase-enumeration-limit)
 rather than a partial set of candidates.
 
+### Mixed inherited and somatic haplotypes
+
+`predict_transcript_model_effect(variants, transcript, germline_variants=...)`
+and `annotate_haplotype` take a known-cis group. Members matching the supplied
+germline are included once in the patient baseline. Only novel alleles are
+applied to that baseline to obtain the mutant; `effect.variant` is the first
+novel member and `effect.variants` retains the supplied group. Matching uses
+reference assembly, contig, normalized position, REF and ALT. A group with no
+novel allele returns `GermlineAlleleOverlap`, without inferring LOH.
+
+The group itself supplies cis constraints. Phase can propagate from any member
+to other germline alleles; unlinked alleles still produce separate hypotheses.
+Homozygous alleles are on both haplotypes and do not bridge their phase.
+As with other phase constraints, conflicting resolver answers are logged and
+ignored. Each hypothesis retains its germline cis/trans assignments, phase
+state, resolver source and novel `somatic_variants` in its evidence.
+
+`VariantCollection.effects` constructs these groups only when the resolver
+supports cis. Unknown or trans relationships retain individual predictions;
+listing alleles in a collection alone does not assert that they are in cis.
+
 ## Transcript-model results
 
 Use the [sequence accessors](transcript_models.md#sequence-access) for a single
