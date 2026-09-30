@@ -31,6 +31,7 @@ Covers:
 """
 
 import copy
+import pickle
 import warnings
 
 import pytest
@@ -150,6 +151,25 @@ def test_genome_rewrap_overrides_fasta(ensembl, cftr_position):
     g1 = Genome(ensembl, fasta=fasta1, verify=False)
     g2 = Genome(g1, fasta=fasta2, verify=False)
     assert g2.fasta is fasta2
+
+
+@pytest.mark.parametrize("with_override", [False, True])
+def test_restore_legacy_pickled_genome(ensembl, with_override):
+    # The public Genome's pickle state through 10.10.x stored .fasta
+    # directly. Emulate that old state without the new private fields.
+    legacy = Genome.__new__(Genome)
+    legacy.__dict__.update(
+        _ensembl=ensembl,
+        fasta=_DictBackedFasta({"1": "acgt"}) if with_override else None,
+        _missing_reference_warned=False)
+    restored = pickle.loads(pickle.dumps(legacy))
+    assert restored.reference_name == ensembl.reference_name
+    assert restored.sequence("1", 1, 4) == ("ACGT" if with_override else "")
+    assert "FASTA" in repr(restored)
+    assert Genome(restored).sequence("1", 1, 4) == restored.sequence("1", 1, 4)
+    restored.close()
+    # Legacy explicit readers are borrowed, like caller-provided readers.
+    assert restored.sequence("1", 1, 4) == ("ACGT" if with_override else "")
 
 
 def test_genome_with_integer_fasta_raises_typeerror(ensembl):

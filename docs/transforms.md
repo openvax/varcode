@@ -138,7 +138,7 @@ leftmost equivalent position.
 from varcode import load_vcf, Genome
 from varcode.transforms import left_align_indels
 
-# Default (transcript-cDNA coverage only) — exonic indels normalize,
+# Without installed reference DNA — exonic indels normalize,
 # intronic/intergenic pass through unchanged.
 vc = load_vcf("tumor.vcf", genome="GRCh38")
 vc = left_align_indels(vc)
@@ -153,6 +153,8 @@ No `reference` parameter — `left_align_indels` reads bases via the
 genome the variants already carry (see
 [varcode.Genome](api_variants.md#varcode.Genome)). Coverage depends on which
 genome shape was passed.
+Native PyEnsembl reference DNA is also inherited when wrapping a configured
+genome; see [reference genomes](api_variants.md#reference-genomes) for setup.
 
 ### Behavior
 

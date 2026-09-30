@@ -16,10 +16,11 @@
 varcode has two possible sources of reference bases at a genomic
 position, and falls back between them in this order:
 
-1. **Chromosome FASTA** (when attached) — read directly from the
-   FASTA file via the ``.fasta`` attribute on :class:`varcode.Genome`.
-   Covers every base on every contig the FASTA contains. Pass a
-   FASTA when constructing the genome to enable this source.
+1. **Chromosome FASTA** (when available) — read via ``.fasta`` on either
+   native PyEnsembl genomes or :class:`varcode.Genome`. The wrapper
+   inherits native DNA unless an explicit ``fasta=`` overrides it.
+   Covers every base on every contig the FASTA contains. Missing native
+   DNA falls through to cDNA; lookups never download reference DNA.
 2. **Transcript cDNA** — fall back to pyensembl's transcript
    sequences via ``transcript.spliced_offset()`` for any transcript
    covering the position. Reverse-complements for ``-`` strand
@@ -35,8 +36,7 @@ Internal API: feature code calls :func:`reference_base` or
 methods (or its construction-time ``fasta=`` kwarg) and the same
 module-level functions for ad-hoc use.
 
-Tracked in openvax/varcode#372. Upstream pyensembl support for the
-chromosome FASTA itself is tracked in openvax/pyensembl#337.
+Tracked in openvax/varcode#372 and #488.
 """
 
 import logging
@@ -60,7 +60,7 @@ def reference_base(genome: Any, contig: str, position: int) -> str:
 
     Works on any genome shape — :class:`varcode.Genome` (chromosome
     FASTA available via ``.fasta``), bare ``pyensembl.Genome``
-    (transcript cDNA only), or anything duck-typed for
+    (optional native FASTA plus transcript cDNA), or anything duck-typed for
     ``transcripts_at_locus``.
 
     See module docstring for the full fallback order.

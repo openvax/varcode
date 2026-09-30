@@ -12,27 +12,17 @@
 
 """Declarative wrapper for a pyensembl ``Genome`` + optional chromosome FASTA.
 
-varcode's reference is the pyensembl ``Genome`` object. By default it
-ships transcript and protein FASTAs but not the chromosome FASTA, so
-features needing raw genomic bases (intronic, intergenic, flanking)
-fall back to transcript-cDNA coverage only. :class:`Genome` is the
-construction-time composition point: pass a release identifier plus
-an optional ``fasta``, and downstream lookups see both sources.
+Varcode inherits optional native reference DNA from the wrapped
+pyensembl ``Genome``. An explicit ``fasta=`` overrides that source.
+Without chromosome DNA, tiered lookups fall back to transcript cDNA.
+Construction never opens or downloads native reference DNA.
 
 Acts as a drop-in for ``pyensembl.Genome`` — every pyensembl attribute
 is accessible via :py:meth:`__getattr__` delegation, so existing code
 that calls ``genome.transcripts_at_locus(...)``,
 ``genome.reference_name``, etc. works unchanged.
 
-This module is a stopgap until ``pyensembl.Genome`` natively supports
-the chromosome FASTA (tracked in openvax/pyensembl#337). Once that
-lands, this wrapper either becomes a one-line delegate or evaporates.
-Designed so the migration is straightforward — the API surface here
-(``Genome.sequence()``, ``Genome.fasta``, the construction-time
-composition pattern) is intentionally identical to the proposed
-pyensembl-native API.
-
-Tracked in openvax/varcode#372.
+Tracked in openvax/varcode#372 and #488.
 """
 
 import os
@@ -66,11 +56,11 @@ class Genome:
 
     The two methods have intentionally different fall-through semantics:
 
-    * :meth:`sequence` — chromosome FASTA *only*. Returns ``""`` when
-      no FASTA is attached. Mirrors the proposed
-      ``pyensembl.Genome.sequence()`` shape from
-      openvax/pyensembl#337 so the eventual upstream migration is
-      mechanical.
+    * :meth:`sequence` — chromosome FASTA *only*. Delegates to native
+      PyEnsembl DNA when configured, including its missing-DNA and
+      invalid-interval errors. Returns ``""`` for genomes without DNA
+      configured. Explicit FASTA overrides retain the legacy permissive
+      lookup behavior.
     * :meth:`reference_base` / :meth:`reference_range` — tiered.
       FASTA first when attached; otherwise transcript cDNA. Use these
       when you want "whatever varcode can tell you" about a position.
@@ -90,20 +80,20 @@ class Genome:
         * ``pyfaidx.Fasta`` — used as-is.
         * Any object supporting ``fa[contig][start:end]`` and returning
           a string or an object with ``.seq``.
-        * ``None`` — no chromosome-level access; features fall back to
-          transcript cDNA.
+        * ``None`` — inherit native PyEnsembl DNA (or a rewrapped
+          Genome's override). Without DNA, features fall back to cDNA.
 
-        varcode does not take ownership of the FASTA object — when the
-        caller passes a pre-opened ``pyfaidx.Fasta``, the caller is
-        responsible for its lifetime. Closing the FASTA after passing
-        it to ``Genome`` will cause subsequent lookups to fail.
+        Native and pre-opened readers are borrowed; their owner controls
+        their lifetime. :meth:`close` closes only a reader this wrapper
+        opened from an explicit path. Rewrapping borrows that reader, so
+        keep its owning wrapper open while using it.
     verify :
         When True (default) and ``fasta`` is provided, spot-check a few
         exonic positions against pyensembl's transcript cDNA to catch
         mislabeled FASTAs (e.g. GRCh37 attached to a GRCh38 release).
         Iterates ``self.transcripts()`` which on a fresh process may
         trigger lazy DB construction; pass ``verify=False`` to defer
-        that cost.
+        that cost. Inherited native DNA is not opened or spot-checked.
 
     Examples
     --------
@@ -136,14 +126,12 @@ class Genome:
             fasta: Optional[Any] = None,
             verify: bool = True):
         fasta_was_provided = fasta is not None
+        self._fasta_override = None
+        self._owns_fasta = False
         if isinstance(ensembl_release, Genome):
-            # Idempotent rewrap. Inherits ._ensembl always; inherits
-            # .fasta unless the caller is providing a fresh one.
             self._ensembl = ensembl_release._ensembl
-            if fasta_was_provided:
-                self.fasta = _resolve_fasta(fasta, self._ensembl)
-            else:
-                self.fasta = ensembl_release.fasta
+            # Copy only the override, without opening a lazy native reader.
+            self._fasta_override = ensembl_release._fasta_override
         else:
             if ensembl_release is None:
                 raise ValueError(
@@ -151,8 +139,10 @@ class Genome:
                     "(int release number, reference-name string, or a "
                     "pyensembl.Genome / varcode.Genome instance).")
             self._ensembl, _ = infer_genome(ensembl_release)
-            self.fasta = (_resolve_fasta(fasta, self._ensembl)
-                          if fasta_was_provided else None)
+
+        if fasta_was_provided:
+            self._fasta_override = _resolve_fasta(fasta, self._ensembl)
+            self._owns_fasta = isinstance(fasta, (str, bytes, os.PathLike))
 
         # Verify only when the caller freshly provided a FASTA.
         # Inheriting a verified FASTA on rewrap doesn't need a re-check.
@@ -165,6 +155,43 @@ class Genome:
         # consumers (cryptic_exons, etc.). Bound to this Genome's
         # lifetime — no module-level cache to invalidate.
         self._missing_reference_warned = False
+
+    @property
+    def fasta(self):
+        """Explicit FASTA override, otherwise the lazy native DNA reader.
+
+        Native access may index a local FASTA, but never downloads DNA.
+        Returns None when native DNA is unconfigured or uninstalled.
+        Assigning None removes the override and resumes native access.
+        """
+        if self._fasta_override is not None:
+            return self._fasta_override
+        return getattr(self._ensembl, "fasta", None)
+
+    @fasta.setter
+    def fasta(self, reader):
+        if reader is self._fasta_override:
+            return
+        self.close()
+        self._fasta_override = reader
+
+    def close(self):
+        """Close only a FASTA opened by this wrapper from an explicit path.
+
+        Native genomes and borrowed readers remain open. Repeated calls
+        are harmless. After closing an owned reader, assign a new reader
+        (or None to resume native access) before making further lookups.
+        """
+        if self._owns_fasta:
+            self._fasta_override.close()
+            self._owns_fasta = False
+
+    def __setstate__(self, state):
+        """Restore wrappers saved before native DNA inheritance as borrowers."""
+        self.__dict__.update(state)
+        if "fasta" in state:
+            self._fasta_override = self.__dict__.pop("fasta")
+            self._owns_fasta = False
 
     def __getattr__(self, name):
         """Delegate everything else to the wrapped pyensembl Genome.
@@ -189,7 +216,12 @@ class Genome:
 
     def __repr__(self) -> str:
         ref = getattr(self._ensembl, "reference_name", "?")
-        fasta_repr = "no FASTA" if self.fasta is None else "FASTA attached"
+        if self._fasta_override is not None:
+            fasta_repr = "FASTA attached"
+        elif getattr(self._ensembl, "requires_genome_fasta", False):
+            fasta_repr = "native FASTA configured"
+        else:
+            fasta_repr = "no FASTA"
         return "varcode.Genome(reference_name=%r, %s)" % (ref, fasta_repr)
 
     def __dir__(self):
@@ -202,24 +234,29 @@ class Genome:
             own.update(dir(ensembl))
         return sorted(own)
 
-    # -- chromosome FASTA API (mirrors openvax/pyensembl#337) ----------
+    # -- chromosome FASTA API ------------------------------------------
 
     def sequence(self, contig: str, start: int, end: int) -> str:
         """Chromosome FASTA sequence on the ``+`` strand.
 
-        1-based inclusive coordinates. Returns ``""`` when no FASTA is
-        attached or the contig / range isn't covered.
+        Uses 1-based inclusive coordinates and returns uppercase DNA.
+        Configured native DNA delegates to PyEnsembl: missing DNA raises
+        ``MissingGenomeFastaError``; invalid coordinates or absent contigs
+        raise ``ValueError``. Install native DNA explicitly with
+        ``download_genome_fasta()`` before querying remote sources.
 
-        FASTA-only — does **not** fall back to transcript cDNA. Use
-        :meth:`reference_base` / :meth:`reference_range` for the
-        tiered lookup. The split is deliberate: this method mirrors
-        the proposed ``pyensembl.Genome.sequence()`` API so callers
-        who want raw chromosome bases (and the upstream migration
-        path) can use it unambiguously.
+        Without configured DNA, returns ``""``. Explicit overrides use
+        the legacy permissive reader (unreadable intervals return ``""``).
+        Does not fall back to cDNA; use :meth:`reference_base` or
+        :meth:`reference_range` for tiered lookup.
         """
-        if self.fasta is None:
+        if (self._fasta_override is None
+                and getattr(self._ensembl, "requires_genome_fasta", False)):
+            return self._ensembl.sequence(contig, start, end)
+        fasta = self.fasta
+        if fasta is None:
             return ""
-        return _fasta_range(self.fasta, contig, start, end)
+        return _fasta_range(fasta, contig, start, end)
 
     # -- tiered lookup convenience -------------------------------------
 
