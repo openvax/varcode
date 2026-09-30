@@ -373,7 +373,6 @@ def infer_genome_for_reference_name(reference_name):
         genome = cached_ensembl_release(release, species=species)
     return genome, converted_ucsc_to_ensembl
 
-@memoize
 def infer_genome(genome_object_string_or_int):
     """
     If given an integer, get the human EnsemblRelease object for that
@@ -384,21 +383,24 @@ def infer_genome(genome_object_string_or_int):
     (e.g. "GRCh38:93"). If the given name is a UCSC genome (e.g. hg19) then
     convert it to the equivalent Ensembl reference (e.g. GRCh37).
 
-    If given a PyEnsembl Genome, simply use it.
+    If given a PyEnsembl or Varcode Genome, return that same object. Do not
+    memoize object pass-through: native genomes with different attached DNA
+    can compare equal. Integer/string resolvers below already cache results.
 
     Returns a pair of (Genome, bool) where the bool corresponds to whether
     the input requested a UCSC genome (e.g. "hg19") and an Ensembl (e.g. GRCh37)
     was returned as a substitute.
     """
+    # Import at call time to avoid the Genome wrapper's import of this module.
+    from .genome import Genome as VarcodeGenome
+
     converted_ucsc_to_ensembl = False
-    # varcode.Genome wraps a pyensembl Genome with optional FASTA.
-    # Recognize it via duck-typing (has ``transcripts_at_locus`` and a
-    # ``fasta`` attribute) so we don't have to import it here and
-    # introduce a cycle.
-    if (hasattr(genome_object_string_or_int, "transcripts_at_locus")
-            and hasattr(genome_object_string_or_int, "fasta")):
+    # Known genome types must bypass duck-typing: probing .fasta can open
+    # and index native DNA before a caller has asked for any sequence.
+    if isinstance(genome_object_string_or_int, (Genome, VarcodeGenome)):
         genome = genome_object_string_or_int
-    elif isinstance(genome_object_string_or_int, Genome):
+    elif (hasattr(genome_object_string_or_int, "transcripts_at_locus")
+            and hasattr(genome_object_string_or_int, "fasta")):
         genome = genome_object_string_or_int
     elif is_integer(genome_object_string_or_int):
         genome = cached_ensembl_release(genome_object_string_or_int)

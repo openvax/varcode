@@ -1,5 +1,18 @@
 # Change Log
 
+## [v10.11.0](https://github.com/openvax/varcode/tree/v10.11.0) (2026-09-29)
+
+- `Genome(native_genome)` inherits optional native PyEnsembl reference DNA
+  instead of hiding it (#488), enabling intronic/intergenic reference lookups.
+  Construction and rewrapping remain lazy; explicit `fasta=` takes precedence.
+- Native `sequence()` preserves PyEnsembl's errors for uninstalled DNA and
+  invalid intervals. Tiered reference lookups retain their cDNA fallback.
+  Reads never download DNA. `close()` closes only explicit path readers opened
+  by that wrapper, leaving native genomes and borrowed readers usable.
+- Preserve the identity of supplied genome objects during inference (#565).
+  Equal annotation genomes can carry different DNA; caching them by equality
+  could silently select the wrong reference file.
+
 ## [v10.10.0](https://github.com/openvax/varcode/tree/v10.10.0) (2026-09-29)
 
 - Add `reference_completion_hypotheses` for mapped Exacto and other RNA
