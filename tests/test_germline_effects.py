@@ -456,6 +456,33 @@ def _germline_vcf(genotype):
 
 
 class TestPartitionGermlineByPhase:
+    def test_cis_group_anchors_germline_through_any_member(self):
+        somatic = _somatic_at()
+        partner = _germline_at(102)
+        germ = (_germline_at(101), _germline_at(103))
+        phase = partition_germline_by_phase(
+            somatic, germ, _PartialPhaseResolver({}, {(101, 102): False}),
+            cis_variants=(somatic, partner))
+        assert phase.trans == germ[:1]
+        assert phase.unphased == germ[1:]
+
+    def test_homozygous_member_does_not_anchor_other_germline(self):
+        somatic = _somatic_at()
+        germ = (_germline_at(101), _germline_at(102))
+        phase = partition_germline_by_phase(
+            somatic, germ, _PartialPhaseResolver({}, {(101, 102): True}),
+            homozygous=germ[:1], cis_variants=(somatic, germ[0]))
+        assert phase.cis == germ[:1]
+        assert phase.unphased == germ[1:]
+
+    def test_cis_group_constraints_precede_conflicting_resolver_answers(self, caplog):
+        germ = (_germline_at(101),)
+        phase = partition_germline_by_phase(
+            _somatic_at(), germ, _PartialPhaseResolver({101: False}),
+            cis_variants=germ)
+        assert phase.cis == germ
+        assert "contradicts" in caplog.text
+
     def test_without_resolver_everything_is_unphased(self):
         germ = [_germline_at(101), _germline_at(102)]
         phase = partition_germline_by_phase(_somatic_at(), germ)

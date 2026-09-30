@@ -172,6 +172,15 @@ def _attach_candidate_set(ordered):
     return top_effect
 
 
+def _unique_alleles(variants):
+    """Keep the first occurrence of each normalized allele, in input order."""
+    unique = []
+    for variant in variants:
+        if not detect_germline_overlap(variant, unique):
+            unique.append(variant)
+    return tuple(unique)
+
+
 def predict_transcript_model_effect(
         variants, transcript, germline_variants=(), phase_resolver=None,
         sequence_provider=None, max_hypotheses=64, max_phase_hypotheses=None,
@@ -189,6 +198,11 @@ def predict_transcript_model_effect(
     phase/splice outcomes, gives a :class:`~varcode.HypothesisLimit`
     instead of a partial candidate set. ``homozygous_germline`` lists
     germline variants on both haplotypes, which are always cis.
+
+    ``variants`` is a known-cis group. Members also present in the germline
+    anchor the patient baseline; only novel alleles are applied to that
+    baseline to obtain the mutant. Repeated normalized alleles are edited
+    once. Other germline alleles retain their phase uncertainty.
     """
     max_hypotheses = _check_max_hypotheses(max_hypotheses)
     max_phase_hypotheses = max_hypotheses if max_phase_hypotheses is None else (
@@ -196,18 +210,15 @@ def predict_transcript_model_effect(
     variants = tuple(variants)
     if not variants:
         raise ValueError("predict_transcript_model_effect requires a somatic variant")
-    germline_variants = tuple(germline_variants)
-    primary = variants[0]
-    if any(detect_germline_overlap(v, germline_variants) for v in variants):
-        if len(variants) == 1:
-            return GermlineAlleleOverlap(primary, transcript)
-        result = Unresolved(
-            primary, transcript, mechanism="germline_overlap_haplotype",
-            reason="A mixed inherited/somatic group requires an allele-aware baseline")
-        result.is_germline_overlap = True
-        result.is_loh = None
-        result.loh_status = "not_assessed"
+    germline_variants = _unique_alleles(germline_variants)
+    somatic_variants = tuple(
+        v for v in _unique_alleles(variants)
+        if not detect_germline_overlap(v, germline_variants))
+    if not somatic_variants:
+        result = GermlineAlleleOverlap(variants[0], transcript)
+        result.variants = variants
         return result
+    primary = somatic_variants[0]
     if (getattr(primary, "sv_type", None) in ("DUP", "INV")
             and primary.alt_assembly):
         if len(variants) != 1 or germline_variants:
@@ -240,11 +251,13 @@ def predict_transcript_model_effect(
 
     phase = partition_germline_by_phase(
         primary, germline_variants, phase_resolver,
-        homozygous=homozygous_germline)
+        homozygous=homozygous_germline, cis_variants=variants)
     try:
         outcomes = _realize_outcomes(
-            variants, transcript, phase.hypotheses(max_phase_hypotheses),
-            sequence_provider, max_hypotheses)
+            variants, somatic_variants, transcript,
+            phase.hypotheses(max_phase_hypotheses),
+            sequence_provider, max_hypotheses,
+            phase_source=getattr(phase_resolver, "phase_source", None))
     except NonlocalStructuralEdit as error:
         return Unresolved(
             primary, transcript, mechanism="nonlocal_structural_variant",
@@ -262,21 +275,21 @@ def predict_transcript_model_effect(
 
 
 def _realize_outcomes(
-        variants, transcript, phase_hypotheses, sequence_provider,
-        max_hypotheses):
+        variants, somatic_variants, transcript, phase_hypotheses,
+        sequence_provider, max_hypotheses, phase_source=None):
     """Classify every phase hypothesis × splice plan.
 
     Raises :class:`~varcode.HypothesisLimitError` past ``max_hypotheses``
     outcomes and ``NonlocalStructuralEdit`` for edits the layout cannot hold.
     """
-    primary = variants[0]
+    primary = somatic_variants[0]
     outcomes = []
     enumeration_index = 0
     for phase_hypothesis in phase_hypotheses:
         reference = GenomicLayout.from_transcript(
             transcript, flank=50, sequence_provider=sequence_provider)
         baseline_layout = reference.apply_variants(phase_hypothesis.cis)
-        mutant_layout = baseline_layout.apply_variants(variants)
+        mutant_layout = baseline_layout.apply_variants(somatic_variants)
         baseline_runs, baseline_statuses = _status_map(
             transcript, baseline_layout)
         mutant_runs, mutant_statuses = _status_map(transcript, mutant_layout)
@@ -313,6 +326,8 @@ def _realize_outcomes(
                     phase_hypotheses, phase_hypothesis),
                 evidence={
                     "phase_state": phase_hypothesis.phase_state,
+                    "phase_source": phase_source,
+                    "somatic_variants": somatic_variants,
                     "shared_splice_sites": tuple(sorted(shared_keys)),
                 },
                 enumeration_index=enumeration_index)
