@@ -186,6 +186,13 @@ class Genome:
             self._fasta_override.close()
             self._owns_fasta = False
 
+    def __setstate__(self, state):
+        """Restore wrappers saved before native DNA inheritance as borrowers."""
+        self.__dict__.update(state)
+        if "fasta" in state:
+            self._fasta_override = self.__dict__.pop("fasta")
+            self._owns_fasta = False
+
     def __getattr__(self, name):
         """Delegate everything else to the wrapped pyensembl Genome.
 
