@@ -39,7 +39,7 @@ domain-specific reviews and independent scientific oracles.
 | High | VCF export derives header sample order from a set but writes row values in dictionary order. A two-row reproduction assigns tumor GT/DP to normal and emits `44:0/1` under `GT:DP`. Differing sample sets also discard sample data; headers and allele-indexed metadata lack a complete preservation contract. | Filed [#502](https://github.com/openvax/varcode/issues/502); resolved in 10.1.3 with explicit [export guarantees and limits](csv.md#vcf-export). |
 | High | The phase cap returns an all-cis placeholder that the consumer classifies as a precise effect. The existing CFTR pair yields cis/trans alternatives at cap 8 but only `p.S159T` at cap 1, with no molecular evidence resolving phase. Four unphased germline alleles exceed the default cap. | Filed [#503](https://github.com/openvax/varcode/issues/503); documented in [germline annotation](germline.md). |
 | High | `deploy.sh` lacks the branch/clean-tree guards, version handling, tagging, and pushing described in AGENTS.md. It can upload from the wrong checkout if invoked without independent checks. | Existing [#414](https://github.com/openvax/varcode/issues/414); release instructions now describe the actual script and required manual checks. |
-| Medium | The test cache probe accesses `EnsemblRelease.db`, which can download missing reference data while supposedly checking local installation. | Existing [#493](https://github.com/openvax/varcode/issues/493); contributor instructions distinguish reference provisioning from offline snapshot tests. |
+| Medium | The test cache probe accesses `EnsemblRelease.db`, which can download missing reference data while supposedly checking local installation. | Resolved [#493](https://github.com/openvax/varcode/issues/493) in 10.11.2 by pinning bare GRCh38 test references to the existing Ensembl 81 fixture and removing the cache probe. |
 | Medium | Some tests cannot detect failures, including the fast-path self-comparison and protocol/attribute surveys. VCF round-trip checks omitted ALT and complete record counts. | Existing [#479](https://github.com/openvax/varcode/issues/479); this change strengthens the VCF checks. The broader test review remains open. |
 | Medium | Reference mismatch fields contain transcript-oriented bases but the message labels them as genome bases; minus-strand errors can be read backwards. | Existing [#434](https://github.com/openvax/varcode/issues/434); troubleshooting now explains the current orientation. |
 | Medium | Historical changelog coverage is incomplete. | Existing [#411](https://github.com/openvax/varcode/issues/411); no invented reconstruction of missing release history. |
@@ -83,8 +83,8 @@ files or rewrite all experimental-annotator documentation.
 ## Follow-up sequence
 
 Sample identity/FORMAT export integrity (#502) was fixed in 10.1.3.
-Phase-cap uncertainty (#503) is the next scientific correctness priority. Then make release guards executable (#414) and make reference
-cache checks truly local (#493). Broader uncertainty composition (#421/#423),
+Phase-cap uncertainty (#503) is the next scientific correctness priority. Then make release guards executable (#414).
+Test reference selection no longer probes the cache (#493, fixed in 10.11.2). Broader uncertainty composition (#421/#423),
 shared RNA fixture adoption (#464), and test-oracle cleanup (#479) remain
 foundational work; they should be reviewed as their own changes.
 

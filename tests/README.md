@@ -9,9 +9,11 @@ requirement. RNA fixture harmonization is tracked in
 [#464](https://github.com/openvax/varcode/issues/464).
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for environment and reference setup.
-The reference-cache probe has a separate download issue
-([#493](https://github.com/openvax/varcode/issues/493)); the offline guarantees
-below apply to the bundled Osteosarc snapshot checks.
+During pytest, bare GRCh38 references (including aliases) use the suite's
+Ensembl 81 fixture. Selection does not download data, probe newer releases,
+or modify the reference cache. Install the documented datasets before
+annotation tests; explicit release choices remain available. The offline
+guarantees below apply to the bundled Osteosarc snapshot checks.
 
 ## Osteosarc test variants
 

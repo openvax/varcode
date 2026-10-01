@@ -1,5 +1,12 @@
 # Change Log
 
+## [v10.11.2](https://github.com/openvax/varcode/tree/v10.11.2) (2026-10-01)
+
+- Pin bare GRCh38 references during pytest to the existing Ensembl 81 fixture
+  (#493). Remove the installed-release scan that could download missing data
+  while probing `EnsemblRelease.db`. Test reference selection leaves the cache
+  untouched and preserves explicit release choices; library behavior is unchanged.
+
 ## [v10.11.1](https://github.com/openvax/varcode/tree/v10.11.1) (2026-09-30)
 
 - Compose mixed inherited/somatic cis groups in the experimental transcript
