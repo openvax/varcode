@@ -40,9 +40,10 @@ pyensembl install --release 95 --species human --custom-mirror https://github.co
 pyensembl install --release 95 --species mouse --custom-mirror https://github.com/openvax/ensembl-data/releases/download/GRCm38.95/
 ```
 
-The test reference resolver currently probes uninstalled releases in a way
-that can trigger downloads; see [#493](https://github.com/openvax/varcode/issues/493).
-The bundled Osteosarc snapshot checks themselves open their data offline.
+During pytest, bare GRCh38 references use Ensembl 81, matching the shared
+fixtures. Reference selection does not scan or populate the user cache;
+install the data above before running annotation tests. Explicit release
+choices are preserved. The bundled Osteosarc snapshot checks open their data offline.
 See [tests/README.md](tests/README.md) for fixture provenance and regeneration.
 
 ## Make and verify a change
