@@ -23,7 +23,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -e '.[rna,test-data]' pytest pytest-cov pytest-xdist ruff
 python -m pip install mkdocs mkdocs-material 'mkdocstrings[python]'
-python -m pip install build twine
+python -m pip install build twine 'setuptools>=64'
 ```
 
 `rna` installs the optional BAM reader; `test-data` installs the pinned

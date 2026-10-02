@@ -31,11 +31,17 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install flake8 pytest pytest-cov coveralls ruff
+          python -m pip install flake8 pytest pytest-cov coveralls ruff build 'setuptools>=64'
           pip install -r requirements.txt
+      - name: Verify, build and install the source distribution
+        run: |
+          python -m pytest -q tests/test_source_distribution.py
+          python -m build --sdist --outdir "$RUNNER_TEMP/varcode-dist"
+          mkdir "$RUNNER_TEMP/varcode-sdist"
+          tar -xzf "$RUNNER_TEMP"/varcode-dist/varcode-*.tar.gz --strip-components=1 -C "$RUNNER_TEMP/varcode-sdist"
           # Osteosarc 0.14.x supports every Python version in this matrix;
           # run native adapter checks against the bundled historical snapshot.
-          pip install '.[test-data]'
+          python -m pip install "$RUNNER_TEMP/varcode-sdist[test-data]"
       - name: Lint with flake8
         run: |
           # stop the build if there are Python syntax errors or undefined names
@@ -72,14 +78,16 @@ jobs:
           pyensembl install --release 95 --species human --custom-mirror https://github.com/openvax/ensembl-data/releases/download/GRCh38.95/
           pyensembl install --release 95 --species mouse --custom-mirror https://github.com/openvax/ensembl-data/releases/download/GRCm38.95/
           echo "After installing Ensembl releases" && df -h
-      - name: Run unit tests
+      - name: Run unit tests from the source distribution
+        working-directory: ${{ runner.temp }}/varcode-sdist
         run: |
-          ./test.sh
+          ./test.sh --cov-report=xml:coverage.xml
       # Experimental annotators may decline inputs. Compare protein_diff on
       # the shared point-edit domain; the full suite above separately checks
       # SV refusal, partial plugins, and explicit dual-annotator regressions.
       - name: Cross-annotator parity gate (shared point-edit domain)
         if: matrix.python-version == '3.11'
+        working-directory: ${{ runner.temp }}/varcode-sdist
         env:
           COVERAGE_FILE: .coverage.parity
         run: |
@@ -88,3 +96,5 @@ jobs:
         uses: coverallsapp/github-action@v2.3.6
         with:
           parallel: true
+          file: ${{ runner.temp }}/varcode-sdist/coverage.xml
+          base-path: ${{ runner.temp }}/varcode-sdist

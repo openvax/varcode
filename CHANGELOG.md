@@ -1,5 +1,14 @@
 # Change Log
 
+## [v10.11.4](https://github.com/openvax/varcode/tree/v10.11.4) (2026-10-02)
+
+- Ship test helpers, bounded fixtures, provenance/checksums and the docs,
+  examples and scripts required to run tests from the source distribution
+  (#509). Existing fixture payloads are unchanged; large shared RNA assets
+  remain external.
+- Verify archive contents and fixture integrity, and run the CI test matrix
+  and parity checks from an installed, unpacked source archive.
+
 ## [v10.11.3](https://github.com/openvax/varcode/tree/v10.11.3) (2026-10-01)
 
 - Guard deployment with a clean main/master checkout synchronized with live
