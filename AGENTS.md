@@ -7,7 +7,7 @@ Guide for coding agents working in this repo. Read this before touching code.
 ## Golden Rules
 
 1. **Never commit to `main`.** Always `git checkout -b <feature-branch>` before editing. Land via PR.
-2. **Every PR bumps the version.** Even doc-only PRs — at minimum a patch bump. `deploy.sh <version>` handles the bump + commit + push.
+2. **Every PR bumps the version.** Even doc-only PRs — at minimum a patch bump in `varcode/version.py` with release notes. Include the bump in the PR; `deploy.sh [version]` publishes the merged version and checks any supplied version matches.
 3. **"Done" means merged AND deployed to PyPI** — never stop at merge. After a PR merges, run `./deploy.sh` from a clean main. Skipping deploy = task not done.
 4. **File problems as issues, don't silently work around them.** If you hit a bug here or in a sibling openvax/pirl-unc repo, open a GitHub issue on the correct repo and link it from the PR.
 5. **After a PR ships, look for the next block of work.** Read open issues across the relevant openvax repos, group by dependency + urgency. Prefer *foundational* changes that unblock multiple downstream improvements; otherwise chain the smallest independent improvements.
@@ -29,7 +29,7 @@ Before telling the user a change is "complete":
 - `./develop.sh` — editable install (dev mode)
 - `./lint.sh` — ruff check
 - `./test.sh` — pytest (with coverage where configured)
-- `./deploy.sh [version]` — lint → test → optional version bump → build → twine upload → tag → push
+- `./deploy.sh [--dry-run] [version]` — clean synchronized main/master + unused-tag checks → lint → test → build → twine check → upload → tag → push. Dry runs stop before upload; version changes always go through a PR.
 
 ## Code Style
 
