@@ -1,5 +1,14 @@
 # Change Log
 
+## [v10.11.3](https://github.com/openvax/varcode/tree/v10.11.3) (2026-10-01)
+
+- Guard deployment with a clean main/master checkout synchronized with live
+  origin, matching version, unused tag, lint/tests and distribution checks
+  (#414). Publish the merged version and push its tag only after upload;
+  `--dry-run` validates and builds without publishing or changing Git history.
+- Preserve each attempt's release artifacts for publication verification and
+  recovery. Keep version bumps in PRs and align the release instructions.
+
 ## [v10.11.2](https://github.com/openvax/varcode/tree/v10.11.2) (2026-10-01)
 
 - Pin bare GRCh38 references during pytest to the existing Ensembl 81 fixture
