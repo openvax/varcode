@@ -1,2 +1,9 @@
 include README.md
 include LICENSE
+include AGENTS.md CHANGELOG.md CONTRIBUTING.md RELEASING.md
+include develop.sh lint.sh test.sh deploy.sh mkdocs.yml .coveragerc
+recursive-include tests *.py *.md
+graft tests/data
+recursive-include docs *.md
+recursive-include examples *.py
+global-exclude *.py[cod]
