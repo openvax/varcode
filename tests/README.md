@@ -220,3 +220,77 @@ python -m pytest -q tests/test_osteosarc_shared_targets.py tests/test_osteosarc_
 The first run downloads and verifies the bundle (28 MB) and exports its
 members into the osteosarc cache (`OSTEOSARC_CACHE`, else the shared OpenVax
 cache); later runs reuse them offline.
+
+## Real Sid RNA phasing
+
+`tests/test_osteosarc_rna_phasing.py` completes the real-read phasing coverage
+in [#528](https://github.com/openvax/varcode/issues/528). It uses the published
+`openvax-v2` bundle, with manifest SHA256
+`b42dbce529cb5724153f035fca3783a41e673b31610a30851b2ef96d4ba43734`.
+The test exports three named members into a pytest temporary directory,
+preserving their original alignment records and indexed BAM format:
+
+| Source label | Target/member suffix | Records | Templates | Supplementary records |
+|---|---|---:|---:|---:|
+| `2024.06.11.bostongene.align.tcga.protocol.dr32Aligned.sorted` | `.NTF3-chr12-5494381-compound` | 12 | 6 | 0 |
+| `IPISRC044_T1_sclrs_ONT.tagged` | `.NTF3-chr12-5494381-compound` | 15 | 15 | 0 |
+| `IPISRC044_T1_sclrs_ONT.tagged` | `.EXOC4-chr7-133274996` | 40 | 38 | 2 |
+
+Each full member name is its source label followed by the suffix. The bundle
+recipe and manifest retain the original source URL, assembly and record
+identities. The tests compare exported record identities and multiplicities
+with both the member manifest and **every record of its selected RG/QNAME
+templates in the bundle's source BAM**. The short-read member includes both
+mates of all six templates. The EXOC4 member keeps both supplementary records;
+the default evidence filter excludes them, while explicitly enabling them
+recognizes their reference alleles without adding alternate support. This
+checks completeness within the published bundle, without reacquiring or
+making claims about records absent from the original bundle.
+
+All coordinates below are one-based GRCh38, using Ensembl 81. NTF3's
+`AG>GT` compound target is split into its two nonoverlapping SNVs. Two
+additional companion alleles were observed in these reads: NTF3
+`12:5494466 G>A` (from the source MD/base observations) and EXOC4
+`7:133895694 G>A` (compared with Ensembl transcript sequences). Their reference
+bases were checked against Ensembl 81 transcripts; germline or somatic status
+is not assumed.
+
+The frozen fragment counts were independently audited from the original
+aligned bases: apply the SAM flag and quality filters, locate each SNV with
+aligned reference/query positions, and merge calls by RG/QNAME. A fragment
+contributes only when both loci have unambiguous ref/alt observations; missing
+coverage and conflicting or other alleles do not count as reference. These
+counts are expectations for the evidence API, rather than another phasing
+implementation used as an oracle.
+
+| Member/case | First allele | Second allele | Both alt | First alt only | Second alt only | Both ref | Expected phase |
+|---|---|---|---:|---:|---:|---:|---|
+| Short-read NTF3 | `12:5494381 A>G` | `12:5494382 G>T` | 3 | 0 | 0 | 3 | Cis |
+| ONT NTF3 | `12:5494381 A>G` | `12:5494382 G>T` | 9 | 0 | 0 | 5 | Cis |
+| ONT NTF3 companion | `12:5494381 A>G` | `12:5494466 G>A` | 0 | 9 | 3 | 2 | Trans |
+| ONT EXOC4 companion | `7:133274996 G>T` | `7:133895694 G>A` | 1 | 0 | 1 | 0 | Unknown |
+
+The defaults require MAPQ/base quality 20, a five-base read-edge exclusion,
+proper pairing for paired reads, and at least two supporting fragments;
+duplicates, secondary and supplementary alignments are filtered as evidence.
+The ONT cases allow a 5% allele error rate; the short-read case uses the default
+1%. EXOC4 has 19 and 3 alternate-supporting templates at the individual loci,
+but only one carries both alternate alleles, so expression alone does not
+establish phase. Raising the NTF3 fragment minimum to 10 also changes its cis
+call to unknown, with nine supporting fragments. Tests exercise both
+`RNAReadPhasingSource` and `MolecularPhaseResolver` in either query order.
+
+These are reproducible RNA observations under the configured evidence model,
+not independently validated tumor haplotypes or estimates of population allele
+fractions: the bundle uses bounded, allele-balanced selection. The existing
+synthetic tests separately cover the germline/subclone rule fixed in #527.
+
+To reproduce, install the reference data as described in `CONTRIBUTING.md`, then:
+
+```sh
+python -m pip install -e '.[test-data,rna]'
+python -m pytest -q tests/test_osteosarc_rna_phasing.py
+```
+
+The first run can download the verified 28 MB shared bundle; later runs reuse
+it offline. No sibling checkout or BAM copies in `tests/data` are required.
