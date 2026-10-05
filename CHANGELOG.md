@@ -1,5 +1,14 @@
 # Change Log
 
+## [v10.11.6](https://github.com/openvax/varcode/tree/v10.11.6) (2026-10-05)
+
+- Exercise real Sid RNA evidence through `VariantCollection.effects()` for
+  NTF3 compound codons and MAP2 complex haplotypes (#464). Pin independent
+  NCBI coding/protein references, retain complete available sequencing
+  templates, and verify individual predictions, phase uncertainty and joint
+  effect provenance. Keep corrected, deletion-only and historical MAP2
+  alleles distinct; RNA support does not replace their DNA predictions.
+
 ## [v10.11.5](https://github.com/openvax/varcode/tree/v10.11.5) (2026-10-05)
 
 - Test RNA read phasing and molecular phase resolution on real Sid RNA

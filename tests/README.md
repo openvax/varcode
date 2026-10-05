@@ -227,7 +227,7 @@ cache); later runs reuse them offline.
 in [#528](https://github.com/openvax/varcode/issues/528). It uses the published
 `openvax-v2` bundle, with manifest SHA256
 `b42dbce529cb5724153f035fca3783a41e673b31610a30851b2ef96d4ba43734`.
-The test exports three named members into a pytest temporary directory,
+The phasing checks export three named members into a pytest temporary directory,
 preserving their original alignment records and indexed BAM format:
 
 | Source label | Target/member suffix | Records | Templates | Supplementary records |
@@ -294,3 +294,103 @@ python -m pytest -q tests/test_osteosarc_rna_phasing.py
 
 The first run can download the verified 28 MB shared bundle; later runs reuse
 it offline. No sibling checkout or BAM copies in `tests/data` are required.
+
+## Real Sid RNA protein effects
+
+The same module passes `MolecularPhaseResolver(RNAReadPhasingSource(...))` to
+`VariantCollection.effects()` for NTF3 and complex MAP2 cases, following
+[#464](https://github.com/openvax/varcode/issues/464). It checks every individual
+DNA prediction against the collection without RNA phasing, including other
+transcripts, and verifies the selected transcript's complete protein against
+independent expectations. NTF3 runs with `fast`, `protein_diff` and the opt-in
+`transcript_model`; MAP2 runs with the two established point-edit annotators.
+Joint legacy effects expose their edited cDNA, and the transcript model's
+realized candidates expose theirs; the tests check their CDS, affected codon
+and stop codon. Joint membership, protein and phase provenance survive JSON.
+The experimental model currently loses its realized candidates/hypotheses
+and their cDNA on JSON round-trip; this reproduced limitation is tracked in
+[#574](https://github.com/openvax/varcode/issues/574). Its full CDS/codon checks
+use the in-memory products, and its round-trip checks cover the preserved
+protein, membership and phase source. The audit also reproduced a support-cache
+key defect ([#575](https://github.com/openvax/varcode/issues/575)); returned
+counts are correct here, but repeated calls rescan the BAM.
+
+`tests/data/sid_rna_effect_references.json` is a separate offline reference
+asset (SHA256 `d9e21cc96450d4a14e7b41d0900df48792c9f64b103b9ce01ab5cc841508d29e`).
+On 2026-10-05, NCBI EFetch supplied these versioned primary records:
+
+| Gene | RefSeq mRNA / protein | GenBank CDS, one-based inclusive | Ensembl 81 transcript |
+|---|---|---|---|
+| NTF3 | [NM_002527.5](https://www.ncbi.nlm.nih.gov/nuccore/NM_002527.5) / NP_002518.1 | 84–857 | ENST00000331010 |
+| MAP2 | [NM_002374.4](https://www.ncbi.nlm.nih.gov/nuccore/NM_002374.4) / NP_002365.3 | 321–5804 | ENST00000360351 |
+
+The acquired CDS and `/translation` protein strings match those Ensembl
+transcripts exactly. Independently retrieved GRCh38 chromosome windows
+`NC_000012.12:5494300–5494500` and `NC_000002.12:209694750–209694830` each match
+one interval of the corresponding RefSeq CDS, at zero-based offsets 85 and
+2579. The asset retains these strings, URLs and response/sequence hashes.
+To repeat acquisition, fetch each recorded URL, extract its CDS interval and
+`/translation`, and compare the sequence hashes. GenBank descriptive metadata
+can change while the accession's sequence remains the same.
+
+The expected edits were applied directly to these RefSeq CDS strings and
+translated independently with [NCBI's standard genetic code](https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi#SG1),
+without importing Varcode, PyEnsembl or using upstream peptide annotations.
+The asset records fixed CDS edit offsets, codons, literal protein replacements,
+complete mutant CDS/protein hashes, lengths and stops. Tests read those frozen
+expectations; they do not compute a second prediction from Varcode.
+
+- NTF3's zero-based CDS offsets 166 and 167 give `AAG>AGG` (`p.K56R`) and
+  `AAG>AAT` (`p.K56N`) individually. Together they give `AAG>AGT` (`p.K56S`),
+  with local peptide `DVSENY` instead of `DVKENY`. Both short-read and ONT cis
+  evidence produce this joint effect while retaining both individual effects.
+- The real ONT trans companion `12:5494466 G>A` changes `CCG>CCA` at proline
+  84. Its silent effect and the separate `p.K56R` prediction remain present.
+  Increasing the compound pair's minimum to 10 leaves its nine observations
+  insufficient: phase is unknown, and the two individual predictions remain.
+
+The MAP2 reads use three additional `openvax-v2` members under
+`isovar/osteosarc/figure_comparisons/corpus/context-evidence.json.gz#/map2/sources/`:
+
+| Member suffix | Source | Regional member records | Complete available records / templates | Q20 compound templates |
+|---|---|---:|---:|---:|
+| `11/original_records` | `IPISRC044_tumor_T1_ucla_rna.md` | 123 | 125 / 78 | 4 |
+| `12/original_records` | `IPISRC044_tumor_T2_ucla_rna.md` | 25 | 26 / 18 | 2 |
+| `3/original_records` | `IPISRC044_T2_sclrs_ONT_dedup` | 32 | 33 / 32 | 1 |
+
+These are original regional acquisitions retained in the neutral bundle. The
+fixture selects their RG/QNAMEs, then copies **all** available records of those
+templates from the bundle source into an indexed temporary BAM. No alignment
+fields change; record digest multiplicities must equal the source's complete
+template subset. The ONT input retains one supplementary record, which the
+default evidence filter excludes. The two bulk inputs have no supplementary
+records. Source products are RNA products, checked by their manifest URLs.
+
+The corrected GRCh38 MAP2 allele is explicitly decomposed into
+`2:209694769 C>A`, `2:209694770 T>G` and deletion of
+`2:209694773–209694800 GCTACTGTGTGTTCAATAAGTACACAGT`. The existing
+`register_haplotype()` API tests this hypothesis's original sequence between
+five-base genomic flanks: `AAGACAGGGCCCAT`. Independent aligned-position,
+query-sequence and quality inspection found four T1 bulk, two T2 bulk and one
+T2 ONT supporting RG/QNAME templates. The bulk witnesses encode a `28N` gap;
+the ONT witness encodes `22D2M6D`. Exact context allows the same RNA sequence
+to support the hypothesis without assigning a genomic deletion mechanism.
+Default MAPQ/Q20, pairing, flag, five-base edge and two-fragment filters remain
+in force; ONT uses the existing 5% error allowance. Missing or different context
+stays unknown and supplies no reference/trans evidence.
+
+The bulk evidence yields a joint 904-aa protein: reference residues 1–866
+followed by `RAHCHHLFKTVRIYQGRVVPFTKALMIKFEEIWPQTFH`, then `TGA`. The single
+ONT compound witness leaves phase unknown and yields no joint prediction.
+Separate predictions for the two substitutions and deletion remain in all cases.
+Additional checks retain the corrected complex allele, the 28-base deletion
+alone (904 aa, with `LAH` instead of `RAH` at the junction), and the historical
+22-base deletion (906 aa, with `STQSH` at the junction) as distinct DNA predictions.
+Only the corrected compound sequence matches these RNA witnesses. Zero matches
+for the other hypotheses do not remove their effects or establish their absence.
+
+These proteins are reference-frame predictions for observed local sequence
+combinations. The tests do not reconstruct full RNA molecules, establish an
+expressed isoform, validate tumor haplotypes, estimate allele fractions from the
+bounded bundle, or pool processed libraries as independent molecules. No runtime
+dependency, RNA assembly implementation or global phasing policy changes.
