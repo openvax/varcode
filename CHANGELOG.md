@@ -1,5 +1,12 @@
 # Change Log
 
+## [v10.11.5](https://github.com/openvax/varcode/tree/v10.11.5) (2026-10-05)
+
+- Test RNA read phasing and molecular phase resolution on real Sid RNA
+  templates from the verified `openvax-v2` bundle (#528). Cover short-read
+  and ONT cis evidence, trans evidence, insufficient shared coverage and
+  fragment thresholds; verify that mates and supplementary records are kept.
+
 ## [v10.11.4](https://github.com/openvax/varcode/tree/v10.11.4) (2026-10-02)
 
 - Ship test helpers, bounded fixtures, provenance/checksums and the docs,
