@@ -32,7 +32,11 @@ uses the installed backend without downloading build dependencies.
 
 CI builds and unpacks the source distribution outside the checkout, installs
 that source with the `test-data` extra, and runs the full suite and parity
-checks from the unpacked directory on Python 3.9/3.10/3.11. To reproduce this
+checks from the unpacked directory on Python 3.9/3.10/3.11/3.12. Python 3.11
+tests both pandas 2 and 3; Python 3.12 and the parity gate use pandas 3.
+Python 3.9/3.10 use pandas 2. The Python 3.11/pandas 2 job also checks the
+gtfparse 2.9.1 compatibility floor; other jobs require gtfparse 3.0.2+.
+To reproduce this
 locally, first install the development tools and reference releases from
 [CONTRIBUTING.md](../CONTRIBUTING.md), then:
 
