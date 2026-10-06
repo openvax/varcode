@@ -10,6 +10,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from unittest.mock import Mock
+
 import pytest
 
 from varcode import (
@@ -110,6 +112,66 @@ def test_supports_variant_counts_alt_fragments_with_contig_normalization(tmp_pat
     try:
         assert source.supports_variant(variant) == 2
         assert source.has_evidence(variant) is True
+    finally:
+        source.close()
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize("conflict", ["A", "C"])
+def test_support_cache_keeps_variant_counts_separate(tmp_path, reverse, conflict):
+    reads = []
+    # Two templates share a QNAME across libraries. Each has two overlapping
+    # supporting mates, so they contribute two fragments, not four reads.
+    for group in ("library1", "library2"):
+        for flag in (99, 147):
+            read = _snv_read("shared", 100, {120: "T"}, flag=flag)
+            read.set_tag("RG", group)
+            reads.append(read)
+    reads.extend([
+        _snv_read("other_alt", 100, {120: "G"}),
+        _snv_read("conflict", 100, {120: "T"}, flag=99),
+        _snv_read("conflict", 100, {120: conflict}, flag=147),
+        _snv_read("low_quality_mate", 100, {120: "T"}, flag=99),
+        _snv_read("low_quality_mate", 100, {120: "A"},
+                  flag=147, low_quality_pos=120),
+        _snv_read("low_quality_only", 180, {200: "T"}, low_quality_pos=200),
+    ])
+    for name, flag in (("duplicate", 1024), ("secondary", 256),
+                       ("supplementary", 2048), ("improper_pair", 65)):
+        reads.append(_snv_read(name, 100, {120: "T"}, flag=flag))
+    low_mapping_quality = _snv_read("low_mapping_quality", 100, {120: "T"})
+    low_mapping_quality.mapping_quality = 19
+    reads.append(low_mapping_quality)
+    variants = [
+        (Variant("1", 120, "A", "T"), 3),
+        (Variant("1", 120, "A", "G"), 1),
+        (Variant("1", 160, "A", "G"), 0),  # Only reference calls.
+        (Variant("1", 200, "A", "T"), 0),  # Only low-quality calls.
+        (Variant("1", 500, "A", "G"), 0),  # No overlapping records.
+        (Variant("2", 120, "A", "T"), None),  # Absent contig.
+    ]
+    if reverse:
+        variants.reverse()
+    source = RNAReadPhasingSource(
+        _write_bam(tmp_path, reads), max_distance_from_read_edge=0)
+    fetch = Mock(wraps=source._fetch_reads_for_variant)
+    source._fetch_reads_for_variant = fetch
+    classify = Mock(wraps=source._read_allele)
+    source._read_allele = classify
+    try:
+        for variant, expected in variants:
+            assert source.supports_variant(variant) == expected
+        assert fetch.call_count == len(variants)
+        classifications = classify.call_count
+        # Interleave queries in the opposite order, using equivalent new
+        # Variant instances to ensure caching is by allele, not object identity.
+        for variant, expected in reversed(variants):
+            equivalent = Variant(variant.contig, variant.start, variant.ref,
+                                 variant.alt, genome=variant.genome)
+            assert source.supports_variant(equivalent) == expected
+            assert source.has_evidence(equivalent) is (expected is not None and expected >= 2)
+        assert fetch.call_count == len(variants)
+        assert classify.call_count == classifications
     finally:
         source.close()
 

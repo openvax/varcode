@@ -487,23 +487,24 @@ class RNAReadPhasingSource:
         """Count quality-filtered reads/fragments supporting ``variant.alt``.
 
         Returns ``None`` when the variant's contig is absent from the BAM.
+        Results are cached until a new haplotype is registered.
         """
         self._register_variant(variant)
-        key = self._variant_key(variant)
-        if key in self._support_cache:
-            return self._support_cache[key]
+        variant_key = self._variant_key(variant)
+        if variant_key in self._support_cache:
+            return self._support_cache[variant_key]
         reads = self._fetch_reads_for_variant(variant)
         if reads is None:
-            self._support_cache[key] = None
+            self._support_cache[variant_key] = None
             return None
         calls_by_fragment = defaultdict(set)
         for read in reads:
             call = self._read_allele(read, variant)
             if call is not None:
-                key = (read.get_tag("RG") if read.has_tag("RG") else "", read.query_name)
-                calls_by_fragment[key].add(call)
+                fragment_key = (read.get_tag("RG") if read.has_tag("RG") else "", read.query_name)
+                calls_by_fragment[fragment_key].add(call)
         count = sum(calls == {"alt"} for calls in calls_by_fragment.values())
-        self._support_cache[key] = count
+        self._support_cache[variant_key] = count
         return count
 
     def has_evidence(self, variant) -> bool:

@@ -1,6 +1,7 @@
 """Known MAP2 RNA haplotypes are sequence observations, not gap mechanisms."""
 
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -58,6 +59,39 @@ def test_map2_identical_sequence_across_gap_decompositions(tmp_path, variants, c
         resolver = MolecularPhaseResolver(s)
         assert all(resolver.in_cis(variants[-1], v) is True for v in variants[:2])
         assert set(resolver.phased_partners(variants[-1])) == set(variants[:2])
+    finally:
+        s.close()
+
+
+@pytest.mark.parametrize("cigar,sequence,before,after,phase", [
+    ("9M28N6M", COMBINED, (1, 1, 0), (1, 1, 1), True),
+    ("9M28D6M", "TAGACAGGGCCCATT", (1, 1, 1), (0, 0, 0), None),
+])
+def test_haplotype_registration_invalidates_support_and_phase_caches(
+        tmp_path, variants, cigar, sequence, before, after, phase):
+    s = source(tmp_path, [read(cigar, sequence)])
+    fetch = Mock(wraps=s._fetch_reads_for_variant)
+    s._fetch_reads_for_variant = fetch
+    fetch_pair = Mock(wraps=s._fetch_reads_for_pair)
+    s._fetch_reads_for_pair = fetch_pair
+    try:
+        for _ in range(2):
+            assert tuple(s.supports_variant(v) for v in variants) == before
+            assert s.in_cis(variants[0], variants[-1]) is (True if before[-1] else None)
+        assert fetch.call_count == 3
+        assert fetch_pair.call_count == 1
+        s.register_haplotype(variants)
+        for _ in range(2):
+            assert tuple(s.supports_variant(v) for v in variants) == after
+            assert s.in_cis(variants[0], variants[-1]) is phase
+        assert fetch.call_count == 6
+        assert fetch_pair.call_count == 2
+        # Re-registering the same hypothesis does not change allele calls.
+        s.register_haplotype(variants)
+        assert tuple(s.supports_variant(v) for v in variants) == after
+        assert s.in_cis(variants[0], variants[-1]) is phase
+        assert fetch.call_count == 6
+        assert fetch_pair.call_count == 2
     finally:
         s.close()
 
