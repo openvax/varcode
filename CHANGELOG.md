@@ -1,5 +1,10 @@
 # Change Log
 
+## [v10.11.9](https://github.com/openvax/varcode/tree/v10.11.9) (2026-10-06)
+
+- Require gtfparse 3.0.2+ across the supported Python/pandas matrix, coordinated
+  with Topiary 5.94.2's gtfparse 3 migration (openvax/topiary#484).
+
 ## [v10.11.8](https://github.com/openvax/varcode/tree/v10.11.8) (2026-10-06)
 
 - Require PyEnsembl 2.24.1+ and gtfparse 2.9.1+, with explicit coverage of

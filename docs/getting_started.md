@@ -10,7 +10,7 @@ use Python 3.9 or later.
 pip install varcode
 ```
 
-Varcode requires PyEnsembl 2.24.1+ and gtfparse 2.9.1+, and supports pandas
+Varcode requires PyEnsembl 2.24.1+ and gtfparse 3.0.2+, and supports pandas
 2.2.2+ and 3.x. To upgrade an existing environment to pandas 3, use Python
 3.11 or later and run:
 
@@ -19,8 +19,8 @@ pip install --upgrade varcode pyensembl 'gtfparse>=3.0.2,<4' 'pandas>=3,<4'
 ```
 
 Python 3.9 and 3.10 remain supported with pandas 2.
-Environments shared with Topiary can keep gtfparse 2.9.1 until its
-[gtfparse 3 migration](https://github.com/openvax/topiary/issues/484) ships.
+Environments shared with Topiary require Topiary 5.94.2 or later for its
+gtfparse 3 support.
 
 ## Reference data
 
