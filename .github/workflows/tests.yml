@@ -26,7 +26,7 @@ jobs:
             gtfparse: "gtfparse>=3.0.2,<4"
           - python-version: "3.11"
             pandas: "pandas>=2.2.2,<3"
-            gtfparse: "gtfparse==2.9.1"
+            gtfparse: "gtfparse>=3.0.2,<4"
           - python-version: "3.11"
             pandas: "pandas>=3,<4"
             gtfparse: "gtfparse>=3.0.2,<4"
