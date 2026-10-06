@@ -1,5 +1,12 @@
 # Change Log
 
+## [v10.11.7](https://github.com/openvax/varcode/tree/v10.11.7) (2026-10-06)
+
+- Cache RNA variant support counts under the variant key, keeping it separate
+  from sequencing-template keys (#575). Verify count accuracy, reuse of zero
+  and missing-contig results, haplotype cache invalidation, and caching on real
+  Sid RNA templates without changing the allele or fragment filtering rules.
+
 ## [v10.11.6](https://github.com/openvax/varcode/tree/v10.11.6) (2026-10-05)
 
 - Exercise real Sid RNA evidence through `VariantCollection.effects()` for

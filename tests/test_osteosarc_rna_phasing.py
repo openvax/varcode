@@ -9,6 +9,7 @@ from collections import Counter
 import hashlib
 import json
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 from pyensembl import cached_release
@@ -136,6 +137,8 @@ def test_real_sid_rna_fragment_evidence(
         # Q20/MAPQ20, five-base edge exclusion and SAM flag filters remain
         # at their defaults. Allow a 5% allele error rate for the ONT data.
         phasing_error_rate=0.01 if member == SHORT_NTF3 else 0.05)
+    fetch = Mock(wraps=source._fetch_reads_for_variant)
+    source._fetch_reads_for_variant = fetch
     try:
         assert source._phase_counts(*variants) == counts
         assert tuple(source.supports_variant(v) for v in variants) == support
@@ -146,6 +149,8 @@ def test_real_sid_rna_fragment_evidence(
         assert resolver.in_cis(*variants) is phase
         for variant, partner in (variants, tuple(reversed(variants))):
             assert tuple(resolver.phased_partners(variant)) == ((partner,) if phase is True else ())
+        assert tuple(source.supports_variant(v) for v in reversed(variants)) == support[::-1]
+        assert fetch.call_count == len(variants)
     finally:
         source.close()
 
