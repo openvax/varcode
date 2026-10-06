@@ -1,5 +1,12 @@
 # Change Log
 
+## [v10.11.8](https://github.com/openvax/varcode/tree/v10.11.8) (2026-10-06)
+
+- Require PyEnsembl 2.24.1+ and gtfparse 3.0.2+ for the current annotation
+  stack. Support pandas 2.2.2+ and 3.x, retaining Python 3.9/3.10 compatibility.
+- Explicitly test pandas 2 and 3 on Python 3.11, plus pandas 3 on Python 3.12,
+  including the installed source distribution and cross-annotator parity.
+
 ## [v10.11.7](https://github.com/openvax/varcode/tree/v10.11.7) (2026-10-06)
 
 - Cache RNA variant support counts under the variant key, keeping it separate

@@ -17,7 +17,17 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        python-version: ["3.9", "3.10", "3.11"]
+        include:
+          - python-version: "3.9"
+            pandas: "pandas>=2.2.2,<3"
+          - python-version: "3.10"
+            pandas: "pandas>=2.2.2,<3"
+          - python-version: "3.11"
+            pandas: "pandas>=2.2.2,<3"
+          - python-version: "3.11"
+            pandas: "pandas>=3,<4"
+          - python-version: "3.12"
+            pandas: "pandas>=3,<4"
 
     steps:
       - name: Checkout repository
@@ -29,10 +39,12 @@ jobs:
           cache: pip
           cache-dependency-path: requirements.txt
       - name: Install dependencies
+        env:
+          PANDAS_REQUIREMENT: ${{ matrix.pandas }}
         run: |
           python -m pip install --upgrade pip
           python -m pip install flake8 pytest pytest-cov coveralls ruff build 'setuptools>=64'
-          pip install -r requirements.txt
+          python -m pip install -r requirements.txt "$PANDAS_REQUIREMENT"
       - name: Verify, build and install the source distribution
         run: |
           python -m pytest -q tests/test_source_distribution.py
@@ -42,6 +54,8 @@ jobs:
           # Osteosarc 0.14.x supports every Python version in this matrix;
           # run native adapter checks against the bundled historical snapshot.
           python -m pip install "$RUNNER_TEMP/varcode-sdist[test-data]"
+          python -m pip check
+          python -m pip show pandas pyensembl gtfparse
       - name: Lint with flake8
         run: |
           # stop the build if there are Python syntax errors or undefined names
@@ -86,7 +100,7 @@ jobs:
       # the shared point-edit domain; the full suite above separately checks
       # SV refusal, partial plugins, and explicit dual-annotator regressions.
       - name: Cross-annotator parity gate (shared point-edit domain)
-        if: matrix.python-version == '3.11'
+        if: matrix.python-version == '3.11' && matrix.pandas == 'pandas>=3,<4'
         working-directory: ${{ runner.temp }}/varcode-sdist
         env:
           COVERAGE_FILE: .coverage.parity

@@ -10,6 +10,16 @@ use Python 3.9 or later.
 pip install varcode
 ```
 
+Varcode requires PyEnsembl 2.24.1+ and gtfparse 3.0.2+, and supports pandas
+2.2.2+ and 3.x. To upgrade an existing environment to pandas 3, use Python
+3.11 or later and run:
+
+```bash
+pip install --upgrade varcode pyensembl gtfparse 'pandas>=3,<4'
+```
+
+Python 3.9 and 3.10 remain supported with pandas 2.
+
 ## Reference data
 
 Varcode uses [PyEnsembl](https://github.com/openvax/pyensembl) for gene annotations
