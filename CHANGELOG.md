@@ -1,5 +1,11 @@
 # Change Log
 
+## [v10.11.10](https://github.com/openvax/varcode/tree/v10.11.10) (2026-10-08)
+
+- Allow osteosarc 0.15.x in the optional `test-data` extra and the snapshot
+  fixture's version check (`>=0.14.4,<0.16`), fixing five dataset tests that
+  errored during setup with osteosarc 0.15.5 (#581).
+
 ## [v10.11.9](https://github.com/openvax/varcode/tree/v10.11.9) (2026-10-06)
 
 - Require gtfparse 3.0.2+ across the supported Python/pandas matrix, coordinated
