@@ -1,5 +1,15 @@
 # Change Log
 
+## v10.12.0 (2026-10-11)
+
+- Add optional shared oncoref uORF evidence and additive `Variant.orf_effects()`
+  annotations using validated upstream transcript frames, reference peptide
+  retention and explicit phase/splice products (#583). Keep canonical effects.
+- Annotate mapped RNA uORF products, including Sid TPST1–CRCP, without promoting
+  native MS observations into mutant translation or presentation evidence.
+- Use nucleotide-frame provenance to distinguish coding frameshifts from
+  stop-loss when protein prefixes coincide (#584).
+
 ## [v10.11.10](https://github.com/openvax/varcode/tree/v10.11.10) (2026-10-08)
 
 - Allow osteosarc 0.15.x in the optional `test-data` extra and the snapshot

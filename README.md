@@ -119,3 +119,9 @@ For bugs or questions, [open an issue](https://github.com/openvax/varcode/issues
 Contributions are welcome; see
 [CONTRIBUTING.md](https://github.com/openvax/varcode/blob/main/CONTRIBUTING.md)
 and the [changelog](https://github.com/openvax/varcode/blob/main/CHANGELOG.md).
+
+### Upstream ORF annotations
+
+Install `varcode[uorf]` and call `variant.orf_effects()` for additive upstream
+reading-frame consequences and model-specific reference MS evidence. See
+[the uORF guide](docs/uorf_annotations.md), including mapped Sid RNA products.

@@ -437,6 +437,15 @@ class Variant(Serializable):
             if gene.is_protein_coding
         ]
 
+    def orf_effects(self, *, catalog=None, transcripts=None, **kwargs):
+        """Additive upstream-ORF consequences; see :mod:`varcode.uorf`.
+
+        Requires ``varcode[uorf]`` only when using the default shared catalogue.
+        Reference MS observations never imply mutant translation.
+        """
+        from .uorf import predict_uorf_effects
+        return predict_uorf_effects(self, catalog=catalog, transcripts=transcripts, **kwargs)
+
     def effects(
             self, raise_on_error=True,
             annotator=None, phase_resolver=None, rna_resolver=None,

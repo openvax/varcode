@@ -508,12 +508,26 @@ def classify_products(variant, transcript, baseline, mutant):
         cdna_sequence=mutant.cdna_sequence,
         mutant_protein_sequence=mutant.protein_sequence,
         annotator_name="transcript_model")
+    def coding_sequence(product):
+        origins = product.evidence.get("genomic_positions", ())
+        target = _start_codon_first_position(transcript)
+        start = origins.index(target) if target in origins else 0
+        return (product.cdna_sequence or "")[start:], origins[start:]
+
+    reference_coding, reference_origins = coding_sequence(baseline)
+    mutant_coding, mutant_origins = coding_sequence(mutant)
+    reference_offsets = {p: i for i, p in enumerate(reference_origins) if p is not None}
+    shifted_codons = [min(i, reference_offsets[p]) // 3
+                      for i, p in enumerate(mutant_origins)
+                      if p in reference_offsets and (i - reference_offsets[p]) % 3]
+    first_changed = next((i for i, (a, b) in enumerate(zip(reference_coding, mutant_coding))
+                          if a != b), min(len(reference_coding), len(mutant_coding)))
+    frame_change = min(shifted_codons) if shifted_codons else first_changed // 3
     return classify_from_protein_diff(
         variant=variant,
         transcript=transcript,
         ref_protein=baseline.protein_sequence or "",
         mut_protein=mutant.protein_sequence or "",
-        length_delta=(
-            len(mutant.cdna_sequence or "")
-            - len(baseline.cdna_sequence or "")),
+        length_delta=len(mutant_coding) - len(reference_coding),
+        frame_change_aa_offset=frame_change,
         mutant_transcript=mutant_transcript)

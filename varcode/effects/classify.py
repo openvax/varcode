@@ -53,7 +53,8 @@ def classify_from_protein_diff(
         ref_protein,
         mut_protein,
         length_delta=0,
-        mutant_transcript=None):
+        mutant_transcript=None,
+        frame_change_aa_offset=None):
     """Classify a :class:`MutationEffect` by diffing translated
     proteins.
 
@@ -78,6 +79,11 @@ def classify_from_protein_diff(
         insertion semantics for premature-stop calls that would
         otherwise look like a substitution-plus-truncation in a
         whole-protein diff.
+
+    frame_change_aa_offset : int or None
+        First affected coding codon when a realized path supplies nucleotide
+        coordinates. Distinguishes a coding frameshift whose amino acids
+        coincidentally match the reference from a stop-codon extension.
 
     Returns
     -------
@@ -113,12 +119,15 @@ def classify_from_protein_diff(
         fs_offset = len(fs_prefix)
         # Guard: if the mutation offset is past the end of the reference protein, the
         # edit is in the stop-codon / 3'UTR region. That's a StopLoss, not a FrameShift.
-        if fs_offset >= len(ref_protein):
+        if (fs_offset if frame_change_aa_offset is None else frame_change_aa_offset) >= len(ref_protein):
             return StopLoss(
                 variant=variant,
                 transcript=transcript,
                 aa_ref="",
                 aa_alt=fs_shifted)
+        if frame_change_aa_offset is not None:
+            fs_offset = min(fs_offset, frame_change_aa_offset)
+            fs_shifted = mut_protein[fs_offset:]
         # No novel residues after the shared prefix -> an immediate stop (true truncation).
         if len(fs_shifted) == 0:
             return FrameShiftTruncation(

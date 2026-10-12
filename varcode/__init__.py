@@ -124,6 +124,8 @@ from .sample_identity import (
 
 
 __all__ = [
+    "ORFTranscript", "UORFAnnotation", "annotate_uorf_variants",
+    "annotate_uorf_product", "predict_uorf_effects", "load_uorf_catalog",
     "SampleCheckConfig", "SampleSpec", "SampleFingerprint",
     "load_vcf_samples", "compare_samples", "check_sample_identity",
     "__version__",
@@ -252,3 +254,8 @@ __all__ = [
     "load_vcf",
     "load_vcf_fast",
 ]
+
+from .uorf import (
+    ORFTranscript, UORFAnnotation, annotate_uorf_variants, annotate_uorf_product,
+    predict_uorf_effects, load_uorf_catalog,
+)
