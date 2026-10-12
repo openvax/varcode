@@ -1,5 +1,16 @@
 # Change Log
 
+## v10.13.0 (2026-10-12)
+
+- Use ORFdata's reference-context validation for RNA product overlays, accepting
+  valid dog aliases while rejecting incompatible taxa, strains and annotations
+  (#586). Retain reference identities and sequence fingerprints in exports.
+- Accept explicit contexts for custom Genome bindings; validate versioned source
+  transcript IDs after lookup and reject ambiguous supplied transcript IDs.
+- Require ORFdata 0.2 in the optional ORF/uORF extras.
+- Preserve a structured unresolved annotation when binding fails, instead of
+  crashing while constructing a transcript effect without a transcript (#587).
+
 ## v10.12.0 (2026-10-11)
 
 - Add optional species-scoped orfdata reference evidence and additive `Variant.orf_effects()`

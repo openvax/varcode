@@ -55,3 +55,13 @@ The compatibility module `varcode.uorf` preserves the original upstream-specific
 call shapes and `varcode[uorf]` remains an installation alias. New code should
 use `varcode.orf` and the bound reference API above. The model catalogue is not
 exhaustive ORF discovery: new starts and downstream CDS regulation are unassessed.
+
+## Reference identity
+
+The ORF extras require ORFdata 0.2. A bound `ReferenceORF` retains its species,
+strain, assembly, annotation version and sequence fingerprints in both native
+and modified-product exports. RNA product metadata must agree with that context.
+For custom Genomes without taxonomy, use `record.bind(transcript, context=...)`
+before calling the generic annotation API. The compatibility uORF wrappers also
+accept `reference_context=...`. See
+[ORFdata's reference guide](https://github.com/openvax/orfdata/blob/main/docs/species.md).

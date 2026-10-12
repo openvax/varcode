@@ -194,7 +194,11 @@ def _effect(effect):
 
 @dataclass
 class ORFAnnotation:
-    """Per-model result, preserving all realized phase/splice alternatives."""
+    """Per-model result, preserving all realized phase/splice alternatives.
+
+    If a reference cannot bind, ``reference`` and ``effect`` are None; ``data``
+    retains the source model and an explicit unresolved reason.
+    """
 
     record: object
     effect: object
@@ -234,6 +238,7 @@ def _annotate_orf_variants(variants, record, transcript, *, genome_build,
             raise ValueError("Variant assembly mismatch")
         if _contig(variant.contig) != _contig(record.contig):
             raise ValueError("Variant contig mismatch")
+        view.reference_orf.context.validate_genome(variant.genome, include_annotation=False)
     try:
         # Validate original genomic REF, including VCF padding anchors. Layout
         # tier 0 deliberately permits unknown intronic REF; this API does not.
@@ -373,11 +378,14 @@ def predict_orf_effects(variants, *, catalog=None, transcripts=None, **kwargs):
             from .errors import ReferenceMismatchError
             if isinstance(error, ReferenceMismatchError):
                 raise
-            effect = Unresolved(variants[0], None, mechanism="uorf_model_unavailable", reason=str(error))
-            annotation = ORFAnnotation(record, effect, dict(
+            # There is no validated transcript to attach a MutationEffect to.
+            # Keep the failure at the ORF-annotation boundary instead of
+            # manufacturing a transcript or passing None to a transcript effect.
+            annotation = ORFAnnotation(record, None, dict(
                 schema="varcode.orf_annotation.v1", model=record.to_dict(),
                 catalogue_metadata=catalog.metadata, variants=_plain(variants),
-                effect=_effect(effect), outcomes=[],
+                effect=dict(type="Unresolved", mechanism="uorf_model_unavailable", reason=str(error)),
+                outcomes=[],
                 discovery=dict(status="reference_models_only", new_starts="not_assessed")))
         results.append(annotation)
     return tuple(results)
