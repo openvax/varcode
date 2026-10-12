@@ -2,10 +2,12 @@
 
 ## v10.12.0 (2026-10-11)
 
-- Add optional shared oncoref uORF evidence and additive `Variant.orf_effects()`
+- Add optional species-scoped orfdata reference evidence and additive `Variant.orf_effects()`
   annotations using validated upstream transcript frames, reference peptide
   retention and explicit phase/splice products (#583). Keep canonical effects.
-- Annotate mapped RNA uORF products, including Sid TPST1–CRCP, without promoting
+- Accept bound PyEnsembl ReferenceORFs with separate model and evidence objects,
+  including ORFs on noncoding RNAs. Preserve all duplicated native peptide copies.
+- Annotate mapped RNA ORF products, including Sid TPST1–CRCP, without promoting
   native MS observations into mutant translation or presentation evidence.
 - Use nucleotide-frame provenance to distinguish coding frameshifts from
   stop-loss when protein prefixes coincide (#584).

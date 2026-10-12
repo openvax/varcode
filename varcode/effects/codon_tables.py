@@ -108,6 +108,15 @@ def codon_table_for_transcript(transcript):
     """
     if transcript is None:
         return STANDARD
+    # An explicit alternative-ORF model owns its genetic code. Do not infer
+    # table 2 from an MT-like contig name for a different species.
+    code = getattr(transcript, "translation_table", None)
+    if code is not None:
+        if code == 1:
+            return STANDARD
+        if code == 2:
+            return VERTEBRATE_MITOCHONDRIAL
+        raise ValueError("Unsupported explicit NCBI translation table: %s" % code)
     contig = getattr(transcript, "contig", None)
     if is_mitochondrial_contig(contig):
         return VERTEBRATE_MITOCHONDRIAL

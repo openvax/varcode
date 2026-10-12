@@ -14,7 +14,7 @@ from varcode.uorf import (
 from varcode.effect_hypotheses import RealizedTranscriptProduct
 from varcode.nucleotides import reverse_complement
 
-oncoref = pytest.importorskip("oncoref")
+orfdata = pytest.importorskip("orfdata")
 
 
 @pytest.fixture(scope="module")
@@ -114,7 +114,7 @@ class Transcript:
                 blocks[-1][1] = p
             else:
                 blocks.append([p, p])
-        return oncoref.UORFRecord("test-orf", "gene", "GENE", "test", "1", self.strand,
+        return orfdata.UORFRecord("test-orf", "gene", "GENE", "test", "1", self.strand,
                                   tuple(map(tuple, blocks)), "MKPG", "uORF", (), ())
 
     def variant(self, offset, ref, alt):
@@ -212,3 +212,59 @@ def test_padded_insertion_ref_and_missing_intronic_ref_are_not_ignored():
     v = Variant("1", 150, "A", "G", genome=cached_release(95))
     a = annotate_uorf_variants([v], spliced.record(), spliced, genome_build="GRCh38")
     assert type(a.effect).__name__ == "Unresolved"
+
+
+def test_generic_orf_annotation_keeps_noncoding_mouse_parent():
+    from varcode import annotate_orf_variants
+    from orfdata import ORFRecord, ORFEvidence
+    t = Transcript()
+    t.biotype = "lncRNA"
+    t.is_protein_coding = False
+    t.genome = cached_release(95, species="mouse")
+    model = replace(t.record().model, taxon_id=10090, species="mus_musculus",
+                    genome_build="GRCm38", orf_type="lncRNA", source="synthetic-test")
+    record = ORFRecord.from_model(model, ORFEvidence())
+    reference = record.bind(t)
+    variant = Variant("1", 106, "A", "G", genome=t.genome)
+    result = annotate_orf_variants([variant], reference)
+    assert result.reference is reference
+    assert result.reference.transcript is t and not t.is_protein_coding
+    assert result.effect.aa_ref == "K" and result.effect.aa_alt == "E"
+    data = result.to_dict()
+    assert data["reference"]["model"]["taxon_id"] == 10090
+    assert data["reference"]["resolved_transcript"]["biotype"] == "lncRNA"
+    assert data["outcomes"][0]["mutant"]["protein_sequence"] == "MEPG"
+    assert data["outcomes"][0]["mutant"]["reference_evidence"]["mutant_translation_evidence"] == "not_assessed"
+
+
+def test_reference_peptide_retention_preserves_all_duplicated_copies():
+    from varcode.orf import _peptide_overlay, _model_positions
+    t = Transcript()
+    peptide = orfdata.PeptideEvidence("shotgun", "KP", ((2, 3),), "synthetic", "test")
+    record = replace(t.record(), peptides=(peptide,))
+    native = _model_positions(record)
+    # Duplicate the native KP codons in-frame; both copies retain their ancestry.
+    origins = native[:9] + native[3:9] + native[9:]
+    overlay = _peptide_overlay(record, "MKPKPG", origins, 0)
+    observation, = overlay["peptide_observations"]
+    assert observation["retained_mutant_intervals"] == [(2, 3), (4, 5)]
+    assert overlay["mutant_translation_evidence"] == "not_assessed"
+
+
+def test_primary_source_lncRNA_orf_uses_same_variant_api():
+    from varcode import annotate_orf_variants
+    record = orfdata.load_catalog().get("c10norep110")
+    transcript = cached_release(95).transcript_by_id(record.transcript_id)
+    reference = record.bind(transcript)
+    assert transcript.biotype == "antisense" and not transcript.is_protein_coding
+    assert record.gene_name == "NUTM2B-AS1" and record.has_evidence("ms")
+    position = reference.model.genomic_positions[3]
+    ref = reference.coding_sequence[3]
+    if record.strand == "-":
+        ref = reverse_complement(ref)
+    alt = next(b for b in "ACGT" if b != ref)
+    variant = Variant(record.contig, position, ref, alt, genome=transcript.genome)
+    annotation = annotate_orf_variants([variant], reference)
+    assert type(annotation.effect).__name__ == "PrematureStop"
+    assert annotation.reference.transcript is transcript
+    assert annotation.to_dict()["outcomes"][0]["mutant"]["protein_sequence"] == "M"
