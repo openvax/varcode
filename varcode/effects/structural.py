@@ -658,9 +658,10 @@ def predict_structural_variant_effect(variant, transcript):
     ``effect.candidates`` for the full outcome set.
     """
     from pyensembl import Transcript
-    if not isinstance(transcript, Transcript):
+    from ..orf import _ORFTranscript
+    if not isinstance(transcript, (Transcript, _ORFTranscript)):
         raise TypeError(
-            "Expected pyensembl.Transcript, got %s" % type(transcript))
+            "Expected a reference or ORF transcript, got %s" % type(transcript))
 
     sv_type = getattr(variant, "sv_type", None)
     if (not getattr(variant, "is_structural", False)
