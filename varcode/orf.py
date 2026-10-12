@@ -80,11 +80,11 @@ class _ORFTranscript:
         return getattr(object.__getattribute__(self, "reference_transcript"), name)
 
 
-def _bind(record, transcript, genome_build):
+def _bind(record, transcript, genome_build, *, reference_context=None):
     if genome_build != record.genome_build:
         raise ValueError("ORF assembly mismatch")
     from orfdata import ReferenceORF
-    return ReferenceORF(record, transcript)
+    return ReferenceORF(record, transcript, context=reference_context)
 
 
 def _reference_provider(view, fallback=None):
@@ -212,7 +212,8 @@ class ORFAnnotation:
 def _annotate_orf_variants(variants, record, transcript, *, genome_build,
                            germline_variants=(), phase_resolver=None,
                            sequence_provider=None, max_hypotheses=64,
-                           homozygous_germline=(), metadata=None, reference=None):
+                           homozygous_germline=(), metadata=None, reference=None,
+                           reference_context=None):
     """Annotate one known-cis group in a validated upstream frame.
 
     Literal REF mismatches raise. Unavailable intronic sequence and unsupported
@@ -222,7 +223,10 @@ def _annotate_orf_variants(variants, record, transcript, *, genome_build,
     variants = tuple(variants)
     if not variants:
         raise ValueError("At least one variant is required")
-    view = _ORFTranscript(_bind(record, transcript, genome_build) if reference is None else reference)
+    if reference is not None and reference_context is not None and reference.context.key != reference_context.key:
+        raise ValueError("Bound ORF and explicit reference context disagree")
+    view = _ORFTranscript(_bind(record, transcript, genome_build,
+                              reference_context=reference_context) if reference is None else reference)
     germline_variants = tuple(germline_variants)
     provider = _reference_provider(view, sequence_provider)
     for variant in (*variants, *germline_variants):
@@ -340,7 +344,14 @@ def predict_orf_effects(variants, *, catalog=None, transcripts=None, **kwargs):
     build = variants[0].reference_name
     if build != catalog.genome_build:
         raise ValueError("Catalogue assembly mismatch")
-    by_id = None if transcripts is None else {str(t.id).split(".")[0]: t for t in transcripts}
+    by_id = None
+    if transcripts is not None:
+        by_id = {}
+        for transcript in transcripts:
+            key = str(transcript.id).split(".")[0]
+            if key in by_id:
+                raise ValueError("Ambiguous supplied transcript identifier: %s" % key)
+            by_id[key] = transcript
     results = []
     for record in catalog.records:
         # Include splice sites inside the ORF envelope and initiation context.
@@ -353,7 +364,8 @@ def predict_orf_effects(variants, *, catalog=None, transcripts=None, **kwargs):
                    for v in variants):
             continue
         try:
-            transcript = genome.transcript_by_id(record.transcript_id) if by_id is None else by_id[record.transcript_id]
+            key = record.transcript_id.split(".")[0]
+            transcript = genome.transcript_by_id(key) if by_id is None else by_id[key]
             annotation = _annotate_orf_variants(
                 variants, record, transcript, genome_build=build,
                 metadata=catalog.metadata, **kwargs)
@@ -383,14 +395,12 @@ def annotate_orf_product(reference, product):
     view = _ORFTranscript(reference)
     record = reference.record
     product_genome = getattr(product.transcript, "genome", None)
-    if product_genome is not None:
-        if product_genome.reference_name != record.genome_build:
-            raise ValueError("RNA product assembly mismatch")
-        species = getattr(product_genome, "species", None)
-        if species is not None:
-            name = str(getattr(species, "latin_name", species)).lower().replace(" ", "_")
-            if name != str(record.species).lower().replace(" ", "_"):
-                raise ValueError("RNA product species mismatch")
+    if product_genome is None:
+        raise ValueError("RNA product reference Genome is required")
+    from orfdata import ReferenceContext
+    # The bound reference is the explicit context for custom Genome metadata
+    # gaps. Existing metadata must agree; aliases use the shared taxonomy map.
+    ReferenceContext.from_genome(product_genome, context=reference.context)
     sequence = product.cdna_sequence
     origins = product.evidence.get("base_origins", ())
     if sequence is None or len(sequence) != len(origins):

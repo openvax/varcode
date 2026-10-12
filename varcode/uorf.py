@@ -18,8 +18,8 @@ def load_uorf_catalog(*args, **kwargs):
 class ORFTranscript(_ORFTranscript):
     """Legacy engine view; use ``record.bind(transcript)`` for the base object."""
 
-    def __init__(self, record, transcript, *, genome_build):
-        super().__init__(_bind(record, transcript, genome_build))
+    def __init__(self, record, transcript, *, genome_build, reference_context=None):
+        super().__init__(_bind(record, transcript, genome_build, reference_context=reference_context))
 
 
 def annotate_uorf_variants(variants, record, transcript, *, genome_build, **kwargs):
@@ -27,8 +27,9 @@ def annotate_uorf_variants(variants, record, transcript, *, genome_build, **kwar
                                  genome_build=genome_build, **kwargs)
 
 
-def annotate_uorf_product(record, transcript, product, *, genome_build):
-    return annotate_orf_product(_bind(record, transcript, genome_build), product)
+def annotate_uorf_product(record, transcript, product, *, genome_build, reference_context=None):
+    return annotate_orf_product(_bind(record, transcript, genome_build,
+                                     reference_context=reference_context), product)
 
 
 def predict_uorf_effects(variants, *, catalog=None, **kwargs):

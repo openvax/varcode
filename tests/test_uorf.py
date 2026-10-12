@@ -79,7 +79,9 @@ class Transcript:
     id = "test"
     name = "test"
     contig = "1"
-    genome = SimpleNamespace(reference_name="GRCh38", release=1)
+    genome = SimpleNamespace(reference_name="GRCh38", release=1,
+                             species="homo_sapiens", annotation_name="synthetic",
+                             annotation_version="1")
     gene = SimpleNamespace(id="gene", name="GENE")
     is_protein_coding = True
     complete = True
