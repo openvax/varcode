@@ -79,7 +79,9 @@ class Transcript:
     id = "test"
     name = "test"
     contig = "1"
-    genome = SimpleNamespace(reference_name="GRCh38", release=1)
+    genome = SimpleNamespace(reference_name="GRCh38", release=1,
+                             species="homo_sapiens", annotation_name="synthetic",
+                             annotation_version="1")
     gene = SimpleNamespace(id="gene", name="GENE")
     is_protein_coding = True
     complete = True
@@ -123,6 +125,87 @@ class Transcript:
             position -= len(ref) - 1
             ref, alt = reverse_complement(ref), reverse_complement(alt)
         return Variant("1", position, ref, alt, genome=cached_release(95))
+
+
+@pytest.mark.parametrize("taxon,species,assembly", [
+    (9606, "homo_sapiens", "GRCh38"),
+    (10090, "mus_musculus", "GRCm39"),
+    (9615, "canis_lupus_familiaris", "ROS_Cfam_1.0"),
+    (4932, "saccharomyces_cerevisiae", "R64-1-1"),
+])
+def test_modified_products_keep_reference_scope_across_species(taxon, species, assembly):
+    from dataclasses import replace
+    from pyensembl.species import find_species_by_name
+    from varcode.effect_hypotheses import RealizedTranscriptProduct
+    from varcode.orf import annotate_orf_product
+
+    t = Transcript()
+    t.genome = SimpleNamespace(reference_name=assembly, species=find_species_by_name(species),
+                              annotation_name="synthetic", annotation_version="1")
+    record = replace(t.record(), taxon_id=taxon, species=species, genome_build=assembly)
+    reference = record.bind(t)
+    product = RealizedTranscriptProduct(t, t.sequence, None, evidence={
+        "base_origins": [(t.contig, p, t.strand) for p in t.positions],
+    })
+    result = annotate_orf_product(reference, product)
+    assert result["reference"]["reference_key"] == reference.context.key
+    assert result["reference"]["reference_context"]["taxon_id"] == taxon
+    assert result["product"]["protein_sequence"] == "MKPG"
+    assert result["product"]["reference_evidence"]["mutant_translation_evidence"] == "not_assessed"
+    t.genome.annotation_version = "2"
+    with pytest.raises(ValueError, match="annotation_version"):
+        annotate_orf_product(reference, product)
+
+
+def test_legacy_binding_can_declare_custom_reference_context():
+    from orfdata import ReferenceContext
+    from varcode.uorf import ORFTranscript
+
+    t = Transcript()
+    t.genome = SimpleNamespace(reference_name="GRCh38")
+    with pytest.raises(ValueError, match="explicit ReferenceContext"):
+        ORFTranscript(t.record(), t, genome_build="GRCh38")
+    explicit = ReferenceContext(9606, "human", "GRCh38", "synthetic", "1")
+    view = ORFTranscript(t.record(), t, genome_build="GRCh38", reference_context=explicit)
+    assert view.reference_orf.context == explicit
+
+
+def test_variant_cannot_cross_taxa_even_with_a_colliding_assembly_label():
+    from dataclasses import replace
+
+    t = Transcript()
+    t.genome = SimpleNamespace(reference_name="GRCm38", species="human",
+                              annotation_name="synthetic", annotation_version="1")
+    record = replace(t.record(), genome_build="GRCm38")
+    variant = Variant("1", 108, "A", "G", genome=cached_release(95, species="mouse"))
+    with pytest.raises(ValueError, match="taxon mismatch"):
+        annotate_uorf_variants([variant], record, t, genome_build="GRCm38")
+
+
+def test_versioned_source_transcript_lookup_and_duplicate_rejection():
+    from dataclasses import replace
+    from varcode.orf import predict_orf_effects
+
+    t = Transcript()
+    t.versioned_id = "test.2"
+    record = replace(t.record(), transcript_id="test.2")
+    catalog = orfdata.ORFCatalog([record], dict(genome_build="GRCh38", taxon_id=9606,
+                                             species="human"))
+    variant = Variant("1", 108, "A", "G", genome=cached_release(95))
+    annotation, = predict_orf_effects(variant, catalog=catalog, transcripts=[t])
+    assert annotation.reference is not None
+    assert annotation.reference.model.transcript_id == "test.2"
+    with pytest.raises(ValueError, match="Ambiguous supplied transcript"):
+        predict_orf_effects(variant, catalog=catalog, transcripts=[t, t])
+    t.versioned_id = "test.3"
+    annotation, = predict_orf_effects(variant, catalog=catalog, transcripts=[t])
+    assert annotation.data["effect"]["type"] == "Unresolved"
+    assert "version mismatch" in annotation.data["effect"]["reason"]
+    assert annotation.effect is None and annotation.reference is None
+    missing, = predict_orf_effects(variant, catalog=catalog, transcripts=[])
+    assert missing.effect is None and missing.reference is None
+    assert missing.to_dict()["model"]["transcript_id"] == "test.2"
+    assert missing.to_dict()["effect"]["type"] == "Unresolved"
 
 
 @pytest.mark.parametrize("reverse", [False, True])
