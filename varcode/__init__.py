@@ -124,7 +124,9 @@ from .sample_identity import (
 
 
 __all__ = [
-    "ORFAnnotation", "annotate_orf_variants", "annotate_orf_product", "predict_orf_effects", "load_orf_catalog",
+    "ORFAnnotation", "ORFOutcome", "ORFProduct", "ORFProductAnnotation",
+    "annotate_orf_variants", "annotate_orf_rna_product", "annotate_orf_product",
+    "predict_orf_effects", "load_orf_catalog",
     "ORFTranscript", "UORFAnnotation", "annotate_uorf_variants",
     "annotate_uorf_product", "predict_uorf_effects", "load_uorf_catalog",
     "SampleCheckConfig", "SampleSpec", "SampleFingerprint",
@@ -261,4 +263,8 @@ from .uorf import (
     predict_uorf_effects, load_uorf_catalog,
 )
 
-from .orf import ORFAnnotation, annotate_orf_variants, annotate_orf_product, predict_orf_effects, load_orf_catalog
+from .orf import (
+    ORFAnnotation, ORFOutcome, ORFProduct, ORFProductAnnotation,
+    annotate_orf_variants, annotate_orf_rna_product, annotate_orf_product,
+    predict_orf_effects, load_orf_catalog,
+)
