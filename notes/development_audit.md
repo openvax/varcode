@@ -3,7 +3,7 @@
 !!! note "Historical record"
     This page records the state of the project when the audit was done. Some
     findings have since been fixed; check the linked issues and the
-    [changelog](changelog.md) for current status.
+    [changelog](../CHANGELOG.md) for current status.
 
 This audit started at `525499d` (Varcode 10.1.1). It combines a broad static
 review with targeted execution of parsing, metadata, failure handling, and
