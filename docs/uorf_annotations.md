@@ -14,11 +14,26 @@ from varcode import Variant, annotate_orf_variants
 
 genome = cached_release(95)  # explicitly provision this reference beforehand
 transcript = genome.transcript_by_id("ENST00000304842")
-reference, = load_catalog().for_transcript(transcript)
+catalog = load_catalog()
+reference = catalog.get("c7riboseqorf56").bind(transcript)
 variant = Variant("7", 66205486, "C", "G", genome=genome)
 annotation = annotate_orf_variants([variant], reference)
 assert annotation.reference is reference
-result = annotation.to_dict()
+for outcome in annotation.outcomes:
+    print(outcome.effect)
+    if outcome.mutant is not None:
+        print(outcome.mutant.protein_sequence)
+        print(outcome.mutant.initiation_context.start_codon)
+```
+
+Select a known ORF explicitly by ID as above. To annotate every ORF on a
+transcript, iterate over `catalog.for_transcript(transcript)`; a transcript
+can have zero, one or several ORFs.
+
+```python
+for reference in catalog.for_transcript(transcript):
+    annotation = annotate_orf_variants([variant], reference)
+    print(annotation.orf_id, annotation.effect)
 ```
 
 The TPST1 +4 substitution is P2A in `c7riboseqorf56` and changes an initiation
@@ -29,9 +44,15 @@ reports unavailable/mismatched models as unresolved.
 `ReferenceORF.model` holds the ORF identity, species, assembly, coding blocks and
 protein; `.evidence` holds source observations, and `.transcript` is the original
 PyEnsembl object. Varcode's `ORFAnnotation.reference` retains that base object;
-`.effect` and exported `outcomes` describe modifications, including alternative
-phase/splice products. A private coding view adapts this ORF to the existing
-transcript-model engine. It does not relabel a noncoding PyEnsembl transcript.
+`.effect` and `.outcomes` describe modifications, including alternative
+phase/splice products. Each `ORFOutcome` carries native `.effect`, `.hypothesis`,
+`.baseline` and `.mutant` objects. Products expose sequences, termination and
+an orfdata `InitiationContext` directly. Unavailable structural products remain
+`None` with an `.unresolved_reason`; failed reference binding is reported by
+`annotation.unresolved_reason`. An empty outcome tuple does not prove no effect.
+Use `annotation.to_dict()` only when exporting JSON. A private coding view
+adapts this ORF to the existing transcript-model engine. It does not relabel
+a noncoding PyEnsembl transcript.
 
 Binding checks the entire spliced path, protein, stop, assembly and available
 species identity. Literal genomic REF mismatches raise, including VCF padding.
@@ -39,10 +60,13 @@ Sequence unavailable for intronic edits remains unresolved. The initial binder
 supports complete, stopped ORFs with NCBI translation table 1; other tables are
 explicitly unsupported, never inferred from an MT-like contig name.
 
-For RNA products, `annotate_orf_product(reference, product)` accepts a
+For RNA products, `annotate_orf_rna_product(reference, product)` accepts a
 `RealizedTranscriptProduct` with one `(contig, position, strand)` or `None` in
 `evidence['base_origins']` per cDNA base. It validates the retained reference
-start and compares the conditional translation with the base ORF. Isovar owns
+start and compares the conditional translation with the base ORF. Its
+`ORFProductAnnotation` exposes `.reference`, `.effect`, `.product`, `.status`
+and `.reason`. An unresolved result retains the supplied `.cdna_sequence`
+and `.evidence` but has no translated `.product`. Isovar owns
 read support and RNA reconstruction; Varcode owns the sequence consequence.
 
 Reference peptides are projected through codon ancestry, retaining every copied
@@ -53,8 +77,12 @@ support and unresolved polarity/initiation status.
 
 The compatibility module `varcode.uorf` preserves the original upstream-specific
 call shapes and `varcode[uorf]` remains an installation alias. New code should
-use `varcode.orf` and the bound reference API above. The model catalogue is not
-exhaustive ORF discovery: new starts and downstream CDS regulation are unassessed.
+use `varcode.orf` and the bound reference API above. `annotate_orf_product`
+retains its original dictionary return for existing RNA exporters; new Python
+code should use `annotate_orf_rna_product`. `ORFAnnotation.data` remains an
+export alias; construct annotations with native fields rather than a `data`
+dictionary. The model catalogue is not exhaustive ORF discovery: new starts
+and downstream CDS regulation are unassessed.
 
 ## Reference identity
 

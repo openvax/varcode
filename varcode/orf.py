@@ -4,16 +4,19 @@ The optional orfdata catalogue supplies reference observations, never patient
 translation evidence. Canonical ``effects()`` results are unchanged.
 """
 
-from dataclasses import asdict, dataclass, fields, is_dataclass
-from typing import Mapping
+from dataclasses import asdict, dataclass, field, fields, is_dataclass
+from typing import TYPE_CHECKING, Mapping, Optional, Tuple
 
-from .effect_hypotheses import RealizedTranscriptProduct
+from .effect_hypotheses import EffectHypothesis, RealizedTranscriptProduct
 from .effects.classify import classify_from_protein_diff
 from .effects.codon_tables import codon_table_for_transcript, translate_sequence
-from .effects.effect_classes import StartLoss, Unresolved
+from .effects.effect_classes import MutationEffect, StartLoss, Unresolved
 from .genomic_layout import SequenceUnavailable, UnsupportedLayoutEdit
 from .mutant_transcript import MutantTranscript
 from .transcript_model import predict_transcript_model_effect
+
+if TYPE_CHECKING:
+    from orfdata import InitiationContext, ORFRecord, ReferenceORF
 
 
 def load_orf_catalog(*args, **kwargs):
@@ -120,13 +123,11 @@ def _plain(value):
 
 
 def _context(sequence, start):
+    from orfdata import InitiationContext, annotate_initiation_context
+
     if start is None or sequence is None or start + 3 > len(sequence):
-        return {"status": "unavailable", "reason": "reference_start_not_retained"}
-    # Raw contexts remain usable with any supplied ORF record, without orfdata.
-    return dict(upstream=sequence[max(0, start - 9):start],
-                start_codon=sequence[start:start + 3], downstream=sequence[start + 3:start + 9],
-                start_offset=start, five_prime_complete=None,
-                interpretation="sequence_prior_only; initiation_not_measured")
+        return InitiationContext("", "", "", unavailable_reason="reference_start_not_retained")
+    return annotate_initiation_context(sequence, start)
 
 
 def _peptide_overlay(record, protein, origins, start):
@@ -176,12 +177,12 @@ def _product(view, product):
     if start is not None and sequence is not None:
         stop = next((i for i in range(start, len(sequence) - 2, 3)
                      if sequence[i:i + 3] in table.stop_codons), None)
-    return dict(cdna_sequence=sequence, protein_sequence=protein,
+    return ORFProduct(cdna_sequence=sequence, protein_sequence=protein,
                 start_codon_present=product.start_codon_present,
                 termination="observed_stop" if stop is not None else "sequence_boundary" if sequence is not None else "unavailable",
                 stop_cdna_offset=stop, initiation_context=context,
-                junction_signature=_plain(product.junction_signature),
-                evidence=_plain(product.evidence),
+                junction_signature=product.junction_signature,
+                evidence=product.evidence,
                 reference_evidence=_peptide_overlay(view.record, protein, origins, start))
 
 
@@ -192,25 +193,140 @@ def _effect(effect):
             "reason", "mechanism", "max_hypotheses") if hasattr(effect, k)}}
 
 
-@dataclass
-class ORFAnnotation:
-    """Per-model result, preserving all realized phase/splice alternatives.
+@dataclass(frozen=True)
+class ORFProduct:
+    """A realized ORF's sequences, initiation context and reference evidence.
 
-    If a reference cannot bind, ``reference`` and ``effect`` are None; ``data``
-    retains the source model and an explicit unresolved reason.
+    Unavailable sequences remain None. Reference peptide retention is not
+    evidence that this product was translated or presented by MHC.
     """
 
-    record: object
-    effect: object
-    data: dict
-    reference: object = None
+    cdna_sequence: Optional[str]
+    protein_sequence: Optional[str]
+    start_codon_present: Optional[bool]
+    termination: str
+    stop_cdna_offset: Optional[int]
+    initiation_context: "InitiationContext"
+    junction_signature: tuple = ()
+    evidence: Mapping = field(default_factory=dict)
+    reference_evidence: Mapping = field(default_factory=dict)
+
+    def to_dict(self):
+        """Export the established product schema without changing native fields."""
+        context = self.initiation_context
+        if context.unavailable_reason:
+            initiation = dict(status="unavailable", reason=context.unavailable_reason)
+        else:
+            initiation = dict(
+                upstream=context.upstream, start_codon=context.start_codon,
+                downstream=context.downstream, start_offset=context.start_offset,
+                five_prime_complete=context.five_prime_complete,
+                interpretation="sequence_prior_only; initiation_not_measured")
+        return dict(
+            cdna_sequence=self.cdna_sequence, protein_sequence=self.protein_sequence,
+            start_codon_present=self.start_codon_present, termination=self.termination,
+            stop_cdna_offset=self.stop_cdna_offset, initiation_context=initiation,
+            junction_signature=_plain(self.junction_signature),
+            evidence=_plain(self.evidence), reference_evidence=_plain(self.reference_evidence))
+
+
+@dataclass(frozen=True)
+class ORFOutcome:
+    """One consequence and its baseline/mutant products, with uncertainty intact."""
+
+    effect: MutationEffect
+    baseline: ORFProduct
+    mutant: Optional[ORFProduct]
+    hypothesis: Optional[EffectHypothesis] = None
+    probability: Optional[float] = None
+    phase_mass: Optional[float] = None
+    source: Optional[str] = None
+    unresolved_reason: Optional[str] = None
+
+    def to_dict(self):
+        result = dict(effect=_effect(self.effect), baseline=self.baseline.to_dict(),
+                      mutant=self.mutant.to_dict() if self.mutant is not None else None)
+        if self.hypothesis is not None:
+            result.update(hypothesis=_plain(self.hypothesis),
+                          probability=self.probability, phase_mass=self.phase_mass)
+        else:
+            result["unresolved_reason"] = self.unresolved_reason
+            if self.mutant is not None:
+                result["source"] = self.source
+        return result
+
+
+@dataclass(frozen=True)
+class ORFAnnotation:
+    """Per-ORF consequences available through ``outcomes`` as Python objects.
+
+    A failed reference binding leaves ``reference`` and ``effect`` as None,
+    with an explicit ``unresolved_reason``. ``to_dict()`` is for export only.
+    """
+
+    record: "ORFRecord"
+    effect: Optional[MutationEffect]
+    reference: Optional["ReferenceORF"] = None
+    variants: tuple = ()
+    outcomes: Tuple[ORFOutcome, ...] = ()
+    catalogue_metadata: Optional[Mapping] = None
+    variant_locations: tuple = ()
+    unresolved_reason: Optional[str] = None
 
     @property
     def orf_id(self):
         return self.record.orf_id
 
+    @property
+    def data(self):
+        """Compatibility export; use attributes for in-process access."""
+        return self.to_dict()
+
     def to_dict(self):
-        return _plain(self.data)
+        result = dict(
+            schema="varcode.orf_annotation.v1", model=self.record.to_dict(),
+            catalogue_metadata=self.catalogue_metadata, variants=_plain(self.variants),
+            effect=_effect(self.effect) if self.effect is not None else dict(
+                type="Unresolved", mechanism="uorf_model_unavailable", reason=self.unresolved_reason),
+            outcomes=[outcome.to_dict() for outcome in self.outcomes],
+            discovery=dict(status="reference_models_only", new_starts="not_assessed"))
+        if self.reference is not None:
+            transcript = self.reference.transcript
+            result.update(
+                reference=self.reference.to_dict(),
+                resolved_transcript=dict(id=transcript.id,
+                    version=getattr(transcript, "version", None),
+                    release=getattr(transcript.genome, "release", None),
+                    genome_build=self.reference.model.genome_build),
+                variant_locations=_plain(self.variant_locations),
+                downstream_cds_regulation="not_assessed")
+        return _plain(result)
+
+
+@dataclass(frozen=True)
+class ORFProductAnnotation:
+    """Consequence of a mapped RNA product relative to a reference ORF.
+
+    Attribute access retains native objects. Use ``to_dict()`` for JSON export.
+    """
+
+    reference: "ReferenceORF"
+    status: str
+    effect: Optional[MutationEffect] = None
+    product: Optional[ORFProduct] = None
+    reason: Optional[str] = None
+    cdna_sequence: Optional[str] = None
+    evidence: Mapping = field(default_factory=dict)
+
+    def to_dict(self):
+        result = dict(schema="varcode.orf_product.v1", model=self.reference.record.to_dict(),
+                      reference=self.reference.to_dict(), status=self.status)
+        if self.product is None:
+            result.update(reason=self.reason, cdna_sequence=self.cdna_sequence,
+                          evidence=_plain(self.evidence))
+        else:
+            result.update(effect=_effect(self.effect), product=self.product.to_dict())
+        return result
 
 
 def _annotate_orf_variants(variants, record, transcript, *, genome_build,
@@ -255,16 +371,8 @@ def _annotate_orf_variants(variants, record, transcript, *, genome_build,
             max_hypotheses=max_hypotheses, homozygous_germline=homozygous_germline)
     except (SequenceUnavailable, UnsupportedLayoutEdit) as error:
         effect = Unresolved(variants[0], view, mechanism="uorf_sequence_unavailable", reason=str(error))
-    data = dict(schema="varcode.orf_annotation.v1", model=record.to_dict(),
-                reference=view.reference_orf.to_dict(),
-                catalogue_metadata=metadata, variants=_plain(variants),
-                resolved_transcript=dict(id=transcript.id,
-                    version=getattr(transcript, "version", None),
-                    release=getattr(getattr(transcript, "genome", None), "release", None),
-                    genome_build=genome_build), effect=_effect(effect), outcomes=[],
-                discovery=dict(status="reference_models_only", new_starts="not_assessed"),
-                downstream_cds_regulation="not_assessed")
-    data["variant_locations"] = []
+    outcomes = []
+    variant_locations = []
     for variant in variants:
         context_snvs = []
         context = record.initiation_context
@@ -283,16 +391,16 @@ def _annotate_orf_variants(variants, record, transcript, *, genome_build,
                 else:
                     context_snvs.append(dict(position=position,
                         status="source_context_differs_from_resolved_transcript"))
-        data["variant_locations"].append(dict(variant=_plain(variant), locations=locations,
+        variant_locations.append(dict(variant=variant, locations=locations,
             initiation_snvs=context_snvs,
             insertion_after_position=variant.start if getattr(variant, "is_insertion", False) else None))
     for candidate in getattr(effect, "realized_candidates", ()):
         for outcome in candidate.outcomes:
-            data["outcomes"].append(dict(
-                effect=_effect(outcome.effect), hypothesis=_plain(outcome.hypothesis),
+            outcomes.append(ORFOutcome(
+                effect=outcome.effect, hypothesis=outcome.hypothesis,
                 baseline=_product(view, outcome.baseline), mutant=_product(view, outcome.mutant),
                 probability=candidate.probability, phase_mass=candidate.phase_mass))
-    if not data["outcomes"] and getattr(variants[0], "is_structural", False):
+    if not outcomes and getattr(variants[0], "is_structural", False):
         baseline = RealizedTranscriptProduct(
             view, view.sequence, view.protein_sequence, start_codon_present=True,
             evidence={"genomic_positions": view.positions})
@@ -300,7 +408,7 @@ def _annotate_orf_variants(variants, record, transcript, *, genome_build,
             alternative = candidate.effect
             mt = getattr(alternative, "mutant_transcript", None)
             if mt is None or mt.cdna_sequence is None:
-                data["outcomes"].append(dict(effect=_effect(alternative),
+                outcomes.append(ORFOutcome(effect=alternative,
                     baseline=_product(view, baseline), mutant=None,
                     unresolved_reason="complete_structural_product_unavailable"))
                 continue
@@ -317,19 +425,22 @@ def _annotate_orf_variants(variants, record, transcript, *, genome_build,
                     strand = "+" if strand == "-" else "-"
                 origins.extend((source.contig, position, strand) for position in positions)
             if mt.edits or len(origins) != len(mt.cdna_sequence):
-                data["outcomes"].append(dict(effect=_effect(alternative),
+                outcomes.append(ORFOutcome(effect=alternative,
                     baseline=_product(view, baseline), mutant=None,
                     unresolved_reason="structural_base_origins_unavailable"))
                 continue
             product = RealizedTranscriptProduct(
                 view, mt.cdna_sequence, mt.mutant_protein_sequence,
                 evidence={**(mt.evidence or {}), "base_origins": origins})
-            observed = annotate_orf_product(view.reference_orf, product)
-            data["outcomes"].append(dict(effect=_effect(alternative),
-                baseline=_product(view, baseline), mutant=observed.get("product"),
+            observed = annotate_orf_rna_product(view.reference_orf, product)
+            outcomes.append(ORFOutcome(effect=alternative,
+                baseline=_product(view, baseline), mutant=observed.product,
                 source=getattr(candidate, "source", None),
-                unresolved_reason=observed.get("reason")))
-    return ORFAnnotation(record, effect, data, view.reference_orf)
+                unresolved_reason=observed.reason))
+    return ORFAnnotation(
+        record=record, effect=effect, reference=view.reference_orf,
+        variants=variants, outcomes=tuple(outcomes), catalogue_metadata=metadata,
+        variant_locations=tuple(variant_locations))
 
 
 def predict_orf_effects(variants, *, catalog=None, transcripts=None, **kwargs):
@@ -381,17 +492,14 @@ def predict_orf_effects(variants, *, catalog=None, transcripts=None, **kwargs):
             # There is no validated transcript to attach a MutationEffect to.
             # Keep the failure at the ORF-annotation boundary instead of
             # manufacturing a transcript or passing None to a transcript effect.
-            annotation = ORFAnnotation(record, None, dict(
-                schema="varcode.orf_annotation.v1", model=record.to_dict(),
-                catalogue_metadata=catalog.metadata, variants=_plain(variants),
-                effect=dict(type="Unresolved", mechanism="uorf_model_unavailable", reason=str(error)),
-                outcomes=[],
-                discovery=dict(status="reference_models_only", new_starts="not_assessed")))
+            annotation = ORFAnnotation(
+                record=record, effect=None, variants=variants,
+                catalogue_metadata=catalog.metadata, unresolved_reason=str(error))
         results.append(annotation)
     return tuple(results)
 
 
-def annotate_orf_product(reference, product):
+def annotate_orf_rna_product(reference, product):
     """Annotate an observed/reconstructed RNA product with mapped base ancestry.
 
     ``product`` is a :class:`RealizedTranscriptProduct`. Its evidence must carry
@@ -399,6 +507,10 @@ def annotate_orf_product(reference, product):
     These placements must come from the reconstruction, not peptide similarity.
     RNA support in ``product.evidence`` remains separate from reference MS.
     Only a uniquely retained complete reference start anchors translation.
+
+    Returns an :class:`ORFProductAnnotation` with native ``reference``,
+    ``effect`` and ``product`` attributes. Unresolved results have no product
+    and carry a ``reason``. Use ``to_dict()`` for JSON export.
     """
     view = _ORFTranscript(reference)
     record = reference.record
@@ -418,10 +530,9 @@ def annotate_orf_product(reference, product):
     starts = [i for i in range(len(positions) - 2)
               if positions[i:i + 3] == tuple(view.start_codon_positions)]
     if len(starts) != 1:
-        return dict(schema="varcode.orf_product.v1", model=record.to_dict(),
-                    reference=reference.to_dict(),
+        return ORFProductAnnotation(reference=reference,
                     status="unresolved", reason="reference_start_missing_or_duplicated",
-                    cdna_sequence=sequence, evidence=_plain(product.evidence))
+                    cdna_sequence=sequence, evidence=product.evidence)
     start = starts[0]
     table = codon_table_for_transcript(view)
     start_present = sequence[start:start + 3] in table.start_codons
@@ -441,10 +552,20 @@ def annotate_orf_product(reference, product):
     observed = RealizedTranscriptProduct(
         view, sequence, protein, product.junction_signature, start_present,
         {**product.evidence, "genomic_positions": positions})
-    return dict(schema="varcode.orf_product.v1", model=record.to_dict(),
-                    reference=reference.to_dict(),
-                status="conditional_translation", effect=_effect(effect),
-                product=_product(view, observed))
+    return ORFProductAnnotation(reference=reference,
+                status="conditional_translation", effect=effect,
+                product=_product(view, observed), cdna_sequence=sequence,
+                evidence=product.evidence)
+
+
+def annotate_orf_product(reference, product):
+    """Compatibility JSON export; prefer :func:`annotate_orf_rna_product`.
+
+    This original entry point returns a dictionary because downstream RNA
+    exporters embed its result directly in JSON. New Python callers should use
+    ``annotate_orf_rna_product`` and access the returned object's attributes.
+    """
+    return annotate_orf_rna_product(reference, product).to_dict()
 
 
 def annotate_orf_variants(variants, reference, **kwargs):
