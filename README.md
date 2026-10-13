@@ -11,21 +11,6 @@ overlapping transcript, Varcode reports the predicted consequence (for example
 a substitution such as `p.L159M`, a frameshift, or a gene fusion). Where the
 sequence can be determined, it also gives the mutant protein.
 
-## What it does
-
-- **Small variants:** SNVs, indels, and multi-base substitutions are classified
-  as coding changes (substitution, frameshift, premature stop, and others) or
-  by where they fall (UTR, intron, splice site, intergenic).
-- **Splice variants:** returns the possible outcomes, such as exon skipping,
-  intron retention, or a cryptic splice site, each with its own predicted
-  protein when it can be determined.
-- **Structural variants:** deletions, duplications, inversions, and breakends
-  get transcript consequences and gene-fusion candidates.
-- **Patient context (optional):** germline variants, phase from a phased VCF
-  or RNA reads, and observed RNA structures refine predictions.
-- **Sample checks:** screens a cohort for possible sample mix-ups using donor
-  genotypes and shared somatic mutations.
-
 ## Installation
 
 Requires Python 3.9 or later:
@@ -98,9 +83,31 @@ varcode --genome GRCh38 --vcf variants.vcf --output-csv effects.csv
 ## Learn more
 
 The [documentation](https://openvax.github.io/varcode/) starts with a
-[getting-started guide](https://openvax.github.io/varcode/getting_started/)
-and then covers sample filtering, splice and structural variants, germline
-and phasing, RNA evidence, and saving results.
+[getting-started guide](https://openvax.github.io/varcode/getting_started/).
+Guides by topic:
+
+- [Effect annotation](https://openvax.github.io/varcode/effect_annotation/):
+  SNVs, indels, and multi-base substitutions, classified as coding changes
+  (substitution, frameshift, premature stop, ...) or by location (UTR, intron,
+  splice site, intergenic).
+- [Splice variants](https://openvax.github.io/varcode/splice_variants/):
+  possible outcomes such as exon skipping, intron retention, or a cryptic
+  splice site, each with its own predicted protein when it can be determined.
+- [Structural variants](https://openvax.github.io/varcode/structural_variants/):
+  transcript consequences and gene-fusion candidates for deletions,
+  duplications, inversions, and breakends.
+- [Germline](https://openvax.github.io/varcode/germline/),
+  [phasing](https://openvax.github.io/varcode/phasing/), and
+  [observed RNA](https://openvax.github.io/varcode/rna_structures/): optional
+  patient context that refines predictions.
+- [Sample queries](https://openvax.github.io/varcode/genotype/) and
+  [identity checks](https://openvax.github.io/varcode/sample_identity/): select
+  a sample's variants, or screen a cohort for possible sample mix-ups.
+- [Saving results](https://openvax.github.io/varcode/csv/): CSV, JSON, and VCF
+  export, and what each keeps.
+- [Reference ORF consequences](https://openvax.github.io/varcode/uorf_annotations/):
+  with the optional `varcode[orf]` extra, `variant.orf_effects()` reports
+  effects on upstream and other catalogued ORFs alongside the ordinary effects.
 
 <a id="effect-types"></a>
 <a id="coordinate-system"></a>
@@ -119,9 +126,4 @@ For bugs or questions, [open an issue](https://github.com/openvax/varcode/issues
 Contributions are welcome; see
 [CONTRIBUTING.md](https://github.com/openvax/varcode/blob/main/CONTRIBUTING.md)
 and the [changelog](https://github.com/openvax/varcode/blob/main/CHANGELOG.md).
-
-### Upstream ORF annotations
-
-Install `varcode[uorf]` and call `variant.orf_effects()` for additive upstream
-reading-frame consequences and model-specific reference MS evidence. See
-[the uORF guide](docs/uorf_annotations.md), including mapped Sid RNA products.
+Varcode is released under the [Apache 2.0 license](https://github.com/openvax/varcode/blob/main/LICENSE).

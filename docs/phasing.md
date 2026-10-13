@@ -27,13 +27,15 @@ Use one resolver per sample. Phase-set tags are local to their source VCF:
 matching tags in independently produced tumor and normal files do not establish
 relative phase. A joint call set or molecular evidence is needed.
 
-Individual effects remain alongside joint results. The selected annotator owns
-the joint prediction: the default returns `HaplotypeEffect` for supported point
-edits, while `annotator="transcript_model"` returns classified phase/splice
-candidates. Unsupported groups are retained as `Unresolved` with their
-`variants` and `phase_source`; they are never silently dropped. The default
-declines joint germline composition rather than ignoring the patient baseline.
-See the [annotator contract](annotator_contract.md#joint-haplotypes).
+Individual effects remain alongside joint results. For supported point edits,
+the default annotator returns a joint `HaplotypeEffect`. Unsupported groups are
+retained as `Unresolved` with their `variants` and `phase_source`; they are
+never silently dropped. The default declines joint germline composition rather
+than ignoring the patient baseline.
+
+The selected annotator owns the joint prediction: the experimental
+`annotator="transcript_model"` returns classified phase/splice candidates
+instead. See the [annotator contract](annotator_contract.md#joint-haplotypes).
 
 For germline-aware somatic annotation, the resolver's collection should contain
 both sets of alleles, but call `somatic_variants.effects(germline=...,
@@ -53,24 +55,32 @@ effects = variants.effects(phase_resolver=phaser)
 
 Here `variants` is the loaded collection to annotate. Short- and long-read
 data can both leave phase unknown; coverage and linked alleles determine whether
-a pair is resolved. `RNAReadPhasingSource` sorts the fragments covering both
-loci into four combinations: both alt alleles, either variant's alt allele
-alone, or neither. A combination counts when it has at least `min_alt_reads`
-fragments and is more than reads showing the wrong allele (`phasing_error_rate`,
-1%) would leak into it, by a one-sided binomial test at
-`max_p_value_for_phasing` (0.05). The pair is cis when both alts are seen
-together and not each alone, and trans when each is seen alone and not
-together; anything else, including all three, is unknown. A variant that arose
-later on the other's copy, or next to a germline variant, is always with it,
-while the earlier one also appears alone; that is cis, not trans. The rule,
-from `varcode.rna_read_phasing.four_gamete_phase`, matches Isovar 1.39.7. A
-source that only reports co-observed
-partners establishes cis, and leaves every other pair unknown; sources that see
-reference alleles too, such as `RNAReadPhasingSource`, report trans through
-their own `in_cis`. Raw BAM phasing does not provide an assembled
-`MutantTranscript`. Assembly-backed sources can provide one; see the
-[source protocols](api_phasing.md#phasing).
-`ReadPhaseResolver` remains a compatibility name for `MolecularPhaseResolver`.
+a pair is resolved.
+
+`RNAReadPhasingSource` sorts the fragments covering both loci into four
+combinations: both alt alleles, either variant's alt allele alone, or neither.
+A combination counts when it has at least `min_alt_reads` fragments and more
+than reads showing the wrong allele would leak into it. The second condition is
+a one-sided binomial test at `max_p_value_for_phasing` (default 0.05), with
+error rate `phasing_error_rate` (default 1%). Then:
+
+- Cis: both alts are seen together, and not each alone.
+- Trans: each alt is seen alone, and not together.
+- Unknown: anything else, including alts seen both together and each alone.
+
+A variant that arose later on the other's copy, or next to a germline variant,
+is always seen with it, while the earlier one also appears alone; that is cis,
+not trans. The rule, from `varcode.rna_read_phasing.four_gamete_phase`, matches
+Isovar 1.39.7.
+
+A source that only reports co-observed partners establishes cis and leaves
+every other pair unknown. Sources that see reference alleles too, such as
+`RNAReadPhasingSource`, report trans through their own `in_cis`.
+
+Raw BAM phasing does not provide an assembled `MutantTranscript`.
+Assembly-backed sources can provide one; see the
+[source protocols](api_phasing.md#phasing). `ReadPhaseResolver` remains a
+compatibility name for `MolecularPhaseResolver`.
 
 <a id="rna-phase-from-isovar"></a>
 
@@ -212,13 +222,16 @@ effects = somatic_variants.effects(
 )
 ```
 
-Order: germline modifies the transcript first, phase collapses the
-candidate set next, and RNA refines multi-candidate effects. Splice
-mechanism sets are reconciled to observed mechanisms; other
-multi-outcome effects append observed-only candidates. Cross-axis key is
-`EffectCandidate.evidence["haplotype"]`, so an
-RNA observation tagged with the same haplotype tag aligns with the
-right germline-aware outcome.
+The inputs apply in order:
+
+1. Germline variants modify the transcript.
+2. Phase evidence collapses the candidate set.
+3. RNA evidence refines multi-candidate effects. Splice mechanism sets are
+   reconciled to the observed mechanisms; other multi-outcome effects gain
+   observed-only candidates.
+
+`EffectCandidate.evidence["haplotype"]` links the three: an RNA observation
+tagged with the same haplotype aligns with the matching germline-aware outcome.
 
 ## Known deletion haplotypes in RNA alignments
 
@@ -248,7 +261,7 @@ nonmatches remain unknown, not trans evidence. The current local mode supports
 nonoverlapping substitutions and deletions. Register competing combinations
 separately. Unregistered variants keep the ordinary CIGAR-based behavior.
 
-For the audited GRCh38 MAP2 example, the combination of `209694769 C>A`,
+For example, in GRCh38 MAP2 the combination of `209694769 C>A`,
 `209694770 T>G`, and the 28-base deletion at `209694773` gives the same local
 sequence under `28D`, `28N`, and `22D2M6D` alignments. An unrelated 19,449-base
 exon skip lacks the required local anchors and is not supporting evidence.

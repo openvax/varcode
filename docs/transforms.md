@@ -16,12 +16,9 @@ normalized = left_align_indels(variants)
 ```
 
 Choose the operation you need; these are independent examples. Pairing reduces
-the number of records and can change which partner's transcripts are annotated.
+the number of records and can change
+[which partner's transcripts are annotated](#which-partner-gets-annotated).
 Left-alignment depends on available reference sequence.
-
-- [Pair breakends](#pair_breakends): usage, pairing rules, and the
-  [partner coverage](#which-partner-gets-annotated).
-- [Left-align indels](#left_align_indels): reference requirements and partial shifts.
 
 ## `pair_breakends`
 
@@ -127,7 +124,7 @@ The number of records stays the same; their coordinates may change.
 
 Two pipelines that exchange variants need a canonical representation
 per indel. `CTT→T` at position 10 inside a `CT`-repeat means the
-same biological event as `CT→_` at position 8 — but tools that
+same biological event as `CT→_` at position 8, but tools that
 compare variants by `(contig, start, ref, alt)` see those
 representations as distinct. Left-alignment normalizes to the
 leftmost equivalent position.
@@ -149,7 +146,7 @@ vc = load_vcf("tumor.vcf", genome=g)
 vc = left_align_indels(vc)
 ```
 
-No `reference` parameter — `left_align_indels` reads bases via the
+There is no `reference` parameter: `left_align_indels` reads bases via the
 genome the variants already carry (see
 [varcode.Genome](api_variants.md#varcode.Genome)). Coverage depends on which
 genome shape was passed.

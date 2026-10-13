@@ -46,6 +46,7 @@ per transcript, and "top priority" means most severe, not most likely.
 - [Include patient germline variants](germline.md) or [phase linked variants](phasing.md)
 - [Attach observed RNA structures or Exacto protein predictions](rna_structures.md)
 - [Pair breakends or left-align indels](transforms.md)
+- [Effects on upstream and other reference ORFs](uorf_annotations.md) (optional `varcode[orf]` extra)
 
 <a id="go-deeper"></a>
 
