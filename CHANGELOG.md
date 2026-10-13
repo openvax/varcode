@@ -1,5 +1,16 @@
 # Change Log
 
+## v10.14.0 (2026-10-13)
+
+- Expose native `ORFAnnotation.outcomes`, with `ORFOutcome` effects/hypotheses
+  and baseline/mutant `ORFProduct` objects. Read sequences and initiation
+  contexts through attributes without serializing the annotation (#589).
+- Add `annotate_orf_rna_product` returning an `ORFProductAnnotation`. Preserve
+  `annotate_orf_product` dictionary returns for existing RNA JSON exporters.
+- Preserve annotation JSON exports and the `.data` export alias. Direct
+  `ORFAnnotation` construction now accepts native fields instead of a serialized
+  `data` dictionary. Examples explicitly select an ORF ID or iterate over ORFs.
+
 ## v10.13.0 (2026-10-12)
 
 - Use ORFdata's reference-context validation for RNA product overlays, accepting

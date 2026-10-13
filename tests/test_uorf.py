@@ -57,9 +57,10 @@ def test_tpst1_plus_four_retains_context_and_coding_consequences(native, catalog
 
 def test_kozak_snv_does_not_claim_coding_or_measured_translation(native):
     result = annotation(native, 66205480, "A", "C")
-    outcome, = result.to_dict()["outcomes"]
-    assert outcome["baseline"]["protein_sequence"] == outcome["mutant"]["protein_sequence"]
-    assert outcome["baseline"]["initiation_context"]["upstream"] != outcome["mutant"]["initiation_context"]["upstream"]
+    assert len(result.outcomes) == 1
+    outcome = result.outcomes[0]
+    assert outcome.baseline.protein_sequence == outcome.mutant.protein_sequence
+    assert outcome.baseline.initiation_context.upstream != outcome.mutant.initiation_context.upstream
 
 
 def test_ref_mismatch_and_assembly_fail(native):
@@ -201,6 +202,9 @@ def test_versioned_source_transcript_lookup_and_duplicate_rejection():
     annotation, = predict_orf_effects(variant, catalog=catalog, transcripts=[t])
     assert annotation.data["effect"]["type"] == "Unresolved"
     assert "version mismatch" in annotation.data["effect"]["reason"]
+    assert "version mismatch" in annotation.unresolved_reason
+    assert annotation.outcomes == ()
+    assert annotation.data == annotation.to_dict()
     assert annotation.effect is None and annotation.reference is None
     missing, = predict_orf_effects(variant, catalog=catalog, transcripts=[])
     assert missing.effect is None and missing.reference is None
@@ -215,8 +219,8 @@ def test_spliced_and_minus_strand_start_context(reverse, split):
     view = ORFTranscript(t.record(), t, genome_build="GRCh38")
     assert view.start_codon_positions == tuple(t.positions[3:6])
     a = annotate_uorf_variants([t.variant(6, "A", "G")], t.record(), t, genome_build="GRCh38")
-    outcomes = a.to_dict()["outcomes"]
-    assert any(x["mutant"]["protein_sequence"] == "MEPG" for x in outcomes)
+    outcomes = a.outcomes
+    assert any(x.mutant.protein_sequence == "MEPG" for x in outcomes)
 
 
 @pytest.mark.parametrize("offset,ref,alt,effect,protein", [
@@ -232,10 +236,11 @@ def test_sequence_consequences(offset, ref, alt, effect, protein):
     t = Transcript()
     a = annotate_uorf_variants([t.variant(offset, ref, alt)], t.record(), t, genome_build="GRCh38")
     assert type(a.effect).__name__ == effect
-    outcome, = a.to_dict()["outcomes"]
-    assert outcome["mutant"]["protein_sequence"] == protein
+    assert len(a.outcomes) == 1
+    outcome = a.outcomes[0]
+    assert outcome.mutant.protein_sequence == protein
     if effect == "FrameShift":
-        assert outcome["mutant"]["termination"] == "observed_stop"
+        assert outcome.mutant.termination == "observed_stop"
         assert a.effect.aa_mutation_start_offset < 4
 
 
@@ -244,11 +249,11 @@ def test_known_cis_and_unknown_germline_phase_export_all_outcomes():
     v = t.variant(6, "A", "G")
     partner = t.variant(7, "A", "C")
     a = annotate_uorf_variants([v, partner], t.record(), t, genome_build="GRCh38")
-    assert a.to_dict()["outcomes"][0]["mutant"]["protein_sequence"] == "MAPG"
+    assert a.outcomes[0].mutant.protein_sequence == "MAPG"
     uncertain = annotate_uorf_variants([v], t.record(), t, genome_build="GRCh38", germline_variants=[partner])
-    outcomes = uncertain.to_dict()["outcomes"]
-    assert {o["mutant"]["protein_sequence"] for o in outcomes} == {"MAPG", "MEPG"}
-    assert {tuple(state for _, state in o["hypothesis"]["phase"]) for o in outcomes} == {("cis",), ("trans",)}
+    outcomes = uncertain.outcomes
+    assert {o.mutant.protein_sequence for o in outcomes} == {"MAPG", "MEPG"}
+    assert {tuple(state for _, state in o.hypothesis.phase) for o in outcomes} == {("cis",), ("trans",)}
 
 
 def test_observed_product_missing_start_remains_unresolved(native):
@@ -265,13 +270,13 @@ def test_sid_dna_fusion_keeps_alternative_acceptors_and_native_ms_scope(catalog)
     variant = parse_symbolic_alt("7", 66205522, "G", "G[7:66127704[", genome=cached_release(95))
     result, = variant.orf_effects(catalog=catalog)
     assert type(result.effect).__name__ == "GeneFusion"
-    outcomes = result.to_dict()["outcomes"]
-    assert any(o["mutant"]["protein_sequence"] == "MPSRRRGGSSLIPGRMPILRFSVTTRYFSY"
-               for o in outcomes if o["mutant"])
-    assert len({o["mutant"]["protein_sequence"] for o in outcomes if o["mutant"]}) >= 3
+    outcomes = result.outcomes
+    assert any(o.mutant.protein_sequence == "MPSRRRGGSSLIPGRMPILRFSVTTRYFSY"
+               for o in outcomes if o.mutant)
+    assert len({o.mutant.protein_sequence for o in outcomes if o.mutant}) >= 3
     for outcome in outcomes:
-        if outcome["mutant"]:
-            assert not outcome["mutant"]["reference_evidence"]["reference_ms_support_on_retained_sequence"]
+        if outcome.mutant:
+            assert not outcome.mutant.reference_evidence["reference_ms_support_on_retained_sequence"]
     assert json.loads(json.dumps(result.to_dict()))["model"]["orf_id"] == "c7riboseqorf56"
 
 
@@ -282,9 +287,10 @@ def test_stop_loss_with_no_downstream_sequence_marks_boundary():
     t.end = t.positions[-1]
     t.exons = (SimpleNamespace(start=t.start, end=t.end),)
     a = annotate_uorf_variants([t.variant(15, "T", "C")], t.record(), t, genome_build="GRCh38")
-    outcome, = a.to_dict()["outcomes"]
-    assert outcome["mutant"]["protein_sequence"] == "MKPGQ"
-    assert outcome["mutant"]["termination"] == "sequence_boundary"
+    assert len(a.outcomes) == 1
+    outcome = a.outcomes[0]
+    assert outcome.mutant.protein_sequence == "MKPGQ"
+    assert outcome.mutant.termination == "sequence_boundary"
 
 
 def test_padded_insertion_ref_and_missing_intronic_ref_are_not_ignored():
@@ -350,4 +356,84 @@ def test_primary_source_lncRNA_orf_uses_same_variant_api():
     annotation = annotate_orf_variants([variant], reference)
     assert type(annotation.effect).__name__ == "PrematureStop"
     assert annotation.reference.transcript is transcript
-    assert annotation.to_dict()["outcomes"][0]["mutant"]["protein_sequence"] == "M"
+    assert annotation.outcomes[0].mutant.protein_sequence == "M"
+
+
+def test_native_orf_access_does_not_serialize(monkeypatch):
+    from varcode import ORFAnnotation, ORFOutcome, ORFProduct, annotate_orf_variants
+    from varcode.effect_hypotheses import EffectHypothesis
+    from varcode.effects import Substitution
+
+    def unexpected_export(*args, **kwargs):
+        raise AssertionError("Annotation access must not serialize")
+
+    t = Transcript()
+    reference = t.record().bind(t)
+    variant = t.variant(6, "A", "G")
+    monkeypatch.setattr(ORFAnnotation, "to_dict", unexpected_export)
+    monkeypatch.setattr(orfdata.ReferenceORF, "to_dict", unexpected_export)
+    monkeypatch.setattr("varcode.orf._plain", unexpected_export)
+    result = annotate_orf_variants([variant], reference)
+    assert result.reference is reference
+    assert result.variants == (variant,)
+    assert len(result.outcomes) == 1
+    outcome = result.outcomes[0]
+    assert isinstance(outcome, ORFOutcome)
+    assert isinstance(outcome.effect, Substitution)
+    assert isinstance(outcome.hypothesis, EffectHypothesis)
+    assert isinstance(outcome.mutant, ORFProduct)
+    assert outcome.baseline.protein_sequence == "MKPG"
+    assert outcome.mutant.protein_sequence == "MEPG"
+    assert outcome.mutant.initiation_context.start_codon == "ATG"
+
+
+def test_multiple_orfs_are_iterable_and_named_selection_is_explicit():
+    from varcode import annotate_orf_variants
+
+    t = Transcript()
+    first = t.record()
+    second = replace(first, orf_id="second-orf", coding_blocks=((118, 126),),
+                     protein_sequence="MK")
+    catalog = orfdata.ORFCatalog([first, second], dict(
+        genome_build="GRCh38", taxon_id=9606, species="human"))
+    annotations = [annotate_orf_variants([t.variant(6, "A", "G")], reference)
+                   for reference in catalog.for_transcript(t)]
+    assert {a.orf_id for a in annotations} == {"test-orf", "second-orf"}
+    selected = catalog.get("second-orf").bind(t)
+    assert selected.model.orf_id == "second-orf"
+    assert selected.protein_sequence == "MK"
+    with pytest.raises(KeyError):
+        catalog.get("missing")
+
+
+@pytest.mark.parametrize("retain_start", [True, False])
+def test_native_rna_annotation_and_legacy_json_export(retain_start, monkeypatch):
+    from varcode import annotate_orf_product, annotate_orf_rna_product
+
+    t = Transcript()
+    reference = t.record().bind(t)
+    origins = [(t.contig, p, t.strand) for p in t.positions] if retain_start else [None] * len(t.sequence)
+    product = RealizedTranscriptProduct(t, t.sequence, None, evidence={
+        "base_origins": origins, "rna_support": 10})
+    with monkeypatch.context() as patch:
+        def unexpected_export(*args, **kwargs):
+            raise AssertionError("RNA annotation must not serialize")
+        patch.setattr("varcode.orf._plain", unexpected_export)
+        result = annotate_orf_rna_product(reference, product)
+    assert result.reference is reference
+    assert result.cdna_sequence == t.sequence
+    assert result.evidence["rna_support"] == 10
+    if retain_start:
+        assert result.status == "conditional_translation"
+        assert result.product.protein_sequence == "MKPG"
+        assert result.product.evidence["rna_support"] == 10
+        assert result.effect is not None
+    else:
+        assert result.status == "unresolved"
+        assert result.reason == "reference_start_missing_or_duplicated"
+        assert result.product is None and result.effect is None
+        assert result.cdna_sequence == t.sequence
+        assert result.evidence["rna_support"] == 10
+    legacy = annotate_orf_product(reference, product)
+    assert isinstance(legacy, dict)
+    assert json.loads(json.dumps(legacy)) == json.loads(json.dumps(result.to_dict()))
