@@ -5,6 +5,7 @@ translation evidence. Canonical ``effects()`` results are unchanged.
 """
 
 from dataclasses import asdict, dataclass, field, fields, is_dataclass
+from hashlib import sha256
 from typing import TYPE_CHECKING, Mapping, Optional, Tuple
 
 from .effect_hypotheses import EffectHypothesis, RealizedTranscriptProduct
@@ -46,6 +47,14 @@ def _model_positions(record):
     return positions[::-1] if record.strand == "-" else positions
 
 
+def _orf_key(reference):
+    model, transcript = reference.model, reference.transcript
+    return (reference.context.key, transcript.id,
+            getattr(transcript, "versioned_id", transcript.id), model.source,
+            model.orf_id, tuple(model.coding_blocks), model.translation_table,
+            model.protein_sequence)
+
+
 class _ORFTranscript:
     """Private coding view used only by Varcode's transcript-model engine.
 
@@ -76,11 +85,21 @@ class _ORFTranscript:
         self.complete = True
         self.translation_table = reference.model.translation_table
         # Distinct coding models on one RNA must survive candidate deduplication.
-        self.id = "%s:%s" % (transcript.id, reference.model.orf_id)
-        self.name = self.id
+        self.id = "%s:orf:%s" % (transcript.id, sha256(repr(_orf_key(reference)).encode()).hexdigest())
+        self.name = "%s:%s" % (transcript.id, reference.model.orf_id)
 
     def __getattr__(self, name):
         return getattr(object.__getattribute__(self, "reference_transcript"), name)
+
+    def to_dict(self):
+        raise ValueError("A private ORF coding view cannot serialize as its parent transcript; "
+                         "use ORFAnnotation.to_dict()")
+
+    def __hash__(self):
+        return hash(self.id)
+
+    def __eq__(self, other):
+        return isinstance(other, _ORFTranscript) and self.id == other.id
 
 
 def _bind(record, transcript, genome_build, *, reference_context=None):

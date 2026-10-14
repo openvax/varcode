@@ -40,6 +40,12 @@ class MutationEffect(Serializable):
             return structural_effect_to_dict(self)
         return super().to_dict()
 
+    def to_json(self):
+        if self.orf is not None or self.orf_annotation is not None:
+            raise ValueError("Export extra ORF consequences with orf_annotation.to_dict(); "
+                             "generic effect serialization cannot preserve their coding models")
+        return super().to_json()
+
     @classmethod
     def from_dict(cls, state_dict):
         if "structural_effect_schema" in state_dict:
@@ -78,6 +84,19 @@ class MutationEffect(Serializable):
 
     transcript = None
     gene = None
+    orf_annotation = None
+
+    @property
+    def orf(self):
+        """The selected reference ORF, or None for ordinary annotation."""
+        if self.orf_annotation is not None:
+            return self.orf_annotation.reference
+        return getattr(self.transcript, "reference_orf", None)
+
+    @property
+    def reference_transcript(self):
+        """Original annotated RNA, including when an extra coding frame is used."""
+        return self.orf.transcript if self.orf is not None else self.transcript
 
     @property
     def original_protein_sequence(self):
@@ -107,15 +126,15 @@ class MutationEffect(Serializable):
 
     @property
     def transcript_name(self):
-        if self.transcript:
-            return self.transcript.name
+        if self.reference_transcript:
+            return self.reference_transcript.name
         else:
             return None
 
     @property
     def transcript_id(self):
-        if self.transcript:
-            return self.transcript.id
+        if self.reference_transcript:
+            return self.reference_transcript.id
         else:
             return None
 
@@ -327,11 +346,13 @@ class TranscriptMutationEffect(Intragenic):
         return result
 
     def __str__(self):
-        return "%s(variant=%s, transcript_name=%s, transcript_id=%s)" % (
+        orf_label = "" if self.orf is None else ", orf_id=%s" % self.orf.model.orf_id
+        return "%s(variant=%s, transcript_name=%s, transcript_id=%s%s)" % (
             self.__class__.__name__,
             self.variant,
-            self.transcript.name,
-            self.transcript.id)
+            self.transcript_name,
+            self.transcript_id,
+            orf_label)
 
 
 class GermlineAlleleOverlap(TranscriptMutationEffect):
@@ -1005,10 +1026,12 @@ class CodingMutation(Exonic):
     def __str__(self):
         fields = [
             ("variant", self.variant),
-            ("transcript_name", self.transcript.name),
-            ("transcript_id", self.transcript.id),
+            ("transcript_name", self.transcript_name),
+            ("transcript_id", self.transcript_id),
             ("effect_description", self.short_description)
         ]
+        if self.orf is not None:
+            fields.append(("orf_id", self.orf.model.orf_id))
         fields_str = ", ".join([
             "%s=%s" % (field_name, field_value)
             for (field_name, field_value)

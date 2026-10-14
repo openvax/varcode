@@ -7,6 +7,64 @@ This includes upstream and overlapping ORFs, internal/downstream frames, and
 ORFs on transcripts annotated as noncoding. The bundled catalogue is human
 GRCh38; explicit species-specific catalogues use the same API.
 
+## Annotate ordinary and extra ORFs together
+
+Supply a catalogue to the usual effects API. Varcode finds the overlapping
+records and resolves their transcripts using the variant's genome:
+
+```python
+from orfdata import load_catalog
+from pyensembl import cached_release
+from varcode import Variant
+
+genome = cached_release(95)  # provision the reference before annotation
+variant = Variant("7", 66205486, "C", "G", genome=genome)
+effects = variant.effects(extra_orfs=load_catalog())
+for annotation in effects.orf_annotations:
+    print(annotation.orf_id, annotation.effect.short_description)
+    for outcome in annotation.outcomes:
+        if outcome.mutant is not None:
+            print(outcome.mutant.protein_sequence)
+```
+
+This returns the ordinary UTR consequences alongside the `p.P2A` consequence in
+`c7riboseqorf56`. Omitting `extra_orfs` retains ordinary annotation without loading
+ORFdata. `extra_orfs` also accepts a bound reference ORF or an iterable of bound
+ORFs, including ORFdata collections; `VariantCollection.effects(extra_orfs=...)`
+reuses an iterable across all variants. Several ORFs on one RNA remain separate.
+No MS threshold is imposed by Varcode.
+
+Added entries are ordinary Varcode effect classes and participate in collection
+sorting and filtering. Their `effect.orf` is the bound reference;
+`effect.reference_transcript` is its original PyEnsembl RNA. The existing engine
+uses a private coding view in `effect.transcript`; its ID distinguishes the ORF
+for candidate grouping. Public `effect.transcript_id` and collection grouping /
+expression lookups use the original RNA identity. `effect.orf_annotation` holds native products, source evidence,
+and initiation-context changes. `effects.orf_annotations` selects these detailed
+annotations in collection order, including failures. Export them with
+`annotation.to_dict()` when JSON is needed. Generic effect/collection JSON
+serialization rejects these entries because its schema cannot preserve their
+coding models. Dataframe/CSV summaries add `orf_id`, `orf_source` and
+`orf_unresolved_reason`; `from_csv` rejects ORF rows rather than recomputing them
+against the ordinary CDS. Full generic round trips are tracked in #593.
+
+Bound inputs must match the variant genome's reference and annotation context.
+Catalogue records resolve against that genome and retain their source identities.
+Reference-scope mismatches raise even with `raise_on_error=False`; per-record
+binding/calculation errors raise by default and become `Failure` entries with
+`orf_annotation.unresolved_reason` when that flag is false. ORFdata collection
+exclusions overlapping the variant are reported in the same way.
+
+The `annotator` argument selects ordinary transcript annotation. Extra ORFs reuse
+Varcode's existing transcript-model engine, including patient germline hypotheses
+and known-cis collection effects. DNA phase queries use the original RNA identity.
+Observed RNA outcomes for the ordinary CDS cannot be directly reused for an extra
+ORF: such observations raise or produce a `Failure` until explicitly mapped with
+`annotate_orf_rna_product`, described below. This interface does not discover new
+ORFs or infer IRES activity, and unsupported translation models remain explicit.
+
+## Work with a selected reference and its products
+
 ```python
 from pyensembl import cached_release
 from orfdata import load_catalog

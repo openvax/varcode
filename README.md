@@ -106,8 +106,10 @@ Guides by topic:
 - [Saving results](https://openvax.github.io/varcode/csv/): CSV, JSON, and VCF
   export, and what each keeps.
 - [Reference ORF consequences](https://openvax.github.io/varcode/uorf_annotations/):
-  with the optional `varcode[orf]` extra, `variant.orf_effects()` reports
-  effects on upstream and other catalogued ORFs alongside the ordinary effects.
+  install `varcode[orf]` and pass an ORFdata catalogue or bound ORFs to
+  `variant.effects(extra_orfs=...)` for ordinary and additional coding
+  consequences together. Access the reference through `effect.orf` and native
+  outcomes through `effect.orf_annotation`.
 
 <a id="effect-types"></a>
 <a id="coordinate-system"></a>
