@@ -40,6 +40,8 @@ def test_native_utr_and_coding_consequences_in_one_call(native, input_kind):
     assert effect.reference_transcript is effect.orf.transcript
     assert effect.reference_transcript.id == reference.transcript.id
     assert effect.transcript_id == reference.transcript.id
+    assert "orf_id=c7riboseqorf56" in str(effect)
+    assert ":orf:" not in str(effect)
     assert effect.reference_transcript.protein_sequence == reference.transcript.protein_sequence
     assert effects.top_priority_effect() is effect
     assert effects.annotator == ordinary.annotator

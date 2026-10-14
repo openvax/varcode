@@ -346,11 +346,13 @@ class TranscriptMutationEffect(Intragenic):
         return result
 
     def __str__(self):
-        return "%s(variant=%s, transcript_name=%s, transcript_id=%s)" % (
+        orf_label = "" if self.orf is None else ", orf_id=%s" % self.orf.model.orf_id
+        return "%s(variant=%s, transcript_name=%s, transcript_id=%s%s)" % (
             self.__class__.__name__,
             self.variant,
-            self.transcript.name,
-            self.transcript.id)
+            self.transcript_name,
+            self.transcript_id,
+            orf_label)
 
 
 class GermlineAlleleOverlap(TranscriptMutationEffect):
@@ -1024,10 +1026,12 @@ class CodingMutation(Exonic):
     def __str__(self):
         fields = [
             ("variant", self.variant),
-            ("transcript_name", self.transcript.name),
-            ("transcript_id", self.transcript.id),
+            ("transcript_name", self.transcript_name),
+            ("transcript_id", self.transcript_id),
             ("effect_description", self.short_description)
         ]
+        if self.orf is not None:
+            fields.append(("orf_id", self.orf.model.orf_id))
         fields_str = ", ".join([
             "%s=%s" % (field_name, field_value)
             for (field_name, field_value)
