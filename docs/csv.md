@@ -101,12 +101,17 @@ predictions; API compatibility is not a guarantee of identical scientific output
 | Preserves all effect-specific fields | No | Depends on the effect type and serialization support |
 
 JSON (`to_json` / `from_json`) avoids CSV's re-annotation for supported objects.
-Structural results use a versioned effect graph: self candidates and shared
-effect links survive, as do primary, cryptic, splice, and external candidates,
-their source/evidence fields, fusion partners, affected exons, and attached
-mutant transcript sequences/segments. Collection annotator provenance is also
-preserved. Deserialization restores recorded predictions without recomputing
-them. Older Varcode versions cannot read this graph format.
+Deserialization restores recorded predictions without recomputing them, and
+collection annotator provenance is preserved.
+
+Structural results use a versioned effect graph, which older Varcode versions
+cannot read. These survive a round trip:
+
+- Self candidates and shared effect links.
+- Primary, cryptic, splice, and external candidates, with their
+  source/evidence fields.
+- Fusion partners and affected exons.
+- Attached mutant transcript sequences and segments.
 
 This remains an object archive with Python class and reference-dataset
 dependencies. Arbitrary extra attributes and third-party sequence providers

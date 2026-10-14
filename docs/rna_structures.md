@@ -32,37 +32,28 @@ for candidate in rna.candidates:
     model_id = candidate.evidence["transcript_model_id"]
 ```
 
-`variants_by_id` maps **Exacto DNA call IDs**, not assumed VCF record IDs, to
+`variants_by_id` maps Exacto DNA call IDs, not assumed VCF record IDs, to
 already loaded variants. Only these IDs are selected from the integration file.
-The model key includes both `transcript_model_id` and the reference transcript
-ID set. Different models/reference interpretations and their DNA links are kept;
-duplicate integration rows do not duplicate a candidate.
 
-The adapter follows Exacto's `index` ordering and inclusive `read_start` /
-`read_end` base-row coordinates. Sequences already run 5' to 3' even for reverse
-strand genes: they are never reverse-complemented a second time. Event rows
-preserve splice structure but do not invent missing bases. The complete original
-structure and integration rows are in `candidate.evidence` and the mutant
-transcript's evidence. Row counts are **not** supporting-read counts.
+Imported models are keyed by both `transcript_model_id` and the set of
+reference transcript IDs. Different models or reference interpretations, and
+their DNA links, are kept; duplicate integration rows do not duplicate a
+candidate. The complete original structure and integration rows are
+in `candidate.evidence` and the mutant transcript's evidence. Row counts are
+**not** supporting-read counts.
 
-The imported model's `reference_segments` maps matching, sense-oriented exonic
-bases to the row's annotated transcript. Genomic position and reference cDNA
-sequence must agree; a `match` label alone is insufficient. Mismatches,
-insertions, intronic/intergenic bases and antisense sequence remain observed
-sequence segments. No reference sequence is substituted or appended, and the
-original versioned transcript IDs remain in the evidence.
+The adapter handles linear, two-locus, SV-linked models with an annotated sense
+5' anchor:
 
-Exacto uses inclusive genomic bounds for matching runs and flanking genomic
-positions for mismatches and insertions. Both strands follow this convention;
-the importer excludes those flanks when validating the observed path.
+- A missing or antisense 3' annotation gives `TranslocationToIntergenic`, whose
+  existing meaning includes non-sense joins.
+- Unknown transcript IDs and incomplete or unsupported structures raise errors.
+- Other Exacto DNA/RNA variant formats, circular RNA, and multi-gene paths are
+  not implemented. They remain in the broader
+  [#260](https://github.com/openvax/varcode/issues/260) roadmap.
 
-This is a deliberately limited adapter for linear, two-locus, SV-linked models
-with an annotated sense 5' anchor. A missing or antisense 3' annotation gives
-`TranslocationToIntergenic`, whose existing meaning includes non-sense joins.
-Unknown transcript IDs and incomplete/unsupported structures raise errors.
-This does not implement all Exacto DNA/RNA variant formats, circular RNA,
-or multi-gene paths. Those remain in the broader
-[#260](https://github.com/openvax/varcode/issues/260) roadmap.
+For how Exacto rows and coordinates are converted, see
+[Exacto format details](#exacto-format-details).
 
 ## Other RNA producers
 
@@ -212,16 +203,22 @@ splice path survive. The reference build, gene, contig and strand must agree.
 Different transcript pairs remain distinct even when their proteins match.
 An explicitly empty list of choices produces no hypotheses for an eligible end.
 
-Each result has source `varcode_reference_completion`. Its `reference_completion`
-evidence records selected transcript IDs, the half-open `observed_span` in
-completed cDNA, and `assumed_spans` with their cDNA and reference coordinates.
-Assumed segments are labeled `assumed_reference_five_prime` or
-`assumed_reference_three_prime`. Original candidate/model evidence and peptide
-are retained in `observed_evidence`, `observed_model_evidence` and
-`observed_protein_sequence`; `observed_source` identifies the producer. Read
-counts and abundance stay nested with the original observation. They provide
-no extra support for a completed isoform, and must not be summed across its
-alternative completions. Candidate JSON serialization preserves this provenance.
+Each result has source `varcode_reference_completion` and records its
+provenance:
+
+- `reference_completion` evidence holds the selected transcript IDs, the
+  half-open `observed_span` in completed cDNA, and `assumed_spans` with their
+  cDNA and reference coordinates.
+- Assumed segments are labeled `assumed_reference_five_prime` or
+  `assumed_reference_three_prime`.
+- The original candidate and model evidence and peptide are retained in
+  `observed_evidence`, `observed_model_evidence` and
+  `observed_protein_sequence`; `observed_source` identifies the producer.
+- Candidate JSON serialization preserves this provenance.
+
+Read counts and abundance stay nested with the original observation. They
+provide no extra support for a completed isoform, and must not be summed across
+its alternative completions.
 
 RNA producers can set `rna_five_prime_complete=True` and/or
 `rna_three_prime_complete=True` in candidate or model evidence when they have
@@ -231,12 +228,14 @@ alone do not establish transcript ends; native rows retain their original scope.
 
 Translation starts only at the retained annotated 5′ initiator, recorded as
 `initiation_status="assumed_reference_start"`. There is no search for a new
-internal/upstream ATG. The original Exacto ORF is unchanged, even when its
-reading frame differs; `observed_orf_frame` reports its frame relative to the
-completed CDS when both starts are known. A mapped start can span observed and
-assumed segments. Missing/partial start annotation or ambiguous coding bases
-leave the protein None. A missing stop gives `protein_completeness="partial_end"`;
-adding a reference 3′ end does not guarantee an in-frame stop after a frameshift.
+internal/upstream ATG. A mapped start can span observed and assumed segments.
+The original Exacto ORF is unchanged, even when its reading frame differs;
+`observed_orf_frame` reports its frame relative to the completed CDS when both
+starts are known.
+
+Missing/partial start annotation or ambiguous coding bases leave the protein
+None. A missing stop gives `protein_completeness="partial_end"`; adding a
+reference 3′ end does not guarantee an in-frame stop after a frameshift.
 Existing transcript-specific genetic codes and mapped selenocysteine/3′-UTR
 rules apply, including explicit uncertain Sec offsets in the hypothesis evidence.
 
@@ -250,6 +249,24 @@ initiation, translation, full-length RNA, tumor specificity or abundance.
 This distinction follows the producer's [observed-sequence ORF selection](https://github.com/pirl-unc/exacto/blob/307c08670d5e706734bddf393bcebc84db497f9f/exacto/exacto-translator/src/algorithms/translation.rs),
 the [experimental dependence of initiation on sequence context](https://pubmed.ncbi.nlm.nih.gov/2601709/),
 and the [3′-UTR requirement for selenocysteine decoding](https://www.nature.com/articles/353273a0).
+
+## Exacto format details
+
+The adapter follows Exacto's `index` ordering and inclusive `read_start` /
+`read_end` base-row coordinates. Sequences already run 5' to 3' even for
+reverse-strand genes, so they are never reverse-complemented a second time.
+Event rows preserve splice structure but do not invent missing bases.
+
+Exacto uses inclusive genomic bounds for matching runs and flanking genomic
+positions for mismatches and insertions, on both strands. The importer excludes
+those flanks when validating the observed path.
+
+The imported model's `reference_segments` maps matching, sense-oriented exonic
+bases to the row's annotated transcript. Genomic position and reference cDNA
+sequence must agree; a `match` label alone is insufficient. Mismatches,
+insertions, intronic/intergenic bases and antisense sequence remain observed
+sequence segments. No reference sequence is substituted or appended, and the
+original versioned transcript IDs remain in the evidence.
 
 Not every RNA junction produces a coding fusion. In the osteosarcoma
 regression fixtures, GABBR1 joins sequence upstream of SLC29A1, OTUD7A joins

@@ -13,6 +13,11 @@
   internal ORF identities across sources. Label ORF dataframe/CSV rows and
   prevent generic serialization from silently losing their coding models (#593).
 
+## v10.14.1 (2026-10-13)
+
+- Reorganize the README and user guides, move maintainer audits to `notes/`,
+  and repair their links to the CSV/VCF and germline documentation.
+
 ## v10.14.0 (2026-10-13)
 
 - Expose native `ORFAnnotation.outcomes`, with `ORFOutcome` effects/hypotheses

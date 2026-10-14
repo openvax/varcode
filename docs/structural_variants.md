@@ -64,11 +64,8 @@ Also note:
   `mutant_transcript` holds the modeled cDNA, translated protein, and evidence.
 - A DNA rearrangement does not by itself establish a complete expressed fusion
   protein. Sequence may be unknown or partial; `None` is not an unchanged protein.
-
-**Migrating to 10.0:** `LargeDeletion`, `LargeDuplication`, and `Inversion` remain
-importable for legacy objects but are no longer emitted. Read the DNA event from
-`effect.variant.sv_type`; use the consequence or its candidates for protein impact.
-Not every SV effect has `.candidates`: check `isinstance(effect, MultiOutcomeEffect)`.
+- Not every SV effect has `.candidates`: check
+  `isinstance(effect, MultiOutcomeEffect)`.
 
 ## Filtering by protein change
 
@@ -195,6 +192,13 @@ and `junction_insertion_status` in its evidence.
   effects (promoter or enhancer hijacking) aren't modeled.
 - Annotating multi-megabase spans can be slow
   ([#407](https://github.com/openvax/varcode/issues/407)).
+
+## Migrating to 10.0
+
+`LargeDeletion`, `LargeDuplication`, and `Inversion` remain importable for
+legacy objects but are no longer emitted. Read the DNA event from
+`effect.variant.sv_type`; use the consequence or its candidates for protein
+impact.
 
 <a id="contents"></a>
 

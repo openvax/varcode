@@ -10,17 +10,8 @@ use Python 3.9 or later.
 pip install varcode
 ```
 
-Varcode requires PyEnsembl 2.24.1+ and gtfparse 3.0.2+, and supports pandas
-2.2.2+ and 3.x. To upgrade an existing environment to pandas 3, use Python
-3.11 or later and run:
-
-```bash
-pip install --upgrade varcode pyensembl 'gtfparse>=3.0.2,<4' 'pandas>=3,<4'
-```
-
-Python 3.9 and 3.10 remain supported with pandas 2.
-Environments shared with Topiary require Topiary 5.94.2 or later for its
-gtfparse 3 support.
+If you are upgrading an existing environment, see
+[dependency versions](#dependency-versions).
 
 ## Reference data
 
@@ -37,13 +28,18 @@ release for your own data.
 
 For your own data, use an annotation that matches the genome build your
 variants were called against. GRCh37 input, for example, needs a GRCh37
-annotation such as Ensembl 75, installed separately. Pass a release number
-(`genome=81`), an assembly with a release (`genome="GRCh38:93"` or
-`"GRCh38.93"`), or a
-PyEnsembl genome object to pin the annotation exactly. An assembly name alone,
-such as `genome="GRCh38"`, uses the most recent installed release of that
-assembly. A release that does not provide the assembly, such as `"GRCh38:75"`,
-is an error.
+annotation such as Ensembl 75, installed separately.
+
+To pin the annotation exactly, pass `genome=` one of:
+
+- A release number, such as `genome=81`.
+- An assembly with a release, such as `genome="GRCh38:93"` or `"GRCh38.93"`.
+  A release that does not provide the assembly, such as `"GRCh38:75"`, is an
+  error.
+- A PyEnsembl genome object.
+
+An assembly name alone, such as `genome="GRCh38"`, uses the most recent
+installed release of that assembly.
 
 ## Annotate one variant
 
@@ -167,6 +163,21 @@ Genomic positions are 1-based and ranges are inclusive. Specify variant alleles
 on the reference genome's forward strand, even for genes on the reverse strand.
 Protein/cDNA offsets exposed for Python slicing are 0-based. Structural records
 also distinguish [junction coordinates from affected spans](sv_reference.md#alleles-coordinates-and-exports).
+
+## Dependency versions
+
+Varcode requires PyEnsembl 2.24.1+ and gtfparse 3.0.2+, and supports pandas
+2.2.2+ and 3.x. Python 3.9 and 3.10 remain supported with pandas 2.
+
+To upgrade an existing environment to pandas 3, use Python 3.11 or later and
+run:
+
+```bash
+pip install --upgrade varcode pyensembl 'gtfparse>=3.0.2,<4' 'pandas>=3,<4'
+```
+
+Environments shared with Topiary require Topiary 5.94.2 or later for its
+gtfparse 3 support.
 
 ## Next steps
 

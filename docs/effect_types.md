@@ -8,7 +8,7 @@ from the source docstrings; this is reference material, not a required first rea
 
 ## Effect families
 
-| Question | Examples |
+| Family | Examples |
 |---|---|
 | [Coding changes](#coding-effects) | `Substitution`, `Insertion`, `Deletion`, `FrameShift`, `PrematureStop`, `Silent` |
 | [Noncoding and untranslated regions](#noncoding-effects) | `Intronic`, `FivePrimeUTR`, `ThreePrimeUTR`, `NoncodingTranscript`, `Intergenic` |
@@ -20,23 +20,19 @@ from the source docstrings; this is reference material, not a required first rea
 
 These labels describe predictions and their limits, not clinical significance.
 
-Two distinctions are worth keeping in mind while reading:
+Some effects describe a change to the protein; others only say where the
+variant landed. Coding effects (`Substitution`, `FrameShift`, `PrematureStop`,
+...) and splice mechanism effects (`NormalSplicing`, `ExonSkipping`, ...)
+describe a protein change. Splice-signal disruption effects (`SpliceDonor`,
+`SpliceAcceptor`, `IntronicSpliceSite`, `ExonicSpliceSite`, all subclasses of
+`SpliceSite`) and region effects (`Intronic`, `FivePrimeUTR`, ...) carry no
+protein consequence on their own.
 
-- **Effects that carry a protein consequence vs. location-only
-  effects.** Coding effects (`Substitution`, `FrameShift`,
-  `PrematureStop`, …) and the splice *mechanism* effects
-  (`NormalSplicing`, `ExonSkipping`, …) describe a change to the
-  protein. The splice-signal *disruption* effects (`SpliceDonor`,
-  `SpliceAcceptor`, `IntronicSpliceSite`, `ExonicSpliceSite`, all
-  sharing the `SpliceSite` base) and the region effects (`Intronic`,
-  `FivePrimeUTR`, …) describe *where* a variant landed and carry no
-  protein consequence on their own.
-- **Single effects vs. multi-outcome containers.** Most effects are a
-  single answer. `MultiOutcomeEffect` subclasses (`SpliceOutcomeSet`,
-  `ExonicSpliceSite`, the structural-variant effects, `HaplotypeEffect`,
-  `PhaseCandidateSet`) bundle several candidate effects when the
-  protein-level outcome isn't deterministic; each exposes
-  `.candidates`, `.most_likely_effect`, and `.highest_priority_effect`.
+Most effects are a single answer. Subclasses of `MultiOutcomeEffect`
+(`SpliceOutcomeSet`, `ExonicSpliceSite`, the structural-variant effects,
+`HaplotypeEffect`, `PhaseCandidateSet`) hold several candidate effects when the
+protein-level outcome isn't determined. Each provides `.candidates`,
+`.most_likely_effect`, and `.highest_priority_effect`.
 
 Severity ordering across types is set by
 [`effect_priority`](api_effects.md#varcode.effect_priority).
