@@ -1,0 +1,221 @@
+"""One effect collection retains ordinary and additional coding consequences."""
+
+from dataclasses import replace
+from types import SimpleNamespace
+
+import pytest
+from pyensembl import cached_release
+
+from varcode import Variant, VariantCollection
+from varcode.effects import Failure, Substitution
+from varcode.germline import GermlineContext
+from .test_uorf import Transcript
+
+orfdata = pytest.importorskip("orfdata")
+
+
+@pytest.fixture(scope="module")
+def native():
+    catalog = orfdata.load_catalog()
+    record = catalog.get("c7riboseqorf56")
+    genome = cached_release(95)
+    transcript = genome.transcript_by_id(record.transcript_id)
+    variant = Variant("7", 66205486, "C", "G", genome=genome)
+    return variant, record.bind(transcript), orfdata.ORFCatalog([record], catalog.metadata)
+
+
+@pytest.mark.parametrize("input_kind", ["catalog", "bound", "iterable"])
+def test_native_utr_and_coding_consequences_in_one_call(native, input_kind):
+    variant, reference, catalog = native
+    supplied = {"catalog": catalog, "bound": reference, "iterable": [reference]}[input_kind]
+    ordinary = variant.effects()
+    effects = variant.effects(extra_orfs=supplied)
+    assert [(type(e), e.transcript_id) for e in effects if e.orf_annotation is None] == [
+        (type(e), e.transcript_id) for e in ordinary]
+    extra = [e for e in effects if e.orf is not None]
+    assert len(extra) == 1
+    effect = extra[0]
+    assert isinstance(effect, Substitution)
+    assert effect.short_description == "p.P2A"
+    assert effect.reference_transcript is effect.orf.transcript
+    assert effect.reference_transcript.id == reference.transcript.id
+    assert effect.transcript_id == reference.transcript.id
+    assert effect.reference_transcript.protein_sequence == reference.transcript.protein_sequence
+    assert effects.top_priority_effect() is effect
+    assert effects.annotator == ordinary.annotator
+    assert effects.annotator_version == ordinary.annotator_version
+    assert effect in effects.drop_silent_and_noncoding()
+    assert effects.orf_annotations == (effect.orf_annotation,)
+    outcome = effect.orf_annotation.outcomes[0]
+    assert outcome.mutant.protein_sequence.startswith("MASRRR")
+    assert outcome.mutant.reference_evidence["mutant_translation_evidence"] == "not_assessed"
+    assert effect.orf_annotation.to_dict()["model"]["orf_id"] == "c7riboseqorf56"
+    assert effect.annotator == "transcript_model"
+    assert effect in effects.groupby_transcript_id()[reference.transcript.id]
+    assert effect in effects.filter_by_transcript_expression({reference.transcript.id: 10})
+    assert hash(effect) == hash(variant.effects(extra_orfs=supplied).top_priority_effect())
+
+
+def synthetic(reverse=False, split=False):
+    transcript = Transcript(reverse=reverse, split=split)
+    transcript.genome = cached_release(95)
+    transcript.biotype = "lncRNA"
+    transcript.is_protein_coding = False
+    return transcript
+
+
+@pytest.mark.parametrize("orf_type", ["uORF", "uoORF", "intORF", "dORF", "doORF", "lncRNA", "processed_transcript"])
+@pytest.mark.parametrize("reverse,split", [(False, False), (True, False), (False, True), (True, True)])
+def test_source_classes_and_noncoding_hosts_share_the_same_path(orf_type, reverse, split):
+    transcript = synthetic(reverse, split)
+    record = replace(transcript.record(), biotype=orf_type)
+    reference = record.bind(transcript)
+    variant = transcript.variant(6, "A", "G")
+    result = variant.effects(extra_orfs=[reference])
+    annotation = result.orf_annotations[0]
+    assert annotation.reference is reference
+    assert annotation.outcomes[0].mutant.protein_sequence == "MEPG"
+    assert not transcript.is_protein_coding
+    assert annotation.effect.reference_transcript is transcript
+
+
+def test_two_overlapping_orfs_and_duplicate_inputs():
+    transcript = synthetic()
+    transcript.sequence = "CCCATGATGCCCGGGTAAATGAAATAA"
+    first = replace(transcript.record(), protein_sequence="MMPG")
+    second = replace(first, orf_id="second", coding_blocks=((106, 117),), protein_sequence="MPG")
+    references = [first.bind(transcript), second.bind(transcript)]
+    result = transcript.variant(9, "C", "G").effects(extra_orfs=[*references, references[0]])
+    assert {a.orf_id for a in result.orf_annotations} == {first.orf_id, second.orf_id}
+    assert len(result.orf_annotations) == 2
+    assert {a.outcomes[0].mutant.protein_sequence for a in result.orf_annotations} == {"MMAG", "MAG"}
+
+
+def test_collection_reuses_generator_for_every_variant(native):
+    variant, reference, _ = native
+    partner = Variant("7", 66205487, "C", "T", genome=variant.genome)
+    result = VariantCollection([variant, partner]).effects(extra_orfs=iter([reference]))
+    assert len(result.orf_annotations) == 2
+    assert {a.variants[0] for a in result.orf_annotations} == {variant, partner}
+    assert len(result.groupby_variant()) == 2
+
+
+def test_same_identifier_in_different_sources_keeps_distinct_cis_groups():
+    transcript = synthetic()
+    original = transcript.record()
+    references = [replace(original, source=source).bind(transcript) for source in ("one", "two")]
+    variants = VariantCollection([transcript.variant(6, "A", "G"), transcript.variant(7, "A", "C")])
+    resolver = SimpleNamespace(in_cis=lambda *args, **kwargs: True)
+    effects = variants.effects(extra_orfs=references, phase_resolver=resolver)
+    joint = [a for a in effects.orf_annotations if len(a.variants) == 2]
+    assert len(joint) == 2
+    assert {a.reference.model.source for a in joint} == {"one", "two"}
+
+
+def test_scope_validation_includes_annotation_and_empty_collections(native):
+    variant, reference, catalog = native
+    earlier = Variant("7", variant.start, variant.ref, variant.alt, genome=cached_release(81))
+    with pytest.raises(ValueError, match="annotation_version"):
+        earlier.effects(extra_orfs=[reference], raise_on_error=False)
+    # A collection's context still matters when it contains no bound ORFs.
+    class EmptyScoped:
+        def __iter__(self):
+            return iter(())
+    empty = EmptyScoped()
+    empty.reference = reference.context
+    with pytest.raises(ValueError, match="annotation_version"):
+        earlier.effects(extra_orfs=empty)
+    wrong = orfdata.ORFCatalog([], {**catalog.metadata, "genome_build": "GRCh37"})
+    with pytest.raises(ValueError, match="assembly"):
+        variant.effects(extra_orfs=wrong)
+
+
+def test_binding_failure_retains_source_record(native):
+    variant, reference, catalog = native
+    missing = replace(reference.record, transcript_id="ENST00000000000", initiation_context=None)
+    supplied = orfdata.ORFCatalog([missing], catalog.metadata)
+    with pytest.raises(ValueError):
+        variant.effects(extra_orfs=supplied)
+    effects = variant.effects(extra_orfs=supplied, raise_on_error=False)
+    failures = [e for e in effects if e.orf_annotation is not None]
+    assert len(failures) == 1 and isinstance(failures[0], Failure)
+    annotation = failures[0].orf_annotation
+    assert annotation.record is missing
+    assert annotation.unresolved_reason
+    assert annotation.reference is None and annotation.effect is None
+
+
+def test_collection_exclusions_remain_visible(native):
+    variant, reference, catalog = native
+    class Excluded:
+        def __iter__(self):
+            return iter(())
+    supplied = Excluded()
+    supplied.reference = reference.context
+    supplied.catalog = catalog
+    supplied.excluded = (SimpleNamespace(orf_id=reference.model.orf_id, reason="unavailable path"),)
+    result = variant.effects(extra_orfs=supplied, raise_on_error=False)
+    assert result.orf_annotations[0].unresolved_reason == "unavailable path"
+
+
+def test_patient_baseline_keeps_unknown_phase_outcomes():
+    transcript = synthetic()
+    reference = transcript.record().bind(transcript)
+    variant = transcript.variant(6, "A", "G")
+    partner = transcript.variant(7, "A", "C")
+    result = variant.effects(extra_orfs=[reference], germline=GermlineContext.from_variants([partner]))
+    outcomes = result.orf_annotations[0].outcomes
+    assert {o.mutant.protein_sequence for o in outcomes} == {"MAPG", "MEPG"}
+
+
+def test_collection_cis_products_keep_original_rna_identity():
+    transcript = synthetic()
+    reference = transcript.record().bind(transcript)
+    first, second = transcript.variant(6, "A", "G"), transcript.variant(7, "A", "C")
+    class Phase:
+        phase_source = "fixture"
+        def in_cis(self, left, right, transcript=None):
+            if transcript is not None:
+                assert transcript is reference.transcript
+            return True
+    result = VariantCollection([first, second]).effects(extra_orfs=[reference], phase_resolver=Phase())
+    joint = [a for a in result.orf_annotations if len(a.variants) == 2]
+    assert len(joint) == 1
+    assert joint[0].outcomes[0].mutant.protein_sequence == "MAPG"
+    assert joint[0].effect.orf is reference
+
+
+def test_observed_canonical_protein_is_not_attached_to_extra_orf(native):
+    variant, reference, _ = native
+    resolver = SimpleNamespace(mutant_transcript=lambda variant, transcript: object())
+    with pytest.raises(NotImplementedError, match="base origins"):
+        variant.effects(extra_orfs=[reference], phase_resolver=resolver)
+    result = variant.effects(extra_orfs=[reference], phase_resolver=resolver, raise_on_error=False)
+    annotation = result.orf_annotations[0]
+    assert annotation.unresolved_reason and annotation.reference is reference
+    assert annotation.outcomes == ()
+
+
+def test_no_extra_input_preserves_ordinary_api(native):
+    variant, _, _ = native
+    assert variant.effects().orf_annotations == ()
+    assert variant.effects(extra_orfs=[]).orf_annotations == ()
+    assert all(e.orf is None and e.reference_transcript is e.transcript for e in variant.effects())
+
+
+def test_exports_cannot_silently_turn_an_orf_into_the_parent_cds(native, tmp_path):
+    from varcode.effects import EffectCollection
+    variant, reference, _ = native
+    result = variant.effects(extra_orfs=[reference])
+    with pytest.raises(ValueError, match="orf_annotation.to_dict"):
+        result.to_json()
+    with pytest.raises(ValueError, match="orf_annotation.to_dict"):
+        result.top_priority_effect().to_json()
+    frame = result.to_dataframe()
+    row = frame[frame.orf_id.notna()].iloc[0]
+    assert row.orf_id == "c7riboseqorf56"
+    assert row.transcript_id == reference.transcript.id
+    path = tmp_path / "effects.csv"
+    result.to_csv(path)
+    with pytest.raises(ValueError, match="reference coding models"):
+        EffectCollection.from_csv(path, genome=variant.genome)

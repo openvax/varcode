@@ -121,7 +121,7 @@ class VariantCollection(Collection):
     def effects(
             self, raise_on_error=True,
             annotator=None, phase_resolver=None, rna_resolver=None,
-            germline=None, validate_reference=True):
+            germline=None, validate_reference=True, extra_orfs=None):
         """
         Splice-disrupting effects are always wrapped in a
         :class:`varcode.splice_outcomes.SpliceOutcomeSet` carrying the
@@ -172,6 +172,11 @@ class VariantCollection(Collection):
             annotation. Hard error on mismatch. Set to False if
             you've already lifted over and know the builds agree.
             Ignored when ``germline`` is ``None``.
+
+        extra_orfs : ORFCatalog or iterable of ReferenceORF, optional
+            Additional coding frames, as in :meth:`Variant.effects`. Iterables
+            are consumed once for the collection. Known-cis variants also
+            receive joint ORF consequences when a phase resolver is supplied.
         """
         from datetime import datetime, timezone
 
@@ -211,6 +216,20 @@ class VariantCollection(Collection):
         if rna_resolver is not None:
             from .rna_evidence import apply_rna_evidence_to_effects
             apply_rna_evidence_to_effects(per_variant, rna_resolver)
+        if extra_orfs is not None:
+            from .extra_orfs import (
+                ORFHaplotypeAnnotator, ORFPhaseResolver, prepare_extra_orfs,
+            )
+            prepared = prepare_extra_orfs(extra_orfs)
+            additional = [effect for variant in self for effect in prepared.effects(
+                variant, raise_on_error=raise_on_error, germline=germline,
+                phase_resolver=phase_resolver, rna_resolver=rna_resolver)]
+            if phase_resolver is not None:
+                additional.extend(build_haplotype_effects(
+                    self, additional, ORFPhaseResolver(phase_resolver),
+                    annotator=ORFHaplotypeAnnotator(), germline=germline,
+                    raise_on_error=raise_on_error))
+            per_variant.extend(additional)
         return EffectCollection(per_variant,
             annotator=getattr(annotator_instance, "name", None),
             annotator_version=getattr(annotator_instance, "version", None),

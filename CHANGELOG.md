@@ -1,5 +1,18 @@
 # Change Log
 
+## v10.15.0 (2026-10-13)
+
+- Accept `extra_orfs=` in `Variant.effects()` and `VariantCollection.effects()`
+  for additive catalogue or bound-reference ORF consequences (#592). Preserve
+  ordinary effects and expose each added effect's `orf`, `reference_transcript`
+  and `orf_annotation`, with native outcomes in `collection.orf_annotations`.
+- Reuse the ORF transcript-model engine for germline hypotheses and known-cis
+  collection products. Preserve input scope, generator inputs and catalogue
+  binding failures; never attach a canonical observed protein to an extra frame.
+- Preserve original RNA IDs for grouping and expression lookup, and namespace
+  internal ORF identities across sources. Label ORF dataframe/CSV rows and
+  prevent generic serialization from silently losing their coding models (#593).
+
 ## v10.14.0 (2026-10-13)
 
 - Expose native `ORFAnnotation.outcomes`, with `ORFOutcome` effects/hypotheses

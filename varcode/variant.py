@@ -449,7 +449,7 @@ class Variant(Serializable):
     def effects(
             self, raise_on_error=True,
             annotator=None, phase_resolver=None, rna_resolver=None,
-            germline=None):
+            germline=None, extra_orfs=None):
         """Predict the variant's effects on overlapping transcripts.
 
         Splice-disrupting effects are always wrapped in a
@@ -506,6 +506,19 @@ class Variant(Serializable):
             :meth:`GermlineContext.empty` falls through to today's
             reference-relative behaviour byte-identically. See
             openvax/varcode#268.
+
+        extra_orfs : ORFCatalog or iterable of ReferenceORF, optional
+            Additional reference coding frames, supplied by ORFdata. A catalogue
+            is resolved against this variant's genome; bound ORFs retain their
+            transcript placements. Ordinary effects are preserved, and native
+            ORF consequences are appended using the transcript-model engine.
+            Each has ``orf``, ``reference_transcript`` and ``orf_annotation``
+            attributes. No catalogue is loaded when omitted. ``annotator``
+            selects the ordinary transcript annotator; additional ORFs use the
+            existing ORF engine, including germline and DNA phase hypotheses.
+            Observed RNA requires ORF-specific base mapping through
+            ``annotate_orf_rna_product``; incompatible RNA observations raise
+            or become Failure effects according to ``raise_on_error``.
         """
         effects = predict_variant_effects(
             variant=self,
@@ -520,6 +533,12 @@ class Variant(Serializable):
         if rna_resolver is not None:
             from .rna_evidence import apply_rna_evidence_to_effects
             apply_rna_evidence_to_effects(effects, rna_resolver)
+        if extra_orfs is not None:
+            from .extra_orfs import prepare_extra_orfs
+            additional = prepare_extra_orfs(extra_orfs).effects(
+                self, raise_on_error=raise_on_error, germline=germline,
+                phase_resolver=phase_resolver, rna_resolver=rna_resolver)
+            effects = effects.clone_with_new_elements([*effects, *additional])
         return effects
 
     def effect_on_transcript(

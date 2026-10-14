@@ -119,6 +119,12 @@ class EffectCollection(Collection):
             annotator_version=self.annotator_version,
             annotated_at=self.annotated_at)
 
+    def to_json(self):
+        if any(e.orf is not None or e.orf_annotation is not None for e in self):
+            raise ValueError("Export extra ORF consequences with orf_annotation.to_dict(); "
+                             "generic collection serialization cannot preserve their coding models")
+        return super().to_json()
+
     def clone_with_new_elements(self, new_elements):
         # Forward annotator provenance explicitly — sercol's base
         # clone_with_new_elements only carries distinct/sort_key/sources,
@@ -137,8 +143,13 @@ class EffectCollection(Collection):
     def groupby_variant(self):
         return self.groupby(key_fn=lambda effect: effect.variant)
 
+    @property
+    def orf_annotations(self):
+        """Detailed native annotations for the extra ORF effects in this collection."""
+        return tuple(e.orf_annotation for e in self if e.orf_annotation is not None)
+
     def groupby_transcript(self):
-        return self.groupby(key_fn=lambda effect: effect.transcript)
+        return self.groupby(key_fn=lambda effect: effect.reference_transcript)
 
     def groupby_transcript_name(self):
         return self.groupby(key_fn=lambda effect: effect.transcript_name)
@@ -364,6 +375,8 @@ class EffectCollection(Collection):
         """Build a dataframe from the effect collection."""
         structural_columns = STRUCTURAL_VARIANT_COLUMNS if any(
             getattr(e.variant, "is_structural", False) for e in self) else ()
+        orf_columns = ("orf_id", "orf_source", "orf_unresolved_reason") if any(
+            e.orf_annotation is not None for e in self) else ()
         # list of properties to extract from Variant objects if they're
         # not None
         variant_properties = [
@@ -390,12 +403,17 @@ class EffectCollection(Collection):
 
             row['effect_type'] = effect.__class__.__name__
             row['effect'] = effect.short_description
+            annotation = effect.orf_annotation
+            if annotation is not None:
+                row['orf_id'] = annotation.orf_id
+                row['orf_source'] = annotation.record.source
+                row['orf_unresolved_reason'] = annotation.unresolved_reason
             return row
         # Always emit the same column set even for empty collections so
         # CSV round-trip doesn't have to special-case len == 0.
         return pd.DataFrame.from_records(
             [row_from_effect(effect) for effect in self],
-            columns=self._DATAFRAME_COLUMNS + structural_columns,
+            columns=self._DATAFRAME_COLUMNS + structural_columns + orf_columns,
         )
 
     def to_csv(self, path, include_header=True):
@@ -506,6 +524,10 @@ class EffectCollection(Collection):
         df = pd.read_csv(
             path, comment="#", dtype={"chr": str, "contig": str})
         reject_structural_csv(df)
+        if "orf_id" in df and df["orf_id"].notna().any():
+            raise ValueError("Extra ORF CSV rows require their reference coding models; "
+                             "canonical transcript re-annotation would lose the ORF. "
+                             "Use ORFAnnotation.to_dict() for full exports.")
         contig_col = resolve_contig_column(df.columns)
         if contig_col is None:
             raise ValueError(
