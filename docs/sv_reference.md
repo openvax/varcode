@@ -10,20 +10,24 @@ Structural `ref`/`alt` and `original_ref`/`original_alt` expose the actual recor
 alleles, including symbolic or breakend ALT. Small-edit flags (`is_snv`,
 `is_indel`, `is_insertion`, `is_deletion`, `is_transition`, `is_transversion`)
 are false; use `is_structural` and `sv_type` for event classification.
+
 SV-containing tables add `sv_type`, `end`, `mate_contig`, `mate_start`,
-`affected_start`, and `affected_end`. These CSVs are summaries, not lossless
-structural archives: `from_csv` rejects them. Retain original VCF/JSON variants
-and their RNA evidence; point-only and empty table columns are unchanged.
+`affected_start`, and `affected_end`; point-only and empty table columns are
+unchanged. These CSVs are summaries, not lossless structural archives:
+`from_csv` rejects them. Retain original VCF/JSON variants and their RNA
+evidence.
 
 Symbolic VCF span records retain `POS` as the padding/junction coordinate;
 `affected_start..affected_end` is the inclusive changed interval `POS+1..END`.
 This applies to DEL, DUP, INV and CNV (including CN0/CN3). This parser requires
-a nonempty span with `END > POS`. Direct `StructuralVariant(...)` construction
-keeps its existing explicit-coordinate defaults: pass `affected_start`
-separately when `start` includes padding. Paired breakends already supply it.
-A directly constructed BND takes `mate_contig`, `mate_start` and
-`mate_orientation` from a breakend ALT when they aren't passed, and raises
-`ValueError` when a passed one contradicts it.
+a nonempty span with `END > POS`.
+
+Direct `StructuralVariant(...)` construction keeps its existing
+explicit-coordinate defaults: pass `affected_start` separately when `start`
+includes padding. Paired breakends already supply it. A directly constructed
+BND takes `mate_contig`, `mate_start` and `mate_orientation` from a breakend
+ALT when they aren't passed, and raises `ValueError` when a passed one
+contradicts it.
 
 ## Junction orientation
 
@@ -106,15 +110,17 @@ rule for 3' breakends upstream of a gene, with LINX's limit for fusions other
 than known pairs.
 
 These fusions are further candidates after the effect's primary classification,
-never the primary one, because RNA need not splice that way. In the Sid
-osteosarcoma, the GABBR1--SLC29A1 junction lands 597 bases before SLC29A1's
-first transcript starts. Isovar's long reads there run from GABBR1 intronic
-sequence into the intergenic stretch and end in poly(A) before SLC29A1. So a
-breakend there stays `TranslocationToIntergenic`, with one fusion candidate per
-SLC29A1 isoform. The model's evidence records `three_prime_breakend="upstream"`
-and `three_prime_upstream_distance`. A DEL, DUP or INV gains the same candidates
+never the primary one, because RNA need not splice that way. The model's
+evidence records `three_prime_breakend="upstream"` and
+`three_prime_upstream_distance`. A DEL, DUP or INV gains the same candidates
 behind its local consequence. Its `most_likely_effect` is unchanged, but, like
 any structural effect set, its priority follows its most disruptive candidate.
+
+For example, in an osteosarcoma sample used for testing, the GABBR1--SLC29A1 junction lands 597
+bases before SLC29A1's first transcript starts. Isovar's long reads there run
+from GABBR1 intronic sequence into the intergenic stretch and end in poly(A)
+before SLC29A1. So a breakend there stays `TranslocationToIntergenic`, with one
+fusion candidate per SLC29A1 isoform.
 
 ## Breakend outcomes
 
@@ -139,6 +145,7 @@ Its reference-derived `mutant_transcript` contains only the retained local
 breakpoints retain the corresponding annotated exons. `A.` keeps genomic left;
 `.A` keeps genomic right, even without a mate. Transcript cDNA is already
 strand-oriented, so the segment itself has `strand="+"` on either gene strand.
+
 The fragment is labeled `evidence["sequence_status"] = "retained_reference_fragment"`;
 full `cdna_sequence` and `mutant_protein_sequence` remain None. Concatenating this
 one fragment does not establish the full allele or prove a mature RNA/protein.
@@ -167,7 +174,7 @@ by the caller's `SVTYPE`. A single record annotates exactly as its labeled pair
 would, but its effects still report the record. Their evidence gives
 `sv_type="BND"` and `junction_event`, the local event it was read as.
 
-For example, openvax-v2's ATP5MG--KMT2A junction, chr11:118,401,717 to
+For example, a test sample's ATP5MG--KMT2A junction, chr11:118,401,717 to
 118,468,775, is exactly intron 1 of Ensembl's ATP5MG-KMT2A readthrough
 transcript AP001267.5-202. A breakend there reports that transcript as
 `Intronic`, and the ATP5MG isoforms, whose gene doesn't reach KMT2A, as fusions.
@@ -241,12 +248,14 @@ tandem duplication.
 Local DUP/INV transcript models require every junction end to lie in the
 selected transcript. An event extending outside it (including a span enclosing
 the entire transcript) does not establish duplicated or inverted cDNA within
-that transcript. Without a fusion partner or supplied `alt_assembly`, the
-result contains an `Unresolved` candidate and `mutant_transcript` is None.
-This means unresolved sequence, not an unchanged protein or a proven truncation.
-The same restriction applies to a span candidate attached to a fusion; it does
-not remove the fusion's own transcript model. A longer isoform of the same gene
-does not establish the shorter isoform's structure.
+that transcript. A longer isoform of the same gene does not establish the
+shorter isoform's structure.
+
+Without a fusion partner or supplied `alt_assembly`, such an event's result
+contains an `Unresolved` candidate and `mutant_transcript` is None. This means
+unresolved sequence, not an unchanged protein or a proven truncation. The same
+restriction applies to a span candidate attached to a fusion; it does not
+remove the fusion's own transcript model.
 
 ## Breakpoint position and protein sequence
 

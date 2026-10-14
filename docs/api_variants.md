@@ -30,13 +30,18 @@ genome = Genome(native)
 ```
 
 An explicit `Genome(native, fasta="/data/other.fa")` overrides native DNA;
-the supplied reference must match the annotation assembly. Without DNA,
-`reference_base` and `reference_range` fall back to transcript cDNA and return
-`""` for uncovered positions. `sequence` reads only chromosome DNA: configured
-native DNA preserves PyEnsembl's missing-DNA and invalid-interval errors,
-while unconfigured genomes return `""`. Explicit FASTA overrides retain their
-legacy permissive lookup behavior. Coordinates are 1-based inclusive, and
-returned bases are uppercase on the genomic plus strand.
+the supplied reference must match the annotation assembly.
+
+Lookups behave as follows:
+
+- Without DNA, `reference_base` and `reference_range` fall back to transcript
+  cDNA and return `""` for uncovered positions.
+- `sequence` reads only chromosome DNA. Configured native DNA preserves
+  PyEnsembl's missing-DNA and invalid-interval errors, while unconfigured
+  genomes return `""`.
+- Explicit FASTA overrides retain their legacy permissive lookup behavior.
+- Coordinates are 1-based inclusive, and returned bases are uppercase on the
+  genomic plus strand.
 
 The native PyEnsembl genome owns its reader. Calling `genome.close()` leaves
 native DNA and caller-provided reader objects open; it closes only readers

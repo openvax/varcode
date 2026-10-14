@@ -2,7 +2,7 @@
 
 Varcode supports Python 3.9 and later. Read [AGENTS.md](AGENTS.md) for the
 repository workflow and [RELEASING.md](RELEASING.md) before preparing a release.
-The [2026-09-24 audit](docs/development_audit.md) records known quality gaps and
+The [2026-09-24 audit](notes/development_audit.md) records known quality gaps and
 their issue links.
 
 ## Report a problem

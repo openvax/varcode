@@ -6,20 +6,6 @@ own sequence instead. This matters when an inherited variant sits nearby: if
 it already changed a codon, a somatic mutation in that codon can produce a
 different amino acid than the reference codon would suggest.
 
-<a id="phase-enumeration-limit"></a>
-
-!!! note "Phase enumeration limit"
-    Each germline variant of unknown phase doubles the number of cis/trans
-    combinations. When they exceed the cap (default eight, so more than three
-    unphased germline variants in a window), Varcode does not guess a phase.
-    It returns a `HypothesisLimit` effect, a kind of `Unresolved`. Its `phase`
-    records which germline variants are known cis, known trans, or unphased,
-    and its `reference_effect` is the effect without germline context, which
-    it ranks like. Homozygous germline variants are always cis, and variants
-    phased to each other (for example in one VCF phase set) count once, so
-    both reduce the count. To raise the cap, set it on the context:
-    `dataclasses.replace(ctx, max_phase_hypotheses=16)`.
-
 ## Basic usage
 
 ```python
@@ -37,6 +23,8 @@ sparse normal column from a somatic caller; see
 Unknown relative phase can produce several candidate effects. See
 [two variants in one codon](phasing.md#two-variants-in-one-codon) for a worked
 example, or [phased VCF input](phasing.md#phased-vcf) to supply evidence.
+With many unphased germline variants nearby, the result is unresolved instead;
+see the [phase enumeration limit](#phase-enumeration-limit).
 No annotator selection is needed.
 
 ## Constructing a `GermlineContext`
@@ -115,6 +103,30 @@ jointly phased VCF or molecular evidence. Short- and long-read data can both
 leave phase unknown; coverage and linked alleles determine whether a particular
 pair is resolved.
 
+## Phase enumeration limit
+
+Each germline variant of unknown phase doubles the number of cis/trans
+combinations. Homozygous germline variants are always cis, and variants phased
+to each other (for example in one VCF phase set) count once, so both reduce the
+count.
+
+When the combinations exceed the cap (default eight, so more than three
+unphased germline variants in a window), Varcode does not guess a phase. It
+returns a `HypothesisLimit` effect, a kind of `Unresolved`:
+
+- Its `phase` records which germline variants are known cis, known trans, or
+  unphased.
+- Its `reference_effect` is the effect without germline context. The
+  `HypothesisLimit` is ranked like that effect.
+
+To raise the cap, set it on the context:
+
+```python
+import dataclasses
+
+ctx = dataclasses.replace(ctx, max_phase_hypotheses=16)
+```
+
 ## Loss of heterozygosity (LOH)
 
 When a reported somatic allele matches the supplied germline, Varcode returns
@@ -138,11 +150,15 @@ for effect in effects:
 
 Here `effects` is the collection annotated with germline context above.
 The check requires `germline=`; annotation without that context cannot attach
-the flag. Use `detect_germline_overlap` for an allele-match query. The deprecated
+the flag.
+
+Use `detect_germline_overlap` for an allele-match query. The deprecated
 `detect_loh` now returns `None` (not assessed) and warns, rather than making a
-zygosity claim. Mixed inherited/somatic groups in the experimental transcript
-model remain explicitly unresolved until their allele-aware baseline can be
-represented.
+zygosity claim.
+
+The experimental transcript model composes known-cis groups that mix inherited
+and somatic alleles, applying each inherited allele once; see
+[mixed inherited and somatic haplotypes](experimental_annotators.md#mixed-inherited-and-somatic-haplotypes).
 
 ## Limitations
 
