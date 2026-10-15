@@ -241,10 +241,16 @@ def _is_rule(value):
     return isinstance(value, EvidenceRule)
 
 
+def _is_names(value):
+    """A non-empty list, tuple or set of evidence names or rules: ORFs with any of them."""
+    return (isinstance(value, (list, tuple, set, frozenset)) and len(value) > 0
+            and all(isinstance(v, str) or _is_rule(v) for v in value))
+
+
 def prepare_extra_orfs(value):
     """Normalize ``extra_orfs``: None or False for none; ``"all"``, an evidence
-    name or an ORFdata rule for ORFdata's ORFs on each variant's genome; else a
-    catalogue or bound ORFs."""
+    name, a list of names (any of them) or an ORFdata rule for ORFdata's ORFs on
+    each variant's genome; else a catalogue or bound ORFs."""
     if type(value).__module__ == "numpy" and type(value).__name__ in ("bool_", "bool"):
         value = bool(value)
     if value is None or value is False:
@@ -255,10 +261,10 @@ def prepare_extra_orfs(value):
         raise ValueError(
             "extra_orfs=True doesn't say which ORFs: pass 'all' for every ORF ORFdata has for the "
             "variant's genome, an evidence name such as 'ms', 'ribosome', 'proteomics' or "
-            "'immunopeptidomics', an ORFdata rule, or a catalogue")
+            "'immunopeptidomics', a list of names for any of them, an ORFdata rule, or a catalogue")
     if value == "all":
         return _resolver(None)
-    if isinstance(value, str) or _is_rule(value):
+    if isinstance(value, str) or _is_rule(value) or _is_names(value):
         return _resolver(value)
     return ExtraORFInput(value)
 

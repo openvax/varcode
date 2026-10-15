@@ -518,8 +518,10 @@ class Variant(Serializable):
             path. An evidence name selects among them: ``"ms"`` (any MS
             peptide), ``"ribosome"`` (Ribo-seq), ``"proteomics"`` (peptides
             from digested cellular proteins) or ``"immunopeptidomics"``
-            (peptides eluted from MHC molecules); so does a rule such as
-            ``orfdata.RiboSeq() & orfdata.MS()``. Placements are made once per genome and reused. A catalogue
+            (peptides eluted from MHC molecules). A list of names, such as
+            ``["proteomics", "immunopeptidomics"]``, selects ORFs with any of
+            them, and a rule such as ``orfdata.RiboSeq() & orfdata.MS()``
+            those meeting all of its parts. Placements are made once per genome and reused. A catalogue
             is resolved against this variant's genome; bound ORFs retain their
             transcript placements. Ordinary effects are preserved, and native
             ORF consequences are appended using the transcript-model engine.

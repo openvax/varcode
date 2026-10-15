@@ -3,7 +3,8 @@
 ## v10.16.0
 
 - `extra_orfs="all"`, an evidence name (`"ribosome"`, `"ms"`,
-  `"proteomics"` or `"immunopeptidomics"`), or an ORFdata rule such as
+  `"proteomics"` or `"immunopeptidomics"`), a list of names for any of them,
+  or an ORFdata rule such as
   `RiboSeq() & MS()` in `Variant.effects()` and `VariantCollection.effects()`
   uses ORFdata's ORFs for each variant's own genome. `True` raises, naming
   these choices, rather than guessing which ORFs are meant. ORFdata picks its species and assembly's catalogues, lifting them

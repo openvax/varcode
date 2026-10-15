@@ -223,7 +223,8 @@ def test_exports_cannot_silently_turn_an_orf_into_the_parent_cds(native, tmp_pat
         EffectCollection.from_csv(path, genome=variant.genome)
 
 
-@pytest.mark.parametrize("value", ["all", "ms", "ribosome", "immunopeptidomics", "rule"])
+@pytest.mark.parametrize("value", ["all", "ms", "riboseq", "immunopeptidomics",
+                                   ["proteomics", "immunopeptidomics"], "rule"])
 def test_orfdata_orfs_for_the_variants_own_genome(native, value):
     variant, _, _ = native
     if value == "rule":
@@ -251,6 +252,10 @@ def test_placements_are_made_once_per_genome_and_reused(native):
     assert prepare_extra_orfs("all").evidence is None and prepare_extra_orfs("all") is not resolver
     with pytest.raises(ValueError, match="doesn't say which ORFs: pass 'all'"):
         variant.effects(extra_orfs=True)
+    # A list of names is any of them, sharing placements with the same rule; "riboseq" is "ribosome".
+    either = prepare_extra_orfs({"immunopeptidomics", "proteomics"})
+    assert either is prepare_extra_orfs(orfdata.MS(methods="proteomics") | orfdata.MS(methods="immunopeptidomics"))
+    assert prepare_extra_orfs("riboseq") is prepare_extra_orfs("ribosome")
     assert len(variant.effects(extra_orfs=False)) == len(variant.effects())
     collection = VariantCollection([variant]).effects(extra_orfs="ms")
     assert any(e.orf is not None and e.orf.orf_id == "c7riboseqorf56" for e in collection)

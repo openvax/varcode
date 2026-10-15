@@ -28,11 +28,13 @@ effects = variant.effects(extra_orfs=orfdata.RiboSeq() & orfdata.MS())
 | --- | --- |
 | `None` (default) | none |
 | `"all"` | every ORF ORFdata has for the genome |
-| `"ribosome"` | translated in ribosome profiling |
+| `"ribosome"` or `"riboseq"` | translated in ribosome profiling |
 | `"ms"` | any supporting MS peptide |
 | `"proteomics"` | peptides from digested cellular proteins |
 | `"immunopeptidomics"` | peptides eluted from MHC molecules (HLA in human) |
-| an ORFdata rule, catalogue or bound ORFs | exactly those |
+| a list of names, e.g. `["proteomics", "immunopeptidomics"]` | ORFs with any of them |
+| an ORFdata rule, e.g. `orfdata.RiboSeq() & orfdata.MS()` | ORFs meeting every part (`&`) or any part (`\|`) |
+| an ORFdata catalogue or bound ORFs | exactly those |
 
 `True` raises rather than guessing which of these you mean.
 
