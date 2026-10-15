@@ -23,6 +23,10 @@ class SampleNotFoundError(KeyError):
     present in the VariantCollection's source VCF(s)."""
 
 
+class InvalidContigError(ValueError):
+    """The selected annotation dataset does not contain a variant's contig."""
+
+
 class ReferenceMismatchError(ValueError):
     """Raised when a variant's reported ref allele does not match the
     reference genome at the variant's position.

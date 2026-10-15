@@ -35,6 +35,9 @@ class MutationEffect(Serializable):
         self.variant = variant
 
     def to_dict(self):
+        if "realized_candidates" in self.__dict__:
+            from .structural_serialization import structural_effect_to_dict
+            return structural_effect_to_dict(self, schema="effect_graph_schema")
         if getattr(self.variant, "is_structural", False):
             from .structural_serialization import structural_effect_to_dict
             return structural_effect_to_dict(self)
@@ -48,13 +51,16 @@ class MutationEffect(Serializable):
 
     @classmethod
     def from_dict(cls, state_dict):
+        if "effect_graph_schema" in state_dict:
+            from .structural_serialization import structural_effect_from_dict
+            return structural_effect_from_dict(cls, state_dict, schema="effect_graph_schema")
         if "structural_effect_schema" in state_dict:
             from .structural_serialization import structural_effect_from_dict
             return structural_effect_from_dict(cls, state_dict)
         return super().from_dict(state_dict)
 
     def __hash__(self):
-        if getattr(self.variant, "is_structural", False):
+        if getattr(self.variant, "is_structural", False) or "realized_candidates" in self.__dict__:
             # Evidence contains dictionaries and candidates can point back
             # to this effect. Equal effects have equal identity fields.
             return hash((type(self), self.variant, self.transcript))
@@ -327,6 +333,8 @@ class TranscriptMutationEffect(Intragenic):
 
     def to_dict(self):
         state = super().to_dict()
+        if "effect_graph_schema" in state or "structural_effect_schema" in state:
+            return state
         # Annotators may return any ordinary effect class for a cis group.
         # Preserve the group independently of that class's constructor fields.
         if len(getattr(self, "variants", ())) > 1:

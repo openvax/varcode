@@ -25,6 +25,7 @@ from .annotators import (
     use_annotator,
 )
 from .errors import (
+    InvalidContigError,
     HypothesisLimitError,
     ReferenceMismatchError,
     SampleNotFoundError,
