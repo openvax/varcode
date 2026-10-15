@@ -52,7 +52,7 @@ def _orf_key(reference):
     return (reference.context.key, transcript.id,
             getattr(transcript, "versioned_id", transcript.id), model.source,
             model.orf_id, tuple(model.coding_blocks), model.translation_table,
-            model.protein_sequence)
+            model.protein_sequence, getattr(model, "start_codon", None))
 
 
 class _ORFTranscript:
@@ -84,6 +84,7 @@ class _ORFTranscript:
         self.is_protein_coding = True
         self.complete = True
         self.translation_table = reference.model.translation_table
+        self.start_codon = getattr(reference.model, "start_codon", None)
         # Distinct coding models on one RNA must survive candidate deduplication.
         self.id = "%s:orf:%s" % (transcript.id, sha256(repr(_orf_key(reference)).encode()).hexdigest())
         self.name = "%s:%s" % (transcript.id, reference.model.orf_id)
