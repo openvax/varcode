@@ -9,7 +9,7 @@ GRCh38; explicit species-specific catalogues use the same API.
 
 ## Annotate with ORFdata's ORFs for the variant's genome
 
-Pass `extra_orfs=True`, an evidence name or an ORFdata rule, and ORFdata
+Pass `extra_orfs="all"`, an evidence name or an ORFdata rule, and ORFdata
 chooses the catalogues for the variant's genome and places each ORF on every
 transcript that carries its exact coding path and protein:
 
@@ -19,10 +19,22 @@ from pyensembl import cached_release
 from varcode import Variant
 
 variant = Variant("7", 66205486, "C", "G", genome=cached_release(115))
-effects = variant.effects(extra_orfs=True)        # every catalogue ORF
+effects = variant.effects(extra_orfs="all")       # every catalogue ORF
 effects = variant.effects(extra_orfs="ms")        # only MS-supported ones
-effects = variant.effects(extra_orfs=orfdata.RiboSeq(min_studies=2) & orfdata.MS())
+effects = variant.effects(extra_orfs=orfdata.RiboSeq() & orfdata.MS())
 ```
+
+| `extra_orfs=` | ORFs used |
+| --- | --- |
+| `None` (default) | none |
+| `"all"` | every ORF ORFdata has for the genome |
+| `"ribosome"` | translated in ribosome profiling |
+| `"ms"` | any supporting MS peptide |
+| `"proteomics"` | peptides from digested cellular proteins |
+| `"immunopeptidomics"` | peptides eluted from MHC molecules (HLA in human) |
+| an ORFdata rule, catalogue or bound ORFs | exactly those |
+
+`True` raises rather than guessing which of these you mean.
 
 The ORFs are placed once per genome and reused by later calls and by
 `VariantCollection.effects`. The same call works on other assemblies and
@@ -39,7 +51,7 @@ installs anything missing:
 
 ORFs ORFdata could not place on the genome, for example because an older
 annotation lacks their transcript, are left out rather than failing the
-call; `varcode.extra_orfs.prepare_extra_orfs(True).excluded(genome)` lists
+call; `varcode.extra_orfs.prepare_extra_orfs("all").excluded(genome)` lists
 them with the reason.
 
 ## Annotate ordinary and extra ORFs together

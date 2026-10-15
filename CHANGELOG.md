@@ -2,10 +2,11 @@
 
 ## v10.16.0
 
-- `extra_orfs=True`, an evidence name such as `"ms"`, or an ORFdata rule such
-  as `RiboSeq(min_studies=2) & MS()` in `Variant.effects()` and
-  `VariantCollection.effects()` uses ORFdata's ORFs for each variant's own
-  genome. ORFdata picks its species and assembly's catalogues, lifting them
+- `extra_orfs="all"`, an evidence name (`"ribosome"`, `"ms"`,
+  `"proteomics"` or `"immunopeptidomics"`), or an ORFdata rule such as
+  `RiboSeq() & MS()` in `Variant.effects()` and `VariantCollection.effects()`
+  uses ORFdata's ORFs for each variant's own genome. `True` raises, naming
+  these choices, rather than guessing which ORFs are meant. ORFdata picks its species and assembly's catalogues, lifting them
   from another assembly when needed, so GRCh37, NCBI36, T2T-CHM13 and mouse
   (GRCm39, GRCm38) work as GRCh38 does. `False` means none. The `orf` extra
   now needs `orfdata>=0.28.0`.

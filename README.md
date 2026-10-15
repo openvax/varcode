@@ -106,8 +106,8 @@ Guides by topic:
 - [Saving results](https://openvax.github.io/varcode/csv/): CSV, JSON, and VCF
   export, and what each keeps.
 - [Reference ORF consequences](https://openvax.github.io/varcode/uorf_annotations/):
-  install `varcode[orf]` and pass `extra_orfs=True` (or `"ms"`, or an ORFdata
-  rule) to `variant.effects` for ordinary and additional coding consequences
+  install `varcode[orf]` and pass `extra_orfs="all"` (or an evidence name such
+  as `"ms"` or `"immunopeptidomics"`, or an ORFdata rule) to `variant.effects` for ordinary and additional coding consequences
   together, using ORFdata's ORFs for the variant's genome; a catalogue or
   bound ORFs also work. Access the reference through `effect.orf` and native
   outcomes through `effect.orf_annotation`.

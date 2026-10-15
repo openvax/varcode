@@ -174,8 +174,8 @@ class VariantCollection(Collection):
             you've already lifted over and know the builds agree.
             Ignored when ``germline`` is ``None``.
 
-        extra_orfs : bool, str, ORFdata rule, ORFCatalog or iterable of ReferenceORF, optional
-            Additional coding frames, as in :meth:`Variant.effects`. ``True``,
+        extra_orfs : str, ORFdata rule, ORFCatalog or iterable of ReferenceORF, optional
+            Additional coding frames, as in :meth:`Variant.effects`. ``"all"``,
             an evidence name or a rule places ORFdata's ORFs once per genome.
             Iterables are consumed once for the collection. Known-cis variants also
             receive joint ORF consequences when a phase resolver is supplied.

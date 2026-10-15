@@ -510,14 +510,16 @@ class Variant(Serializable):
             reference-relative behaviour byte-identically. See
             openvax/varcode#268.
 
-        extra_orfs : bool, str, ORFdata rule, ORFCatalog or iterable of ReferenceORF, optional
-            Additional reference coding frames, supplied by ORFdata. ``True``
-            uses ORFdata's ORFs for this variant's genome: its species and
-            assembly's catalogues, lifted from another assembly when needed,
-            placed on every transcript carrying each ORF's exact coding path.
-            An evidence name such as ``"ms"`` or a rule such as
-            ``orfdata.RiboSeq(min_studies=2) & orfdata.MS()`` selects among
-            them. Placements are made once per genome and reused. A catalogue
+        extra_orfs : str, ORFdata rule, ORFCatalog or iterable of ReferenceORF, optional
+            Additional reference coding frames, supplied by ORFdata. ``"all"``
+            uses every ORF ORFdata has for this variant's genome: its species
+            and assembly's catalogues, lifted from another assembly when
+            needed, placed on every transcript carrying each ORF's exact coding
+            path. An evidence name selects among them: ``"ms"`` (any MS
+            peptide), ``"ribosome"`` (Ribo-seq), ``"proteomics"`` (peptides
+            from digested cellular proteins) or ``"immunopeptidomics"``
+            (peptides eluted from MHC molecules); so does a rule such as
+            ``orfdata.RiboSeq() & orfdata.MS()``. Placements are made once per genome and reused. A catalogue
             is resolved against this variant's genome; bound ORFs retain their
             transcript placements. Ordinary effects are preserved, and native
             ORF consequences are appended using the transcript-model engine.

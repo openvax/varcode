@@ -148,8 +148,8 @@ class GenomeExtraORFs:
     """ORFdata's extra ORFs for each variant's own genome, placed once per genome.
 
     ``evidence`` is what ``orfdata.extra_orfs`` takes: ``None`` for every
-    catalogue ORF, an evidence name such as ``"ms"``, or a rule such as
-    ``RiboSeq(min_studies=2) & MS()``. ORFdata picks the catalogue for the
+    catalogue ORF, an evidence name such as ``"ms"`` or
+    ``"immunopeptidomics"``, or a rule such as ``RiboSeq() & MS()``. ORFdata picks the catalogue for the
     genome's species and assembly, lifting one from another assembly when
     needed, and places each ORF on every transcript carrying its exact
     coding path and protein.
@@ -173,7 +173,7 @@ class GenomeExtraORFs:
         try:
             from orfdata import extra_orfs
         except ImportError as error:
-            raise ImportError("extra_orfs=True needs orfdata>=0.28.0: pip install 'varcode[orf]'") from error
+            raise ImportError("extra_orfs needs orfdata>=0.28.0: pip install 'varcode[orf]'") from error
         placed = extra_orfs(genome, self.evidence)
         found = (placed, ExtraORFInput(placed, metadata=_summary(placed.catalog), report_excluded=False))
         self._inputs[genome] = found
@@ -219,7 +219,7 @@ def _resolver(evidence):
     try:
         from orfdata.evidence import evidence_rule
     except ImportError as error:
-        raise ImportError("extra_orfs=True needs orfdata>=0.28.0: pip install 'varcode[orf]'") from error
+        raise ImportError("extra_orfs needs orfdata>=0.28.0: pip install 'varcode[orf]'") from error
     evidence = evidence_rule(evidence)  # "ms" and MS() share placements; an unknown name raises here.
     key = None if evidence is None else json.dumps(evidence.to_dict(), sort_keys=True)
     if key not in _RESOLVERS:
@@ -228,7 +228,7 @@ def _resolver(evidence):
 
 
 def clear_extra_orfs_cache():
-    """Drop the ORF placements ``extra_orfs=True`` keeps for each genome."""
+    """Drop the ORF placements kept for each genome when ``extra_orfs`` names ORFdata's ORFs."""
     for resolver in _RESOLVERS.values():
         resolver.clear()
 
@@ -242,9 +242,9 @@ def _is_rule(value):
 
 
 def prepare_extra_orfs(value):
-    """Normalize ``extra_orfs``: None or False for none; True, an evidence name or
-    an ORFdata rule for ORFdata's ORFs on each variant's genome; else a catalogue
-    or bound ORFs."""
+    """Normalize ``extra_orfs``: None or False for none; ``"all"``, an evidence
+    name or an ORFdata rule for ORFdata's ORFs on each variant's genome; else a
+    catalogue or bound ORFs."""
     if type(value).__module__ == "numpy" and type(value).__name__ in ("bool_", "bool"):
         value = bool(value)
     if value is None or value is False:
@@ -252,6 +252,11 @@ def prepare_extra_orfs(value):
     if isinstance(value, (ExtraORFInput, GenomeExtraORFs)):
         return value
     if value is True:
+        raise ValueError(
+            "extra_orfs=True doesn't say which ORFs: pass 'all' for every ORF ORFdata has for the "
+            "variant's genome, an evidence name such as 'ms', 'ribosome', 'proteomics' or "
+            "'immunopeptidomics', an ORFdata rule, or a catalogue")
+    if value == "all":
         return _resolver(None)
     if isinstance(value, str) or _is_rule(value):
         return _resolver(value)
