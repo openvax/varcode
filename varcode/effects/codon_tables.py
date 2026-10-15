@@ -23,7 +23,7 @@ Refs:
   https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi?mode=t#SG2
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 _BASES = "TCAG"
 _CODONS = tuple(b1 + b2 + b3 for b1 in _BASES for b2 in _BASES for b3 in _BASES)
@@ -101,10 +101,13 @@ def is_mitochondrial_contig(contig):
 
 
 def codon_table_for_transcript(transcript):
-    """Select the codon table for a transcript based on its contig.
+    """Select this coding model's genetic code and initiation codons.
 
-    Vertebrate mitochondrial genes use NCBI translation table 2;
-    every other transcript uses the standard table.
+    Explicit ``translation_table`` and source-declared ``start_codon`` take
+    precedence over defaults. Otherwise mitochondrial contigs use table 2
+    and other contigs use table 1. A declared start extends only this model's
+    initiation set; its internal amino acid and the global tables are unchanged.
+    This recognizes a retained source start, not evidence for mutant translation.
     """
     if transcript is None:
         return STANDARD
@@ -113,14 +116,21 @@ def codon_table_for_transcript(transcript):
     code = getattr(transcript, "translation_table", None)
     if code is not None:
         if code == 1:
-            return STANDARD
-        if code == 2:
-            return VERTEBRATE_MITOCHONDRIAL
-        raise ValueError("Unsupported explicit NCBI translation table: %s" % code)
-    contig = getattr(transcript, "contig", None)
-    if is_mitochondrial_contig(contig):
-        return VERTEBRATE_MITOCHONDRIAL
-    return STANDARD
+            table = STANDARD
+        elif code == 2:
+            table = VERTEBRATE_MITOCHONDRIAL
+        else:
+            raise ValueError("Unsupported explicit NCBI translation table: %s" % code)
+    else:
+        table = (VERTEBRATE_MITOCHONDRIAL if is_mitochondrial_contig(
+            getattr(transcript, "contig", None)) else STANDARD)
+    declared = getattr(transcript, "start_codon", None)
+    if declared is not None:
+        if declared not in table.forward_table:
+            raise ValueError("Unsupported declared initiation codon: %r" % declared)
+        if declared not in table.start_codons:
+            return replace(table, start_codons=table.start_codons | {declared})
+    return table
 
 
 def translate_sequence(

@@ -1,5 +1,15 @@
 # Change Log
 
+## v10.15.2 (2026-10-15)
+
+- Preserve source-declared non-AUG initiation in extra ORF variant, haplotype,
+  splice and mapped RNA-product translation. Downstream variants in GTG/ACG
+  ORFs now retain the reference protein and receive coding consequences instead
+  of false Silent effects with empty proteins (#597).
+- Keep initiation specific to the source coding model, retain ordinary internal
+  codon translation, and preserve conditional-translation evidence and explicit
+  start-change/loss behavior.
+
 ## v10.15.1 (2026-10-14)
 
 - Preserve transcript-model candidates, hypotheses, realized baseline/mutant

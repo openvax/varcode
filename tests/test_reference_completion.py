@@ -157,6 +157,17 @@ def test_split_annotated_start_codon_is_retained(context):
     assert result.evidence["cds_start"] == 0
 
 
+@pytest.mark.parametrize("start", ["GTG", "ACG"])
+def test_completion_uses_source_declared_initiation(context, start):
+    _, first, _ = context
+    first.start_codon = start
+    first.sequence = first.coding_sequence = start + first.sequence[3:]
+    result, = reference_completion_hypotheses(fragment(context))
+    assert result.effect.mutant_protein_sequence == "MKPGKFP"
+    assert result.evidence["initiation_status"] == "assumed_reference_start"
+    assert result.evidence["protein_status"] == "predicted_from_reference_completion"
+
+
 def test_out_of_frame_internal_atg_is_a_separate_producer_hypothesis(context):
     from varcode import load_exacto_fusions
     from .test_exacto_fusions import link, table

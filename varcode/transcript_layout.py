@@ -238,8 +238,8 @@ def _translate_from_start(transcript, cdna, start, pieces):
         to_stop=True,
         selenocysteine={pos - start for pos in
                         layout_selenocysteine(transcript, pieces)})
-    # NCBI's recognized initiation codons encode Met at the CDS start,
-    # even when their internal translation is another residue (e.g. CTG).
+    # Recognized and source-declared initiators encode Met at this start,
+    # even when their internal translation is another residue (e.g. CTG/GTG).
     return "M" + protein[1:], True, start_codon
 
 
