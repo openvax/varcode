@@ -263,6 +263,10 @@ def test_real_ntf3_cis_reads_predict_the_compound_codon(
         assert restored_joint.variants == variants
         assert restored_joint.phase_source == joint.phase_source
         assert_primary_protein(restored_joint, "NTF3_compound", effect_references)
+        if annotator == "transcript_model":
+            from .test_transcript_model_serialization import assert_realized_annotation_equal
+            assert_realized_annotation_equal(joint, restored_joint)
+            assert_primary_cdna(restored_joint, "NTF3_compound", effect_references)
     finally:
         source.close()
 

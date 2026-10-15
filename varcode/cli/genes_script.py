@@ -48,7 +48,7 @@ def main(args_list=None):
         args_list = sys.argv[1:]
     args = arg_parser.parse_args(args_list)
     variants = variant_collection_from_args(args)
-    variants_dataframe = variants.to_dataframe(raise_on_error=not args.skip_errors)
+    variants_dataframe = variants.to_dataframe(raise_on_error=False if args.skip_errors else None)
     logger.info('\n%s', variants_dataframe)
     if args.output_csv:
         variants_dataframe.to_csv(args.output_csv, index=False)

@@ -59,11 +59,12 @@ def test_skip_errors_retains_bad_contig_and_valid_chr_variant(main, tmp_path):
     output = tmp_path / "result.csv"
     args = ["--genome", "GRCh38", "--variant", "chr12", "25245350", "C", "T",
             "--variant", "99", "150", "A", "T", "--output-csv", str(output)]
-    with pytest.raises(ValueError, match="Invalid contig"):
+    with pytest.warns(UserWarning, match="contigs absent"):
         main(args)
     if main is effects_main:
         args += ["--only-coding", "--one-per-variant"]
-    main(args + ["--skip-errors"])
+    with pytest.warns(UserWarning, match="contigs absent"):
+        main(args + ["--skip-errors"])
     table = pd.read_csv(output)
     status = "effect_type" if main is effects_main else "annotation_status"
     failed = table[table[status] == "Failure"]
@@ -92,3 +93,18 @@ def test_transcript_free_failure_json_round_trip():
     assert restored[0].variant == variant
     assert restored[0].transcript is None
     assert restored[0].error == "unknown contig"
+
+
+@pytest.mark.parametrize("main", [effects_main, genes_main])
+def test_strelka_cli_keeps_unplaced_and_unannotatable_records(main, tmp_path):
+    output = tmp_path / "strelka.csv"
+    with pytest.warns(UserWarning, match="GL000226.1"):
+        main(["--genome", "GRCh37:75", "--vcf", str(Path(__file__).parent / "data/strelka-example.vcf"),
+              "--output-csv", str(output)])
+    table = pd.read_csv(output)
+    contig_column = "contig" if main is effects_main else "chr"
+    assert len(table[[contig_column, "start", "ref", "alt"]].drop_duplicates()) == 20
+    assert {"GL000216.1", "GL000226.1"} <= set(table[contig_column])
+    missing = table[table[contig_column] == "GL000226.1"]
+    assert len(missing) == 1
+    assert "Invalid contig" in missing.iloc[0].annotation_error

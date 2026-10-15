@@ -1,5 +1,16 @@
 # Change Log
 
+## v10.15.1 (2026-10-14)
+
+- Preserve transcript-model candidates, hypotheses, realized baseline/mutant
+  products, evidence and ranking in versioned effect JSON graphs, including
+  shared references back to their owning effects (#574).
+- Convert UCSC accession-bearing unplaced/random/alternate contig names while
+  preserving accession versions. Batch annotation and both CLIs retain missing
+  contigs as explicit failures with one summary warning; collection
+  `raise_on_error=True` remains strict, and unrelated errors still raise by
+  default (#435).
+
 ## v10.15.0 (2026-10-13)
 
 - Accept `extra_orfs=` in `Variant.effects()` and `VariantCollection.effects()`

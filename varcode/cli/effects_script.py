@@ -65,7 +65,7 @@ def main(args_list=None):
 
     args = arg_parser.parse_args(args_list)
     variants = variant_collection_from_args(args)
-    effects = variants.effects(raise_on_error=not args.skip_errors)
+    effects = variants.effects(raise_on_error=False if args.skip_errors else None)
     # Annotation failures are diagnostics, not biological effects to rank or
     # discard with coding filters. Keep every failed transcript visible.
     failures = [effect for effect in effects if isinstance(effect, Failure)]
@@ -79,7 +79,7 @@ def main(args_list=None):
     effects = effects.clone_with_new_elements(list(effects) + failures)
 
     effects_dataframe = effects.to_dataframe()
-    if args.skip_errors:
+    if args.skip_errors or failures:
         effects_dataframe["annotation_error"] = [getattr(e, "error", None) for e in effects]
     logger.info('\n%s', effects)
     if args.output_csv:

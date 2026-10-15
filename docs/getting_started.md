@@ -153,7 +153,8 @@ Inputs can be combined and repeated: `--vcf`, `--maf`, `--variant`, and
 - They skip records whose FILTER is not `PASS` or `.`, and report how many were
   skipped. Use `--include-filtered` to keep them.
 
-An annotation error stops the command. `--skip-errors` continues and records
+Records on contigs missing from the annotation remain visible as failures with
+a summary warning. Other annotation errors stop the command. `--skip-errors` continues and records
 each failure in the output; see [continuing past errors](errors.md#continuing-past-errors).
 For sample mix-up screening, see [`varcode check-samples`](sample_identity.md).
 

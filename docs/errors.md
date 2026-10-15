@@ -124,6 +124,21 @@ name would hide bugs in analysis scripts.
 
 ## Continuing past errors
 
+`VariantCollection.effects()`, `VariantCollection.to_dataframe()` and both
+CLIs retain records on contigs absent from the selected annotation, with one
+summary warning. Such records have a `Failure` effect or gene-table diagnostic
+columns; missing annotation does not establish an intergenic location.
+Collection methods accept `raise_on_error=True` for strict handling. Their
+default (`None`) still raises other annotation errors. Single-variant
+`Variant.effects()` remains strict by default.
+
+With UCSC name conversion enabled (the VCF and CLI default), accession-bearing
+names such as `chrUn_KI270438v1` become `KI270438.1`. GRCh37 names such as
+`chrUn_gl000216` become `GL000216.1`, following the
+[UCSC hg19 alias table](https://hgdownload.soe.ucsc.edu/goldenPath/hg19/bigZips/hg19.chromAlias.txt).
+Explicit accession versions are preserved; names without a supported mapping
+remain unchanged. This does not lift coordinates between assemblies.
+
 In Python, pass `raise_on_error=False` to `.effects()`. Each failed
 annotation becomes a `Failure` effect instead of an exception, and other
 transcripts can still annotate successfully:

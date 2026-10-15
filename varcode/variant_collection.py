@@ -11,11 +11,12 @@
 # limitations under the License.
 
 from collections import OrderedDict
+import warnings
 
 import pandas as pd
 from sercol import Collection
 
-from .effects import EffectCollection
+from .effects import EffectCollection, Failure
 from .common import memoize
 from .csv_helpers import (
     CONTIG_COLUMN_ALIASES,
@@ -26,7 +27,7 @@ from .csv_helpers import (
     warn_on_version_drift,
     write_metadata_header,
 )
-from .errors import SampleNotFoundError
+from .errors import InvalidContigError, SampleNotFoundError
 from .genotype import Genotype, Zygosity
 from .variant import Variant, variant_ascending_position_sort_key
 from .version import __version__ as _varcode_version
@@ -119,7 +120,7 @@ class VariantCollection(Collection):
         return self.from_dict(kwargs)
 
     def effects(
-            self, raise_on_error=True,
+            self, raise_on_error=None,
             annotator=None, phase_resolver=None, rna_resolver=None,
             germline=None, validate_reference=True, extra_orfs=None):
         """
@@ -132,10 +133,10 @@ class VariantCollection(Collection):
 
         Parameters
         ----------
-        raise_on_error : bool, optional
-            If exception is raised while determining effect of variant on a
-            transcript, should it be raised? This default is True, meaning
-            errors result in raised exceptions, otherwise they are only logged.
+        raise_on_error : bool or None, optional
+            By default, retain missing-contig records as Failure effects and
+            warn once, but raise other annotation errors. True also raises for
+            missing contigs; False retains all annotation failures.
 
         annotator : str, EffectAnnotator, or None
             Per-call annotator override applied to every variant in
@@ -194,16 +195,16 @@ class VariantCollection(Collection):
                 self, validate_reference=validate_reference)
 
         annotator_instance = resolve_annotator(annotator)
-        per_variant = [
-            effect
-            for variant in self
-            for effect in variant.effects(
-                raise_on_error=raise_on_error,
-                annotator=annotator_instance,
-                germline=germline,
-                phase_resolver=phase_resolver,
-            )
-        ]
+        missing = self._missing_contigs(raise_on_error)
+        strict = raise_on_error is not False
+        per_variant = []
+        for variant in self:
+            if variant in missing:
+                per_variant.append(Failure(variant, error=missing[variant]))
+            else:
+                per_variant.extend(variant.effects(
+                    raise_on_error=strict, annotator=annotator_instance,
+                    germline=germline, phase_resolver=phase_resolver))
         if phase_resolver is not None:
             apply_phase_resolver_to_effects(per_variant, phase_resolver)
             # Joint cis-variant effects sit alongside the per-variant
@@ -212,7 +213,7 @@ class VariantCollection(Collection):
             # individual effect severity.
             per_variant.extend(build_haplotype_effects(
                 self, per_variant, phase_resolver, annotator=annotator_instance,
-                germline=germline, raise_on_error=raise_on_error))
+                germline=germline, raise_on_error=strict))
         if rna_resolver is not None:
             from .rna_evidence import apply_rna_evidence_to_effects
             apply_rna_evidence_to_effects(per_variant, rna_resolver)
@@ -221,14 +222,14 @@ class VariantCollection(Collection):
                 ORFHaplotypeAnnotator, ORFPhaseResolver, prepare_extra_orfs,
             )
             prepared = prepare_extra_orfs(extra_orfs)
-            additional = [effect for variant in self for effect in prepared.effects(
-                variant, raise_on_error=raise_on_error, germline=germline,
+            additional = [effect for variant in self if variant not in missing for effect in prepared.effects(
+                variant, raise_on_error=strict, germline=germline,
                 phase_resolver=phase_resolver, rna_resolver=rna_resolver)]
             if phase_resolver is not None:
                 additional.extend(build_haplotype_effects(
                     self, additional, ORFPhaseResolver(phase_resolver),
                     annotator=ORFHaplotypeAnnotator(), germline=germline,
-                    raise_on_error=raise_on_error))
+                    raise_on_error=strict))
             per_variant.extend(additional)
         return EffectCollection(per_variant,
             annotator=getattr(annotator_instance, "name", None),
@@ -456,21 +457,47 @@ class VariantCollection(Collection):
         "chr", "start", "ref", "alt", "gene_name", "gene_id",
     )
 
-    def to_dataframe(self, raise_on_error=True):
+    def _missing_contigs(self, raise_on_error):
+        """Check this dataset, retaining unavailable annotations explicitly."""
+        missing = {}
+        for variant in self:
+            try:
+                variant._check_that_genome_has_contig()
+            except InvalidContigError as error:
+                if raise_on_error is True:
+                    raise
+                missing[variant] = str(error)
+            except Exception:
+                # Reference installation/database errors still follow the
+                # ordinary annotation error policy, not missing-contig policy.
+                if raise_on_error is not False:
+                    raise
+        if missing:
+            names = sorted({"%s:%s" % (v.reference_name, v.contig) for v in missing})
+            warnings.warn("%d variants on contigs absent from the annotation: %s; "
+                          "retained as failures" % (len(missing), ", ".join(names)),
+                          UserWarning, stacklevel=3)
+        return missing
+
+    def to_dataframe(self, raise_on_error=None):
         """Build a DataFrame from this variant collection.
 
-        With ``raise_on_error=False``, retain variants whose gene lookup fails
-        and add ``annotation_status`` / ``annotation_error`` diagnostic columns.
+        By default, missing contigs are retained with diagnostic columns while
+        other errors raise. True raises all errors; False retains all failures.
         """
+        missing = self._missing_contigs(raise_on_error)
+        diagnostics = bool(missing) or raise_on_error is False
         structural_columns = STRUCTURAL_VARIANT_COLUMNS if any(
             getattr(v, "is_structural", False) for v in self) else ()
         def row_from_variant(variant):
             error = None
             try:
+                if variant in missing:
+                    raise InvalidContigError(missing[variant])
                 gene_names = ";".join(variant.gene_names)
                 gene_ids = ";".join(variant.gene_ids)
             except Exception as exc:
-                if raise_on_error:
+                if raise_on_error is not False and not isinstance(exc, InvalidContigError):
                     raise
                 gene_names = gene_ids = None
                 error = str(exc)
@@ -483,7 +510,7 @@ class VariantCollection(Collection):
                 ("gene_id", gene_ids)
             ])
             row.update((name, getattr(variant, name, None)) for name in structural_columns)
-            if not raise_on_error:
+            if diagnostics:
                 row.update(annotation_status="Failure" if error is not None else "ok",
                            annotation_error=error)
             return row
@@ -491,9 +518,9 @@ class VariantCollection(Collection):
         # Always return a DataFrame with the expected columns, even
         # when empty, so downstream code (CSV round-trip, joins) doesn't
         # have to special-case len == 0.
-        diagnostics = () if raise_on_error else ("annotation_status", "annotation_error")
+        diagnostic_columns = ("annotation_status", "annotation_error") if diagnostics else ()
         return pd.DataFrame.from_records(
-            rows, columns=self._DATAFRAME_COLUMNS + structural_columns + diagnostics)
+            rows, columns=self._DATAFRAME_COLUMNS + structural_columns + diagnostic_columns)
 
     def to_csv(self, path, include_header=True):
         """Write this collection to CSV.

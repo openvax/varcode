@@ -1,11 +1,11 @@
-"""Versioned structural-effect graphs, including self-referential candidates.
+"""Versioned effect graphs, including self-referential realized candidates.
 
-Only effect/candidate links use graph references. Variants, transcripts, and
-MutantTranscript models retain their existing Serializable representations.
+Effects and transcript-model records use graph references. Variants,
+transcripts and MutantTranscript retain their existing Serializable formats.
 This is an object archive, not a portable annotation database.
 """
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, fields, replace
 from inspect import Parameter, signature
 
 from serializable import DataclassSerializable
@@ -27,37 +27,54 @@ _ATTACHED_FIELDS = (
     "_modifies_protein_sequence", "modifies_coding_sequence",
     "modifies_protein_sequence", "variants", "phase_source", "annotator",
     "annotator_version", "observed_mutant_transcripts",
+    "candidates", "realized_candidates", "most_likely_candidate",
+    "highest_priority_candidate", "hypotheses", "mechanism_rank",
+    "probability", "splice_signal", "germline_unknown",
 )
 
 
-def structural_effect_to_dict(root):
+def _model_types():
+    from ..effect_hypotheses import (
+        ClassifiedOutcome, EffectHypothesis, RealizedEffectCandidate,
+        RealizedTranscriptProduct, SpliceOption, SplicePlan, SpliceSiteKey,
+    )
+    return (ClassifiedOutcome, EffectHypothesis, RealizedEffectCandidate,
+            RealizedTranscriptProduct, SpliceOption, SplicePlan, SpliceSiteKey)
+
+
+def structural_effect_to_dict(root, *, schema="structural_effect_schema"):
     from .effect_classes import MutationEffect, StructuralVariantEffect
 
     indices = {}
     nodes = []
+    model_types = _model_types()
 
     def encode(value):
-        if isinstance(value, MutationEffect):
+        if isinstance(value, MutationEffect) or type(value) in model_types:
             key = id(value)
             if key not in indices:
                 indices[key] = len(nodes)
                 nodes.append(None)  # reserve before following self links
-                fields = {}
+                if type(value) in model_types:
+                    state = {f.name: getattr(value, f.name) for f in fields(value)}
+                    nodes[indices[key]] = (type(value), encode(state), {})
+                    return _EffectReference(indices[key])
+                state = {}
                 for name, parameter in signature(type(value).__init__).parameters.items():
                     if name == "self" or parameter.kind in (
                             Parameter.VAR_POSITIONAL, Parameter.VAR_KEYWORD):
                         continue
                     if name == "primary_effects" and isinstance(value, StructuralVariantEffect):
-                        fields[name] = value._primary_effects
+                        state[name] = value._primary_effects
                     elif name == "candidates" and hasattr(value, "_candidates"):
-                        fields[name] = value._candidates
+                        state[name] = value._candidates
                     elif hasattr(value, name):
-                        fields[name] = getattr(value, name)
+                        state[name] = getattr(value, name)
                     elif parameter.default is Parameter.empty:
                         raise ValueError("Missing effect constructor field: %s" % name)
                 attached = {name: value.__dict__[name] for name in _ATTACHED_FIELDS
-                            if name in value.__dict__ and name not in fields}
-                nodes[indices[key]] = (type(value), encode(fields), encode(attached))
+                            if name in value.__dict__ and name not in state}
+                nodes[indices[key]] = (type(value), encode(state), encode(attached))
             return _EffectReference(indices[key])
         if isinstance(value, EffectCandidate):
             return replace(value, effect=encode(value.effect), evidence=encode(value.evidence))
@@ -68,35 +85,38 @@ def structural_effect_to_dict(root):
         return value
 
     encode(root)
-    return {"structural_effect_schema": 1, "nodes": tuple(nodes)}
+    return {schema: 1, "nodes": tuple(nodes)}
 
 
-def structural_effect_from_dict(root_class, state):
+def structural_effect_from_dict(root_class, state, *, schema="structural_effect_schema"):
     from .effect_classes import MutationEffect
 
-    if state.get("structural_effect_schema") != 1:
-        raise ValueError("Unsupported structural effect serialization schema")
+    if state.get(schema) != 1:
+        raise ValueError("Unsupported effect serialization schema")
     nodes = state["nodes"]
     if not nodes or nodes[0][0] is not root_class:
-        raise ValueError("Structural effect root class does not match archive")
-    for cls, _, _ in nodes:
-        if not isinstance(cls, type) or not issubclass(cls, MutationEffect):
-            raise ValueError("Structural effect graph contains a non-effect class")
+        raise ValueError("Effect root class does not match archive")
+    model_types = _model_types()
+    for cls, _, attached in nodes:
+        if not isinstance(cls, type) or not (issubclass(cls, MutationEffect) or cls in model_types):
+            raise ValueError("Effect graph contains an unsupported class")
+        if cls in model_types and attached:
+            raise ValueError("Unexpected transcript-model attachment")
     objects = [object.__new__(cls) for cls, _, _ in nodes]
     started = set()
 
     def decode(value):
         if isinstance(value, _EffectReference):
             index = value.index
-            if not isinstance(index, int) or not 0 <= index < len(nodes):
-                raise ValueError("Invalid structural effect graph reference")
+            if type(index) is not int or not 0 <= index < len(nodes):
+                raise ValueError("Invalid effect graph reference")
             if index not in started:
                 started.add(index)
                 cls, fields, attached = nodes[index]
                 cls.__init__(objects[index], **decode(fields))
                 for name, item in decode(attached).items():
                     if name not in _ATTACHED_FIELDS:
-                        raise ValueError("Unknown structural effect attachment: %s" % name)
+                        raise ValueError("Unknown effect attachment: %s" % name)
                     setattr(objects[index], name, item)
             return objects[index]
         if isinstance(value, EffectCandidate):

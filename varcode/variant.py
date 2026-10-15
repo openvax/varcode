@@ -10,6 +10,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import re
+
 from pyensembl.locus import normalize_chromosome
 from serializable import Serializable
 from typechecks import require_instance
@@ -21,6 +23,7 @@ from .nucleotides import (
 )
 from .reference import  infer_genome, ensembl_to_ucsc_reference_names
 from .string_helpers import trim_shared_flanking_strings
+from .errors import InvalidContigError
 from .effects import (
     predict_variant_effects,
     predict_variant_effect_on_transcript
@@ -357,7 +360,7 @@ class Variant(Serializable):
         # Different annotation datasets can share an assembly name. Query
         # this genome's contigs; pyensembl caches the query per database.
         if self.contig not in self.genome.contigs():
-            raise ValueError("Invalid contig name '%s' for reference '%s'" % (
+            raise InvalidContigError("Invalid contig name '%s' for reference '%s'" % (
                 self.contig,
                 self.reference_name))
 
@@ -610,9 +613,12 @@ class Variant(Serializable):
 
     def _convert_ucsc_contig_name_to_ensembl(self, contig):
         """
-        Convert names such as "chr1" to "1" but don't convert the
-        unplaced contigs such as "chrUn_KI270438v1" or alt contigs
-        such as "chr6_apd_hap1".
+        Convert UCSC chromosome and accession-bearing scaffold names.
+
+        Preserve explicit accession versions. The unversioned GL names in
+        hg19 are version 1 (UCSC hg19.chromAlias.txt); do not reinterpret them
+        as a different version found in a newer assembly. This is a name
+        conversion only and does not open or download reference data.
 
         Parameters
         ----------
@@ -622,6 +628,15 @@ class Variant(Serializable):
         -------
         str
         """
+        match = re.fullmatch(
+            r"chr(?:Un|[0-9XYM]+)_([A-Za-z]+[0-9]+)v([0-9]+)(?:_(?:random|alt|fix))?",
+            contig)
+        if match:
+            return "%s.%s" % (match[1].upper(), match[2])
+        if self.reference_name == "GRCh37":
+            match = re.fullmatch(r"chr(?:Un|[0-9XYM]+)_(gl000[0-9]{3})(?:_random)?", contig)
+            if match and 191 <= int(match[1][-3:]) <= 249:
+                return match[1].upper() + ".1"
         if contig.startswith("chr") and "_" not in contig:
             contig = contig[3:]
         if contig == "M":

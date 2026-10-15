@@ -51,6 +51,16 @@ neither alone proves translation.
 
 ## Related objects
 
+Effects produced by `annotator="transcript_model"` retain their typed
+candidates, hypotheses, baseline and mutant products, evidence and ranking
+through `EffectCollection.to_json()` / `from_json()` and individual effect
+serialization. The versioned graph preserves candidate links to the owning
+effect and retains unknown probabilities as `None`. Older effect JSON remains
+readable. Transcript references still use the existing PyEnsembl serialization
+contract; the archive is not a replacement for reference annotation data.
+Extra-ORF effect JSON remains a separate unsupported operation; use its native
+`orf_annotation.to_dict()` export.
+
 | Object | Contents |
 |---|---|
 | `MutationEffect` | A predicted consequence or an unresolved result |
