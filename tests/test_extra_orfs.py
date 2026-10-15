@@ -241,9 +241,47 @@ def test_placements_are_made_once_per_genome_and_reused(native):
 
     variant, _, _ = native
     resolver = prepare_extra_orfs("ms")
-    assert prepare_extra_orfs("ms") is resolver and prepare_extra_orfs(orfdata.MS()) is not resolver
+    # "ms" is MS(): one rule, one set of placements.
+    assert prepare_extra_orfs("ms") is resolver and prepare_extra_orfs(orfdata.MS()) is resolver
+    assert prepare_extra_orfs(orfdata.RiboSeq()) is not resolver
+    with pytest.raises(ValueError, match="Unknown evidence method"):
+        prepare_extra_orfs("MS")
     assert resolver.for_genome(variant.genome) is resolver.for_genome(variant.genome)
     assert prepare_extra_orfs(False) is None
     assert len(variant.effects(extra_orfs=False)) == len(variant.effects())
     collection = VariantCollection([variant]).effects(extra_orfs="ms")
     assert any(e.orf is not None and e.orf.orf_id == "c7riboseqorf56" for e in collection)
+
+
+def test_a_declared_near_cognate_start_initiates_its_orf():
+    transcript = synthetic()
+    transcript.sequence = "CCCGTGAAACCCGGGTAAATGAAATAA"  # GTG, read as methionine, as the source declares.
+    reference = replace(transcript.record(), start_codon="GTG").bind(transcript)
+    effect = transcript.variant(6, "A", "G").effects(extra_orfs=[reference]).orf_annotations[0].effect
+    assert isinstance(effect, Substitution) and effect.short_description == "p.K2E"
+
+
+def test_orfs_orfdata_could_not_place_never_fail_zero_config_effects(native):
+    from varcode.extra_orfs import ExtraORFInput
+
+    variant, reference, catalog = native
+
+    class Placed:
+        def __iter__(self):
+            return iter(())
+    placed = Placed()
+    placed.reference, placed.catalog = reference.context, catalog
+    placed.excluded = (SimpleNamespace(orf_id=reference.model.orf_id, reason="unavailable path"),)
+    # An explicit collection reports it, naming the ORF; ORFdata's own placements leave it out.
+    with pytest.raises(ValueError, match="Extra ORF c7riboseqorf56: unavailable path"):
+        variant.effects(extra_orfs=placed)
+    quiet = variant.effects(extra_orfs=ExtraORFInput(placed, report_excluded=False))
+    assert quiet.orf_annotations == () and len(quiet) == len(variant.effects())
+
+
+def test_annotations_carry_the_catalogue_summary_not_its_record_lists(native):
+    from varcode.extra_orfs import _summary
+
+    summary = _summary(orfdata.load_catalog())
+    assert summary["source"] and summary["genome_build"] == "GRCh38"
+    assert not {"unresolved", "catalog_manifest", "records"} & set(summary)

@@ -84,6 +84,8 @@ class _ORFTranscript:
         self.is_protein_coding = True
         self.complete = True
         self.translation_table = reference.model.translation_table
+        # A declared near-cognate start initiates this ORF; see codon_table_for_transcript.
+        self.declared_start_codon = getattr(reference.model, "start_codon", None)
         # Distinct coding models on one RNA must survive candidate deduplication.
         self.id = "%s:orf:%s" % (transcript.id, sha256(repr(_orf_key(reference)).encode()).hexdigest())
         self.name = "%s:%s" % (transcript.id, reference.model.orf_id)

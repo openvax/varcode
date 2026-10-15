@@ -23,7 +23,7 @@ Refs:
   https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi?mode=t#SG2
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 _BASES = "TCAG"
 _CODONS = tuple(b1 + b2 + b3 for b1 in _BASES for b2 in _BASES for b3 in _BASES)
@@ -113,14 +113,20 @@ def codon_table_for_transcript(transcript):
     code = getattr(transcript, "translation_table", None)
     if code is not None:
         if code == 1:
-            return STANDARD
-        if code == 2:
-            return VERTEBRATE_MITOCHONDRIAL
-        raise ValueError("Unsupported explicit NCBI translation table: %s" % code)
-    contig = getattr(transcript, "contig", None)
-    if is_mitochondrial_contig(contig):
-        return VERTEBRATE_MITOCHONDRIAL
-    return STANDARD
+            table = STANDARD
+        elif code == 2:
+            table = VERTEBRATE_MITOCHONDRIAL
+        else:
+            raise ValueError("Unsupported explicit NCBI translation table: %s" % code)
+    else:
+        contig = getattr(transcript, "contig", None)
+        table = VERTEBRATE_MITOCHONDRIAL if is_mitochondrial_contig(contig) else STANDARD
+    # A source-supported near-cognate start (GTG, ACG, ...) that the ORF model
+    # declares initiates that ORF, read as methionine like the table's own.
+    declared = getattr(transcript, "declared_start_codon", None)
+    if isinstance(declared, str) and declared not in table.start_codons:
+        table = replace(table, start_codons=table.start_codons | {declared})
+    return table
 
 
 def translate_sequence(

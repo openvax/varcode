@@ -34,8 +34,8 @@ include = ["varcode", "varcode.*"]
 "Bug Tracker" = "https://github.com/openvax/varcode/issues"
 
 [project.optional-dependencies]
-orf = ["orfdata[pyensembl]>=0.27.1,<1"]
-uorf = ["orfdata[pyensembl]>=0.27.1,<1"]
+orf = ["orfdata[pyensembl]>=0.28.0,<1"]
+uorf = ["orfdata[pyensembl]>=0.28.0,<1"]
 rna = ["pysam>=0.21"]
 test-data = ["osteosarc>=0.14.4,<0.16"]
 

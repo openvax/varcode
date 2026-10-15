@@ -6,9 +6,21 @@
   as `RiboSeq(min_studies=2) & MS()` in `Variant.effects()` and
   `VariantCollection.effects()` uses ORFdata's ORFs for each variant's own
   genome. ORFdata picks its species and assembly's catalogues, lifting them
-  from another assembly when needed, so GRCh37, T2T-CHM13 and mouse work as
-  GRCh38 does. Placements are made once per genome and reused. `False` means
-  none. The `orf` extra now needs `orfdata>=0.27.1`.
+  from another assembly when needed, so GRCh37, NCBI36, T2T-CHM13 and mouse
+  (GRCm39, GRCm38) work as GRCh38 does. `False` means none. The `orf` extra
+  now needs `orfdata>=0.28.0`.
+  - Placements are made once per genome and reused: the last four genomes,
+    and `"ms"` and `MS()` share them. `clear_extra_orfs_cache()` drops them.
+    Placements are indexed, so a variant adds about 2 ms on a warm cache,
+    not a scan of every placement.
+  - ORFs ORFdata could not place on the genome (an older annotation may lack
+    their transcript) are left out, never an error. `GenomeExtraORFs.excluded`
+    lists them. An explicit ORFdata collection still reports them, now naming
+    the ORF.
+  - Each annotation carries the catalogue's identity and provenance, not its
+    per-record lists, so a mouse annotation's JSON is about 90 KB, not 900 KB.
+- An ORF model's declared near-cognate start (GTG, ACG) initiates its ORF.
+  Missense changes in such ORFs were reported as Silent.
 
 ## v10.15.1 (2026-10-14)
 

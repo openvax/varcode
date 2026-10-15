@@ -30,9 +30,17 @@ species once ORFdata has what they need, and fails with the command that
 installs anything missing:
 
 - human GRCh38: the bundled catalogue, nothing to install;
-- human GRCh37, NCBI36 or T2T-CHM13: `orfdata chains download` (and, for
-  CHM13, `orfdata genomes install t2t-chm13` for the annotation);
-- mouse: `orfdata setup --species mouse --accept-terms`.
+- human GRCh37, NCBI36 or T2T-CHM13: `orfdata setup --species human` for the
+  chain files (and, for CHM13, `orfdata genomes install t2t-chm13` for the
+  annotation);
+- mouse: `pip install "orfdata[data,build-data]"`, then `orfdata setup
+  --species mouse`, which builds the three mouse catalogues from their
+  sources (add `--accept-terms` for UCSC's GRCm38 and NCBIM37 chains).
+
+ORFs ORFdata could not place on the genome, for example because an older
+annotation lacks their transcript, are left out rather than failing the
+call; `varcode.extra_orfs.prepare_extra_orfs(True).excluded(genome)` lists
+them with the reason.
 
 ## Annotate ordinary and extra ORFs together
 
