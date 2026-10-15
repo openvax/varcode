@@ -101,10 +101,13 @@ def is_mitochondrial_contig(contig):
 
 
 def codon_table_for_transcript(transcript):
-    """Select the codon table for a transcript based on its contig.
+    """Select this coding model's genetic code and initiation codons.
 
-    Vertebrate mitochondrial genes use NCBI translation table 2;
-    every other transcript uses the standard table.
+    Explicit ``translation_table`` and source-declared ``start_codon`` take
+    precedence over defaults. Otherwise mitochondrial contigs use table 2
+    and other contigs use table 1. A declared start extends only this model's
+    initiation set; its internal amino acid and the global tables are unchanged.
+    This recognizes a retained source start, not evidence for mutant translation.
     """
     if transcript is None:
         return STANDARD
@@ -119,13 +122,14 @@ def codon_table_for_transcript(transcript):
         else:
             raise ValueError("Unsupported explicit NCBI translation table: %s" % code)
     else:
-        contig = getattr(transcript, "contig", None)
-        table = VERTEBRATE_MITOCHONDRIAL if is_mitochondrial_contig(contig) else STANDARD
-    # A source-supported near-cognate start (GTG, ACG, ...) that the ORF model
-    # declares initiates that ORF, read as methionine like the table's own.
-    declared = getattr(transcript, "declared_start_codon", None)
-    if isinstance(declared, str) and declared not in table.start_codons:
-        table = replace(table, start_codons=table.start_codons | {declared})
+        table = (VERTEBRATE_MITOCHONDRIAL if is_mitochondrial_contig(
+            getattr(transcript, "contig", None)) else STANDARD)
+    declared = getattr(transcript, "start_codon", None)
+    if declared is not None:
+        if declared not in table.forward_table:
+            raise ValueError("Unsupported declared initiation codon: %r" % declared)
+        if declared not in table.start_codons:
+            return replace(table, start_codons=table.start_codons | {declared})
     return table
 
 

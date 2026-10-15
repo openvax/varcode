@@ -21,8 +21,16 @@
     the ORF.
   - Each annotation carries the catalogue's identity and provenance, not its
     per-record lists, so a mouse annotation's JSON is about 90 KB, not 900 KB.
-- An ORF model's declared near-cognate start (GTG, ACG) initiates its ORF.
-  Missense changes in such ORFs were reported as Silent.
+
+## v10.15.2 (2026-10-15)
+
+- Preserve source-declared non-AUG initiation in extra ORF variant, haplotype,
+  splice and mapped RNA-product translation. Downstream variants in GTG/ACG
+  ORFs now retain the reference protein and receive coding consequences instead
+  of false Silent effects with empty proteins (#597).
+- Keep initiation specific to the source coding model, retain ordinary internal
+  codon translation, and preserve conditional-translation evidence and explicit
+  start-change/loss behavior.
 
 ## v10.15.1 (2026-10-14)
 
