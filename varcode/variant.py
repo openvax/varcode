@@ -510,8 +510,14 @@ class Variant(Serializable):
             reference-relative behaviour byte-identically. See
             openvax/varcode#268.
 
-        extra_orfs : ORFCatalog or iterable of ReferenceORF, optional
-            Additional reference coding frames, supplied by ORFdata. A catalogue
+        extra_orfs : bool, str, ORFdata rule, ORFCatalog or iterable of ReferenceORF, optional
+            Additional reference coding frames, supplied by ORFdata. ``True``
+            uses ORFdata's ORFs for this variant's genome: its species and
+            assembly's catalogues, lifted from another assembly when needed,
+            placed on every transcript carrying each ORF's exact coding path.
+            An evidence name such as ``"ms"`` or a rule such as
+            ``orfdata.RiboSeq(min_studies=2) & orfdata.MS()`` selects among
+            them. Placements are made once per genome and reused. A catalogue
             is resolved against this variant's genome; bound ORFs retain their
             transcript placements. Ordinary effects are preserved, and native
             ORF consequences are appended using the transcript-model engine.
@@ -536,9 +542,10 @@ class Variant(Serializable):
         if rna_resolver is not None:
             from .rna_evidence import apply_rna_evidence_to_effects
             apply_rna_evidence_to_effects(effects, rna_resolver)
-        if extra_orfs is not None:
-            from .extra_orfs import prepare_extra_orfs
-            additional = prepare_extra_orfs(extra_orfs).effects(
+        from .extra_orfs import prepare_extra_orfs
+        prepared = prepare_extra_orfs(extra_orfs)
+        if prepared is not None:
+            additional = prepared.effects(
                 self, raise_on_error=raise_on_error, germline=germline,
                 phase_resolver=phase_resolver, rna_resolver=rna_resolver)
             effects = effects.clone_with_new_elements([*effects, *additional])

@@ -104,8 +104,57 @@ class ExtraORFInput:
         return result
 
 
+class GenomeExtraORFs:
+    """ORFdata's extra ORFs for each variant's own genome, placed once per genome.
+
+    ``evidence`` is what ``orfdata.extra_orfs`` takes: ``None`` for every
+    catalogue ORF, an evidence name such as ``"ms"``, or a rule such as
+    ``RiboSeq(min_studies=2) & MS()``. ORFdata picks the catalogue for the
+    genome's species and assembly, lifting one from another assembly when
+    needed, and places each ORF on every transcript carrying its exact
+    coding path and protein.
+    """
+
+    def __init__(self, evidence=None):
+        self.evidence = evidence
+        self._inputs = {}
+
+    def for_genome(self, genome):
+        if genome not in self._inputs:
+            from orfdata import extra_orfs
+            self._inputs[genome] = ExtraORFInput(extra_orfs(genome, self.evidence))
+        return self._inputs[genome]
+
+    def effects(self, variant, **kwargs):
+        return self.for_genome(variant.genome).effects(variant, **kwargs)
+
+
+# One resolver per evidence selection, so repeated calls reuse placements.
+_RESOLVERS = {}
+
+
+def _resolver(evidence):
+    import json
+    key = (json.dumps(evidence.to_dict(), sort_keys=True)
+           if hasattr(evidence, "to_dict") else evidence)
+    if key not in _RESOLVERS:
+        _RESOLVERS[key] = GenomeExtraORFs(evidence)
+    return _RESOLVERS[key]
+
+
 def prepare_extra_orfs(value):
-    return value if value is None or isinstance(value, ExtraORFInput) else ExtraORFInput(value)
+    """Normalize ``extra_orfs``: None or False for none; True, an evidence name or
+    an ORFdata rule for ORFdata's ORFs on each variant's genome; else a catalogue
+    or bound ORFs."""
+    if value is None or value is False:
+        return None
+    if isinstance(value, (ExtraORFInput, GenomeExtraORFs)):
+        return value
+    if value is True:
+        return _resolver(None)
+    if isinstance(value, str) or type(value).__module__ == "orfdata.evidence":
+        return _resolver(value)
+    return ExtraORFInput(value)
 
 
 class ORFPhaseResolver:

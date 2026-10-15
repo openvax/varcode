@@ -1,5 +1,15 @@
 # Change Log
 
+## v10.16.0
+
+- `extra_orfs=True`, an evidence name such as `"ms"`, or an ORFdata rule such
+  as `RiboSeq(min_studies=2) & MS()` in `Variant.effects()` and
+  `VariantCollection.effects()` uses ORFdata's ORFs for each variant's own
+  genome. ORFdata picks its species and assembly's catalogues, lifting them
+  from another assembly when needed, so GRCh37, T2T-CHM13 and mouse work as
+  GRCh38 does. Placements are made once per genome and reused. `False` means
+  none. The `orf` extra now needs `orfdata>=0.27.1`.
+
 ## v10.15.1 (2026-10-14)
 
 - Preserve transcript-model candidates, hypotheses, realized baseline/mutant
