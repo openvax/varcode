@@ -43,6 +43,15 @@ class MutationEffect(Serializable):
             return structural_effect_to_dict(self)
         return super().to_dict()
 
+    # Set after construction (extra ORF effects), so to_dict() leaves them out.
+    _attached = ("orf_annotation", "annotator", "annotator_version")
+
+    def __reduce__(self):
+        """Pickle and copy through to_dict(), plus the attributes set after construction."""
+        reduced = super().__reduce__()
+        attached = {k: self.__dict__[k] for k in self._attached if k in self.__dict__}
+        return reduced + (attached,) if attached else reduced
+
     def to_json(self):
         if self.orf is not None or self.orf_annotation is not None:
             raise ValueError("Export extra ORF consequences with orf_annotation.to_dict(); "

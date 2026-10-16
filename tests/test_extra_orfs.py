@@ -221,3 +221,120 @@ def test_exports_cannot_silently_turn_an_orf_into_the_parent_cds(native, tmp_pat
     result.to_csv(path)
     with pytest.raises(ValueError, match="reference coding models"):
         EffectCollection.from_csv(path, genome=variant.genome)
+
+
+@pytest.mark.parametrize("value", ["all", "ms", "riboseq", "immunopeptidomics",
+                                   ["proteomics", "immunopeptidomics"], "rule"])
+def test_orfdata_orfs_for_the_variants_own_genome(native, value):
+    variant, _, _ = native
+    if value == "rule":
+        value = orfdata.RiboSeq() & orfdata.MS()
+    effects = variant.effects(extra_orfs=value)
+    found = {(e.orf.orf_id, e.short_description) for e in effects if e.orf is not None}
+    assert ("c7riboseqorf56", "p.P2A") in found
+    # Ordinary effects are unchanged.
+    assert [(type(e), e.transcript_id) for e in effects if e.orf_annotation is None] == [
+        (type(e), e.transcript_id) for e in variant.effects()]
+
+
+def test_placements_are_made_once_per_genome_and_reused(native):
+    from varcode.extra_orfs import prepare_extra_orfs
+
+    variant, _, _ = native
+    resolver = prepare_extra_orfs("ms")
+    # "ms" is MS(): one rule, one set of placements.
+    assert prepare_extra_orfs("ms") is resolver and prepare_extra_orfs(orfdata.MS()) is resolver
+    assert prepare_extra_orfs(orfdata.RiboSeq()) is not resolver
+    with pytest.raises(ValueError, match="Unknown evidence method"):
+        prepare_extra_orfs("MS")
+    assert resolver.for_genome(variant.genome) is resolver.for_genome(variant.genome)
+    assert prepare_extra_orfs(False) is None
+    assert prepare_extra_orfs("all").evidence is None and prepare_extra_orfs("all") is not resolver
+    with pytest.raises(ValueError, match="doesn't say which ORFs: pass 'all'"):
+        variant.effects(extra_orfs=True)
+    # A list of names is any of them, sharing placements with the same rule; "riboseq" is "ribosome".
+    either = prepare_extra_orfs({"immunopeptidomics", "proteomics"})
+    assert either is prepare_extra_orfs(orfdata.MS(methods="proteomics") | orfdata.MS(methods="immunopeptidomics"))
+    assert prepare_extra_orfs("riboseq") is prepare_extra_orfs("ribosome")
+    assert len(variant.effects(extra_orfs=False)) == len(variant.effects())
+    collection = VariantCollection([variant]).effects(extra_orfs="ms")
+    assert any(e.orf is not None and e.orf.orf_id == "c7riboseqorf56" for e in collection)
+
+
+def test_a_declared_near_cognate_start_initiates_its_orf():
+    transcript = synthetic()
+    transcript.sequence = "CCCGTGAAACCCGGGTAAATGAAATAA"  # GTG, read as methionine, as the source declares.
+    reference = replace(transcript.record(), start_codon="GTG").bind(transcript)
+    effect = transcript.variant(6, "A", "G").effects(extra_orfs=[reference]).orf_annotations[0].effect
+    assert isinstance(effect, Substitution) and effect.short_description == "p.K2E"
+
+
+def test_orfs_orfdata_could_not_place_never_fail_zero_config_effects(native):
+    from varcode.extra_orfs import ExtraORFInput
+
+    variant, reference, catalog = native
+
+    class Placed:
+        def __iter__(self):
+            return iter(())
+    placed = Placed()
+    placed.reference, placed.catalog = reference.context, catalog
+    placed.excluded = (SimpleNamespace(orf_id=reference.model.orf_id, reason="unavailable path"),)
+    # An explicit collection reports it, naming the ORF; ORFdata's own placements leave it out.
+    with pytest.raises(ValueError, match="Extra ORF c7riboseqorf56: unavailable path"):
+        variant.effects(extra_orfs=placed)
+    quiet = variant.effects(extra_orfs=ExtraORFInput(placed, report_excluded=False))
+    assert quiet.orf_annotations == () and len(quiet) == len(variant.effects())
+
+
+def test_annotations_carry_the_catalogue_summary_not_its_record_lists(native):
+    from varcode.extra_orfs import _summary
+
+    summary = _summary(orfdata.load_catalog())
+    assert summary["source"] and summary["genome_build"] == "GRCh38"
+    assert not {"unresolved", "catalog_manifest", "records"} & set(summary)
+
+
+def test_pickled_and_copied_effects_keep_their_orf_annotation(native):
+    import copy
+    import pickle
+
+    variant, _, _ = native
+    effects = variant.effects(extra_orfs="all")
+    for restored in (pickle.loads(pickle.dumps(effects)), copy.deepcopy(effects)):
+        annotations = restored.orf_annotations
+        assert [a.orf_id for a in annotations] == [a.orf_id for a in effects.orf_annotations]
+        assert all(a.effect.orf_annotation is a for a in annotations)
+        assert {e.short_description for e in restored if e.orf is not None} >= {"p.P2A"}
+
+
+def test_a_bad_extra_orfs_value_raises_before_any_annotation(native, monkeypatch):
+    import varcode.variant
+
+    variant, _, _ = native
+
+    def annotated(*args, **kwargs):
+        raise AssertionError("annotated before extra_orfs was checked")
+    monkeypatch.setattr(varcode.variant, "predict_variant_effects", annotated)
+    for bad in (True, "MS", "riboseq "):
+        with pytest.raises(ValueError):
+            variant.effects(extra_orfs=bad)
+        with pytest.raises(ValueError):
+            VariantCollection([variant]).effects(extra_orfs=bad)
+
+
+def test_placements_follow_the_annotation_however_it_is_wrapped(native):
+    import numpy as np
+
+    from varcode import Genome
+    from varcode.extra_orfs import clear_extra_orfs_cache, prepare_extra_orfs
+
+    variant, reference, _ = native
+    resolver = prepare_extra_orfs("ms")
+    placed = resolver.for_genome(variant.genome)
+    assert resolver.for_genome(Genome(variant.genome)) is placed
+    clear_extra_orfs_cache()
+    assert resolver.for_genome(variant.genome) is not placed
+    # An array is never compared to "all"; an array of bound ORFs is a collection, as before.
+    effects = variant.effects(extra_orfs=np.array([reference, reference], dtype=object))
+    assert {a.orf_id for a in effects.orf_annotations} == {"c7riboseqorf56"}

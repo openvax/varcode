@@ -7,6 +7,55 @@ This includes upstream and overlapping ORFs, internal/downstream frames, and
 ORFs on transcripts annotated as noncoding. The bundled catalogue is human
 GRCh38; explicit species-specific catalogues use the same API.
 
+## Annotate with ORFdata's ORFs for the variant's genome
+
+Pass `extra_orfs="all"`, an evidence name or an ORFdata rule, and ORFdata
+chooses the catalogues for the variant's genome and places each ORF on every
+transcript that carries its exact coding path and protein:
+
+```python
+import orfdata
+from pyensembl import cached_release
+from varcode import Variant
+
+variant = Variant("7", 66205486, "C", "G", genome=cached_release(115))
+effects = variant.effects(extra_orfs="all")       # every catalogue ORF
+effects = variant.effects(extra_orfs="ms")        # only MS-supported ones
+effects = variant.effects(extra_orfs=orfdata.RiboSeq() & orfdata.MS())
+```
+
+| `extra_orfs=` | ORFs used |
+| --- | --- |
+| `None` (default) | none |
+| `"all"` | every ORF ORFdata has for the genome |
+| `"ribosome"` or `"riboseq"` | translated in ribosome profiling |
+| `"ms"` | any supporting MS peptide |
+| `"proteomics"` | peptides from digested cellular proteins |
+| `"immunopeptidomics"` | peptides eluted from MHC molecules (HLA in human) |
+| a list of names, e.g. `["proteomics", "immunopeptidomics"]` | ORFs with any of them |
+| an ORFdata rule, e.g. `orfdata.RiboSeq() & orfdata.MS()` | ORFs meeting every part (`&`) or any part (`\|`) |
+| an ORFdata catalogue or bound ORFs | exactly those |
+
+`True` raises rather than guessing which of these you mean.
+
+The ORFs are placed once per genome and reused by later calls and by
+`VariantCollection.effects`. The same call works on other assemblies and
+species once ORFdata has what they need, and fails with the command that
+installs anything missing:
+
+- human GRCh38: the bundled catalogue, nothing to install;
+- human GRCh37, NCBI36 or T2T-CHM13: `orfdata setup --species human` for the
+  chain files (and, for CHM13, `orfdata genomes install t2t-chm13` for the
+  annotation);
+- mouse: `pip install "orfdata[data,build-data]"`, then `orfdata setup
+  --species mouse`, which builds the three mouse catalogues from their
+  sources (add `--accept-terms` for UCSC's GRCm38 and NCBIM37 chains).
+
+ORFs ORFdata could not place on the genome, for example because an older
+annotation lacks their transcript, are left out rather than failing the
+call; `varcode.extra_orfs.prepare_extra_orfs("all").excluded(genome)` lists
+them with the reason.
+
 ## Annotate ordinary and extra ORFs together
 
 Supply a catalogue to the usual effects API. Varcode finds the overlapping

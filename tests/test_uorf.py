@@ -329,7 +329,7 @@ def test_generic_orf_annotation_keeps_noncoding_mouse_parent():
 def test_reference_peptide_retention_preserves_all_duplicated_copies():
     from varcode.orf import _peptide_overlay, _model_positions
     t = Transcript()
-    peptide = orfdata.PeptideEvidence("shotgun", "KP", ((2, 3),), "synthetic", "test")
+    peptide = orfdata.PeptideEvidence("proteomics", "KP", ((2, 3),), "synthetic", "test")
     record = replace(t.record(), peptides=(peptide,))
     native = _model_positions(record)
     # Duplicate the native KP codons in-frame; both copies retain their ancestry.

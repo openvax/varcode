@@ -1,5 +1,31 @@
 # Change Log
 
+## v10.16.0
+
+- `extra_orfs="all"`, an evidence name (`"ribosome"`, `"ms"`,
+  `"proteomics"` or `"immunopeptidomics"`), a list of names for any of them,
+  or an ORFdata rule such as
+  `RiboSeq() & MS()` in `Variant.effects()` and `VariantCollection.effects()`
+  uses ORFdata's ORFs for each variant's own genome. `True` raises, naming
+  these choices, rather than guessing which ORFs are meant. ORFdata picks its species and assembly's catalogues, lifting them
+  from another assembly when needed, so GRCh37, NCBI36, T2T-CHM13 and mouse
+  (GRCm39, GRCm38) work as GRCh38 does. `False` means none. The `orf` extra
+  now needs `orfdata>=0.28.0`.
+  - Placements are made once per genome and reused: the last four genomes,
+    and `"ms"` and `MS()` share them, as do one annotation's genomes however
+    wrapped. `varcode.extra_orfs.clear_extra_orfs_cache()` drops them.
+    Placements are indexed, so a variant adds about 2 ms on a warm cache,
+    not a scan of every placement.
+  - ORFs ORFdata could not place on the genome (an older annotation may lack
+    their transcript) are left out, never an error.
+    `varcode.extra_orfs.prepare_extra_orfs("all").excluded(genome)` lists
+    them. An explicit ORFdata collection still reports them, now naming the
+    ORF.
+  - A bad `extra_orfs` value raises before any variant is annotated.
+  - Pickled and copied effects keep their `orf_annotation`.
+  - Each annotation carries the catalogue's identity and provenance, not its
+    per-record lists, so a mouse annotation's JSON is about 90 KB, not 900 KB.
+
 ## v10.15.2 (2026-10-15)
 
 - Preserve source-declared non-AUG initiation in extra ORF variant, haplotype,
