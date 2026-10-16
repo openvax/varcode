@@ -293,3 +293,48 @@ def test_annotations_carry_the_catalogue_summary_not_its_record_lists(native):
     summary = _summary(orfdata.load_catalog())
     assert summary["source"] and summary["genome_build"] == "GRCh38"
     assert not {"unresolved", "catalog_manifest", "records"} & set(summary)
+
+
+def test_pickled_and_copied_effects_keep_their_orf_annotation(native):
+    import copy
+    import pickle
+
+    variant, _, _ = native
+    effects = variant.effects(extra_orfs="all")
+    for restored in (pickle.loads(pickle.dumps(effects)), copy.deepcopy(effects)):
+        annotations = restored.orf_annotations
+        assert [a.orf_id for a in annotations] == [a.orf_id for a in effects.orf_annotations]
+        assert all(a.effect.orf_annotation is a for a in annotations)
+        assert {e.short_description for e in restored if e.orf is not None} >= {"p.P2A"}
+
+
+def test_a_bad_extra_orfs_value_raises_before_any_annotation(native, monkeypatch):
+    import varcode.variant
+
+    variant, _, _ = native
+
+    def annotated(*args, **kwargs):
+        raise AssertionError("annotated before extra_orfs was checked")
+    monkeypatch.setattr(varcode.variant, "predict_variant_effects", annotated)
+    for bad in (True, "MS", "riboseq "):
+        with pytest.raises(ValueError):
+            variant.effects(extra_orfs=bad)
+        with pytest.raises(ValueError):
+            VariantCollection([variant]).effects(extra_orfs=bad)
+
+
+def test_placements_follow_the_annotation_however_it_is_wrapped(native):
+    import numpy as np
+
+    from varcode import Genome
+    from varcode.extra_orfs import clear_extra_orfs_cache, prepare_extra_orfs
+
+    variant, reference, _ = native
+    resolver = prepare_extra_orfs("ms")
+    placed = resolver.for_genome(variant.genome)
+    assert resolver.for_genome(Genome(variant.genome)) is placed
+    clear_extra_orfs_cache()
+    assert resolver.for_genome(variant.genome) is not placed
+    # An array is never compared to "all"; an array of bound ORFs is a collection, as before.
+    effects = variant.effects(extra_orfs=np.array([reference, reference], dtype=object))
+    assert {a.orf_id for a in effects.orf_annotations} == {"c7riboseqorf56"}

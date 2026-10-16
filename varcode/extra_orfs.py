@@ -167,16 +167,28 @@ class GenomeExtraORFs:
         self._inputs = OrderedDict()
 
     def _placed(self, genome):
-        if genome in self._inputs:
-            self._inputs.move_to_end(genome)
-            return self._inputs[genome]
+        from .genome import Genome
+
+        # A varcode Genome wraps a pyensembl one; placements depend only on the annotation.
+        key = genome._ensembl if isinstance(genome, Genome) else genome
+        if key in self._inputs:
+            self._inputs.move_to_end(key)
+            return self._inputs[key]
         try:
             from orfdata import extra_orfs
         except ImportError as error:
             raise ImportError("extra_orfs needs orfdata>=0.28.0: pip install 'varcode[orf]'") from error
-        placed = extra_orfs(genome, self.evidence)
+        try:
+            placed = extra_orfs(genome, self.evidence)
+        except ValueError as error:
+            if "ReferenceContext" not in str(error):
+                raise
+            raise ValueError(
+                "%s. For extra_orfs, place ORFdata's ORFs with orfdata.extra_orfs(genome, evidence, "
+                "context=orfdata.ReferenceContext(...)) and pass the result"
+                % str(error).rstrip(".")) from error
         found = (placed, ExtraORFInput(placed, metadata=_summary(placed.catalog), report_excluded=False))
-        self._inputs[genome] = found
+        self._inputs[key] = found
         while len(self._inputs) > self.max_genomes:
             self._inputs.popitem(last=False)
         return found
@@ -262,7 +274,7 @@ def prepare_extra_orfs(value):
             "extra_orfs=True doesn't say which ORFs: pass 'all' for every ORF ORFdata has for the "
             "variant's genome, an evidence name such as 'ms', 'ribosome', 'proteomics' or "
             "'immunopeptidomics', a list of names for any of them, an ORFdata rule, or a catalogue")
-    if value == "all":
+    if isinstance(value, str) and value == "all":
         return _resolver(None)
     if isinstance(value, str) or _is_rule(value) or _is_names(value):
         return _resolver(value)

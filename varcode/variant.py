@@ -516,9 +516,10 @@ class Variant(Serializable):
             and assembly's catalogues, lifted from another assembly when
             needed, placed on every transcript carrying each ORF's exact coding
             path. An evidence name selects among them: ``"ms"`` (any MS
-            peptide), ``"ribosome"`` (Ribo-seq), ``"proteomics"`` (peptides
-            from digested cellular proteins) or ``"immunopeptidomics"``
-            (peptides eluted from MHC molecules). A list of names, such as
+            peptide), ``"ribosome"`` or ``"riboseq"`` (Ribo-seq),
+            ``"proteomics"`` (peptides from digested cellular proteins),
+            ``"immunopeptidomics"`` (peptides eluted from MHC molecules) or
+            ``"ms_unclassified"`` (MS whose source doesn't say which). A list of names, such as
             ``["proteomics", "immunopeptidomics"]``, selects ORFs with any of
             them, and a rule such as ``orfdata.RiboSeq() & orfdata.MS()``
             those meeting all of its parts. Placements are made once per genome and reused. A catalogue
@@ -533,6 +534,8 @@ class Variant(Serializable):
             ``annotate_orf_rna_product``; incompatible RNA observations raise
             or become Failure effects according to ``raise_on_error``.
         """
+        from .extra_orfs import prepare_extra_orfs
+        prepared = prepare_extra_orfs(extra_orfs)  # A bad value raises before any annotation.
         effects = predict_variant_effects(
             variant=self,
             raise_on_error=raise_on_error,
@@ -546,8 +549,6 @@ class Variant(Serializable):
         if rna_resolver is not None:
             from .rna_evidence import apply_rna_evidence_to_effects
             apply_rna_evidence_to_effects(effects, rna_resolver)
-        from .extra_orfs import prepare_extra_orfs
-        prepared = prepare_extra_orfs(extra_orfs)
         if prepared is not None:
             additional = prepared.effects(
                 self, raise_on_error=raise_on_error, germline=germline,

@@ -176,8 +176,9 @@ class VariantCollection(Collection):
 
         extra_orfs : str, ORFdata rule, ORFCatalog or iterable of ReferenceORF, optional
             Additional coding frames, as in :meth:`Variant.effects`. ``"all"``,
-            an evidence name or a rule places ORFdata's ORFs once per genome.
-            Iterables are consumed once for the collection. Known-cis variants also
+            an evidence name, a list of names or a rule places ORFdata's ORFs
+            once per genome. A catalogue or an iterable of bound ORFs is
+            consumed once for the collection. Known-cis variants also
             receive joint ORF consequences when a phase resolver is supplied.
         """
         from datetime import datetime, timezone
@@ -195,6 +196,11 @@ class VariantCollection(Collection):
             germline.validate_against(
                 self, validate_reference=validate_reference)
 
+        from .extra_orfs import (
+            ORFHaplotypeAnnotator, ORFPhaseResolver, prepare_extra_orfs,
+        )
+        # A bad extra_orfs value raises before any variant is annotated.
+        prepared = prepare_extra_orfs(extra_orfs)
         annotator_instance = resolve_annotator(annotator)
         missing = self._missing_contigs(raise_on_error)
         strict = raise_on_error is not False
@@ -218,10 +224,6 @@ class VariantCollection(Collection):
         if rna_resolver is not None:
             from .rna_evidence import apply_rna_evidence_to_effects
             apply_rna_evidence_to_effects(per_variant, rna_resolver)
-        from .extra_orfs import (
-            ORFHaplotypeAnnotator, ORFPhaseResolver, prepare_extra_orfs,
-        )
-        prepared = prepare_extra_orfs(extra_orfs)
         if prepared is not None:
             additional = [effect for variant in self if variant not in missing for effect in prepared.effects(
                 variant, raise_on_error=strict, germline=germline,

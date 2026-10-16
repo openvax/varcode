@@ -12,13 +12,17 @@
   (GRCm39, GRCm38) work as GRCh38 does. `False` means none. The `orf` extra
   now needs `orfdata>=0.28.0`.
   - Placements are made once per genome and reused: the last four genomes,
-    and `"ms"` and `MS()` share them. `clear_extra_orfs_cache()` drops them.
+    and `"ms"` and `MS()` share them, as do one annotation's genomes however
+    wrapped. `varcode.extra_orfs.clear_extra_orfs_cache()` drops them.
     Placements are indexed, so a variant adds about 2 ms on a warm cache,
     not a scan of every placement.
   - ORFs ORFdata could not place on the genome (an older annotation may lack
-    their transcript) are left out, never an error. `GenomeExtraORFs.excluded`
-    lists them. An explicit ORFdata collection still reports them, now naming
-    the ORF.
+    their transcript) are left out, never an error.
+    `varcode.extra_orfs.prepare_extra_orfs("all").excluded(genome)` lists
+    them. An explicit ORFdata collection still reports them, now naming the
+    ORF.
+  - A bad `extra_orfs` value raises before any variant is annotated.
+  - Pickled and copied effects keep their `orf_annotation`.
   - Each annotation carries the catalogue's identity and provenance, not its
     per-record lists, so a mouse annotation's JSON is about 90 KB, not 900 KB.
 
