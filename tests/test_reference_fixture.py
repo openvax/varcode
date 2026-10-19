@@ -66,3 +66,50 @@ assert snapshot() == before
                  VARCODE_TEST_CACHE_STATE=cache_state),
         capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("cache_state", ["empty", "partial", "stale_index"])
+def test_optional_atm_fixture_never_provisions_missing_release(tmp_path, cache_state):
+    script = r'''
+import os
+from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+from pyensembl import EnsemblRelease, Genome
+
+cache = Path(os.environ["PYENSEMBL_CACHE_DIR"])
+state = os.environ["VARCODE_TEST_CACHE_STATE"]
+if state != "empty":
+    release = EnsemblRelease(115)
+    gtf = Path(release.download_cache.cached_path(release.gtf_url))
+    gtf.parent.mkdir(parents=True, exist_ok=True)
+    gtf.write_bytes(b"incomplete GTF download")
+    if state == "stale_index":
+        gtf.with_suffix(".db").write_bytes(b"incomplete database")
+
+def snapshot():
+    return {str(p.relative_to(cache)): p.read_bytes() if p.is_file() else None
+            for p in cache.rglob("*")}
+
+before = snapshot()
+attempts = []
+
+def forbid_source_acquisition(*args, **kwargs):
+    attempts.append((args, kwargs))
+    raise AssertionError("optional fixture attempted source acquisition")
+
+with patch.object(Genome, "_set_local_paths", forbid_source_acquisition):
+    with pytest.raises(pytest.skip.Exception, match="Ensembl release 115 not installed"):
+        import tests.test_frameshift_cterminus_regression
+
+assert not attempts, "optional fixture tried to acquire missing sources"
+assert snapshot() == before
+'''
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=Path(__file__).resolve().parents[1],
+        env=dict(os.environ, PYENSEMBL_CACHE_DIR=str(tmp_path),
+                 VARCODE_TEST_CACHE_STATE=cache_state),
+        capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stdout + result.stderr

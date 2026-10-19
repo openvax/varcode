@@ -16,6 +16,8 @@
 - Install CI annotation data from the canonical sources used by the tests,
   matching PyEnsembl 2.27.5's source-specific cache identities
   (openvax/pyensembl#470).
+- Check optional ATM test data availability without downloading missing
+  annotation data during test collection (#605).
 
 ## v10.16.4
 
