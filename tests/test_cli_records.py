@@ -84,6 +84,21 @@ def test_reference_mismatch_keeps_failures_with_coding_and_priority_filters(tmp_
     failures = table[table.effect_type == "Failure"]
     assert len(failures) > 1  # keep each transcript's error, not just one
     assert failures.annotation_error.notna().all()
+    assert failures.annotation_error.str.contains("variant ref='A'", regex=False).all()
+    assert failures.annotation_error.str.contains("reference genome has 'C'", regex=False).all()
+
+
+def test_reference_mismatch_cli_reports_genomic_bases_and_skip_option(capsys):
+    with pytest.raises(SystemExit) as caught:
+        effects_main(["--genome", "GRCh38:81", "--variant", "12", "25245350", "G", "T"])
+    assert caught.value.code == 1
+    error = capsys.readouterr().err
+    assert len(error.splitlines()) == 1
+    assert "12:25245350" in error
+    assert "variant ref='G'" in error
+    assert "reference genome has 'C'" in error
+    assert "--skip-errors" in error
+    assert "raise_on_error" not in error
 
 
 def test_transcript_free_failure_json_round_trip():

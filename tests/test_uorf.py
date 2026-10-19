@@ -64,8 +64,12 @@ def test_kozak_snv_does_not_claim_coding_or_measured_translation(native):
 
 
 def test_ref_mismatch_and_assembly_fail(native):
-    with pytest.raises(ReferenceMismatchError):
+    with pytest.raises(ReferenceMismatchError) as caught:
         annotation(native, 66205486, "A", "G")
+    assert caught.value.genomic_expected_ref == "C"
+    assert caught.value.genomic_observed_ref == "A"
+    assert "variant ref='A'" in str(caught.value)
+    assert "reference genome has 'C'" in str(caught.value)
     record, transcript = native
     with pytest.raises(ValueError, match="assembly"):
         ORFTranscript(record, transcript, genome_build="GRCh37")
@@ -126,6 +130,22 @@ class Transcript:
             position -= len(ref) - 1
             ref, alt = reverse_complement(ref), reverse_complement(alt)
         return Variant("1", position, ref, alt, genome=cached_release(95))
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_orf_ref_mismatch_keeps_original_genomic_alleles_and_interval(reverse):
+    transcript = Transcript(reverse=reverse)
+    variant = transcript.variant(3, "CCC", "CCA")
+    with pytest.raises(ReferenceMismatchError) as caught:
+        annotate_uorf_variants([variant], transcript.record(), transcript, genome_build="GRCh38")
+    error = caught.value
+    assert error.expected_ref == "ATG"
+    assert error.observed_ref == "CCC"
+    assert error.genomic_expected_ref == ("CAT" if reverse else "ATG")
+    assert error.genomic_observed_ref == variant.original_ref
+    assert error.genome_start == variant.original_start
+    assert error.genome_end == variant.original_start + 2
+    assert "1:%d-%d" % (error.genome_start, error.genome_end) in str(error)
 
 
 @pytest.mark.parametrize("taxon,species,assembly", [

@@ -14,6 +14,7 @@ from .effects.codon_tables import codon_table_for_transcript, translate_sequence
 from .effects.effect_classes import MutationEffect, StartLoss, Unresolved
 from .genomic_layout import SequenceUnavailable, UnsupportedLayoutEdit
 from .mutant_transcript import MutantTranscript
+from .nucleotides import reverse_complement
 from .transcript_model import predict_transcript_model_effect
 
 if TYPE_CHECKING:
@@ -383,7 +384,15 @@ def _annotate_orf_variants(variants, record, transcript, *, genome_build,
             if not getattr(variant, "is_structural", False) and variant.original_ref:
                 expected = provider(variant.contig, variant.original_start, variant.original_start + len(variant.original_ref) - 1)
                 if expected != variant.original_ref:
-                    raise ReferenceMismatchError(variant, transcript, variant.original_ref, expected)
+                    observed = variant.original_ref
+                    if view.on_backward_strand:
+                        expected = reverse_complement(expected)
+                        observed = reverse_complement(observed)
+                    raise ReferenceMismatchError(
+                        variant=variant, transcript=view.reference_transcript,
+                        expected_ref=expected, observed_ref=observed,
+                        genome_start=variant.original_start,
+                        genome_end=variant.original_start + len(variant.original_ref) - 1)
         effect = predict_transcript_model_effect(
             variants, view, germline_variants=germline_variants,
             phase_resolver=phase_resolver,

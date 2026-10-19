@@ -1,5 +1,14 @@
 # Change Log
 
+## v10.16.4
+
+- Show genomic forward-strand alleles and the checked interval in reference
+  mismatch errors, including minus-strand transcripts and ORF annotations
+  (#434, #601). Preserve the existing transcript-oriented error fields and expose
+  explicit `genomic_expected_ref` and `genomic_observed_ref` fields.
+- Report CLI reference mismatches on one stderr line with a `--skip-errors`
+  hint; retained failure rows carry the same corrected diagnostic.
+
 ## v10.16.3
 
 - Report CLI input and output path mistakes on one stderr line with exit status

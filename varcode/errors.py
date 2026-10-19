@@ -17,6 +17,8 @@ Exception types raised by varcode. ``ReferenceMismatchError`` subclasses
 ``predict_variant_effect_on_transcript_or_failure`` fallback).
 """
 
+from .nucleotides import reverse_complement
+
 
 class SampleNotFoundError(KeyError):
     """Raised when genotype info is requested for a sample that isn't
@@ -45,6 +47,11 @@ class ReferenceMismatchError(ValueError):
     Callers who would rather continue past this error can pass
     ``raise_on_error=False`` to :meth:`Variant.effects` to receive
     ``Failure`` effects instead.
+
+    ``expected_ref`` and ``observed_ref`` retain the transcript-strand
+    alleles supplied by the annotation engine. ``genomic_expected_ref``
+    and ``genomic_observed_ref`` expose their forward-strand equivalents,
+    which are used in the message alongside genomic coordinates.
     """
 
     def __init__(self, variant, transcript, expected_ref, observed_ref,
@@ -57,23 +64,33 @@ class ReferenceMismatchError(ValueError):
         self.genome_start = genome_start
         self.genome_end = genome_end
 
-        location = ""
+        if getattr(transcript, "on_backward_strand", False):
+            self.genomic_expected_ref = reverse_complement(expected_ref)
+            self.genomic_observed_ref = reverse_complement(observed_ref)
+        else:
+            self.genomic_expected_ref = expected_ref
+            self.genomic_observed_ref = observed_ref
+
+        start = variant.trimmed_base1_start if genome_start is None else genome_start
+        end = variant.trimmed_base1_end if genome_end is None else genome_end
+        location = "%s:%d" % (variant.contig, start)
+        if end != start:
+            location += "-%d" % end
+
+        context = []
+        if transcript is not None:
+            context.append(transcript.id)
+            if transcript.name and transcript.name != transcript.id:
+                context.append(transcript.name)
+            context.append("strand %s" % transcript.strand)
         if transcript_offset is not None:
-            location = " at transcript offset %d" % transcript_offset
-        if genome_start is not None and genome_end is not None:
-            location += " (chromosome positions %d:%d)" % (
-                genome_start, genome_end)
+            context.append("transcript offset %d" % transcript_offset)
 
         message = (
-            "Reference allele mismatch for %s on %s%s: variant reports "
-            "ref=%r but the reference genome has %r at this position.\n"
-            "This usually means the variant was called against a "
-            "different genome build, the ref field was filled in with "
-            "the patient's germline allele rather than the reference, "
-            "or the variant is on the wrong strand. Pass "
-            "raise_on_error=False to .effects() to receive a Failure "
-            "effect instead of raising." % (
-                variant, transcript, location, observed_ref, expected_ref)
+            "Reference allele mismatch at %s: variant ref=%r, "
+            "reference genome has %r%s. Check the genome build and allele strand." % (
+                location, self.genomic_observed_ref, self.genomic_expected_ref,
+                " (%s)" % ", ".join(context) if context else "")
         )
         super().__init__(message)
 
