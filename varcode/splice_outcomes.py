@@ -163,8 +163,8 @@ class SpliceOutcomeSet(MultiOutcomeEffect, TranscriptMutationEffect):
       ``mutant_transcript``, populated when the protein math resolved,
       ``None`` when only the mechanism is predicted.
 
-    For back-compat, :attr:`short_description` delegates to the most
-    likely candidate. Constructed by
+    :attr:`short_description` lists every current candidate in producer
+    order, including unresolved predictions. Constructed by
     :func:`enumerate_splice_outcomes` as part of every
     ``Variant.effects()`` / ``Variant.effect_on_transcript(...)`` /
     ``VariantCollection.effects()`` call (always-on as of varcode 6.0).
@@ -383,11 +383,19 @@ class SpliceOutcomeSet(MultiOutcomeEffect, TranscriptMutationEffect):
 
     @property
     def priority_class(self):
-        """Delegate priority lookup to the disrupted-signal class so a
-        SpliceOutcomeSet sorts as if it were the original splice effect.
+        """Rank by the signal or its higher-priority exonic coding effect.
 
-        Read by :func:`varcode.effects.effect_priority`.
+        This preserves the previous transcript selection without replacing
+        the set with the consequence conditional on normal splicing. Only
+        the eager NormalSplicing candidate is needed for this lookup.
         """
+        if self.disrupted_signal_class is ExonicSpliceSite:
+            from .effects.effect_ordering import effect_priority, transcript_effect_priority_dict
+
+            coding = self.effect_if_splicing_unchanged
+            signal_priority = transcript_effect_priority_dict[ExonicSpliceSite]
+            if coding is not None and effect_priority(coding) > signal_priority:
+                return getattr(coding, "priority_class", None) or type(coding)
         return self.disrupted_signal_class
 
     @property
@@ -453,7 +461,8 @@ class SpliceOutcomeSet(MultiOutcomeEffect, TranscriptMutationEffect):
 
     @property
     def short_description(self) -> str:
-        return "splice-set:%s" % self.most_likely_candidate.effect.short_description
+        return "splice-set:%s" % " | ".join(
+            candidate.effect.short_description for candidate in self.candidates)
 
     def __str__(self) -> str:
         return "SpliceOutcomeSet(variant=%s, transcript=%s, candidates=[%s])" % (

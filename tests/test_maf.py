@@ -14,7 +14,7 @@ import pytest
 
 from pyensembl import ensembl_grch37 as ensembl
 
-from varcode import Variant, load_maf, load_maf_dataframe
+from varcode import SpliceOutcomeSet, Variant, load_maf, load_maf_dataframe
 
 import pandas as pd
 
@@ -70,6 +70,9 @@ def generate_maf_aa_changes():
 @pytest.mark.parametrize(['variant', 'expected_aa_change'], list(generate_maf_aa_changes()))
 def test_maf_aa_changes(variant, expected_aa_change):
     effect = variant.effects().top_priority_effect()
+    if isinstance(effect, SpliceOutcomeSet):
+        # The MAF annotation describes the codon change under normal splicing.
+        effect = effect.effect_if_splicing_unchanged
     change = effect.short_description
     eq_(
         change,

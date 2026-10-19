@@ -259,7 +259,8 @@ def test_internal_exon_next_to_the_first_is_still_skipped_first():
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     target = next(e for e in variant.effects() if e.transcript is transcript)
     assert isinstance(target.most_likely_effect, ExonSkipping)
-    assert target.short_description == "splice-set:exon-skip ENSE00003635654 (p.S18_E54del)"
+    assert target.short_description.startswith("splice-set:exon-skip ENSE00003635654 (p.S18_E54del)")
+    assert all(c.effect.short_description in target.short_description for c in target.candidates)
 
 
 # --------------------------------------------------------------------
@@ -609,15 +610,14 @@ def test_collection_iteration_after_wrapping():
     assert splice_set_count >= 1
 
 
-def test_short_description_uses_most_likely_inner_effect():
+def test_short_description_includes_all_current_candidates():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     effects = variant.effects()
     target = next(e for e in effects if e.transcript is transcript)
     desc = target.short_description
     assert desc.startswith("splice-set:")
-    # The inner mechanism's short_description shows up.
-    assert target.most_likely_effect.short_description in desc
+    assert all(c.effect.short_description in desc for c in target.candidates)
 
 
 # --------------------------------------------------------------------

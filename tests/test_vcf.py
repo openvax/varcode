@@ -39,36 +39,36 @@ HG19_VCF_EXTERNAL_URL = (
 def test_load_vcf_local():
     variants = load_vcf(HG19_VCF_FILENAME)
     assert variants.reference_names() == {"GRCh37"}
-    assert len(variants) == 14
+    assert len(variants) == 13
 
     variants = load_vcf(HG19_VCF_FILENAME + ".gz")
     assert variants.reference_names() == {"GRCh37"}
-    assert len(variants) == 14
+    assert len(variants) == 13
 
     variants = load_vcf("file://%s" % HG19_VCF_FILENAME)
     assert variants.reference_names() == {"GRCh37"}
-    assert len(variants) == 14
+    assert len(variants) == 13
 
     variants = load_vcf("file://%s.gz" % HG19_VCF_FILENAME)
     assert variants.reference_names() == {"GRCh37"}
-    assert len(variants) == 14
+    assert len(variants) == 13
 
     # An extra slashe before an absolute path can confuse URL parsing.
     # Test that it can still be opened:
     variants = load_vcf("/%s" % HG19_VCF_FILENAME)
     assert variants.reference_names() == {"GRCh37"}
-    assert len(variants) == 14
+    assert len(variants) == 13
 
 if RUN_TESTS_REQUIRING_INTERNET:
     def test_load_vcf_external():
         variants = load_vcf(HG19_VCF_FILENAME)
         eq_(variants.reference_names(), {"GRCh37"})
         eq_(variants.original_reference_names(), {"hg19"})
-        eq_(len(variants), 14)
+        eq_(len(variants), 13)
 
         variants = load_vcf(HG19_VCF_FILENAME + ".gz")
         eq_(variants.reference_names(), {"GRCh37"})
-        eq_(len(variants), 14)
+        eq_(len(variants), 13)
 
 def test_vcf_reference_name():
     variants = load_vcf(HG19_VCF_FILENAME)
@@ -121,10 +121,10 @@ def test_genome_arg_to_load_vcf_b37():
         load_vcf(HG19_VCF_FILENAME, genome="b37", convert_ucsc_contig_names=True))
 
 def test_vcf_number_entries():
-    # there are 14 mutations listed in the VCF, make sure they are all parsed
+    # The 14 records include one REF == ALT entry, which is not a variant.
     variants = load_vcf(HG19_VCF_FILENAME)
-    assert len(variants) == 14, \
-        "Expected 14 mutations, got %d" % (len(variants),)
+    assert len(variants) == 13, \
+        "Expected 13 sequence changes, got %d" % (len(variants),)
 
 def test_vcf_number_entries_duplicates():
     # There are 3 duplicated mutations listed in the VCF

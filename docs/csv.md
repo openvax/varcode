@@ -18,6 +18,11 @@ effects = vc.effects()
 effects.to_csv("effects.csv")
 ```
 
+Splice rows list every current candidate description in `effect`, retain
+`effect_type=SpliceOutcomeSet`, and name the affected signal in `splice_signal`.
+The descriptions include unresolved candidates; they do not archive each
+candidate's sequences or evidence.
+
 By default, both writers prepend `#`-prefixed provenance lines so the
 file is self-describing:
 
@@ -155,7 +160,9 @@ What is refused or not kept:
 
 - A subset that drops one of a record's original ALT alleles is rejected
   before any output is written. Keep all alleles, or explicitly remap the
-  genotype and allele-indexed fields first.
+  genotype and allele-indexed fields first. This includes invalid multiallelic
+  input whose reference-identical ALT was skipped by `load_vcf`; correct that
+  source record before exporting it.
 - Records are not merged just because their IDs match.
 - Hand-constructed records without an ALT index are treated as biallelic;
   their GT and standard allele-depth/likelihood fields must agree with that.
