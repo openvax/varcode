@@ -13,7 +13,7 @@ sequence can be determined, it also gives the mutant protein.
 
 ## Installation
 
-Requires Python 3.9 or later:
+Requires Python 3.11 or later:
 
 ```bash
 pip install varcode
