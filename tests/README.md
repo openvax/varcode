@@ -32,9 +32,9 @@ uses the installed backend without downloading build dependencies.
 
 CI builds and unpacks the source distribution outside the checkout, installs
 that source with the `test-data` extra, and runs the full suite and parity
-checks from the unpacked directory on Python 3.9/3.10/3.11/3.12. Python 3.11
-tests both pandas 2 and 3; Python 3.12 and the parity gate use pandas 3.
-Python 3.9/3.10 use pandas 2. All jobs require gtfparse 3.0.2+.
+checks from the unpacked directory on Python 3.11–3.14. Python 3.11 tests
+both pandas 2 and 3; Python 3.12–3.14 and the parity gate use pandas 3.
+All jobs require gtfparse 3.0.2+.
 To reproduce this
 locally, first install the development tools and reference releases from
 [CONTRIBUTING.md](../CONTRIBUTING.md), then:
@@ -111,14 +111,14 @@ separate from export and tests.
 The targeted GPX4 and BRCA1 regressions use Ensembl 81. Offline integration
 checks use the public osteosarc dataset through the published
 osteosarc 0.14.x/0.15.x adapter (`>=0.14.4,<0.16`) from the optional `test-data` extra
-(Python 3.9+):
+(Python 3.11+):
 
 ```sh
 python -m pip install -e '.[test-data]'
 python -m pytest -q tests/test_osteosarc_dataset.py
 ```
 
-These five tests run in the ordinary suite and in CI on Python 3.9/3.10/3.11.
+These five tests run in the ordinary suite and in CI on Python 3.11–3.14.
 They unpack `tests/data/osteosarc_snapshot_2026-09-18t.zip` into a pytest
 temporary directory, check the archive SHA256, and open it offline through
 Osteosarc, which verifies all source objects against their receipts. No

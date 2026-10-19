@@ -2,7 +2,7 @@
 
 This guide takes you from installation to a predicted effect and protein
 sequence, then shows how to annotate a file and read the results. The examples
-use Python 3.9 or later.
+use Python 3.11 or later.
 
 ## Install
 
@@ -170,7 +170,7 @@ also distinguish [junction coordinates from affected spans](sv_reference.md#alle
 ## Dependency versions
 
 Varcode requires PyEnsembl 2.24.1+ and gtfparse 3.0.2+, and supports pandas
-2.2.2+ and 3.x. Python 3.9 and 3.10 remain supported with pandas 2.
+2.2.2+ and 3.x on Python 3.11 or later.
 
 To upgrade an existing environment to pandas 3, use Python 3.11 or later and
 run:

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "varcode"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 authors = [{name = "Alex Rubinsteyn", email = "alex.rubinsteyn@unc.edu"}]
 description = "Variant annotation in Python"
 classifiers = [

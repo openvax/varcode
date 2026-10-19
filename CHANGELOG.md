@@ -1,5 +1,10 @@
 # Change Log
 
+## v10.17.2
+
+- Require Python 3.11 or later and test Python 3.11–3.14 in CI. Continue
+  testing pandas 2 and 3 on Python 3.11; Python 3.12–3.14 use pandas 3.
+
 ## v10.17.1
 
 - Cancel superseded Tests workflow runs for the same pull request (#604).
