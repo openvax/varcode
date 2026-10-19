@@ -11,11 +11,9 @@
 # limitations under the License.
 
 """Tests for the :class:`ReferenceSegment` extension of
-:class:`MutantTranscript` (PR 9; #252).
-
-Coverage is intentionally narrow — this PR only adds the data shape.
-Actual SV annotation that consumes ``reference_segments`` lands in
-PR 10; cryptic-exon enumeration in PR 11.
+:class:`MutantTranscript`. Covers the data shape only; SV annotation
+that consumes ``reference_segments`` is tested in
+``test_structural_variant_annotator.py``.
 """
 
 import pytest

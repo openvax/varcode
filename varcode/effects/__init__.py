@@ -54,7 +54,7 @@ from .effect_classes import (
     StartLoss,
     FrameShift,
     ExonLoss,
-    # Structural-variant effect classes (PR 10; #252)
+    # Structural-variant effect classes
     CrypticExonCandidate,
     GeneFusion,
     Inversion,
@@ -116,7 +116,7 @@ __all__ = [
     "FrameShift",
     "ExonLoss",
 
-    # Structural-variant effect classes (PR 10; #252)
+    # Structural-variant effect classes
     "CrypticExonCandidate",
     "GeneFusion",
     "Inversion",

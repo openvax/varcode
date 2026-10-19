@@ -1,5 +1,11 @@
 # Change Log
 
+## v10.16.1
+
+- Refresh annotator, fast-path, mutant-transcript, and germline documentation
+  to describe the current implementation. Restore the fast-path regression
+  test's comparison with the full effect pipeline (#409).
+
 ## v10.16.0
 
 - `extra_orfs="all"`, an evidence name (`"ribosome"`, `"ms"`,

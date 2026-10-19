@@ -139,7 +139,7 @@ def predict_in_frame_coding_effect(
         argument indicates the offset *after* which to insert the alt
         nucleotides.
     """
-    # Shared fast path for trivial single-codon SNVs (see #271 stage 3c).
+    # Fast path for trivial single-codon SNVs.
     # Returns None for any variant that would need the full in-frame
     # pipeline below (indels, MNVs, start-/stop-adjacent subs).
     fast_path_effect = try_fast_path_snv(

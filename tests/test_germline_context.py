@@ -4,12 +4,9 @@
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
 
-"""Tests for :class:`varcode.germline.GermlineContext` (#268, slice 1).
-
-Slice 1 ships the input contract — constructors, validation,
-completeness flag, window-based lookup. No effect-side logic yet
-(annotator dispatch, transcript construction with germline applied,
-phase enumeration, LOH detection are subsequent slices).
+"""Tests for :class:`varcode.germline.GermlineContext`: constructors,
+validation, completeness flag, window-based lookup. Effect-side logic
+is tested in ``test_germline_effects.py``.
 """
 from __future__ import annotations
 
@@ -133,9 +130,8 @@ class TestFromVariants:
 
 
 class TestWindowLookup:
-    """The window lookup is what slice 2's germline-application path
-    will call millions of times during effect prediction — pin
-    correctness on the boundary cases now while it's free to fix."""
+    """Germline-aware effect prediction calls the window lookup once
+    per (somatic, transcript) pair — pin the boundary cases."""
 
     def _ctx(self, variants):
         return GermlineContext.from_variants(
@@ -238,9 +234,7 @@ class TestValidateAgainst:
 
     def test_unknown_reference_skips_check(self):
         """If we couldn't determine either reference, we can't validate.
-        Don't raise on uncertainty — just no-op. Slice 2's annotator
-        plumbing will surface coordinate mismatches as
-        ReferenceMismatchError on first contact."""
+        Don't raise on uncertainty — just no-op."""
         germ = GermlineContext.from_variants([self._v("GRCh38")])
         # Manually wipe the reference (simulates a context built from
         # variants with no genome attribute).

@@ -25,10 +25,9 @@ class FastEffectAnnotator:
     name = "fast"
 
     version = _varcode_version
-    """Built-in annotators track varcode's own version. Third-party
-    annotators (isovar's plugin, exacto's plugin) expose their own
-    version string here; CSV provenance headers and round-trip
-    warnings read from this field. See #271."""
+    """Built-in annotators track varcode's own version; third-party
+    annotators expose their own. CSV provenance headers and round-trip
+    warnings read from this field."""
 
     def annotate_on_transcript(self, variant, transcript):
         """Delegate to the existing per-transcript prediction.
