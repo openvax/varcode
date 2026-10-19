@@ -77,6 +77,7 @@ def test_varcode_effects_script_user_errors_exit_cleanly(commandline_args, messa
     eq_(exc_info.value.code, 1)
     stderr = capsys.readouterr().err
     assert "Traceback" not in stderr
+    assert len(stderr.splitlines()) == 1
     assert message in stderr
 
 

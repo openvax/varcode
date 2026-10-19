@@ -45,5 +45,6 @@ def test_varcode_genes_script_missing_maf_exits_cleanly(capsys):
     assert exc_info.value.code == 1
     stderr = capsys.readouterr().err
     assert "Traceback" not in stderr
+    assert len(stderr.splitlines()) == 1
     assert ": error: " in stderr
     assert "/nonexistent/x.maf" in stderr
