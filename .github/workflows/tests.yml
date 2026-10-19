@@ -12,6 +12,7 @@ on:
   pull_request:
 
 concurrency:
+  # Supersede only this PR's matrix. Unique run IDs keep every main push.
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
