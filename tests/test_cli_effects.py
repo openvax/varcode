@@ -16,6 +16,7 @@ import pytest
 
 from varcode.cli.effects_script import main as run_script
 from varcode import Variant
+from varcode.variant_collection import VariantCollection
 
 from .common import eq_
 def test_varcode_effects_script_kras_g12d_top_effect():
@@ -60,6 +61,10 @@ def test_varcode_effects_script_kras_g12d_top_effect():
             "--variant position is out of range",
         ),
         (
+            ["--genome", "grch37", "--variant", "12", "0", "C", "T"],
+            "--variant position is out of range",
+        ),
+        (
             ["--genome", "grch37", "--variant", "12", "25398284", "C", "T",
              "--output-csv", "/nonexistent/dir/out.csv"],
             "output directory does not exist: /nonexistent/dir",
@@ -73,6 +78,15 @@ def test_varcode_effects_script_user_errors_exit_cleanly(commandline_args, messa
     stderr = capsys.readouterr().err
     assert "Traceback" not in stderr
     assert message in stderr
+
+
+def test_varcode_effects_script_does_not_hide_annotation_errors(monkeypatch):
+    def fail_annotation(*args, **kwargs):
+        raise ValueError("internal annotation bug")
+
+    monkeypatch.setattr(VariantCollection, "effects", fail_annotation)
+    with pytest.raises(ValueError, match="internal annotation bug"):
+        run_script(["--genome", "grch37", "--variant", "12", "25398284", "C", "T"])
 
 
 def test_varcode_effects_script_output_csv_directory_fails_before_annotating(

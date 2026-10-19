@@ -112,17 +112,17 @@ def make_variants_parser(**kwargs):
 
 
 @contextmanager
-def exit_on_user_error(arg_parser):
+def exit_on_user_error(arg_parser, errors=(ValueError, OSError)):
     """
-    Report mistakes a user can make on the command line (missing input
-    file, unknown genome, invalid contig or allele, reference mismatch,
-    unwritable output path) as a one-line ``prog: error: ...`` message with
-    exit status 1, instead of a traceback.
+    Report input and output errors as a one-line ``prog: error: ...`` message
+    with exit status 1. Callers keep annotation outside this context so
+    internal annotation errors retain their traceback.
     """
     try:
         yield
-    except (ValueError, OSError) as e:
-        arg_parser.exit(1, "%s: error: %s\n" % (arg_parser.prog, e))
+    except errors as e:
+        arg_parser.exit(1, "%s: error: %s\n" % (
+            arg_parser.prog, " ".join(str(e).splitlines())))
 
 
 def check_output_directory(path):
@@ -137,9 +137,8 @@ def check_output_directory(path):
         raise ValueError("output directory does not exist: %s" % directory)
 
 
-# PyEnsembl looks up loci in SQLite, whose INTEGER is a signed 64-bit value.
-# A larger position raises OverflowError from inside the query, which isn't a
-# ValueError and so wouldn't be reported as the bad coordinate it is.
+# Genomic coordinates are 1-based. PyEnsembl looks up loci in SQLite, whose
+# INTEGER is signed 64-bit; larger values raise OverflowError in the query.
 MAX_POSITION = 2 ** 63 - 1
 
 
@@ -150,9 +149,9 @@ def parse_position(position):
         raise ValueError(
             "--variant position must be an integer, got %r" % (position,)
         ) from None
-    if parsed > MAX_POSITION:
+    if not 1 <= parsed <= MAX_POSITION:
         raise ValueError(
-            "--variant position is out of range, got %s (must be at most %d)" % (
+            "--variant position is out of range, got %s (must be between 1 and %d)" % (
                 parsed, MAX_POSITION))
     return parsed
 
