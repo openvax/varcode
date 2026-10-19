@@ -84,19 +84,19 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/pyensembl
-          key: pyensembl-${{ runner.os }}-grch37.75-grch38.81-grch38.95-grcm38.95-${{ hashFiles('requirements.txt') }}-v2
-          # Reuse existing sequences, then cache the complete 2.11 GTFs.
-          restore-keys: |
-            pyensembl-${{ runner.os }}-grch37.75-grch38.81-grch38.95-grcm38.95-${{ hashFiles('requirements.txt') }}-v1
+          # PyEnsembl 2.27.5 keys downloads and indexes by their source URL.
+          key: pyensembl-${{ runner.os }}-grch37.75-grch38.81-grch38.95-grcm38.95-${{ hashFiles('requirements.txt') }}-v3
       - name: Install Ensembl data
         run: |
           echo "Before installing Ensembl releases" && df -h
           # pyensembl install is idempotent — when the cache hit
           # restores the data, these commands just verify and exit.
-          pyensembl install --release 75 --species human --custom-mirror https://github.com/openvax/ensembl-data/releases/download/GRCh37.75/
-          pyensembl install --release 81 --species human --custom-mirror https://github.com/openvax/ensembl-data/releases/download/GRCh38.81/
-          pyensembl install --release 95 --species human --custom-mirror https://github.com/openvax/ensembl-data/releases/download/GRCh38.95/
-          pyensembl install --release 95 --species mouse --custom-mirror https://github.com/openvax/ensembl-data/releases/download/GRCm38.95/
+          # Use the same canonical sources as EnsemblRelease in the tests.
+          # Mirror URLs have distinct cache identities (openvax/pyensembl#470).
+          pyensembl install --release 75 --species human
+          pyensembl install --release 81 --species human
+          pyensembl install --release 95 --species human
+          pyensembl install --release 95 --species mouse
           echo "After installing Ensembl releases" && df -h
       - name: Run unit tests from the source distribution
         working-directory: ${{ runner.temp }}/varcode-sdist

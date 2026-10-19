@@ -375,38 +375,12 @@ def multi_gene_effect_sort_key(effect):
 
 def select_between_exonic_splice_site_and_alternate_effect(effect):
     """
-    If the given effect is an ExonicSpliceSite (or the always-on
-    SpliceOutcomeSet wrapper around one) it might carry a more
-    disruptive coding consequence on its ``alternate_effect``. In
-    that case, return the alternate. Otherwise this is the identity.
+    Select the higher-priority consequence of a raw ExonicSpliceSite.
 
-    "Alternate" here is specifically the *if-splicing-proceeds*
-    coding effect (``NormalSplicing.coding_effect`` on the wrapper,
-    ``ExonicSpliceSite.alternate_effect`` on the legacy raw class) —
-    **not** the highest-priority across all mechanism candidates.
-    This preserves the legacy ``top_priority_effect`` behavior: an
-    exonic variant that introduces a PrematureStop in-codon still
-    surfaces as PrematureStop, but mechanism-only outcomes like
-    ExonSkipping leave the SpliceOutcomeSet as the canonical top
-    (so the full possibility set stays visible to consumers).
+    SpliceOutcomeSet objects remain intact. Their priority_class already
+    accounts for the coding consequence conditional on normal splicing,
+    and selecting that consequence alone would discard other candidates.
     """
-    # Always-on SpliceOutcomeSet: match the legacy unwrap semantics —
-    # only ``ExonicSpliceSite``-disruption had a coding alternate worth
-    # surfacing as the canonical top effect. Intronic disruptions
-    # (SpliceDonor / SpliceAcceptor / IntronicSpliceSite) keep the
-    # SpliceOutcomeSet as the canonical top.
-    from ..splice_outcomes import SpliceOutcomeSet
-    if isinstance(effect, SpliceOutcomeSet):
-        if effect.disrupted_signal_class is not ExonicSpliceSite:
-            return effect
-        alt = effect.alternate_effect
-        if alt is None:
-            return effect
-        signal_priority = effect_priority(effect)
-        alt_priority = effect_priority(alt)
-        if alt_priority > signal_priority:
-            return alt
-        return effect
     if effect.__class__ is not ExonicSpliceSite:
         return effect
     if effect.alternate_effect is None:
@@ -618,10 +592,9 @@ def top_priority_effect_for_single_gene(effects):
 def top_priority_effect(effects):
     """
     Given a collection of variant transcript effects,
-    return the top priority object. ExonicSpliceSite variants require special
-    treatment since they actually represent two effects -- the splicing modification
-    and whatever else would happen to the exonic sequence if nothing else gets
-    changed. In cases where multiple transcripts give rise to multiple
+    return the top priority object, retaining complete splice outcome sets.
+    Raw ExonicSpliceSite effects select their higher-priority consequence.
+    In cases where multiple transcripts give rise to multiple
     effects, use a variety of filtering and sorting heuristics to pick
     the canonical transcript.
     """

@@ -335,13 +335,24 @@ class Variant(Serializable):
                 self.start + 1,
                 self.alt)
         elif self.is_deletion:
+            # HGVS uses a single coordinate for a one-base deletion.
+            # https://hgvs-nomenclature.org/stable/recommendations/DNA/deletion/
+            if self.start == self.end:
+                return "chr%s g.%ddel%s" % (self.contig, self.start, self.ref)
             return "chr%s g.%d_%ddel%s" % (
                 self.contig,
                 self.start,
                 self.end,
                 self.ref)
         elif self.ref == self.alt:
-            return "chr%s g.%d%s" % (self.contig, self.start, self.ref)
+            # Equal alleles trim to empty strings. Describe the original
+            # checked interval, using HGVS's explicit no-change marker.
+            # https://hgvs-nomenclature.org/stable/recommendations/DNA/substitution/
+            end = self.original_start + max(0, len(self.original_ref) - 1)
+            interval = str(self.original_start)
+            if end != self.original_start:
+                interval += "_%d" % end
+            return "chr%s g.%s=" % (self.contig, interval)
         else:
             # substitution
             return "chr%s g.%d%s>%s" % (

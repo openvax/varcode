@@ -79,6 +79,10 @@ def load_vcf(
     temporary file and ``load_vcf`` recurses on the local copy; pandas
     doesn't reliably stream gzipped HTTP responses, so we materialize first.
 
+    Reference-identical ALT alleles are skipped with a counted warning.
+    They do not count toward ``max_variants``; retained alleles keep their
+    original VCF ALT indices and metadata.
+
     Parameters
     ----------
 
@@ -369,6 +373,7 @@ def dataframes_to_variant_collection(
     # drops it and warning every time would just be noise.
     n_skipped_flag_off = 0
     n_skipped_unparseable = 0
+    n_skipped_no_change = 0
     n_filtered_records = 0
     limit_reached = max_variants == 0
     for chunk in (() if limit_reached else dataframes):
@@ -426,6 +431,12 @@ def dataframes_to_variant_collection(
                         continue
                 else:
                     variant = Variant(chrom, int(pos), ref, alt, **variant_kwargs)
+                    # VCF ALT contains non-reference alleles. Compare the
+                    # normalized strings so case differences are not edits.
+                    # https://samtools.github.io/hts-specs/VCFv4.4.pdf section 1.6
+                    if variant.original_ref == variant.original_alt:
+                        n_skipped_no_change += 1
+                        continue
                 variants.append(variant)
                 metadata[variant] = {
                     'id': id_,
@@ -449,6 +460,11 @@ def dataframes_to_variant_collection(
             "Skipped %d VCF record(s) with FILTER other than PASS or '.' in %s. "
             "Use --include-filtered on the CLI (only_passing=False in Python) "
             "to include them." % (n_filtered_records, source_path))
+    if n_skipped_no_change:
+        warn(
+            "Skipped %d reference-identical ALT allele(s) in %s (REF == ALT); "
+            "these records do not describe a sequence change." % (
+                n_skipped_no_change, source_path))
     if n_skipped_flag_off > 0:
         warn(
             "Skipped %d symbolic/breakend allele(s) in %s "

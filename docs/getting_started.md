@@ -103,12 +103,14 @@ for variant, effect in effects.top_priority_effect_per_variant().items():
 effects.to_csv("effects.csv")
 ```
 
-Keep the full `effects` collection when you need every transcript's prediction
-or the alternative outcomes. Note that `effects.top_priority_effect()` (without
+Keep the full `effects` collection when you need every transcript's prediction.
+Selected splice effects retain their complete candidate sets. Note that
+`effects.top_priority_effect()` (without
 `_per_variant`) returns a single effect for the entire collection.
 
-CSV is a report format, not a complete archive: it does not keep every
-alternative outcome or the evidence behind it. Keep your input files too. See
+CSV lists every current splice candidate's description, with the affected
+signal in `splice_signal`. It does not archive complete candidate objects or
+their evidence. Keep your input files too. See
 [saving and reloading results](csv.md) for what survives a round trip.
 
 ## How to read results

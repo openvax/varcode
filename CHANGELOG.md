@@ -1,5 +1,24 @@
 # Change Log
 
+## v10.17.0
+
+- Preserve complete `SpliceOutcomeSet` objects during top-priority selection,
+  including `--one-per-variant`, and list every current candidate in summaries
+  and CSV descriptions (#436). Exonic sets retain the ranking of their coding
+  effect conditional on normal splicing. Call `effect_if_splicing_unchanged`
+  explicitly when that single conditional consequence is wanted.
+- Add `splice_signal` to effect tables containing splice sets so the affected
+  signal is reported separately from the container's `effect_type`.
+- Skip reference-identical VCF ALT alleles with a counted warning, preserving
+  original allele indices and excluding these entries from `max_variants`.
+- Describe single-base deletions without a repeated coordinate, and explicit
+  no-change variants with `=` over the original interval.
+- Install CI annotation data from the canonical sources used by the tests,
+  matching PyEnsembl 2.27.5's source-specific cache identities
+  (openvax/pyensembl#470).
+- Check optional ATM test data availability without downloading missing
+  annotation data during test collection (#605).
+
 ## v10.16.4
 
 - Show genomic forward-strand alleles and the checked interval in reference

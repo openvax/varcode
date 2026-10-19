@@ -23,6 +23,18 @@ print(splice_set.disrupted_signal_class.__name__)  # ExonicSpliceSite
 No opt-in flag is needed. `disrupted_signal_class` identifies the affected
 signal; `candidates` describes what might happen to the transcript.
 
+Since 10.17, top-priority selection and `--one-per-variant` retain the selected
+`SpliceOutcomeSet` with all of its candidates. Its `short_description` lists
+every current candidate, including unresolved predictions. Effect CSVs keep
+`effect_type=SpliceOutcomeSet` and report the affected signal separately in
+`splice_signal`. Candidate order remains the producer's order, not a measured
+probability. These summaries do not preserve the full evidence or sequences.
+
+Exonic sets rank at the higher priority of their signal and their coding
+consequence conditional on normal splicing. Code that previously received an
+unwrapped coding effect from `top_priority_effect()` should now explicitly
+read `effect_if_splicing_unchanged` when it needs that conditional consequence.
+
 ## Candidate outcomes
 
 ```python

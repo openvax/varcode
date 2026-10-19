@@ -373,10 +373,14 @@ class EffectCollection(Collection):
 
     def to_dataframe(self):
         """Build a dataframe from the effect collection."""
+        from ..splice_outcomes import SpliceOutcomeSet
+
         structural_columns = STRUCTURAL_VARIANT_COLUMNS if any(
             getattr(e.variant, "is_structural", False) for e in self) else ()
         orf_columns = ("orf_id", "orf_source", "orf_unresolved_reason") if any(
             e.orf_annotation is not None for e in self) else ()
+        splice_columns = ("splice_signal",) if any(
+            isinstance(e, SpliceOutcomeSet) for e in self) else ()
         # list of properties to extract from Variant objects if they're
         # not None
         variant_properties = [
@@ -403,6 +407,9 @@ class EffectCollection(Collection):
 
             row['effect_type'] = effect.__class__.__name__
             row['effect'] = effect.short_description
+            if isinstance(effect, SpliceOutcomeSet):
+                signal = effect.disrupted_signal_class
+                row['splice_signal'] = signal.__name__ if signal is not None else None
             annotation = effect.orf_annotation
             if annotation is not None:
                 row['orf_id'] = annotation.orf_id
@@ -413,7 +420,7 @@ class EffectCollection(Collection):
         # CSV round-trip doesn't have to special-case len == 0.
         return pd.DataFrame.from_records(
             [row_from_effect(effect) for effect in self],
-            columns=self._DATAFRAME_COLUMNS + structural_columns + orf_columns,
+            columns=self._DATAFRAME_COLUMNS + structural_columns + orf_columns + splice_columns,
         )
 
     def to_csv(self, path, include_header=True):
