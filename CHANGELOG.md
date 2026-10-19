@@ -1,5 +1,12 @@
 # Change Log
 
+## v10.16.3
+
+- Report CLI input and output path mistakes on one stderr line with exit status
+  1. Validate `--variant` positions before annotation, including zero and
+  negative coordinates (#431, #599). Keep annotation errors and retained
+  `Failure` effects on their existing paths.
+
 ## v10.16.2
 
 - Remove unused lint, coverage, and changelog-generator configuration files
