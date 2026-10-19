@@ -23,6 +23,7 @@ a generic ``ValueError`` or ``AssertionError``.
 """
 
 import pytest
+from types import SimpleNamespace
 
 import varcode
 from varcode import Variant, ReferenceMismatchError
@@ -68,8 +69,9 @@ def test_reference_mismatch_error_message_is_actionable():
         assert "'G'" in msg   # actual genome base
         # Suggests the most common causes.
         assert "genome build" in msg or "germline" in msg or "strand" in msg
-        # Points at the escape hatch.
-        assert "raise_on_error=False" in msg
+        assert "Variant(" not in msg
+        assert "Transcript(" not in msg
+        assert "\n" not in msg
     else:
         raise AssertionError("Expected ReferenceMismatchError")
 
@@ -118,3 +120,56 @@ def test_transcript_failure_helper_retains_error():
     assert effect.variant == variant
     assert effect.transcript is transcript
     assert effect.error == str(exc_info.value)
+
+
+@pytest.mark.parametrize("strand, expected, observed, genomic_expected, genomic_observed", [
+    ("+", "AG", "CC", "AG", "CC"),
+    ("-", "AG", "CC", "CT", "GG"),
+])
+def test_mismatch_displays_genomic_bases_and_checked_interval(
+        strand, expected, observed, genomic_expected, genomic_observed):
+    variant = Variant("12", 100, "GGGG", "TTTT", genome=81)
+    transcript = SimpleNamespace(id="ENST_TEST", name="test", strand=strand,
+                                 on_backward_strand=strand == "-")
+    error = ReferenceMismatchError(
+        variant, transcript, expected, observed, transcript_offset=8,
+        genome_start=101, genome_end=102)
+    assert error.expected_ref == expected  # retain transcript-oriented fields
+    assert error.observed_ref == observed
+    assert error.genomic_expected_ref == genomic_expected
+    assert error.genomic_observed_ref == genomic_observed
+    message = str(error)
+    assert "12:101-102" in message
+    assert "variant ref=%r" % genomic_observed in message
+    assert "reference genome has %r" % genomic_expected in message
+    assert "ENST_TEST" in message
+    assert "strand %s" % strand in message
+    assert "transcript offset 8" in message
+
+
+def test_kras_minus_strand_mismatch_reports_forward_alleles():
+    variant = Variant("12", 25245350, "G", "T", genome=81)
+    transcript = variant.genome.transcript_by_id("ENST00000256078")
+    with pytest.raises(ReferenceMismatchError) as caught:
+        variant.effect_on_transcript(transcript)
+    error = caught.value
+    assert error.observed_ref == "C"
+    assert error.expected_ref == "G"
+    assert error.genomic_observed_ref == "G"
+    assert error.genomic_expected_ref == "C"
+    assert "12:25245350:" in str(error)
+    assert "variant ref='G'" in str(error)
+    assert "reference genome has 'C'" in str(error)
+
+
+def test_coding_helper_mismatch_reports_forward_alleles():
+    from varcode.effects.effect_prediction_coding import predict_variant_coding_effect_on_transcript
+
+    variant = Variant("12", 100, "GG", "TT", genome=81)
+    transcript = SimpleNamespace(id="ENST_TEST", name="test", strand="-",
+                                 on_backward_strand=True, complete=True, sequence="ATGAGTAA")
+    with pytest.raises(ReferenceMismatchError) as caught:
+        predict_variant_coding_effect_on_transcript(variant, transcript, "CC", "AA", 3)
+    assert "12:100-101" in str(caught.value)
+    assert "variant ref='GG'" in str(caught.value)
+    assert "reference genome has 'CT'" in str(caught.value)

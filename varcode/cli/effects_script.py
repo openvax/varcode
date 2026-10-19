@@ -22,6 +22,7 @@ from .variant_args import (
     variant_collection_from_args,
 )
 from ..effects import Failure
+from ..errors import ReferenceMismatchError
 
 
 # as_file, rather than str(), so that logging.conf is also readable when varcode
@@ -73,7 +74,11 @@ def main(args_list=None):
         if args.output_csv:
             check_output_directory(args.output_csv)
         variants = variant_collection_from_args(args)
-    effects = variants.effects(raise_on_error=False if args.skip_errors else None)
+    try:
+        effects = variants.effects(raise_on_error=False if args.skip_errors else None)
+    except ReferenceMismatchError as error:
+        arg_parser.exit(1, "%s: error: %s Use --skip-errors to retain failed annotations.\n" % (
+            arg_parser.prog, error))
     # Annotation failures are diagnostics, not biological effects to rank or
     # discard with coding filters. Keep every failed transcript visible.
     failures = [effect for effect in effects if isinstance(effect, Failure)]
