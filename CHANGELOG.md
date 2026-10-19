@@ -13,6 +13,9 @@
   original allele indices and excluding these entries from `max_variants`.
 - Describe single-base deletions without a repeated coordinate, and explicit
   no-change variants with `=` over the original interval.
+- Install CI annotation data from the canonical sources used by the tests,
+  matching PyEnsembl 2.27.5's source-specific cache identities
+  (openvax/pyensembl#470).
 
 ## v10.16.4
 
