@@ -1,5 +1,10 @@
 # Change Log
 
+## v10.17.1
+
+- Cancel superseded Tests workflow runs for the same pull request (#604).
+  Independent PRs and every main push retain separate test runs.
+
 ## v10.17.0
 
 - Preserve complete `SpliceOutcomeSet` objects during top-priority selection,
