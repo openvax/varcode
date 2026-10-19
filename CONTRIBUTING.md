@@ -35,11 +35,17 @@ library into the active environment.
 Install the reference datasets used by the full suite (these are downloads):
 
 ```bash
-pyensembl install --release 75 --species human --custom-mirror https://github.com/openvax/ensembl-data/releases/download/GRCh37.75/
-pyensembl install --release 81 --species human --custom-mirror https://github.com/openvax/ensembl-data/releases/download/GRCh38.81/
-pyensembl install --release 95 --species human --custom-mirror https://github.com/openvax/ensembl-data/releases/download/GRCh38.95/
-pyensembl install --release 95 --species mouse --custom-mirror https://github.com/openvax/ensembl-data/releases/download/GRCm38.95/
+pyensembl install --release 75 --species human
+pyensembl install --release 81 --species human
+pyensembl install --release 95 --species human
+pyensembl install --release 95 --species mouse
 ```
+
+These canonical sources match the `EnsemblRelease` objects used by the tests.
+PyEnsembl 2.27.5 keys downloads and indexes by their source URL; rerun the
+installer after upgrading from the older cache format. The optional ATM
+regressions also run when `pyensembl install --release 115 --species human`
+has completed.
 
 During pytest, bare GRCh38 references use Ensembl 81, matching the shared
 fixtures. Reference selection does not scan or populate the user cache;
