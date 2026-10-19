@@ -1,5 +1,10 @@
 # Change Log
 
+## v10.16.2
+
+- Remove unused lint, coverage, and changelog-generator configuration files
+  (#410). The contributing guide already states the current Python minimum.
+
 ## v10.16.1
 
 - Refresh annotator, fast-path, mutant-transcript, and germline documentation
