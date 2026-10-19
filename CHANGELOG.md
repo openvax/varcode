@@ -3,7 +3,8 @@
 ## v10.16.2
 
 - Remove unused lint, coverage, and changelog-generator configuration files
-  (#410). The contributing guide already states the current Python minimum.
+  and their stale source-distribution references (#410, #600). The
+  contributing guide already states the current Python minimum.
 
 ## v10.16.1
 
