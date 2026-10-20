@@ -1,8 +1,8 @@
 # Bundled fixture inventory
 
 `SHA256SUMS` records every file in this directory tree, including the provenance
-notes, except the checksum file itself. The fixtures total about 5 MB; the
-largest is the 3.6 MiB compressed historical Osteosarc metadata snapshot.
+notes, except the checksum file itself. The fixtures include compact complete
+public benchmark VCFs and the compressed historical Osteosarc metadata snapshot.
 No BAM/CRAM files or shared RNA bundles belong here. See
 [the test-data guide](../README.md) for reference installation and external
 `openvax-v2` assets.
@@ -11,6 +11,7 @@ No BAM/CRAM files or shared RNA bundles belong here. See
 
 | Files | Recorded source and reproduction information |
 |---|---|
+| `public_somatic/*` | [Complete HCC1395/COLO829 call sets and canine consequence table](public_somatic/README.md), with a source manifest, offline regeneration and explicit annotation limitations. |
 | `osteosarc_variants.json`, `osteosarc_snapshot_2026-09-18t.zip` | [Snapshot identity, receipts, archive hash and offline export recipe](../README.md#regenerate-from-the-verified-snapshot). `../collect_osteosarc_variants.py` exports the reviewed snapshot with the pinned Osteosarc version. |
 | `osteosarc_observed_junctions.json` | Each record retains its source page, ONT read name, reference identity and source-sequence SHA256. [Shared read verification](../README.md#shared-test-data-openvax-v2) uses the external bundle; only the bounded junction windows are stored here. |
 | `sid_rna_effect_references.json` | Versioned NCBI RefSeq CDS/protein records and GRCh38 genomic windows, acquired 2026-10-05 independently of Varcode/PyEnsembl. URLs, accession versions, response and sequence hashes, CDS edits and manually audited protein expectations are recorded in the file. [RNA effect verification](../README.md#real-sid-rna-protein-effects) explains the audit. |

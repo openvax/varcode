@@ -1,0 +1,1106 @@
+{
+  "27": {
+    "transcript": "ENSCAFT00000075724",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "52": {
+    "transcript": "ENSCAFT00000066821",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "79": {
+    "transcript": "ENSCAFT00000022204",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "82": {
+    "transcript": "ENSCAFT00000003928",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "92": {
+    "transcript": "ENSCAFT00000026863",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "110": {
+    "transcript": "ENSCAFT00000080620",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "141": {
+    "transcript": "ENSCAFT00000008119",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "166": {
+    "transcript": "ENSCAFT00000049988",
+    "biotype": "protein_coding",
+    "missing_start": false,
+    "missing_stop": true
+  },
+  "173": {
+    "transcript": "ENSCAFT00000016089",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "179": {
+    "transcript": "ENSCAFT00000028180",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "184": {
+    "transcript": "ENSCAFT00000025182",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "192": {
+    "transcript": "ENSCAFT00000083693",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "201": {
+    "transcript": "ENSCAFT00000015172",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "202": {
+    "transcript": "ENSCAFT00000015172",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "284": {
+    "transcript": "ENSCAFT00000044328",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "305": {
+    "transcript": "ENSCAFT00000031825",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "347": {
+    "transcript": "ENSCAFT00000013885",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "355": {
+    "transcript": "ENSCAFT00000036196",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "369": {
+    "transcript": "ENSCAFT00000000254",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "370": {
+    "transcript": "ENSCAFT00000000254",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "381": {
+    "transcript": "ENSCAFT00000066308",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "392": {
+    "transcript": "ENSCAFT00000019948",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "398": {
+    "transcript": "ENSCAFT00000025850",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "447": {
+    "transcript": "ENSCAFT00000068195",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "448": {
+    "transcript": "ENSCAFT00000068195",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "463": {
+    "transcript": "ENSCAFT00000000052",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "468": {
+    "transcript": "ENSCAFT00000000977",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "469": {
+    "transcript": "ENSCAFT00000000977",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "470": {
+    "transcript": "ENSCAFT00000000977",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "471": {
+    "transcript": "ENSCAFT00000000977",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "472": {
+    "transcript": "ENSCAFT00000000977",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "473": {
+    "transcript": "ENSCAFT00000000977",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "474": {
+    "transcript": "ENSCAFT00000000977",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "475": {
+    "transcript": "ENSCAFT00000000977",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "476": {
+    "transcript": "ENSCAFT00000000977",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "477": {
+    "transcript": "ENSCAFT00000000977",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "478": {
+    "transcript": "ENSCAFT00000000977",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "479": {
+    "transcript": "ENSCAFT00000000977",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "480": {
+    "transcript": "ENSCAFT00000000977",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "484": {
+    "transcript": "ENSCAFT00000001553",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "519": {
+    "transcript": "ENSCAFT00000006347",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "522": {
+    "transcript": "ENSCAFT00000006776",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "525": {
+    "transcript": "ENSCAFT00000007460",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "526": {
+    "transcript": "ENSCAFT00000007946",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "527": {
+    "transcript": "ENSCAFT00000007946",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "533": {
+    "transcript": "ENSCAFT00000008729",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "545": {
+    "transcript": "ENSCAFT00000010199",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "546": {
+    "transcript": "ENSCAFT00000010199",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "547": {
+    "transcript": "ENSCAFT00000010232",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "558": {
+    "transcript": "ENSCAFT00000011674",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "559": {
+    "transcript": "ENSCAFT00000011674",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "560": {
+    "transcript": "ENSCAFT00000011674",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "569": {
+    "transcript": "ENSCAFT00000012374",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "570": {
+    "transcript": "ENSCAFT00000012374",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "575": {
+    "transcript": "ENSCAFT00000013017",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "582": {
+    "transcript": "ENSCAFT00000015747",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "594": {
+    "transcript": "ENSCAFT00000017872",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "595": {
+    "transcript": "ENSCAFT00000017872",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "596": {
+    "transcript": "ENSCAFT00000017897",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": true
+  },
+  "623": {
+    "transcript": "ENSCAFT00000021619",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "624": {
+    "transcript": "ENSCAFT00000021619",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "633": {
+    "transcript": "ENSCAFT00000022255",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "634": {
+    "transcript": "ENSCAFT00000022255",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "645": {
+    "transcript": "ENSCAFT00000025248",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "652": {
+    "transcript": "ENSCAFT00000025911",
+    "biotype": "protein_coding",
+    "missing_start": false,
+    "missing_stop": true
+  },
+  "653": {
+    "transcript": "ENSCAFT00000025939",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "677": {
+    "transcript": "ENSCAFT00000028906",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "678": {
+    "transcript": "ENSCAFT00000028906",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "680": {
+    "transcript": "ENSCAFT00000029219",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "683": {
+    "transcript": "ENSCAFT00000029350",
+    "biotype": "IG_V_gene",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "684": {
+    "transcript": "ENSCAFT00000029374",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "718": {
+    "transcript": "ENSCAFT00000037237",
+    "biotype": "protein_coding",
+    "missing_start": false,
+    "missing_stop": true
+  },
+  "719": {
+    "transcript": "ENSCAFT00000037237",
+    "biotype": "protein_coding",
+    "missing_start": false,
+    "missing_stop": true
+  },
+  "729": {
+    "transcript": "ENSCAFT00000038437",
+    "biotype": "protein_coding",
+    "missing_start": false,
+    "missing_stop": true
+  },
+  "732": {
+    "transcript": "ENSCAFT00000039095",
+    "biotype": "protein_coding",
+    "missing_start": false,
+    "missing_stop": true
+  },
+  "736": {
+    "transcript": "ENSCAFT00000039333",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "737": {
+    "transcript": "ENSCAFT00000039333",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "753": {
+    "transcript": "ENSCAFT00000039841",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "769": {
+    "transcript": "ENSCAFT00000043601",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "771": {
+    "transcript": "ENSCAFT00000044000",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "775": {
+    "transcript": "ENSCAFT00000044662",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "809": {
+    "transcript": "ENSCAFT00000049358",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "811": {
+    "transcript": "ENSCAFT00000049520",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "812": {
+    "transcript": "ENSCAFT00000049520",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "825": {
+    "transcript": "ENSCAFT00000059525",
+    "biotype": "protein_coding",
+    "missing_start": false,
+    "missing_stop": true
+  },
+  "826": {
+    "transcript": "ENSCAFT00000059525",
+    "biotype": "protein_coding",
+    "missing_start": false,
+    "missing_stop": true
+  },
+  "827": {
+    "transcript": "ENSCAFT00000060201",
+    "biotype": "protein_coding",
+    "missing_start": false,
+    "missing_stop": true
+  },
+  "828": {
+    "transcript": "ENSCAFT00000060278",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "830": {
+    "transcript": "ENSCAFT00000060715",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "850": {
+    "transcript": "ENSCAFT00000065909",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "858": {
+    "transcript": "ENSCAFT00000066862",
+    "biotype": "protein_coding",
+    "missing_start": false,
+    "missing_stop": true
+  },
+  "867": {
+    "transcript": "ENSCAFT00000070619",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "869": {
+    "transcript": "ENSCAFT00000071387",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "870": {
+    "transcript": "ENSCAFT00000071387",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "871": {
+    "transcript": "ENSCAFT00000072479",
+    "biotype": "protein_coding",
+    "missing_start": false,
+    "missing_stop": true
+  },
+  "908": {
+    "transcript": "ENSCAFT00000083448",
+    "biotype": "protein_coding",
+    "missing_start": false,
+    "missing_stop": true
+  },
+  "909": {
+    "transcript": "ENSCAFT00000083503",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "910": {
+    "transcript": "ENSCAFT00000083503",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "912": {
+    "transcript": "ENSCAFT00000083992",
+    "biotype": "IG_V_gene",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "913": {
+    "transcript": "ENSCAFT00000084820",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "914": {
+    "transcript": "ENSCAFT00000084820",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "915": {
+    "transcript": "ENSCAFT00000084820",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "916": {
+    "transcript": "ENSCAFT00000085111",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "917": {
+    "transcript": "ENSCAFT00000085111",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "935": {
+    "transcript": "ENSCAFT00000090138",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "936": {
+    "transcript": "ENSCAFT00000090201",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "937": {
+    "transcript": "ENSCAFT00000090634",
+    "biotype": "IG_V_gene",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "960": {
+    "transcript": "ENSCAFT00000047948",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "975": {
+    "transcript": "ENSCAFT00000007527",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "978": {
+    "transcript": "ENSCAFT00000048978",
+    "biotype": "protein_coding",
+    "missing_start": false,
+    "missing_stop": true
+  },
+  "985": {
+    "transcript": "ENSCAFT00000066204",
+    "biotype": "protein_coding",
+    "missing_start": false,
+    "missing_stop": true
+  },
+  "986": {
+    "transcript": "ENSCAFT00000066204",
+    "biotype": "protein_coding",
+    "missing_start": false,
+    "missing_stop": true
+  },
+  "989": {
+    "transcript": "ENSCAFT00000072530",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "995": {
+    "transcript": "ENSCAFT00000026086",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "996": {
+    "transcript": "ENSCAFT00000026086",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "997": {
+    "transcript": "ENSCAFT00000026086",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1056": {
+    "transcript": "ENSCAFT00000045216",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1057": {
+    "transcript": "ENSCAFT00000045216",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1060": {
+    "transcript": "ENSCAFT00000047596",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1070": {
+    "transcript": "ENSCAFT00000009593",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1084": {
+    "transcript": "ENSCAFT00000016832",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1134": {
+    "transcript": "ENSCAFT00000021533",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1155": {
+    "transcript": "ENSCAFT00000003375",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1156": {
+    "transcript": "ENSCAFT00000003375",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1172": {
+    "transcript": "ENSCAFT00000078051",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1185": {
+    "transcript": "ENSCAFT00000046627",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1186": {
+    "transcript": "ENSCAFT00000046627",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1187": {
+    "transcript": "ENSCAFT00000046627",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1190": {
+    "transcript": "ENSCAFT00000049004",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1208": {
+    "transcript": "ENSCAFT00000029108",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1209": {
+    "transcript": "ENSCAFT00000029108",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1214": {
+    "transcript": "ENSCAFT00000007985",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1234": {
+    "transcript": "ENSCAFT00000043255",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1255": {
+    "transcript": "ENSCAFT00000035214",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1258": {
+    "transcript": "ENSCAFT00000017008",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1267": {
+    "transcript": "ENSCAFT00000027090",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1314": {
+    "transcript": "ENSCAFT00000043509",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1321": {
+    "transcript": "ENSCAFT00000015796",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1322": {
+    "transcript": "ENSCAFT00000015796",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1359": {
+    "transcript": "ENSCAFT00000081625",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1392": {
+    "transcript": "ENSCAFT00000003937",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1404": {
+    "transcript": "ENSCAFT00000021951",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1430": {
+    "transcript": "ENSCAFT00000039094",
+    "biotype": "protein_coding",
+    "missing_start": false,
+    "missing_stop": true
+  },
+  "1432": {
+    "transcript": "ENSCAFT00000001939",
+    "biotype": "protein_coding",
+    "missing_start": false,
+    "missing_stop": true
+  },
+  "1434": {
+    "transcript": "ENSCAFT00000068001",
+    "biotype": "protein_coding",
+    "missing_start": false,
+    "missing_stop": true
+  },
+  "1441": {
+    "transcript": "ENSCAFT00000037947",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1454": {
+    "transcript": "ENSCAFT00000024976",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1504": {
+    "transcript": "ENSCAFT00000001138",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1523": {
+    "transcript": "ENSCAFT00000000242",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1549": {
+    "transcript": "ENSCAFT00000021978",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1570": {
+    "transcript": "ENSCAFT00000045335",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1573": {
+    "transcript": "ENSCAFT00000005177",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1580": {
+    "transcript": "ENSCAFT00000063392",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1615": {
+    "transcript": "ENSCAFT00000035161",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1622": {
+    "transcript": "ENSCAFT00000045475",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1728": {
+    "transcript": "ENSCAFT00000015530",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1742": {
+    "transcript": "ENSCAFT00000011022",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1767": {
+    "transcript": "ENSCAFT00000020093",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1774": {
+    "transcript": "ENSCAFT00000013701",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1784": {
+    "transcript": "ENSCAFT00000044134",
+    "biotype": "protein_coding",
+    "missing_start": false,
+    "missing_stop": true
+  },
+  "1799": {
+    "transcript": "ENSCAFT00000021929",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1802": {
+    "transcript": "ENSCAFT00000004052",
+    "biotype": "protein_coding",
+    "missing_start": false,
+    "missing_stop": true
+  },
+  "1821": {
+    "transcript": "ENSCAFT00000027418",
+    "biotype": "protein_coding",
+    "missing_start": false,
+    "missing_stop": true
+  },
+  "1897": {
+    "transcript": "ENSCAFT00000077777",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1977": {
+    "transcript": "ENSCAFT00000019086",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "1980": {
+    "transcript": "ENSCAFT00000007956",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "2001": {
+    "transcript": "ENSCAFT00000079189",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "2002": {
+    "transcript": "ENSCAFT00000079189",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "2017": {
+    "transcript": "ENSCAFT00000028511",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "2018": {
+    "transcript": "ENSCAFT00000085904",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "2019": {
+    "transcript": "ENSCAFT00000010155",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "2020": {
+    "transcript": "ENSCAFT00000021863",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "2021": {
+    "transcript": "ENSCAFT00000021863",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "2039": {
+    "transcript": "ENSCAFT00000007877",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "2040": {
+    "transcript": "ENSCAFT00000007877",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "2053": {
+    "transcript": "ENSCAFT00000005379",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "2073": {
+    "transcript": "ENSCAFT00000068799",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "2076": {
+    "transcript": "ENSCAFT00000011208",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "2077": {
+    "transcript": "ENSCAFT00000011208",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "2083": {
+    "transcript": "ENSCAFT00000070414",
+    "biotype": "protein_coding",
+    "missing_start": false,
+    "missing_stop": true
+  },
+  "2117": {
+    "transcript": "ENSCAFT00000030453",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "2118": {
+    "transcript": "ENSCAFT00000030453",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "2119": {
+    "transcript": "ENSCAFT00000030453",
+    "biotype": "protein_coding",
+    "missing_start": true,
+    "missing_stop": false
+  },
+  "2121": {
+    "transcript": "ENSCAFT00000007144",
+    "biotype": "protein_coding",
+    "missing_start": false,
+    "missing_stop": true
+  }
+}
