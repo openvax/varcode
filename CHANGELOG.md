@@ -1,5 +1,17 @@
 # Change Log
 
+## v10.18.1
+
+- Bundle complete pinned HCC1395/COLO829 SEQC2, NYGC and Lancet2 small-variant
+  benchmarks and published structural-variant sets, with source checksums,
+  reproducible extraction and full loading/annotation checks in CI (#614).
+- Validate the complete published canine osteosarcoma table against CanFam3.1
+  / Ensembl 99. Independently check 1,954 protein changes, a stop-loss and a
+  splice consequence; retain an uncertain initiation outcome and 184 records
+  affected by the existing partial-transcript/biotype limitation (#195).
+- Install the additional pinned human and dog reference releases in CI and
+  document local provisioning. Public fixtures travel with source releases.
+
 ## v10.18.0
 
 - Use configured genome DNA automatically for noncanonical ORF intronic,

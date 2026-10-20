@@ -37,8 +37,10 @@ Install the reference datasets used by the full suite (these are downloads):
 ```bash
 pyensembl install --release 75 --species human
 pyensembl install --release 81 --species human
+pyensembl install --release 93 --species human
 pyensembl install --release 95 --species human
 pyensembl install --release 95 --species mouse
+pyensembl install --release 99 --species dog
 ```
 
 These canonical sources match the `EnsemblRelease` objects used by the tests.
@@ -51,6 +53,9 @@ During pytest, bare GRCh38 references use Ensembl 81, matching the shared
 fixtures. Reference selection does not scan or populate the user cache;
 install the data above before running annotation tests. Explicit release
 choices are preserved. The bundled Osteosarc snapshot checks open their data offline.
+The complete public somatic benchmarks use human 75/93 and dog 99. Their
+[provenance and comparison limits](tests/data/public_somatic/README.md) explain
+the assemblies, source versions and explicitly unresolved canine records.
 See [tests/README.md](tests/README.md) for fixture provenance and regeneration.
 
 ## Make and verify a change

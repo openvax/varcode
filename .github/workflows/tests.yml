@@ -76,8 +76,7 @@ jobs:
       - name: Run default linting script
         run: |
           ./lint.sh
-      # Cache the pyensembl downloads — fetching all four releases
-      # uncached takes ~5 minutes per matrix job. The key encodes:
+      # Cache the pyensembl downloads. The key encodes:
       #   - the exact release tags below (auto-invalidates if a
       #     release is added/changed)
       #   - the requirements.txt hash (auto-invalidates if pyensembl
@@ -90,7 +89,11 @@ jobs:
         with:
           path: ~/.cache/pyensembl
           # PyEnsembl 2.27.5 keys downloads and indexes by their source URL.
-          key: pyensembl-${{ runner.os }}-grch37.75-grch38.81-grch38.95-grcm38.95-${{ hashFiles('requirements.txt') }}-v3
+          key: pyensembl-${{ runner.os }}-grch37.75-grch38.81-grch38.93-grch38.95-grcm38.95-canfam3.99-${{ hashFiles('requirements.txt') }}-v3
+          # Reuse unchanged releases when first adding human 93 and dog 99.
+          # Keep dependency and source-layout identities identical.
+          restore-keys: |
+            pyensembl-${{ runner.os }}-grch37.75-grch38.81-grch38.95-grcm38.95-${{ hashFiles('requirements.txt') }}-v3
       - name: Install Ensembl data
         run: |
           echo "Before installing Ensembl releases" && df -h
@@ -100,8 +103,10 @@ jobs:
           # Mirror URLs have distinct cache identities (openvax/pyensembl#470).
           pyensembl install --release 75 --species human
           pyensembl install --release 81 --species human
+          pyensembl install --release 93 --species human
           pyensembl install --release 95 --species human
           pyensembl install --release 95 --species mouse
+          pyensembl install --release 99 --species dog
           echo "After installing Ensembl releases" && df -h
       - name: Run unit tests from the source distribution
         working-directory: ${{ runner.temp }}/varcode-sdist
