@@ -90,6 +90,10 @@ jobs:
           path: ~/.cache/pyensembl
           # PyEnsembl 2.27.5 keys downloads and indexes by their source URL.
           key: pyensembl-${{ runner.os }}-grch37.75-grch38.81-grch38.93-grch38.95-grcm38.95-canfam3.99-${{ hashFiles('requirements.txt') }}-v3
+          # Reuse unchanged releases when first adding human 93 and dog 99.
+          # Keep dependency and source-layout identities identical.
+          restore-keys: |
+            pyensembl-${{ runner.os }}-grch37.75-grch38.81-grch38.95-grcm38.95-${{ hashFiles('requirements.txt') }}-v3
       - name: Install Ensembl data
         run: |
           echo "Before installing Ensembl releases" && df -h

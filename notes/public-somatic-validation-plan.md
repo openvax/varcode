@@ -27,3 +27,10 @@ Varcode implementation only. File upstream reference or dataset problems in
 the appropriate repository. Public truth sets are a reproducible definition
 of the requested benchmark coverage, not every historical caller output for
 these cell lines. Primary sources and pinned versions define completeness.
+
+## Provisioning adjustment
+
+The initial CI cache key caused all six releases to download. Reuse main's
+verified four-release cache (same requirements hash and source-layout version)
+as a fallback, then install the two new releases and save the expanded cache.
+Keep the source URLs and explicit reference installation unchanged.
