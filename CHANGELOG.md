@@ -1,5 +1,15 @@
 # Change Log
 
+## v10.17.3
+
+- Read reference ranges from contiguous exon slices and reject gaps in combined
+  transcript coverage before scanning bases. This avoids repeated coordinate
+  mapping during structural variant annotation without a chromosome FASTA
+  (#407), preserving ranges covered jointly by several transcripts, transcript
+  precedence, strand handling, and the existing adapter fallback.
+- Avoid loading transcript FASTA for ranges whose endpoint offsets already
+  establish an intervening intron.
+
 ## v10.17.2
 
 - Require Python 3.11 or later and test Python 3.11–3.14 in CI. Continue

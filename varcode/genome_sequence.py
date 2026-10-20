@@ -83,19 +83,21 @@ def reference_range(genome: Any, contig: str, start: int, end: int) -> str:
     :func:`reference_base`.)
 
     Transcript-cDNA path first tries a single-transcript range lookup
-    (cheap: one locus query, one slice). Falls back to per-position
-    scanning only when no single transcript spans the whole range.
+    (cheap: one locus query, one slice). If no single transcript spans
+    the range, assemble slices from their combined exon coverage.
+    Adapters without exon intervals retain per-position scanning.
 
     Complexity:
 
     * Chromosome FASTA hit: one slice. O(end - start).
     * Single-transcript span: one locus query, one slice. O(1) in
       transcript lookups.
-    * Per-position fallback: the transcripts overlapping the range are
-      fetched once and every position is answered from that list, so a
-      range read costs one locus query whichever path serves it.
-      All-or-nothing still makes the loop bail at the first uncovered
-      position.
+    * Multi-transcript span: one locus query, then at most one slice per
+      overlapping exon. An exon-interval union rejects uncovered ranges
+      without mapping every base through every transcript.
+    * Per-position fallback for adapters without usable exon intervals:
+      the transcripts overlapping the range are fetched once, so a range
+      read costs one locus query whichever path serves it.
 
     See module docstring for the full fallback order.
     """
@@ -117,6 +119,9 @@ def reference_range(genome: Any, contig: str, start: int, end: int) -> str:
     span = _range_from_transcripts(transcripts, start, end)
     if span is not None:
         return span
+    span = _range_from_exon_slices(transcripts, contig, start, end)
+    if span is not None:
+        return span
 
     bases = []
     for pos in range(start, end + 1):
@@ -125,6 +130,54 @@ def reference_range(genome: Any, contig: str, start: int, end: int) -> str:
             return ""
         bases.append(base)
     return "".join(bases)
+
+
+def _range_from_exon_slices(transcripts, contig, start, end):
+    """Assemble genomic bases from exon slices, retaining transcript order.
+
+    ``None`` requests the per-position fallback for adapters without usable
+    intervals or with partially readable exons. ``""`` means uncovered.
+    """
+    try:
+        by_transcript = [
+            (t, [(max(start, lo), min(end, hi))
+                 for lo, hi in t.exon_intervals if lo <= end and hi >= start])
+            for t in transcripts]
+        intervals = sorted(pair for _, exons in by_transcript for pair in exons)
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return None
+    covered_end = start - 1
+    for lo, hi in intervals:
+        if lo > covered_end + 1:
+            return ""
+        covered_end = max(covered_end, hi)
+        if covered_end >= end:
+            break
+    if covered_end < end:
+        return ""
+
+    bases = [""] * (end - start + 1)
+    disagreements = set()
+    for transcript, exons in by_transcript:
+        if not exons or transcript.sequence is None:
+            continue
+        for lo, hi in exons:
+            span = _plus_strand_slice(transcript, lo, hi)
+            if not span:
+                # A short sequence can still supply part of an exon. Let
+                # the original base reader determine exactly which part.
+                return None
+            for offset, base in enumerate(span, lo - start):
+                answer = bases[offset]
+                if not answer:
+                    bases[offset] = base
+                elif base != answer and offset not in disagreements:
+                    logger.debug(
+                        "transcripts overlapping %s:%d disagree on the + strand "
+                        "base (%r vs %r); using the first answer",
+                        contig, start + offset, answer, base)
+                    disagreements.add(offset)
+    return "".join(bases) if all(bases) else ""
 
 
 # --------------------------------------------------------------------
@@ -225,10 +278,12 @@ def _plus_strand_slice(transcript: Any, start: int, end: int) -> str:
         end_offset = transcript.spliced_offset(end)
     except (ValueError, KeyError):
         return ""
+    lo, hi = sorted((start_offset, end_offset))
+    if hi - lo != end - start:
+        return ""
     seq = transcript.sequence
     if seq is None:
         return ""
-    lo, hi = sorted((start_offset, end_offset))
     if hi >= len(seq):
         return ""
     slice_seq = seq[lo:hi + 1].upper()
