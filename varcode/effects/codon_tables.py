@@ -10,39 +10,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Codon translation tables as simple dict/frozenset lookups.
+"""Offline NCBI genetic codes and species/compartment assignments.
 
-Built by hand from NCBI Translation Tables 1 (Standard) and 2
-(Vertebrate Mitochondrial). Keeps codon translation inside varcode so
-that downstream callers don't need BioPython just to enumerate 64
-codons. See openvax/varcode#293 for the broader move to drop the
-biopython dependency.
-
-Refs:
-  https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi?mode=t#SG1
-  https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi?mode=t#SG2
+The packaged snapshot records its NCBI source hashes. Refresh it with
+``notes/build_genetic_code_data.py``. Context-dependent stop/sense codes
+remain unsupported rather than silently losing their recoding semantics.
 """
 
 from dataclasses import dataclass, replace
+from importlib.resources import files
+import json
 
 _BASES = "TCAG"
 _CODONS = tuple(b1 + b2 + b3 for b1 in _BASES for b2 in _BASES for b3 in _BASES)
-
-# AA strings are in NCBI codon order (base1 = T,T,...,G ; base2 cycles
-# T,C,A,G within each base1 ; base3 cycles T,C,A,G within each base2).
-# So zip(_CODONS, _AA_STRING) gives the forward mapping.
-
-_STANDARD_AAS = \
-    "FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG"
-
-# Vertebrate mitochondrial (table 2) differs from standard at four codons:
-#   TGA: * -> W (Trp)
-#   ATA: I -> M (Met)
-#   AGA: R -> * (stop)
-#   AGG: R -> * (stop)
-_VERT_MT_AAS = \
-    "FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIMMTTTTNNKKSS**VVVVAAAADDEEGGGG"
-
 
 def _build_forward_table(aa_string):
     return {codon: aa for codon, aa in zip(_CODONS, aa_string) if aa != "*"}
@@ -68,21 +48,73 @@ class CodonTable:
     stop_codons: frozenset
 
 
-STANDARD = CodonTable(
-    name="Standard",
-    ncbi_id=1,
-    forward_table=_build_forward_table(_STANDARD_AAS),
-    start_codons=frozenset({"TTG", "CTG", "ATG"}),
-    stop_codons=_build_stop_codons(_STANDARD_AAS),
-)
+_DATA = json.loads(files("varcode").joinpath("data/genetic_codes.json").read_text())
+_TABLES = {
+    int(identifier): CodonTable(
+        name=row["name"], ncbi_id=int(identifier),
+        forward_table=_build_forward_table(row["amino_acids"]),
+        start_codons=frozenset(c for c, aa in zip(_CODONS, row["starts_stops"]) if aa == "M"),
+        stop_codons=_build_stop_codons(row["starts_stops"]))
+    for identifier, row in _DATA["codes"].items()
+}
+_TAXA_BY_NAME = {alias: taxon for taxon in _DATA["taxa"].values() for alias in taxon["aliases"]}
+STANDARD = _TABLES[1]
+VERTEBRATE_MITOCHONDRIAL = _TABLES[2]
 
-VERTEBRATE_MITOCHONDRIAL = CodonTable(
-    name="Vertebrate Mitochondrial",
-    ncbi_id=2,
-    forward_table=_build_forward_table(_VERT_MT_AAS),
-    start_codons=frozenset({"ATT", "ATC", "ATA", "ATG", "GTG"}),
-    stop_codons=_build_stop_codons(_VERT_MT_AAS),
-)
+
+def codon_table_by_id(code):
+    """Return an unambiguous NCBI code without downloading data."""
+    if type(code) is not int or code not in _TABLES:
+        raise ValueError("Unsupported explicit NCBI translation table: %s" % code)
+    table = _TABLES[code]
+    if table.stop_codons.intersection(table.forward_table):
+        raise ValueError("NCBI translation table %s requires context-dependent stop recoding" % code)
+    return table
+
+
+def _reference_code(transcript):
+    contig = str(getattr(transcript, "contig", "")).lower()
+    compartment = ("mitochondrial" if is_mitochondrial_contig(contig) else
+                   "plastid" if contig in {"pt", "cp", "chrc", "chloroplast", "plastid", "apicoplast"} else
+                   "nuclear")
+    genome = getattr(transcript, "genome", None)
+    declared_compartments = getattr(genome, "contig_compartments", {})
+    compartment = declared_compartments.get(getattr(transcript, "contig", None), compartment)
+    if compartment not in {"nuclear", "mitochondrial", "plastid"}:
+        raise ValueError("Unsupported reference compartment: %r" % compartment)
+    # Custom/reference providers can supply these without an annotation change.
+    explicit = getattr(genome, compartment + "_translation_table", None)
+    if explicit is not None:
+        return explicit
+    species = getattr(genome, "species", None)
+    taxon_id = getattr(genome, "taxon_id", None)
+    if species is None and taxon_id is None:
+        # Source-explicit PyEnsembl Genomes (including with_mirror()) retain
+        # the assembly but not the Species object. Resolve exact registered
+        # assemblies only; never guess a species from a filename or prefix.
+        from pyensembl.species import Species
+        species = Species._reference_names_to_species.get(getattr(genome, "reference_name", None))
+    name = str(getattr(species, "latin_name", species)).lower().replace(" ", "_")
+    if name not in _TAXA_BY_NAME and species is not None:
+        from pyensembl.species import find_species_by_name
+        try:
+            name = find_species_by_name(name).latin_name
+        except ValueError:
+            pass
+    taxon = _DATA["taxa"].get(str(taxon_id)) if taxon_id is not None else _TAXA_BY_NAME.get(name)
+    named = _TAXA_BY_NAME.get(name)
+    if taxon_id is not None and named is not None and named is not taxon:
+        raise ValueError("Reference species and taxon_id disagree when selecting a genetic code")
+    if taxon is not None and taxon.get(compartment):
+        return taxon[compartment]
+    # Preserve the established standard-code default for unscoped nuclear
+    # transcripts. Organelle codes cannot be inferred from the contig alone.
+    if compartment == "nuclear" and species is None and taxon_id is None:
+        return 1
+    raise ValueError(
+        "No %s genetic-code assignment for species %r (taxon_id=%r); "
+        "supply transcript.translation_table or genome.%s_translation_table"
+        % (compartment, species, taxon_id, compartment))
 
 
 # Names commonly used for the mitochondrial contig across genome builds
@@ -90,6 +122,7 @@ VERTEBRATE_MITOCHONDRIAL = CodonTable(
 # "M". Lowercased for case-insensitive matching.
 _MITOCHONDRIAL_CONTIG_NAMES = frozenset({
     "mt", "chrmt", "m", "chrm", "mtdna", "mito",
+    "mitochondrion_genome", "mitochondrial_genome", "mitochondrion", "mitochondrial",
 })
 
 
@@ -104,8 +137,7 @@ def codon_table_for_transcript(transcript):
     """Select this coding model's genetic code and initiation codons.
 
     Explicit ``translation_table`` and source-declared ``start_codon`` take
-    precedence over defaults. Otherwise mitochondrial contigs use table 2
-    and other contigs use table 1. A declared start extends only this model's
+    precedence over NCBI species/compartment assignments. A declared start extends only this model's
     initiation set; its internal amino acid and the global tables are unchanged.
     This recognizes a retained source start, not evidence for mutant translation.
     """
@@ -114,16 +146,7 @@ def codon_table_for_transcript(transcript):
     # An explicit alternative-ORF model owns its genetic code. Do not infer
     # table 2 from an MT-like contig name for a different species.
     code = getattr(transcript, "translation_table", None)
-    if code is not None:
-        if code == 1:
-            table = STANDARD
-        elif code == 2:
-            table = VERTEBRATE_MITOCHONDRIAL
-        else:
-            raise ValueError("Unsupported explicit NCBI translation table: %s" % code)
-    else:
-        table = (VERTEBRATE_MITOCHONDRIAL if is_mitochondrial_contig(
-            getattr(transcript, "contig", None)) else STANDARD)
+    table = codon_table_by_id(_reference_code(transcript) if code is None else code)
     declared = getattr(transcript, "start_codon", None)
     if declared is not None:
         if declared not in table.forward_table:

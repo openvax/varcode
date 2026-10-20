@@ -177,7 +177,7 @@ class GenomeExtraORFs:
         try:
             from orfdata import extra_orfs
         except ImportError as error:
-            raise ImportError("extra_orfs needs orfdata>=0.28.0: pip install 'varcode[orf]'") from error
+            raise ImportError("extra_orfs needs orfdata>=0.34.0: pip install 'varcode[orf]'") from error
         try:
             placed = extra_orfs(genome, self.evidence)
         except ValueError as error:
@@ -231,7 +231,7 @@ def _resolver(evidence):
     try:
         from orfdata.evidence import evidence_rule
     except ImportError as error:
-        raise ImportError("extra_orfs needs orfdata>=0.28.0: pip install 'varcode[orf]'") from error
+        raise ImportError("extra_orfs needs orfdata>=0.34.0: pip install 'varcode[orf]'") from error
     evidence = evidence_rule(evidence)  # "ms" and MS() share placements; an unknown name raises here.
     key = None if evidence is None else json.dumps(evidence.to_dict(), sort_keys=True)
     if key not in _RESOLVERS:

@@ -35,6 +35,9 @@ class MutationEffect(Serializable):
         self.variant = variant
 
     def to_dict(self):
+        if self.orf is not None or self.orf_annotation is not None:
+            from .structural_serialization import structural_effect_to_dict
+            return structural_effect_to_dict(self, schema="orf_effect_schema")
         if "realized_candidates" in self.__dict__:
             from .structural_serialization import structural_effect_to_dict
             return structural_effect_to_dict(self, schema="effect_graph_schema")
@@ -52,14 +55,11 @@ class MutationEffect(Serializable):
         attached = {k: self.__dict__[k] for k in self._attached if k in self.__dict__}
         return reduced + (attached,) if attached else reduced
 
-    def to_json(self):
-        if self.orf is not None or self.orf_annotation is not None:
-            raise ValueError("Export extra ORF consequences with orf_annotation.to_dict(); "
-                             "generic effect serialization cannot preserve their coding models")
-        return super().to_json()
-
     @classmethod
     def from_dict(cls, state_dict):
+        if "orf_effect_schema" in state_dict:
+            from .structural_serialization import structural_effect_from_dict
+            return structural_effect_from_dict(cls, state_dict, schema="orf_effect_schema")
         if "effect_graph_schema" in state_dict:
             from .structural_serialization import structural_effect_from_dict
             return structural_effect_from_dict(cls, state_dict, schema="effect_graph_schema")
@@ -342,7 +342,7 @@ class TranscriptMutationEffect(Intragenic):
 
     def to_dict(self):
         state = super().to_dict()
-        if "effect_graph_schema" in state or "structural_effect_schema" in state:
+        if any(key in state for key in ("effect_graph_schema", "structural_effect_schema", "orf_effect_schema")):
             return state
         # Annotators may return any ordinary effect class for a cis group.
         # Preserve the group independently of that class's constructor fields.

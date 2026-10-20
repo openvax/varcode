@@ -153,8 +153,9 @@ def test_unsupported_translation_instruction_retains_explicit_failure(unsupporte
         reason = "Unsupported declared initiation codon"
     else:
         reference = declared_orf("GTG")
-        reference = replace(reference.record, translation_table=3).bind(reference.transcript)
-        reason = "Unsupported explicit NCBI translation table: 3"
+        # Simulate a future bound source code unsupported by this Varcode.
+        object.__setattr__(reference.record, "translation_table", 999)
+        reason = "Unsupported explicit NCBI translation table: 999"
     variant = reference.transcript.variant(6, "A", "G")
     with pytest.raises(ValueError, match=reason):
         variant.effects(extra_orfs=[reference])

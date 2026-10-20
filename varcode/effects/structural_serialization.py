@@ -1,8 +1,8 @@
 """Versioned effect graphs, including self-referential realized candidates.
 
-Effects and transcript-model records use graph references. Variants,
-transcripts and MutantTranscript retain their existing Serializable formats.
-This is an object archive, not a portable annotation database.
+Effects and transcript-model records use graph references. Ordinary effects
+retain their existing reference formats. The ORF schema additionally snapshots
+reference RNAs and coding models, independently of an annotation database.
 """
 
 from dataclasses import dataclass, fields, replace
@@ -30,6 +30,7 @@ _ATTACHED_FIELDS = (
     "candidates", "realized_candidates", "most_likely_candidate",
     "highest_priority_candidate", "hypotheses", "mechanism_rank",
     "probability", "splice_signal", "germline_unknown",
+    "orf_annotation",
 )
 
 
@@ -48,15 +49,42 @@ def structural_effect_to_dict(root, *, schema="structural_effect_schema"):
     indices = {}
     nodes = []
     model_types = _model_types()
+    orf = schema == "orf_effect_schema"
+    special_types = ()
+    if orf:
+        from orfdata import ReferenceORF
+        from pyensembl import Transcript
+        from ..orf import _ORFTranscript
+        from ..orf_serialization import (
+            _ReferenceGenome, _ReferenceTranscript, orf_graph_types, record_fields)
+        from ..variant import Variant
+        from ..structural_variant import StructuralVariant
+        model_types += orf_graph_types()
+        special_types = (ReferenceORF, _ORFTranscript, Variant, StructuralVariant)
 
     def encode(value):
-        if isinstance(value, MutationEffect) or type(value) in model_types:
+        if orf and isinstance(value, Transcript):
+            return _ReferenceTranscript.capture(value)
+        if isinstance(value, MutationEffect) or type(value) in model_types + special_types:
             key = id(value)
             if key not in indices:
                 indices[key] = len(nodes)
                 nodes.append(None)  # reserve before following self links
+                if orf and isinstance(value, ReferenceORF):
+                    state = dict(
+                        record=value.record, transcript=_ReferenceTranscript.capture(value.transcript),
+                        context=value.context, any_transcript=True)
+                    nodes[indices[key]] = (type(value), encode(state), {})
+                    return _EffectReference(indices[key])
+                if orf and isinstance(value, _ORFTranscript):
+                    nodes[indices[key]] = (type(value), encode(dict(reference=value.reference_orf)), {})
+                    return _EffectReference(indices[key])
+                if orf and isinstance(value, Variant):
+                    state = {**value.to_dict(), "genome": _ReferenceGenome.capture(value.genome)}
+                    nodes[indices[key]] = (type(value), encode(state), {})
+                    return _EffectReference(indices[key])
                 if type(value) in model_types:
-                    state = {f.name: getattr(value, f.name) for f in fields(value)}
+                    state = record_fields(value) if orf else {f.name: getattr(value, f.name) for f in fields(value)}
                     nodes[indices[key]] = (type(value), encode(state), {})
                     return _EffectReference(indices[key])
                 state = {}
@@ -97,8 +125,17 @@ def structural_effect_from_dict(root_class, state, *, schema="structural_effect_
     if not nodes or nodes[0][0] is not root_class:
         raise ValueError("Effect root class does not match archive")
     model_types = _model_types()
+    special_types = ()
+    if schema == "orf_effect_schema":
+        from orfdata import ReferenceORF
+        from ..orf import _ORFTranscript
+        from ..orf_serialization import orf_graph_types
+        from ..variant import Variant
+        from ..structural_variant import StructuralVariant
+        model_types += orf_graph_types()
+        special_types = (ReferenceORF, _ORFTranscript, Variant, StructuralVariant)
     for cls, _, attached in nodes:
-        if not isinstance(cls, type) or not (issubclass(cls, MutationEffect) or cls in model_types):
+        if not isinstance(cls, type) or not (issubclass(cls, MutationEffect) or cls in model_types + special_types):
             raise ValueError("Effect graph contains an unsupported class")
         if cls in model_types and attached:
             raise ValueError("Unexpected transcript-model attachment")

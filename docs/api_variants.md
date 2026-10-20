@@ -5,17 +5,21 @@ For examples, see [file loading](getting_started.md#load-a-file),
 
 ## Reference genomes
 
-`Genome` inherits reference DNA configured on a PyEnsembl genome (PyEnsembl
-2.11 or later). This makes intronic and intergenic bases available to Varcode's
-reference lookups as well as features such as indel left alignment.
+**Provide chromosome DNA once on your reference genome.** Varcode then uses it
+for SV breakpoint windows, cryptic-exon searches, intron-retention products,
+ncORF consequences and indel left alignment. Without chromosome DNA, exonic
+consequences still work; outcomes needing unavailable intronic/intergenic bases
+remain unresolved or unavailable.
+
+Use the same assembly for the annotation, DNA and variant coordinates:
 
 ```python
 from pyensembl import EnsemblRelease
-from varcode import Genome
+from varcode import load_vcf
 
-native = EnsemblRelease(81, genome_fasta_path="/data/GRCh38.fa")
-genome = Genome(native)
-bases = genome.reference_range("7", 117_480_000, 117_480_050)
+genome = EnsemblRelease(81, genome_fasta="/data/GRCh38.fa")
+variants = load_vcf("variants.vcf", genome=genome, parse_structural_variants=True)
+effects = variants.effects(extra_orfs="all")  # optional: requires varcode[orf]
 ```
 
 Construction and rewrapping do not open or download native DNA. The first
@@ -23,12 +27,14 @@ read can index a local FASTA or decompress it into PyEnsembl's cache. For a
 remote source, install DNA explicitly before querying:
 
 ```python
-native = EnsemblRelease(81, download_genome_fasta=True)
-native.download_genome_fasta()  # explicit, potentially large download
-native.index_genome_fasta()
-genome = Genome(native)
+genome = EnsemblRelease(81, genome_fasta=True)
+genome.download_genome_fasta()  # explicit, potentially large download
+genome.index_genome_fasta()
 ```
 
+The `genome_fasta=` PyEnsembl spelling requires PyEnsembl 2.28 or later.
+For older supported versions or a pre-opened FASTA reader, use
+`varcode.Genome(native, fasta="/data/GRCh38.fa")`.
 An explicit `Genome(native, fasta="/data/other.fa")` overrides native DNA;
 the supplied reference must match the annotation assembly.
 
@@ -48,6 +54,18 @@ native DNA and caller-provided reader objects open; it closes only readers
 that this wrapper opened from an explicit `fasta=` path. Rewrapping borrows an
 explicit reader, so its owning wrapper must stay open. Close the native genome
 or a caller-provided reader only after all its borrowers have finished.
+
+The command-line equivalent is:
+
+```bash
+varcode --genome GRCh38:81 --genome-fasta /data/GRCh38.fa \
+  --vcf variants.vcf --extra-orfs all --output-csv effects.csv
+```
+
+`--genome-fasta` works for VCF, MAF, individual variants and variant JSON.
+All combined inputs must use one assembly. `--extra-orfs` is optional;
+repeat an evidence selection (for example `--extra-orfs proteomics
+--extra-orfs immunopeptidomics`) to include ORFs supported by either.
 
 ::: varcode.Genome
 

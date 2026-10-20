@@ -119,12 +119,6 @@ class EffectCollection(Collection):
             annotator_version=self.annotator_version,
             annotated_at=self.annotated_at)
 
-    def to_json(self):
-        if any(e.orf is not None or e.orf_annotation is not None for e in self):
-            raise ValueError("Export extra ORF consequences with orf_annotation.to_dict(); "
-                             "generic collection serialization cannot preserve their coding models")
-        return super().to_json()
-
     def clone_with_new_elements(self, new_elements):
         # Forward annotator provenance explicitly — sercol's base
         # clone_with_new_elements only carries distinct/sort_key/sources,
@@ -371,8 +365,8 @@ class EffectCollection(Collection):
         "effect_type", "effect",
     )
 
-    def to_dataframe(self):
-        """Build a dataframe from the effect collection."""
+    def to_dataframe(self, include_archive=False):
+        """Build a summary; optionally retain full graphs in ``effect_json``."""
         from ..splice_outcomes import SpliceOutcomeSet
 
         structural_columns = STRUCTURAL_VARIANT_COLUMNS if any(
@@ -418,10 +412,13 @@ class EffectCollection(Collection):
             return row
         # Always emit the same column set even for empty collections so
         # CSV round-trip doesn't have to special-case len == 0.
-        return pd.DataFrame.from_records(
+        frame = pd.DataFrame.from_records(
             [row_from_effect(effect) for effect in self],
             columns=self._DATAFRAME_COLUMNS + structural_columns + orf_columns + splice_columns,
         )
+        if include_archive and self.orf_annotations:
+            frame["effect_json"] = [effect.to_json() for effect in self]
+        return frame
 
     def to_csv(self, path, include_header=True):
         """Write this collection to CSV.
@@ -438,7 +435,7 @@ class EffectCollection(Collection):
             explicitly. Pass ``include_header=False`` for fast
             consumers that don't tolerate comment lines.
         """
-        df = self.to_dataframe()
+        df = self.to_dataframe(include_archive=True)
         if not include_header:
             df.to_csv(path, index=False)
             return
@@ -475,7 +472,11 @@ class EffectCollection(Collection):
         """Rebuild an EffectCollection from a CSV previously written by
         ``EffectCollection.to_csv()``.
 
-        The current CSV format records (contig, start, ref, alt,
+        ORF-containing exports include an ``effect_json`` column. Those rows
+        restore the saved graphs without reannotation; edited identity columns
+        that disagree with their archives raise.
+
+        Ordinary summary CSV records (contig, start, ref, alt,
         transcript_id) but not enough per-effect state to reconstruct
         effects byte-for-byte. This method takes the pragmatic semantic
         round-trip path: rebuild each Variant, re-annotate against the
@@ -515,6 +516,31 @@ class EffectCollection(Collection):
 
         header = read_metadata_header(path)
         warn_on_version_drift(header, _varcode_version, path)
+        df = pd.read_csv(
+            path, comment="#", dtype={"chr": str, "contig": str})
+        if "effect_json" in df:
+            from .effect_classes import MutationEffect
+            if df["effect_json"].isna().any():
+                raise ValueError("Incomplete effect_json archive column; every row must retain its effect")
+            effects = []
+            for payload in df["effect_json"]:
+                effect = MutationEffect.from_json(payload)
+                if not isinstance(effect, MutationEffect):
+                    raise ValueError("effect_json row does not contain a mutation effect")
+                effects.append(effect)
+            result = cls(effects, sort_key=False,
+                         annotator=header.get("annotator"), annotator_version=header.get("annotator_version"),
+                         annotated_at=header.get("annotated_at"))
+            summary = result.to_dataframe()
+            # Refuse a stale payload after spreadsheet edits to identifying
+            # columns. Empty alleles and missing transcript IDs normalize alike.
+            for column in ("contig", "start", "ref", "alt", "transcript_id", "effect_type", "orf_id", "orf_source"):
+                if column in df and column in summary:
+                    original = df[column].fillna("").astype(str).tolist()
+                    restored = summary[column].fillna("").astype(str).tolist()
+                    if original != restored:
+                        raise ValueError("CSV %s disagrees with its archived effect_json" % column)
+            return result
         if genome is None:
             genome = header.get("reference_name")
         if genome is None:
@@ -528,13 +554,11 @@ class EffectCollection(Collection):
         # CSVs are interchangeable between VariantCollection and
         # EffectCollection (openvax/varcode#274). Declaring both in
         # dtype is a no-op for whichever column is absent.
-        df = pd.read_csv(
-            path, comment="#", dtype={"chr": str, "contig": str})
         reject_structural_csv(df)
         if "orf_id" in df and df["orf_id"].notna().any():
             raise ValueError("Extra ORF CSV rows require their reference coding models; "
                              "canonical transcript re-annotation would lose the ORF. "
-                             "Use ORFAnnotation.to_dict() for full exports.")
+                             "Use EffectCollection.to_csv() or to_json() for full exports.")
         contig_col = resolve_contig_column(df.columns)
         if contig_col is None:
             raise ValueError(
