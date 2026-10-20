@@ -14,9 +14,8 @@ from pyensembl import cached_release
 from varcode import load_vcf
 from varcode.effects import (
     AlternateStartCodon, IncompleteTranscript, NoncodingTranscript, Silent,
-    StopLoss,
+    SpliceAcceptor, StopLoss,
 )
-from varcode.effects.effect_classes import SpliceSite
 from varcode.splice_outcomes import SpliceOutcomeSet
 from varcode.transforms import pair_breakends
 
@@ -123,14 +122,16 @@ def test_published_canine_consequences():
         hgvs = row["HGVSp_Short"]
         original = transcript.protein_sequence
         if row["Variant_Classification"] == "Splice_Site":
+            assert row["Consequence"] == "splice_acceptor_variant"
             assert isinstance(effect, SpliceOutcomeSet)
-            assert issubclass(effect.disrupted_signal_class, SpliceSite)
+            assert effect.disrupted_signal_class is SpliceAcceptor
             materialize_effects([effect])
             counts["splice"] += 1
         elif hgvs == "p.M1?":
             # The paper leaves the protein outcome unknown. Varcode recognizes
             # TTG as an alternative initiator; this is NOT protein concordance.
             assert isinstance(effect, AlternateStartCodon)
+            assert (effect.ref_codon, effect.alt_codon) == ("ATG", "TTG")
             assert original[0] == "M"
             counts["start_uncertain"] += 1
         elif "ext" in hgvs:
