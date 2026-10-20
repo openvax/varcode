@@ -42,7 +42,7 @@ def input_directory(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("path,count", [
     ("README.md", 2),
-    ("docs/getting_started.md", 4),
+    ("docs/getting_started.md", 5),
     ("docs/index.md", 1),
     ("docs/effect_annotation.md", 3),
     ("docs/structural_variants.md", 1),

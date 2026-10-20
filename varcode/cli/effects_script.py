@@ -39,6 +39,11 @@ arg_parser.add_argument(
     "--output-csv", help="CSV output: variant coordinates, gene/transcript IDs, effect type and description, plus SV fields")
 
 arg_parser.add_argument(
+    "--extra-orfs", action="append", metavar="EVIDENCE",
+    help="Add ORFdata consequences: all, ribosome, ms, proteomics or immunopeptidomics. "
+         "Repeat to include ORFs with any selected evidence; requires varcode[orf].")
+
+arg_parser.add_argument(
     "--one-per-variant",
     default=False,
     action="store_true",
@@ -70,12 +75,23 @@ def main(args_list=None):
         args_list = sys.argv[1:]
 
     args = arg_parser.parse_args(args_list)
-    with exit_on_user_error(arg_parser):
+    with exit_on_user_error(arg_parser, errors=(ValueError, OSError, ImportError)):
         if args.output_csv:
             check_output_directory(args.output_csv)
         variants = variant_collection_from_args(args)
+        from ..extra_orfs import prepare_extra_orfs
+        selection = args.extra_orfs
+        if selection and "all" in selection:
+            if len(selection) != 1:
+                raise ValueError("--extra-orfs all cannot be combined with evidence filters")
+            selection = "all"
+        extra_orfs = prepare_extra_orfs(selection)
+        if extra_orfs is not None:
+            for genome in {id(v.genome): v.genome for v in variants}.values():
+                extra_orfs.for_genome(genome)
     try:
-        effects = variants.effects(raise_on_error=False if args.skip_errors else None)
+        effects = variants.effects(
+            raise_on_error=False if args.skip_errors else None, extra_orfs=extra_orfs)
     except ReferenceMismatchError as error:
         arg_parser.exit(1, "%s: error: %s Use --skip-errors to retain failed annotations.\n" % (
             arg_parser.prog, error))
@@ -91,7 +107,7 @@ def main(args_list=None):
 
     effects = effects.clone_with_new_elements(list(effects) + failures)
 
-    effects_dataframe = effects.to_dataframe()
+    effects_dataframe = effects.to_dataframe(include_archive=True)
     if args.skip_errors or failures:
         effects_dataframe["annotation_error"] = [getattr(e, "error", None) for e in effects]
     logger.info('\n%s', effects)

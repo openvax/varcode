@@ -209,16 +209,18 @@ def test_exports_cannot_silently_turn_an_orf_into_the_parent_cds(native, tmp_pat
     from varcode.effects import EffectCollection
     variant, reference, _ = native
     result = variant.effects(extra_orfs=[reference])
-    with pytest.raises(ValueError, match="orf_annotation.to_dict"):
-        result.to_json()
-    with pytest.raises(ValueError, match="orf_annotation.to_dict"):
-        result.top_priority_effect().to_json()
+    restored = EffectCollection.from_json(result.to_json())
+    assert restored.orf_annotations[0].to_dict() == result.orf_annotations[0].to_dict()
+    effect = result.top_priority_effect()
+    assert type(effect).from_json(effect.to_json()).orf_annotation.to_dict() == effect.orf_annotation.to_dict()
     frame = result.to_dataframe()
     row = frame[frame.orf_id.notna()].iloc[0]
     assert row.orf_id == "c7riboseqorf56"
     assert row.transcript_id == reference.transcript.id
     path = tmp_path / "effects.csv"
     result.to_csv(path)
+    assert EffectCollection.from_csv(path).orf_annotations[0].to_dict() == result.orf_annotations[0].to_dict()
+    frame.to_csv(path, index=False)  # A legacy summary still lacks its model.
     with pytest.raises(ValueError, match="reference coding models"):
         EffectCollection.from_csv(path, genome=variant.genome)
 

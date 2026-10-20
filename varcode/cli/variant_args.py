@@ -34,6 +34,10 @@ def add_variant_args(arg_parser):
         description="Genomic variant files")
 
     variant_arg_group.add_argument(
+        "--genome-fasta",
+        help="Chromosome DNA FASTA for this reference assembly; enables intronic/SV sequence analysis")
+
+    variant_arg_group.add_argument(
         "--vcf",
         default=[],
         action="append",
@@ -170,6 +174,9 @@ def download_and_install_reference_data(variant_collections):
 
 def variant_collection_from_args(args, required=True):
     variant_collections = []
+    fasta = getattr(args, "genome_fasta", None)
+    if fasta is not None and not os.path.isfile(fasta):
+        raise ValueError("--genome-fasta is not a readable FASTA file: %s" % fasta)
 
     for vcf_path in args.vcf:
         variant_collections.append(
@@ -207,6 +214,29 @@ def variant_collection_from_args(args, required=True):
     if required and len(variant_collections) == 0:
         raise ValueError(
             "No variants loaded (use --maf, --vcf, --variant, or --json-variants options)")
+
+    if fasta is not None:
+        from ..genome import Genome
+        assemblies = {v.reference_name for collection in variant_collections for v in collection}
+        if len(assemblies) > 1:
+            raise ValueError("--genome-fasta requires inputs from one reference assembly")
+        genomes = {}
+        wrapped = []
+        for collection in variant_collections:
+            replacements = {}
+            for variant in collection:
+                key = id(variant.genome)
+                if key not in genomes:
+                    genomes[key] = Genome(variant.genome, fasta=fasta)
+                replacements[variant] = type(variant).from_dict({
+                    **variant.to_dict(), "genome": genomes[key]})
+            wrapped.append(VariantCollection(
+                [replacements[v] for v in collection],
+                sources=collection.sources,
+                source_to_metadata_dict={
+                    source: {replacements[v]: metadata for v, metadata in entries.items() if v in replacements}
+                    for source, entries in collection.source_to_metadata_dict.items()}))
+        variant_collections = wrapped
 
     if args.download_reference_genome_data:
         download_and_install_reference_data(variant_collections)

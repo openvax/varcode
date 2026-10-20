@@ -369,13 +369,16 @@ def _annotate_orf_variants(variants, record, transcript, *, genome_build,
     view = _ORFTranscript(_bind(record, transcript, genome_build,
                               reference_context=reference_context) if reference is None else reference)
     germline_variants = tuple(germline_variants)
-    provider = _reference_provider(view, sequence_provider)
     for variant in (*variants, *germline_variants):
         if variant.reference_name != genome_build:
             raise ValueError("Variant assembly mismatch")
         if _contig(variant.contig) != _contig(record.contig):
             raise ValueError("Variant contig mismatch")
         view.reference_orf.context.validate_genome(variant.genome, include_annotation=False)
+    if sequence_provider is None:
+        from .transcript_model import _provider_for_genome
+        sequence_provider = _provider_for_genome(variants[0].genome)
+    provider = _reference_provider(view, sequence_provider)
     try:
         # Validate original genomic REF, including VCF padding anchors. Layout
         # tier 0 deliberately permits unknown intronic REF; this API does not.

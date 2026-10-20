@@ -59,6 +59,31 @@ def test_native_intronic_and_intergenic_queries(native_genome, tmp_path):
         native.close()
 
 
+@pytest.mark.parametrize("override", [False, True])
+def test_sv_breakpoint_scan_reads_chromosome_dna_without_transcripts(native_genome, override, monkeypatch):
+    from varcode import StructuralVariant
+    from varcode import cryptic_exons
+    sequence = "AACGTTCAGGTACCGATTCGAACGT"
+    genome = Genome(native_genome, fasta={"1": sequence}, verify=False) if override else Genome(native_genome)
+    variant = StructuralVariant("1", 10, "DEL", end=15, genome=genome)
+    scans = []
+
+    def scan(**kwargs):
+        scans.append(kwargs)
+        return []
+
+    monkeypatch.setattr(cryptic_exons, "enumerate_candidates", scan)
+    cryptic_exons.enumerate_from_structural_variant(variant, flank=3)
+    assert scans
+    for scan in scans:
+        start = scan["sequence_start"]
+        assert scan["sequence"] == sequence[start - 1:start - 1 + len(scan["sequence"])]
+    for contig, breakpoint in variant.breakpoints:
+        assert any(scan["contig"] == contig and scan["sequence_start"] <= breakpoint - 3
+                   and scan["sequence_start"] + len(scan["sequence"]) - 1 >= breakpoint + 3
+                   for scan in scans)
+
+
 def test_construction_inference_and_repr_do_not_open_native_dna(
         native_genome, monkeypatch):
     def unexpected_open(self):

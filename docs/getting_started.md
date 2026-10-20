@@ -41,6 +41,21 @@ To pin the annotation exactly, pass `genome=` one of:
 An assembly name alone, such as `genome="GRCh38"`, uses the most recent
 installed release of that assembly.
 
+### Chromosome DNA for SV and splice analysis
+
+Transcript FASTA contains exons. Supply a chromosome FASTA to also resolve
+intronic sequence, SV breakpoint windows and extra-ORF splice products:
+
+```python
+from pyensembl import EnsemblRelease
+
+genome = EnsemblRelease(81, genome_fasta="/data/GRCh38.fa")
+```
+
+Pass this same `genome` to your variants or file loader. For explicit download
+setup, older PyEnsembl versions and resource ownership, see
+[reference genomes](api_variants.md#reference-genomes).
+
 ## Annotate one variant
 
 ```python
@@ -108,9 +123,10 @@ Selected splice effects retain their complete candidate sets. Note that
 `effects.top_priority_effect()` (without
 `_per_variant`) returns a single effect for the entire collection.
 
-CSV lists every current splice candidate's description, with the affected
-signal in `splice_signal`. It does not archive complete candidate objects or
-their evidence. Keep your input files too. See
+CSV summaries list every current splice candidate's description, with the affected
+signal in `splice_signal`. Collections containing extra ORFs also carry full
+graphs in `effect_json`; ordinary summary CSVs do not archive candidate objects
+or their evidence. Keep your input files too. See
 [saving and reloading results](csv.md) for what survives a round trip.
 
 ## How to read results
@@ -147,6 +163,19 @@ The `varcode` command annotates files without writing Python, and
 varcode --genome GRCh38 --vcf variants.vcf --output-csv effects.csv
 varcode-genes --genome GRCh38 --variant chr12 25245350 C T --output-csv genes.csv
 ```
+
+For SV/splice analysis with optional noncanonical ORFs:
+
+```bash
+pip install 'varcode[orf]'
+varcode --genome GRCh38:81 --genome-fasta /data/GRCh38.fa \
+  --vcf variants.vcf --extra-orfs all --output-csv effects.csv
+```
+
+Use `--extra-orfs ms` to select ORFs with MS evidence. ORFdata chooses the
+catalogue for the reference species and assembly; missing data produces setup
+instructions. CSV files containing extra ORFs include an `effect_json` column
+so `EffectCollection.from_csv()` can restore the complete consequences.
 
 Inputs can be combined and repeated: `--vcf`, `--maf`, `--variant`, and
 `--json-variants`. `--genome GRCh38:93` pins Ensembl release 93, as in Python. The commands differ from `load_vcf` in two ways:

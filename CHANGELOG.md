@@ -1,5 +1,22 @@
 # Change Log
 
+## v10.18.0
+
+- Use configured genome DNA automatically for noncanonical ORF intronic,
+  splice and local SV consequences, preserving explicit sequence providers
+  and validated transcript exons (#610).
+- Select genetic codes from explicit source models or offline NCBI
+  species/compartment assignments. Support unambiguous NCBI codes including
+  yeast and invertebrate mitochondria; reject unknown assignments and
+  context-dependent stop codes explicitly (#611).
+- Add `--genome-fasta` and `--extra-orfs` CLI options with input validation
+  and a single documented reference setup path.
+- Round-trip extra-ORF effects, reference RNA snapshots, source evidence,
+  failed bindings and all alternative products in versioned JSON graphs.
+  ORF-containing CSVs carry full effect archives beside summary columns,
+  preventing reconstruction against the canonical CDS (#593).
+- Require ORFdata 0.34 or later for optional ORF functionality.
+
 ## v10.17.3
 
 - Read reference ranges from contiguous exon slices and reject gaps in combined

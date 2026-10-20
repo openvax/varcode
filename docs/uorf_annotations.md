@@ -90,12 +90,21 @@ uses a private coding view in `effect.transcript`; its ID distinguishes the ORF
 for candidate grouping. Public `effect.transcript_id` and collection grouping /
 expression lookups use the original RNA identity. `effect.orf_annotation` holds native products, source evidence,
 and initiation-context changes. `effects.orf_annotations` selects these detailed
-annotations in collection order, including failures. Export them with
-`annotation.to_dict()` when JSON is needed. Generic effect/collection JSON
-serialization rejects these entries because its schema cannot preserve their
-coding models. Dataframe/CSV summaries add `orf_id`, `orf_source` and
-`orf_unresolved_reason`; `from_csv` rejects ORF rows rather than recomputing them
-against the ordinary CDS. Full generic round trips are tracked in #593.
+annotations in collection order, including failures. `annotation.to_dict()`
+exports the ORF-specific report. `effects.to_json()` / `EffectCollection.from_json()`
+round-trip native effects, reference models, evidence and every alternative
+product through a versioned graph. Bound ORFs retain a snapshot of their full
+parent RNA and reference context, so their reconstruction needs no catalogue
+download or annotation lookup. These snapshots describe the archived RNA;
+they do not provide a genome database for new annotation.
+
+Dataframe/CSV summaries add `orf_id`, `orf_source` and `orf_unresolved_reason`.
+`effects.to_csv()` also includes an `effect_json` archive column when extra
+ORFs are present; `EffectCollection.from_csv()` restores those graphs and
+rejects edited identity columns that disagree with their payloads.
+`to_dataframe(include_archive=True)` provides the same full rows.
+Legacy CSV summaries lacking the archive still cannot reconstruct ORF models
+and are rejected. Ordinary CSV files retain their existing format.
 
 Bound inputs must match the variant genome's reference and annotation context.
 Catalogue records resolve against that genome and retain their source identities.
@@ -163,9 +172,28 @@ a noncoding PyEnsembl transcript.
 
 Binding checks the entire spliced path, protein, stop, assembly and available
 species identity. Literal genomic REF mismatches raise, including VCF padding.
-Sequence unavailable for intronic edits remains unresolved. The initial binder
-supports complete, stopped ORFs with NCBI translation table 1; other tables are
-explicitly unsupported, never inferred from an MT-like contig name.
+Configured genome DNA is used automatically for intronic edits and splice/SV
+products; absent sequence remains unresolved. An explicit `sequence_provider`
+on `annotate_orf_variants` overrides this fallback. Bound transcript exons retain
+the validated ORF reference sequence.
+
+ORFdata 0.34 supports binding complete, stopped ORFs with NCBI tables 1, 2 and 3.
+Varcode preserves the declared code through variant and RNA-product translation.
+Other ORF binding codes still depend on ORFdata support; see
+[ORFdata #57](https://github.com/openvax/orfdata/issues/57).
+For ordinary transcripts, Varcode uses source-declared translation tables first,
+then its offline NCBI species/compartment assignments. Human/mouse mitochondria
+use table 2, budding yeast mitochondria table 3, fly/worm mitochondria table 5,
+and *Candida albicans* nuclear genes table 12. References without species
+metadata can use an exact assembly registered with PyEnsembl, including
+mirrored references. The bundled snapshot covers 22 taxa; unknown assignments
+require explicit `transcript.translation_table` or the relevant
+`genome.nuclear_translation_table`, `genome.mitochondrial_translation_table`
+or `genome.plastid_translation_table`. Unscoped nuclear transcripts retain the
+standard-code default. Codes 27, 28 and 31 require context-dependent stop
+recoding and remain explicitly unsupported. Definitions and assignments come
+from [NCBI](https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi);
+snapshot hashes and the refresh script are included with Varcode.
 
 For RNA products, `annotate_orf_rna_product(reference, product)` accepts a
 `RealizedTranscriptProduct` with one `(contig, position, strand)` or `None` in
@@ -193,7 +221,7 @@ and downstream CDS regulation are unassessed.
 
 ## Reference identity
 
-The ORF extras require ORFdata 0.2. A bound `ReferenceORF` retains its species,
+The ORF extras require ORFdata 0.34. A bound `ReferenceORF` retains its species,
 strain, assembly, annotation version and sequence fingerprints in both native
 and modified-product exports. RNA product metadata must agree with that context.
 For custom Genomes without taxonomy, use `record.bind(transcript, context=...)`

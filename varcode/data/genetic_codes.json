@@ -1,0 +1,431 @@
+{
+  "code_source_sha256": "2aecbdd09ecc5e0d233c105090a593737298ef93d88f6bc0c1bef26df6051a04",
+  "codes": {
+    "1": {
+      "amino_acids": "FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG",
+      "name": "Standard",
+      "starts_stops": "---M------**--*----M---------------M----------------------------"
+    },
+    "10": {
+      "amino_acids": "FFLLSSSSYY**CCCWLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG",
+      "name": "Euplotid Nuclear",
+      "starts_stops": "----------**-----------------------M----------------------------"
+    },
+    "11": {
+      "amino_acids": "FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG",
+      "name": "Bacterial, Archaeal and Plant Plastid",
+      "starts_stops": "---M------**--*----M------------MMMM---------------M------------"
+    },
+    "12": {
+      "amino_acids": "FFLLSSSSYY**CC*WLLLSPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG",
+      "name": "Alternative Yeast Nuclear",
+      "starts_stops": "----------**--*----M---------------M----------------------------"
+    },
+    "13": {
+      "amino_acids": "FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIMMTTTTNNKKSSGGVVVVAAAADDEEGGGG",
+      "name": "Ascidian Mitochondrial",
+      "starts_stops": "---M------**----------------------MM---------------M------------"
+    },
+    "14": {
+      "amino_acids": "FFLLSSSSYYY*CCWWLLLLPPPPHHQQRRRRIIIMTTTTNNNKSSSSVVVVAAAADDEEGGGG",
+      "name": "Alternative Flatworm Mitochondrial",
+      "starts_stops": "-----------*-----------------------M----------------------------"
+    },
+    "15": {
+      "amino_acids": "FFLLSSSSYY*QCC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG",
+      "name": "Blepharisma Macronuclear",
+      "starts_stops": "----------*---*--------------------M----------------------------"
+    },
+    "16": {
+      "amino_acids": "FFLLSSSSYY*LCC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG",
+      "name": "Chlorophycean Mitochondrial",
+      "starts_stops": "----------*---*--------------------M----------------------------"
+    },
+    "2": {
+      "amino_acids": "FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIMMTTTTNNKKSS**VVVVAAAADDEEGGGG",
+      "name": "Vertebrate Mitochondrial",
+      "starts_stops": "----------**--------------------MMMM----------**---M------------"
+    },
+    "21": {
+      "amino_acids": "FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIMMTTTTNNNKSSSSVVVVAAAADDEEGGGG",
+      "name": "Trematode Mitochondrial",
+      "starts_stops": "----------**-----------------------M---------------M------------"
+    },
+    "22": {
+      "amino_acids": "FFLLSS*SYY*LCC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG",
+      "name": "Scenedesmus obliquus Mitochondrial",
+      "starts_stops": "------*---*---*--------------------M----------------------------"
+    },
+    "23": {
+      "amino_acids": "FF*LSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG",
+      "name": "Thraustochytrium Mitochondrial",
+      "starts_stops": "--*-------**--*-----------------M--M---------------M------------"
+    },
+    "24": {
+      "amino_acids": "FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSSKVVVVAAAADDEEGGGG",
+      "name": "Rhabdopleuridae Mitochondrial",
+      "starts_stops": "---M------**-------M---------------M---------------M------------"
+    },
+    "25": {
+      "amino_acids": "FFLLSSSSYY**CCGWLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG",
+      "name": "Candidate Division SR1 and Gracilibacteria",
+      "starts_stops": "---M------**-----------------------M---------------M------------"
+    },
+    "26": {
+      "amino_acids": "FFLLSSSSYY**CC*WLLLAPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG",
+      "name": "Pachysolen tannophilus Nuclear",
+      "starts_stops": "----------**--*----M---------------M----------------------------"
+    },
+    "27": {
+      "amino_acids": "FFLLSSSSYYQQCCWWLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG",
+      "name": "Karyorelict Nuclear",
+      "starts_stops": "--------------*--------------------M----------------------------"
+    },
+    "28": {
+      "amino_acids": "FFLLSSSSYYQQCCWWLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG",
+      "name": "Condylostoma Nuclear",
+      "starts_stops": "----------**--*--------------------M----------------------------"
+    },
+    "29": {
+      "amino_acids": "FFLLSSSSYYYYCC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG",
+      "name": "Mesodinium Nuclear",
+      "starts_stops": "--------------*--------------------M----------------------------"
+    },
+    "3": {
+      "amino_acids": "FFLLSSSSYY**CCWWTTTTPPPPHHQQRRRRIIMMTTTTNNKKSSRRVVVVAAAADDEEGGGG",
+      "name": "Yeast Mitochondrial",
+      "starts_stops": "----------**----------------------MM---------------M------------"
+    },
+    "30": {
+      "amino_acids": "FFLLSSSSYYEECC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG",
+      "name": "Peritrich Nuclear",
+      "starts_stops": "--------------*--------------------M----------------------------"
+    },
+    "31": {
+      "amino_acids": "FFLLSSSSYYEECCWWLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG",
+      "name": "Blastocrithidia Nuclear",
+      "starts_stops": "----------**-----------------------M----------------------------"
+    },
+    "32": {
+      "amino_acids": "FFLLSSSSYY*WCC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG",
+      "name": "Balanophoraceae Plastid",
+      "starts_stops": "---M------*---*----M------------MMMM---------------M------------"
+    },
+    "33": {
+      "amino_acids": "FFLLSSSSYYY*CCWWLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSSKVVVVAAAADDEEGGGG",
+      "name": "Cephalodiscidae Mitochondrial",
+      "starts_stops": "---M-------*-------M---------------M---------------M------------"
+    },
+    "4": {
+      "amino_acids": "FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG",
+      "name": "Mold Mitochondrial; Protozoan Mitochondrial; Coelenterate\n Mitochondrial; Mycoplasma; Spiroplasma",
+      "starts_stops": "--MM------**-------M------------MMMM---------------M------------"
+    },
+    "5": {
+      "amino_acids": "FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIMMTTTTNNKKSSSSVVVVAAAADDEEGGGG",
+      "name": "Invertebrate Mitochondrial",
+      "starts_stops": "---M------**--------------------MMMM---------------M------------"
+    },
+    "6": {
+      "amino_acids": "FFLLSSSSYYQQCC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG",
+      "name": "Ciliate Nuclear; Dasycladacean Nuclear; Hexamita Nuclear",
+      "starts_stops": "--------------*--------------------M----------------------------"
+    },
+    "9": {
+      "amino_acids": "FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIIMTTTTNNNKSSSSVVVVAAAADDEEGGGG",
+      "name": "Echinoderm Mitochondrial; Flatworm Mitochondrial",
+      "starts_stops": "----------**-----------------------M---------------M------------"
+    }
+  },
+  "source": "NCBI gc.prt version 4.6 and Taxonomy EUtils; retrieved 2026-10-20",
+  "taxa": {
+    "10090": {
+      "aliases": [
+        "house_mouse",
+        "mouse",
+        "mus_musculus"
+      ],
+      "mitochondrial": 2,
+      "name": "Mus musculus",
+      "nuclear": 1
+    },
+    "10116": {
+      "aliases": [
+        "brown_rat",
+        "mus_norvegicus",
+        "norway_rat",
+        "rat",
+        "rats",
+        "rattus_norvegicus"
+      ],
+      "mitochondrial": 2,
+      "name": "Rattus norvegicus",
+      "nuclear": 1
+    },
+    "3702": {
+      "aliases": [
+        "arabidopsis_thaliana",
+        "arabis_thaliana",
+        "mouse-ear_cress",
+        "thale-cress",
+        "thale_cress"
+      ],
+      "mitochondrial": 1,
+      "name": "Arabidopsis thaliana",
+      "nuclear": 1,
+      "plastid": 11
+    },
+    "3847": {
+      "aliases": [
+        "glycine_max",
+        "phaseolus_max",
+        "soybean",
+        "soybeans"
+      ],
+      "mitochondrial": 1,
+      "name": "Glycine max",
+      "nuclear": 1,
+      "plastid": 11
+    },
+    "4081": {
+      "aliases": [
+        "lycopersicon_esculentum",
+        "lycopersicon_esculentum_var._esculentum",
+        "solanum_esculentum",
+        "solanum_lycopersicum",
+        "solanum_lycopersicum_var._humboldtii",
+        "tomato"
+      ],
+      "mitochondrial": 1,
+      "name": "Solanum lycopersicum",
+      "nuclear": 1,
+      "plastid": 11
+    },
+    "4530": {
+      "aliases": [
+        "asian_cultivated_rice",
+        "oryza_sativa",
+        "red_rice",
+        "rice"
+      ],
+      "mitochondrial": 1,
+      "name": "Oryza sativa",
+      "nuclear": 1,
+      "plastid": 11
+    },
+    "4565": {
+      "aliases": [
+        "bread_wheat",
+        "canadian_hard_winter_wheat",
+        "common_wheat",
+        "triticum_aestivum",
+        "triticum_aestivum_subsp._aestivum",
+        "triticum_sativum",
+        "triticum_vulgare",
+        "wheat"
+      ],
+      "mitochondrial": 1,
+      "name": "Triticum aestivum",
+      "nuclear": 1,
+      "plastid": 11
+    },
+    "4577": {
+      "aliases": [
+        "maize",
+        "zea_mays",
+        "zea_mays_var._japonica"
+      ],
+      "mitochondrial": 1,
+      "name": "Zea mays",
+      "nuclear": 1,
+      "plastid": 11
+    },
+    "4896": {
+      "aliases": [
+        "fission_yeast",
+        "schizosaccharomyces_malidevorans",
+        "schizosaccharomyces_pombe"
+      ],
+      "mitochondrial": 4,
+      "name": "Schizosaccharomyces pombe",
+      "nuclear": 1
+    },
+    "4932": {
+      "aliases": [
+        "baker's_yeast",
+        "brewer's_yeast",
+        "candida_robusta",
+        "mycoderma_cerevisiae",
+        "saccharomyces_boulardii",
+        "saccharomyces_boulardii_(nom._inval.)",
+        "saccharomyces_capensis",
+        "saccharomyces_cerevisiae",
+        "saccharomyces_cerevisiae_'var._diastaticus'",
+        "saccharomyces_cerevisiae_(desm.)_meyen_ex_e.c._hansen,_1883",
+        "saccharomyces_diastaticus",
+        "saccharomyces_italicus",
+        "saccharomyces_oviformis",
+        "saccharomyces_uvarum_var._melibiosus"
+      ],
+      "mitochondrial": 3,
+      "name": "Saccharomyces cerevisiae",
+      "nuclear": 1
+    },
+    "5476": {
+      "aliases": [
+        "candida_albicans",
+        "candida_albicans_var._stellatoidea",
+        "candida_stellatoidea",
+        "dematium_albicans",
+        "endomyces_albicans",
+        "monilia_albicans",
+        "monilia_stellatoidea",
+        "myceloblastanon_albicans",
+        "mycotorula_albicans",
+        "oidium_albicans",
+        "parasaccharomyces_albicans",
+        "procandida_albicans",
+        "procandida_stellatoidea",
+        "saccharomyces_albicans",
+        "syringospora_albicans"
+      ],
+      "mitochondrial": 4,
+      "name": "Candida albicans",
+      "nuclear": 12
+    },
+    "5811": {
+      "aliases": [
+        "leishmania_gondii",
+        "toxoplasma_gondii"
+      ],
+      "mitochondrial": 4,
+      "name": "Toxoplasma gondii",
+      "nuclear": 1,
+      "plastid": 4
+    },
+    "5833": {
+      "aliases": [
+        "malaria_parasite_p._falciparum",
+        "plasmodium_(laverania)_falciparum",
+        "plasmodium_falciparum"
+      ],
+      "mitochondrial": 4,
+      "name": "Plasmodium falciparum",
+      "nuclear": 1,
+      "plastid": 11
+    },
+    "6239": {
+      "aliases": [
+        "caenorhabditis_elegans",
+        "rhabditis_elegans"
+      ],
+      "mitochondrial": 5,
+      "name": "Caenorhabditis elegans",
+      "nuclear": 1
+    },
+    "7165": {
+      "aliases": [
+        "african_malaria_mosquito",
+        "anopheles_gambiae"
+      ],
+      "mitochondrial": 5,
+      "name": "Anopheles gambiae",
+      "nuclear": 1
+    },
+    "7227": {
+      "aliases": [
+        "drosophila_melanogaster",
+        "fruit_fly",
+        "sophophora_melanogaster"
+      ],
+      "mitochondrial": 5,
+      "name": "Drosophila melanogaster",
+      "nuclear": 1
+    },
+    "7955": {
+      "aliases": [
+        "brachydanio_rerio",
+        "brachydanio_rerio_frankei",
+        "cyprinus_rerio",
+        "danio_frankei",
+        "danio_rerio",
+        "danio_rerio_frankei",
+        "leopard_danio",
+        "zebra_danio",
+        "zebra_fish",
+        "zebrafish"
+      ],
+      "mitochondrial": 2,
+      "name": "Danio rerio",
+      "nuclear": 1
+    },
+    "9031": {
+      "aliases": [
+        "bantam",
+        "chicken",
+        "chickens",
+        "gallus_domesticus",
+        "gallus_gallus",
+        "gallus_gallus_domesticus",
+        "phasianus_gallus"
+      ],
+      "mitochondrial": 2,
+      "name": "Gallus gallus",
+      "nuclear": 1
+    },
+    "9606": {
+      "aliases": [
+        "homo_sapiens",
+        "human"
+      ],
+      "mitochondrial": 2,
+      "name": "Homo sapiens",
+      "nuclear": 1
+    },
+    "9615": {
+      "aliases": [
+        "canis_borealis",
+        "canis_canis",
+        "canis_domesticus",
+        "canis_familiaris",
+        "canis_lupus_borealis",
+        "canis_lupus_familiaris",
+        "dog",
+        "dogs"
+      ],
+      "mitochondrial": 2,
+      "name": "Canis lupus familiaris",
+      "nuclear": 1
+    },
+    "9685": {
+      "aliases": [
+        "cat",
+        "cats",
+        "domestic_cat",
+        "felis_catus",
+        "felis_domesticus",
+        "felis_silvestris_catus"
+      ],
+      "mitochondrial": 2,
+      "name": "Felis catus",
+      "nuclear": 1
+    },
+    "9913": {
+      "aliases": [
+        "bos_bovis",
+        "bos_primigenius_taurus",
+        "bos_taurus",
+        "bovine",
+        "cow",
+        "dairy_cow",
+        "domestic_cattle",
+        "domestic_cow",
+        "ox"
+      ],
+      "mitochondrial": 2,
+      "name": "Bos taurus",
+      "nuclear": 1
+    }
+  },
+  "taxonomy_source_sha256": "b9f6cc8d8ebf3433adbe0f2dfc489fdb0a7a4b74cefa391696238a387e3cfa8b"
+}

@@ -3,7 +3,7 @@
 Save results as CSV for a table you can inspect or share, as
 [JSON](#csv-vs-json) to archive supported objects, or write variants back to
 [VCF](#vcf-export). Whichever you choose, keep the original inputs and
-evidence too: a results table does not preserve every alternative outcome,
+evidence too: a summary table does not preserve every alternative outcome,
 sequence, or annotation context.
 
 ## Writing
@@ -22,6 +22,15 @@ Splice rows list every current candidate description in `effect`, retain
 `effect_type=SpliceOutcomeSet`, and name the affected signal in `splice_signal`.
 The descriptions include unresolved candidates; they do not archive each
 candidate's sequences or evidence.
+
+When a collection includes extra ORFs, `to_csv()` adds an `effect_json`
+column to every row. This archives the complete effects alongside the readable
+summaries. `from_csv()` restores those saved graphs, including ORF source
+identity, reference RNA, evidence, failures and alternative products, without
+reannotation or catalogue downloads. Keep the archive column intact:
+missing payloads or summary identities that disagree with them raise an error.
+`to_dataframe()` remains a compact summary; use
+`to_dataframe(include_archive=True)` to include the archives.
 
 By default, both writers prepend `#`-prefixed provenance lines so the
 file is self-describing:
@@ -44,7 +53,7 @@ vc.to_csv("plain.csv", include_header=False)
 ## Reading
 
 The examples here apply to ordinary point-variant tables. Structural-variant
-CSVs are summaries only: `from_csv` rejects them rather than reconstructing
+CSV summaries without `effect_json` cannot be restored: `from_csv` rejects them rather than reconstructing
 incomplete SVs. See [structural exports](sv_reference.md#alleles-coordinates-and-exports).
 
 When the header is present, `from_csv` recovers the reference genome
@@ -57,7 +66,7 @@ vc = VariantCollection.from_csv("variants.csv")
 effects = EffectCollection.from_csv("effects.csv")
 ```
 
-`EffectCollection.from_csv` re-runs annotation. It does not recover the original
+For summary files without `effect_json`, `EffectCollection.from_csv` re-runs annotation. It does not recover the original
 germline/phase/RNA evidence, candidate sets, or historical predictions. A
 reference-name header also does not pin the original annotation dataset; pass
 the same explicit `genome` when that matters.
@@ -87,9 +96,9 @@ effect tables also need effect/transcript fields.
 
 ## Version drift
 
-Because `EffectCollection.from_csv` re-runs annotation on read, a
-collection serialized by one major varcode version and loaded under
-another can produce different effects. `from_csv` emits
+For summary files without `effect_json`, `EffectCollection.from_csv`
+re-runs annotation, so loading under another version can produce different
+effects. Archived rows restore their saved predictions. `from_csv` emits
 a `UserWarning` when the header's `varcode_version` differs in major
 version from the currently-installed version. Minor and patch drift
 is silent, but bug fixes or a different annotation dataset can still change
@@ -100,10 +109,10 @@ predictions; API compatibility is not a guarantee of identical scientific output
 | | CSV | JSON |
 |---|---|---|
 | Intended use | Inspect or share a table | Serialize supported objects |
-| Reloading effects | Re-annotates on read | Restores serialized state where supported |
-| Structural variants | Export summaries; import rejected | Restore effect/candidate graphs and mutant transcript models |
+| Reloading effects | Summary rows re-annotate; `effect_json` rows restore saved graphs | Restores serialized state where supported |
+| Structural variants | Summary import rejected; archived rows restore graphs | Restore effect/candidate graphs and mutant transcript models |
 | Carries annotator version header | Yes | (via the serialized object) |
-| Preserves all effect-specific fields | No | Depends on the effect type and serialization support |
+| Preserves all effect-specific fields | With `effect_json`, subject to graph support | Depends on the effect type and serialization support |
 
 JSON (`to_json` / `from_json`) avoids CSV's re-annotation for supported objects.
 Deserialization restores recorded predictions without recomputing them, and
@@ -123,6 +132,12 @@ dependencies. Arbitrary extra attributes and third-party sequence providers
 need their own serialization support. Test the round-trip for the actual result
 types you use, and retain source variants, reference release, and original
 RNA/phase/germline evidence independently.
+
+Extra-ORF graphs snapshot their full reference RNA and use ORFdata's public
+record constructors to restore the bound coding model. Reading these ORF
+graphs needs ORFdata but no installed catalogue or reference database.
+The snapshot supplies archived transcript properties; it is not a reference
+genome for annotating new variants. See [ORF annotations](uorf_annotations.md).
 
 <a id="vcf-export-limitations"></a>
 
