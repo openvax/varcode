@@ -14,6 +14,7 @@
 import warnings
 
 import pytest 
+from pyensembl import cached_release
 
 from varcode import Variant
 from varcode.reference import (
@@ -87,12 +88,13 @@ def test_reference_name_fasta_filenames(candidate, assembly_name):
 def test_reference_name_with_release_chooses_that_release(name, release, species, was_ucsc):
     genome, converted = infer_genome(name)
     assert (genome.release, genome.species.latin_name, converted) == (release, species, was_ucsc)
+    assert genome is cached_release(release, species=species)
 
 
 @pytest.mark.parametrize(["name", "message"], [
-    ("GRCh38:75", "release 75 of homo_sapiens provides GRCh37, not GRCh38"),
-    ("GRCh38.75", "release 75 of homo_sapiens provides GRCh37, not GRCh38"),
-    ("GRCh37:93", "release 93 of homo_sapiens provides GRCh38, not GRCh37"),
+    ("GRCh38:75", "Assembly 'GRCh38' conflicts with selected GRCh37"),
+    ("GRCh38.75", "Assembly 'GRCh38' conflicts with selected GRCh37"),
+    ("GRCh37:93", "Assembly 'GRCh37' conflicts with selected GRCh38"),
     ("GRCh38:40", "No genome for homo_sapiens in Ensembl release 40"),
 ])
 def test_release_that_does_not_provide_the_assembly_is_rejected(name, message):
@@ -111,6 +113,7 @@ def test_variant_keeps_the_chosen_release_through_serialization():
     ("GRCh38.p13", "GRCh38"),
     ("grch38.d1.vd1", "GRCh38"),
     ("Felis_catus_9.0", "Felis_catus_9.0"),
+    ("CanFam3.1", "CanFam3.1"),
 ])
 def test_names_ending_in_digits_are_not_read_as_releases(name, reference_name):
     genome, _ = infer_genome(name)

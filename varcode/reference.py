@@ -16,7 +16,7 @@ import os
 from warnings import warn
 import re
 
-from pyensembl import Genome
+from pyensembl import EnsemblRelease, Genome
 from pyensembl import cached_release as cached_ensembl_release
 from pyensembl import genome_for_reference_name as get_genome_for_ensembl_reference_name
 
@@ -286,9 +286,8 @@ def infer_reference_name(reference_name_or_path):
     return match
 
 
-# An assembly name followed by an Ensembl release: "GRCh38:93", or
-# "GRCh38.93" as in Ensembl's file names. Paths (which contain "/") never match.
-_RELEASE_SUFFIX = re.compile(r"^\s*([^:/\\\s]+?)\s*([:._\-\s])\s*(\d+)\s*$")
+# Numbered releases and annotation dates. Paths never match.
+_RELEASE_SUFFIX = re.compile(r"^\s*([^:/\\\s]+?)\s*([:._\-\s])\s*(\d{4}_\d{2}|\d+)\s*$")
 
 
 def _exact_reference_names():
@@ -309,7 +308,7 @@ def _split_release(reference_name):
     The assembly name and requested Ensembl release in ``reference_name``,
     or ``(reference_name, None)`` when it names no release.
 
-    A colon always introduces a release ("GRCh38.p13:93"). Other separators
+    A colon always introduces a release ("GRCh38:2026_04"). Other separators
     do only after an exact assembly name or alias, so names that end in
     digits, such as "Felis_catus_9.0", keep their meaning.
     """
@@ -317,11 +316,14 @@ def _split_release(reference_name):
         return reference_name, None
     match = _RELEASE_SUFFIX.match(reference_name)
     if match is None:
+        if ":" in reference_name and not any(sep in reference_name for sep in ("/", "\\")):
+            raise ValueError(
+                "Explicit Ensembl release must be an integer or YYYY_MM: %r" % reference_name)
         return reference_name, None
     name, separator, release = match.groups()
     if separator != ":" and normalize_reference_name(name) not in _exact_names:
         return reference_name, None
-    return name, int(release)
+    return name, release if "_" in release else int(release)
 
 
 @memoize
@@ -332,9 +334,10 @@ def infer_genome_for_reference_name(reference_name):
     to the equivalent in Ensembl.
 
     A name may end in a release to choose that Ensembl release, e.g.
-    ``"GRCh38:93"``, ``"GRCh38.93"`` or ``"hg19:75"``. Otherwise the most
-    recent locally installed release of the assembly is used, or the newest
-    release if none is installed.
+    ``"GRCh38:93"``, ``"GRCh38:2026_04"`` or ``"GRCh37:2013_09"``.
+    Selection is offline and validates the requested assembly. Otherwise the
+    most recent locally installed numbered release is used, or the newest
+    numbered release if none is installed.
 
     Parameters
     ----------
@@ -364,13 +367,9 @@ def infer_genome_for_reference_name(reference_name):
         genome = get_genome_for_ensembl_reference_name(reference_name)
     else:
         species = pyensembl.species.Species._reference_names_to_species[reference_name]
-        # Raises ValueError when the species has no genome in that release.
-        provided = species.which_reference(release)
-        if provided != reference_name:
-            raise ValueError(
-                "Ensembl release %d of %s provides %s, not %s" % (
-                    release, species.latin_name, provided, reference_name))
-        genome = cached_ensembl_release(release, species=species)
+        # PyEnsembl resolves historical dated assemblies as well as numbered
+        # releases, validates the selection and preserves its cache identity.
+        genome = EnsemblRelease.cached(release, species=species, assembly=reference_name)
     return genome, converted_ucsc_to_ensembl
 
 def infer_genome(genome_object_string_or_int):
@@ -380,7 +379,7 @@ def infer_genome(genome_object_string_or_int):
 
     If given a string, return the most recent installed EnsemblRelease
     which has an equivalent reference, or the release the string names
-    (e.g. "GRCh38:93"). If the given name is a UCSC genome (e.g. hg19) then
+    (e.g. "GRCh38:93" or "GRCh38:2026_04"). If the given name is a UCSC genome (e.g. hg19) then
     convert it to the equivalent Ensembl reference (e.g. GRCh37).
 
     If given a PyEnsembl or Varcode Genome, return that same object. Do not
