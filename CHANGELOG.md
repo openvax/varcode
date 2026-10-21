@@ -9,6 +9,8 @@
 - Preserve the older CanFam3.1 benchmark and distinguish below-threshold
   candidates from stronger somatic evidence. Document current dog reference
   selection without converting or relabeling legacy variant coordinates.
+- Declare assembly identities in synthetic ORF test fixtures and test assembly
+  and annotation mismatches separately for current PyEnsembl compatibility (#619).
 
 ## v10.18.1
 

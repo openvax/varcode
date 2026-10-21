@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 from pyensembl import cached_release
 
-from varcode import Variant, VariantCollection
+from varcode import Genome, Variant, VariantCollection
 from varcode.effects import Failure, Substitution
 from varcode.germline import GermlineContext
 from .test_uorf import Transcript
@@ -116,7 +116,11 @@ def test_same_identifier_in_different_sources_keeps_distinct_cis_groups():
 
 def test_scope_validation_includes_annotation_and_empty_collections(native):
     variant, reference, catalog = native
-    earlier = Variant("7", variant.start, variant.ref, variant.alt, genome=cached_release(81))
+    # Releases 81 and 95 also differ in GRCh38 assembly patch. Hold the
+    # assembly constant so this specifically exercises annotation validation.
+    different_annotation = Genome(variant.genome)
+    different_annotation.annotation_version = "different"
+    earlier = Variant("7", variant.start, variant.ref, variant.alt, genome=different_annotation)
     with pytest.raises(ValueError, match="annotation_version"):
         earlier.effects(extra_orfs=[reference], raise_on_error=False)
     # A collection's context still matters when it contains no bound ORFs.
@@ -127,6 +131,11 @@ def test_scope_validation_includes_annotation_and_empty_collections(native):
     empty.reference = reference.context
     with pytest.raises(ValueError, match="annotation_version"):
         earlier.effects(extra_orfs=empty)
+    different_assembly = Genome(variant.genome)
+    different_assembly.assembly_accession = "GCA_000001405.18"
+    other = Variant("7", variant.start, variant.ref, variant.alt, genome=different_assembly)
+    with pytest.raises(ValueError, match="assembly_accession"):
+        other.effects(extra_orfs=[reference], raise_on_error=False)
     wrong = orfdata.ORFCatalog([], {**catalog.metadata, "genome_build": "GRCh37"})
     with pytest.raises(ValueError, match="assembly"):
         variant.effects(extra_orfs=wrong)
