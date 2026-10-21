@@ -1,5 +1,16 @@
 # Change Log
 
+## v10.18.3
+
+- Accept concrete annotation dates in reference strings, including
+  `GRCh38:2026_04`, `GRCh37:2013_09` and `ROS_Cfam_1.0:2020_10`, in the API
+  and CLI. Resolve and validate assemblies through PyEnsembl's shared
+  selector, retaining historical cache identities and numbered releases (#616).
+- Reject malformed explicit dates instead of silently selecting another
+  release. Require PyEnsembl 2.30 or later for assembly-aware selection.
+- Retain explicit numbered and dated UCSC releases when loading VCFs,
+  and use assembly metadata for historical UCSC aliases and scaffolds (#622).
+
 ## v10.18.2
 
 - Add native ROS_Cfam_1.0 canine lymphoma variants and a matched-normal,

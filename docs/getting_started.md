@@ -36,10 +36,14 @@ To pin the annotation exactly, pass `genome=` one of:
 - An assembly with a release, such as `genome="GRCh38:93"` or `"GRCh38.93"`.
   A release that does not provide the assembly, such as `"GRCh38:75"`, is an
   error.
+- An assembly with an annotation date, such as `genome="GRCh38:2026_04"`,
+  `"GRCh37:2013_09"` or `"ROS_Cfam_1.0:2020_10"`. Use `YYYY_MM`; the requested
+  assembly must match. See [dated reference setup](api_variants.md#pin-an-annotation-release).
 - A PyEnsembl genome object.
 
 An assembly name alone, such as `genome="GRCh38"`, uses the most recent
-installed release of that assembly.
+installed numbered release of that assembly. Selecting a reference does not
+download data or convert variant coordinates.
 
 ### Chromosome DNA for SV and splice analysis
 
@@ -178,7 +182,9 @@ instructions. CSV files containing extra ORFs include an `effect_json` column
 so `EffectCollection.from_csv()` can restore the complete consequences.
 
 Inputs can be combined and repeated: `--vcf`, `--maf`, `--variant`, and
-`--json-variants`. `--genome GRCh38:93` pins Ensembl release 93, as in Python. The commands differ from `load_vcf` in two ways:
+`--json-variants`. `--genome GRCh38:93` pins Ensembl release 93;
+`--genome GRCh38:2026_04` pins the April 2026 annotation, as in Python.
+The commands differ from `load_vcf` in two ways:
 
 - They load structural variants automatically.
 - They skip records whose FILTER is not `PASS` or `.`, and report how many were

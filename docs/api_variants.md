@@ -5,6 +5,36 @@ For examples, see [file loading](getting_started.md#load-a-file),
 
 ## Reference genomes
 
+### Pin an annotation release
+
+Use the same reference string in Python's `genome=` argument and the CLI's
+`--genome` option:
+
+| Reference string | Assembly and annotation |
+|---|---|
+| `GRCh38:93` | Human GRCh38, numbered Ensembl release 93 |
+| `GRCh38:2026_04` | Human GRCh38, annotation dated April 2026 |
+| `GRCh37:2013_09` | Human GRCh37, historical annotation dated September 2013 |
+| `ROS_Cfam_1.0:2020_10` | Dog ROS_Cfam_1.0, annotation dated October 2020 |
+
+Selection is offline. Install the matching annotation before using it, for example:
+
+```bash
+pyensembl install --release 2013_09 --assembly GRCh37
+varcode --genome GRCh37:2013_09 --vcf variants.vcf --output-csv effects.csv
+```
+
+Dates use `YYYY_MM`. An incompatible assembly/date combination or malformed
+explicit date raises an error. An assembly name without a release selects the
+most recent installed **numbered** release, or the newest numbered release
+when none is installed. Selecting a release does not convert coordinates.
+
+Historical dated datasets keep PyEnsembl's accession-based reference names
+and cache directories. For example, `GRCh37:2013_09` has `genome.assembly ==
+"GRCh37"` and `genome.reference_name == "GCA_000001405.14"`.
+
+### Chromosome DNA
+
 **Provide chromosome DNA once on your reference genome.** Varcode then uses it
 for SV breakpoint windows, cryptic-exon searches, intron-retention products,
 ncORF consequences and indel left alignment. Without chromosome DNA, exonic
@@ -32,8 +62,7 @@ genome.download_genome_fasta()  # explicit, potentially large download
 genome.index_genome_fasta()
 ```
 
-The `genome_fasta=` PyEnsembl spelling requires PyEnsembl 2.28 or later.
-For older supported versions or a pre-opened FASTA reader, use
+Varcode requires PyEnsembl 2.30 or later. For a pre-opened FASTA reader, use
 `varcode.Genome(native, fasta="/data/GRCh38.fa")`.
 An explicit `Genome(native, fasta="/data/other.fa")` overrides native DNA;
 the supplied reference must match the annotation assembly.
@@ -76,16 +105,17 @@ of the website release.
 
 ```bash
 pyensembl install --release 2020_10 --species dog
+varcode --genome ROS_Cfam_1.0:2020_10 --vcf ros_cfam_variants.vcf --output-csv effects.csv
 ```
 
 ```python
-genome = EnsemblRelease("2020_10", species="dog")
-variants = load_vcf("ros_cfam_variants.vcf", genome=genome)
+variants = load_vcf("ros_cfam_variants.vcf", genome="ROS_Cfam_1.0:2020_10")
 ```
 
 For SV or intronic sequence analysis, install with `--with-genome-fasta`
-and construct the dataset with `genome_fasta=True`, or supply a matching
-local FASTA. The complete genomic DNA download requires additional disk space.
+and pass `EnsemblRelease("2020_10", species="dog", genome_fasta=True)` as
+`genome=`, or supply a matching local FASTA. The complete genomic DNA download
+requires additional disk space.
 
 Keep CanFam3.1 calls on their original reference unless their coordinates and
 alleles have been explicitly converted and validated. Selecting a new assembly
