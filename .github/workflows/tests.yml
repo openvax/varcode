@@ -89,10 +89,11 @@ jobs:
         with:
           path: ~/.cache/pyensembl
           # PyEnsembl 2.27.5 keys downloads and indexes by their source URL.
-          key: pyensembl-${{ runner.os }}-grch37.75-grch38.81-grch38.93-grch38.95-grcm38.95-canfam3.99-${{ hashFiles('requirements.txt') }}-v3
-          # Reuse unchanged releases when first adding human 93 and dog 99.
+          key: pyensembl-${{ runner.os }}-grch37.75-grch38.81-grch38.93-grch38.95-grcm38.95-canfam3.99-roscfam.2020_10-${{ hashFiles('requirements.txt') }}-v3
+          # Reuse unchanged releases when adding the current dog annotation.
           # Keep dependency and source-layout identities identical.
           restore-keys: |
+            pyensembl-${{ runner.os }}-grch37.75-grch38.81-grch38.93-grch38.95-grcm38.95-canfam3.99-${{ hashFiles('requirements.txt') }}-v3
             pyensembl-${{ runner.os }}-grch37.75-grch38.81-grch38.95-grcm38.95-${{ hashFiles('requirements.txt') }}-v3
       - name: Install Ensembl data
         run: |
@@ -107,6 +108,7 @@ jobs:
           pyensembl install --release 95 --species human
           pyensembl install --release 95 --species mouse
           pyensembl install --release 99 --species dog
+          pyensembl install --release 2020_10 --species dog
           echo "After installing Ensembl releases" && df -h
       - name: Run unit tests from the source distribution
         working-directory: ${{ runner.temp }}/varcode-sdist

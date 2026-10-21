@@ -67,6 +67,31 @@ All combined inputs must use one assembly. `--extra-orfs` is optional;
 repeat an evidence selection (for example `--extra-orfs proteomics
 --extra-orfs immunopeptidomics`) to include ORFs supported by either.
 
+### Current dog reference
+
+For variants called on **ROS_Cfam_1.0** (GCA_014441545.1), select the matching
+dog annotation explicitly. Ensembl's current dog annotation is dated
+**2020_10**, as verified on 2026-10-20; this is its build date, not the date
+of the website release.
+
+```bash
+pyensembl install --release 2020_10 --species dog
+```
+
+```python
+genome = EnsemblRelease("2020_10", species="dog")
+variants = load_vcf("ros_cfam_variants.vcf", genome=genome)
+```
+
+For SV or intronic sequence analysis, install with `--with-genome-fasta`
+and construct the dataset with `genome_fasta=True`, or supply a matching
+local FASTA. The complete genomic DNA download requires additional disk space.
+
+Keep CanFam3.1 calls on their original reference unless their coordinates and
+alleles have been explicitly converted and validated. Selecting a new assembly
+does not convert variants. Our [native dog benchmark](https://github.com/openvax/varcode/tree/main/tests/data/public_somatic)
+uses published ROS_Cfam_1.0 calls; the historical CanFam3.1 comparison stays pinned.
+
 ::: varcode.Genome
 
 ## Variants

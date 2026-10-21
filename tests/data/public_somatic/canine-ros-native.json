@@ -1,0 +1,321 @@
+{
+  "schema_version": 1,
+  "reference": {
+    "assembly": "ROS_Cfam_1.0",
+    "assembly_accession": "GCA_014441545.1",
+    "ensembl_annotation_date": "2020_10",
+    "latest_checked": "2026-10-20",
+    "available_annotation_dates": [
+      "2020_10"
+    ],
+    "files": {
+      "gtf": {
+        "url": "https://ftp.ebi.ac.uk/pub/ensemblorganisms/GCA/014/441/545/1/ensembl/2020_10/geneset/genes.gtf.gz",
+        "sha256": "49ef356cfcaeb73b920ac442f4197f5d631f1d849ef66736360049a6d26ecc5f"
+      },
+      "cdna": {
+        "url": "https://ftp.ebi.ac.uk/pub/ensemblorganisms/GCA/014/441/545/1/ensembl/2020_10/geneset/cdna.fa.bgz",
+        "sha256": "5f55e7c0cb2af78fb6b041dde08e2625fec9192a815a52ed3b2b891fbe441f69"
+      },
+      "pep": {
+        "url": "https://ftp.ebi.ac.uk/pub/ensemblorganisms/GCA/014/441/545/1/ensembl/2020_10/geneset/pep.fa.bgz",
+        "sha256": "b0f45216e4ae01287d23bfd07f27a97ce39889fac0a2c5024936bc55809db771"
+      }
+    }
+  },
+  "sources": {
+    "jak": {
+      "doi": "10.1292/jvms.24-0096",
+      "article_url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC11442398/",
+      "source_url": "https://www.ebi.ac.uk/europepmc/webservices/rest/PMC11442398/fullTextXML",
+      "source_file": "varcode-ros-jak.xml",
+      "source_sha256": "b10282a2eece35214d7423ab9b64394f0ab0e0e464044ce5097cd9bf8579e297",
+      "retrieved": "2026-10-20"
+    },
+    "lymphoma": {
+      "doi": "10.3389/fvets.2025.1535446",
+      "article_url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC11880205/",
+      "source_url": "https://www.ebi.ac.uk/europepmc/webservices/rest/PMC11880205/fullTextXML",
+      "source_file": "varcode-ros-lymphoma.xml",
+      "source_sha256": "16f105a2fe76247fedd521c437617f23185fcab8ec93e1c9e09a79ae01c0acfc",
+      "retrieved": "2026-10-20"
+    },
+    "melanoma": {
+      "doi": "10.1292/jvms.25-0492",
+      "article_url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC13369617/",
+      "source_url": "https://www.ebi.ac.uk/europepmc/webservices/rest/PMC13369617/fullTextXML",
+      "source_file": "varcode-ros-melanoma.xml",
+      "source_sha256": "4936021e30c8d0b4186d1183c407bb6bb18fcc332bdb2d9c21a04a91af6bacd9",
+      "retrieved": "2026-10-20"
+    }
+  },
+  "coverage": {
+    "lymphoma": "All four native ROS_Cfam_1.0 alleles in Table 4 (five tumor observations). The WES tables use CanFam3.1 and are not imported here.",
+    "jak": "All five native alleles in Tables 1 and 2; the two Table 2 observations remain marked below the main VAF threshold. The STAT3 Y640F call was also detected in the targeted hotspot assay.",
+    "melanoma": "One selected ddPCR-validated deletion from the 15-entry Table 1. This is not the complete melanoma call set. The other validated marker, ARID1A, is omitted because the table does not unambiguously specify its insertion anchoring."
+  },
+  "records": [
+    {
+      "id": "lymphoma-tab4-1",
+      "source": "lymphoma",
+      "table": "tab4",
+      "table_data_row": 1,
+      "gene": "ZDBF2",
+      "contig": "37",
+      "start": 14823603,
+      "ref": "G",
+      "alt": "A",
+      "published_consequence": "Missense",
+      "published_cdna_change": "c.485G>A",
+      "published_protein_change": null,
+      "samples": "Dog 17",
+      "published_vaf": "0.465",
+      "evidence": "tumor_call_filtered_against_available_blood_controls",
+      "reference_window": {
+        "source_url": "https://rest.ensembl.org/sequence/region/canis_lupus_familiaris/37:14823553..14823653:1?content-type=application/json",
+        "source_sha256": "a844ea63c10182690f57bea8ccfe55702342cc2ebff613a6db51c6b4d5bec943",
+        "id": "primary_assembly:ROS_Cfam_1.0:37:14823553:14823653:1",
+        "start": 14823553,
+        "end": 14823653,
+        "sequence": "AGGGTTTGTTCATAAAATTGGAAGTGGTGTGAAGGAATTTAATCCAGTTGGGATAGGTCAAGCTACACATACTAGACGAAGCTTAATATGTCCCTCAGTGA",
+        "sequence_sha256": "c86b690866434fd4e725bdef235d2c0fe3edae258f517d77fd3926b54e46a88a"
+      }
+    },
+    {
+      "id": "lymphoma-tab4-2",
+      "source": "lymphoma",
+      "table": "tab4",
+      "table_data_row": 2,
+      "gene": "ZDBF2",
+      "contig": "37",
+      "start": 14828457,
+      "ref": "G",
+      "alt": "T",
+      "published_consequence": "Missense",
+      "published_cdna_change": "c.5339G>T",
+      "published_protein_change": null,
+      "samples": "Dog 33, 34",
+      "published_vaf": "0.612, 0.472",
+      "evidence": "tumor_call_filtered_against_available_blood_controls",
+      "reference_window": {
+        "source_url": "https://rest.ensembl.org/sequence/region/canis_lupus_familiaris/37:14828407..14828507:1?content-type=application/json",
+        "source_sha256": "5f6d1395e8e2eb58729caa363610ac5ac7eb58b606be4d90253e3338b970e5f7",
+        "id": "primary_assembly:ROS_Cfam_1.0:37:14828407:14828507:1",
+        "start": 14828407,
+        "end": 14828507,
+        "sequence": "GGAAGAGGATTCTCAGCCAGTGGTTGACCAACTTCAGAAGGCCGACAAAGGAATCAACGTTTGTCAAAGGAAAAATCCAGAAACTACCAGCCGAAAAGATA",
+        "sequence_sha256": "02c8f031492e59cc15204c8d71920263935742dc83cca20864d81d1088172a70"
+      }
+    },
+    {
+      "id": "lymphoma-tab4-3",
+      "source": "lymphoma",
+      "table": "tab4",
+      "table_data_row": 3,
+      "gene": "ZDBF2",
+      "contig": "37",
+      "start": 14829849,
+      "ref": "C",
+      "alt": "T",
+      "published_consequence": "Missense",
+      "published_cdna_change": "c.6731C>T",
+      "published_protein_change": null,
+      "samples": "Dog 33",
+      "published_vaf": "0.607",
+      "evidence": "tumor_call_filtered_against_available_blood_controls",
+      "reference_window": {
+        "source_url": "https://rest.ensembl.org/sequence/region/canis_lupus_familiaris/37:14829799..14829899:1?content-type=application/json",
+        "source_sha256": "4803e05e2a0775fe92577ab410cbd7a88f4918f6dd5cb93df8180b0e7ef2bada",
+        "id": "primary_assembly:ROS_Cfam_1.0:37:14829799:14829899:1",
+        "start": 14829799,
+        "end": 14829899,
+        "sequence": "CGCCCAGCTGCCGCCGTCGGCCCGCGCCGCGGCCGGGACCTCCTCACAGGCGGCGCCTCGCAAGTTCCTGGAAAGCAAACGGAAGACCCAGACCCAGAGGA",
+        "sequence_sha256": "bc2e23e4052d03020576aa7c09f6d22ee47d15c6d4ccabd0b5ebd81165a8c77d"
+      }
+    },
+    {
+      "id": "lymphoma-tab4-4",
+      "source": "lymphoma",
+      "table": "tab4",
+      "table_data_row": 4,
+      "gene": "ZDBF2",
+      "contig": "37",
+      "start": 14830134,
+      "ref": "C",
+      "alt": "T",
+      "published_consequence": "Missense",
+      "published_cdna_change": "c.7016C>T",
+      "published_protein_change": null,
+      "samples": "Dog 34",
+      "published_vaf": "0.436",
+      "evidence": "tumor_call_filtered_against_available_blood_controls",
+      "reference_window": {
+        "source_url": "https://rest.ensembl.org/sequence/region/canis_lupus_familiaris/37:14830084..14830184:1?content-type=application/json",
+        "source_sha256": "e43e652087f7a474cddd8d607030e610ba3f7f5325ea6361226561f20673c943",
+        "id": "primary_assembly:ROS_Cfam_1.0:37:14830084:14830184:1",
+        "start": 14830084,
+        "end": 14830184,
+        "sequence": "CAGGAGCGCGTTCGTGAGACTGCACCTTAAGAAGAAAACGGGCGACGTCACTAAGTTAAAGAAGGGAAAGAGCGCGGCCCCAACGCCTCCGGGCTCGTCCG",
+        "sequence_sha256": "3f3799513a20e22e770eb31bd20ea7660f7bfef2b0e318bea4a06f0b6892d158"
+      }
+    },
+    {
+      "id": "jak-tbl_001-1",
+      "source": "jak",
+      "table": "tbl_001",
+      "table_data_row": 1,
+      "gene": "STAT3",
+      "contig": "9",
+      "start": 21321114,
+      "ref": "T",
+      "alt": "C",
+      "published_consequence": "Missense",
+      "published_cdna_change": "c.1222T>C",
+      "published_protein_change": null,
+      "samples": "Dog 17",
+      "published_vaf": "0.111",
+      "evidence": "tumor_call_filtered_against_available_blood_controls",
+      "reference_window": {
+        "source_url": "https://rest.ensembl.org/sequence/region/canis_lupus_familiaris/9:21321064..21321164:1?content-type=application/json",
+        "source_sha256": "7ad41980885a8efb8f8a7409480aeb8b1ff509d261f7c9d8fa47193e50fa8975",
+        "id": "primary_assembly:ROS_Cfam_1.0:9:21321064:21321164:1",
+        "start": 21321064,
+        "end": 21321164,
+        "sequence": "CAAAAGTGATGAACATGGAAGAGTCCAACAACGGCAGCCTGTCTGCAGAATTCAAACACCTGGTATGAGGCAGAAGCCTGGATCCTGGTCTCCAAGGGCCT",
+        "sequence_sha256": "0038a958b95a5f4dfdf75855d7cc9e9b874e081c694e35dcf5c2f287d41846b6"
+      }
+    },
+    {
+      "id": "jak-tbl_001-2",
+      "source": "jak",
+      "table": "tbl_001",
+      "table_data_row": 2,
+      "gene": "STAT3",
+      "contig": "9",
+      "start": 21327310,
+      "ref": "A",
+      "alt": "G",
+      "published_consequence": "Missense",
+      "published_cdna_change": "c.1847A>G",
+      "published_protein_change": null,
+      "samples": "Dog 13",
+      "published_vaf": "0.173",
+      "evidence": "tumor_call_filtered_against_available_blood_controls",
+      "reference_window": {
+        "source_url": "https://rest.ensembl.org/sequence/region/canis_lupus_familiaris/9:21327260..21327360:1?content-type=application/json",
+        "source_sha256": "06c26880a85743cbfe6c13dfab79043d8b5377b63e2deb096571ce20ec427525",
+        "id": "primary_assembly:ROS_Cfam_1.0:9:21327260:21327360:1",
+        "start": 21327260,
+        "end": 21327360,
+        "sequence": "CACAAAGCCCCCAGGCACCTTCCTGCTACGGTTCAGTGAAAGCAGCAAAGAAGGAGGTGTCACCTTCACTTGGGTGGAGAAGGACATCAGCGGTAAGTTTG",
+        "sequence_sha256": "af372fc54e355c6fc3a4cb25bd2ff698607bb77b5fae6283473467b274a6089d"
+      }
+    },
+    {
+      "id": "jak-tbl_001-3",
+      "source": "jak",
+      "table": "tbl_001",
+      "table_data_row": 3,
+      "gene": "JAK1",
+      "contig": "5",
+      "start": 45587580,
+      "ref": "G",
+      "alt": "T",
+      "published_consequence": "Missense",
+      "published_cdna_change": "c.3125G>T",
+      "published_protein_change": null,
+      "samples": "Dog 18",
+      "published_vaf": "0.11",
+      "evidence": "tumor_call_filtered_against_available_blood_controls",
+      "reference_window": {
+        "source_url": "https://rest.ensembl.org/sequence/region/canis_lupus_familiaris/5:45587530..45587630:1?content-type=application/json",
+        "source_sha256": "7a55bfc82243d3d97b5ca842ea215fd198cd83c683b8552e1c6e360d5fc177dc",
+        "id": "primary_assembly:ROS_Cfam_1.0:5:45587530:45587630:1",
+        "start": 45587530,
+        "end": 45587630,
+        "sequence": "AGCAATTGAAACTGACAAGGAGTACTACACAGTCAAGGATGATCGGGACAGCCCTGTGTTTTGGTAACTGAATCTAATGTTAATGTCTTTTATTCCTCCTG",
+        "sequence_sha256": "8e17c5bb2b3109278418308375301421a340b75896627fbe986e79127fd4cfa4"
+      }
+    },
+    {
+      "id": "jak-tbl_002-1",
+      "source": "jak",
+      "table": "tbl_002",
+      "table_data_row": 1,
+      "gene": "STAT3",
+      "contig": "9",
+      "start": 21327882,
+      "ref": "A",
+      "alt": "T",
+      "published_consequence": "Missense",
+      "published_cdna_change": "c.1919A>T",
+      "published_protein_change": "p.Y640F",
+      "samples": "Dog 2",
+      "published_vaf": "0.098",
+      "evidence": "below_main_vaf_threshold",
+      "reference_window": {
+        "source_url": "https://rest.ensembl.org/sequence/region/canis_lupus_familiaris/9:21327832..21327932:1?content-type=application/json",
+        "source_sha256": "2281369765a864d752a2a693ac3da26153a4abc41c365ca909096b2cd4e95533",
+        "id": "primary_assembly:ROS_Cfam_1.0:9:21327832:21327932:1",
+        "start": 21327832,
+        "end": 21327932,
+        "sequence": "CTTACAATATCCCATGACAGGTAAGACCCAGATCCAGTCGGTGGAACCATATACCAAGCAACAGCTGAACAACATGTCGTTTGCTGAAATCATCATGGGCT",
+        "sequence_sha256": "f8be57a871cad1f2d544bb7be35b86207a30c3451768c9e2f5f4b7fb5c94776a"
+      }
+    },
+    {
+      "id": "jak-tbl_002-2",
+      "source": "jak",
+      "table": "tbl_002",
+      "table_data_row": 2,
+      "gene": "JAK1",
+      "contig": "5",
+      "start": 45587528,
+      "ref": "A",
+      "alt": "G",
+      "published_consequence": "Missense",
+      "published_cdna_change": "c.3073A>G",
+      "published_protein_change": null,
+      "samples": "Dog 3",
+      "published_vaf": "0.095",
+      "evidence": "below_main_vaf_threshold",
+      "reference_window": {
+        "source_url": "https://rest.ensembl.org/sequence/region/canis_lupus_familiaris/5:45587478..45587578:1?content-type=application/json",
+        "source_sha256": "596d2b684e76bf485255566531fe873a5397f21109ce18e9654015f06e984425",
+        "id": "primary_assembly:ROS_Cfam_1.0:5:45587478:45587578:1",
+        "start": 45587478,
+        "end": 45587578,
+        "sequence": "TCCTTGTTGAGAGTGAACACCAAGTGAAAATTGGAGACTTTGGTTTGACCAAAGCAATTGAAACTGACAAGGAGTACTACACAGTCAAGGATGATCGGGAC",
+        "sequence_sha256": "0b7bd6a16c7b0c81d6c1013fa9265f56ef1f893bff67b890bbcfd67b68d2b4fd"
+      }
+    },
+    {
+      "id": "melanoma-SPTBN1",
+      "source": "melanoma",
+      "table": "tbl_001",
+      "table_data_row": 4,
+      "gene": "SPTBN1",
+      "contig": "10",
+      "start": 56527053,
+      "end": 56527054,
+      "ref": "AC",
+      "alt": "",
+      "published_consequence": "Frameshift",
+      "published_cdna_change": null,
+      "published_protein_change": "p.N795fs",
+      "samples": "Case 2",
+      "published_vaf": "0.061",
+      "evidence": "matched_normal_and_ddpcr_validated",
+      "input_derivation": "The table reports an inclusive deletion interval and allele -. Chromosome 10 is identified from the SPTBN1 locus (ENSCAFG00845009556) in the pinned annotation; deleted REF bases are read from the matching Ensembl genomic window.",
+      "reference_window": {
+        "source_url": "https://rest.ensembl.org/sequence/region/canis_lupus_familiaris/10:56527003..56527104:1?content-type=application/json",
+        "source_sha256": "195254d6f4f4dc53c5be259b0be859ab6a20f6936c5457c1670df666269c1f54",
+        "id": "primary_assembly:ROS_Cfam_1.0:10:56527003:56527104:1",
+        "start": 56527003,
+        "end": 56527104,
+        "sequence": "CACACAGTCTCTGGTCAAGAAACACAAGGATGTGGCAGAGGAGATCGCCAACTACAGGCCCACCATTGACACGCTGCACGAGCAGGCCAGCGCCCTCCCCCA",
+        "sequence_sha256": "b168e4098b01b19679236a101779e4b4b7c6136a2e573aa6c08e0fcb12eaecc8"
+      }
+    }
+  ]
+}

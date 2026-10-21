@@ -1,5 +1,15 @@
 # Change Log
 
+## v10.18.2
+
+- Add native ROS_Cfam_1.0 canine lymphoma variants and a matched-normal,
+  ddPCR-validated melanoma SPTBN1 frameshift. Pin the current Ensembl dog
+  annotation (2020_10), source publications and genomic reference windows;
+  compare published coding positions and independent peptide translation (#617).
+- Preserve the older CanFam3.1 benchmark and distinguish below-threshold
+  candidates from stronger somatic evidence. Document current dog reference
+  selection without converting or relabeling legacy variant coordinates.
+
 ## v10.18.1
 
 - Bundle complete pinned HCC1395/COLO829 SEQC2, NYGC and Lancet2 small-variant
