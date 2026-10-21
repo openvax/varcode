@@ -149,8 +149,9 @@ class Variant(Serializable):
 
         self.reference_name = self.genome.reference_name
         if self.original_genome_was_ucsc:
+            # Historical dated datasets use accessions as reference names.
             self.original_reference_name = ensembl_to_ucsc_reference_names[
-                self.reference_name]
+                getattr(self.genome, "assembly", self.reference_name)]
         else:
             self.original_reference_name = self.reference_name
 
@@ -656,7 +657,7 @@ class Variant(Serializable):
             contig)
         if match:
             return "%s.%s" % (match[1].upper(), match[2])
-        if self.reference_name == "GRCh37":
+        if getattr(self.genome, "assembly", self.reference_name) == "GRCh37":
             match = re.fullmatch(r"chr(?:Un|[0-9XYM]+)_(gl000[0-9]{3})(?:_random)?", contig)
             if match and 191 <= int(match[1][-3:]) <= 249:
                 return match[1].upper() + ".1"

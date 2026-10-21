@@ -21,10 +21,7 @@ from warnings import warn
 import pandas
 from typechecks import require_string
 
-from .reference import (
-    infer_genome,
-    ensembl_to_ucsc_reference_names
-)
+from .reference import infer_genome
 from .variant import Variant, variant_ascending_position_sort_key
 from .variant_collection import VariantCollection
 from .vcf_parsing import VCFHeader
@@ -199,24 +196,17 @@ def load_vcf(
         path = parsed_path.path
     header = VCFHeader.from_path(path)
 
-    ####
-    # The following code looks a bit crazy because it's motivated by the
-    # desired to preserve UCSC reference names even though the Variant
-    # objects we're creating will convert them to EnsemblRelease genomes
-    # with different reference names.
-    #
-    # For example, if a VCF is aligned against 'hg19' then we want to create a
-    # variant which has 'hg19' as its genome argument, so that serialization
-    # back to VCF will put the correct reference genome in the generated
-    # header.
     if genome is None:
         if reference_vcf_key not in header.metadata:
             raise ValueError("Unable to infer reference genome for %s" % (path,))
         genome = header.metadata[reference_vcf_key]
 
+    # Preserve the complete UCSC selector, including any explicit release,
+    # so variants retain both their reference identity and contig convention.
+    original_genome = genome
     genome, genome_was_ucsc = infer_genome(genome)
     if genome_was_ucsc:
-        genome = ensembl_to_ucsc_reference_names[genome.reference_name]
+        genome = original_genome
 
     if convert_ucsc_contig_names is None:
         convert_ucsc_contig_names = genome_was_ucsc

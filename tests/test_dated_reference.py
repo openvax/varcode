@@ -6,7 +6,7 @@ import pandas as pd
 from pyensembl import EnsemblRelease
 import pytest
 
-from varcode import Variant, VariantCollection
+from varcode import StructuralVariant, Variant, VariantCollection, load_vcf
 from varcode.cli.effects_script import arg_parser, main
 from varcode.cli.variant_args import variant_collection_from_args
 from varcode.reference import infer_genome, infer_genome_for_reference_name
@@ -70,15 +70,21 @@ def test_dated_inference_is_offline(name, monkeypatch):
     assert genome.release == name.split(":")[1]
 
 
-@pytest.mark.parametrize("name", ["GRCh38:2026_04", "GRCh37:2013_09"])
-def test_dated_variant_json_preserves_reference_identity(name):
-    variant = Variant("7", 100, "A", "T", genome=name)
+@pytest.mark.parametrize("name,assembly", [
+    ("GRCh38:2026_04", "GRCh38"), ("GRCh37:2013_09", "GRCh37"),
+    ("hg19:2013_09", "GRCh37"),
+])
+def test_dated_variant_json_preserves_reference_identity(name, assembly):
+    variant = Variant("chr7", 100, "A", "T", genome=name)
     restored = Variant.from_json(variant.to_json())
     assert restored.genome.release == name.split(":")[1]
-    assert restored.genome.assembly == name.split(":")[0]
+    assert restored.genome.assembly == assembly
     assert restored.genome.assembly_accession == variant.genome.assembly_accession
     assert restored.genome.download_cache.cache_directory_path == (
         variant.genome.download_cache.cache_directory_path)
+    if name.startswith("hg19:"):
+        assert variant.original_reference_name == restored.original_reference_name == "hg19"
+        assert variant.contig == restored.contig == "7"
 
 
 def test_dated_object_pass_through_retains_attached_dna(tmp_path):
@@ -90,6 +96,34 @@ def test_dated_object_pass_through_retains_attached_dna(tmp_path):
     selected, converted = infer_genome(genome)
     assert selected is genome and not converted
     assert selected.sequence("99", 1, 4) == "ACGT"
+
+
+@pytest.mark.parametrize("from_header", [True, False])
+@pytest.mark.parametrize("name,release,contig,normalized", [
+    ("hg19:2013_09", "2013_09", "chrUn_gl000211", "GL000211.1"),
+    ("hg38:2026_04", "2026_04", "chr7", "7"),
+    ("hg38:93", 93, "chr7", "7"),
+])
+def test_ucsc_vcf_selection_retains_release_and_scaffold_identity(
+        tmp_path, from_header, name, release, contig, normalized):
+    path = tmp_path / "variants.vcf"
+    path.write_text(
+        "##fileformat=VCFv4.2\n"
+        "##reference=%s\n"
+        '##INFO=<ID=END,Number=1,Type=Integer,Description="End position">\n'
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
+        "%s\t100\tsmall\tA\tT\t.\tPASS\t.\n"
+        "chr7\t200\tsv\tA\t<DEL>\t.\tPASS\tEND=210\n"
+        % (name if from_header else "GRCh37", contig))
+    variants = load_vcf(
+        str(path), genome=None if from_header else name,
+        parse_structural_variants=True)
+    assert len(variants) == 2
+    assert {v.genome.release for v in variants} == {release}
+    assert {v.original_reference_name for v in variants} == {name.split(":")[0]}
+    assert {v.contig for v in variants if not isinstance(v, StructuralVariant)} == {
+        normalized}
+    assert any(isinstance(v, StructuralVariant) and v.contig == "7" for v in variants)
 
 
 @pytest.mark.parametrize("name,date", [
