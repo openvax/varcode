@@ -86,7 +86,11 @@ class Transcript:
     contig = "1"
     genome = SimpleNamespace(reference_name="GRCh38", release=1,
                              species="homo_sapiens", annotation_name="synthetic",
-                             annotation_version="1")
+                             annotation_version="1",
+                             # Variants below use this assembly, although the
+                             # tiny transcript annotation itself is synthetic.
+                             assembly_accession=getattr(
+                                 cached_release(95), "assembly_accession", None))
     gene = SimpleNamespace(id="gene", name="GENE")
     is_protein_coding = True
     complete = True

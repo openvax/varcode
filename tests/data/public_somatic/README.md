@@ -1,8 +1,9 @@
 # Public somatic benchmarks
 
-These are complete, pinned benchmark call sets for the two requested human
-cell lines, plus the complete published canine consequence table. They are
-not an exhaustive union of every historical caller output. Sets overlap;
+These include complete, pinned benchmark call sets for the two requested human
+cell lines, the complete published CanFam3.1 canine consequence table, and
+selected native ROS_Cfam_1.0 canine calls. They are not an exhaustive union
+of every historical caller output. Sets overlap;
 their record counts must not be added and described as unique mutations.
 
 | Fixture | Records | Reference used in tests |
@@ -15,9 +16,12 @@ their record counts must not be added and described as unique mutations.
 | `hcc1395-consensus-sv.tsv` | 1,788 | GRCh38, Ensembl 93 |
 | `colo829-sv-truth.vcf` | 134 / 68 events | GRCh37, Ensembl 75 |
 | `canine-osa-vep99.tsv` | 2,141 / 1,936 unique alleles | CanFam3.1, Ensembl 99 |
+| `canine-ros-native.json` | 10 alleles / 11 observations, selected | ROS_Cfam_1.0, Ensembl 2020_10 |
 
-`manifest.json` records exact source URLs, content hashes, transformations,
-assemblies, releases and row counts. `../SHA256SUMS` additionally covers every
+`manifest.json` records the complete historical sets' source URLs, content
+hashes, transformations, assemblies, releases and row counts. The curated
+ROS_Cfam fixture embeds its own source and reference metadata.
+`../SHA256SUMS` additionally covers every
 fixture and supporting file. The source distribution includes this directory.
 No reference data or benchmark downloads occur in the test code.
 
@@ -111,7 +115,57 @@ incomplete transcripts and absent intronic DNA can leave products unresolved.
 These public-data tests use transcript references; configured chromosome-FASTA
 behavior is covered separately by the genome-DNA/structural regression tests.
 
-## Regeneration and attribution
+## Native ROS_Cfam_1.0 canine variants
+
+`canine-ros-native.json` adds **10 distinct alleles / 11 tumor observations**
+on ROS_Cfam_1.0 (GCA_014441545.1). These are selected published observations,
+not a complete cohort or a somatic truth set. They were called on this
+assembly directly; no CanFam3.1 liftover is involved.
+
+| Source | Coverage | Evidence |
+|---|---|---|
+| [Matsumura et al., 2025](https://doi.org/10.3389/fvets.2025.1535446) | All 4 ZDBF2 alleles in Table 4, in 5 tumor observations | Targeted sequencing; filtered against available blood controls |
+| [Tsuruta et al., 2024](https://doi.org/10.1292/jvms.24-0096) | All 5 STAT3/JAK1 alleles in Tables 1–2 | Three pass the main VAF threshold; two remain explicitly below-threshold candidates. STAT3 Y640F was also detected by the hotspot assay |
+| [Tagawa et al., 2026](https://doi.org/10.1292/jvms.25-0492) | One selected SPTBN1 deletion from the 15-entry Table 1 | Matched normal plus ddPCR confirmation in tumor DNA; published p.Asn795fs |
+
+The melanoma table omits chromosomes and REF bases. For SPTBN1, the pinned
+annotation identifies chromosome 10 and Ensembl genomic DNA supplies the
+deleted `AC` at 56,527,053–56,527,054 (1-based inclusive). This derivation is
+explicit in the fixture. The other validated marker, ARID1A, has insufficiently
+specified insertion anchoring in the table and is not imported. This benchmark
+does not claim coverage of the other melanoma calls.
+
+The current Ensembl dog annotation is **2020_10**, checked against its
+[published annotation dates](https://ftp.ebi.ac.uk/pub/ensemblorganisms/GCA/014/441/545/1/ensembl/)
+on 2026-10-20. This date records when the annotation was built.
+The fixture pins GTF, cDNA and peptide SHA256s. Small genomic windows from
+Ensembl REST preserve the assembly, interval, sequence and sequence SHA256;
+tests require no network or full chromosome FASTA. These windows do not
+provide full-genome SV coverage.
+
+The papers do not specify transcript IDs for these records. Tests select
+complete current models compatible with each published coding position,
+check the published consequence, and independently translate the edited RNA
+using Biopython. For SNVs, the expected edit comes from the published cDNA
+position; for SPTBN1, it comes from the stated genomic deletion. Only STAT3
+Y640F and SPTBN1 Asn795fs have explicit protein descriptions in these selected
+source statements. Other peptide changes and the full frameshift tail are
+computed predictions, not independently published peptide sequences.
+
+The original article XML URLs and SHA256s are recorded alongside each source.
+The fixture contains curated factual variant observations; articles retain
+their original licenses (Matsumura: CC BY 4.0; Tsuruta and Tagawa: CC BY-NC-ND
+4.0). Reacquire and check those statements and genomic windows with:
+
+```sh
+python tests/data/public_somatic/check_ros_sources.py /tmp/ros-sources --download
+python -m pytest -q tests/test_canine_ros.py
+```
+
+Omit `--download` to verify an existing source directory offline. An upstream
+source checksum change needs review; do not refresh expectations automatically.
+
+## Regeneration and attribution: complete historical benchmarks
 
 Download each manifest `source_url` to its `source_file` in a separate directory,
 then run (requires `pandas` and `openpyxl` for the two spreadsheets):
