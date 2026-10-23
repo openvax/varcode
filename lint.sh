@@ -1,6 +1,7 @@
 #!/bin/bash
 set -o errexit
 
-ruff check varcode/ tests/
+"${PYTHON:-python}" -m ruff check varcode/ tests/
+"${PYTHON:-python}" -m mypy
 
-echo 'Passes ruff check'
+echo 'Passes ruff and mypy checks'

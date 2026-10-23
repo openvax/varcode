@@ -13,13 +13,13 @@
 
 import os
 from operator import index
-import urllib
+import urllib.parse
+import urllib.request
 import logging
 from collections import OrderedDict
 from warnings import warn
 
 import pandas
-from typechecks import require_string
 
 from .reference import infer_genome
 from .variant import Variant, variant_ascending_position_sort_key
@@ -54,7 +54,7 @@ def _is_symbolic_allele(alt):
 
 
 def load_vcf(
-        path,
+        path: str | os.PathLike[str],
         genome=None,
         reference_vcf_key="reference",
         only_passing=True,
@@ -68,7 +68,7 @@ def load_vcf(
         convert_ucsc_contig_names=True,
         parse_structural_variants=False,
         genome_fasta=None,
-        warn_on_filtered=False):
+        warn_on_filtered=False) -> VariantCollection:
     """
     Load reference name and Variant objects from the given VCF filename.
 
@@ -83,7 +83,7 @@ def load_vcf(
     Parameters
     ----------
 
-    path : str
+    path : str or os.PathLike[str]
         Path to VCF (*.vcf) or compressed VCF (*.vcf.gz).
 
     genome : {pyensembl.Genome, reference name, Ensembl version int}, optional
@@ -147,7 +147,9 @@ def load_vcf(
         to transcript-cDNA coverage only.
     """
 
-    require_string(path, "Path or URL to VCF")
+    path = os.fspath(path)
+    if not isinstance(path, str):
+        raise TypeError("Path or URL to VCF must resolve to str, got %s" % type(path).__name__)
     parsed_path = parse_url_or_path(path)
 
     if parsed_path.scheme and parsed_path.scheme.lower() != "file":
@@ -402,6 +404,7 @@ def dataframes_to_variant_collection(
                     if sample_names:
                         sample_info = sample_info_parser(list(tpl[10:]), tpl[9])
 
+                variant: Variant | None
                 if symbolic:
                     from .sv_allele_parser import parse_symbolic_alt
                     variant = parse_symbolic_alt(
@@ -478,7 +481,7 @@ def dataframes_to_variant_collection(
 
 
 def read_vcf_into_dataframe(
-        path,
+        path: str | os.PathLike[str],
         include_info=False,
         sample_names=None,
         chunk_size=None):
@@ -487,7 +490,7 @@ def read_vcf_into_dataframe(
 
     Parameters
     ----------
-    path : str
+    path : str or os.PathLike[str]
         Path to local file. HTTP and other protocols are not implemented.
 
     include_info : boolean, default False
@@ -508,7 +511,10 @@ def read_vcf_into_dataframe(
     VCF file. Otherwise, an iterable of dataframes, each with chunk_size rows.
 
     """
-    vcf_field_types = OrderedDict()
+    path = os.fspath(path)
+    if not isinstance(path, str):
+        raise TypeError("Path to VCF must resolve to str, got %s" % type(path).__name__)
+    vcf_field_types: OrderedDict[str, type[str] | type[int]] = OrderedDict()
     vcf_field_types['CHROM'] = str
     vcf_field_types['POS'] = int
     vcf_field_types['ID'] = str
@@ -547,7 +553,7 @@ def read_vcf_into_dataframe(
     return reader
 
 
-def parse_url_or_path(s):
+def parse_url_or_path(s: str) -> urllib.parse.ParseResult:
     # urlparse will parse paths with two leading slashes (e.g. "//foo")
     # in a strange way. We collapse these paths to start with just one
     # slash.

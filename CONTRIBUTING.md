@@ -21,13 +21,14 @@ From the repository root:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -e '.[rna,test-data]' pytest pytest-cov pytest-xdist ruff
+python -m pip install -e '.[rna,test-data,lint]' pytest pytest-cov pytest-xdist
 python -m pip install mkdocs mkdocs-material 'mkdocstrings[python]'
 python -m pip install build twine 'setuptools>=64'
 ```
 
 `rna` installs the optional BAM reader; `test-data` installs the pinned
-Osteosarc adapter. `pytest-xdist` is optional: `test.sh` also runs serially.
+Osteosarc adapter. `lint` installs Ruff and the same pinned mypy version used
+in CI. `pytest-xdist` is optional: `test.sh` also runs serially.
 Activate this environment before invoking the scripts so Python and its tools
 come from the same installation. `./develop.sh` installs just the editable
 library into the active environment.
@@ -80,6 +81,14 @@ For a focused test run, use `python -m pytest tests/test_vcf_limits.py`.
 `test.sh` accepts pytest arguments and chooses a memory-aware worker count;
 set `TEST_SH_MAX=2` to cap it when running other suites concurrently.
 The CI parity check is `./test.sh --annotator=protein_diff -m parity`.
+
+Typing is incremental. The package includes `py.typed`; `./lint.sh` checks
+the five input/comparison modules listed in `[tool.mypy]` and a small consumer
+example in `tests/typing/api_inputs.py`. Function bodies are checked even
+where signatures are still unannotated. Imported legacy modules and third-party
+libraries without stubs remain permissive; the marker does not mean every
+Varcode API has complete annotations. Expand the configured scope as modules
+gain annotations, keeping the consumer checks in sync.
 
 Every PR includes a version bump in `varcode/version.py`, relevant changelog
 notes, and issue links. Wait for green GitHub checks before merging; follow
