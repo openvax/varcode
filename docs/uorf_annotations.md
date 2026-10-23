@@ -177,7 +177,9 @@ products; absent sequence remains unresolved. An explicit `sequence_provider`
 on `annotate_orf_variants` overrides this fallback. Bound transcript exons retain
 the validated ORF reference sequence.
 
-ORFdata 0.34 supports binding complete, stopped ORFs with NCBI tables 1, 2 and 3.
+Varcode requires ORFdata 0.35 or later for ORF annotations, including its
+compatibility with PyEnsembl's reference strain and species taxon IDs.
+ORFdata supports binding complete, stopped ORFs with NCBI tables 1, 2 and 3.
 Varcode preserves the declared code through variant and RNA-product translation.
 Other ORF binding codes still depend on ORFdata support; see
 [ORFdata #57](https://github.com/openvax/orfdata/issues/57).
