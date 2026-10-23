@@ -195,6 +195,12 @@ recoding and remain explicitly unsupported. Definitions and assignments come
 from [NCBI](https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi);
 snapshot hashes and the refresh script are included with Varcode.
 
+With PyEnsembl 2.31 or a compatible provider, an explicitly unset reference
+table (for example, `reference_metadata={"translation_tables": {"nuclear": None}}`)
+raises `ValueError` instead of using a species default. A translation table
+declared in the annotation or ORF model still takes precedence. An unfamiliar
+scaffold name alone does not disable the species' nuclear default.
+
 For RNA products, `annotate_orf_rna_product(reference, product)` accepts a
 `RealizedTranscriptProduct` with one `(contig, position, strand)` or `None` in
 `evidence['base_origins']` per cDNA base. It validates the retained reference
