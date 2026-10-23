@@ -1,5 +1,14 @@
 # Change Log
 
+## v10.18.4
+
+- Honor explicitly unset reference genetic-code tables from PyEnsembl and
+  compatible providers: raise a clear error instead of silently selecting a
+  species default. Preserve source-declared tables, normal scaffold and
+  organelle assignments, and fallback for older providers (#623).
+- Require ORFdata 0.35 or later for optional ORF annotations so PyEnsembl's
+  reference strain IDs remain distinct from species IDs during binding (#625).
+
 ## v10.18.3
 
 - Accept concrete annotation dates in reference strings, including

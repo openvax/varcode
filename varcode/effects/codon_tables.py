@@ -73,6 +73,12 @@ def codon_table_by_id(code):
 
 
 def _reference_code(transcript):
+    assignment = getattr(transcript, "genetic_code", None)
+    if getattr(assignment, "source", None) == "reference" and assignment.table_id is None:
+        raise ValueError(
+            "Explicitly unset %s genetic code for contig %r; "
+            "supply a translation table in the annotation/model or reference metadata"
+            % (assignment.compartment, getattr(transcript, "contig", None)))
     contig = str(getattr(transcript, "contig", "")).lower()
     compartment = ("mitochondrial" if is_mitochondrial_contig(contig) else
                    "plastid" if contig in {"pt", "cp", "chrc", "chloroplast", "plastid", "apicoplast"} else
@@ -140,6 +146,9 @@ def codon_table_for_transcript(transcript):
     precedence over NCBI species/compartment assignments. A declared start extends only this model's
     initiation set; its internal amino acid and the global tables are unchanged.
     This recognizes a retained source start, not evidence for mutant translation.
+    An explicitly unset reference assignment raises ValueError instead of
+    falling back to a species default; providers without this metadata retain
+    the usual fallback.
     """
     if transcript is None:
         return STANDARD

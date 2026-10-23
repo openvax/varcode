@@ -81,6 +81,75 @@ def test_taxonomy_conflicts_and_unknown_codes_raise():
             codon_table_by_id(code)
 
 
+def test_explicitly_unset_reference_code_does_not_use_taxonomy_fallback():
+    transcript = SimpleNamespace(
+        contig="1", genome=SimpleNamespace(species="human"),
+        translation_table=None,
+        genetic_code=SimpleNamespace(table_id=None, source="reference", compartment="nuclear"))
+    with pytest.raises(ValueError, match="Explicitly unset nuclear genetic code"):
+        codon_table_for_transcript(transcript)
+
+
+def test_explicit_model_code_precedes_unset_reference_metadata():
+    transcript = SimpleNamespace(
+        contig="MT", translation_table=3, start_codon="CTG",
+        genetic_code=SimpleNamespace(table_id=None, source="reference", compartment="mitochondrial"))
+    table = codon_table_for_transcript(transcript)
+    assert table.ncbi_id == 3
+    assert "CTG" in table.start_codons
+    assert "CTG" not in codon_table_by_id(3).start_codons
+
+
+@pytest.mark.parametrize("genetic_code", [None, SimpleNamespace(table_id=None, source="unresolved")])
+def test_unscoped_provider_retains_standard_default(genetic_code):
+    transcript = SimpleNamespace(contig="unplaced_42", translation_table=None, genetic_code=genetic_code)
+    assert codon_table_for_transcript(transcript).ncbi_id == 1
+
+
+@pytest.mark.parametrize("contig,compartment", [
+    ("1", "nuclear"), ("unplaced_42", "nuclear"),
+    ("MT", "mitochondrial"), ("Pt", "plastid"),
+    ("NC_012920.1", "mitochondrial"),
+])
+def test_pyensembl_explicitly_unset_reference_code(contig, compartment):
+    pyensembl = pytest.importorskip("pyensembl", minversion="2.31.0")
+    genome = pyensembl.Genome("GRCh38", "test", reference_metadata={
+        "translation_tables": {compartment: None},
+        "contig_compartments": {"NC_012920.1": "mitochondrial"},
+    })
+    transcript = pyensembl.Transcript("t", None, contig, 1, 9, "+", None, "g", genome)
+    assert transcript.genetic_code.table_id is None
+    assert transcript.genetic_code.source == "reference"
+    with pytest.raises(ValueError, match="Explicitly unset %s genetic code" % compartment):
+        codon_table_for_transcript(transcript)
+
+
+@pytest.mark.parametrize("reference,contig,code", [
+    ("GRCh38", "unplaced_42", 1), ("R64-1-1", "unplaced_42", 1),
+    ("GRCh38", "MT", 2), ("R64-1-1", "MT", 3),
+])
+def test_pyensembl_scaffolds_and_known_organelles(reference, contig, code):
+    pyensembl = pytest.importorskip("pyensembl", minversion="2.31.0")
+    genome = pyensembl.Genome(reference, "test")
+    transcript = pyensembl.Transcript("t", None, contig, 1, 9, "+", None, "g", genome)
+    assert codon_table_for_transcript(transcript).ncbi_id == code
+
+
+def test_pyensembl_annotation_table_overrides_explicitly_unset_reference(tmp_path):
+    pyensembl = pytest.importorskip("pyensembl", minversion="2.31.0")
+    gtf = tmp_path / "declared.gtf"
+    gtf.write_text(
+        '1\ttest\tCDS\t1\t9\t.\t+\t0\tgene_id "g"; transcript_id "t"; transl_table "12";\n')
+    genome = pyensembl.Genome(
+        "GRCh38", "test", gtf_path_or_url=str(gtf),
+        reference_metadata={"translation_tables": {"nuclear": None}})
+    transcript = pyensembl.Transcript("t", None, "1", 1, 9, "+", None, "g", genome)
+    assert transcript.genetic_code.source == "annotation"
+    table = codon_table_for_transcript(transcript)
+    assert table.ncbi_id == 12
+    assert translate_sequence("ATGCTGTAA", codon_table=table) == "MS"
+
+
 def test_yeast_orf_modification_retains_declared_code():
     from dataclasses import replace
     from pyensembl import cached_release

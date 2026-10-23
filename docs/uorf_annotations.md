@@ -177,7 +177,9 @@ products; absent sequence remains unresolved. An explicit `sequence_provider`
 on `annotate_orf_variants` overrides this fallback. Bound transcript exons retain
 the validated ORF reference sequence.
 
-ORFdata 0.34 supports binding complete, stopped ORFs with NCBI tables 1, 2 and 3.
+Varcode requires ORFdata 0.35 or later for ORF annotations, including its
+compatibility with PyEnsembl's reference strain and species taxon IDs.
+ORFdata supports binding complete, stopped ORFs with NCBI tables 1, 2 and 3.
 Varcode preserves the declared code through variant and RNA-product translation.
 Other ORF binding codes still depend on ORFdata support; see
 [ORFdata #57](https://github.com/openvax/orfdata/issues/57).
@@ -194,6 +196,12 @@ standard-code default. Codes 27, 28 and 31 require context-dependent stop
 recoding and remain explicitly unsupported. Definitions and assignments come
 from [NCBI](https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi);
 snapshot hashes and the refresh script are included with Varcode.
+
+With PyEnsembl 2.31 or a compatible provider, an explicitly unset reference
+table (for example, `reference_metadata={"translation_tables": {"nuclear": None}}`)
+raises `ValueError` instead of using a species default. A translation table
+declared in the annotation or ORF model still takes precedence. An unfamiliar
+scaffold name alone does not disable the species' nuclear default.
 
 For RNA products, `annotate_orf_rna_product(reference, product)` accepts a
 `RealizedTranscriptProduct` with one `(contig, position, strand)` or `None` in
