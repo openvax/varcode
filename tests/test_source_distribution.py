@@ -37,7 +37,7 @@ def test_source_distribution_contains_test_support(tmp_path):
     required = {ROOT / name for name in (
         "README.md", "LICENSE", "pyproject.toml", "requirements.txt", "MANIFEST.in",
         "AGENTS.md", "CHANGELOG.md", "CONTRIBUTING.md", "RELEASING.md",
-        "develop.sh", "lint.sh", "test.sh", "deploy.sh", "mkdocs.yml",
+        "develop.sh", "lint.sh", "test.sh", "deploy.sh", "mkdocs.yml", "varcode/py.typed",
     )}
     for pattern in ("tests/**/*.py", "tests/**/*.md", "docs/**/*.md", "examples/**/*.py"):
         required.update(ROOT.glob(pattern))

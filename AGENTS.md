@@ -27,14 +27,14 @@ Before telling the user a change is "complete":
 ## Scripts
 
 - `./develop.sh` — editable install (dev mode)
-- `./lint.sh` — ruff check
+- `./lint.sh` — Ruff plus gradual mypy checks
 - `./test.sh` — pytest (with coverage where configured)
 - `./deploy.sh [--dry-run] [version]` — clean synchronized main/master + unused-tag checks → lint → test → build → twine check → upload → tag → push. Dry runs stop before upload; version changes always go through a PR.
 
 ## Code Style
 
 - Python 3.11+
-- Lint: ruff (config in `pyproject.toml`)
+- Lint: Ruff and mypy (config in `pyproject.toml`; install the `lint` extra)
 - Docstrings: numpy style
 - Bugfixes include a regression test where feasible
 - varcode sits under vaxrank/isovar/topiary — API changes are breaking. Keep backwards-compat where reasonable; coordinate a minor/major bump when not.

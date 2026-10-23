@@ -14,8 +14,6 @@ from __future__ import print_function, division, absolute_import
 
 import numpy as np
 
-from typechecks import require_string
-
 # include all pseudonucleotides encoding repeats and uncertain bases
 STANDARD_NUCLEOTIDES = {'A', 'C', 'T', 'G'}
 
@@ -77,10 +75,10 @@ def all_standard_nucleotides(nucleotides):
 
 
 def normalize_nucleotide_string(
-        nucleotides,
-        allow_extended_nucleotides=False,
-        empty_chars=".-",
-        treat_nan_as_empty=True):
+        nucleotides: str | float,
+        allow_extended_nucleotides: bool = False,
+        empty_chars: str = ".-",
+        treat_nan_as_empty: bool = True) -> str:
     """
     Normalizes a nucleotide string by converting various ways of encoding empty
     strings into "", making all letters upper case, and checking to make sure
@@ -88,8 +86,9 @@ def normalize_nucleotide_string(
 
     Parameters
     ----------
-    nucleotides : str
-        Sequence of nucleotides, e.g. "ACCTG"
+    nucleotides : str or float
+        Sequence of nucleotides, e.g. "ACCTG", or NaN when
+        ``treat_nan_as_empty`` is enabled.
 
     extended_nucleotides : bool
         Allow non-canonical nucleotide characters like 'X' for unknown base
@@ -101,12 +100,12 @@ def normalize_nucleotide_string(
     treat_nan_as_empty : bool
         Some MAF files represent deletions/insertions with NaN ref/alt values
     """
+    if treat_nan_as_empty and isinstance(nucleotides, float) and np.isnan(nucleotides):
+        return ""
+    if not isinstance(nucleotides, str):
+        raise TypeError("Expected nucleotide string, got %s" % type(nucleotides).__name__)
     if nucleotides in empty_chars:
         return ""
-    elif treat_nan_as_empty and isinstance(nucleotides, float) and np.isnan(nucleotides):
-        return ""
-
-    require_string(nucleotides, name="nucleotide string")
 
     nucleotides = nucleotides.upper()
 

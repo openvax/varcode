@@ -10,15 +10,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import logging
+import os
+from typing import TYPE_CHECKING
 
 import pandas
-from typechecks import require_string
 from pandas import isnull
 
 from .reference import infer_genome
 from .variant import Variant, variant_ascending_position_sort_key
 from .variant_collection import VariantCollection
+
+if TYPE_CHECKING:
+    from pyensembl import Genome as EnsemblGenome
+    from .genome import Genome
 
 TCGA_PATIENT_ID_LENGTH = 12
 
@@ -45,13 +52,15 @@ MAF_COLUMN_NAMES = [
 ]
 
 
-def load_maf_dataframe(path, nrows=None, raise_on_error=True, encoding=None):
+def load_maf_dataframe(
+        path: str | os.PathLike[str], nrows: int | None = None,
+        raise_on_error: bool = True, encoding: str | None = None) -> pandas.DataFrame:
     """
     Load the guaranteed columns of a TCGA MAF file into a DataFrame
 
     Parameters
     ----------
-    path : str
+    path : str or os.PathLike[str]
         Path to MAF file
 
     nrows : int
@@ -63,7 +72,9 @@ def load_maf_dataframe(path, nrows=None, raise_on_error=True, encoding=None):
     encoding : str, optional
         Encoding to use for UTF when reading MAF file.
     """
-    require_string(path, "Path to MAF")
+    path = os.fspath(path)
+    if not isinstance(path, str):
+        raise TypeError("Path to MAF must resolve to str, got %s" % type(path).__name__)
 
     n_basic_columns = len(MAF_COLUMN_NAMES)
 
@@ -104,20 +115,20 @@ def load_maf_dataframe(path, nrows=None, raise_on_error=True, encoding=None):
     return df
 
 def load_maf(
-        path,
+        path: str | os.PathLike[str],
         optional_cols=None,
         sort_key=variant_ascending_position_sort_key,
         distinct=True,
         raise_on_error=True,
         encoding=None,
-        nrows=None):
+        nrows=None) -> VariantCollection:
     """
     Load reference name and Variant objects from MAF filename.
 
     Parameters
     ----------
 
-    path : str
+    path : str or os.PathLike[str]
         Path to MAF (*.maf).
 
     optional_cols : list, optional
@@ -140,6 +151,7 @@ def load_maf(
     nrows : int, optional
         Limit to number of rows loaded
     """
+    path = os.fspath(path)
     if optional_cols is None:
         optional_cols = ()
     maf_df = load_maf_dataframe(
@@ -151,7 +163,7 @@ def load_maf(
     if len(maf_df) == 0 and raise_on_error:
         raise ValueError("Empty MAF file %s" % path)
 
-    ensembl_objects = {}
+    ensembl_objects: dict[str | int, EnsemblGenome | Genome] = {}
     variants = []
     metadata = {}
     for _, x in maf_df.iterrows():

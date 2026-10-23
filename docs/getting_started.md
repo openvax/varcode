@@ -111,6 +111,11 @@ For a MAF, use `variants = varcode.load_maf("variants.maf")` after importing
 `varcode`; the MAF's build information supplies the reference. See
 [file-loading parameters](api_variants.md#file-loading) for format-specific options.
 
+Both loaders accept strings and text path objects, such as
+`load_vcf(Path("variants.vcf.gz"), genome=81)` with
+`from pathlib import Path`. Byte paths are rejected. `load_vcf` also accepts
+HTTP/HTTPS URL strings and downloads compressed VCFs before parsing them.
+
 ## Summarize and save results
 
 Choose one effect per variant when you need a compact report:

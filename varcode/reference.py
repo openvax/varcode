@@ -10,20 +10,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import print_function, division, absolute_import
+from __future__ import annotations
 
 import os
 from warnings import warn
 import re
+from typing import TYPE_CHECKING
 
 from pyensembl import EnsemblRelease, Genome
 from pyensembl import cached_release as cached_ensembl_release
 from pyensembl import genome_for_reference_name as get_genome_for_ensembl_reference_name
 
 import pyensembl.species
-from typechecks import is_string, is_integer
 
 from .common import memoize
+
+if TYPE_CHECKING:
+    from .genome import Genome as VarcodeGenome
 
 canonical_reference_names = set(
     pyensembl.species.Species._reference_names_to_species.keys())
@@ -162,10 +165,11 @@ def most_recent_assembly_name(assembly_names):
     where "recency" is determined by sorting based on the numeric element of
     the assembly name.
     """
-    match_recency = [
-        int(re.search(r'\d+', assembly_name).group())
-        for assembly_name in assembly_names
-    ]
+    match_recency = []
+    for assembly_name in assembly_names:
+        match = re.search(r'\d+', assembly_name)
+        assert match is not None, "Expected a numbered assembly name: %s" % assembly_name
+        match_recency.append(int(match.group()))
     sorted_list_of_names = [
         assembly
         for (number, assembly) in
@@ -372,7 +376,9 @@ def infer_genome_for_reference_name(reference_name):
         genome = EnsemblRelease.cached(release, species=species, assembly=reference_name)
     return genome, converted_ucsc_to_ensembl
 
-def infer_genome(genome_object_string_or_int):
+def infer_genome(
+        genome_object_string_or_int: Genome | VarcodeGenome | str | int,
+) -> tuple[Genome | VarcodeGenome, bool]:
     """
     If given an integer, get the human EnsemblRelease object for that
     Ensembl version.
@@ -401,9 +407,9 @@ def infer_genome(genome_object_string_or_int):
     elif (hasattr(genome_object_string_or_int, "transcripts_at_locus")
             and hasattr(genome_object_string_or_int, "fasta")):
         genome = genome_object_string_or_int
-    elif is_integer(genome_object_string_or_int):
+    elif isinstance(genome_object_string_or_int, int):
         genome = cached_ensembl_release(genome_object_string_or_int)
-    elif is_string(genome_object_string_or_int):
+    elif isinstance(genome_object_string_or_int, str):
         genome, converted_ucsc_to_ensembl = \
             infer_genome_for_reference_name(genome_object_string_or_int)
     else:

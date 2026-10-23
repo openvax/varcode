@@ -14,7 +14,6 @@ import re
 
 from pyensembl.locus import normalize_chromosome
 from serializable import Serializable
-from typechecks import require_instance
 
 from .nucleotides import (
     normalize_nucleotide_string,
@@ -248,16 +247,19 @@ class Variant(Serializable):
     def __hash__(self):
         return self.start
 
-    def __lt__(self, other):
+    def __lt__(self, other: object) -> bool:
         """
         Variants are ordered by locus.
         """
-        require_instance(other, Variant, name="variant")
+        if not isinstance(other, Variant):
+            return NotImplemented
         if self.contig == other.contig:
             return self.start < other.start
         return self.contig < other.contig
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Variant):
+            return NotImplemented
         if self is other:
             return True
         return (

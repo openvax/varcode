@@ -1,5 +1,16 @@
 # Change Log
 
+## v10.18.5
+
+- Remove direct imports of the undeclared `typechecks` dependency. Accept
+  text `os.PathLike` inputs in VCF/MAF loaders and preserve URL/compressed VCF
+  loading. Unsupported Variant comparisons now follow Python's reflected
+  comparison protocol (#580).
+- Publish inline typing metadata and introduce a gradual mypy gate for input
+  and comparison APIs in local linting and CI (#580).
+- Honor the documented NaN-as-empty nucleotide option before validating
+  string input, while rejecting other non-string values clearly (#626).
+
 ## v10.18.4
 
 - Honor explicitly unset reference genetic-code tables from PyEnsembl and
