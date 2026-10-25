@@ -118,6 +118,7 @@ from .effects import (
     GermlineAlleleOverlap,
 )
 from .version import __version__
+from .proteome import to_proteome
 from .sample_identity import (
     SampleCheckConfig, SampleSpec, SampleFingerprint,
     load_vcf_samples, compare_samples, check_sample_identity,
@@ -133,6 +134,7 @@ __all__ = [
     "SampleCheckConfig", "SampleSpec", "SampleFingerprint",
     "load_vcf_samples", "compare_samples", "check_sample_identity",
     "__version__",
+    "to_proteome",
 
     # basic classes
     "Variant",

@@ -1,5 +1,15 @@
 # Change Log
 
+## v10.19.0
+
+- Add `to_proteome()` for native effects, candidates and standalone ORF
+  annotations. Preserve every supplied full product, baseline comparison,
+  hypothesis, source context and omitted outcome in ORFdata's shared collection
+  and offline producer graph. Equal sequences retain their distinct sources;
+  FASTA deduplication remains explicit (#620).
+- Keep legacy duck-typed genome providers compatible with the mypy gate when
+  using current published PyEnsembl typing metadata (#628).
+
 ## v10.18.5
 
 - Remove direct imports of the undeclared `typechecks` dependency. Accept

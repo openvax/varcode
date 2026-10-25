@@ -68,6 +68,7 @@ files = [
     "varcode/variant.py",
     "varcode/vcf.py",
     "varcode/maf.py",
+    "varcode/proteome.py",
     "tests/typing/api_inputs.py",
 ]
 follow_imports = "silent"

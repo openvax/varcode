@@ -38,6 +38,7 @@ nav:
       - Genotypes & sample queries: genotype.md
       - Sample identity checks: sample_identity.md
       - Saving & reloading results: csv.md
+      - Protein collections & FASTA: proteome.md
       - Troubleshooting: errors.md
   - Advanced workflows:
       - Splice variants: splice_variants.md

@@ -15,7 +15,7 @@ from __future__ import annotations
 import os
 from warnings import warn
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from pyensembl import EnsemblRelease, Genome
 from pyensembl import cached_release as cached_ensembl_release
@@ -406,7 +406,9 @@ def infer_genome(
         genome = genome_object_string_or_int
     elif (hasattr(genome_object_string_or_int, "transcripts_at_locus")
             and hasattr(genome_object_string_or_int, "fasta")):
-        genome = genome_object_string_or_int
+        # Preserve legacy duck-typed providers. The concrete public input
+        # union cannot express this runtime-validated pass-through (#628).
+        genome = cast("Genome | VarcodeGenome", genome_object_string_or_int)
     elif isinstance(genome_object_string_or_int, int):
         genome = cached_ensembl_release(genome_object_string_or_int)
     elif isinstance(genome_object_string_or_int, str):
