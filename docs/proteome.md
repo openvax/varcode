@@ -41,6 +41,9 @@ predicted = varcode.to_proteome(orf_annotations=annotations)
 
 The collection's `records` contain `varcode.proteome.v1` events and comparisons.
 Its `links` connect events to comparisons and comparisons to protein entries.
+For an `EffectCollection`, a collection record also retains source filenames
+and the supplied annotation timestamp, without splitting identical predictions
+that appeared in different input collections.
 Comparison payloads retain baseline and mutant products, focal variants,
 hypotheses, affected intervals, coordinate conventions, and candidate context.
 Baseline proteins need not be members of the search collection. Native graphs

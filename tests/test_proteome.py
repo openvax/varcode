@@ -84,7 +84,7 @@ def test_coding_substitution_and_offline_roundtrip(effect, tmp_path, monkeypatch
     assert data["mutant"]["protein_sequence"] == "MTK"
     assert data["intervals"] == {"mutant_aa": [1, 2], "baseline_aa": [1, 2]}
     assert entry.occurrences == () and entry.orf is None and entry.derivation is None
-    assert {link.relation for link in predicted.links} == {"produces", "has_outcome"}
+    assert {link.relation for link in predicted.links} == {"produces", "has_outcome", "contains"}
     path = tmp_path / "predicted.json.gz"
     predicted.save(path)
     monkeypatch.setattr(_ReferenceGenome, "transcripts_at_locus", lambda *args: pytest.fail("genome accessed"))
@@ -336,6 +336,17 @@ def test_collection_version_is_not_assigned_to_a_different_producer(effect):
     assert entry.producer.tool == "unknown"
     assert entry.producer.tool_version is None
     assert entry.producer.method == "external_annotator"
+
+
+def test_collection_provenance_is_retained_without_splitting_products(effect):
+    first = EffectCollection([effect], sources={"a.vcf", "b.vcf"}, annotated_at="2026-01-01T00:00:00Z")
+    second = EffectCollection([effect], sources={"c.vcf"}, annotated_at="2026-01-02T00:00:00Z")
+    predicted = to_proteome(first).merge(to_proteome(second))
+    assert len(predicted) == 1
+    collections = [record for record in predicted.records if record.kind == "collection"]
+    assert {tuple(record.payload["sources"]) for record in collections} == {("a.vcf", "b.vcf"), ("c.vcf",)}
+    assert {record.payload["annotated_at"] for record in collections} == {first.annotated_at, second.annotated_at}
+    assert len([link for link in predicted.links if link.relation == "contains"]) == 2
 
 
 def test_unknown_taxon_is_not_guessed(effect):

@@ -15,7 +15,7 @@ from serializable.helpers import to_json
 
 from .effect_candidates import EffectCandidate
 from .effect_hypotheses import ClassifiedOutcome, RealizedEffectCandidate
-from .effects import Failure, HypothesisLimit, MutationEffect, Unresolved
+from .effects import EffectCollection, Failure, HypothesisLimit, MutationEffect, Unresolved
 from .effects.structural_serialization import structural_effect_to_dict
 from .orf import ORFAnnotation, ORFOutcome
 from .orf_serialization import _ReferenceGenome
@@ -390,6 +390,7 @@ class _Export:
             event, status=("no_supplied_outcomes" if not statuses else
                            statuses[0] if len(set(statuses)) == 1 else "alternative_outcomes"),
             complete=False if "hypothesis_limit" in statuses else None, payload=payload)
+        return event.key
 
 
 def to_proteome(effects: Iterable = (), *, sample_id: str | None = None,
@@ -427,8 +428,14 @@ def to_proteome(effects: Iterable = (), *, sample_id: str | None = None,
         raise ImportError("to_proteome requires the optional dependency: pip install 'varcode[orf]'") from error
     defaults = {name: getattr(effects, name, None) for name in ("annotator", "annotator_version")}
     export = _Export(sample_id, run_id, defaults)
+    collection = None
+    if isinstance(effects, EffectCollection):
+        metadata = _json(dict(defaults, sources=sorted(effects.sources), annotated_at=effects.annotated_at))
+        collection = export.record("collection", _identifier("EffectCollection", metadata), payload=metadata)
     for value in effects:
-        export.add(value)
+        event_key = export.add(value)
+        if collection is not None:
+            export.link(collection.key, event_key, "contains")
     for annotation in orf_annotations:
         if not isinstance(annotation, ORFAnnotation):
             raise TypeError("orf_annotations must contain ORFAnnotation objects")
