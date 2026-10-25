@@ -90,3 +90,19 @@ to `orfdata.extra_orfs`, and exports return its existing Proteome. Add
 function; keep `orf_annotations=` compatible. Review corrections are tracked
 in #630. PyPI was checked directly during this pass: 0.35.0 is still the latest
 published ORFdata, so the compatible dependency floor remains a release blocker.
+
+## Second review corrections
+
+Preserve each comparison's native mechanism state and mutant-transcript
+evidence, independently of sibling alternatives. Reuse the native graph encoder
+for an inert outcome projection that excludes alternative collections; do not
+hash a whole candidate set into each outcome's identity. Test cryptic donors
+with different genomic positions and equal-sequence fusion models, including
+reordering, sequence grouping and offline reload.
+
+Resolve complete source references through ORFdata's ReferenceContext and use
+its resolved taxon consistently. Validate all available genome metadata against
+that context, including earlier incomplete sources. Test real Ensembl dog 99
+metadata and retain species/strain mismatch rejection. The published dependency
+requirement remains blocked: PyPI still exposes only ORFdata 0.35.0 and upstream
+#124/#125/#126 are open. Do not invent a minimum version or weaken those tests.

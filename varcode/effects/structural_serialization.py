@@ -33,6 +33,15 @@ _ATTACHED_FIELDS = (
     "orf_annotation",
 )
 
+# A comparison describes one outcome, independently of candidate containers
+# and back-references to an enclosing annotation. Its inert projection retains
+# the mechanism, transcript model and evidence but does not archive siblings.
+_ALTERNATIVE_FIELDS = {
+    "primary_effects", "candidates", "hypotheses", "realized_candidates",
+    "_cryptic_candidates", "_splice_candidates", "_extra_candidates",
+    "most_likely_candidate", "highest_priority_candidate", "orf_annotation",
+}
+
 
 def _model_types():
     from ..effect_hypotheses import (
@@ -44,12 +53,14 @@ def _model_types():
 
 
 def structural_effect_to_dict(root, *, schema="structural_effect_schema"):
+    """Archive a native graph, or project one inert ``orf_comparison_schema`` outcome."""
     from .effect_classes import MutationEffect, PhaseCandidateSet, StructuralVariantEffect
 
     indices = {}
     nodes = []
     model_types = _model_types()
-    orf = schema == "orf_effect_schema"
+    comparison = schema == "orf_comparison_schema"
+    orf = schema == "orf_effect_schema" or comparison
     special_types = ()
     if orf:
         from orfdata import ReferenceORF
@@ -92,6 +103,8 @@ def structural_effect_to_dict(root, *, schema="structural_effect_schema"):
                     if name == "self" or parameter.kind in (
                             Parameter.VAR_POSITIONAL, Parameter.VAR_KEYWORD):
                         continue
+                    if comparison and name in _ALTERNATIVE_FIELDS:
+                        continue
                     if name == "primary_effects" and isinstance(value, StructuralVariantEffect):
                         state[name] = value._primary_effects
                     elif isinstance(value, PhaseCandidateSet) and name in ("candidates", "hypotheses"):
@@ -105,7 +118,8 @@ def structural_effect_to_dict(root, *, schema="structural_effect_schema"):
                     elif parameter.default is Parameter.empty:
                         raise ValueError("Missing effect constructor field: %s" % name)
                 attached = {name: value.__dict__[name] for name in _ATTACHED_FIELDS
-                            if name in value.__dict__ and name not in state}
+                            if name in value.__dict__ and name not in state
+                            and not (comparison and name in _ALTERNATIVE_FIELDS)}
                 nodes[indices[key]] = (type(value), encode(state), encode(attached))
             return _EffectReference(indices[key])
         if isinstance(value, EffectCandidate):
@@ -123,6 +137,8 @@ def structural_effect_to_dict(root, *, schema="structural_effect_schema"):
 def structural_effect_from_dict(root_class, state, *, schema="structural_effect_schema"):
     from .effect_classes import MutationEffect
 
+    if schema == "orf_comparison_schema":
+        raise ValueError("Comparison projections are inert, not reconstructable effect graphs")
     if state.get(schema) != 1:
         raise ValueError("Unsupported effect serialization schema")
     nodes = state["nodes"]

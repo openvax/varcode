@@ -12,6 +12,10 @@
 - Preserve phase-candidate constructor state, transcript-free gene identities,
   capped ORF statuses and distinct ORF outcome sources during proteome export
   (#630).
+- Retain native splice mechanism and fusion model evidence in comparison
+  identities, and use ORFdata's reference taxonomy consistently for dog and
+  strain-specific genomes. Validate partial source metadata against the
+  resolved reference (#630).
 - Keep legacy duck-typed genome providers compatible with the mypy gate when
   using current published PyEnsembl typing metadata (#628).
 

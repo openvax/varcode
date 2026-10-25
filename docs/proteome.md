@@ -57,6 +57,9 @@ and the supplied annotation timestamp, without splitting identical predictions
 that appeared in different input collections.
 Comparison payloads retain baseline and mutant products, focal variants,
 hypotheses, affected intervals, coordinate conventions, and candidate context.
+Each comparison also retains its native mechanism and transcript-model evidence,
+so cryptic splice positions and equal-sequence fusion models keep separate links
+to their outcomes. Comparison identities do not depend on sibling order.
 Baseline proteins need not be members of the search collection. Native graphs
 retain reference models, edits, ordered fusion segments and evidence.
 

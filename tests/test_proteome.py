@@ -17,7 +17,7 @@ from varcode.effect_hypotheses import (
     merge_classified_outcomes,
 )
 from varcode.effects import (
-    Deletion, Failure, GeneFusion, HypothesisLimit, Intragenic,
+    CrypticDonor, Deletion, Failure, GeneFusion, HypothesisLimit, Intergenic, Intragenic,
     SpliceDonor, Substitution, Unresolved,
 )
 from varcode.effects.effect_classes import PhaseCandidateSet
@@ -267,6 +267,86 @@ def test_splice_alternatives_and_added_rna_context_survive(effect):
     assert len(predicted.by_sequence()["MK"]) == 2
     assert next(r for r in comparisons(predicted) if r.status == "unresolved").payload["omission_reason"] == "DNA unavailable"
     assert any(r.payload["contexts"][-1].get("source") == "RNA" for r in comparisons(predicted))
+
+
+def test_cryptic_positions_distinguish_otherwise_identical_comparisons(effect, tmp_path):
+    signal = SpliceDonor(effect.variant, effect.transcript, effect.transcript.exons[0], 1)
+    candidates = tuple(EffectCandidate(CrypticDonor(
+        effect.variant, effect.transcript, signal, effect.transcript.exons[0],
+        cryptic_genomic_position=position)) for position in (15, 18))
+    splice = SpliceOutcomeSet(effect.variant, effect.transcript, candidates=candidates,
+                              disrupted_signal_class=SpliceDonor)
+    predicted = to_proteome(splice)
+    records = comparisons(predicted)
+    assert len(records) == 2
+    assert {r.status for r in records} == {"sequence_unavailable"}
+    assert {r.payload["effect_description"] for r in records} == {"cryptic-donor (predicted)"}
+    assert {r.payload["native"]["nodes"][0][1]["cryptic_genomic_position"] for r in records} == {15, 18}
+    reversed_splice = SpliceOutcomeSet(effect.variant, effect.transcript, candidates=candidates[::-1],
+                                       disrupted_signal_class=SpliceDonor)
+    assert {r.key for r in comparisons(to_proteome(reversed_splice))} == {r.key for r in records}
+    path = tmp_path / "cryptic.json.gz"
+    predicted.save(path)
+    assert graph(orfdata.Proteome.load(path)) == graph(predicted)
+
+
+def test_equal_fusion_sequences_retain_transcript_model_associations(effect, tmp_path):
+    transcript = effect.transcript
+    sv = StructuralVariant("1", 6, "BND", mate_contig="1", mate_start=7, genome=transcript.genome)
+    models = [MutantTranscript(reference_transcript=transcript,
+                               cdna_sequence="ATGACTAAATAA", mutant_protein_sequence="MTK",
+                               evidence={"transcript_model_id": model}) for model in ("model-1", "model-2")]
+    first, second = [GeneFusion(sv, transcript, transcript, mutant_transcript=model) for model in models]
+    fusion = GeneFusion(sv, transcript, transcript, primary_effects=(first, second))
+    predicted = to_proteome(fusion)
+    assert len(comparisons(predicted)) == len(predicted.entries) == 2
+    assert len(predicted.by_sequence()["MTK"]) == 2
+    assert len(predicted.fasta_index(deduplicate=True)) == 1
+    assert len([link for link in predicted.links if link.relation == "produces"]) == 2
+    for model in ("model-1", "model-2"):
+        assert sum(model in json.dumps(r.to_dict()["payload"]["native"]) for r in comparisons(predicted)) == 1
+    # Reordering sibling candidates cannot change outcome IDs.
+    fusion._primary_effects = (second, first)
+    assert {r.key for r in comparisons(to_proteome(fusion))} == {r.key for r in comparisons(predicted)}
+    path = tmp_path / "fusion-models.json.gz"
+    predicted.save(path)
+    assert graph(orfdata.Proteome.load(path)) == graph(predicted)
+
+
+@pytest.mark.parametrize("coding", [False, True])
+def test_dog_reference_uses_orfdata_taxonomy(effect, coding):
+    from pyensembl import cached_release
+
+    genome = cached_release(99, species="dog")
+    assert genome.taxon_id == 9615 and genome.species_taxon_id == 9612
+    effect.transcript.genome = effect.variant.genome = genome
+    predicted = to_proteome(effect if coding else Intergenic(effect.variant))
+    reference = orfdata.ReferenceContext.from_genome(genome)
+    assert predicted.reference == reference
+    assert comparisons(predicted)[0].payload["source_taxon_id"] == 9615
+    if coding:
+        assert predicted.entries[0].taxon_id == 9615
+        assert predicted.entries[0].producer.reference == reference
+
+
+def test_strain_reference_uses_orfdata_species_resolution(effect, tmp_path):
+    genome = _ReferenceGenome(dict(reference_name="R64-1-1", annotation_name="synthetic",
+                                  species="saccharomyces_cerevisiae", taxon_id=559292,
+                                  species_taxon_id=4932, strain="S288C", strain_taxon_id=559292))
+    effect.transcript.genome = effect.variant.genome = genome
+    predicted = to_proteome(effect)
+    assert predicted.entries[0].taxon_id == 4932
+    assert predicted.reference == orfdata.ReferenceContext.from_genome(genome)
+    assert predicted.reference.strain_taxon_id == 559292
+    path = tmp_path / "strain.json.gz"
+    predicted.save(path)
+    assert graph(orfdata.Proteome.load(path)) == graph(predicted)
+
+
+def test_partial_source_context_is_validated_against_later_reference(effect):
+    effect.transcript.genome = _ReferenceGenome(dict(reference_name="different-assembly"))
+    with pytest.raises(ValueError, match="reference_name mismatch"):
+        to_proteome(effect)
 
 
 def test_reference_and_isovar_shaped_composition_and_conflicts(effect, tmp_path):

@@ -50,8 +50,9 @@ def _json(value):
     return json.loads(to_json(portable(value)))
 
 
-def _archive(value):
-    return _json(structural_effect_to_dict(value, schema="orf_effect_schema"))
+def _archive(value, *, comparison=False):
+    schema = "orf_comparison_schema" if comparison else "orf_effect_schema"
+    return _json(structural_effect_to_dict(value, schema=schema))
 
 
 def _digest(value):
@@ -142,21 +143,25 @@ def _context(effect, annotation=None):
     bound = annotation.reference if annotation is not None else getattr(effect, "orf", None)
     reference = (getattr(annotation.record, "reference_context", None) if annotation is not None and bound is None
                  else None if bound is None else bound.context)
+    all_genomes = genomes + variant_genomes
     taxa = set()
-    for genome in genomes + variant_genomes:
-        named = species_taxon(getattr(genome, "species", None))
-        taxon = getattr(genome, "species_taxon_id", None) or named or getattr(genome, "taxon_id", None)
+    for genome in all_genomes:
+        taxon = (getattr(genome, "taxon_id", None) or species_taxon(getattr(genome, "species", None))
+                 or getattr(genome, "species_taxon_id", None))
         if taxon is not None:
             taxa.add(taxon)
-        if all(getattr(genome, key, None) is not None for key in
-               ("species", "reference_name", "annotation_name")) and taxon is not None:
-            candidate = ReferenceContext.from_genome(genome)
-            if reference is None:
-                reference = candidate
-        if reference is not None:
-            reference.validate_genome(genome, include_annotation=any(genome is g for g in genomes))
+        if reference is None and taxon is not None and all(getattr(genome, key, None) is not None for key in
+                                                         ("species", "reference_name", "annotation_name")):
+            reference = ReferenceContext.from_genome(genome)
     if reference is not None:
-        taxa.add(reference.taxon_id)
+        # ORFdata resolves reference vs. species taxa (dog vs. wolf, or a yeast
+        # strain vs. its species). Use that resolution for both records and
+        # entries, and validate even sources encountered before this context.
+        for genome in all_genomes:
+            reference.validate_genome(genome, include_annotation=any(genome is g for g in genomes))
+        return reference, reference.taxon_id, transcripts
+    # Without a qualified reference, retain explicit source taxa; do not replace
+    # a reference organism by its species ancestor or invent reference metadata.
     if len(taxa) > 1:
         raise ValueError("A predicted product cannot silently combine different source taxa")
     return reference, next(iter(taxa), None), transcripts
@@ -307,6 +312,7 @@ class _Export:
         gene_names = _ids([gene.name for gene in genes] + [getattr(record_model, "gene_name", None)])
         payload = dict(
             effect_type=type(effect).__name__, effect_description=effect.short_description,
+            native=_archive(effect, comparison=True),
             gene_ids=gene_ids, gene_names=gene_names,
             baseline=baseline_data, mutant=mutant_data,
             intervals=_intervals(effect), coordinate_conventions=_COORDINATES,
