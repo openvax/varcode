@@ -1,4 +1,4 @@
-# Reference ORF consequences
+# ncORF annotation with ORFdata
 
 Install `varcode[orf]` for the optional [orfdata](https://github.com/openvax/orfdata)
 reference layer. PyEnsembl supplies reference transcripts, orfdata supplies ORF
@@ -6,6 +6,38 @@ models and evidence, and Varcode compares those objects with altered products.
 This includes upstream and overlapping ORFs, internal/downstream frames, and
 ORFs on transcripts annotated as noncoding. The bundled catalogue is human
 GRCh38; explicit species-specific catalogues use the same API.
+
+## Annotate and export
+
+Use the ordinary effects API for both annotated CDSs and ncORFs. ORFdata loads
+and places the reference ORFs; Varcode annotates their variant consequences;
+the resulting proteins and provenance use ORFdata's shared `Proteome`.
+
+```python
+from varcode import load_vcf
+
+variants = load_vcf("tumor.vcf", genome="GRCh38:95")
+effects = variants.effects(extra_orfs="all")
+proteome = effects.to_proteome(sample_id="tumor-1")
+proteome.write_fasta("tumor.fasta")
+proteome.save("tumor.proteome.json.gz")
+```
+
+For an existing ORFdata workflow, pass its collection directly:
+
+```python
+import orfdata
+
+orfs = orfdata.extra_orfs(variants[0].genome, "ms")
+effects = variants.effects(extra_orfs=orfs)
+proteome = effects.to_proteome(sample_id="tumor-1")
+```
+
+No manual transcript binding or separate ncORF export is needed for this
+workflow. Available alternative proteins are retained; failures, unresolved
+results and hypothesis limits remain in the saved manifest. Keep that snapshot
+alongside FASTA. See [protein collections](proteome.md) for composition,
+optional sequence deduplication and offline loading.
 
 ## Annotate with ORFdata's ORFs for the variant's genome
 
@@ -52,11 +84,13 @@ installs anything missing:
   sources (add `--accept-terms` for UCSC's GRCm38 and NCBIM37 chains).
 
 ORFs ORFdata could not place on the genome, for example because an older
-annotation lacks their transcript, are left out rather than failing the
-call; `varcode.extra_orfs.prepare_extra_orfs("all").excluded(genome)` lists
-them with the reason.
+annotation lacks their transcript, are left out by the automatic selector.
+To inspect them, load `orfs = orfdata.extra_orfs(genome)` and read
+`orfs.excluded`. Passing this explicit collection with
+`variant.effects(extra_orfs=orfs, raise_on_error=False)` retains overlapping
+binding failures as ordinary `Failure` entries and in proteome export.
 
-## Annotate ordinary and extra ORFs together
+## Custom catalogues and detailed annotations
 
 Supply a catalogue to the usual effects API. Varcode finds the overlapping
 records and resolves their transcripts using the variant's genome:
@@ -121,7 +155,7 @@ ORF: such observations raise or produce a `Failure` until explicitly mapped with
 `annotate_orf_rna_product`, described below. This interface does not discover new
 ORFs or infer IRES activity, and unsupported translation models remain explicit.
 
-## Work with a selected reference and its products
+## Advanced: work with one reference ORF
 
 ```python
 from pyensembl import cached_release
@@ -141,6 +175,10 @@ for outcome in annotation.outcomes:
         print(outcome.mutant.protein_sequence)
         print(outcome.mutant.initiation_context.start_codon)
 ```
+
+For a standalone annotation, `varcode.to_proteome(annotation)` uses the same
+ORFdata export and retains failed or unresolved results. The function also
+accepts a list or generator of annotations.
 
 Select a known ORF explicitly by ID as above. To annotate every ORF on a
 transcript, iterate over `catalog.for_transcript(transcript)`; a transcript

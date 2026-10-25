@@ -1,5 +1,27 @@
 # Change Log
 
+## v10.19.0
+
+- Require ORFdata 0.36 for stable source identities across exporters, unknown
+  source taxa, and complete available producer metadata in FASTA headers
+  (orfdata#124, orfdata#125, orfdata#126).
+- Add `to_proteome()` for native effects, candidates and standalone ORF
+  annotations. Preserve every supplied full product, baseline comparison,
+  hypothesis, source context and omitted outcome in ORFdata's shared collection
+  and offline producer graph. Equal sequences retain their distinct sources;
+  FASTA deduplication remains explicit (#620).
+- Add `effects.to_proteome()` and direct single-result export for a shared
+  annotation/export workflow using ORFdata's ncORF sources and collection API.
+- Preserve phase-candidate constructor state, transcript-free gene identities,
+  capped ORF statuses and distinct ORF outcome sources during proteome export
+  (#630).
+- Retain native splice mechanism and fusion model evidence in comparison
+  identities, and use ORFdata's reference taxonomy consistently for dog and
+  strain-specific genomes. Validate partial source metadata against the
+  resolved reference (#630).
+- Keep legacy duck-typed genome providers compatible with the mypy gate when
+  using current published PyEnsembl typing metadata (#628).
+
 ## v10.18.5
 
 - Remove direct imports of the undeclared `typechecks` dependency. Accept

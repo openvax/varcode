@@ -38,6 +38,7 @@ nav:
       - Genotypes & sample queries: genotype.md
       - Sample identity checks: sample_identity.md
       - Saving & reloading results: csv.md
+      - Protein collections & FASTA: proteome.md
       - Troubleshooting: errors.md
   - Advanced workflows:
       - Splice variants: splice_variants.md
@@ -47,7 +48,7 @@ nav:
       - Germline-aware annotation: germline.md
       - Phasing: phasing.md
       - VariantCollection transforms: transforms.md
-      - Reference ORF consequences: uorf_annotations.md
+      - ncORF annotation with ORFdata: uorf_annotations.md
       - Experimental annotators: experimental_annotators.md
   - Reference:
       - Varcode, Isovar & Vaxrank: library_roles.md

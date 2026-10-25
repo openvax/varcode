@@ -21,6 +21,11 @@ See [effect annotation](effect_annotation.md) for result access and the
 
 ::: varcode.EffectCandidate
 
+## Protein collections
+
+See [protein collections and FASTA](proteome.md) for `varcode.to_proteome()`,
+offline provenance, alternatives and reference composition.
+
 ## Priority ordering
 
 ::: varcode.effect_priority

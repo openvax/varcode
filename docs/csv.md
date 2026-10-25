@@ -6,6 +6,9 @@ Save results as CSV for a table you can inspect or share, as
 evidence too: a summary table does not preserve every alternative outcome,
 sequence, or annotation context.
 
+For predicted protein FASTA with baseline comparisons, alternatives and omitted
+outcomes in a shared offline manifest, use [protein collections](proteome.md).
+
 ## Writing
 
 ```python

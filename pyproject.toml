@@ -35,8 +35,8 @@ include = ["varcode", "varcode.*"]
 "Bug Tracker" = "https://github.com/openvax/varcode/issues"
 
 [project.optional-dependencies]
-orf = ["orfdata[pyensembl]>=0.35.0,<1"]
-uorf = ["orfdata[pyensembl]>=0.35.0,<1"]
+orf = ["orfdata[pyensembl]>=0.36.0,<1"]
+uorf = ["orfdata[pyensembl]>=0.36.0,<1"]
 rna = ["pysam>=0.21"]
 test-data = ["osteosarc>=0.14.4,<0.16", "biopython>=1.85"]
 lint = ["ruff", "mypy==2.4.0"]
@@ -68,6 +68,7 @@ files = [
     "varcode/variant.py",
     "varcode/vcf.py",
     "varcode/maf.py",
+    "varcode/proteome.py",
     "tests/typing/api_inputs.py",
 ]
 follow_imports = "silent"
