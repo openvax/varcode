@@ -7,6 +7,11 @@
   hypothesis, source context and omitted outcome in ORFdata's shared collection
   and offline producer graph. Equal sequences retain their distinct sources;
   FASTA deduplication remains explicit (#620).
+- Add `effects.to_proteome()` and direct single-result export for a shared
+  annotation/export workflow using ORFdata's ncORF sources and collection API.
+- Preserve phase-candidate constructor state, transcript-free gene identities,
+  capped ORF statuses and distinct ORF outcome sources during proteome export
+  (#630).
 - Keep legacy duck-typed genome providers compatible with the mypy gate when
   using current published PyEnsembl typing metadata (#628).
 

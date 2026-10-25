@@ -142,6 +142,16 @@ class EffectCollection(Collection):
         """Detailed native annotations for the extra ORF effects in this collection."""
         return tuple(e.orf_annotation for e in self if e.orf_annotation is not None)
 
+    def to_proteome(self, *, sample_id=None, run_id=None):
+        """Export ordinary and ncORF outcomes to ORFdata's shared Proteome.
+
+        All supplied alternatives and omitted outcomes are retained. Requires
+        the optional ``orf`` dependency. See :func:`varcode.to_proteome` for
+        the source identity, reference and offline provenance contracts.
+        """
+        from ..proteome import to_proteome
+        return to_proteome(self, sample_id=sample_id, run_id=run_id)
+
     def groupby_transcript(self):
         return self.groupby(key_fn=lambda effect: effect.reference_transcript)
 

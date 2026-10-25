@@ -44,7 +44,7 @@ def _model_types():
 
 
 def structural_effect_to_dict(root, *, schema="structural_effect_schema"):
-    from .effect_classes import MutationEffect, StructuralVariantEffect
+    from .effect_classes import MutationEffect, PhaseCandidateSet, StructuralVariantEffect
 
     indices = {}
     nodes = []
@@ -94,6 +94,10 @@ def structural_effect_to_dict(root, *, schema="structural_effect_schema"):
                         continue
                     if name == "primary_effects" and isinstance(value, StructuralVariantEffect):
                         state[name] = value._primary_effects
+                    elif isinstance(value, PhaseCandidateSet) and name in ("candidates", "hypotheses"):
+                        # Preserve constructor order and native effects, rather
+                        # than the public priority-sorted EffectCandidate view.
+                        state[name] = (value._candidates_raw if name == "candidates" else value._hypotheses)
                     elif name == "candidates" and hasattr(value, "_candidates"):
                         state[name] = value._candidates
                     elif hasattr(value, name):

@@ -84,12 +84,29 @@ def _model(effect, annotation=None):
     return annotation.record if annotation is not None else None if bound is None else bound.record
 
 
+def _genes(effect, transcripts=()):
+    result: list = []
+    for source in (effect, *transcripts):
+        gene = getattr(source, "gene", None)
+        if gene is not None and all(gene is not previous for previous in result):
+            result.append(gene)
+    return result
+
+
+def _outcome_contexts(value, contexts):
+    return (*contexts, dict(source=value.source)) if isinstance(value, ORFOutcome) and value.source is not None else contexts
+
+
+def _limits(effect):
+    return dict(max_hypotheses=effect.max_hypotheses) if isinstance(effect, HypothesisLimit) else {}
+
+
 def _label(effect, annotation=None, kind=None):
     variants = _variants(effect, annotation)
     variant_labels = ["%s:%s:%s>%s" % (v.contig, v.start, v.ref, v.alt) for v in variants]
     record = _model(effect, annotation)
     models = ([record.orf_id] if record is not None else
-              [t.id for t in _transcripts(effect)])
+              [t.id for t in _transcripts(effect)] or list(_ids(g.id for g in _genes(effect))))
     return ":".join([kind or type(effect).__name__, *models, *variant_labels])
 
 
@@ -118,7 +135,8 @@ def _context(effect, annotation=None):
     from orfdata.reference import species_taxon
 
     transcripts = _transcripts(effect, annotation)
-    genomes = [t.genome for t in transcripts if getattr(t, "genome", None) is not None]
+    genomes = [source.genome for source in [*transcripts, *_genes(effect)]
+               if getattr(source, "genome", None) is not None]
     variants = _variants(effect, annotation)
     variant_genomes = [v.genome for v in variants]
     bound = annotation.reference if annotation is not None else getattr(effect, "orf", None)
@@ -154,7 +172,7 @@ def _source(effect, defaults, contexts, annotation=None):
     source = next((source for source in reversed(sources) if source != "varcode"),
                   sources[-1] if sources else None)
     # A source string such as "rna" describes an import path, not its generating tool.
-    native_source = source in (None, "varcode", "varcode_splice", "varcode_motif")
+    native_source = source in (None, "varcode", "varcode_splice", "varcode_motif", "varcode_germline")
     tool = "varcode" if native_source and (annotator in _BUILTIN_ANNOTATORS or source is not None) else "unknown"
     model = _model(effect, annotation)
     provider = source if not native_source else getattr(model, "source", None) or None
@@ -216,10 +234,16 @@ def _identity(value, defaults, contexts=()):
     effect = _effect(value)
     transcripts = _transcripts(effect, annotation)
     model = _model(effect, annotation)
+    contexts = _outcome_contexts(value, contexts)
     identity = dict(
         type=type(value).__name__,
         variants=sorted((_variant_identity(v) for v in _variants(effect, annotation)), key=_digest),
         transcripts=[dict(id=t.id, genome=_ReferenceGenome.capture(t.genome).metadata) for t in transcripts],
+        genes=[dict(id=gene.id, contig=getattr(gene, "contig", None),
+                    start=getattr(gene, "start", None), end=getattr(gene, "end", None),
+                    strand=getattr(gene, "strand", None),
+                    genome=_ReferenceGenome.capture(getattr(gene, "genome", None)).metadata)
+               for gene in _genes(effect) if not transcripts],
         model=None if model is None else dict(
             orf_id=model.orf_id, source=model.source, transcript_id=model.transcript_id,
             reference=None if model.reference_context is None else model.reference_context.key),
@@ -277,8 +301,13 @@ class _Export:
         status, omitted = _status(effect, baseline_data, mutant_data, reason)
         reference, taxon, transcripts = self.scope(effect, annotation)
         hypothesis = getattr(outcome, "hypothesis", None)
+        record_model = _model(effect, annotation)
+        genes = _genes(effect, transcripts)
+        gene_ids = _ids([gene.id for gene in genes] + [getattr(record_model, "gene_id", None)])
+        gene_names = _ids([gene.name for gene in genes] + [getattr(record_model, "gene_name", None)])
         payload = dict(
             effect_type=type(effect).__name__, effect_description=effect.short_description,
+            gene_ids=gene_ids, gene_names=gene_names,
             baseline=baseline_data, mutant=mutant_data,
             intervals=_intervals(effect), coordinate_conventions=_COORDINATES,
             hypothesis=None if hypothesis is None else _archive(hypothesis),
@@ -294,20 +323,15 @@ class _Export:
         # the parent event independently detects conflicting source results.
         native_id = _identifier(_label(effect, annotation) + ":" + effect.short_description,
                                 dict(event=self.event_ids[event_id], comparison=payload))
-        limits = dict(max_hypotheses=effect.max_hypotheses) if isinstance(effect, HypothesisLimit) else {}
+        limits = _limits(effect)
         record = self.record("comparison", native_id, status=status, payload=payload,
                              complete=False if limits else None, limits=limits)
         self.link(event_id, record.key, "has_outcome")
         sequence = mutant_data["protein_sequence"]
         if not sequence:
             return status
-        record_model = _model(effect, annotation)
         origin = ("nc_orf" if record_model is not None else "reference_cds" if any(
             getattr(t, "is_protein_coding", False) for t in transcripts) else "unknown")
-        gene_ids = _ids([getattr(getattr(t, "gene", None), "id", None) for t in transcripts] +
-                        [getattr(record_model, "gene_id", None)])
-        gene_names = _ids([getattr(getattr(t, "gene", None), "name", None) for t in transcripts] +
-                          [getattr(record_model, "gene_name", None)])
         producer = ProducerInfo(
             origin=origin, native_id=native_id, **_source(effect, self.defaults, contexts, annotation),
             exporter=_EXPORTER, sample_id=self.sample_id, run_id=self.run_id,
@@ -333,14 +357,23 @@ class _Export:
                 outcome, event_id, contexts=(*contexts, context), annotation=annotation, ancestors=ancestors)]
         if isinstance(value, (ClassifiedOutcome, ORFOutcome)):
             return [self.comparison(value.effect, event_id, baseline=value.baseline,
-                                    mutant=value.mutant, outcome=value, annotation=annotation, contexts=contexts)]
+                                    mutant=value.mutant, outcome=value, annotation=annotation,
+                                    contexts=_outcome_contexts(value, contexts))]
         if isinstance(value, ORFAnnotation):
             if value.outcomes:
                 return [status for outcome in value.outcomes for status in self.walk(
                     outcome, event_id, annotation=value, contexts=contexts, ancestors=ancestors)]
-            status = "failed_binding" if value.reference is None else "unresolved"
+            if value.reference is None:
+                status, reason = "failed_binding", value.unresolved_reason or "reference ORF binding unavailable"
+            elif value.effect is None:
+                status, reason = "unresolved", value.unresolved_reason or "native annotation supplies no effect or outcomes"
+            else:
+                status, reason = _status(value.effect, {"protein_sequence": None},
+                                         {"protein_sequence": None}, value.unresolved_reason)
+            limits = _limits(value.effect)
             record = self.record("comparison", self.event_ids[event_id] + ":" + status, status=status,
-                                 payload=dict(orf_id=value.orf_id, omission_reason=value.unresolved_reason,
+                                 limits=limits, complete=False if limits else None,
+                                 payload=dict(orf_id=value.orf_id, omission_reason=reason,
                                               contexts=contexts))
             self.link(event_id, record.key, "has_outcome")
             return [status]
@@ -379,8 +412,9 @@ class _Export:
         event = self.record("event", native_id, status="supplied_result")
         self.event_ids[event.key] = native_id
         statuses = self.walk(value, event.key, contexts=contexts)
-        payload = dict(native=_archive(value), contexts=contexts,
-                       source=_source(_effect(value), self.defaults, contexts,
+        outcome_contexts = _outcome_contexts(value, contexts)
+        payload = dict(native=_archive(value), contexts=outcome_contexts,
+                       source=_source(_effect(value), self.defaults, outcome_contexts,
                                       value if isinstance(value, ORFAnnotation) else None),
                        coordinate_conventions=_COORDINATES,
                        sequence_convention="supplied amino acids, including any supplied terminal *; no trimming",
@@ -389,19 +423,23 @@ class _Export:
         self.records[event_index] = replace(
             event, status=("no_supplied_outcomes" if not statuses else
                            statuses[0] if len(set(statuses)) == 1 else "alternative_outcomes"),
-            complete=False if "hypothesis_limit" in statuses else None, payload=payload)
+            complete=False if "hypothesis_limit" in statuses else None,
+            limits=_limits(_effect(value)), payload=payload)
         return event.key
 
 
-def to_proteome(effects: Iterable = (), *, sample_id: str | None = None,
+def to_proteome(effects: Iterable | MutationEffect | EffectCandidate | RealizedEffectCandidate |
+                ClassifiedOutcome | ORFAnnotation | ORFOutcome = (), *, sample_id: str | None = None,
                 run_id: str | None = None, orf_annotations: Iterable[ORFAnnotation] = ()) -> "Proteome":
     """Expose supplied native outcomes through ORFdata's shared collection API.
 
     Parameters
     ----------
-    effects : EffectCollection or iterable
-        Native effects, EffectCandidates, RealizedEffectCandidates, or
-        ClassifiedOutcomes. Every realized outcome is retained.
+    effects : native result, EffectCollection or iterable
+        Native effects, EffectCandidates, RealizedEffectCandidates,
+        ClassifiedOutcomes, ORFAnnotations or ORFOutcomes. A single result is
+        accepted directly. Every realized outcome is retained, including
+        failed ORF bindings with no effect.
     sample_id, run_id : str, optional
         Explicit source scope. Predictions without a sample are supported.
     orf_annotations : iterable of ORFAnnotation
@@ -432,7 +470,9 @@ def to_proteome(effects: Iterable = (), *, sample_id: str | None = None,
     if isinstance(effects, EffectCollection):
         metadata = _json(dict(defaults, sources=sorted(effects.sources), annotated_at=effects.annotated_at))
         collection = export.record("collection", _identifier("EffectCollection", metadata), payload=metadata)
-    for value in effects:
+    results = ((effects,) if isinstance(effects, (MutationEffect, EffectCandidate, RealizedEffectCandidate,
+                                                ClassifiedOutcome, ORFAnnotation, ORFOutcome)) else effects)
+    for value in results:
         event_key = export.add(value)
         if collection is not None:
             export.link(collection.key, event_key, "contains")

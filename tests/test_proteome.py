@@ -16,7 +16,11 @@ from varcode.effect_hypotheses import (
     ClassifiedOutcome, EffectHypothesis, RealizedTranscriptProduct,
     merge_classified_outcomes,
 )
-from varcode.effects import Deletion, Failure, GeneFusion, HypothesisLimit, SpliceDonor, Substitution, Unresolved
+from varcode.effects import (
+    Deletion, Failure, GeneFusion, HypothesisLimit, Intragenic,
+    SpliceDonor, Substitution, Unresolved,
+)
+from varcode.effects.effect_classes import PhaseCandidateSet
 from varcode.germline import PhasePartition
 from varcode.orf import ORFAnnotation, ORFOutcome, ORFProduct, annotate_orf_variants
 from varcode.orf_serialization import _Feature, _ReferenceGenome, _ReferenceTranscript
@@ -47,6 +51,16 @@ def effect(transcript):
     result.annotator = "transcript_model"
     result.annotator_version = "fixture-1"
     return result
+
+
+@pytest.fixture
+def reference_orf(transcript):
+    return orfdata.ORFRecord(
+        orf_id="nc/orf|1", gene_id="gene-1", gene_name="GENE1", transcript_id="tx-1",
+        contig="1", strand="+", coding_blocks=((1, 12),), protein_sequence="MAK",
+        biotype="lncRNA", taxon_id=9606, species="homo_sapiens", source="fixture",
+        ribosome_studies=(), peptides=(), genome_build="fixture",
+        reference_context=orfdata.ReferenceContext.from_genome(transcript.genome)).bind(transcript)
 
 
 def comparisons(proteome):
@@ -374,7 +388,8 @@ def test_native_ensembl_effect_collection_with_extra_orf_roundtrips(tmp_path):
     reference = record.bind(genome.transcript_by_id(record.transcript_id))
     variant = Variant("7", 66205486, "C", "G", genome=genome)
     effects = variant.effects(extra_orfs=[reference])
-    predicted = to_proteome(effects, sample_id="fixture")
+    predicted = effects.to_proteome(sample_id="fixture")
+    assert graph(predicted) == graph(to_proteome(effects, sample_id="fixture"))
     orf_entry, = [entry for entry in predicted if entry.producer.orf_ids]
     assert orf_entry.sequence == effects.orf_annotations[0].outcomes[0].mutant.protein_sequence
     assert orf_entry.sequence.startswith("MASRRR")
@@ -383,6 +398,11 @@ def test_native_ensembl_effect_collection_with_extra_orf_roundtrips(tmp_path):
     path = tmp_path / "native.json.gz"
     predicted.save(path)
     assert graph(orfdata.Proteome.load(path)) == graph(predicted)
+    # Native ORF archives snapshot each gene through its parent transcript;
+    # the absence of a second gene.genome pointer must not change source IDs.
+    extra = next(e for e in effects if e.orf_annotation is not None)
+    archived = type(extra).from_json(extra.to_json())
+    assert {e.accession for e in to_proteome(extra)} == {e.accession for e in to_proteome(archived)}
 
 
 def test_exporter_version_does_not_change_native_prediction_identity(effect, monkeypatch):
@@ -397,3 +417,118 @@ def test_exporter_version_does_not_change_native_prediction_identity(effect, mon
     assert first.entries[0].accession == second.entries[0].accession
     assert {r.key for r in first.records} == {r.key for r in second.records}
     assert len(first.merge(second).entries) == 1
+
+
+def test_default_germline_phase_candidates_export_and_archive(tmp_path):
+    from varcode import GermlineContext
+    from varcode.effects.structural_serialization import structural_effect_from_dict, structural_effect_to_dict
+    from .test_germline_effects import _somatic, _same_codon_germline, CFTR_ID
+
+    variant = _somatic()
+    germline = GermlineContext.from_variants([_same_codon_germline()])
+    effect, = [e for e in variant.effects(germline=germline) if e.transcript_id == CFTR_ID]
+    assert isinstance(effect, PhaseCandidateSet)
+    predicted = to_proteome([effect])
+    assert {r.payload["effect_description"] for r in comparisons(predicted)} == {"p.L159M", "p.S159T"}
+    state = structural_effect_to_dict(effect, schema="orf_effect_schema")
+    restored = structural_effect_from_dict(PhaseCandidateSet, state, schema="orf_effect_schema")
+    assert [c.short_description for c in restored._candidates_raw] == [c.short_description for c in effect._candidates_raw]
+    assert [c.evidence for c in restored.candidates] == [c.evidence for c in effect.candidates]
+    path = tmp_path / "phase.json.gz"
+    predicted.save(path)
+    assert graph(orfdata.Proteome.load(path)) == graph(predicted)
+
+
+def test_transcript_free_gene_effects_have_distinct_identities(effect, tmp_path):
+    first = Intragenic(effect.variant, _Feature(1, 12, "gene-1", "GENE1", "1", "+"))
+    second = Intragenic(effect.variant, _Feature(1, 12, "gene-2", "GENE2", "1", "+"))
+    predicted = to_proteome([first, second])
+    assert len(predicted) == 0 and len(comparisons(predicted)) == 2
+    assert len({r.key for r in predicted.records if r.kind == "event"}) == 2
+    assert {r.payload["gene_ids"] for r in comparisons(predicted)} == {("gene-1",), ("gene-2",)}
+    assert to_proteome([second, first]).merge(predicted).summary()["producer_records"] == 4
+    path = tmp_path / "intragenic.json.gz"
+    predicted.save(path)
+    assert graph(orfdata.Proteome.load(path)) == graph(predicted)
+
+
+def test_bound_orf_hypothesis_limit_preserves_status_and_cap(reference_orf, effect):
+    partner = Variant("1", 5, "C", "G", genome=effect.variant.genome)
+    annotation = annotate_orf_variants([effect.variant], reference_orf, germline_variants=[partner], max_hypotheses=1)
+    assert isinstance(annotation.effect, HypothesisLimit) and annotation.outcomes == ()
+    predicted = to_proteome(orf_annotations=[annotation])
+    assert not predicted.entries
+    for record in predicted.records:
+        assert record.status == "hypothesis_limit"
+        assert record.complete is False
+        assert record.limits["max_hypotheses"] == 1
+    comparison, = comparisons(predicted)
+    assert comparison.payload["omission_reason"] == annotation.effect.reason
+
+
+@pytest.mark.parametrize("kind", ["failure", "unresolved"])
+def test_bound_orf_without_products_retains_underlying_reason(reference_orf, effect, kind):
+    native = (Failure(effect.variant, effect.transcript, error="native annotation failed") if kind == "failure" else
+              Unresolved(effect.variant, effect.transcript, "missing_sequence", "reference DNA absent"))
+    annotation = ORFAnnotation(reference_orf.record, native, reference_orf, variants=(effect.variant,))
+    comparison, = comparisons(to_proteome(orf_annotations=[annotation]))
+    assert comparison.status == ("annotation_failure" if kind == "failure" else "unresolved")
+    assert comparison.payload["omission_reason"] == (native.error if kind == "failure" else native.reason)
+
+
+@pytest.mark.parametrize("standalone", [False, True])
+def test_orf_outcome_sources_remain_distinct(reference_orf, effect, standalone, tmp_path):
+    annotation = annotate_orf_variants([effect.variant], reference_orf)
+    outcomes = tuple(replace(annotation.outcomes[0], source=source) for source in ("source-A", "source-B"))
+    annotated = replace(annotation, outcomes=outcomes)
+    predicted = to_proteome(outcomes) if standalone else to_proteome(orf_annotations=[annotated])
+    assert len(predicted) == len(comparisons(predicted)) == 2
+    assert len(predicted.by_sequence()["MTK"]) == 2
+    assert {r.payload["contexts"][-1]["source"] for r in comparisons(predicted)} == {"source-A", "source-B"}
+    assert {e.producer.provider for e in predicted} == {"source-A", "source-B"}
+    assert len(predicted.merge(predicted)) == 2
+    path = tmp_path / "sources.json.gz"
+    predicted.save(path)
+    assert graph(orfdata.Proteome.load(path)) == graph(predicted)
+
+
+def test_single_and_multiple_orf_results_use_the_same_export_api(reference_orf, effect):
+    annotation = annotate_orf_variants([effect.variant], reference_orf)
+    failed = ORFAnnotation(reference_orf.record, None, variants=(effect.variant,), unresolved_reason="unavailable model")
+    for result in (annotation, failed):
+        assert graph(to_proteome(result)) == graph(to_proteome(orf_annotations=[result]))
+    assert graph(to_proteome([annotation, failed])) == graph(to_proteome(orf_annotations=[annotation, failed]))
+    assert graph(to_proteome(effect)) == graph(to_proteome([effect]))
+
+
+def test_ncorf_selector_and_export_delegate_to_orfdata(monkeypatch, tmp_path):
+    from pyensembl import cached_release
+
+    genome = cached_release(95)
+    catalog = orfdata.load_catalog()
+    reference = catalog.get("c7riboseqorf56").bind(genome.transcript_by_id("ENST00000304842"))
+    calls = []
+
+    class PlacedORFs:
+        def __iter__(self):
+            return iter([reference])
+
+    placed = PlacedORFs()
+    placed.reference, placed.catalog, placed.excluded = reference.context, catalog, ()
+
+    def load(genome, evidence):
+        calls.append((genome, evidence))
+        return placed
+
+    monkeypatch.setattr(orfdata, "extra_orfs", load)
+    monkeypatch.setattr("varcode.extra_orfs._RESOLVERS", {})
+    variant = Variant("7", 66205486, "C", "G", genome=genome)
+    first = variant.effects(extra_orfs="all")
+    second = variant.effects(extra_orfs="all")
+    assert calls == [(genome, None)]
+    assert len(first.orf_annotations) == len(second.orf_annotations) == 1
+    proteome = first.to_proteome(sample_id="tumor-1")
+    assert isinstance(proteome, orfdata.Proteome)
+    entry, = [e for e in proteome if e.producer.orf_ids]
+    assert entry.producer.orf_ids == (reference.orf_id,)
+    assert entry.sequence == first.orf_annotations[0].outcomes[0].mutant.protein_sequence

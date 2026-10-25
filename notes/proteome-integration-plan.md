@@ -69,3 +69,24 @@ new public adapter. Run Ruff/mypy, the full test suite and documentation build;
 review the PR; require green CI with the released ORFdata contract before merge.
 Deploy from clean main, verify PyPI artifacts/tag, and update the shared Varcode
 wheel while preserving editable checkouts and unrelated packages.
+
+## Review corrections and ncORF workflow
+
+Reproduce each review finding before changing behavior. Archive the private
+constructor state of PhaseCandidateSet, retain gene identity without a
+transcript, classify outcome-free ORF annotations from their underlying effect,
+and include each ORFOutcome's source in identities and provenance. Add native
+annotation and offline regression cases for each. Do not substitute a guessed
+ORFdata version: raise both optional dependency floors when a published release
+actually implements #124/#125/#126; keep the PR blocked until then.
+
+Simplify the common ncORF workflow around the existing `effects(extra_orfs=...)`
+entry point and shared proteome export. Preserve existing APIs and keep advanced
+standalone ORF operations available. Prefer one documented annotation/export
+path and small convenience methods over additional wrappers or terminology.
+The user confirmed using ORFdata: source loading and placement stay delegated
+to `orfdata.extra_orfs`, and exports return its existing Proteome. Add
+`EffectCollection.to_proteome()` and accept a single native result in the free
+function; keep `orf_annotations=` compatible. Review corrections are tracked
+in #630. PyPI was checked directly during this pass: 0.35.0 is still the latest
+published ORFdata, so the compatible dependency floor remains a release blocker.
