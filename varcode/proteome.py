@@ -19,14 +19,13 @@ from .effects import EffectCollection, Failure, HypothesisLimit, MutationEffect,
 from .effects.structural_serialization import structural_effect_to_dict
 from .orf import ORFAnnotation, ORFOutcome
 from .orf_serialization import _ReferenceGenome
-from .version import __version__
 
 if TYPE_CHECKING:
     from orfdata import Proteome
 
 
 _SCHEMA = "varcode.proteome.v1"
-_EXPORTER = "varcode/%s" % __version__
+_EXPORTER = "varcode"
 _COORDINATES = {
     "aa_intervals": "0-based half-open; empty mutant intervals retain deletion junctions",
     "cdna_offsets_and_edits": "0-based; edit intervals are half-open",
@@ -267,7 +266,7 @@ class _Export:
         self.sample_id = sample_id
         self.run_id = run_id
         self.defaults = defaults
-        self.entries = []
+        self.proteins = []
         self.records = []
         self.links = []
         self.event_ids = {}
@@ -278,7 +277,7 @@ class _Export:
         from orfdata import ProducerRecord
         record = ProducerRecord(
             namespace="varcode", schema_version=_SCHEMA, kind=kind,
-            native_id=native_id, exporter=_EXPORTER, sample_id=self.sample_id,
+            native_id=native_id, exporters=(_EXPORTER,), sample_id=self.sample_id,
             run_id=self.run_id, **kwargs)
         self.records.append(record)
         return record
@@ -297,7 +296,7 @@ class _Export:
 
     def comparison(self, effect, event_id, *, baseline=None, mutant=None,
                    outcome=None, annotation=None, contexts=()):
-        from orfdata import ProducerInfo, ProteomeEntry
+        from orfdata import ProducerInfo, ProteinSequence
 
         supplied_products = outcome is not None
         baseline_data = _product(baseline, effect=effect, baseline=True)
@@ -340,15 +339,15 @@ class _Export:
             getattr(t, "is_protein_coding", False) for t in transcripts) else "unknown")
         producer = ProducerInfo(
             origin=origin, native_id=native_id, **_source(effect, self.defaults, contexts, annotation),
-            exporter=_EXPORTER, sample_id=self.sample_id, run_id=self.run_id,
+            exporters=(_EXPORTER,), sample_id=self.sample_id, run_id=self.run_id,
             gene_ids=gene_ids, gene_names=gene_names,
             transcript_ids=_ids([t.id for t in transcripts] + [getattr(record_model, "transcript_id", None)]),
             orf_ids=() if record_model is None else (record_model.orf_id,),
             orf_kind=getattr(record_model, "biotype", None), reference=reference,
             start_complete=mutant_data["start_complete"], stop_complete=mutant_data["stop_complete"])
-        entry = ProteomeEntry.from_producer(sequence, taxon_id=taxon, producer=producer)
-        self.entries.append(entry)
-        self.link(record.key, entry.accession, "produces", "entry")
+        protein = ProteinSequence.from_producer(sequence, taxon_id=taxon, producer=producer)
+        self.proteins.append(protein)
+        self.link(record.key, protein.accession, "produces", "protein")
         return status
 
     def walk(self, value, event_id, *, contexts=(), annotation=None, ancestors=()):
@@ -487,6 +486,6 @@ def to_proteome(effects: Iterable | MutationEffect | EffectCandidate | RealizedE
             raise TypeError("orf_annotations must contain ORFAnnotation objects")
         export.add(annotation)
     reference = next(iter(export.references.values())) if len(export.references) == 1 and not export.unknown_reference else None
-    return Proteome.from_entries(export.entries, reference=reference,
-                                 compatibility="strict" if reference else "mixed",
-                                 records=export.records, links=export.links)
+    return Proteome.from_proteins(export.proteins, reference=reference,
+                                  compatibility="strict" if reference else "mixed",
+                                  records=export.records, links=export.links)

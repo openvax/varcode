@@ -51,7 +51,7 @@ The existing `orf_annotations=` keyword is also supported, including when
 combining standalone ORF annotations with ordinary effects.
 
 The collection's `records` contain `varcode.proteome.v1` events and comparisons.
-Its `links` connect events to comparisons and comparisons to protein entries.
+Its `links` connect events to comparisons and comparisons to proteins.
 For an `EffectCollection`, a collection record also retains source filenames
 and the supplied annotation timestamp, without splitting identical predictions
 that appeared in different input collections.
@@ -63,7 +63,7 @@ to their outcomes. Comparison identities do not depend on sibling order.
 Baseline proteins need not be members of the search collection. Native graphs
 retain reference models, edits, ordered fusion segments and evidence.
 
-Available sequences become entries. Missing sequences, known empty products,
+Available sequences become proteins. Missing sequences, known empty products,
 annotation failures, failed ORF bindings, unresolved results and hypothesis
 limits have distinct statuses and omission reasons. Explicit partial boundaries
 and unknown boundaries remain distinct. The manifest describes the supplied
@@ -77,7 +77,7 @@ evidence is not relabeled as experimental support for a mutant protein.
 sources_by_sequence = predicted.by_sequence()
 sources_by_accession = predicted.by_accession()
 
-# The default FASTA keeps one entry per distinct source prediction.
+# The default FASTA keeps one protein per distinct source prediction.
 # Opt into exact sequence grouping and retain its token-to-source mapping:
 predicted.write_fasta("unique.fasta", deduplicate=True)
 token_to_sources = predicted.fasta_index(deduplicate=True)
@@ -87,11 +87,9 @@ combined = reference.merge(predicted)
 combined.save("combined.proteome.json.gz")
 ```
 
-The same `merge()` accepts an ORFdata `Proteome` containing Isovar producer
-records. An Isovar adapter is tracked separately in
-[Isovar #542](https://github.com/openvax/isovar/issues/542); this API does not
-require that unfinished integration. The Varcode tests compose reference,
-Varcode, and Isovar-shaped records through the shared interface.
+The same `merge()` accepts an ORFdata `Proteome` from
+`isovar.to_proteome(...)`. The Varcode tests compose reference, Varcode, and
+Isovar-shaped results through that shared interface.
 
 Known conflicting taxa, assemblies, annotation contexts and source identities
 raise errors. A collection with missing or mixed source references remains

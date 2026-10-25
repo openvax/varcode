@@ -89,10 +89,12 @@ def test_coding_substitution_and_offline_roundtrip(effect, tmp_path, monkeypatch
     assert entry.producer.origin == "reference_cds"
     assert entry.producer.tool == "varcode"
     assert entry.producer.tool_version == "fixture-1"
+    assert entry.producer.exporters == ("varcode",)
     assert entry.producer.transcript_ids == ("tx-1",)
     assert entry.producer.gene_names == ("GENE1",)
     assert entry.producer.start_complete is None  # reference completeness does not prove mutant extent
     comparison, = comparisons(predicted)
+    assert comparison.exporters == ("varcode",)
     data = comparison.to_dict()["payload"]
     assert data["baseline"]["protein_sequence"] == "MAK"
     assert data["mutant"]["protein_sequence"] == "MTK"
@@ -127,7 +129,7 @@ def test_equal_sequences_preserve_baselines_phase_and_group_associations(effect)
     a = outcome(effect, baseline="MAK", phase=((background, "cis"),))
     b = outcome(effect, baseline="MAR", phase=((background, "trans"),), index=1)
     predicted = to_proteome(merge_classified_outcomes([a, b]))
-    assert len(predicted.entries) == len(comparisons(predicted)) == 2
+    assert len(predicted.proteins) == len(comparisons(predicted)) == 2
     assert len(predicted.by_sequence()["MTK"]) == 2
     assert {r.payload["baseline"]["protein_sequence"] for r in comparisons(predicted)} == {"MAK", "MAR"}
     assert len(predicted.fasta_index()) == 2
@@ -178,13 +180,13 @@ def test_native_orf_and_failed_binding(transcript, tmp_path):
     path = tmp_path / "orf.json.gz"
     predicted.save(path)
     assert graph(orfdata.Proteome.load(path)) == graph(predicted)
-    assert to_proteome([annotation.effect]).entries[0].producer.origin == "nc_orf"
+    assert to_proteome([annotation.effect]).proteins[0].producer.origin == "nc_orf"
     # Attached and standalone routes share identity and do not duplicate products.
     annotation.effect.orf_annotation = annotation
     assert graph(to_proteome([annotation.effect], orf_annotations=[annotation])) == graph(to_proteome(orf_annotations=[annotation]))
     other = annotate_orf_variants([variant], replace(record, source="another catalogue").bind(transcript))
     combined = to_proteome([annotation.effect, other.effect])
-    assert len(combined.entries) == 2
+    assert len(combined.proteins) == 2
     assert {e.producer.provider for e in combined} == {"fixture", "another catalogue"}
 
 
@@ -299,7 +301,7 @@ def test_equal_fusion_sequences_retain_transcript_model_associations(effect, tmp
     first, second = [GeneFusion(sv, transcript, transcript, mutant_transcript=model) for model in models]
     fusion = GeneFusion(sv, transcript, transcript, primary_effects=(first, second))
     predicted = to_proteome(fusion)
-    assert len(comparisons(predicted)) == len(predicted.entries) == 2
+    assert len(comparisons(predicted)) == len(predicted.proteins) == 2
     assert len(predicted.by_sequence()["MTK"]) == 2
     assert len(predicted.fasta_index(deduplicate=True)) == 1
     assert len([link for link in predicted.links if link.relation == "produces"]) == 2
@@ -325,8 +327,8 @@ def test_dog_reference_uses_orfdata_taxonomy(effect, coding):
     assert predicted.reference == reference
     assert comparisons(predicted)[0].payload["source_taxon_id"] == 9615
     if coding:
-        assert predicted.entries[0].taxon_id == 9615
-        assert predicted.entries[0].producer.reference == reference
+        assert predicted.proteins[0].taxon_id == 9615
+        assert predicted.proteins[0].producer.reference == reference
 
 
 def test_strain_reference_uses_orfdata_species_resolution(effect, tmp_path):
@@ -335,7 +337,7 @@ def test_strain_reference_uses_orfdata_species_resolution(effect, tmp_path):
                                   species_taxon_id=4932, strain="S288C", strain_taxon_id=559292))
     effect.transcript.genome = effect.variant.genome = genome
     predicted = to_proteome(effect)
-    assert predicted.entries[0].taxon_id == 4932
+    assert predicted.proteins[0].taxon_id == 4932
     assert predicted.reference == orfdata.ReferenceContext.from_genome(genome)
     assert predicted.reference.strain_taxon_id == 559292
     path = tmp_path / "strain.json.gz"
@@ -354,20 +356,20 @@ def test_reference_and_isovar_shaped_composition_and_conflicts(effect, tmp_path)
     reference = predicted.reference
     assert reference is not None
     # A reference baseline can be added later; the prediction never required
-    # it to be present. This is the same annotated-entry API used by from_genome.
-    baseline = orfdata.ProteomeEntry("protein-1", "MAK", "annotated", 9606, "synthetic")
+    # it to be present. This is the same protein API used by from_genome.
+    baseline = orfdata.ProteinSequence("protein-1", "MAK", "annotated", 9606, "synthetic")
     reference_proteome = orfdata.Proteome(reference, [baseline])
     producer = orfdata.ProducerInfo(
         origin="reference_cds", method="rna_assembly", tool="isovar", native_id="rna-product-1",
         sample_id="sample1", transcript_ids=("tx-1",), reference=reference,
         start_complete=None, stop_complete=None)
-    rna_entry = orfdata.ProteomeEntry.from_producer("MTK", taxon_id=9606, producer=producer)
+    rna_entry = orfdata.ProteinSequence.from_producer("MTK", taxon_id=9606, producer=producer)
     rna_record = orfdata.ProducerRecord(
         namespace="isovar", schema_version="isovar.fixture.v1", kind="evidence", native_id="reads-1",
         support="RNA", scope={"sample_id": "sample1", "reads": ["read1"]},
         payload={"translation_support": "not_measured", "future_extension": {"a": 1}})
-    rna = orfdata.Proteome.from_entries([rna_entry], reference=reference, records=[rna_record], links=[
-        orfdata.ProducerLink(rna_record.key, rna_entry.accession, "entry", "supports_RNA_template")])
+    rna = orfdata.Proteome.from_proteins([rna_entry], reference=reference, records=[rna_record], links=[
+        orfdata.ProducerLink(rna_record.key, rna_entry.accession, "protein", "supports_RNA_template")])
     merged = reference_proteome.merge(predicted, rna)
     assert len(merged) == 3 and len(merged.by_sequence()["MTK"]) == 2
     assert merged.merge(predicted, rna).identity == merged.identity
@@ -377,11 +379,11 @@ def test_reference_and_isovar_shaped_composition_and_conflicts(effect, tmp_path)
     with pytest.raises(ValueError, match="different reference"):
         predicted.merge(orfdata.Proteome(replace(reference, annotation_version="2"), []))
     bad = replace(rna_entry, sequence="MKK")
-    with pytest.raises(ValueError, match="Conflicting proteome entry"):
-        merged.merge(orfdata.Proteome.from_entries([bad], reference=reference))
+    with pytest.raises(ValueError, match="Conflicting protein identity"):
+        merged.merge(orfdata.Proteome.from_proteins([bad], reference=reference))
     bad_record = replace(rna_record, payload={"conflicting": True})
     with pytest.raises(ValueError, match="Conflicting producer record"):
-        merged.merge(orfdata.Proteome.from_entries([], reference=reference, records=[bad_record]))
+        merged.merge(orfdata.Proteome.from_proteins([], reference=reference, records=[bad_record]))
 
 
 def test_different_known_source_taxa_and_assemblies_are_rejected(effect):
@@ -409,9 +411,10 @@ def test_missing_gene_names_and_terminal_stop_are_preserved(effect):
 def test_wrapper_export_does_not_split_native_source_identity(effect):
     predicted = to_proteome([effect])
     entry, = predicted
-    wrapper_entry = orfdata.ProteomeEntry.from_producer(
-        entry.sequence, taxon_id=entry.taxon_id, producer=replace(entry.producer, exporter="wrapper"))
-    wrapped = orfdata.Proteome.from_entries([wrapper_entry], reference=predicted.reference)
+    wrapper_entry = orfdata.ProteinSequence.from_producer(
+        entry.sequence, taxon_id=entry.taxon_id,
+        producer=replace(entry.producer, exporter=None, exporters=("wrapper",)))
+    wrapped = orfdata.Proteome.from_proteins([wrapper_entry], reference=predicted.reference)
     assert wrapper_entry.accession == entry.accession
     combined = predicted.merge(wrapped)
     assert len(combined) == 1
@@ -493,10 +496,10 @@ def test_exporter_version_does_not_change_native_prediction_identity(effect, mon
     second = to_proteome([effect])
     # Both source entries and graph records keep identity independently of
     # which adapter version serialized the same native result (ORFdata #124).
-    assert first.entries[0].producer.native_id == second.entries[0].producer.native_id
-    assert first.entries[0].accession == second.entries[0].accession
+    assert first.proteins[0].producer.native_id == second.proteins[0].producer.native_id
+    assert first.proteins[0].accession == second.proteins[0].accession
     assert {r.key for r in first.records} == {r.key for r in second.records}
-    assert len(first.merge(second).entries) == 1
+    assert len(first.merge(second).proteins) == 1
 
 
 def test_default_germline_phase_candidates_export_and_archive(tmp_path):
@@ -537,7 +540,7 @@ def test_bound_orf_hypothesis_limit_preserves_status_and_cap(reference_orf, effe
     annotation = annotate_orf_variants([effect.variant], reference_orf, germline_variants=[partner], max_hypotheses=1)
     assert isinstance(annotation.effect, HypothesisLimit) and annotation.outcomes == ()
     predicted = to_proteome(orf_annotations=[annotation])
-    assert not predicted.entries
+    assert not predicted.proteins
     for record in predicted.records:
         assert record.status == "hypothesis_limit"
         assert record.complete is False

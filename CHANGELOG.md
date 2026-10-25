@@ -2,6 +2,9 @@
 
 ## v10.19.0
 
+- Require ORFdata 0.36 for stable source identities across exporters, unknown
+  source taxa, and complete available producer metadata in FASTA headers
+  (orfdata#124, orfdata#125, orfdata#126).
 - Add `to_proteome()` for native effects, candidates and standalone ORF
   annotations. Preserve every supplied full product, baseline comparison,
   hypothesis, source context and omitted outcome in ORFdata's shared collection
