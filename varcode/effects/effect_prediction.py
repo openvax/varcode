@@ -46,6 +46,11 @@ from .effect_classes import (
 logger = logging.getLogger(__name__)
 
 
+def _validate_transcript_filter(transcript_filter):
+    if transcript_filter is not None and not callable(transcript_filter):
+        raise TypeError("transcript_filter must be callable or None")
+
+
 def _annotate_transcript(
         annotator, variant, transcript, germline=None, phase_resolver=None):
     """Apply the return-value contract without hiding errors or falling back."""
@@ -74,7 +79,8 @@ def predict_variant_effects(
         raise_on_error=False,
         annotator=None,
         germline=None,
-        phase_resolver=None):
+        phase_resolver=None,
+        transcript_filter=None):
     """Determine the effects of a variant on any transcripts it overlaps.
     Returns an EffectCollection object.
 
@@ -122,7 +128,15 @@ def predict_variant_effects(
         phase is known), and by the post-annotation walk to attach
         contig-derived ``mutant_transcript`` to per-variant effects.
         See openvax/varcode#269.
+
+    transcript_filter : callable or None
+        Optional predicate accepting the original reference transcript.
+        Annotate only transcripts for which it returns a truthy value.
+        Selection runs before annotation and does not change coding-biotype
+        or completeness rules. Rejected overlaps do not become intragenic
+        or intergenic effects. Predicate errors follow ``raise_on_error``.
     """
+    _validate_transcript_filter(transcript_filter)
     # Lazy import — varcode.annotators depends on varcode.effects at
     # load time, so we defer to break the cycle.
     from ..annotators.registry import resolve_annotator
@@ -167,19 +181,19 @@ def predict_variant_effects(
             else:
                 # gene ID  has transcripts overlapped by this variant
                 for transcript in transcripts_grouped_by_gene[gene_id]:
-                    annotate = lambda v, t: _annotate_transcript(
-                        annotator_instance, v, t, germline=germline,
-                        phase_resolver=phase_resolver)
-                    if raise_on_error:
-                        effect = annotate(variant, transcript)
-                    else:
-                        try:
-                            effect = annotate(variant, transcript)
-                        except Exception as error:
-                            logger.warning(
-                                "Encountered error annotating %s for %s: %s",
-                                variant, transcript, error)
-                            effect = Failure(variant, transcript, error=str(error))
+                    try:
+                        if transcript_filter is not None and not transcript_filter(transcript):
+                            continue
+                        effect = _annotate_transcript(
+                            annotator_instance, variant, transcript, germline=germline,
+                            phase_resolver=phase_resolver)
+                    except Exception as error:
+                        if raise_on_error:
+                            raise
+                        logger.warning(
+                            "Encountered error annotating %s for %s: %s",
+                            variant, transcript, error)
+                        effect = Failure(variant, transcript, error=str(error))
                     effects.append(effect)
     annotated_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
     collection = EffectCollection(

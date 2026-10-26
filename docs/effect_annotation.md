@@ -26,6 +26,49 @@ collection. See [how to read results](getting_started.md#how-to-read-results).
 The same interface handles structural variants. To include them when loading
 a VCF, pass `parse_structural_variants=True`; see [SV loading](structural_variants.md#basic-usage).
 
+## Choose transcripts
+
+By default, `effects()` includes every overlapping transcript. Use
+`transcript_filter` to select transcripts before prediction:
+
+```python
+# Restrict annotation to a known set of reference transcript IDs.
+selected_ids = {"ENST00000003084", "ENST00000357654"}
+effects = variants.effects(transcript_filter=lambda t: t.id in selected_ids)
+
+# Or select by the reference annotation's biotype.
+effects = variants.effects(
+    transcript_filter=lambda t: t.biotype == "protein_coding")
+```
+
+The same argument works on one `Variant` and on
+`varcode.effects.predict_variant_effects()`. It receives the original reference
+transcript. Use a deterministic predicate; it may be called again for another
+variant or ORF. The predicate chooses the primary transcripts sent to the
+annotator; an SV fusion prediction can still refer to a partner transcript
+discovered by that annotator.
+
+When supplying `extra_orfs`, selection also applies to each ORF's original
+transcript placement. Excluded placements do not generate coding predictions
+or joint haplotype effects. Unplaced ORF failures remain visible because there
+is no resolved transcript to select. See [additional ORFs](uorf_annotations.md).
+
+Selection does not change how a transcript is interpreted. With the built-in
+annotators, ordinary point-variant prediction still reports
+`NoncodingTranscript` outside the `protein_coding` biotype, and
+`IncompleteTranscript` for incomplete coding annotations. Selecting an NMD,
+IG/TR or pseudogene transcript does not by itself request a different coding
+model. Additional supported coding frames are supplied through ORFdata's
+`extra_orfs` API. [Ensembl](https://www.ensembl.org/info/genome/genebuild/biotypes.html)
+and [GENCODE](https://www.gencodegenes.org/pages/biotypes.html) define the
+reference biotypes separately from the sequence consequences calculated here.
+
+If all overlapping transcripts are rejected, their effects are absent and
+the collection can be empty. Filtering does not turn an overlap into an
+`Intergenic` or `Intragenic` result; genuine transcript-free overlaps remain.
+Errors inside the predicate follow `raise_on_error`, like annotation errors.
+A non-callable `transcript_filter` always raises `TypeError`.
+
 <a id="read-an-effect"></a>
 
 ## Protein sequences
