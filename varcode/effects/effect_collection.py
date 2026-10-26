@@ -378,6 +378,7 @@ class EffectCollection(Collection):
     def to_dataframe(self, include_archive=False):
         """Build a summary; optionally retain full graphs in ``effect_json``."""
         from ..splice_outcomes import SpliceOutcomeSet
+        from .effect_classes import StartLoss
 
         structural_columns = STRUCTURAL_VARIANT_COLUMNS if any(
             getattr(e.variant, "is_structural", False) for e in self) else ()
@@ -385,6 +386,10 @@ class EffectCollection(Collection):
             e.orf_annotation is not None for e in self) else ()
         splice_columns = ("splice_signal",) if any(
             isinstance(e, SpliceOutcomeSet) for e in self) else ()
+        start_loss_columns = (
+            "ref_codon", "alt_codon", "ref_codon_offset", "alt_codon_offset",
+            "codon_change_status", "alt_codon_amino_acid",
+        ) if any(isinstance(e, StartLoss) for e in self) else ()
         # list of properties to extract from Variant objects if they're
         # not None
         variant_properties = [
@@ -411,6 +416,9 @@ class EffectCollection(Collection):
 
             row['effect_type'] = effect.__class__.__name__
             row['effect'] = effect.short_description
+            if isinstance(effect, StartLoss):
+                for field_name in start_loss_columns:
+                    row[field_name] = getattr(effect, field_name)
             if isinstance(effect, SpliceOutcomeSet):
                 signal = effect.disrupted_signal_class
                 row['splice_signal'] = signal.__name__ if signal is not None else None
@@ -424,9 +432,10 @@ class EffectCollection(Collection):
         # CSV round-trip doesn't have to special-case len == 0.
         frame = pd.DataFrame.from_records(
             [row_from_effect(effect) for effect in self],
-            columns=self._DATAFRAME_COLUMNS + structural_columns + orf_columns + splice_columns,
+            columns=(self._DATAFRAME_COLUMNS + structural_columns + orf_columns
+                     + splice_columns + start_loss_columns),
         )
-        if include_archive and self.orf_annotations:
+        if include_archive and (self.orf_annotations or start_loss_columns):
             frame["effect_json"] = [effect.to_json() for effect in self]
         return frame
 
@@ -482,7 +491,7 @@ class EffectCollection(Collection):
         """Rebuild an EffectCollection from a CSV previously written by
         ``EffectCollection.to_csv()``.
 
-        ORF-containing exports include an ``effect_json`` column. Those rows
+        ORF and start-loss exports include an ``effect_json`` column. Those rows
         restore the saved graphs without reannotation; edited identity columns
         that disagree with their archives raise.
 
@@ -525,7 +534,6 @@ class EffectCollection(Collection):
         from ..variant import Variant
 
         header = read_metadata_header(path)
-        warn_on_version_drift(header, _varcode_version, path)
         df = pd.read_csv(
             path, comment="#", dtype={"chr": str, "contig": str})
         if "effect_json" in df:
@@ -544,13 +552,15 @@ class EffectCollection(Collection):
             summary = result.to_dataframe()
             # Refuse a stale payload after spreadsheet edits to identifying
             # columns. Empty alleles and missing transcript IDs normalize alike.
-            for column in ("contig", "start", "ref", "alt", "transcript_id", "effect_type", "orf_id", "orf_source"):
+            for column in ("contig", "start", "ref", "alt", "transcript_id", "effect_type", "orf_id", "orf_source",
+                           "ref_codon", "alt_codon", "codon_change_status", "alt_codon_amino_acid"):
                 if column in df and column in summary:
                     original = df[column].fillna("").astype(str).tolist()
                     restored = summary[column].fillna("").astype(str).tolist()
                     if original != restored:
                         raise ValueError("CSV %s disagrees with its archived effect_json" % column)
             return result
+        warn_on_version_drift(header, _varcode_version, path)
         if genome is None:
             genome = header.get("reference_name")
         if genome is None:

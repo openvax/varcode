@@ -928,7 +928,7 @@ def _classify_structural_transcript(event, transcript, model, affected):
     if cds_start is None:
         # The annotated initiation is lost; alternative initiation is not
         # modeled, so no mutant protein is asserted.
-        return StartLoss(variant, transcript), model
+        return StartLoss(variant, transcript, mutant_transcript=model), model
     reference_start = min(transcript.start_codon_spliced_offsets)
     sequence = model.cdna_sequence
     mapped_sec = segment_selenocysteine(model)

@@ -128,6 +128,30 @@ def test_deleted_start_is_still_start_loss(realize, reverse):
     assert type(effect) is StartLoss
     assert mutant.start_codon_present is False
     assert mutant.protein_sequence == ""
+    assert effect.ref_codon == "ATG"
+    assert effect.alt_codon is None
+    assert effect.codon_change_status == "start_removed"
+    assert effect.mutant_transcript.cdna_sequence == mutant.cdna_sequence
+    assert effect.mutant_transcript.edits == ()
+    assert not effect.mutant_transcript.is_identical_to_reference
+
+
+def test_start_loss_is_compared_to_patient_baseline(realize):
+    transcript = Transcript()
+    layout = GenomicLayout.from_transcript(
+        transcript, flank=0, sequence_provider=provider())
+    layout = layout.apply_point_variant(point(1, "A", "C"))
+    baseline = realize(transcript, layout)
+    variant = point(2, "T", "C")
+    mutant = realize(transcript, layout.apply_point_variant(variant))
+
+    effect = classify_products(variant, transcript, baseline, mutant)
+
+    assert type(effect) is StartLoss
+    assert (effect.ref_codon, effect.alt_codon) == ("CTG", "CCG")
+    assert (effect.ref_codon_offset, effect.alt_codon_offset) == (0, 0)
+    assert effect.mutant_transcript.cdna_sequence == "CCGCAAGCTTAG"
+    assert effect.mutant_transcript.mutant_protein_sequence is None
 
 
 def test_alternate_start_is_compared_to_patient_baseline(realize):

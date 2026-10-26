@@ -1,5 +1,17 @@
 # Change Log
 
+## v10.20.1
+
+- Preserve transcript-oriented reference/alternate codons, cDNA coordinates,
+  resolved nucleotide edits and available mutant cDNA on `StartLoss` (#206).
+  Deleted, unmapped and ambiguous starts retain explicit context status.
+  Literal alternate-codon decoding uses the transcript's genetic code; the
+  initiated protein remains unknown and the start-loss summary is unchanged.
+- Retain start-loss details and transcript/ORF provenance in native JSON and
+  CSV archives; expose codon context in dataframe summaries. Reuse realized
+  transcript products and patient baselines rather than reconstructing a
+  compound outcome from its primary variant alone.
+
 ## v10.20.0
 
 - Add `transcript_filter` to variant and collection annotation, including

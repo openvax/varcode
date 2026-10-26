@@ -269,6 +269,7 @@ def realize_exon_path(transcript, layout, kept_run_keys=None):
         start_codon_present=start_present,
         evidence={
             "start_codon": start_codon,
+            "start_codon_offset": start,
             "exon_runs": tuple(run.key for run in selected),
             "genomic_positions": genomic_positions,
         })
@@ -419,6 +420,7 @@ def realize_splice_plan(
         transcript, cdna, start_offset, pieces)
     evidence = {
         "start_codon": start_codon,
+        "start_codon_offset": start_offset,
         "exon_runs": tuple(run.key for run in selected),
         "genomic_positions": genomic_positions,
         "splice_choices": tuple(
@@ -494,7 +496,13 @@ def _unchanged_product_effect(variant, transcript, mutant):
 def classify_products(variant, transcript, baseline, mutant):
     """Classify a mutant product against the patient's baseline product."""
     if baseline.start_codon_present and not mutant.start_codon_present:
-        return StartLoss(variant, transcript)
+        context = dict(reference_transcript=transcript,
+                       annotator_name="transcript_model", evidence=dict(mutant.evidence))
+        model = (MutantTranscript.from_sequence(mutant.cdna_sequence, **context)
+                 if mutant.cdna_sequence is not None else MutantTranscript(**context))
+        return StartLoss(variant, transcript, mutant_transcript=model,
+                         ref_codon=baseline.evidence.get("start_codon"),
+                         ref_codon_offset=baseline.evidence.get("start_codon_offset"))
     if baseline.protein_sequence == mutant.protein_sequence:
         ref_codon = baseline.evidence.get("start_codon")
         alt_codon = mutant.evidence.get("start_codon")
