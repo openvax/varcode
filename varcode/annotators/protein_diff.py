@@ -41,7 +41,7 @@ Algorithm
 """
 
 from ..effects.classify import classify_from_protein_diff
-from ..effects.codon_tables import codon_table_for_transcript
+from ..effects.codon_tables import codon_table_for_transcript, initiator_as_met
 from ..effects.effect_classes import (
     AlternateStartCodon,
     ExonicSpliceSite,
@@ -55,14 +55,6 @@ from ..effects.effect_classes import (
 from ..mutant_transcript import _mutant_cds_start, apply_variant_to_transcript
 from ..version import __version__ as _varcode_version
 from .fast import FastEffectAnnotator
-
-
-def _initiator_as_met(protein, first_codon, codon_table):
-    """``protein`` with its first residue read as Met when ``first_codon``
-    is a start codon of ``codon_table``, as the initiator tRNA reads it."""
-    if protein and first_codon in codon_table.start_codons:
-        return "M" + protein[1:]
-    return protein
 
 
 class ProteinDiffEffectAnnotator:
@@ -165,8 +157,8 @@ class ProteinDiffEffectAnnotator:
         # A recognised start codon at the CDS start (e.g. CTG/TTG, or MT
         # ATA/GTG under table 2) initiates as Met, whatever it decodes to
         # internally. Ensembl writes such initiators literally in some
-        # proteins and as Met in others, so read both proteins' first
-        # codons the same way before diffing them (#320, #537).
+        # proteins and as Met in others. The mutant builder already uses
+        # initiation semantics; normalize the reference too (#320, #537, #634).
         codon_table = codon_table_for_transcript(transcript)
         cds_start = min(transcript.start_codon_spliced_offsets)
         ref_first_codon = str(
@@ -174,10 +166,9 @@ class ProteinDiffEffectAnnotator:
         mutant_cds_start = _mutant_cds_start(transcript, mt.edits)
         mut_first_codon = mt.cdna_sequence[
             mutant_cds_start:mutant_cds_start + 3].upper()
-        ref_protein = _initiator_as_met(
+        ref_protein = initiator_as_met(
             str(transcript.protein_sequence), ref_first_codon, codon_table)
-        mut_protein = _initiator_as_met(
-            mt.mutant_protein_sequence, mut_first_codon, codon_table)
+        mut_protein = mt.mutant_protein_sequence
 
         # Proteins match → Silent or AlternateStartCodon. Handle
         # both here because the shared classifier doesn't have

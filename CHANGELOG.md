@@ -1,5 +1,15 @@
 # Change Log
 
+## v10.21.1
+
+- Translate recognized alternative initiators as methionine when building
+  germline baselines and joint haplotypes. A supplied germline ATG→CTG followed
+  by a cis somatic CTG→CCG now reports `StartLoss`, rather than `p.L1P` (#634).
+  Preserve patient codons, resolved edits, phase alternatives and the unknown
+  protein after start loss. Initiation follows the transcript's genetic code
+  and source declarations; internal codon decoding is unchanged. Missing
+  germline information remains unavailable.
+
 ## v10.21.0
 
 - Accept annotated and source-defined TranscriptORFs through the ordinary

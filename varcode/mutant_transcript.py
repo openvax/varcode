@@ -396,10 +396,15 @@ def _translate_from_cds(mutant_cdna, transcript, edits=()):
     """Translate ``mutant_cdna`` from the canonical CDS start to the
     first stop. ``edits`` (in reference coordinates) locate that start,
     and the annotated selenocysteine codons they leave intact, in the
-    mutant. Returns ``None`` if the CDS start is past the cDNA end or
-    translation errors."""
+    mutant. Recognized codons at a retained start initiate as Met;
+    internal codons keep their ordinary genetic-code assignments.
+    Returns ``None`` if the CDS start is past the cDNA end or translation
+    errors. A disrupted start still has a literal translation here for
+    classification; StartLoss clears the resulting unknown protein.
+    """
     from .effects.codon_tables import (
         codon_table_for_transcript,
+        initiator_as_met,
         translate_sequence,
     )
     from .effects.selenocysteine import edited_selenocysteine
@@ -410,12 +415,19 @@ def _translate_from_cds(mutant_cdna, transcript, edits=()):
     coding = mutant_cdna[cds_start:]
     truncated = coding[:(len(coding) // 3) * 3]
     try:
-        return translate_sequence(
+        protein = translate_sequence(
             truncated, codon_table=codon_table, to_stop=True,
             selenocysteine={pos - cds_start for pos in
                             edited_selenocysteine(transcript, edits)})
     except ValueError:
         return None
+    reference_start = min(transcript.start_codon_spliced_offsets)
+    start_removed = any(
+        e.cdna_start <= reference_start < e.cdna_end and e.length_delta
+        for e in edits)
+    if not start_removed:
+        protein = initiator_as_met(protein, coding[:3], codon_table)
+    return protein
 
 
 def apply_variant_to_transcript(variant, transcript):
