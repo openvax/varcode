@@ -48,6 +48,55 @@ Severity ordering across types is set by
 
 ::: varcode.effects.effect_classes.StartLoss
 
+### Start-loss nucleotide details
+
+`StartLoss` retains the known sequence change while leaving
+`mutant_protein_sequence` as `None` and the summary as `p.M1? (start-loss)`.
+For example, with Ensembl 81 / GRCh38:
+
+```python
+from pyensembl import cached_release
+from varcode import Variant
+
+genome = cached_release(81)
+transcript = genome.transcript_by_id("ENST00000003084")
+effect = Variant("7", 117480096, "T", "C", genome).effect_on_transcript(transcript)
+assert (effect.ref_codon, effect.alt_codon) == ("ATG", "ACG")
+assert effect.alt_codon_amino_acid == "T"
+assert effect.mutant_protein_sequence is None
+edit, = effect.mutant_transcript.edits
+```
+
+Codons and edits use transcript orientation, including reverse-strand
+transcripts. `ref_codon_offset` and `alt_codon_offset` are zero-based offsets
+in the baseline and mutant cDNA. Each resolved `TranscriptEdit` carries its
+reference cDNA interval, alternate bases and source variant. Realized compound
+products retain their complete cDNA and mapping evidence; they carry a single
+edit only when that edit explains the entire product.
+
+`codon_change_status` describes whether the alternate triplet can be reported:
+
+| Status | Meaning |
+| --- | --- |
+| `mapped` | The start position maps to a complete triplet in the mutant cDNA. |
+| `start_removed` | The mapped original start position was removed. |
+| `start_ambiguous` | Multiple retained copies prevent a unique mapping. |
+| `edit_unresolved` | The edit or start mapping could not be established. |
+| `sequence_unavailable` | The required sequence or complete triplet is unavailable. |
+
+Unavailable codons and alternate offsets are `None`; available edits and cDNA
+remain accessible through `mutant_transcript`. `alt_codon_amino_acid` gives the
+triplet's **internal decoding**, using the transcript's genetic code (`"*"`
+for a stop, `None` for an unknown codon). This does not establish translation
+initiation or an alternate protein. See [NCBI's genetic-code tables](https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi)
+for the distinction between internal decoding and initiator methionine.
+Recognized alternative initiators retain `AlternateStartCodon` classification.
+
+Native `to_json()` / `from_json()` retain these details. Collections containing
+start-loss effects expose codon fields in `to_dataframe()` and include the
+native `effect_json` archive in `to_csv()`; `EffectCollection.from_csv()` restores
+these saved results without reannotation.
+
 ::: varcode.effects.effect_classes.Substitution
 
 ::: varcode.effects.effect_classes.ComplexSubstitution

@@ -576,11 +576,12 @@ def annotate_orf_rna_product(reference, product):
     product_view = copy(view)
     product_view.start_codon_spliced_offsets = tuple(range(start, start + 3))
     mt = MutantTranscript(reference_transcript=product_view, cdna_sequence=sequence,
-                          mutant_protein_sequence=protein, evidence=product.evidence)
+                          mutant_protein_sequence=protein,
+                          evidence={**product.evidence, "start_codon_offset": start})
     # The shared classifier compares protein outcomes; DNA linkage and source
     # placements remain in the RNA evidence supplied by the caller.
     effect = (classify_from_protein_diff(None, product_view, record.protein_sequence, protein,
-                                       mutant_transcript=mt) if start_present else StartLoss(None, view))
+                                       mutant_transcript=mt) if start_present else StartLoss(None, view, mutant_transcript=mt))
     observed = RealizedTranscriptProduct(
         view, sequence, protein, product.junction_signature, start_present,
         {**product.evidence, "genomic_positions": positions})

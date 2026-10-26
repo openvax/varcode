@@ -1174,26 +1174,26 @@ class NonsilentCodingMutation(CodingMutation):
 
 
 class StartLoss(NonsilentCodingMutation):
-    """
-    When a start codon is lost it's difficult to determine if there is
-    an alternative Kozak consensus sequence (either before or after the
-    original) from which an alternative start codon can be inferred.
+    """Loss of the annotated start, with available nucleotide context.
 
-    TODO:
-        - look for downstream alternative start codon to predict
-          new coding sequence (probably also requires matching
-          pattern of preceding ~6nt)
-        - If an alternative start codon is changed to ATG then
-          we should make a StrongerStartCodon effect which is effectively
-          silent
-        - If ATG is changed to the two common alternative codons then
-          we should make a WeakerStartCodon effect which is also
-          effectively silent.
+    ``ref_codon`` and ``alt_codon`` are in transcript orientation. Their
+    offsets are zero-based in the baseline and mutant cDNA, respectively.
+    A removed or unmapped start has no alternate codon/offset. Edits and
+    sequence remain on ``mutant_transcript`` when available. Neither these
+    details nor a codon's internal amino-acid meaning establish initiation.
+    The protein outcome remains unknown; alternative-start discovery is
+    outside this effect's scope.
     """
     def __init__(
             self,
             variant,
-            transcript):
+            transcript,
+            mutant_transcript=None,
+            ref_codon=None,
+            alt_codon=None,
+            ref_codon_offset=None,
+            alt_codon_offset=None,
+            codon_change_status=None):
         NonsilentCodingMutation.__init__(
             self,
             variant=variant,
@@ -1201,11 +1201,39 @@ class StartLoss(NonsilentCodingMutation):
             aa_mutation_start_offset=0,
             aa_mutation_end_offset=1,
             aa_ref=transcript.protein_sequence[0])
+        if codon_change_status is None:
+            from .start_loss import start_loss_details
+            details = start_loss_details(variant, transcript, mutant_transcript)
+            mutant_transcript = details["mutant_transcript"]
+            ref_codon = details["ref_codon"] if ref_codon is None else ref_codon
+            alt_codon = details["alt_codon"] if alt_codon is None else alt_codon
+            ref_codon_offset = details["ref_codon_offset"] if ref_codon_offset is None else ref_codon_offset
+            alt_codon_offset = details["alt_codon_offset"] if alt_codon_offset is None else alt_codon_offset
+            codon_change_status = details["codon_change_status"]
+        self.mutant_transcript = mutant_transcript
+        self.ref_codon = ref_codon
+        self.alt_codon = alt_codon
+        self.ref_codon_offset = ref_codon_offset
+        self.alt_codon_offset = alt_codon_offset
+        self.codon_change_status = codon_change_status
+
+    def __hash__(self):
+        # Transcript-model evidence can contain dictionaries.
+        return hash((type(self), self.variant, self.transcript))
+
+    @property
+    def alt_codon_amino_acid(self):
+        """Internal decoding of the alternate triplet, not an initiated protein residue."""
+        if self.alt_codon is None:
+            return None
+        from .codon_tables import codon_table_for_transcript
+        table = codon_table_for_transcript(self.transcript)
+        if self.alt_codon in table.stop_codons:
+            return "*"
+        return table.forward_table.get(self.alt_codon)
 
     @property
     def mutant_protein_sequence(self):
-        # TODO: scan downstream in the cDNA sequence to predict an alternate
-        # start codon using a Kozak sequence template
         return None
 
     @property

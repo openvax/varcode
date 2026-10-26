@@ -994,6 +994,7 @@ def _classify_against_patient_baseline(
     from .mutant_transcript import apply_variants_to_transcript
 
     cis_germline = list(hypothesis.cis)
+    baseline = None
 
     # Patient baseline: just the cis germline applied. Empty cis →
     # baseline is the reference transcript (no edits).
@@ -1045,7 +1046,8 @@ def _classify_against_patient_baseline(
         ref_protein=baseline_protein,
         mut_protein=joint.mutant_protein_sequence,
         length_delta=somatic_length_delta,
-        mutant_transcript=joint)
+        mutant_transcript=joint,
+        baseline_transcript=baseline)
 
 
 def predict_germline_aware_effect(

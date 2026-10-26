@@ -55,7 +55,8 @@ def classify_from_protein_diff(
         mut_protein,
         length_delta=0,
         mutant_transcript=None,
-        frame_change_aa_offset=None):
+        frame_change_aa_offset=None,
+        baseline_transcript=None):
     """Classify a :class:`MutationEffect` by diffing translated
     proteins.
 
@@ -85,6 +86,9 @@ def classify_from_protein_diff(
         First affected coding codon when a realized path supplies nucleotide
         coordinates. Distinguishes a coding frameshift whose amino acids
         coincidentally match the reference from a stop-codon extension.
+    baseline_transcript : MutantTranscript or None
+        Patient baseline, when the comparison includes cis germline edits.
+        Keeps start-loss reference codons and offsets in that baseline.
 
     Returns
     -------
@@ -99,7 +103,14 @@ def classify_from_protein_diff(
 
     # Start loss: mutant protein doesn't begin with M.
     if not mut_protein or (mut_protein[0] != "M" and ref_protein and ref_protein[0] == "M"):
-        return StartLoss(variant=variant, transcript=transcript)
+        reference = {}
+        if baseline_transcript is not None:
+            from .start_loss import start_loss_details
+            baseline = start_loss_details(None, transcript, baseline_transcript)
+            reference = dict(ref_codon=baseline["alt_codon"],
+                             ref_codon_offset=baseline["alt_codon_offset"])
+        return StartLoss(variant=variant, transcript=transcript,
+                         mutant_transcript=mutant_transcript, **reference)
 
     ref_delta, alt_delta, prefix, suffix = trim_shared_flanking_strings(
         ref_protein, mut_protein)
