@@ -157,6 +157,43 @@ ORFs or infer IRES activity, and unsupported translation models remain explicit.
 
 ## Advanced: work with one reference ORF
 
+### Annotated CDSs and source-defined fragments
+
+`TranscriptORF` includes an annotated CDS as well as additional coding models.
+The optional `.record` is catalogue provenance. Pass any mapped placement through
+the same `extra_orfs` argument; it retains its original RNA and source identity:
+
+```python
+cds = orfdata.TranscriptORF.from_annotation(transcript)
+effects = variant.effects(extra_orfs=[cds])
+annotation = effects.orf_annotations[0]
+assert annotation.reference is cds
+assert annotation.record is None
+```
+
+Source-defined placements from `TranscriptORF.at` use the same path, including
+declared non-AUG starts and several starts on one transcript. The selected ORF's
+coding view stays internal; `effect.reference_transcript` is the original RNA.
+An annotated CDS carried on another gene's transcript keeps both source and host
+gene identities and exports as `reference_cds`.
+
+For incomplete models, `start_complete`, `stop_complete`, `coding_phase` and
+`coding_origin` describe what is known. Internal small variants in a validated
+local frame can produce a partial `ORFProduct`. Its protein contains the supplied
+coding fragment, without filling missing sequence from another reference.
+`annotation.unavailable_operations` records unavailable start-loss, stop-loss
+and full-protein calculations. Edits touching incomplete codons or unsupported
+splice/structural/germline contexts return `Unresolved` with the reference,
+baseline fragment, evidence and reason retained. An unknown frame, unmapped or
+circular RNA, programmed frame change or unmodeled recoding likewise remains
+accessible as an explicit unavailable result. Partial mapped-RNA reconstruction
+is currently unavailable through `annotate_orf_rna_product`.
+
+Native JSON and Proteome snapshots retain these boundaries and outcomes. Source
+RNA support and reference translation evidence never become evidence that a
+predicted mutant protein was expressed. Protein positions in a partial model are
+relative to its source fragment, including any source-reported leading `X`.
+
 ```python
 from pyensembl import cached_release
 from orfdata import load_catalog

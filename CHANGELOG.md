@@ -1,5 +1,22 @@
 # Change Log
 
+## v10.21.0
+
+- Accept annotated and source-defined TranscriptORFs through the ordinary
+  `extra_orfs` API without requiring catalogue records. Preserve source/host
+  identities, distinct starts and placements, native evidence and offline
+  effect/proteome graphs (#638; orfdata#61).
+- Calculate local small-variant products for incomplete ORFs with a validated
+  reading frame. Preserve exact fragment extent and unavailable start/stop/full
+  product calculations. Unknown frames, partial-codon edits and unsupported
+  recoding, circular, splice, structural or germline cases retain the reference
+  and an explicit unavailable result (orfdata#64).
+- Record the actual Varcode producer method/version for low-level ORF
+  annotations before export (#639). Annotated CDS products remain reference CDSs
+  even when carried on another gene's transcript.
+- Require ORFdata 0.39.0 in the optional ORF extras. Add native Ensembl/UniProt
+  cases for partial CDSs, non-AUG/multiple starts and bicistronic placements.
+
 ## v10.20.2
 
 - Compare source ORF contigs using PyEnsembl's normalization, so yeast `Mito`

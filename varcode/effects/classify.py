@@ -56,7 +56,11 @@ def classify_from_protein_diff(
         length_delta=0,
         mutant_transcript=None,
         frame_change_aa_offset=None,
-        baseline_transcript=None):
+        baseline_transcript=None,
+        start_complete=True,
+        stop_complete=True,
+        coding_start=None,
+        stop_observed=None):
     """Classify a :class:`MutationEffect` by diffing translated
     proteins.
 
@@ -90,6 +94,17 @@ def classify_from_protein_diff(
         Patient baseline, when the comparison includes cis germline edits.
         Keeps start-loss reference codons and offsets in that baseline.
 
+    start_complete, stop_complete : bool
+        Whether the reference establishes these boundaries. A coding fragment
+        cannot imply start loss from a changed leading methionine or stop loss
+        from a longer translated window.
+    coding_start : int or None
+        Explicit codon origin for a partial coding product; may precede zero
+        when the source protein retains a leading unknown partial residue.
+    stop_observed : bool or None
+        Whether translation found a stop within the supplied coding interval.
+        None preserves the established complete-transcript inference.
+
     Returns
     -------
     MutationEffect subclass instance
@@ -102,7 +117,7 @@ def classify_from_protein_diff(
             aa_ref=ref_protein[:1] if ref_protein else "")
 
     # Start loss: mutant protein doesn't begin with M.
-    if not mut_protein or (mut_protein[0] != "M" and ref_protein and ref_protein[0] == "M"):
+    if start_complete and (not mut_protein or (mut_protein[0] != "M" and ref_protein and ref_protein[0] == "M")):
         reference = {}
         if baseline_transcript is not None:
             from .start_loss import start_loss_details
@@ -131,7 +146,7 @@ def classify_from_protein_diff(
         fs_offset = len(fs_prefix)
         # Guard: if the mutation offset is past the end of the reference protein, the
         # edit is in the stop-codon / 3'UTR region. That's a StopLoss, not a FrameShift.
-        if (fs_offset if frame_change_aa_offset is None else frame_change_aa_offset) >= len(ref_protein):
+        if stop_complete and (fs_offset if frame_change_aa_offset is None else frame_change_aa_offset) >= len(ref_protein):
             return StopLoss(
                 variant=variant,
                 transcript=transcript,
@@ -163,10 +178,10 @@ def classify_from_protein_diff(
     # Deletion here. See #394. (When mutant_transcript is unavailable —
     # e.g. the splice-outcome builder — we can't tell, so fall back to
     # the historical PrematureStop classification.)
-    mutant_translation_ran_off_end = False
-    if (mutant_transcript is not None
+    mutant_translation_ran_off_end = stop_observed is False
+    if (stop_observed is None and mutant_transcript is not None
             and mutant_transcript.cdna_sequence is not None):
-        cds_start = min(transcript.start_codon_spliced_offsets)
+        cds_start = min(transcript.start_codon_spliced_offsets) if coding_start is None else coding_start
         n_mutant_codons = (
             len(mutant_transcript.cdna_sequence) - cds_start) // 3
         # translate() stops *before* the stop codon, so a protein that
@@ -192,7 +207,7 @@ def classify_from_protein_diff(
         # preserved by the fast annotator).
         if mutant_transcript is not None and len(mutant_transcript.edits) == 1:
             edit = mutant_transcript.edits[0]
-            cds_start = min(transcript.start_codon_spliced_offsets)
+            cds_start = min(transcript.start_codon_spliced_offsets) if coding_start is None else coding_start
             if edit.is_insertion and edit.cdna_start >= cds_start:
                 if (edit.cdna_start - cds_start) % 3 == 0:
                     aa_ref = ""
@@ -220,7 +235,7 @@ def classify_from_protein_diff(
         mutant_transcript is not None
         and len(mutant_transcript.edits) == 1
         and mutant_transcript.edits[0].is_insertion)
-    if (len(mut_protein) > len(ref_protein)
+    if (stop_complete and len(mut_protein) > len(ref_protein)
             and aa_offset + n_ref >= len(ref_protein)
             and (n_ref > 0 or not is_cdna_pure_insertion)):
         return StopLoss(
