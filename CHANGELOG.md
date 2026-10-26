@@ -1,5 +1,12 @@
 # Change Log
 
+## v10.20.2
+
+- Compare source ORF contigs using PyEnsembl's normalization, so yeast `Mito`
+  records accept normalized `MITO` variants and RNA origins. Preserve source
+  spelling, explicit genetic codes and reference evidence while rejecting
+  genuinely different contigs (#636, orfdata#57).
+
 ## v10.20.1
 
 - Preserve transcript-oriented reference/alternate codons, cDNA coordinates,

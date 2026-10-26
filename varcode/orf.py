@@ -31,7 +31,8 @@ def load_orf_catalog(*args, **kwargs):
 
 
 def _contig(value):
-    value = str(value).removeprefix("chr")
+    from pyensembl.locus import normalize_chromosome
+    value = normalize_chromosome(str(value).removeprefix("chr"))
     return "MT" if value == "M" else value
 
 
