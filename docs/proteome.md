@@ -60,6 +60,13 @@ hypotheses, affected intervals, coordinate conventions, and candidate context.
 Each comparison also retains its native mechanism and transcript-model evidence,
 so cryptic splice positions and equal-sequence fusion models keep separate links
 to their outcomes. Comparison identities do not depend on sibling order.
+Standalone alternatives retain their mechanism coordinates and model evidence
+in event identity too. Known germline phase and nearby variants remain attached
+even when annotation returns only one hypothesis. Fusion transcript aliases use
+the transcript ID and source reference, keeping native JSON round trips stable.
+Varcode 10.19.1 corrects source keys for these affected predictions. Earlier
+snapshots remain readable; regenerate affected exports before combining them
+with results exported by the corrected adapter.
 Baseline proteins need not be members of the search collection. Native graphs
 retain reference models, edits, ordered fusion segments and evidence.
 

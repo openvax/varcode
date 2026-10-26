@@ -31,6 +31,10 @@ class MutationEffect(Serializable):
     Base class for mutation effects.
     """
 
+    _effect_graph_fields = (
+        "realized_candidates", "germline_phase_state",
+        "germline_variants_in_window", "germline_unknown")
+
     def __init__(self, variant):
         self.variant = variant
 
@@ -38,7 +42,7 @@ class MutationEffect(Serializable):
         if self.orf is not None or self.orf_annotation is not None:
             from .structural_serialization import structural_effect_to_dict
             return structural_effect_to_dict(self, schema="orf_effect_schema")
-        if "realized_candidates" in self.__dict__:
+        if any(name in self.__dict__ for name in self._effect_graph_fields):
             from .structural_serialization import structural_effect_to_dict
             return structural_effect_to_dict(self, schema="effect_graph_schema")
         if getattr(self.variant, "is_structural", False):
@@ -69,7 +73,7 @@ class MutationEffect(Serializable):
         return super().from_dict(state_dict)
 
     def __hash__(self):
-        if getattr(self.variant, "is_structural", False) or "realized_candidates" in self.__dict__:
+        if getattr(self.variant, "is_structural", False) or any(name in self.__dict__ for name in self._effect_graph_fields):
             # Evidence contains dictionaries and candidates can point back
             # to this effect. Equal effects have equal identity fields.
             return hash((type(self), self.variant, self.transcript))

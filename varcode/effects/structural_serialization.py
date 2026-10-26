@@ -30,6 +30,7 @@ _ATTACHED_FIELDS = (
     "candidates", "realized_candidates", "most_likely_candidate",
     "highest_priority_candidate", "hypotheses", "mechanism_rank",
     "probability", "splice_signal", "germline_unknown",
+    "germline_phase_state", "germline_variants_in_window",
     "orf_annotation",
 )
 
