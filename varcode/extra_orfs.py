@@ -101,7 +101,7 @@ class ExtraORFInput:
             reference.context.validate_genome(reference.transcript.genome)
 
     def effects(self, variant, *, raise_on_error=True, germline=None,
-                phase_resolver=None, rna_resolver=None):
+                phase_resolver=None, rna_resolver=None, transcript_filter=None):
         self.validate(variant.genome)
         if self._index is None:
             if self.catalog is not None:
@@ -120,8 +120,11 @@ class ExtraORFInput:
             try:
                 if reason is not None:
                     raise ValueError("Extra ORF %s: %s" % (record.orf_id, reason))
+                transcript = (reference.transcript if reference is not None else
+                              variant.genome.transcript_by_id(record.transcript_id.split(".")[0]))
+                if transcript_filter is not None and not transcript_filter(transcript):
+                    continue
                 if reference is None:
-                    transcript = variant.genome.transcript_by_id(record.transcript_id.split(".")[0])
                     reference = _bind(record, transcript, variant.reference_name)
                 annotation = _annotate(
                     (variant,), reference, metadata=self.metadata,

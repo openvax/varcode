@@ -466,7 +466,7 @@ class Variant(Serializable):
     def effects(
             self, raise_on_error=True,
             annotator=None, phase_resolver=None, rna_resolver=None,
-            germline=None, extra_orfs=None):
+            germline=None, extra_orfs=None, transcript_filter=None):
         """Predict the variant's effects on overlapping transcripts.
 
         Splice-disrupting effects are always wrapped in a
@@ -547,6 +547,18 @@ class Variant(Serializable):
             Observed RNA requires ORF-specific base mapping through
             ``annotate_orf_rna_product``; incompatible RNA observations raise
             or become Failure effects according to ``raise_on_error``.
+
+        transcript_filter : callable or None
+            Select transcripts before annotation, for example
+            ``lambda t: t.biotype == "protein_coding"`` or
+            ``lambda t: t.id in selected_ids``. Omission keeps all overlapping
+            transcripts. The predicate receives the original reference
+            transcript, including for additional ORF placements. Selection
+            does not change coding-biotype or completeness rules. Genuine
+            transcript-free overlaps and unplaced ORF failures remain visible;
+            rejecting all overlapping transcripts can return an empty collection.
+            Predicate errors follow ``raise_on_error``. Use a deterministic
+            predicate: it may be called again for another variant or ORF.
         """
         from .extra_orfs import prepare_extra_orfs
         prepared = prepare_extra_orfs(extra_orfs)  # A bad value raises before any annotation.
@@ -556,6 +568,7 @@ class Variant(Serializable):
             annotator=annotator,
             germline=germline,
             phase_resolver=phase_resolver,
+            transcript_filter=transcript_filter,
         )
         if phase_resolver is not None:
             from .phasing import apply_phase_resolver_to_effects
@@ -566,7 +579,8 @@ class Variant(Serializable):
         if prepared is not None:
             additional = prepared.effects(
                 self, raise_on_error=raise_on_error, germline=germline,
-                phase_resolver=phase_resolver, rna_resolver=rna_resolver)
+                phase_resolver=phase_resolver, rna_resolver=rna_resolver,
+                transcript_filter=transcript_filter)
             effects = effects.clone_with_new_elements([*effects, *additional])
         return effects
 

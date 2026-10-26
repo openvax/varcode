@@ -1,5 +1,13 @@
 # Change Log
 
+## v10.20.0
+
+- Add `transcript_filter` to variant and collection annotation, including
+  additional ORF placements and phased joint effects. Select reference
+  transcripts by ID, biotype or caller criteria before prediction, while
+  preserving default consequences and genuine transcript-free overlaps
+  (#195). Selection does not broaden the ordinary coding-biotype policy.
+
 ## v10.19.1
 
 - Preserve mechanism coordinates, fusion roles and transcript-model evidence

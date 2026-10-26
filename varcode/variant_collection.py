@@ -122,7 +122,8 @@ class VariantCollection(Collection):
     def effects(
             self, raise_on_error=None,
             annotator=None, phase_resolver=None, rna_resolver=None,
-            germline=None, validate_reference=True, extra_orfs=None):
+            germline=None, validate_reference=True, extra_orfs=None,
+            transcript_filter=None):
         """
         Splice-disrupting effects are always wrapped in a
         :class:`varcode.splice_outcomes.SpliceOutcomeSet` carrying the
@@ -180,14 +181,23 @@ class VariantCollection(Collection):
             once per genome. A catalogue or an iterable of bound ORFs is
             consumed once for the collection. Known-cis variants also
             receive joint ORF consequences when a phase resolver is supplied.
+
+        transcript_filter : callable or None
+            Select reference transcripts before ordinary and additional ORF
+            annotation, as in :meth:`Variant.effects`. Joint haplotype effects
+            use only the selected placements. A non-callable value raises
+            even for an empty collection.
         """
         from datetime import datetime, timezone
 
         from .annotators.registry import resolve_annotator
+        from .effects.effect_prediction import _validate_transcript_filter
         from .phasing import (
             apply_phase_resolver_to_effects,
             build_haplotype_effects,
         )
+
+        _validate_transcript_filter(transcript_filter)
 
         # Pre-flight: cross-VCF build mismatch surfaces here as one
         # readable error rather than per-variant ReferenceMismatchError
@@ -211,7 +221,8 @@ class VariantCollection(Collection):
             else:
                 per_variant.extend(variant.effects(
                     raise_on_error=strict, annotator=annotator_instance,
-                    germline=germline, phase_resolver=phase_resolver))
+                    germline=germline, phase_resolver=phase_resolver,
+                    transcript_filter=transcript_filter))
         if phase_resolver is not None:
             apply_phase_resolver_to_effects(per_variant, phase_resolver)
             # Joint cis-variant effects sit alongside the per-variant
@@ -227,7 +238,8 @@ class VariantCollection(Collection):
         if prepared is not None:
             additional = [effect for variant in self if variant not in missing for effect in prepared.effects(
                 variant, raise_on_error=strict, germline=germline,
-                phase_resolver=phase_resolver, rna_resolver=rna_resolver)]
+                phase_resolver=phase_resolver, rna_resolver=rna_resolver,
+                transcript_filter=transcript_filter)]
             if phase_resolver is not None:
                 additional.extend(build_haplotype_effects(
                     self, additional, ORFPhaseResolver(phase_resolver),

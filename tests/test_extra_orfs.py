@@ -102,6 +102,78 @@ def test_collection_reuses_generator_for_every_variant(native):
     assert len(result.groupby_variant()) == 2
 
 
+@pytest.mark.parametrize("collection", [False, True])
+@pytest.mark.parametrize("input_kind", ["catalog", "bound", "iterable"])
+def test_transcript_selection_applies_to_original_orf_placements(native, collection, input_kind):
+    variant, reference, catalog = native
+    supplied = {"catalog": catalog, "bound": reference, "iterable": [reference]}[input_kind]
+    target = VariantCollection([variant]) if collection else variant
+    seen = []
+
+    def select(transcript):
+        seen.append((transcript.id, transcript.biotype))
+        assert ":orf:" not in transcript.id
+        return transcript.id == reference.transcript.id
+
+    result = target.effects(extra_orfs=supplied, transcript_filter=select)
+    assert len(result.orf_annotations) == 1
+    assert {e.transcript_id for e in result if e.transcript} == {reference.transcript.id}
+    assert (reference.transcript.id, reference.transcript.biotype) in seen
+    assert not target.effects(extra_orfs=supplied, transcript_filter=lambda t: False).orf_annotations
+
+
+def test_filtered_orf_skips_binding_and_protein_prediction(native):
+    variant, reference, catalog = native
+    # Deliberately inconsistent protein: binding would fail if it ran.
+    invalid = replace(reference.record, protein_sequence="A" * len(reference.record.protein_sequence),
+                      peptides=())
+    supplied = orfdata.ORFCatalog([invalid], catalog.metadata)
+    with pytest.raises(ValueError):
+        variant.effects(extra_orfs=supplied)
+    assert not variant.effects(extra_orfs=supplied, transcript_filter=lambda t: False).orf_annotations
+
+
+def test_unplaced_orf_failure_remains_visible_with_transcript_selection(native):
+    variant, reference, catalog = native
+    missing = replace(reference.record, transcript_id="ENST00000000000", initiation_context=None)
+    supplied = orfdata.ORFCatalog([missing], catalog.metadata)
+    result = variant.effects(extra_orfs=supplied, transcript_filter=lambda t: False,
+                             raise_on_error=False)
+    annotation, = result.orf_annotations
+    assert annotation.reference is None and annotation.unresolved_reason
+    assert isinstance(result[-1], Failure)
+
+
+def test_orf_filter_error_obeys_error_policy(native):
+    variant, reference, _ = native
+    from varcode.extra_orfs import prepare_extra_orfs
+
+    def select(transcript):
+        raise ValueError("selection failed")
+
+    prepared = prepare_extra_orfs(reference)
+    with pytest.raises(ValueError, match="selection failed"):
+        prepared.effects(variant, transcript_filter=select)
+    failure, = prepared.effects(variant, transcript_filter=select, raise_on_error=False)
+    assert isinstance(failure, Failure)
+    assert failure.orf_annotation.reference is reference
+    assert failure.orf_annotation.unresolved_reason == "selection failed"
+
+
+def test_orf_haplotype_does_not_reintroduce_filtered_transcripts(native):
+    variant, reference, _ = native
+    partner = Variant("7", 66205487, "C", "T", genome=variant.genome)
+    variants = VariantCollection([variant, partner])
+    resolver = SimpleNamespace(in_cis=lambda *args, **kwargs: True)
+    keep = lambda t: t.id == reference.transcript.id
+    result = variants.effects(extra_orfs=[reference], phase_resolver=resolver,
+                               transcript_filter=keep)
+    assert len(result.orf_annotations) == 3
+    assert any(len(a.variants) == 2 for a in result.orf_annotations)
+    assert not variants.effects(extra_orfs=[reference], phase_resolver=resolver,
+                                transcript_filter=lambda t: False)
+
+
 def test_same_identifier_in_different_sources_keeps_distinct_cis_groups():
     transcript = synthetic()
     original = transcript.record()
