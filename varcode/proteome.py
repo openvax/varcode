@@ -81,7 +81,9 @@ def _variants(effect, annotation=None):
 
 def _model(effect, annotation=None):
     bound = getattr(effect, "orf", None)
-    return annotation.record if annotation is not None else None if bound is None else bound.record
+    if annotation is not None:
+        return annotation.record or annotation.reference
+    return None if bound is None else bound.record or bound
 
 
 def _genes(effect, transcripts=()):
@@ -362,8 +364,10 @@ class _Export:
         hypothesis = getattr(outcome, "hypothesis", None)
         record_model = _model(effect, annotation)
         genes = _genes(effect, transcripts)
-        gene_ids = _ids([gene.id for gene in genes] + [getattr(record_model, "gene_id", None)])
-        gene_names = _ids([gene.name for gene in genes] + [getattr(record_model, "gene_name", None)])
+        gene_ids = _ids([gene.id for gene in genes] + [getattr(record_model, "gene_id", None),
+                                                     getattr(record_model, "source_gene_id", None)])
+        gene_names = _ids([gene.name for gene in genes] + [getattr(record_model, "gene_name", None),
+                                                         getattr(record_model, "source_gene_name", None)])
         payload = dict(
             effect_type=type(effect).__name__, effect_description=effect.short_description,
             native=_archive(effect, comparison=True),
@@ -390,7 +394,8 @@ class _Export:
         sequence = mutant_data["protein_sequence"]
         if not sequence:
             return status
-        origin = ("nc_orf" if record_model is not None else "reference_cds" if any(
+        origin = ("reference_cds" if getattr(record_model, "kind", None) == "annotated" else
+                  "nc_orf" if record_model is not None else "reference_cds" if any(
             getattr(t, "is_protein_coding", False) for t in transcripts) else "unknown")
         producer = ProducerInfo(
             origin=origin, native_id=native_id, **_source(effect, self.defaults, contexts, annotation),
@@ -398,7 +403,7 @@ class _Export:
             gene_ids=gene_ids, gene_names=gene_names,
             transcript_ids=_ids([t.id for t in transcripts] + [getattr(record_model, "transcript_id", None)]),
             orf_ids=() if record_model is None else (record_model.orf_id,),
-            orf_kind=getattr(record_model, "biotype", None), reference=reference,
+            orf_kind=getattr(record_model, "orf_type", getattr(record_model, "biotype", None)), reference=reference,
             start_complete=mutant_data["start_complete"], stop_complete=mutant_data["stop_complete"])
         protein = ProteinSequence.from_producer(sequence, taxon_id=taxon, producer=producer)
         self.proteins.append(protein)

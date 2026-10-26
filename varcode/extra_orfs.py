@@ -15,6 +15,8 @@ def _span(record):
     positions = [p for block in record.coding_blocks for p in block]
     if record.initiation_context is not None:
         positions.extend(record.initiation_context.genomic_positions)
+    if not positions or record.contig is None:
+        return None
     return _contig(record.contig), min(positions) - 6, max(positions) + 6
 
 
@@ -28,8 +30,13 @@ class _SpanIndex:
 
     def __init__(self, entries):
         by_contig = {}
+        self._unmapped = []
         for order, entry in enumerate(entries):
-            contig, start, end = _span(entry[0])
+            span = _span(entry[1] if entry[1] is not None else entry[0])
+            if span is None:
+                self._unmapped.append(entry)
+                continue
+            contig, start, end = span
             by_contig.setdefault(contig, []).append((start, end, order, entry))
         self._contigs = {}
         for contig, items in by_contig.items():
@@ -39,10 +46,10 @@ class _SpanIndex:
     def overlapping(self, variant):
         found = self._contigs.get(_contig(variant.contig))
         if found is None:
-            return []
+            return list(self._unmapped)
         starts, widest, items = found
         window = items[bisect_left(starts, variant.start - widest):bisect_right(starts, variant.end)]
-        return [item[3] for item in sorted(
+        return self._unmapped + [item[3] for item in sorted(
             (item for item in window if item[1] >= variant.start), key=lambda item: item[2])]
 
 
@@ -51,6 +58,9 @@ class ExtraORFInput:
 
     def __init__(self, value, *, metadata=None, report_excluded=True):
         from orfdata import ORFCatalog, ReferenceORF
+
+        if not hasattr(ReferenceORF, "coding_positions"):
+            raise ImportError("extra_orfs needs orfdata>=0.39.0: pip install 'varcode[orf]'")
 
         self.catalog = value if isinstance(value, ORFCatalog) else None
         self.context = getattr(value, "reference", None) if self.catalog is None else None
@@ -64,8 +74,6 @@ class ExtraORFInput:
         self.references = (value,) if isinstance(value, ReferenceORF) else tuple(value)
         if any(not isinstance(ref, ReferenceORF) for ref in self.references):
             raise TypeError("extra_orfs requires an ORFdata catalogue or bound reference ORFs")
-        if any(ref.record is None for ref in self.references):
-            raise NotImplementedError("Annotation-derived ORFs require source coding models")
         catalog = getattr(value, "catalog", None)
         if catalog is not None:
             self.metadata = catalog.metadata if metadata is None else metadata
@@ -98,7 +106,8 @@ class ExtraORFInput:
             self.context.validate_genome(genome)
         for reference in self.references:
             reference.context.validate_genome(genome)
-            reference.context.validate_genome(reference.transcript.genome)
+            if reference.transcript.genome is not None:
+                reference.context.validate_genome(reference.transcript.genome)
 
     def effects(self, variant, *, raise_on_error=True, germline=None,
                 phase_resolver=None, rna_resolver=None, transcript_filter=None):
@@ -180,7 +189,7 @@ class GenomeExtraORFs:
         try:
             from orfdata import extra_orfs
         except ImportError as error:
-            raise ImportError("extra_orfs needs orfdata>=0.34.0: pip install 'varcode[orf]'") from error
+            raise ImportError("extra_orfs needs orfdata>=0.39.0: pip install 'varcode[orf]'") from error
         try:
             placed = extra_orfs(genome, self.evidence)
         except ValueError as error:
@@ -234,7 +243,7 @@ def _resolver(evidence):
     try:
         from orfdata.evidence import evidence_rule
     except ImportError as error:
-        raise ImportError("extra_orfs needs orfdata>=0.34.0: pip install 'varcode[orf]'") from error
+        raise ImportError("extra_orfs needs orfdata>=0.39.0: pip install 'varcode[orf]'") from error
     evidence = evidence_rule(evidence)  # "ms" and MS() share placements; an unknown name raises here.
     key = None if evidence is None else json.dumps(evidence.to_dict(), sort_keys=True)
     if key not in _RESOLVERS:
@@ -316,7 +325,7 @@ def _annotate(variants, reference, *, metadata=None, germline=None,
     germline_variants = () if not germline else germline.variants_in_window(
         transcript.contig, transcript.start, transcript.end)
     annotation = _annotate_orf_variants(
-        variants, reference.record, transcript, genome_build=reference.model.genome_build,
+        variants, reference.record, transcript, genome_build=reference.context.genome_build,
         reference=reference, metadata=metadata, germline_variants=germline_variants,
         homozygous_germline=() if not germline else germline.homozygous(germline_variants),
         max_hypotheses=64 if not germline else germline.max_phase_hypotheses,

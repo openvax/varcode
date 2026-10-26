@@ -82,6 +82,9 @@ class _ReferenceTranscript(Serializable):
 
     @classmethod
     def capture(cls, transcript):
+        from orfdata import SourceRNA
+        if isinstance(transcript, SourceRNA):
+            return transcript
         names = (
             "id", "name", "transcript_id", "transcript_name", "version", "versioned_id",
             "contig", "strand", "start", "end", "biotype", "topology", "sequence",
@@ -118,7 +121,7 @@ class _ReferenceTranscript(Serializable):
 
 
 def orf_graph_types():
-    from orfdata import catalog, evidence_summary, initiation_context, model, reference
+    from orfdata import catalog, evidence_summary, initiation_context, model, reference, rna
     from orfdata import liftover
     from .orf import ORFAnnotation, ORFOutcome, ORFProduct
     from .mutant_transcript import MutantTranscript, ReferenceSegment, TranscriptEdit, _AssembledAllele
@@ -126,10 +129,10 @@ def orf_graph_types():
     # Public data records only; never serialize a catalogue, provider or cache.
     names = {
         "ORFRecord", "UORFRecord", "PeptideEvidence", "ORFEvidence", "ORFModel",
-        "ReferenceContext", "ScopedTarget", "InitiationContext", "EvidenceSummary", "Liftover",
+        "ReferenceContext", "ScopedTarget", "InitiationContext", "EvidenceSummary", "Liftover", "SourceRNA",
     }
     records = {getattr(module, name) for module in (
-        catalog, evidence_summary, initiation_context, model, reference, liftover)
+        catalog, evidence_summary, initiation_context, model, reference, liftover, rna)
         for name in names if hasattr(module, name)}
     return tuple(records) + (ORFAnnotation, ORFOutcome, ORFProduct,
                             MutantTranscript, ReferenceSegment, TranscriptEdit, _AssembledAllele)

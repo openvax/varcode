@@ -358,7 +358,7 @@ def test_reference_peptide_retention_preserves_all_duplicated_copies():
     native = _model_positions(record)
     # Duplicate the native KP codons in-frame; both copies retain their ancestry.
     origins = native[:9] + native[3:9] + native[9:]
-    overlay = _peptide_overlay(record, "MKPKPG", origins, 0)
+    overlay = _peptide_overlay(record.bind(t), "MKPKPG", origins, 0)
     observation, = overlay["peptide_observations"]
     assert observation["retained_mutant_intervals"] == [(2, 3), (4, 5)]
     assert overlay["mutant_translation_evidence"] == "not_assessed"

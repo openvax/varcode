@@ -367,7 +367,7 @@ class TranscriptMutationEffect(Intragenic):
         return result
 
     def __str__(self):
-        orf_label = "" if self.orf is None else ", orf_id=%s" % self.orf.model.orf_id
+        orf_label = "" if self.orf is None else ", orf_id=%s" % self.orf.orf_id
         return "%s(variant=%s, transcript_name=%s, transcript_id=%s%s)" % (
             self.__class__.__name__,
             self.variant,
@@ -1052,7 +1052,7 @@ class CodingMutation(Exonic):
             ("effect_description", self.short_description)
         ]
         if self.orf is not None:
-            fields.append(("orf_id", self.orf.model.orf_id))
+            fields.append(("orf_id", self.orf.orf_id))
         fields_str = ", ".join([
             "%s=%s" % (field_name, field_value)
             for (field_name, field_value)

@@ -83,9 +83,11 @@ def structural_effect_to_dict(root, *, schema="structural_effect_schema"):
                 indices[key] = len(nodes)
                 nodes.append(None)  # reserve before following self links
                 if orf and isinstance(value, ReferenceORF):
-                    state = dict(
-                        record=value.record, transcript=_ReferenceTranscript.capture(value.transcript),
-                        context=value.context, any_transcript=True)
+                    state = (dict(snapshot=value.to_dict(),
+                                  transcript=_ReferenceTranscript.capture(value.transcript))
+                             if value.record is None else dict(
+                                 record=value.record, transcript=_ReferenceTranscript.capture(value.transcript),
+                                 context=value.context, any_transcript=True))
                     nodes[indices[key]] = (type(value), encode(state), {})
                     return _EffectReference(indices[key])
                 if orf and isinstance(value, _ORFTranscript):
@@ -171,7 +173,13 @@ def structural_effect_from_dict(root_class, state, *, schema="structural_effect_
             if index not in started:
                 started.add(index)
                 cls, fields, attached = nodes[index]
-                cls.__init__(objects[index], **decode(fields))
+                values = decode(fields)
+                if schema == "orf_effect_schema" and cls is ReferenceORF and "snapshot" in values:
+                    restored = cls.from_dict(values["snapshot"], values["transcript"])
+                    for name, item in restored.__dict__.items():
+                        object.__setattr__(objects[index], name, item)
+                else:
+                    cls.__init__(objects[index], **values)
                 for name, item in decode(attached).items():
                     if name not in _ATTACHED_FIELDS:
                         raise ValueError("Unknown effect attachment: %s" % name)

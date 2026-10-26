@@ -50,11 +50,13 @@ def _model_positions(record):
 
 
 def _orf_key(reference):
-    model, transcript = reference.model, reference.transcript
+    transcript = reference.transcript
     return (reference.context.key, transcript.id,
-            getattr(transcript, "versioned_id", transcript.id), model.source,
-            model.orf_id, tuple(model.coding_blocks), model.translation_table,
-            model.protein_sequence, getattr(model, "start_codon", None))
+            getattr(transcript, "versioned_id", transcript.id), reference.source,
+            reference.orf_id, tuple(reference.coding_blocks), reference.translation_table,
+            reference.protein_sequence, reference.start_codon, reference.kind,
+            reference.start_complete, reference.stop_complete, reference.coding_origin,
+            reference.cdna_interval)
 
 
 class _ORFTranscript:
@@ -73,26 +75,44 @@ class _ORFTranscript:
         self.positions = reference.genomic_positions
         self.sequence = reference.transcript_sequence
         start, end = reference.cdna_interval
-        wanted = reference.model.genomic_positions
+        wanted = reference.coding_positions
         self.protein_sequence = reference.protein_sequence
-        self.start_codon_spliced_offsets = tuple(range(start, start + 3))
-        self.stop_codon_spliced_offsets = tuple(range(end - 3, end))
-        self.start_codon_positions = wanted[:3]
-        self.stop_codon_positions = wanted[-3:]
+        self.start_codon_spliced_offsets = tuple(range(start, start + 3)) if reference.start_complete else ()
+        self.stop_codon_spliced_offsets = tuple(range(end - 3, end)) if reference.stop_complete else ()
+        self.start_codon_positions = wanted[:3] if reference.start_complete else ()
+        self.stop_codon_positions = wanted[-3:] if reference.stop_complete else ()
         self.coding_sequence = reference.coding_sequence
-        self.coding_sequence_position_ranges = reference.model.coding_blocks
+        self.coding_sequence_position_ranges = reference.coding_blocks
         self.five_prime_utr_sequence = self.sequence[:start]
         self.three_prime_utr_sequence = self.sequence[end:]
         self.is_protein_coding = True
-        self.complete = True
-        self.translation_table = reference.model.translation_table
-        self.start_codon = getattr(reference.model, "start_codon", None)
+        self.complete = reference.start_complete is True and reference.stop_complete is True
+        self.contains_start_codon = reference.start_complete
+        self.contains_stop_codon = reference.stop_complete
+        self.translation_table = reference.translation_table
+        self.start_codon = reference.start_codon
         # Distinct coding models on one RNA must survive candidate deduplication.
         self.id = "%s:orf:%s" % (transcript.id, sha256(repr(_orf_key(reference)).encode()).hexdigest())
-        self.name = "%s:%s" % (transcript.id, reference.model.orf_id)
+        self.name = "%s:%s" % (transcript.id, reference.orf_id)
+        if transcript.genome is None:
+            from .orf_serialization import _Feature, _ReferenceGenome
+            context = reference.context
+            self.genome = _ReferenceGenome(dict(
+                reference_name=context.genome_build, species=context.species, taxon_id=context.taxon_id,
+                annotation_name=context.annotation_name, annotation_version=context.annotation_version,
+                assembly_accession=context.assembly_accession, strain=context.strain,
+                strain_taxon_id=context.strain_taxon_id))
+            self.exons = tuple(_Feature(a, b) for a, b in transcript.exons)
+            self.start = min(self.positions) if self.positions else 0
+            self.end = max(self.positions) if self.positions else 0
+            self.on_backward_strand = transcript.strand == "-"
+            self.on_forward_strand = transcript.strand == "+"
 
     def __getattr__(self, name):
         return getattr(object.__getattribute__(self, "reference_transcript"), name)
+
+    def spliced_offset(self, position):
+        return self.positions.index(position)
 
     def to_dict(self):
         raise ValueError("A private ORF coding view cannot serialize as its parent transcript; "
@@ -152,23 +172,26 @@ def _context(sequence, start):
     return annotate_initiation_context(sequence, start)
 
 
-def _peptide_overlay(record, protein, origins, start):
+def _peptide_overlay(reference, protein, origins, start):
     """Track native residues by codon ancestry, not coincidental peptide matches."""
-    native = _model_positions(record)
+    native = reference.coding_positions
     retained = []
     if protein is not None and start is not None:
-        by_codon = {tuple(native[i:i + 3]): i // 3 + 1
-                    for i in range(0, len(native) - 3, 3)}
+        origin = reference.coding_origin
+        by_codon = {} if origin is None else {
+            tuple(native[origin + 3 * i:origin + 3 * i + 3]): i + 1
+            for i in range(len(reference.protein_sequence))
+            if 0 <= origin + 3 * i and origin + 3 * i + 3 <= len(native)}
         for index, aa in enumerate(protein):
             codon = tuple(origins[start + index * 3:start + index * 3 + 3])
             ref = by_codon.get(codon)
-            if ref is not None and record.protein_sequence[ref - 1] == aa:
+            if ref is not None and reference.protein_sequence[ref - 1] == aa:
                 retained.append((ref, index + 1))
     mapping = {}
     for ref, alt in retained:
         mapping.setdefault(ref, []).append(alt)
     observations = []
-    for peptide in record.peptides:
+    for peptide in reference.evidence.peptides:
         intervals = []
         for a, b in peptide.protein_intervals:
             for start in mapping.get(a, ()):
@@ -180,10 +203,10 @@ def _peptide_overlay(record, protein, origins, start):
     return dict(retained_native_residues=retained, peptide_observations=observations,
                 reference_ms_support_on_retained_sequence=any(
                     o["reference_peptide_retained"] and p.is_supporting
-                    for o, p in zip(observations, record.peptides)),
+                    for o, p in zip(observations, reference.evidence.peptides)),
                 mutant_translation_evidence="not_assessed",
                 mutant_mhc_presentation_evidence="not_assessed",
-                mutant_hla_presentation_evidence="not_assessed" if record.taxon_id == 9606 else "not_applicable")
+                mutant_hla_presentation_evidence="not_assessed" if reference.context.taxon_id == 9606 else "not_applicable")
 
 
 def _product(view, product):
@@ -205,7 +228,7 @@ def _product(view, product):
                 stop_cdna_offset=stop, initiation_context=context,
                 junction_signature=product.junction_signature,
                 evidence=product.evidence,
-                reference_evidence=_peptide_overlay(view.record, protein, origins, start))
+                reference_evidence=_peptide_overlay(view.reference_orf, protein, origins, start))
 
 
 def _effect(effect):
@@ -286,7 +309,7 @@ class ORFAnnotation:
     with an explicit ``unresolved_reason``. ``to_dict()`` is for export only.
     """
 
-    record: "ORFRecord"
+    record: Optional["ORFRecord"]
     effect: Optional[MutationEffect]
     reference: Optional["ReferenceORF"] = None
     variants: tuple = ()
@@ -294,10 +317,11 @@ class ORFAnnotation:
     catalogue_metadata: Optional[Mapping] = None
     variant_locations: tuple = ()
     unresolved_reason: Optional[str] = None
+    unavailable_operations: Mapping = field(default_factory=dict)
 
     @property
     def orf_id(self):
-        return self.record.orf_id
+        return self.reference.orf_id if self.reference is not None else self.record.orf_id
 
     @property
     def data(self):
@@ -306,12 +330,14 @@ class ORFAnnotation:
 
     def to_dict(self):
         result = dict(
-            schema="varcode.orf_annotation.v1", model=self.record.to_dict(),
+            schema="varcode.orf_annotation.v1", model=None if self.record is None else self.record.to_dict(),
             catalogue_metadata=self.catalogue_metadata, variants=_plain(self.variants),
             effect=_effect(self.effect) if self.effect is not None else dict(
                 type="Unresolved", mechanism="uorf_model_unavailable", reason=self.unresolved_reason),
             outcomes=[outcome.to_dict() for outcome in self.outcomes],
             discovery=dict(status="reference_models_only", new_starts="not_assessed"))
+        if self.unavailable_operations:
+            result["unavailable_operations"] = dict(self.unavailable_operations)
         if self.reference is not None:
             transcript = self.reference.transcript
             result.update(
@@ -319,7 +345,7 @@ class ORFAnnotation:
                 resolved_transcript=dict(id=transcript.id,
                     version=getattr(transcript, "version", None),
                     release=getattr(transcript.genome, "release", None),
-                    genome_build=self.reference.model.genome_build),
+                    genome_build=self.reference.context.genome_build),
                 variant_locations=_plain(self.variant_locations),
                 downstream_cds_regulation="not_assessed")
         return _plain(result)
@@ -341,7 +367,8 @@ class ORFProductAnnotation:
     evidence: Mapping = field(default_factory=dict)
 
     def to_dict(self):
-        result = dict(schema="varcode.orf_product.v1", model=self.reference.record.to_dict(),
+        result = dict(schema="varcode.orf_product.v1", model=(None if self.reference.record is None
+                                                            else self.reference.record.to_dict()),
                       reference=self.reference.to_dict(), status=self.status)
         if self.product is None:
             result.update(reason=self.reason, cdna_sequence=self.cdna_sequence,
@@ -349,6 +376,155 @@ class ORFProductAnnotation:
         else:
             result.update(effect=_effect(self.effect), product=self.product.to_dict())
         return result
+
+
+def _finish_annotation(annotation):
+    from .version import __version__
+
+    for effect in (annotation.effect, *(outcome.effect for outcome in annotation.outcomes)):
+        if effect is not None:
+            effect.annotator = "transcript_model"
+            effect.annotator_version = __version__
+    if annotation.effect is not None:
+        annotation.effect.orf_annotation = annotation
+    return annotation
+
+
+def _boundary_operations(reference):
+    unavailable = {}
+    for boundary, operation in (("start", "start_loss"), ("stop", "stop_loss")):
+        state = getattr(reference, boundary + "_complete")
+        if state is not True:
+            unavailable[operation] = "reference_%s_%s" % (boundary, "unknown" if state is None else "incomplete")
+    if unavailable:
+        unavailable["complete_mutant_protein"] = "reference_coding_fragment"
+    return unavailable
+
+
+def _baseline_product(view):
+    reference = view.reference_orf
+    origin = reference.coding_origin
+    return ORFProduct(
+        cdna_sequence=view.sequence, protein_sequence=reference.protein_sequence,
+        start_codon_present=reference.start_complete,
+        termination=("observed_stop" if reference.stop_complete else
+                     "sequence_boundary" if reference.stop_complete is False else "unknown_boundary"),
+        stop_cdna_offset=reference.end - 3 if reference.stop_complete else None,
+        initiation_context=_context(view.sequence, reference.start if reference.start_complete else None),
+        evidence=dict(genomic_positions=view.positions, coding_interval=reference.cdna_interval,
+                      coding_phase=reference.coding_phase),
+        reference_evidence=_peptide_overlay(reference, reference.protein_sequence, view.positions,
+                                            None if origin is None else reference.start + origin))
+
+
+def _unavailable_annotation(view, variants, reason, metadata=None):
+    effect = Unresolved(variants[0], view, mechanism="orf_consequence_unavailable", reason=reason)
+    return _finish_annotation(ORFAnnotation(
+        record=view.record, reference=view.reference_orf, effect=effect, variants=variants,
+        catalogue_metadata=metadata, unresolved_reason=reason,
+        unavailable_operations={**_boundary_operations(view.reference_orf), "variant_consequence": reason},
+        variant_locations=_variant_locations(variants, view.reference_orf),
+        outcomes=(ORFOutcome(effect, _baseline_product(view), None, unresolved_reason=reason),)))
+
+
+def _unsupported_reference(view):
+    """Check the ordinary coding engine's assumptions against the actual source model."""
+    reference = view.reference_orf
+    if reference.wraps_junction:
+        return "circular_orf_consequence_unavailable"
+    if not reference.coding_positions:
+        return "orf_genomic_mapping_unavailable"
+    if reference.coding_origin is None:
+        return "orf_reading_frame_unknown"
+    if reference.subcodon_introns:
+        return "orf_programmed_frame_consequence_unavailable"
+    table = codon_table_for_transcript(view)
+    phase = reference.coding_phase
+    coding = reference.coding_sequence[phase:]
+    coding = coding[:len(coding) // 3 * 3]
+    if set(coding) - set("ACGT"):
+        return "orf_reference_codon_ambiguous"
+    translated = translate_sequence(coding, codon_table=table, to_stop=True)
+    if reference.start_complete and translated:
+        translated = "M" + translated[1:]
+    skip = 1 if reference.coding_origin < 0 else 0
+    if translated != reference.protein_sequence[skip:]:
+        return "orf_reference_translation_requires_recoding"
+    return None
+
+
+def _annotate_partial(view, variants, *, germline_variants=(), metadata=None):
+    """Calculate local products within known coding bounds, without inventing missing ends."""
+    from .mutant_transcript import _resolve_variant_edit
+
+    reference = view.reference_orf
+    if germline_variants:
+        return _unavailable_annotation(view, variants, "partial_orf_germline_phasing_unavailable", metadata)
+    first = reference.start + reference.coding_phase
+    end = reference.end - (reference.end - first) % 3
+    if reference.stop_complete:
+        end -= 3
+    edits = []
+    for variant in variants:
+        if getattr(variant, "is_structural", False):
+            return _unavailable_annotation(view, variants, "partial_orf_structural_product_unavailable", metadata)
+        resolved = _resolve_variant_edit(variant, view, view.sequence)
+        if resolved is None:
+            return _unavailable_annotation(view, variants, "partial_orf_splice_edit_unavailable", metadata)
+        edit, _ = resolved
+        if not first <= edit.cdna_start < end or not edit.cdna_start <= edit.cdna_end <= end:
+            return _unavailable_annotation(view, variants, "partial_orf_boundary_or_partial_codon_edit", metadata)
+        edits.append(edit)
+    edits.sort(key=lambda e: e.cdna_start)
+    if any(a.cdna_end > b.cdna_start or a.cdna_start == b.cdna_start for a, b in zip(edits, edits[1:])):
+        return _unavailable_annotation(view, variants, "overlapping_partial_orf_edits", metadata)
+    sequence, positions = view.sequence, list(view.positions)
+    delta = 0
+    for edit in reversed(edits):
+        a, b = edit.cdna_start, edit.cdna_end
+        sequence = sequence[:a] + edit.alt_bases + sequence[b:]
+        if len(edit.alt_bases) != b - a:
+            positions[a:b] = [None] * len(edit.alt_bases)
+        delta += len(edit.alt_bases) - (b - a)
+    bound_end = reference.end + delta
+    table = codon_table_for_transcript(view)
+    coding = sequence[first:bound_end]
+    coding = coding[:len(coding) // 3 * 3]
+    if set(coding) - set("ACGT"):
+        return _unavailable_annotation(view, variants, "partial_orf_mutant_codon_ambiguous", metadata)
+    protein = translate_sequence(coding, codon_table=table, to_stop=True)
+    start_present = reference.start_complete
+    if reference.start_complete:
+        start_present = coding[:3] in table.start_codons
+        protein = ("M" + protein[1:]) if start_present and protein else ""
+    skip = 1 if reference.coding_origin < 0 else 0
+    protein = reference.protein_sequence[:skip] + protein
+    stop = next((first + i for i in range(0, len(coding), 3) if coding[i:i + 3] in table.stop_codons), None)
+    mt = MutantTranscript(view, edits=tuple(edits), cdna_sequence=sequence,
+                          mutant_protein_sequence=protein, annotator_name="transcript_model",
+                          evidence=dict(coding_interval=(reference.start, bound_end),
+                                        coding_phase=reference.coding_phase, product_extent="coding_fragment"))
+    effect = classify_from_protein_diff(
+        variants[0], view, reference.protein_sequence, protein, length_delta=delta, mutant_transcript=mt,
+        frame_change_aa_offset=max(0, (edits[0].cdna_start - reference.start - reference.coding_origin) // 3),
+        start_complete=reference.start_complete is True,
+        stop_complete=reference.stop_complete is True,
+        coding_start=reference.start + reference.coding_origin, stop_observed=stop is not None)
+    baseline = _baseline_product(view)
+    product = ORFProduct(
+        cdna_sequence=sequence, protein_sequence=protein, start_codon_present=start_present,
+        termination=("observed_stop" if stop is not None else "sequence_boundary"
+                     if reference.stop_complete is not None else "unknown_boundary"),
+        stop_cdna_offset=stop, initiation_context=_context(sequence, reference.start if start_present else None),
+        evidence=dict(genomic_positions=tuple(positions), coding_interval=(reference.start, bound_end),
+                      coding_phase=reference.coding_phase, product_extent="coding_fragment"),
+        reference_evidence=_peptide_overlay(reference, protein, positions,
+                                            reference.start + reference.coding_origin))
+    return _finish_annotation(ORFAnnotation(
+        record=reference.record, reference=reference, effect=effect, variants=variants,
+        outcomes=(ORFOutcome(effect, baseline, product),), catalogue_metadata=metadata,
+        variant_locations=_variant_locations(variants, reference),
+        unavailable_operations=_boundary_operations(reference)))
 
 
 def _annotate_orf_variants(variants, record, transcript, *, genome_build,
@@ -373,9 +549,11 @@ def _annotate_orf_variants(variants, record, transcript, *, genome_build,
     for variant in (*variants, *germline_variants):
         if variant.reference_name != genome_build:
             raise ValueError("Variant assembly mismatch")
-        if _contig(variant.contig) != _contig(record.contig):
+        if view.contig is not None and _contig(variant.contig) != _contig(view.contig):
             raise ValueError("Variant contig mismatch")
         view.reference_orf.context.validate_genome(variant.genome, include_annotation=False)
+    if not view.positions:
+        return _unavailable_annotation(view, variants, "orf_genomic_mapping_unavailable", metadata)
     if sequence_provider is None:
         from .transcript_model import _provider_for_genome
         sequence_provider = _provider_for_genome(variants[0].genome)
@@ -397,6 +575,11 @@ def _annotate_orf_variants(variants, record, transcript, *, genome_build,
                         expected_ref=expected, observed_ref=observed,
                         genome_start=variant.original_start,
                         genome_end=variant.original_start + len(variant.original_ref) - 1)
+        reason = _unsupported_reference(view)
+        if reason is not None:
+            return _unavailable_annotation(view, variants, reason, metadata)
+        if not view.complete:
+            return _annotate_partial(view, variants, germline_variants=germline_variants, metadata=metadata)
         effect = predict_transcript_model_effect(
             variants, view, germline_variants=germline_variants,
             phase_resolver=phase_resolver,
@@ -405,28 +588,7 @@ def _annotate_orf_variants(variants, record, transcript, *, genome_build,
     except (SequenceUnavailable, UnsupportedLayoutEdit) as error:
         effect = Unresolved(variants[0], view, mechanism="uorf_sequence_unavailable", reason=str(error))
     outcomes = []
-    variant_locations = []
-    for variant in variants:
-        context_snvs = []
-        context = record.initiation_context
-        positions = set(_model_positions(record))
-        if context is not None:
-            positions.update(context.genomic_positions)
-        locations = []
-        for position in sorted(p for p in positions if variant.start <= p <= variant.end):
-            coding = record.map_genomic_position(position, genome_build=genome_build)
-            initiation = record.map_initiation_position(position, genome_build=genome_build)
-            locations.append(dict(position=position, coding=coding, initiation=initiation))
-            if initiation and len(variant.ref) == len(variant.alt) == 1 and variant.ref != variant.alt:
-                if initiation["genomic_ref"] == variant.ref:
-                    context_snvs.append(record.annotate_initiation_snv(
-                        position, variant.ref, variant.alt, genome_build=genome_build))
-                else:
-                    context_snvs.append(dict(position=position,
-                        status="source_context_differs_from_resolved_transcript"))
-        variant_locations.append(dict(variant=variant, locations=locations,
-            initiation_snvs=context_snvs,
-            insertion_after_position=variant.start if getattr(variant, "is_insertion", False) else None))
+    variant_locations = _variant_locations(variants, view.reference_orf)
     for candidate in getattr(effect, "realized_candidates", ()):
         for outcome in candidate.outcomes:
             outcomes.append(ORFOutcome(
@@ -470,10 +632,38 @@ def _annotate_orf_variants(variants, record, transcript, *, genome_build,
                 baseline=_product(view, baseline), mutant=observed.product,
                 source=getattr(candidate, "source", None),
                 unresolved_reason=observed.reason))
-    return ORFAnnotation(
+    return _finish_annotation(ORFAnnotation(
         record=record, effect=effect, reference=view.reference_orf,
         variants=variants, outcomes=tuple(outcomes), catalogue_metadata=metadata,
-        variant_locations=tuple(variant_locations))
+        variant_locations=tuple(variant_locations)))
+
+
+def _variant_locations(variants, reference):
+    variant_locations = []
+    record = reference.record or reference
+    genome_build = reference.context.genome_build
+    for variant in variants:
+        context_snvs = []
+        context = record.initiation_context
+        positions = set(_model_positions(record))
+        if context is not None:
+            positions.update(context.genomic_positions)
+        locations = []
+        for position in sorted(p for p in positions if variant.start <= p <= variant.end):
+            coding = record.map_genomic_position(position, genome_build=genome_build)
+            initiation = record.map_initiation_position(position, genome_build=genome_build)
+            locations.append(dict(position=position, coding=coding, initiation=initiation))
+            if initiation and len(variant.ref) == len(variant.alt) == 1 and variant.ref != variant.alt:
+                if initiation["genomic_ref"] == variant.ref:
+                    context_snvs.append(record.annotate_initiation_snv(
+                        position, variant.ref, variant.alt, genome_build=genome_build))
+                else:
+                    context_snvs.append(dict(position=position,
+                        status="source_context_differs_from_resolved_transcript"))
+        variant_locations.append(dict(variant=variant, locations=locations,
+            initiation_snvs=context_snvs,
+            insertion_after_position=variant.start if getattr(variant, "is_insertion", False) else None))
+    return tuple(variant_locations)
 
 
 def predict_orf_effects(variants, *, catalog=None, transcripts=None, **kwargs):
@@ -546,7 +736,7 @@ def annotate_orf_rna_product(reference, product):
     and carry a ``reason``. Use ``to_dict()`` for JSON export.
     """
     view = _ORFTranscript(reference)
-    record = reference.record
+    record = reference
     product_genome = getattr(product.transcript, "genome", None)
     if product_genome is None:
         raise ValueError("RNA product reference Genome is required")
@@ -558,6 +748,10 @@ def annotate_orf_rna_product(reference, product):
     origins = product.evidence.get("base_origins", ())
     if sequence is None or len(sequence) != len(origins):
         raise ValueError("A sequence and one base origin per nucleotide are required")
+    reason = _unsupported_reference(view) or (None if view.complete else "partial_orf_rna_product_unavailable")
+    if reason is not None:
+        return ORFProductAnnotation(reference=reference, status="unresolved", reason=reason,
+                                    cdna_sequence=sequence, evidence=product.evidence)
     positions = tuple(o[1] if o is not None and _contig(o[0]) == _contig(record.contig)
                       and o[2] == record.strand else None for o in origins)
     starts = [i for i in range(len(positions) - 2)
@@ -605,11 +799,11 @@ def annotate_orf_product(reference, product):
 def annotate_orf_variants(variants, reference, **kwargs):
     """Annotate variants relative to a validated ``orfdata.ReferenceORF``.
 
-    ``reference.model`` and ``reference.evidence`` describe the base ORF;
-    the returned annotation retains that same reference and all alternative
+    The reference's coding fields and ``reference.evidence`` describe the base
+    ORF; catalogue ``record``/``model`` are optional. The returned annotation retains that reference and all alternative
     modified products. The parent RNA can be annotated protein-coding or
     noncoding. Native peptide detection never establishes mutant translation.
     """
     return _annotate_orf_variants(variants, reference.record, reference.transcript,
-                                  genome_build=reference.model.genome_build,
+                                  genome_build=reference.context.genome_build,
                                   reference=reference, **kwargs)
