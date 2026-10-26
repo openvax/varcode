@@ -991,6 +991,7 @@ def _classify_against_patient_baseline(
     would produce on its own.
     """
     from .effects.classify import classify_from_protein_diff
+    from .effects.codon_tables import codon_table_for_transcript, initiator_as_met
     from .mutant_transcript import apply_variants_to_transcript
 
     cis_germline = list(hypothesis.cis)
@@ -1012,9 +1013,14 @@ def _classify_against_patient_baseline(
         baseline_length_delta = baseline.total_length_delta
     else:
         # No cis germline → patient haplotype == reference at this
-        # locus. Use the reference protein directly.
+        # locus. Normalize annotated alternate initiators just as the
+        # mutant builder does for germline and joint haplotypes (#634).
         baseline_protein = str(transcript.protein_sequence) if (
             getattr(transcript, "protein_sequence", None)) else None
+        cds_start = min(transcript.start_codon_spliced_offsets)
+        baseline_protein = initiator_as_met(
+            baseline_protein, str(transcript.sequence)[cds_start:cds_start + 3],
+            codon_table_for_transcript(transcript))
         baseline_length_delta = 0
 
     # Post-somatic: cis germline + somatic on the same haplotype.

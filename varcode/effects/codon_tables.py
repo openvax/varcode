@@ -165,6 +165,18 @@ def codon_table_for_transcript(transcript):
     return table
 
 
+def initiator_as_met(protein, first_codon, codon_table):
+    """Read a retained, recognized initiation codon as Met.
+
+    NCBI's ``Starts`` assignment is distinct from internal codon decoding.
+    This changes only the first residue; callers establish that the codon
+    is at the retained CDS start, rather than a downstream candidate start.
+    """
+    if protein and first_codon.upper() in codon_table.start_codons:
+        return "M" + protein[1:]
+    return protein
+
+
 def translate_sequence(
         nucleotide_sequence,
         codon_table=STANDARD,
