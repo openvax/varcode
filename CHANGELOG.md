@@ -1,5 +1,18 @@
 # Change Log
 
+## v10.19.1
+
+- Preserve mechanism coordinates, fusion roles and transcript-model evidence
+  in proteome event identities so standalone alternatives do not collide.
+  Conflicting output sequences under the same source identity still raise
+  (#631).
+- Retain single-hypothesis germline phase state and nearby germline variants
+  in native serialization and proteome provenance, distinguishing known phase
+  evidence from absent context (#631).
+- Deduplicate fusion transcript aliases by reference-scoped transcript identity
+  so native JSON round trips keep event keys and protein accessions stable
+  (#631).
+
 ## v10.19.0
 
 - Require ORFdata 0.36 for stable source identities across exporters, unknown

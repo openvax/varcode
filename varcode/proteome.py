@@ -117,6 +117,10 @@ def _variant_identity(variant):
     return _json(state)
 
 
+def _transcript_identity(transcript):
+    return dict(id=transcript.id, genome=_ReferenceGenome.capture(transcript.genome).metadata)
+
+
 def _transcripts(effect, annotation=None):
     result = []
     if annotation is not None and annotation.reference is not None:
@@ -124,9 +128,56 @@ def _transcripts(effect, annotation=None):
     for name in ("reference_transcript", "partner_transcript",
                  "five_prime_transcript", "three_prime_transcript"):
         transcript = getattr(effect, name, None)
-        if transcript is not None and all(transcript is not t for t in result):
+        if transcript is not None and all(_transcript_identity(transcript) != _transcript_identity(t) for t in result):
             result.append(transcript)
     return result
+
+
+def _mechanism_context(effect):
+    """Source coordinates and model evidence, excluding predicted products."""
+    context = {name: getattr(effect, name) for name in (
+        "cryptic_genomic_position", "exon_length_delta", "in_frame",
+        "retained_intron_start", "retained_intron_end", "side",
+        "contig", "interval_start", "interval_end", "distance_to_exon")
+        if getattr(effect, name, None) is not None}
+
+    def feature_identity(feature):
+        return {name: getattr(feature, name, None) for name in ("id", "contig", "start", "end", "strand")}
+
+    for name in ("affected_exon", "nearest_exon", "exon"):
+        feature = getattr(effect, name, None)
+        if feature is not None:
+            context[name] = feature_identity(feature)
+    for name in ("affected_exons", "exons"):
+        features = getattr(effect, name, None)
+        if features is not None:
+            context[name] = [feature_identity(feature) for feature in features]
+    for name in ("five_prime_transcript", "three_prime_transcript"):
+        transcript = getattr(effect, name, None)
+        if transcript is not None:
+            context[name] = _transcript_identity(transcript)
+    model = getattr(effect, "mutant_transcript", None)
+    if model is not None:
+        context["transcript_model"] = dict(
+            annotator=model.annotator_name, evidence=_json(model.evidence),
+            reference=None if model.reference_transcript is None else _transcript_identity(model.reference_transcript),
+            edits=[dict(start=edit.cdna_start, end=edit.cdna_end,
+                        variant=None if edit.source_variant is None else _variant_identity(edit.source_variant))
+                   for edit in model.edits],
+            segments=None if model.reference_segments is None else [dict(
+                start=segment.start, end=segment.end, strand=segment.strand, label=segment.label,
+                source=dict(feature_identity(segment.source), genome=_ReferenceGenome.capture(
+                    getattr(segment.source, "genome", segment.source)).metadata)) for segment in model.reference_segments])
+    return context
+
+
+def _germline_context(effect):
+    context = {name: getattr(effect, name) for name in ("germline_phase_state", "germline_unknown")
+               if hasattr(effect, name)}
+    variants = getattr(effect, "germline_variants_in_window", None)
+    if variants is not None:
+        context["germline_variants_in_window"] = sorted((_variant_identity(v) for v in variants), key=_digest)
+    return context
 
 
 def _context(effect, annotation=None):
@@ -242,7 +293,7 @@ def _identity(value, defaults, contexts=()):
     identity = dict(
         type=type(value).__name__,
         variants=sorted((_variant_identity(v) for v in _variants(effect, annotation)), key=_digest),
-        transcripts=[dict(id=t.id, genome=_ReferenceGenome.capture(t.genome).metadata) for t in transcripts],
+        transcripts=[_transcript_identity(t) for t in transcripts],
         genes=[dict(id=gene.id, contig=getattr(gene, "contig", None),
                     start=getattr(gene, "start", None), end=getattr(gene, "end", None),
                     strand=getattr(gene, "strand", None),
@@ -253,6 +304,10 @@ def _identity(value, defaults, contexts=()):
             reference=None if model.reference_context is None else model.reference_context.key),
         source=_source(effect, defaults, contexts, annotation), contexts=contexts,
         mechanism=getattr(effect, "mechanism", None))
+    for name, context in (("mechanism_context", _mechanism_context(effect)),
+                          ("germline_context", _germline_context(effect))):
+        if context:
+            identity[name] = context
     if isinstance(value, (ClassifiedOutcome, ORFOutcome)):
         identity.update(hypothesis=None if value.hypothesis is None else _archive(value.hypothesis),
                         baseline=_product(value.baseline))

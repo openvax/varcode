@@ -17,8 +17,8 @@ from varcode.effect_hypotheses import (
     merge_classified_outcomes,
 )
 from varcode.effects import (
-    CrypticDonor, Deletion, Failure, GeneFusion, HypothesisLimit, Intergenic, Intragenic,
-    SpliceDonor, Substitution, Unresolved,
+    CrypticAcceptor, CrypticDonor, Deletion, Failure, GeneFusion, HypothesisLimit, Intergenic, Intragenic, IntronRetention,
+    SpliceAcceptor, SpliceDonor, Substitution, Unresolved,
 )
 from varcode.effects.effect_classes import PhaseCandidateSet
 from varcode.germline import PhasePartition
@@ -290,6 +290,10 @@ def test_cryptic_positions_distinguish_otherwise_identical_comparisons(effect, t
     path = tmp_path / "cryptic.json.gz"
     predicted.save(path)
     assert graph(orfdata.Proteome.load(path)) == graph(predicted)
+    standalone = to_proteome(splice.candidates)
+    assert len(comparisons(standalone)) == 2
+    assert len({r.key for r in standalone.records if r.kind == "event"}) == 2
+    assert graph(standalone.merge(to_proteome(splice.candidates[::-1]))) == graph(standalone)
 
 
 def test_equal_fusion_sequences_retain_transcript_model_associations(effect, tmp_path):
@@ -313,6 +317,113 @@ def test_equal_fusion_sequences_retain_transcript_model_associations(effect, tmp
     path = tmp_path / "fusion-models.json.gz"
     predicted.save(path)
     assert graph(orfdata.Proteome.load(path)) == graph(predicted)
+    standalone = to_proteome([first, second])
+    assert len(standalone.proteins) == len(comparisons(standalone)) == 2
+    conflicting = GeneFusion(sv, transcript, transcript, mutant_transcript=replace(models[0], mutant_protein_sequence="MTR"))
+    with pytest.raises(ValueError, match="Conflicting producer record"):
+        to_proteome([first, conflicting])
+    # from_sequence also stores cDNA in an assembled segment's provider.
+    # Those sequence bytes must not turn changed output into a new source ID.
+    observed = [GeneFusion(sv, transcript, transcript, mutant_transcript=MutantTranscript.from_sequence(
+        sequence, reference_transcript=transcript, mutant_protein_sequence="MTK",
+        evidence={"transcript_model_id": "same-observation"}))
+        for sequence in ("ATGACTAAATAA", "ATGACCAAATAA")]
+    with pytest.raises(ValueError, match="Conflicting producer record"):
+        to_proteome(observed)
+
+
+@pytest.mark.parametrize("mechanism,coordinates", [
+    (CrypticAcceptor, ({"cryptic_genomic_position": 15}, {"cryptic_genomic_position": 18})),
+    (IntronRetention, ({"retained_intron_start": 13, "retained_intron_end": 15},
+                      {"retained_intron_start": 13, "retained_intron_end": 18})),
+])
+def test_standalone_mechanism_coordinates_do_not_hide_output_conflicts(effect, mechanism, coordinates):
+    signal_class = SpliceAcceptor if mechanism is CrypticAcceptor else SpliceDonor
+    signal = signal_class(effect.variant, effect.transcript, effect.transcript.exons[0], 1)
+    extra = {"affected_exon": effect.transcript.exons[0]} if mechanism is CrypticAcceptor else {}
+
+    def candidate(position, protein):
+        return mechanism(effect.variant, effect.transcript, signal, **extra, **position,
+                         mutant_protein_sequence=protein)
+
+    first, second = [candidate(position, "MTK") for position in coordinates]
+    predicted = to_proteome([first, second])
+    assert len(predicted.proteins) == len(comparisons(predicted)) == 2
+    assert len(predicted.by_sequence()["MTK"]) == 2
+    with pytest.raises(ValueError, match="Conflicting producer record"):
+        to_proteome([first, candidate(coordinates[0], "MTR")])
+
+
+@pytest.mark.parametrize("in_cis", [False, True])
+def test_single_germline_hypothesis_preserves_provenance(in_cis, tmp_path):
+    from varcode import GermlineContext, predict_germline_aware_effect
+    from varcode.annotators.registry import get_default_annotator
+    from .test_germline_effects import _cftr, _somatic, _same_codon_germline, _StubPhaseResolver
+
+    variant, transcript, background = _somatic(), _cftr(), _same_codon_germline()
+    annotator = get_default_annotator()
+    plain = annotator.annotate_on_transcript(variant, transcript)
+    phased = predict_germline_aware_effect(
+        variant, transcript, GermlineContext.from_variants([background]), annotator,
+        phase_resolver=_StubPhaseResolver(in_cis_answer=in_cis))
+    assert phased.germline_phase_state == "phased"
+    assert phased.germline_variants_in_window == (background,)
+    if not in_cis:
+        assert phased.mutant_protein_sequence == plain.mutant_protein_sequence
+    predicted = to_proteome(phased)
+    assert graph(predicted) != graph(to_proteome(plain))
+    assert len(predicted.merge(to_proteome(plain)).proteins) == 2
+    native = type(phased).from_json(phased.to_json())
+    assert native.germline_phase_state == phased.germline_phase_state
+    assert native.germline_variants_in_window == phased.germline_variants_in_window
+    assert graph(to_proteome(native)) == graph(predicted)
+    assert len(EffectCollection([phased])) == 1  # graph serialization remains hashable
+    archive = json.dumps(graph(predicted))
+    assert "germline_phase_state" in archive and "germline_variants_in_window" in archive
+    path = tmp_path / "single-phase.json.gz"
+    predicted.save(path)
+    assert graph(orfdata.Proteome.load(path)) == graph(predicted)
+
+
+def test_native_fusion_roundtrip_preserves_source_identity(tmp_path):
+    from .test_germline_effects import _cftr
+
+    first = _cftr()
+    second = first.genome.transcript_by_id("ENST00000357654")
+    variant = StructuralVariant(first.contig, first.start, "BND", genome=first.genome,
+                                mate_contig=second.contig, mate_start=second.start)
+    model = MutantTranscript(reference_segments=(ReferenceSegment(first, 0, 6), ReferenceSegment(second, 6, 12)),
+                             cdna_sequence="ATGACTAAATAA", mutant_protein_sequence="MTK",
+                             evidence={"transcript_model_id": "fusion-model"})
+    fusion = GeneFusion(variant, first, second, mutant_transcript=model)
+    restored = GeneFusion.from_json(fusion.to_json())
+    original, reloaded = to_proteome(fusion), to_proteome(restored)
+    assert {r.key for r in original.records} == {r.key for r in reloaded.records}
+    assert {p.accession for p in original} == {p.accession for p in reloaded}
+    assert graph(original.merge(reloaded)) == graph(original)
+    path = tmp_path / "native-fusion.json.gz"
+    original.merge(reloaded).save(path)
+    assert graph(orfdata.Proteome.load(path)) == graph(original)
+
+
+def test_fusion_aliases_preserve_reference_scope_and_roles(effect):
+    first = effect.transcript
+    second = _ReferenceTranscript({**first.data, "id": "tx-2", "transcript_id": "tx-2"},
+                                  first.genome, first.exons, _Feature(1, 12, "gene-2", "GENE2"))
+    variant = StructuralVariant("1", 6, "BND", mate_contig="1", mate_start=7, genome=first.genome)
+    forward = GeneFusion(variant, first, second)
+    reversed_roles = GeneFusion(variant, first, second, five_prime_transcript=second, three_prime_transcript=first)
+    assert len(comparisons(to_proteome([forward, reversed_roles]))) == 2
+    models = [MutantTranscript(
+        reference_segments=(ReferenceSegment(first, offset, offset + 6), ReferenceSegment(second, 6, 12)),
+        mutant_protein_sequence="MTK", evidence={"support": "same-source"}) for offset in (0, 3)]
+    alternatives = [GeneFusion(variant, first, second, mutant_transcript=model) for model in models]
+    assert len(to_proteome(alternatives).proteins) == 2
+    # Matching transcript IDs must not collapse genuinely different references.
+    other_reference = _ReferenceGenome({**first.genome.metadata, "reference_name": "other-assembly"})
+    alias = _ReferenceTranscript(dict(first.data), other_reference, first.exons, first.gene)
+    with pytest.raises(ValueError, match="reference_name mismatch"):
+        to_proteome(GeneFusion(variant, first, alias))
 
 
 @pytest.mark.parametrize("coding", [False, True])
