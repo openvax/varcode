@@ -674,7 +674,7 @@ def test_deletion_in_repeat_residue_stretch_agrees_hgvs_canonical(
         dual_annotator):
     """Deletion of one codon from a poly-residue stretch (CFTR
     protein[98:102] == 'PLLL'). Both annotators report
-    ``Deletion('p.L101del')`` after the #321 fix — the HGVS 3'-rule
+    ``Deletion('p.L102del')`` after the #321/#643 fixes — the HGVS 3'-rule
     canonical position is the most C-terminal equivalent residue.
     Fast applies the rule by sliding ``aa_mutation_start_offset``
     forward while the deleted residue matches the next reference
@@ -684,7 +684,7 @@ def test_deletion_in_repeat_residue_stretch_agrees_hgvs_canonical(
     annotator = _FAST if dual_annotator == "fast" else _PDIFF
     effect = _annotate(variant, CFTR_ID, annotator)
     assert isinstance(effect, Deletion)
-    assert effect.short_description == "p.L101del"
+    assert effect.short_description == "p.L102del"
 
 
 def test_insertion_in_repeat_residue_stretch_agrees_hgvs_canonical(
@@ -722,7 +722,7 @@ def test_inframe_nine_base_deletion_agrees(dual_annotator):
     annotator = _FAST if dual_annotator == "fast" else _PDIFF
     effect = _annotate(variant, CFTR_ID, annotator)
     assert isinstance(effect, Deletion)
-    assert effect.short_description == "p.RSP2del"
+    assert effect.short_description == "p.R3_P5del"
 
 
 def test_misaligned_insertion_before_stop_agrees(dual_annotator):

@@ -212,8 +212,8 @@ def predict_in_frame_coding_effect(
     # residues can slide forward (i.e. the residue immediately after
     # the deletion equals the first deleted residue), report the most
     # 3' (C-terminal) equivalent representation. Example: deleting one
-    # L from PLLL (positions 99–101) is canonically p.L101del, not
-    # p.L99del. Closes #321.
+    # L from PLLL (L residues at positions 100–102) is canonically
+    # p.L102del, not p.L100del. Closes #321.
     if n_aa_ref > 0 and n_aa_alt == 0:
         protein_seq = transcript.protein_sequence
         while (aa_mutation_start_offset + n_aa_ref < len(protein_seq)

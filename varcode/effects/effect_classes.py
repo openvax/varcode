@@ -1269,9 +1269,14 @@ class KnownAminoAcidChange(NonsilentCodingMutation):
                 self.aa_mutation_start_offset,
                 self.aa_alt)
         elif len(self.aa_alt) == 0:
-            return "p.%s%ddel" % (
-                self.aa_ref,
-                self.aa_mutation_start_offset)
+            # Effect offsets stay zero-based; descriptions name one-based
+            # residues, with an inclusive first/last range for larger deletions.
+            start = self.aa_mutation_start_offset + 1
+            if len(self.aa_ref) == 1:
+                return "p.%s%ddel" % (self.aa_ref, start)
+            return "p.%s%d_%s%ddel" % (
+                self.aa_ref[0], start,
+                self.aa_ref[-1], start + len(self.aa_ref) - 1)
         else:
             return "p.%s%d%s" % (
                 self.aa_ref,
