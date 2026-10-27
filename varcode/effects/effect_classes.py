@@ -14,7 +14,7 @@
 from memoized_property import memoized_property
 from serializable import Serializable
 
-from .common import bio_seq_to_str
+from .common import bio_seq_to_str, validate_deletion_notation
 
 
 def _cryptic_motif_score(candidate):
@@ -100,6 +100,30 @@ class MutationEffect(Serializable):
         but is more informative for coding ones.
         """
         return self.__class__.__name__.lower()
+
+    def format_short_description(self, *, deletion_notation="sequence"):
+        """Render the short description with a protein deletion display choice.
+
+        Parameters
+        ----------
+        deletion_notation : {"sequence", "range"}
+            ``"sequence"`` (default) includes every deleted residue and its
+            one-based start, e.g. ``p.RSP3del``. ``"range"`` uses the first
+            and last residue positions, e.g. ``p.R3_P5del``. Other consequence
+            and splice-mechanism labels retain their existing notation.
+
+        Returns
+        -------
+        str
+            A display label. This does not change the effect or its archive.
+        """
+        validate_deletion_notation(deletion_notation)
+        if deletion_notation == "sequence":
+            return self.short_description
+        return self._format_short_description(deletion_notation)
+
+    def _format_short_description(self, deletion_notation):
+        return self.short_description
 
     transcript = None
     gene = None
@@ -750,6 +774,12 @@ class NormalSplicing(SpliceMechanismEffect):
             return "normal-splicing"
         return "normal-splicing (%s)" % self.coding_effect.short_description
 
+    def _format_short_description(self, deletion_notation):
+        if self.coding_effect is None:
+            return self.short_description
+        return "normal-splicing (%s)" % self.coding_effect.format_short_description(
+            deletion_notation=deletion_notation)
+
 
 class ExonSkipping(SpliceMechanismEffect):
     """The affected exon is excluded from the mature transcript.
@@ -1269,14 +1299,8 @@ class KnownAminoAcidChange(NonsilentCodingMutation):
                 self.aa_mutation_start_offset,
                 self.aa_alt)
         elif len(self.aa_alt) == 0:
-            # Effect offsets stay zero-based; descriptions name one-based
-            # residues, with an inclusive first/last range for larger deletions.
-            start = self.aa_mutation_start_offset + 1
-            if len(self.aa_ref) == 1:
-                return "p.%s%ddel" % (self.aa_ref, start)
-            return "p.%s%d_%s%ddel" % (
-                self.aa_ref[0], start,
-                self.aa_ref[-1], start + len(self.aa_ref) - 1)
+            # Effect offsets stay zero-based; labels name the one-based start.
+            return "p.%s%ddel" % (self.aa_ref, self.aa_mutation_start_offset + 1)
         else:
             return "p.%s%d%s" % (
                 self.aa_ref,
@@ -1381,6 +1405,14 @@ class Deletion(KnownAminoAcidChange):
             aa_mutation_start_offset=aa_mutation_start_offset,
             aa_ref=aa_ref,
             aa_alt="")
+
+    def _format_short_description(self, deletion_notation):
+        if len(self.aa_ref) <= 1:
+            return self.short_description
+        start = self.aa_mutation_start_offset + 1
+        return "p.%s%d_%s%ddel" % (
+            self.aa_ref[0], start,
+            self.aa_ref[-1], start + len(self.aa_ref) - 1)
 
 
 class PrematureStop(KnownAminoAcidChange):
@@ -1588,6 +1620,15 @@ class StructuralVariantEffect(TranscriptMutationEffect, MultiOutcomeEffect):
         if self._primary_effects and self._primary_effects[0] is not self:
             return self._primary_effects[0].short_description
         return "unresolved-structural-transcript"
+
+    def _format_short_description(self, deletion_notation):
+        # Subclasses with dedicated labels (e.g. sv-deletion) retain them.
+        if type(self).short_description is not StructuralVariantEffect.short_description:
+            return self.short_description
+        if self._primary_effects and self._primary_effects[0] is not self:
+            return self._primary_effects[0].format_short_description(
+                deletion_notation=deletion_notation)
+        return self.short_description
 
     @property
     def priority_class(self):
@@ -2067,6 +2108,10 @@ class PhaseCandidateSet(TranscriptMutationEffect, MultiOutcomeEffect):
         ambiguity. Consumers wanting the full possibility set read
         :attr:`candidates`."""
         return "?" + self.most_likely_effect.short_description
+
+    def _format_short_description(self, deletion_notation):
+        return "?" + self.most_likely_effect.format_short_description(
+            deletion_notation=deletion_notation)
 
     @property
     def priority_class(self):

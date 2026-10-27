@@ -1,5 +1,14 @@
 # Change Log
 
+## v10.21.3
+
+- Restore full deleted amino-acid sequences in default protein deletion labels
+  while retaining corrected one-based positions: CFTR is `p.RSP3del` (#646).
+  Use `effect.format_short_description(deletion_notation="range")` for the
+  optional endpoint form `p.R3_P5del`; collection DataFrame and CSV exports
+  accept the same option. Formatting leaves model coordinates, sequences,
+  normalization and archived effects unchanged.
+
 ## v10.21.2
 
 - Describe pure protein deletions with one-based residue numbers and inclusive

@@ -722,7 +722,7 @@ def test_inframe_nine_base_deletion_agrees(dual_annotator):
     annotator = _FAST if dual_annotator == "fast" else _PDIFF
     effect = _annotate(variant, CFTR_ID, annotator)
     assert isinstance(effect, Deletion)
-    assert effect.short_description == "p.R3_P5del"
+    assert effect.short_description == "p.RSP3del"
 
 
 def test_misaligned_insertion_before_stop_agrees(dual_annotator):

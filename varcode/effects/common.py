@@ -17,5 +17,9 @@ def bio_seq_to_str(seq):
     if type(seq) is str:
         return seq
     else:
-        return str(seq) 
-    
+        return str(seq)
+
+
+def validate_deletion_notation(deletion_notation):
+    if deletion_notation not in ("sequence", "range"):
+        raise ValueError("deletion_notation must be 'sequence' or 'range', got %r" % (deletion_notation,))
