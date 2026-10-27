@@ -58,7 +58,7 @@ downstream integrations without forcing them into the core class:
 
 from typing import Any, Mapping, NamedTuple, Optional, Tuple
 
-from pyensembl.locus import normalize_chromosome
+from .contigs import normalize_contig_name
 
 from .variant import Variant
 
@@ -407,8 +407,8 @@ class StructuralVariant(Variant):
                     "%s=%r contradicts breakend ALT %r" % (field, given, alt))
 
     def _ensembl_contig_name(self, contig):
-        return self._convert_ucsc_contig_name_to_ensembl(
-            normalize_chromosome(contig))
+        return normalize_contig_name(
+            contig, reference_name=getattr(self.genome, "assembly", self.reference_name))
 
     @property
     def is_structural(self) -> bool:

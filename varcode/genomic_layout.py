@@ -370,6 +370,17 @@ class GenomicLayout:
     def apply_point_variant(self, variant, validate_reference=True):
         """Apply one normalized nucleotide allele to its first occurrence."""
         contig = variant.contig
+        names = {segment.contig for segment in self.segments if segment.contig is not None}
+        if contig not in names:
+            from .contigs import resolve_contig_name
+            reference_name = getattr(
+                getattr(variant, "genome", None), "assembly",
+                getattr(variant, "reference_name", None))
+            resolution = resolve_contig_name(contig, names, reference_name=reference_name)
+            if resolution.status == "ambiguous":
+                raise UnsupportedLayoutEdit(resolution.diagnostic)
+            if resolution.resolved_name is not None:
+                contig = resolution.resolved_name
         ref = variant.trimmed_ref.upper()
         alt = variant.trimmed_alt.upper()
         start = variant.trimmed_base1_start

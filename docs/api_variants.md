@@ -33,6 +33,69 @@ Historical dated datasets keep PyEnsembl's accession-based reference names
 and cache directories. For example, `GRCh37:2013_09` has `genome.assembly ==
 "GRCh37"` and `genome.reference_name == "GCA_000001405.14"`.
 
+### Resolve chromosome names across readers
+
+Use the names actually present in an annotation, BAM or FASTA. An exact match
+wins; otherwise the resolver requires one unambiguous alias:
+
+```python
+from varcode import ContigResolver, resolve_contig_name, normalize_contig_name
+
+result = resolve_contig_name("MT", ["chr1", "chrM"], reference_name="GRCh38")
+assert result.status == "alias"
+assert result.original_name == "MT"
+assert result.resolved_name == "chrM"  # spelling to pass to the target reader
+
+assert resolve_contig_name("MT", ["M", "chrM"]).status == "ambiguous"
+assert resolve_contig_name("MT", ["MT", "chrM"]).resolved_name == "MT"
+assert normalize_contig_name("chrUn_gl000216", reference_name="hg19") == "GL000216.1"
+```
+
+For many queries, build the index once with
+`resolver = ContigResolver(bam.references, reference_name="GRCh38")`, then call
+`resolver.resolve(variant.contig)`. For annotation lookup, supply
+`genome.contigs()` and prefer `genome.assembly` as the reference name when it is
+available; historical annotations can use accession-based `genome.reference_name`
+values. The resolver does not open or download reference data itself.
+
+| Status | Meaning |
+| --- | --- |
+| `exact` | The supplied spelling occurs in the target vocabulary. |
+| `alias` | Exactly one target name shares the normalized spelling. |
+| `ambiguous` | Multiple aliases match; `resolved_name` is `None`. |
+| `missing` | No target name matches, including an empty target vocabulary. |
+| `reference_unavailable` | Target names were supplied as `None`. |
+
+`candidates` retains the selected name or sorted ambiguous names.
+`normalized_name` is a comparison key, not necessarily a name in the target file.
+Unresolved results provide `diagnostic` text without emitting warnings; aggregate
+these by input source/contig when processing a cohort. Missing reference names
+must not be interpreted as intergenic annotation or absence of RNA evidence.
+
+Supported spelling rules include ordinary `chr` prefixes, `M`/`MT`/`chrM`/`chrMT`,
+PyEnsembl case normalization (including yeast `Mito`), and accession-bearing
+UCSC scaffold names. Explicit versions remain distinct: `KI270438.1` does not
+match `KI270438.2`. Unversioned UCSC GL aliases require explicit GRCh37/hg19
+context (also `b37`/`NCBI37`); the resolver never infers that context from the
+available names. Unknown names remain eligible for exact matches.
+
+These are spelling rules, **not sequence or coordinate equivalence checks**.
+Callers must establish compatible references before using matched names.
+The assembly-specific [UCSC hg19 alias table](https://hgdownload.soe.ucsc.edu/goldenPath/hg19/bigZips/hg19.chromAlias.txt)
+and [hg38 alias table](https://hgdownload.soe.ucsc.edu/goldenPath/hg38/bigZips/hg38.chromAlias.txt)
+even assign different sequence accessions to `chrM`. The
+[NCBI sequence report](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/reference-docs/data-reports/genome-sequence/)
+records names and accessions within a specific assembly. This API performs no
+liftover and does not infer RefSeq/GenBank accession equivalence.
+
+::: varcode.normalize_contig_name
+
+::: varcode.resolve_contig_name
+
+::: varcode.ContigResolver
+
+::: varcode.ContigResolution
+
 ### Chromosome DNA
 
 **Provide chromosome DNA once on your reference genome.** Varcode then uses it

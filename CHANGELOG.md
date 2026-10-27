@@ -1,5 +1,21 @@
 # Change Log
 
+## v10.22.0
+
+- Expose `normalize_contig_name`, `resolve_contig_name`, `ContigResolver` and
+  immutable `ContigResolution` results for annotation/BAM/FASTA vocabularies
+  (#645). Preserve exact target spellings, reject ambiguous aliases, distinguish
+  missing contigs from unavailable reference names, and retain accession versions.
+  Index a vocabulary once for repeated lookups without a global dataset cache.
+- Share existing UCSC naming rules across Variant, structural breakend mates and
+  ORF checks, including hg19 unversioned GL aliases and versioned hg38 scaffolds.
+  Preserve original names and conversion flags. Name resolution neither validates
+  sequence/assembly equivalence nor changes annotation failures to intergenic calls.
+- Resolve point-edit contigs against realized transcript-layout names (#648).
+  ORFs retaining a source name such as `chr1` now accept a variant using `1`;
+  layout source names and original variant provenance remain intact, and ambiguous
+  aliases cannot select a segment silently.
+
 ## v10.21.3
 
 - Restore full deleted amino-acid sequences in default protein deletion labels

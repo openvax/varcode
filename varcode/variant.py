@@ -10,11 +10,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import re
-
-from pyensembl.locus import normalize_chromosome
 from serializable import Serializable
 
+from .contigs import normalize_contig_name, _convert_ucsc_contig_name
 from .nucleotides import (
     normalize_nucleotide_string,
     STANDARD_NUCLEOTIDES,
@@ -646,7 +644,9 @@ class Variant(Serializable):
         own contig.
         """
         if self.normalize_contig_names:
-            contig = normalize_chromosome(contig)
+            return normalize_contig_name(
+                contig, reference_name=getattr(self.genome, "assembly", self.reference_name),
+                convert_ucsc=self.convert_ucsc_contig_names)
         if self.convert_ucsc_contig_names:
             contig = self._convert_ucsc_contig_name_to_ensembl(contig)
         return contig
@@ -668,20 +668,8 @@ class Variant(Serializable):
         -------
         str
         """
-        match = re.fullmatch(
-            r"chr(?:Un|[0-9XYM]+)_([A-Za-z]+[0-9]+)v([0-9]+)(?:_(?:random|alt|fix))?",
-            contig)
-        if match:
-            return "%s.%s" % (match[1].upper(), match[2])
-        if getattr(self.genome, "assembly", self.reference_name) == "GRCh37":
-            match = re.fullmatch(r"chr(?:Un|[0-9XYM]+)_(gl000[0-9]{3})(?:_random)?", contig)
-            if match and 191 <= int(match[1][-3:]) <= 249:
-                return match[1].upper() + ".1"
-        if contig.startswith("chr") and "_" not in contig:
-            contig = contig[3:]
-        if contig == "M":
-            contig = "MT"
-        return contig
+        return _convert_ucsc_contig_name(
+            contig, getattr(self.genome, "assembly", self.reference_name))
 
     def clone_without_ucsc_data(self):
         """
