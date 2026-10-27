@@ -30,10 +30,9 @@ def load_orf_catalog(*args, **kwargs):
     return load(*args, **kwargs)
 
 
-def _contig(value):
-    from pyensembl.locus import normalize_chromosome
-    value = normalize_chromosome(str(value).removeprefix("chr"))
-    return "MT" if value == "M" else value
+def _contig(value, reference_name=None):
+    from .contigs import normalize_contig_name
+    return normalize_contig_name(str(value), reference_name=reference_name)
 
 
 def _positions(transcript):
@@ -134,9 +133,10 @@ def _bind(record, transcript, genome_build, *, reference_context=None):
 
 def _reference_provider(view, fallback=None):
     offsets = {p: i for i, p in enumerate(view.positions)}
+    build = view.reference_orf.genome_build
 
     def sequence(contig, start, end):
-        if _contig(contig) == _contig(view.contig) and all(p in offsets for p in range(start, end + 1)):
+        if _contig(contig, build) == _contig(view.contig, build) and all(p in offsets for p in range(start, end + 1)):
             genomic = "".join(view.sequence[offsets[p]] for p in range(start, end + 1))
             return genomic.translate(str.maketrans("ACGT", "TGCA")) if view.on_backward_strand else genomic
         if fallback is not None:
@@ -549,7 +549,7 @@ def _annotate_orf_variants(variants, record, transcript, *, genome_build,
     for variant in (*variants, *germline_variants):
         if variant.reference_name != genome_build:
             raise ValueError("Variant assembly mismatch")
-        if view.contig is not None and _contig(variant.contig) != _contig(view.contig):
+        if view.contig is not None and _contig(variant.contig, genome_build) != _contig(view.contig, genome_build):
             raise ValueError("Variant contig mismatch")
         view.reference_orf.context.validate_genome(variant.genome, include_annotation=False)
     if not view.positions:
@@ -698,7 +698,7 @@ def predict_orf_effects(variants, *, catalog=None, transcripts=None, **kwargs):
         context = record.initiation_context
         if context is not None:
             positions += tuple(context.genomic_positions)
-        if not any(_contig(v.contig) == _contig(record.contig)
+        if not any(_contig(v.contig, build) == _contig(record.contig, build)
                    and v.start <= max(positions) + 6 and v.end >= min(positions) - 6
                    for v in variants):
             continue
@@ -752,7 +752,7 @@ def annotate_orf_rna_product(reference, product):
     if reason is not None:
         return ORFProductAnnotation(reference=reference, status="unresolved", reason=reason,
                                     cdna_sequence=sequence, evidence=product.evidence)
-    positions = tuple(o[1] if o is not None and _contig(o[0]) == _contig(record.contig)
+    positions = tuple(o[1] if o is not None and _contig(o[0], reference.genome_build) == _contig(record.contig, reference.genome_build)
                       and o[2] == record.strand else None for o in origins)
     starts = [i for i in range(len(positions) - 2)
               if positions[i:i + 3] == tuple(view.start_codon_positions)]

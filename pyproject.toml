@@ -63,6 +63,7 @@ ignore = ["E501", "F841", "E731", "E741", "E722", "E721"]
 [tool.mypy]
 python_version = "3.11"
 files = [
+    "varcode/contigs.py",
     "varcode/nucleotides.py",
     "varcode/reference.py",
     "varcode/variant.py",

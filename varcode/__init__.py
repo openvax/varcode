@@ -31,6 +31,7 @@ from .errors import (
     SampleNotFoundError,
 )
 from .genome import Genome
+from .contigs import ContigResolution, ContigResolver, normalize_contig_name, resolve_contig_name
 from .genome_sequence import reference_base, reference_range
 from .germline import (
     GenomeBuildMismatchError,

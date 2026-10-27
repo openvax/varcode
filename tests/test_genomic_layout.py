@@ -8,6 +8,7 @@ from varcode.genomic_layout import (
     GenomicLayout,
     LayoutSegment,
     SequenceUnavailable,
+    UnsupportedLayoutEdit,
     join_breakends,
     project_intervals,
 )
@@ -32,6 +33,52 @@ def point(contig, start, ref, alt):
         trimmed_ref=ref,
         trimmed_alt=alt,
         is_structural=False)
+
+
+@pytest.mark.parametrize("source,query,reference", [
+    ("chr1", "1", "GRCh38"),
+    ("chrUn_gl000216", "GL000216.1", "GRCh37"),
+    ("chrUn_KI270438v1", "KI270438.1", "GRCh38"),
+])
+@pytest.mark.parametrize("strand", ["+", "-"])
+@pytest.mark.parametrize("start,ref,alt,forward,reverse", [
+    (3, "C", "T", "AATCGG", "CCGATT"),
+    (3, "CC", "", "AAGG", "CCTT"),
+    (2, "", "TA", "AATACCGG", "CCGGTATT"),
+])
+def test_point_edit_aliases_retain_layout_names_and_variant_provenance(
+        source, query, reference, strand, start, ref, alt, forward, reverse):
+    def sequence(contig, low, high):
+        assert contig == source
+        return "AACCGG"[low - 1:high]
+
+    layout = GenomicLayout.from_interval(source, 1, 6, strand, sequence_provider=sequence)
+    variant = point(query, start, ref, alt)
+    variant.reference_name = reference
+    result = layout.apply_point_variant(variant)
+    assert result.materialize() == (forward if strand == "+" else reverse)
+    assert all(segment.contig in (None, source) for segment in result.segments)
+    if alt:
+        changed = [segment for segment in result.segments if segment.source_variant is not None]
+        assert changed
+        assert all(segment.source_variant is variant for segment in changed)
+    assert variant.contig == query
+    assert layout.materialize() == ("AACCGG" if strand == "+" else "CCGGTT")
+
+
+def test_point_edit_exact_name_wins_and_ambiguous_aliases_fail():
+    layout = GenomicLayout((LayoutSegment("MT", 1, 2, sequence="AA"),
+                            LayoutSegment("chrM", 1, 2, sequence="CC")))
+    exact = layout.apply_point_variant(point("MT", 1, "A", "G"))
+    assert exact.materialize() == "GACC"
+    with pytest.raises(UnsupportedLayoutEdit, match="Ambiguous"):
+        layout.apply_point_variant(point("M", 1, "A", "G"))
+
+
+def test_point_edit_alias_resolution_does_not_substitute_accession_versions():
+    layout = GenomicLayout((LayoutSegment("KI270438.2", 1, 2, sequence="AA"),))
+    with pytest.raises(KeyError):
+        layout.apply_point_variant(point("chrUn_KI270438v1", 1, "A", "G"))
 
 
 def structural(kind, start, end, affected_start=None, affected_end=None,
