@@ -94,9 +94,9 @@ def test_subset_then_full_grch38_tp53_annotation(make_genome):
     effects = variant.effects()
     tp53 = next(effect for effect in effects if effect.transcript_id == "ENST00000269305")
     assert tp53.gene_name == "TP53"
-    assert tp53.short_description == "p.E2del"
+    assert tp53.short_description == "p.E3del"
     assert tp53.mutant_protein_sequence == (
-        tp53.original_protein_sequence[:1] + tp53.original_protein_sequence[2:])
+        tp53.original_protein_sequence[:2] + tp53.original_protein_sequence[3:])
 
 
 @pytest.mark.parametrize("name,genome,expected", [

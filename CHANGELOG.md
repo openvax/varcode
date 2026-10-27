@@ -1,5 +1,13 @@
 # Change Log
 
+## v10.21.2
+
+- Describe pure protein deletions with one-based residue numbers and inclusive
+  first/last residue ranges (#643): `p.K404del` becomes `p.K405del` for the
+  reported GOLGA5 deletion, and CFTR `p.RSP2del` becomes `p.R3_P5del`.
+  Preserve zero-based effect offsets, deleted residues, mutant protein sequences
+  and existing normalization to the most C-terminal equivalent deletion.
+
 ## v10.21.1
 
 - Translate recognized alternative initiators as methionine when building

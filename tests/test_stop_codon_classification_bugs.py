@@ -186,8 +186,8 @@ def test_394_stop_deletion_with_empty_3p_utr_is_deletion():
         "Expected aa_ref='GGT', got %r" % effect.aa_ref
     assert effect.aa_alt == "", \
         "Expected empty aa_alt, got %r" % effect.aa_alt
-    assert effect.short_description == "p.GGT354del", \
-        "Expected p.GGT354del, got %r" % effect.short_description
+    assert effect.short_description == "p.G355_T357del", \
+        "Expected p.G355_T357del, got %r" % effect.short_description
 
 
 def test_394_full_effects_call_does_not_raise():
@@ -273,8 +273,8 @@ def test_394_default_annotator_agrees_on_deletion():
         "Expected Deletion, got %s (%s)" % (
             effect.__class__.__name__,
             getattr(effect, "short_description", effect))
-    assert effect.short_description == "p.GGT354del", \
-        "Expected p.GGT354del, got %r" % effect.short_description
+    assert effect.short_description == "p.G355_T357del", \
+        "Expected p.G355_T357del, got %r" % effect.short_description
 
 
 def test_394_genuine_premature_stop_still_classified_as_premature_stop():
