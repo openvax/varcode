@@ -464,6 +464,11 @@ class SpliceOutcomeSet(MultiOutcomeEffect, TranscriptMutationEffect):
         return "splice-set:%s" % " | ".join(
             candidate.effect.short_description for candidate in self.candidates)
 
+    def _format_short_description(self, deletion_notation):
+        return "splice-set:%s" % " | ".join(
+            candidate.effect.format_short_description(deletion_notation=deletion_notation)
+            for candidate in self.candidates)
+
     def __str__(self) -> str:
         return "SpliceOutcomeSet(variant=%s, transcript=%s, candidates=[%s])" % (
             self.variant,

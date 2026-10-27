@@ -42,6 +42,33 @@ Severity ordering across types is set by
 
 ## Coding effects
 
+### Protein deletion labels
+
+By default, `Deletion.short_description` includes the complete deleted sequence
+and its one-based starting position. `p.RSP3del` means deleting `RSP` starting at
+residue 3. To display the first and last deleted residues instead:
+
+```python
+effect.short_description                                      # "p.RSP3del"
+effect.format_short_description(deletion_notation="range")     # "p.R3_P5del"
+effect.format_short_description(deletion_notation="sequence")  # "p.RSP3del"
+
+effects.to_dataframe(deletion_notation="range")
+effects.to_csv("effects.csv", deletion_notation="range")
+```
+
+Single-residue deletions use the same label in both forms, e.g. `p.K405del`.
+The option also follows nested deletion effects in normal-splicing, splice-set,
+phase and structural summaries. Other consequence and splice-mechanism labels
+retain their existing notation. The endpoint form follows the
+[HGVS deletion range convention](https://hgvs-nomenclature.org/stable/recommendations/protein/deletion/);
+these short labels are not a complete HGVS representation.
+
+This is a per-call display option. It leaves `aa_ref`, zero-based effect offsets,
+repeat normalization and predicted proteins unchanged. JSON archives and CSV
+reloads retain the biological effect, whose `short_description` uses the default
+sequence form. Use the formatter again when a range label is wanted.
+
 ::: varcode.effects.effect_classes.Silent
 
 ::: varcode.effects.effect_classes.AlternateStartCodon

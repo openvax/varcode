@@ -25,6 +25,7 @@ from ..csv_helpers import (
     write_metadata_header,
 )
 from ..version import __version__ as _varcode_version
+from .common import validate_deletion_notation
 from .effect_ordering import (
     effect_priority,
     multi_gene_effect_sort_key,
@@ -375,11 +376,17 @@ class EffectCollection(Collection):
         "effect_type", "effect",
     )
 
-    def to_dataframe(self, include_archive=False):
-        """Build a summary; optionally retain full graphs in ``effect_json``."""
+    def to_dataframe(self, include_archive=False, *, deletion_notation="sequence"):
+        """Build a summary; optionally retain full graphs in ``effect_json``.
+
+        ``deletion_notation="range"`` renders protein deletion labels using
+        endpoint positions instead of the default full deleted sequence.
+        See :meth:`MutationEffect.format_short_description`.
+        """
         from ..splice_outcomes import SpliceOutcomeSet
         from .effect_classes import StartLoss
 
+        validate_deletion_notation(deletion_notation)
         structural_columns = STRUCTURAL_VARIANT_COLUMNS if any(
             getattr(e.variant, "is_structural", False) for e in self) else ()
         orf_columns = ("orf_id", "orf_source", "orf_unresolved_reason") if any(
@@ -415,7 +422,7 @@ class EffectCollection(Collection):
             row['transcript_name'] = effect.transcript_name
 
             row['effect_type'] = effect.__class__.__name__
-            row['effect'] = effect.short_description
+            row['effect'] = effect.format_short_description(deletion_notation=deletion_notation)
             if isinstance(effect, StartLoss):
                 for field_name in start_loss_columns:
                     row[field_name] = getattr(effect, field_name)
@@ -439,7 +446,7 @@ class EffectCollection(Collection):
             frame["effect_json"] = [effect.to_json() for effect in self]
         return frame
 
-    def to_csv(self, path, include_header=True):
+    def to_csv(self, path, include_header=True, *, deletion_notation="sequence"):
         """Write this collection to CSV.
 
         Parameters
@@ -453,8 +460,13 @@ class EffectCollection(Collection):
             be read back via ``from_csv`` without supplying a genome
             explicitly. Pass ``include_header=False`` for fast
             consumers that don't tolerate comment lines.
+
+        deletion_notation : {"sequence", "range"}
+            Display pure protein deletions as ``p.RSP3del`` (default) or
+            ``p.R3_P5del``. This does not change the archived effect; loading
+            the CSV restores effects with their default display notation.
         """
-        df = self.to_dataframe(include_archive=True)
+        df = self.to_dataframe(include_archive=True, deletion_notation=deletion_notation)
         if not include_header:
             df.to_csv(path, index=False)
             return
