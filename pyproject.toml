@@ -67,6 +67,10 @@ files = [
     "varcode/nucleotides.py",
     "varcode/reference.py",
     "varcode/variant.py",
+    "varcode/annotators/__init__.py",
+    "varcode/annotators/registry.py",
+    "varcode/variant_collection.py",
+    "varcode/effects/effect_collection.py",
     "varcode/vcf.py",
     "varcode/maf.py",
     "varcode/proteome.py",
@@ -76,3 +80,7 @@ follow_imports = "silent"
 ignore_missing_imports = true
 check_untyped_defs = true
 warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = ["varcode", "varcode.*"]
+implicit_reexport = false

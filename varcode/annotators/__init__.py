@@ -17,7 +17,16 @@
 object satisfying :class:`EffectAnnotator`; they need no capability list.
 """
 
-from typing import Protocol, runtime_checkable
+from __future__ import annotations
+
+from types import NotImplementedType
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
+
+if TYPE_CHECKING:
+    from pyensembl import Transcript
+
+    from ..effects.effect_classes import MutationEffect
+    from ..variant import Variant
 
 from .fast import FastEffectAnnotator
 from .protein_diff import ProteinDiffEffectAnnotator
@@ -72,7 +81,24 @@ class EffectAnnotator(Protocol):
 
     name: str
 
-    def annotate_on_transcript(self, variant, transcript):
+    def annotate_on_transcript(
+            self, variant: Variant, transcript: Transcript,
+    ) -> MutationEffect | NotImplementedType:
+        """Predict a transcript consequence or explicitly decline the input.
+
+        Parameters
+        ----------
+        variant : Variant
+            Genomic variant, including StructuralVariant subclasses.
+        transcript : pyensembl.Transcript
+            Reference transcript selected for annotation.
+
+        Returns
+        -------
+        MutationEffect or types.NotImplementedType
+            A consequence (which may retain multiple outcomes), or
+            ``NotImplemented`` for an unsupported input. Never return None.
+        """
         ...
 
 

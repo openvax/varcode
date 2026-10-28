@@ -57,14 +57,18 @@ nav:
       - Effect types: effect_types.md
       - API:
           - Index: api.md
+          - Conventions & return values: conventions.md
           - Variants & files: api_variants.md
           - Effects: api_effects.md
           - Phasing & germline: api_phasing.md
           - RNA & transcripts: api_rna.md
+          - ORFs: api_orfs.md
+          - Sample identity: api_sample_identity.md
           - Annotators: api_annotators.md
       - Writing an annotator: annotator_contract.md
   - Project:
       - Changelog: changelog.md
+      - API & documentation maintenance: dev/api-quality.md
 
 markdown_extensions:
   - admonition

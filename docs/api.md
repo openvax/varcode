@@ -5,6 +5,15 @@ below for signatures, parameters, and return types. Most annotation uses the
 same `effects()` interface; [annotator selection](experimental_annotators.md)
 is optional.
 
+Read [API conventions](conventions.md) for return shapes, missing results,
+error defaults, compatibility names, and current typing coverage.
+
+| Task | Reference |
+|---|---|
+| Resolve chromosome names for another reader | [Chromosome resolver](api_variants.md#resolve-chromosome-names-across-readers) |
+| Annotate additional reference ORFs or mapped RNA products | [ORFs](api_orfs.md) |
+| Compare sample evidence | [Sample identity](api_sample_identity.md) |
+
 ## Variants and files
 
 <a id="reference-genomes"></a><a id="varcodegenome"></a><a id="variants"></a><a id="varcodevariant"></a><a id="varcodevariantcollection"></a><a id="varcodestructuralvariant"></a><a id="varcodesv_types"></a><a id="genotypes"></a><a id="varcodegenotype"></a><a id="varcodezygosity"></a><a id="variantcollection-transforms"></a><a id="file-loading"></a><a id="varcodeload_vcf"></a><a id="exceptions"></a><a id="varcodereferencemismatcherror"></a><a id="varcodesamplenotfounderror"></a><a id="varcodegenomebuildmismatcherror"></a>[Variants and files reference](api_variants.md)
@@ -88,6 +97,7 @@ is optional.
 - <a id="varcode.register_annotator"></a>[register_annotator](api_annotators.md#varcode.register_annotator)
 - <a id="varcode.get_annotator"></a>[get_annotator](api_annotators.md#varcode.get_annotator)
 - <a id="varcode.get_default_annotator"></a>[get_default_annotator](api_annotators.md#varcode.get_default_annotator)
+- [resolve_annotator](api_annotators.md#varcode.resolve_annotator)
 - <a id="varcode.set_default_annotator"></a>[set_default_annotator](api_annotators.md#varcode.set_default_annotator)
 - <a id="varcode.use_annotator"></a>[use_annotator](api_annotators.md#varcode.use_annotator)
 - <a id="varcode.TranscriptModelEffectAnnotator"></a><a id="varcode.TranscriptModelEffectAnnotator.annotate_with_context"></a>[TranscriptModelEffectAnnotator](api_annotators.md#varcode.TranscriptModelEffectAnnotator)

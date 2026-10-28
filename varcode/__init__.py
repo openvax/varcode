@@ -11,6 +11,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""Predict variant consequences with explicit transcript and evidence context.
+
+Start with :class:`Variant`, :func:`load_vcf`, and :meth:`Variant.effects`.
+The default annotator is ``fast``; alternative implementations are opt-in.
+Public imports below include compatibility names retained for existing callers.
+"""
+
 from .annotators import (
     EffectAnnotator,
     FastEffectAnnotator,
@@ -231,6 +238,7 @@ __all__ = [
     "NonsilentCodingMutation",
 
     # exceptions
+    "InvalidContigError",
     "ReferenceMismatchError",
     "SampleNotFoundError",
     "GenomeBuildMismatchError",
@@ -254,6 +262,12 @@ __all__ = [
     "Genome",
     "reference_base",
     "reference_range",
+
+    # Reference-vocabulary name resolution (no coordinate conversion)
+    "ContigResolution",
+    "ContigResolver",
+    "normalize_contig_name",
+    "resolve_contig_name",
 
     # file loading
     "load_maf",

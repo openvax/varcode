@@ -17,22 +17,45 @@ can decline individual inputs by returning ``NotImplemented``; no static
 capability declaration or implicit fallback is used.
 """
 
+from __future__ import annotations
+
+from collections.abc import Iterator
 from contextlib import contextmanager
+from typing import TYPE_CHECKING, TypeVar, cast
+
+if TYPE_CHECKING:
+    from . import EffectAnnotator
 
 from .fast import FastEffectAnnotator
 from .protein_diff import ProteinDiffEffectAnnotator
 from ..transcript_model import TranscriptModelEffectAnnotator
 
 
-_REGISTRY = {}
+_AnnotatorT = TypeVar("_AnnotatorT", bound="EffectAnnotator")
+_REGISTRY: dict[str, EffectAnnotator] = {}
 _DEFAULT_NAME = "fast"
 
 
-def register_annotator(annotator):
+def register_annotator(annotator: _AnnotatorT) -> _AnnotatorT:
     """Add an annotator to the process-global registry, keyed by its
     ``.name``. Re-registering under the same name overrides the
     previous entry — this is deliberate so callers can swap
     implementations in tests.
+
+    Parameters
+    ----------
+    annotator : EffectAnnotator
+        Implementation with a nonempty name and an annotation method.
+
+    Returns
+    -------
+    EffectAnnotator
+        The same instance, preserving its concrete type.
+
+    Raises
+    ------
+    ValueError
+        The instance has no nonempty name.
     """
     name = getattr(annotator, "name", None)
     if not name:
@@ -42,14 +65,14 @@ def register_annotator(annotator):
     return annotator
 
 
-def get_annotator(name):
+def get_annotator(name: str) -> EffectAnnotator:
     """Look up a registered annotator by name. Raises ``KeyError``
     if no annotator is registered under that name.
     """
     return _REGISTRY[name]
 
 
-def get_default_annotator():
+def get_default_annotator() -> EffectAnnotator:
     """Return the annotator currently configured as the default
     (``"fast"`` unless changed via :func:`set_default_annotator` or
     :func:`use_annotator`).
@@ -57,7 +80,7 @@ def get_default_annotator():
     return _REGISTRY[_DEFAULT_NAME]
 
 
-def set_default_annotator(name):
+def set_default_annotator(name: str) -> None:
     """Swap the process-wide default annotator. ``name`` must refer
     to a registered annotator.
     """
@@ -69,7 +92,9 @@ def set_default_annotator(name):
     _DEFAULT_NAME = name
 
 
-def resolve_annotator(annotator_or_name):
+def resolve_annotator(
+        annotator_or_name: str | EffectAnnotator | None,
+) -> EffectAnnotator:
     """Normalize a per-call ``annotator=`` argument to an instance.
 
     Accepts ``None`` (use the current default), a string (look up in
@@ -95,11 +120,10 @@ def resolve_annotator(annotator_or_name):
 
 
 @contextmanager
-def use_annotator(name_or_instance):
+def use_annotator(name_or_instance: str | EffectAnnotator) -> Iterator[None]:
     """Context manager that temporarily swaps the default annotator.
 
-    Useful for A/B comparisons and scoped overrides without mutating
-    global state across the codebase::
+    Useful for sequential comparisons and scoped overrides::
 
         with varcode.use_annotator("protein_diff"):
             effects = variant_collection.effects()
@@ -110,6 +134,22 @@ def use_annotator(name_or_instance):
     name-based lookups inside the block find it; on exit the
     previous default and any previously-registered annotator under
     that name are restored.
+
+    Parameters
+    ----------
+    name_or_instance : str or EffectAnnotator
+        Registered name or implementation to select for the block.
+
+    Yields
+    ------
+    None
+        The context manager does not bind an annotator with ``as``.
+
+    Notes
+    -----
+    The override is process-global, not thread- or task-local. Concurrent
+    callers should pass ``annotator=`` explicitly. Restoration also occurs
+    when the block raises an exception.
     """
     global _DEFAULT_NAME
     prior_default = _DEFAULT_NAME
@@ -122,7 +162,8 @@ def use_annotator(name_or_instance):
         _DEFAULT_NAME = name_or_instance
         prior_registration = None
     else:
-        name = getattr(name_or_instance, "name", None)
+        # Keep the runtime check for callers without static checking.
+        name = cast(str, getattr(name_or_instance, "name", None))
         if not name:
             raise ValueError(
                 "Annotator instance has no .name attribute; cannot scope.")

@@ -36,6 +36,9 @@ Before telling the user a change is "complete":
 - Python 3.11+
 - Lint: Ruff and mypy (config in `pyproject.toml`; install the `lint` extra)
 - Docstrings: numpy style
+- Public API changes: follow `docs/dev/api-quality.md`; keep explicit exports,
+  generated reference entries, and static consumer checks in sync. Document
+  empty/unavailable results, error policy, and coordinate conventions.
 - Bugfixes include a regression test where feasible
 - varcode sits under vaxrank/isovar/topiary — API changes are breaking. Keep backwards-compat where reasonable; coordinate a minor/major bump when not.
 

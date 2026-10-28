@@ -21,6 +21,24 @@ See [effect annotation](effect_annotation.md) for result access and the
 
 ::: varcode.EffectCandidate
 
+::: varcode.candidates_from_effects
+
+## Splice candidates
+
+See [splice variants](splice_variants.md) for the distinction between signal
+disruption and candidate consequences. The scores below are sequence heuristics,
+not probabilities that a candidate is expressed.
+
+::: varcode.SpliceCandidateRNAEvidence
+
+::: varcode.enumerate_cryptic_exon_candidates
+
+::: varcode.enumerate_from_structural_variant
+
+::: varcode.score_donor
+
+::: varcode.score_acceptor
+
 ## Protein collections
 
 See [protein collections and FASTA](proteome.md) for `varcode.to_proteome()`,

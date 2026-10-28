@@ -42,7 +42,8 @@ To pin the annotation exactly, pass `genome=` one of:
 - A PyEnsembl genome object.
 
 An assembly name alone, such as `genome="GRCh38"`, uses the most recent
-installed numbered release of that assembly. Selecting a reference does not
+installed numbered release of that assembly, or the newest numbered release
+when none is installed. Selecting a reference does not
 download data or convert variant coordinates.
 
 ### Chromosome DNA for SV and splice analysis

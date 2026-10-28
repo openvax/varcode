@@ -199,6 +199,16 @@ uses published ROS_Cfam_1.0 calls; the historical CanFam3.1 comparison stays pin
 
 ::: varcode.Genome
 
+### Reference sequence access
+
+These helpers use one-based inclusive genomic coordinates and return
+forward-strand sequence. An empty string means sequence is unavailable;
+it does not establish that the queried region is absent.
+
+::: varcode.reference_base
+
+::: varcode.reference_range
+
 ## Variants
 
 ::: varcode.Variant
@@ -227,11 +237,15 @@ uses published ROS_Cfam_1.0 calls; the historical CanFam3.1 comparison stays pin
 
 ::: varcode.vcf.load_vcf
 
+::: varcode.load_vcf_fast
+
 ::: varcode.load_maf
 
 ::: varcode.load_maf_dataframe
 
 ## Exceptions
+
+::: varcode.InvalidContigError
 
 ::: varcode.ReferenceMismatchError
 

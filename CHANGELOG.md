@@ -1,5 +1,22 @@
 # Change Log
 
+## v10.22.2
+
+- Make chromosome resolver and missing-contig exception exports explicit for
+  strict type-checking consumers (#651). Type the core annotation return paths
+  and annotator protocol/registry, including explicit unsupported results and
+  concrete plugin identity, without changing runtime selection rules.
+- Describe base effect sequences and offsets as optional and change flags as
+  three-state values, so typed callers do not mistake default None/False
+  attributes for the only results a subclass can provide.
+- Extend consumer checks to cover annotation, filtering, ranking, and custom
+  annotators; reject invalid plugin returns and arguments statically.
+- Expand the public API reference for ORFs, sample identity, sequence access,
+  result models, and compatibility names. Correct stale error/installation
+  guidance and document empty ranking results and process-global overrides.
+- Record the API quality audit and contributor conventions, including the
+  remaining collection, effect-model, and optional-integration typing work.
+
 ## v10.22.1
 
 - Resolve canonical `chr`/mitochondrial case aliases such as `CHRM` and `CHR1`

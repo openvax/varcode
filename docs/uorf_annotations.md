@@ -252,7 +252,7 @@ products; absent sequence remains unresolved. An explicit `sequence_provider`
 on `annotate_orf_variants` overrides this fallback. Bound transcript exons retain
 the validated ORF reference sequence.
 
-Varcode requires ORFdata 0.35 or later for ORF annotations, including its
+The `orf` and `uorf` extras require ORFdata ≥0.39.0, <1, including its
 compatibility with PyEnsembl's reference strain and species taxon IDs.
 ORFdata supports binding complete, stopped ORFs with NCBI tables 1, 2 and 3.
 Varcode preserves the declared code through variant and RNA-product translation.
@@ -304,7 +304,7 @@ and downstream CDS regulation are unassessed.
 
 ## Reference identity
 
-The ORF extras require ORFdata 0.34. A bound `ReferenceORF` retains its species,
+A bound `ReferenceORF` retains its species,
 strain, assembly, annotation version and sequence fingerprints in both native
 and modified-product exports. RNA product metadata must agree with that context.
 For custom Genomes without taxonomy, use `record.bind(transcript, context=...)`
