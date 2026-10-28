@@ -69,8 +69,23 @@ def normalize_contig_name(
         select the actual spelling in an annotation, BAM or FASTA vocabulary.
     """
     _check_reference_name(reference_name)
+    if convert_ucsc and isinstance(name, str):
+        canonical_chr_match = re.fullmatch(r"chr([0-9]+|[xym]|mt)", name, flags=re.IGNORECASE)
+        if canonical_chr_match:
+            name = "chr" + canonical_chr_match[1].upper()
     contig = normalize_chromosome(name)
     return _convert_ucsc_contig_name(contig, reference_name) if convert_ucsc else contig
+
+
+def _resolution_key(name: str | int, reference_name: str | None) -> str:
+    """Build a spelling key without applying annotation's zero-contig sentinel.
+
+    ``0`` is a valid external reference name (including SAM SN). Resolving
+    that name does not make it a valid Variant/annotation chromosome.
+    """
+    if (isinstance(name, str) and name == "0") or (type(name) is int and name == 0):
+        return "0"
+    return normalize_contig_name(name, reference_name=reference_name)
 
 
 @dataclass(frozen=True)
@@ -128,6 +143,10 @@ class ContigResolver:
     Otherwise exactly one normalized match is required. Ambiguity is returned
     explicitly, never resolved by iteration order. There is no global vocabulary cache,
     warning emission, reference download, or automatic assembly inference.
+    Canonical chr/mitochondrial spellings accept case variants. Other names
+    retain the public normalization rules; no viral/decoy synonym catalogue
+    is inferred. The valid external name ``0`` is accepted even though
+    annotation/Variant chromosome normalization rejects it.
     """
 
     def __init__(self, available_contigs: Iterable[str] | None, *, reference_name: str | None = None):
@@ -143,7 +162,7 @@ class ContigResolver:
             for name in available_contigs:
                 if not isinstance(name, str):
                     raise TypeError("available_contigs must contain only string names")
-                key = normalize_contig_name(name, reference_name=reference_name)
+                key = _resolution_key(name, reference_name)
                 names.add(name)
                 aliases.setdefault(key, set()).add(name)
             self._available_contigs = frozenset(names)
@@ -159,7 +178,7 @@ class ContigResolver:
 
     def resolve(self, name: str | int) -> ContigResolution:
         """Resolve a name, preserving both the supplied and target spellings."""
-        key = normalize_contig_name(name, reference_name=self.reference_name)
+        key = _resolution_key(name, self.reference_name)
         candidates: tuple[str, ...] = ()
         status: ContigResolutionStatus
         if self.available_contigs is None:

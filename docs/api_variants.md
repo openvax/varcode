@@ -57,6 +57,10 @@ For many queries, build the index once with
 `genome.contigs()` and prefer `genome.assembly` as the reference name when it is
 available; historical annotations can use accession-based `genome.reference_name`
 values. The resolver does not open or download reference data itself.
+When fetching alignments for an input variant, prefer `variant.original_contig`
+so an exact source spelling wins even if another alias is also in the header.
+The reference context selects spelling rules; it does not validate that the BAM
+and annotation use identical sequences or coordinates.
 
 | Status | Meaning |
 | --- | --- |
@@ -71,6 +75,14 @@ values. The resolver does not open or download reference data itself.
 Unresolved results provide `diagnostic` text without emitting warnings; aggregate
 these by input source/contig when processing a cohort. Missing reference names
 must not be interpreted as intergenic annotation or absence of RNA evidence.
+
+Canonical chromosome case variants (`CHR1`, `CHRX`, `CHRM`, `CHRMT`) participate
+in alias resolution. If both `1` and `CHR1` occur, querying `chr1` is ambiguous;
+querying either exact name retains it. Custom/viral/decoy names remain available
+as supplied, including the valid SAM reference name `0`. Accepting `0` in an
+external vocabulary does not relax `Variant`/annotation validation. No `EBV` ↔
+GenBank-accession synonym is inferred, and alternative loci are not mapped onto
+their primary chromosomes. Genuine accession versions remain distinct.
 
 Supported spelling rules include ordinary `chr` prefixes, `M`/`MT`/`chrM`/`chrMT`,
 PyEnsembl case normalization (including yeast `Mito`), and accession-bearing

@@ -1,5 +1,14 @@
 # Change Log
 
+## v10.22.1
+
+- Resolve canonical `chr`/mitochondrial case aliases such as `CHRM` and `CHR1`
+  with exact-name precedence and explicit alias ambiguity (#650).
+- Accept the valid external reference name `0` without preventing unrelated
+  BAM/FASTA lookups. Variant/annotation chromosome validation is unchanged.
+  Verify mixed viral, decoy, alternative-locus and custom names against an
+  indexed BAM; do not infer viral synonyms or collapse accession versions.
+
 ## v10.22.0
 
 - Expose `normalize_contig_name`, `resolve_contig_name`, `ContigResolver` and

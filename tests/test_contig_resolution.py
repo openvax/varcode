@@ -33,8 +33,8 @@ def test_assembly_specific_aliases_work_in_both_directions(reference, ucsc, nati
         assert result.diagnostic is None
 
 
-@pytest.mark.parametrize("supplied", ["M", "MT", "chrM", "chrMT"])
-@pytest.mark.parametrize("target", ["M", "MT", "chrM", "chrMT"])
+@pytest.mark.parametrize("supplied", ["M", "MT", "chrM", "chrMT", "m", "mt", "chrm", "chrmt", "CHRM", "CHRMT"])
+@pytest.mark.parametrize("target", ["M", "MT", "chrM", "chrMT", "m", "mt", "chrm", "chrmt", "CHRM", "CHRMT"])
 def test_mitochondrial_spellings_preserve_the_actual_target(supplied, target):
     result = resolve_contig_name(supplied, [target], reference_name="GRCh38")
     assert result.normalized_name == "MT"
@@ -151,7 +151,7 @@ def test_resolver_snapshots_names_and_results_are_immutable():
         result.resolved_name = "M"
 
 
-@pytest.mark.parametrize("name", [None, 1.2, b"1", [], "", "0"])
+@pytest.mark.parametrize("name", [None, 1.2, b"1", [], ""])
 def test_invalid_query_names_fail_explicitly(name):
     with pytest.raises((TypeError, ValueError)):
         resolve_contig_name(name, ["1"])
@@ -222,3 +222,49 @@ def test_resolved_names_can_fetch_from_an_actual_bam(tmp_path):
             assert result.resolved_name is not None
             assert [read.query_name for read in bam.fetch(result.resolved_name, 5, 15)] == [expected]
         assert resolver.resolve("KI270438.2").status == "missing"
+
+
+@pytest.mark.parametrize("query,names,expected", [
+    ("chr1", ["1", "CHR1"], ("1", "CHR1")),
+    ("MT", ["CHRM", "chrMT"], ("CHRM", "chrMT")),
+    ("x", ["X", "CHRX"], ("CHRX", "X")),
+])
+def test_canonical_case_aliases_preserve_ambiguity_and_exact_names(query, names, expected):
+    result = ContigResolver(names).resolve(query)
+    assert result.status == "ambiguous"
+    assert result.candidates == expected
+    for name in names:
+        result = ContigResolver(names).resolve(name)
+        assert result.status == "exact"
+        assert result.resolved_name == name
+
+
+def test_custom_reference_vocabulary_does_not_poison_unrelated_lookups(tmp_path):
+    pysam = pytest.importorskip("pysam")
+    names = ["0", "HPV16", "NC_007605.1", "hs37d5", "HLA-A*01:01:01:01", "chr6_apd_hap1"]
+    path = tmp_path / "custom.bam"
+    with pysam.AlignmentFile(path, "wb", header={"SQ": [{"SN": name, "LN": 100} for name in names]}) as bam:
+        for index, name in enumerate(names):
+            read = pysam.AlignedSegment(bam.header)
+            read.query_name = "witness_" + str(index)
+            read.query_sequence = "ACGT"
+            read.reference_id = index
+            read.reference_start = 10
+            read.cigarstring = "4M"
+            bam.write(read)
+    pysam.index(str(path))
+    with pysam.AlignmentFile(path) as bam:
+        resolver = ContigResolver(bam.references, reference_name="custom")
+        for index, name in enumerate(names):
+            result = resolver.resolve(name)
+            assert result.status == "exact"
+            assert [read.query_name for read in bam.fetch(result.resolved_name, 10, 14)] == ["witness_" + str(index)]
+        assert resolver.resolve(0).resolved_name == "0"
+        assert resolver.resolve("EBV").status == "missing"
+        assert resolver.resolve("NC_007605.2").status == "missing"
+        assert resolver.resolve("6").status == "missing"
+    assert ContigResolver(["1"]).resolve("0").status == "missing"
+    with pytest.raises(ValueError, match="cannot be 0"):
+        normalize_contig_name("0")
+    with pytest.raises(ValueError, match="cannot be 0"):
+        Variant("0", 1, "A", "G", "GRCh38")
