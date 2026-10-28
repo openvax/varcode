@@ -20,6 +20,8 @@ See [experimental annotators](experimental_annotators.md) for alternatives and
 
 ::: varcode.get_default_annotator
 
+::: varcode.resolve_annotator
+
 ::: varcode.set_default_annotator
 
 ::: varcode.use_annotator
@@ -33,3 +35,18 @@ See [supported inputs and results](experimental_annotators.md) before using it.
 ::: varcode.TranscriptModelEffectAnnotator
 
 ::: varcode.predict_transcript_model_effect
+
+### Compatibility names
+
+`RealizedEffectAnnotator` and `predict_realized_effect` are retained aliases
+for the transcript-model implementation. Prefer the canonical names above in
+new code; selecting the old `"realized"` registry name still works.
+
+::: varcode.RealizedEffectAnnotator
+    options:
+      members: false
+      skip_local_inventory: true
+
+::: varcode.predict_realized_effect
+    options:
+      skip_local_inventory: true

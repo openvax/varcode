@@ -12,9 +12,15 @@
 
 
 from memoized_property import memoized_property
+from typing import TYPE_CHECKING, Any, Literal
+
 from serializable import Serializable
 
 from .common import bio_seq_to_str, validate_deletion_notation
+
+if TYPE_CHECKING:
+    from ..mutant_transcript import MutantTranscript
+    from ..orf import ORFAnnotation
 
 
 def _cryptic_motif_score(candidate):
@@ -93,7 +99,7 @@ class MutationEffect(Serializable):
         return self.variant < other.variant
 
     @property
-    def short_description(self):
+    def short_description(self) -> str:
         """
         A short but human-readable description of the effect.
         Defaults to class name for most of the non-coding effects,
@@ -101,7 +107,9 @@ class MutationEffect(Serializable):
         """
         return self.__class__.__name__.lower()
 
-    def format_short_description(self, *, deletion_notation="sequence"):
+    def format_short_description(
+            self, *, deletion_notation: Literal["sequence", "range"] = "sequence",
+    ) -> str:
         """Render the short description with a protein deletion display choice.
 
         Parameters
@@ -125,9 +133,12 @@ class MutationEffect(Serializable):
     def _format_short_description(self, deletion_notation):
         return self.short_description
 
-    transcript = None
-    gene = None
-    orf_annotation = None
+    # Ordinary annotation and ORF/import adapters expose different transcript
+    # and gene views. Keep their present values gradual until those protocols
+    # are defined (#653), rather than inferring that these fields are always None.
+    transcript: Any | None = None
+    gene: Any | None = None
+    orf_annotation: "ORFAnnotation | None" = None
 
     @property
     def orf(self):
@@ -142,7 +153,7 @@ class MutationEffect(Serializable):
         return self.orf.transcript if self.orf is not None else self.transcript
 
     @property
-    def original_protein_sequence(self):
+    def original_protein_sequence(self) -> str | None:
         """Amino acid sequence of a coding transcript (without the nucleotide
         variant/mutation)
         """
@@ -154,28 +165,28 @@ class MutationEffect(Serializable):
             return None
 
     @property
-    def gene_name(self):
+    def gene_name(self) -> str | None:
         if self.gene:
             return self.gene.name
         else:
             return None
 
     @property
-    def gene_id(self):
+    def gene_id(self) -> str | None:
         if self.gene:
             return self.gene.id
         else:
             return None
 
     @property
-    def transcript_name(self):
+    def transcript_name(self) -> str | None:
         if self.reference_transcript:
             return self.reference_transcript.name
         else:
             return None
 
     @property
-    def transcript_id(self):
+    def transcript_id(self) -> str | None:
         if self.reference_transcript:
             return self.reference_transcript.id
         else:
@@ -185,19 +196,19 @@ class MutationEffect(Serializable):
     # 1) is this a variant effect overlapping a transcript?
     # 2) does that transcript have a coding sequence?
     # 3) does the variant affect the coding sequence?
-    modifies_coding_sequence = False
+    modifies_coding_sequence: bool | None = False
 
     # Additionally:
     # 4) Does the change to the coding sequence result in a change to the
     # protein sequence?
-    modifies_protein_sequence = False
+    modifies_protein_sequence: bool | None = False
 
-    mutant_protein_sequence = None
+    mutant_protein_sequence: str | None = None
 
     # which residues in the mutant protein sequence are different from
     # the original?
-    aa_mutation_start_offset = None
-    aa_mutation_end_offset = None
+    aa_mutation_start_offset: int | None = None
+    aa_mutation_end_offset: int | None = None
 
     # Optional full :class:`~varcode.MutantTranscript` attached to
     # this effect (#269 / #296 / #335). SV effects and splice
@@ -206,7 +217,7 @@ class MutationEffect(Serializable):
     # default; an Isovar-style :class:`PhaseResolver` can attach an
     # assembled-contig MutantTranscript post-hoc via
     # :func:`varcode.phasing.apply_phase_resolver_to_effects`.
-    mutant_transcript = None
+    mutant_transcript: "MutantTranscript | None" = None
 
 
 class MultiOutcomeEffect(MutationEffect):

@@ -31,19 +31,9 @@ v = varcode.Variant("7", 117531114, "T", "A", genome=81)
 v.effects()
 ```
 
-Produces:
-
-```
-varcode.errors.ReferenceMismatchError:
-Reference allele mismatch for Variant(contig='7', start=117531114, ref='T', alt='A', reference_name='GRCh38')
-on Transcript(...) at transcript offset 620 (chromosome positions 117531114:117531114):
-variant reports ref='T' but the reference genome has 'G' at this position.
-This usually means the variant was called against a different genome
-build, the ref field was filled in with the patient's germline allele
-rather than the reference, or the variant is on the wrong strand.
-Pass raise_on_error=False to .effects() to receive a Failure effect
-instead of raising.
-```
+The error message identifies the genomic location, forward-strand alleles,
+and available transcript context. Its structured fields let callers inspect
+the mismatch without parsing that message.
 
 <a id="three-common-causes"></a>
 
@@ -72,13 +62,15 @@ except varcode.ReferenceMismatchError as e:
     e.transcript        # the Transcript being compared against
     e.expected_ref      # reference bases in transcript orientation
     e.observed_ref      # variant REF bases in transcript orientation
+    e.genomic_expected_ref  # reference bases on the genomic forward strand
+    e.genomic_observed_ref  # variant REF bases on the genomic forward strand
     e.transcript_offset # position in the transcript
 ```
 
 On minus-strand transcripts, `expected_ref` and `observed_ref` are
 reverse-complemented, so they won't match the forward-strand REF text in your
-VCF. The current error message calls them genome bases; that misleading
-wording is tracked in [#434](https://github.com/openvax/varcode/issues/434).
+VCF. Use `genomic_expected_ref` and `genomic_observed_ref` when comparing with
+the original VCF. The error message also uses these forward-strand fields.
 
 ## `GenomeBuildMismatchError`
 

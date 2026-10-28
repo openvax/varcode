@@ -10,7 +10,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from serializable import Serializable
+
+if TYPE_CHECKING:
+    from pyensembl import Transcript
+
+    from .annotators import EffectAnnotator
+    from .effects import EffectCollection, MutationEffect
 
 from .contigs import normalize_contig_name, _convert_ucsc_contig_name
 from .nucleotides import (
@@ -462,9 +472,11 @@ class Variant(Serializable):
         return predict_orf_effects(self, catalog=catalog, transcripts=transcripts, **kwargs)
 
     def effects(
-            self, raise_on_error=True,
-            annotator=None, phase_resolver=None, rna_resolver=None,
-            germline=None, extra_orfs=None, transcript_filter=None):
+            self, raise_on_error: bool = True,
+            annotator: str | EffectAnnotator | None = None,
+            phase_resolver=None, rna_resolver=None,
+            germline=None, extra_orfs=None, transcript_filter=None,
+    ) -> EffectCollection:
         """Predict the variant's effects on overlapping transcripts.
 
         Splice-disrupting effects are always wrapped in a
@@ -557,6 +569,14 @@ class Variant(Serializable):
             rejecting all overlapping transcripts can return an empty collection.
             Predicate errors follow ``raise_on_error``. Use a deterministic
             predicate: it may be called again for another variant or ORF.
+
+        Returns
+        -------
+        EffectCollection
+            Transcript consequences and any requested additional ORF effects.
+            A consequence may retain several candidate outcomes; ranking does
+            not establish which one is expressed. Transcript selection can
+            produce an empty collection.
         """
         from .extra_orfs import prepare_extra_orfs
         prepared = prepare_extra_orfs(extra_orfs)  # A bad value raises before any annotation.
@@ -583,8 +603,35 @@ class Variant(Serializable):
         return effects
 
     def effect_on_transcript(
-            self, transcript, annotator=None, germline=None, phase_resolver=None):
-        """Annotate one transcript using the same selection as :meth:`effects`."""
+            self, transcript: Transcript,
+            annotator: str | EffectAnnotator | None = None,
+            germline=None, phase_resolver=None,
+    ) -> MutationEffect:
+        """Annotate one transcript using the same selection as :meth:`effects`.
+
+        Parameters
+        ----------
+        transcript : pyensembl.Transcript
+            Reference transcript to annotate.
+        annotator : str, EffectAnnotator, or None
+            Registered name or instance; None uses the current default.
+        germline : GermlineContext or None
+            Optional patient context for the selected annotator.
+        phase_resolver : resolver object or None
+            Optional evidence for germline phase.
+
+        Returns
+        -------
+        MutationEffect
+            Consequence, including an outcome set where needed. An annotator's
+            explicit refusal becomes Unresolved; it does not return None or
+            NotImplemented from this public method.
+
+        Notes
+        -----
+        Annotation errors propagate. Use ``effects(raise_on_error=False)``
+        to collect Failure effects across overlapping transcripts instead.
+        """
         return predict_variant_effect_on_transcript(
             self, transcript, annotator=annotator, germline=germline,
             phase_resolver=phase_resolver)

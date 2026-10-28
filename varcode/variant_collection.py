@@ -10,7 +10,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 from collections import OrderedDict
+from typing import TYPE_CHECKING, Any
 import warnings
 
 import pandas as pd
@@ -31,6 +34,9 @@ from .errors import InvalidContigError, SampleNotFoundError
 from .genotype import Genotype, Zygosity
 from .variant import Variant, variant_ascending_position_sort_key
 from .version import __version__ as _varcode_version
+
+if TYPE_CHECKING:
+    from .annotators import EffectAnnotator
 
 
 class VariantCollection(Collection):
@@ -120,10 +126,12 @@ class VariantCollection(Collection):
         return self.from_dict(kwargs)
 
     def effects(
-            self, raise_on_error=None,
-            annotator=None, phase_resolver=None, rna_resolver=None,
-            germline=None, validate_reference=True, extra_orfs=None,
-            transcript_filter=None):
+            self, raise_on_error: bool | None = None,
+            annotator: str | EffectAnnotator | None = None,
+            phase_resolver=None, rna_resolver=None,
+            germline=None, validate_reference: bool = True, extra_orfs=None,
+            transcript_filter=None,
+    ) -> EffectCollection:
         """
         Splice-disrupting effects are always wrapped in a
         :class:`varcode.splice_outcomes.SpliceOutcomeSet` carrying the
@@ -187,6 +195,13 @@ class VariantCollection(Collection):
             annotation, as in :meth:`Variant.effects`. Joint haplotype effects
             use only the selected placements. A non-callable value raises
             even for an empty collection.
+
+        Returns
+        -------
+        EffectCollection
+            Individual consequences plus any joint haplotype or additional ORF
+            effects. Empty input returns an empty collection. Failure and
+            unresolved outcomes remain explicit according to the error policy.
         """
         from datetime import datetime, timezone
 
@@ -393,7 +408,7 @@ class VariantCollection(Collection):
         """
         # three levels of nested dictionaries!
         #   {source name: {variant: {attribute: value}}}
-        combined_dictionary = {}
+        combined_dictionary: dict[str, dict[Variant, dict[str, Any]]] = {}
         for source_to_metadata_dict in dictionaries:
             for source_name, variant_to_metadata_dict in source_to_metadata_dict.items():
                 combined_dictionary.setdefault(source_name, {})
@@ -506,6 +521,8 @@ class VariantCollection(Collection):
             getattr(v, "is_structural", False) for v in self) else ()
         def row_from_variant(variant):
             error = None
+            gene_names: str | None
+            gene_ids: str | None
             try:
                 if variant in missing:
                     raise InvalidContigError(missing[variant])

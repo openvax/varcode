@@ -35,6 +35,8 @@ for input requirements and examples.
 
 ::: varcode.PhasePartition
 
+::: varcode.PhaseHypothesis
+
 ::: varcode.enumerate_phase_hypotheses
 
 ::: varcode.detect_loh

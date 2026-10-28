@@ -7,6 +7,10 @@ See [Transcript models](transcript_models.md) for sequence access and
 
 ::: varcode.MutantTranscript
 
+::: varcode.ReferenceSegment
+
+::: varcode.TranscriptEdit
+
 ::: varcode.apply_variant_to_transcript
 
 ::: varcode.apply_variants_to_transcript

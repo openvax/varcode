@@ -17,13 +17,22 @@ is required.
 For example, this adapter takes a callable that returns an effect or `None`:
 
 ```python
+from collections.abc import Callable
+from types import NotImplementedType
+
+from pyensembl import Transcript
+from varcode import MutationEffect, Variant
+
+
 class MyAnnotator:
     name = "my_model"
 
-    def __init__(self, model):
+    def __init__(self, model: Callable[[Variant, Transcript], MutationEffect | None]):
         self.model = model
 
-    def annotate_on_transcript(self, variant, transcript):
+    def annotate_on_transcript(
+            self, variant: Variant, transcript: Transcript,
+    ) -> MutationEffect | NotImplementedType:
         prediction = self.model(variant, transcript)
         if prediction is None:
             return NotImplemented
@@ -41,6 +50,11 @@ effects = variant.effects(annotator=annotator.name)
 ```
 
 Here `my_model` is your prediction callable and `variant` is a loaded variant.
+
+The annotations let a type checker verify the required EffectAnnotator
+protocol without making your class inherit from it. `register_annotator()`
+returns the same concrete instance. For concurrent work, pass `annotator=`
+per call; `use_annotator()` temporarily changes the process-wide default.
 
 ## Unsupported inputs and errors
 

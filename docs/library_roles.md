@@ -54,33 +54,30 @@ predicted protein change and evidence that the RNA exists are separate facts.
   Change flags for imported partial proteins stay unresolved unless mapped,
   in-frame observed codons differ from the reference; an unobserved suffix is
   not a demonstrated protein deletion.
-- **Isovar:** the small-variant path reconstructs RNA context; the separate
-  supplied-fusion path validates RNA and retains alternative frame hypotheses.
-  Automated collection, alternative-path assembly, and competitive reconciliation
-  for nominated SVs are tracked in
-  [Isovar #305](https://github.com/openvax/isovar/issues/305).
-- **Vaxrank:** the ordinary RNA path selects Isovar's top protein; a separate
-  supplied-fusion adapter retains coding hypotheses. The opt-in DNA fallback
-  checks each structural candidate's protein before ranking
-  ([Vaxrank #482](https://github.com/openvax/vaxrank/issues/482)).
-  `--germline-vcf` reaches Isovar, so matched germline edits in assembled RNA
-  are labelled rather than left unexplained.
+- **Isovar:** consult its [RNA reconstruction and reconciliation guide](https://github.com/openvax/isovar/blob/master/docs/library-responsibilities.md)
+  for the inputs and evidence supported by each reconstruction path.
+- **Vaxrank:** consult its [candidate evaluation guide](https://openvax.github.io/vaxrank/library-responsibilities/)
+  for supported imports, selection policies, and DNA fallback behavior.
+
+Those downstream workflows evolve independently of Varcode. Use their own
+documentation for current integration coverage rather than treating Varcode's
+ability to represent a hypothesis as proof of an end-to-end pipeline.
 
 A DNA-only fallback remains a prediction without RNA confirmation. It must not
 silently discard alternatives or relabel missing RNA as evidence of absence.
 
-## Compatible versions
+## Compatible installations
 
-| Package | Requires |
-|---|---|
-| Vaxrank 3.24 | Varcode ≥10.4.1, <11 and Isovar ≥1.38.1, <1.39 |
-| Vaxrank 3.22, 3.23 | Varcode ≥10.4.1, <11 and Isovar 1.37 |
-| Isovar 1.37.2 or later | Varcode ≥10.5.2, <11 |
-| Isovar ≥1.38 | Needed for germline trans from RNA reads; 1.36 and 1.37 report germline cis only |
-| Isovar ≥1.36 | Needed for `IsovarReadPhasing.in_cis`; older versions report cis only |
+The installed releases' dependency metadata defines the compatible package
+ranges. Install or upgrade the related packages together, then run
+`python -m pip check` in that environment. Package metadata checks dependency
+constraints; tests of the workflows you use check integration behavior.
 
-Varcode 10.4.1 fixes a structural-effect ranking crash that Vaxrank's DNA
-fallback hits on earlier Varcode 10 releases.
+For source checkouts, consult the current
+[Isovar requirements](https://github.com/openvax/isovar/blob/master/requirements.txt)
+and [Vaxrank requirements](https://github.com/openvax/vaxrank/blob/main/requirements.txt).
+The [Varcode changelog](changelog.md) records version-specific fixes. Historical
+minimum-version notes are not a compatibility guarantee for every later release.
 
 ## Other library guides
 

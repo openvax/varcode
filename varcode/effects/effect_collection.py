@@ -10,7 +10,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 from collections import OrderedDict
+from typing import TYPE_CHECKING
 
 import pandas as pd
 from sercol import Collection
@@ -26,12 +29,16 @@ from ..csv_helpers import (
 )
 from ..version import __version__ as _varcode_version
 from .common import validate_deletion_notation
+
 from .effect_ordering import (
     effect_priority,
     multi_gene_effect_sort_key,
     top_priority_effect,
     transcript_effect_priority_dict
 )
+
+if TYPE_CHECKING:
+    from .effect_classes import MutationEffect
 
 
 def _default_effect_sort_key(effect):
@@ -238,7 +245,7 @@ class EffectCollection(Collection):
         return self.filter(
             lambda effect: effect_priority(effect) >= min_priority)
 
-    def drop_silent_and_noncoding(self, keep_unresolved=True):
+    def drop_silent_and_noncoding(self, keep_unresolved: bool = True) -> EffectCollection:
         """
         Keep effects with a protein-changing candidate or unresolved SV outcome.
 
@@ -249,6 +256,11 @@ class EffectCollection(Collection):
             False requires a positive prediction of protein change. Candidate
             sets are retained intact if any alternative qualifies; their order
             and provenance are unchanged.
+
+        Returns
+        -------
+        EffectCollection
+            Filtered collection retaining complete qualifying outcome sets.
         """
         from .sequence_change import modification_status
 
@@ -290,13 +302,21 @@ class EffectCollection(Collection):
                 lines.append("  Highest Priority Effect: %s" % best)
         return "\n".join(lines)
 
-    def top_priority_effect(self):
-        """Highest priority MutationEffect of all genes/transcripts overlapped
-        by this variant. If this variant doesn't overlap anything, then this
-        this method will return an Intergenic effect.
+    def top_priority_effect(self) -> MutationEffect:
+        """Select one effect using Varcode's severity and transcript heuristics.
 
-        If multiple effects have the same priority, then return the one
-        which is associated with the longest transcript.
+        Returns
+        -------
+        MutationEffect
+            Selected effect, retaining complete splice outcome sets. This is
+            a ranking summary, not evidence that the selected transcript or
+            outcome is expressed. See :func:`varcode.top_priority_effect`.
+
+        Raises
+        ------
+        ValueError
+            The collection is empty. This method does not synthesize an
+            Intergenic effect for an empty or filtered collection.
         """
         return top_priority_effect(self.elements)
 
@@ -410,7 +430,7 @@ class EffectCollection(Collection):
         ] + list(structural_columns)
 
         def row_from_effect(effect):
-            row = OrderedDict()
+            row: OrderedDict[str, object] = OrderedDict()
 
             row['variant'] = str(effect.variant.short_description)
             for field_name in variant_properties:
