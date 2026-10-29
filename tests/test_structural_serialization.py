@@ -11,6 +11,9 @@ from varcode.effects import (
 )
 from .test_sv_consequences import local_model  # isolate individual transcript models
 
+# Legacy wrapper contract; the default composition path has separate regression tests.
+pytestmark = pytest.mark.usefixtures("legacy_annotator")
+
 
 @pytest.fixture
 def transcript():

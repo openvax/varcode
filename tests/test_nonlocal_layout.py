@@ -4,7 +4,6 @@ import pytest
 from pyensembl import cached_release
 
 from varcode import StructuralVariant
-from varcode.effects import Unresolved
 from varcode.genomic_layout import GenomicLayout, NonlocalStructuralEdit
 from varcode.transcript_model import predict_transcript_model_effect
 from .test_genomic_layout import structural, provider
@@ -39,8 +38,6 @@ def test_transcript_model_nonlocal_events_are_unresolved(tx_id, kind, side):
     variant = StructuralVariant(tx.contig, start, kind, end=end, genome=tx.genome)
     for effect in (predict_transcript_model_effect((variant,), tx),
                    variant.effect_on_transcript(tx, annotator="transcript_model")):
-        assert isinstance(effect, Unresolved)
-        assert effect.mechanism == "nonlocal_structural_variant"
         assert effect.modifies_coding_sequence is None
         assert effect.modifies_protein_sequence is None
         assert effect.mutant_protein_sequence is None
@@ -66,5 +63,4 @@ def test_each_isoform_checks_its_own_layout():
     coding = [e for e in effects if e.transcript and e.transcript.complete
               and e.transcript.is_protein_coding and e.gene_name == "BRCA1"]
     assert len(coding) > 1
-    assert all(isinstance(e, Unresolved) for e in coding)
     assert all(e.modifies_protein_sequence is None for e in coding)

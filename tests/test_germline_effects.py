@@ -33,6 +33,7 @@ import pytest
 from pyensembl import cached_release
 
 from varcode import (
+    get_annotator,
     Completeness,
     EffectCollection,
     GenomeBuildMismatchError,
@@ -131,7 +132,7 @@ class TestBackCompat:
         v = _somatic()
         ctx = GermlineContext.empty()
         without = list(v.effects(raise_on_error=False))
-        with_empty = list(v.effects(raise_on_error=False, germline=ctx))
+        with_empty = list(v.effects(raise_on_error=False, germline=ctx, annotator="fast"))
         assert [type(e).__name__ for e in without] == [
             type(e).__name__ for e in with_empty]
 
@@ -709,7 +710,7 @@ class TestHypothesisLimit:
             GermlineContext.from_variants([germline], reference_name="GRCh38"),
             max_phase_hypotheses=1)
         e = predict_germline_aware_effect(
-            splice_variant, _cftr(), ctx, get_default_annotator())
+            splice_variant, _cftr(), ctx, get_annotator("fast"))
         assert isinstance(e, HypothesisLimit)
         assert isinstance(e.reference_effect, SpliceOutcomeSet)
         assert effect_priority(e) == effect_priority(
@@ -788,7 +789,7 @@ class TestEffectsKwargWiring:
         v = _somatic()
         ctx = GermlineContext.from_variants(
             [_same_codon_germline()], reference_name="GRCh38")
-        effects = list(v.effects(raise_on_error=False, germline=ctx))
+        effects = list(v.effects(raise_on_error=False, germline=ctx, annotator="fast"))
         # At least one PhaseCandidateSet among the per-transcript
         # outputs (CFTR has multiple transcripts).
         assert any(isinstance(e, PhaseCandidateSet) for e in effects)
@@ -797,7 +798,7 @@ class TestEffectsKwargWiring:
         somatic = VariantCollection([_somatic()])
         ctx = GermlineContext.from_variants(
             [_same_codon_germline()], reference_name="GRCh38")
-        effects = somatic.effects(germline=ctx, raise_on_error=False)
+        effects = somatic.effects(germline=ctx, raise_on_error=False, annotator="fast")
         assert any(isinstance(e, PhaseCandidateSet) for e in effects)
         # Annotator metadata still tracks the underlying annotator,
         # not "germline" (germline is a transcript modifier, not an

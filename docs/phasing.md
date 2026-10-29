@@ -27,15 +27,13 @@ Use one resolver per sample. Phase-set tags are local to their source VCF:
 matching tags in independently produced tumor and normal files do not establish
 relative phase. A joint call set or molecular evidence is needed.
 
-Individual effects remain alongside joint results. For supported point edits,
-the default annotator returns a joint `HaplotypeEffect`. Unsupported groups are
-retained as `Unresolved` with their `variants` and `phase_source`; they are
-never silently dropped. The default declines joint germline composition rather
-than ignoring the patient baseline.
-
-The selected annotator owns the joint prediction: the experimental
-`annotator="transcript_model"` returns classified phase/splice candidates
-instead. See the [annotator contract](annotator_contract.md#joint-haplotypes).
+Individual effects remain alongside joint results. The default returns a
+classified joint effect with phase/splice candidates, composing supplied germline
+and local structural edits through the same transcript path. Unsupported groups
+remain `Unresolved` with their `variants` and `phase_source`; they are never
+silently dropped. Explicit `annotator="fast"` retains the legacy
+`HaplotypeEffect` wrapper and limited context support. See the
+[annotator contract](annotator_contract.md#joint-haplotypes).
 
 For germline-aware somatic annotation, the resolver's collection should contain
 both sets of alleles, but call `somatic_variants.effects(germline=...,
@@ -158,23 +156,19 @@ print(type(eff).__name__, eff.short_description)
 ```python
 eff = somatic.effect_on_transcript(cftr, germline=ctx)
 print(type(eff).__name__, eff.short_description)
-# PhaseCandidateSet ?p.L159M
+# Substitution p.L159M; other comparisons remain in candidates
 
-for c in eff.candidates:
-    ev = c.evidence
-    print(f"  haplotype={ev['haplotype']:<2} "
-          f"germline_in_cis={[v.short_description for v in ev['germline_variants']]} "
-          f"=> {c.effect.short_description}")
-# haplotype=B  germline_in_cis=[]                            => p.L159M
-# haplotype=A  germline_in_cis=['chr7 g.117531101T>C']       => p.S159T
+for candidate in eff.candidates:
+    for hypothesis in candidate.hypotheses:
+        cis = [v.short_description for v, state in hypothesis.phase if state == "cis"]
+        print(cis, candidate.effect.short_description)
+# []                         p.L159M
+# ['chr7 g.117531101T>C']      p.S159T
 ```
 
-The `?` prefix on `?p.L159M` flags the description as the
-most-likely candidate of a `PhaseCandidateSet`. In application code,
-check `isinstance(eff, PhaseCandidateSet)` and iterate
-`eff.candidates` (a tuple of `EffectCandidate` objects carrying
-per-hypothesis evidence keys); use `eff.effects` if only the
-inner classified `MutationEffect`s are needed.
+The top description reports the preferred comparison, not certainty about phase.
+Inspect each candidate's hypotheses and products. Several equivalent hypotheses
+can merge into one candidate while preserving their phase provenance.
 
 ### With known phase
 

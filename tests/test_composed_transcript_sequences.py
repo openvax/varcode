@@ -134,6 +134,12 @@ def test_splice_products_assemble_supplied_bases_on_both_strands(reverse, with_s
     for candidate in result.candidates:
         for outcome in candidate.outcomes:
             mechanism, = [option.mechanism for _, option in outcome.hypothesis.splice_plan.choices]
+            baseline_mechanisms = [option.mechanism for _, option in
+                                   outcome.hypothesis.baseline_splice_plan.choices]
+            # The inherited exonic splice-region edit has its own alternatives;
+            # these sequence expectations describe its annotated baseline path.
+            if baseline_mechanisms != ["normal"]:
+                continue
             assert outcome.effect.baseline_transcript.cdna_sequence == "ATGCGAGCTTAG"
             if not with_sequence and mechanism in ("intron_retention", "cryptic"):
                 assert isinstance(outcome.effect, Unresolved)

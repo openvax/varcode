@@ -1,7 +1,7 @@
 # Annotators API
 
 Ordinary annotation uses the default without selecting an implementation.
-See [experimental annotators](experimental_annotators.md) for alternatives and
+See [annotation choices](experimental_annotators.md) for alternatives and
 [Writing an annotator](annotator_contract.md) for extensions.
 
 ## Annotators
@@ -28,8 +28,8 @@ See [experimental annotators](experimental_annotators.md) for alternatives and
 
 ## Experimental transcript model
 
-This annotator is opt-in with `annotator="transcript_model"`; `fast` remains
-the default. The former `realized` name and public imports remain aliases.
+This is the default annotator; `annotator="fast"` selects the compatibility
+implementation. The former `realized` name and public imports remain aliases.
 See [supported inputs and results](experimental_annotators.md) before using it.
 
 ::: varcode.TranscriptModelEffectAnnotator

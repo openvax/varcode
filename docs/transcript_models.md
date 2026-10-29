@@ -39,13 +39,11 @@ candidate exposes its own products through the same effect accessors. Products
 with different distant sequences remain distinct candidates, even if their
 local amino-acid changes match.
 
-The scope of the germline comparison matters: the default `fast` and
-`protein_diff` paths consider a local window around the somatic variant. Their
-retained models include those selected edits, not every supplied patient allele.
-For full-transcript composition, select `annotator="transcript_model"`; it
-considers supplied germline calls across the transcript span. Unknown phase
-still produces alternatives or a hypothesis limit, and missing germline calls
-cannot be recovered. See [experimental annotation](experimental_annotators.md).
+The default considers supplied germline calls across the whole transcript span.
+Unknown phase produces alternatives or a hypothesis limit; missing germline
+calls cannot be recovered. The explicit compatibility selections `fast` and
+`protein_diff` retain their local germline lookup. See
+[annotation choices](experimental_annotators.md).
 
 ## Selenocysteine
 
@@ -93,5 +91,12 @@ Extra-ORF effect JSON remains a separate unsupported operation; use its native
 | `MultiOutcomeEffect` | Several candidate effects, each with its own consequence and evidence |
 
 The [API reference](api_rna.md#mutant-transcripts) lists model fields and construction
-helpers. The experimental transcript-model annotator uses additional baseline
+helpers. The default transcript-model annotator uses baseline
 and mutant product wrappers; see [its result format](experimental_annotators.md#transcript-model-results).
+
+
+Ambiguous reference codons retain their uniquely determined amino acid, or `X`
+when no unique residue is established. `X` is an unknown residue, including a
+possible stop for mixed sense/stop codons; it is not a concrete amino acid.
+The original cDNA remains available. See the
+[translation convention](https://biopython.org/docs/latest/api/Bio.Seq.html).

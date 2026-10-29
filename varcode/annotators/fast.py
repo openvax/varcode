@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""The built-in default annotator, registered as ``fast`` for compatibility.
+"""The compatibility annotator, explicitly selected as ``fast``.
 
 Routes point edits to the established offset predictor and rearrangements
 to the structural implementation. Callers do not need to select by kind.

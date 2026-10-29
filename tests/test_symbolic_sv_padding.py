@@ -70,10 +70,14 @@ def test_vcf_deletion_does_not_remove_cftr_exon_terminal_anchor(tmp_path):
         "7\t%d\t.\tT\t<DEL>\t.\tPASS\tEND=%d\n" % (first.end, second.end))
     (sv,) = load_vcf(str(path), genome=genome, parse_structural_variants=True)
     effect = sv.effect_on_transcript(tx)
-    assert first not in effect.affected_exons
-    assert second in effect.affected_exons
+    normal = next(o for c in effect.candidates for o in c.outcomes
+                  if all(option.mechanism == "normal"
+                         for _, option in o.hypothesis.splice_plan.choices))
+    origins = normal.mutant.evidence["genomic_positions"]
+    assert first.end in origins
+    assert not any(second.start <= p <= second.end for p in origins if p is not None)
     a, b = first.end - first.start + 1, second.end - second.start + 1
-    assert effect.mutant_transcript.cdna_sequence == tx.sequence[:a] + tx.sequence[a+b:]
+    assert normal.mutant.cdna_sequence == tx.sequence[:a] + tx.sequence[a+b:]
 
 
 def test_direct_constructor_span_defaults_remain_explicit():

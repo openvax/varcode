@@ -61,9 +61,13 @@ def test_same_rna_support_preserves_distinct_patient_baselines(inputs):
         transcript_filter=lambda t: t.id == transcript.id)
     supported = [o for c in results[0].candidates for o in c.outcomes
                  if o.mutant.evidence.get("rna_support")]
-    assert len(supported) == 2
+    expected = [o for c in original.candidates for o in c.outcomes
+                if o.mutant.cdna_sequence == skipped.mutant_transcript.cdna_sequence]
+    assert len(supported) == len(expected)
     assert {o.hypothesis.phase for o in supported} == {((germline, "cis"),), ((germline, "trans"),)}
-    assert len({o.baseline.cdna_sequence for o in supported}) == 2
+    assert {o.baseline.cdna_sequence for o in supported} == {
+        o.baseline.cdna_sequence for o in expected}
+    assert len({o.baseline.cdna_sequence for o in supported}) >= 2
     assert len({o.mutant.cdna_sequence for o in supported}) == 1
     assert all(o.hypothesis.evidence["phase_state"] == "unknown" for o in supported)
 

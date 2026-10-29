@@ -173,15 +173,13 @@ def _is_canonical_junction(transcript, left, right):
         return False
     if right.exon_number != left.exon_number + 1:
         return False
-    left_exon = _ordered_exons(transcript)[left.exon_number - 1]
-    right_exon = _ordered_exons(transcript)[right.exon_number - 1]
     if transcript.on_backward_strand:
         return (
-            left.last_genomic_position == left_exon.start
-            and right.first_genomic_position == right_exon.end)
+            left.last_genomic_position == left.reference_start
+            and right.first_genomic_position == right.reference_end)
     return (
-        left.last_genomic_position == left_exon.end
-        and right.first_genomic_position == right_exon.start)
+        left.last_genomic_position == left.reference_end
+        and right.first_genomic_position == right.reference_start)
 
 
 def junction_signature(transcript, runs):
@@ -433,6 +431,7 @@ def _unchanged_product_effect(variant, transcript, mutant):
         return Intronic(variant, transcript, nearest_exon=None,
                         distance_to_exon=0)
     first_offset = min(offsets)
+    last_offset = max(offsets)
     cds_start = min(transcript.start_codon_spliced_offsets)
     stop_offsets = tuple(transcript.stop_codon_spliced_offsets)
     cds_end = max(stop_offsets) + 1 if stop_offsets else (
@@ -443,6 +442,7 @@ def _unchanged_product_effect(variant, transcript, mutant):
     protein = str(transcript.protein_sequence)
     if mapped_offsets and mutant.evidence.get("start_codon_offset") is not None:
         first_offset = min(mapped_offsets)
+        last_offset = max(mapped_offsets)
         cds_start = mutant.evidence["start_codon_offset"]
         protein = mutant.protein_sequence
         cds_end = cds_start + 3 * (len(protein) + 1)
@@ -455,14 +455,26 @@ def _unchanged_product_effect(variant, transcript, mutant):
     if first_offset >= cds_end:
         return ThreePrimeUTR(variant, transcript)
     aa_pos = (first_offset - cds_start) // 3
-    aa_ref = (
-        protein[aa_pos] if 0 <= aa_pos < len(protein) else "")
+    aa_end = (min(last_offset, cds_end - 1) - cds_start) // 3 + 1
+    aa_ref = protein[aa_pos:aa_end] if 0 <= aa_pos < len(protein) else ""
     effect = Silent(variant, transcript, aa_pos=aa_pos, aa_ref=aa_ref)
     if mutant_origins:
         effect.excluded_from_mrna = not any(
             start <= position <= end for position in mutant_origins
             if position is not None)
     return effect
+
+
+def _unknown_codons(product):
+    """Mapped ambiguous codons; equal X strings alone cannot prove equality."""
+    start = product.evidence.get("start_codon_offset")
+    if start is None or product.cdna_sequence is None:
+        return ()
+    origins = product.evidence.get("genomic_positions", ())
+    return tuple((origins[start + 3 * i:start + 3 * i + 3],
+                  product.cdna_sequence[start + 3 * i:start + 3 * i + 3])
+                 for i, residue in enumerate(product.protein_sequence or "")
+                 if residue == "X")
 
 
 def classify_products(variant, transcript, baseline, mutant):
@@ -487,6 +499,16 @@ def classify_products(variant, transcript, baseline, mutant):
         return finish(StartLoss(variant, transcript, mutant_transcript=mutant_model,
                          ref_codon=baseline.evidence.get("start_codon"),
                          ref_codon_offset=baseline.evidence.get("start_codon_offset")))
+    if "X" in baseline.protein_sequence or "X" in mutant.protein_sequence:
+        before, after = baseline.protein_sequence, mutant.protein_sequence
+        offset = next((i for i, (a, b) in enumerate(zip(before, after)) if a != b),
+                      min(len(before), len(after)))
+        ambiguous = (before[offset:offset + 1] == "X" or after[offset:offset + 1] == "X"
+                     or before == after and _unknown_codons(baseline) != _unknown_codons(mutant))
+        if ambiguous:
+            return finish(Unresolved(
+                variant, transcript, mechanism="ambiguous_coding_sequence",
+                reason="Ambiguous codons do not establish the first protein change"))
     if baseline.protein_sequence == mutant.protein_sequence:
         ref_codon = baseline.evidence.get("start_codon")
         alt_codon = mutant.evidence.get("start_codon")

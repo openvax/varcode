@@ -2,8 +2,8 @@
 
 An annotator predicts an effect for a variant on a transcript. Register a custom
 implementation when you want to compare your model through Varcode's public
-annotation interface. For the built-in experiments, see
-[Experimental annotators](experimental_annotators.md).
+annotation interface. For the built-in implementations, see
+[Annotation pipeline and compatibility](experimental_annotators.md).
 
 ## Required method
 
@@ -103,22 +103,20 @@ JSON round trips retain this group context and any attached observed RNA models.
 The phase resolver may also supply observed mutant transcripts, whose source and
 coverage must remain distinguishable from inferred sequences.
 
-The default and `protein_diff` explicitly share the established point-edit
-haplotype builder, returning `HaplotypeEffect`. They prefer a supplied RNA model
-and decline joint patient-baseline composition. Without an observed model,
-unsupported structural/splice groups and conflicting edits stay unresolved.
-`transcript_model` uses its multi-variant engine and returns an ordinary classified
-effect with alternatives in `candidates`. It uses germline windows around every
-group member and retains `(variant, model)` observations in
-`observed_mutant_transcripts`, without replacing modeled candidate sequences.
+The default uses its multi-variant engine and returns an ordinary classified
+effect with alternatives in `candidates`. Germline lookup covers the transcript
+span. Supplied RNA models refine the same candidates, preserving partial or
+unmatched models as unresolved comparisons. No observation sidecar is needed.
+The explicit `fast` and `protein_diff` selections retain the legacy point-edit
+builder and `HaplotypeEffect` result type.
 
 ## Default implementation
 
-The default owns point-variant prediction, structural handling, and the existing
-germline-aware point-edit path. Structural code lives in
-`varcode.effects.structural` as internal helpers; both the default and the
-transcript model's fusion path call those helpers directly. There is no separate
-structural annotator or automatic router between implementations.
+The default centralizes genomic layout editing, paired splice enumeration,
+transcript realization and classification. Existing helpers in
+`varcode.effects.structural` own typed junctions, BNDs, inversions, nonlocal
+rearrangements and supplied transcript assemblies. Unsupported inputs
+remain explicit; there is no automatic fallback between annotators.
 
 Structural transcript models can retain the builder label `structural_variant`
 in their provenance, while the effect collection records the selected annotator.

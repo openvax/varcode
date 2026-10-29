@@ -366,20 +366,27 @@ def apply_phase_resolver_to_effects(effects, phase_resolver):
         if variant is None or transcript is None:
             replacements.append(e)
             continue
-        mt = phase_resolver.mutant_transcript(variant, transcript)
-        if mt is not None:
-            if getattr(e, "realized_candidates", None):
-                from .effects.effect_classes import Unresolved
-                from .rna_evidence import make_rna_outcome
-                from .transcript_model import _refine_transcript_model_effect
+        if getattr(e, "realized_candidates", None):
+            from .effects.effect_classes import Unresolved
+            from .rna_evidence import make_rna_outcome
+            from .transcript_model import _refine_transcript_model_effect
 
-                observed = Unresolved(variant, transcript, "rna_transcript_comparison")
-                observed.mutant_transcript = mt
-                e = _refine_transcript_model_effect(e, (make_rna_outcome(
-                    observed, source=mt.annotator_name, extra_evidence=mt.evidence),))
-                changed = True
-            else:
-                e.mutant_transcript = mt
+            observations = []
+            for member in getattr(e, "variants", (variant,)):
+                model = phase_resolver.mutant_transcript(member, transcript)
+                if model is not None:
+                    observed = Unresolved(member, transcript, "rna_transcript_comparison")
+                    observed.mutant_transcript = model
+                    observations.append(make_rna_outcome(
+                        observed, source=model.annotator_name, extra_evidence=model.evidence))
+            if observations:
+                refined = _refine_transcript_model_effect(e, observations)
+                changed = changed or refined is not e
+                e = refined
+        else:
+            model = phase_resolver.mutant_transcript(variant, transcript)
+            if model is not None:
+                e.mutant_transcript = model
         replacements.append(e)
     if changed:
         from .rna_evidence import _replace_effects

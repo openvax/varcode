@@ -27,14 +27,12 @@ With many unphased germline variants nearby, the result is unresolved instead;
 see the [phase enumeration limit](#phase-enumeration-limit).
 No annotator selection is needed.
 
-The default lookup is local to the somatic codon/splice signal. When a
-comparison is assembled, `effect.baseline_transcript` and
-`effect.mutant_transcript` retain the actual selected edits and full sequences,
-including inherited residues outside the changed amino acid. They do not
-imply that distant germline calls were considered. For composition across
-the full transcript, use the opt-in
-[transcript-model path](experimental_annotators.md#comparing-annotators), which
-uses the same `germline=`, `phase_resolver=` and `rna_resolver=` inputs.
+The default lookup covers the full transcript span, including introns that a
+splice hypothesis may retain. `effect.baseline_transcript` and
+`effect.mutant_transcript` retain the actual products compared. The baseline
+includes inherited alleles assigned in cis by each hypothesis. The same
+`germline=`, `phase_resolver=` and `rna_resolver=` inputs compose through the
+[shared transcript pipeline](experimental_annotators.md#comparing-annotators).
 
 ## Constructing a `GermlineContext`
 
@@ -73,8 +71,7 @@ silently mis-treating sparse data as complete.
 | `HOTSPOTS_ONLY` | Panel-of-normals, ClinVar | ⇒ unknown |
 | `EMPTY` | Explicit no-data | n/a |
 
-When the context is sparse and a somatic variant lands in a window
-with no germline calls, varcode flags `effect.germline_unknown =
+When the context is sparse, Varcode flags `effect.germline_unknown =
 True` rather than silently assuming ref/ref.
 
 ## Cross-VCF build mismatch
@@ -102,9 +99,9 @@ coordinates. Prefer correcting mismatched inputs.
 
 ## How germline changes predictions
 
-Nearby germline variants can change the baseline codon or splice signal used
-to classify a somatic variant. The current default uses a local window, not a
-complete patient-genome reconstruction; see [limitations](#limitations).
+Supplied germline variants can change baseline codons or splice signals used
+to classify a somatic variant. This is a transcript comparison, not a complete
+patient-genome reconstruction; see [limitations](#limitations).
 
 Phase-set tags describe phase within their source VCF. Do not equate tags
 from independently produced tumor and normal files. Use a resolver backed by a
@@ -120,7 +117,7 @@ to each other (for example in one VCF phase set) count once, so both reduce the
 count.
 
 When the combinations exceed the cap (default eight, so more than three
-unphased germline variants in a window), Varcode does not guess a phase. It
+independent unphased germline variants across the transcript), Varcode does not guess a phase. It
 returns a `HypothesisLimit` effect, a kind of `Unresolved`:
 
 - Its `phase` records which germline variants are known cis, known trans, or
@@ -138,31 +135,27 @@ ctx = dataclasses.replace(ctx, max_phase_hypotheses=16)
 
 ## When a patient comparison cannot be built
 
-The default annotator does not support every combination of inherited and
-somatic edits. For example, an intronic splice-site variant cannot be applied
-directly to an already-spliced cDNA, and overlapping edits can conflict.
-If a hypothesis contains cis germline edits that cannot be composed, or the
-required baseline/joint protein is unavailable, its result is `Unresolved`
-with `mechanism="germline_composition"` and an explanatory `reason`.
+Each candidate retains its baseline and mutant products. Missing intronic
+sequence, conflicting edits and unsupported rearrangements remain explicit
+unresolved results rather than reference-relative substitutes. Unknown phase
+and splice choices stay in the same `candidate.outcomes` records; inspect
+`outcome.hypothesis.phase`, `baseline_splice_plan`, and `splice_plan`.
 
-The result retains `reference_effect`, the somatic annotation **without**
-germline context, for inspection and severity ranking. That diagnostic is not
-a patient-relative consequence. The unresolved result itself has no mutant
-protein sequence, and both change flags remain `None`, not `False`.
+A germline-disrupted site retains all compatible baseline mechanisms. An
+unchanged active site uses the same mechanism on both sides of the comparison;
+a site deleted or changed in the tumor does not force one guessed baseline.
+RNA support can select a matching predicted product without inventing phase.
 
-For known phase, inspect the returned effect directly. For unknown phase,
-inspect each `PhaseCandidateSet.candidates` entry: a failed cis hypothesis
-remains unresolved, while a trans hypothesis can retain its ordinary reference
-annotation. Candidate evidence preserves the cis germline variants. Both the
-phase alternatives and diagnostic reference effects survive native JSON and
-pickle round-trips. Unresolved status does not supply missing phase evidence
-or imply that the somatic variant is harmless.
+When all inherited edits are in trans, the affected haplotype has the reference
+baseline. Missing germline information cannot establish that the patient has
+that baseline. For unavailable fields, see
+[sequence availability](transcript_models.md#sequence-access).
 
-Supported patient-baseline comparisons, including start-loss codon details,
-are unchanged. When all nearby germline edits are in trans, the affected
-haplotype has the reference baseline and reference-relative annotation remains
-appropriate. For broader composition support, see the opt-in
-[transcript-model annotator](experimental_annotators.md#transcript-model-results).
+The explicit `annotator="fast"` compatibility path retains local germline
+lookup, `PhaseCandidateSet` results, and `Unresolved` with
+`mechanism="germline_composition"` for combinations it cannot compose. Its
+`reference_effect` is a diagnostic without germline context, not a patient
+consequence. Existing serialized results remain readable.
 
 ## Loss of heterozygosity (LOH)
 
@@ -193,20 +186,18 @@ Use `detect_germline_overlap` for an allele-match query. The deprecated
 `detect_loh` now returns `None` (not assessed) and warns, rather than making a
 zygosity claim.
 
-The experimental transcript model composes known-cis groups that mix inherited
+The default transcript model composes known-cis groups that mix inherited
 and somatic alleles, applying each inherited allele once; see
 [mixed inherited and somatic haplotypes](experimental_annotators.md#mixed-inherited-and-somatic-haplotypes).
 
 ## Limitations
 
-- **Germline-disrupted splice sites get no explicit downgrade.**
-  The default cannot compose all cis germline/splice hypotheses; unsupported
-  comparisons remain unresolved as described above. It does not infer that a
-  noncanonical signal is inactive or automatically reduce splice severity.
+- **Splice predictions remain hypotheses.** Sequence changes do not establish
+  which transcript is expressed or automatically reduce splice severity.
 - **Subclonal somatic and CNV dosage are not modeled.** Every
   somatic variant is treated as 100% present.
 - **Hypothesis cap of 8** by default when phase is unknown across
-  multiple germline variants in a window; above it the effect is
+  multiple germline variants across the transcript; above it the effect is
   [unresolved](#phase-enumeration-limit). Change it with
   `GermlineContext.max_phase_hypotheses`.
 - **Normalization mismatch** between germline and somatic VCFs
@@ -217,12 +208,11 @@ and somatic alleles, applying each inherited allele once; see
 
 ## Lower-level helpers
 
-The high-level `effects(germline=...)` path delegates to
-`predict_germline_aware_effect`. Both that function and
-`apply_germline_to_transcript` (returns a `MutantTranscript` with
-germline edits applied) are public — call them directly if you have
-a custom annotator or want the patient protein without full effect
-prediction.
+The high-level `effects(germline=...)` path uses the shared transcript model.
+`predict_transcript_model_effect` accepts an explicit known-cis group and
+supplied germline variants. The existing `predict_germline_aware_effect` and
+`apply_germline_to_transcript` helpers remain available for compatibility and
+custom small-edit annotators; they retain their local/cDNA-edit contracts.
 
 ## Related guides
 

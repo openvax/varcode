@@ -19,10 +19,15 @@ remain unsupported rather than silently losing their recoding semantics.
 
 from dataclasses import dataclass, replace
 from importlib.resources import files
+from itertools import product
 import json
 
 _BASES = "TCAG"
 _CODONS = tuple(b1 + b2 + b3 for b1 in _BASES for b2 in _BASES for b3 in _BASES)
+_IUPAC_BASES = dict(zip(
+    "ACGTRYSWKMBDHVNX",
+    ("A", "C", "G", "T", "AG", "CT", "CG", "AT", "GT", "AC",
+     "CGT", "AGT", "ACT", "ACG", "ACGT", "ACGT")))
 
 def _build_forward_table(aa_string):
     return {codon: aa for codon, aa in zip(_CODONS, aa_string) if aa != "*"}
@@ -184,6 +189,10 @@ def translate_sequence(
         selenocysteine=()):
     """Translate a cDNA string to amino acids using ``codon_table``.
 
+    Valid IUPAC codons yield their unique residue/stop, or ``X`` when
+    ambiguous (including a mixture of sense and stop possibilities).
+    Invalid symbols raise ``ValueError``.
+
     Parameters
     ----------
     nucleotide_sequence : str or convertible-to-str
@@ -212,14 +221,18 @@ def translate_sequence(
         if codon == "TGA" and i in selenocysteine:
             result.append("U")
             continue
-        if codon in stops:
+        aa = "*" if codon in stops else forward.get(codon)
+        if aa is None:
+            if any(base not in _IUPAC_BASES for base in codon):
+                raise ValueError(
+                    "Unknown codon %r at position %d of sequence" % (codon, i))
+            alternatives = {forward.get("".join(bases), "*")
+                            for bases in product(*(_IUPAC_BASES[base] for base in codon))}
+            aa = next(iter(alternatives)) if len(alternatives) == 1 else "X"
+        if aa == "*":
             if to_stop:
                 break
             result.append("*")
             continue
-        aa = forward.get(codon)
-        if aa is None:
-            raise ValueError(
-                "Unknown codon %r at position %d of sequence" % (codon, i))
         result.append(aa)
     return "".join(result)

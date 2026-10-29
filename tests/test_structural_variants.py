@@ -510,16 +510,8 @@ def test_vcf_loader_sv_carries_sample_info():
 
 
 def test_vcf_loader_sv_yields_structural_variant_effect():
-    """End-to-end: a VCF with an SV row, loaded with the flag on,
-    produces a typed :class:`StructuralVariantEffect` when annotated.
-
-    This is the gate that protects #257 / #252 / #261: if this test
-    works, downstream issues can build SV-typed pipelines on top of
-    ``load_vcf`` instead of constructing :class:`StructuralVariant`
-    objects by hand.
-    """
+    """A loaded symbolic DEL reaches the default layout, not placeholder edits."""
     from pyensembl import cached_release
-    from varcode.effects.effect_classes import StructuralVariantEffect
     ensembl_grch38 = cached_release(81)
     cftr = ensembl_grch38.transcript_by_id("ENST00000003084")
     body = (
@@ -537,22 +529,18 @@ def test_vcf_loader_sv_yields_structural_variant_effect():
         effects = vc.effects()
     finally:
         os.unlink(path)
-    sv_effects = [e for e in effects if isinstance(e, StructuralVariantEffect)]
-    assert len(sv_effects) >= 1, (
-        "Expected at least one StructuralVariantEffect from the loaded "
-        "<DEL> row; got effect types %s" % [type(e).__name__ for e in effects])
+    effect, = [effect for effect in effects if effect.transcript_id == cftr.id]
+    assert isinstance(effect.variant, StructuralVariant)
+    products = [outcome.mutant for candidate in effect.realized_candidates
+                for outcome in candidate.outcomes]
+    assert any(product.cdna_sequence is not None for product in products)
+    assert all(len(product.cdna_sequence) < len(cftr.sequence)
+               for product in products if product.cdna_sequence is not None)
 
 
 def test_sv_effect_on_transcript_uses_default_structural_prediction():
-    """Companion to the kind-dispatch fix in
-    :func:`predict_variant_effects`: the legacy
-    :meth:`Variant.effect_on_transcript` path also has to route SVs
-    through the default's structural helpers. Otherwise ``predict_*_effects``
-    is correct but ``sv.effect_on_transcript(t)`` quietly does offset
-    arithmetic on the placeholder ``ref="N"/alt="A"`` and emits
-    nonsense — a footgun for anyone who learned the legacy API."""
+    """Direct transcript calls use the same complete DEL products as collections."""
     from pyensembl import cached_release
-    from varcode.effects.effect_classes import StructuralVariantEffect
     ensembl_grch38 = cached_release(81)
     cftr = ensembl_grch38.transcript_by_id("ENST00000003084")
     sv = StructuralVariant(
@@ -564,9 +552,15 @@ def test_sv_effect_on_transcript_uses_default_structural_prediction():
         genome=ensembl_grch38,
     )
     effect = sv.effect_on_transcript(cftr)
-    assert isinstance(effect, StructuralVariantEffect), (
-        "SV.effect_on_transcript must dispatch to the SV annotator "
-        "and produce a StructuralVariantEffect — got %s" % type(effect).__name__)
+    assert effect.realized_candidates
+    collection_effect, = [e for e in sv.effects() if e.transcript_id == cftr.id]
+    assert type(effect) is type(collection_effect)
+    assert effect.mutant_transcript.cdna_sequence == collection_effect.mutant_transcript.cdna_sequence
+    sequences = [candidate.effect.mutant_transcript.cdna_sequence
+                 for candidate in effect.realized_candidates]
+    assert any(sequence is not None for sequence in sequences)
+    assert all(len(sequence) < len(cftr.sequence)
+               for sequence in sequences if sequence is not None)
 
 
 def test_vcf_loader_sv_explicit_protein_diff_passes_through():

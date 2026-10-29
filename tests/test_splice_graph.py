@@ -150,6 +150,27 @@ def test_reference_splice_sites_are_intact(reverse):
     assert statuses_for(reverse=reverse) == ()
 
 
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize("donor,acceptor", [("GC", "AG"), ("AT", "AC")])
+def test_annotated_noncanonical_sites_are_intact_until_edited(reverse, donor, acceptor):
+    sequence = FORWARD[:10] + donor + acceptor + FORWARD[14:]
+    if reverse:
+        sequence = reverse_complement(sequence)
+    transcript = Transcript(reverse)
+    layout = GenomicLayout.from_transcript(
+        transcript, flank=0,
+        sequence_provider=lambda contig, start, end: sequence[start - 1:end])
+    assert disrupted_splice_sites(transcript, layout) == ()
+
+    # Change the first base of this annotated donor on either strand.
+    variant = (point(14, reverse_complement(donor[0]), "G") if reverse
+               else point(11, donor[0], "C"))
+    altered = layout.apply_point_variant(variant)
+    assert any(status.key.side == "donor" and status.key.exon_number == 2
+               and status.strength == "lost"
+               for status in disrupted_splice_sites(transcript, altered))
+
+
 def test_donor_canonical_and_weak_windows_are_distinct():
     strong = statuses_for(point(11, "G", "A"))
     weak_intronic = statuses_for(point(14, "G", "A"))
@@ -177,6 +198,14 @@ def test_tier_zero_detects_explicit_canonical_site_edit_without_fasta():
         point(11, "G", "A"), with_sequence=False)
 
     assert statuses[0].strength == "lost"
+
+
+def test_tier_zero_uses_supplied_noncanonical_ref_without_fasta():
+    # The supplied GC→GT edit is still a change to the annotated donor;
+    # a canonical ALT alone cannot establish unchanged splicing.
+    statuses = statuses_for(point(12, "C", "T"), with_sequence=False)
+    assert any(status.key.side == "donor" and status.key.exon_number == 2
+               and status.strength == "lost" for status in statuses)
 
 
 def test_exon_truncation_is_a_lost_splice_site():

@@ -10,6 +10,9 @@ from varcode.effects import (
 )
 from varcode.effects import structural
 
+# Legacy wrapper contract; the default composition path has separate regression tests.
+pytestmark = pytest.mark.usefixtures("legacy_annotator")
+
 
 @pytest.fixture
 def cftr():

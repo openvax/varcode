@@ -19,7 +19,7 @@ scope exercise both code paths automatically.
 
 The ``annotator_scope`` autouse fixture sets the default annotator
 for the entire test function based on the ``--annotator`` CLI option
-(default: ``"fast"``). CI uses ``--annotator=protein_diff -m parity``
+(default: ``"transcript_model"``). CI uses ``--annotator=protein_diff -m parity``
 for the shared point-edit domain. Partial experimental annotators are not
 expected to satisfy tests for unsupported inputs (for example SVs).
 """
@@ -55,7 +55,7 @@ def pytest_addoption(parser):
         help=(
             "Run the full test suite under a specific annotator "
             "(e.g. --annotator=protein_diff). Default: no override "
-            "(uses whatever each test sets, which is fast unless "
+            "(uses the shared transcript model unless "
             "the test explicitly picks something else)."
         ),
     )
@@ -86,3 +86,10 @@ def dual_annotator(request):
                 ...
     """
     return request.param
+
+
+@pytest.fixture
+def legacy_annotator():
+    """Exercise the retained Varcode 10 result-wrapper contract explicitly."""
+    with varcode.use_annotator("fast"):
+        yield

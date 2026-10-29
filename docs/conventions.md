@@ -3,7 +3,7 @@
 Use `Variant.effects()` for all overlapping transcripts,
 `Variant.effect_on_transcript()` for one selected transcript, and
 `VariantCollection.effects()` for a batch. They share annotator selection
-rules. The default is `fast`; experimental implementations do not silently
+rules. The default is `transcript_model`; alternative implementations do not silently
 fall back to it for unsupported inputs.
 
 ## Return shapes
@@ -55,7 +55,7 @@ their signatures are not extension contracts.
 
 `genome=` is the canonical reference argument. The older `ensembl=` argument is
 retained for compatibility. `load_vcf_fast` is deprecated in favor of
-`load_vcf`. The old `realized` annotator names refer to the experimental
+`load_vcf`. The old `realized` annotator names refer to the shared
 transcript-model implementation. The [uORF wrappers](api_orfs.md#upstream-orf-compatibility-api)
 retain their upstream-only defaults, so changing names alone can change which
 catalogue is used.

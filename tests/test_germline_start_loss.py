@@ -55,18 +55,23 @@ def test_germline_alternate_start_then_somatic_start_loss(transcript_id, start, 
     assert restored.mutant_protein_sequence is None
 
 
-def test_unknown_phase_keeps_distinct_patient_start_codons():
+@pytest.mark.parametrize("annotator", ["fast", "transcript_model"])
+def test_unknown_phase_keeps_distinct_patient_start_codons(annotator):
     transcript = cached_release(81).transcript_by_id("ENST00000003084")
     germline = start_variant(transcript, 0, "A", "C")
     somatic = start_variant(transcript, 1, "T", "C")
     effect = somatic.effect_on_transcript(
-        transcript, germline=GermlineContext.from_variants([germline]))
-    assert type(effect) is PhaseCandidateSet
+        transcript, germline=GermlineContext.from_variants([germline]), annotator=annotator)
+    assert type(effect) is (PhaseCandidateSet if annotator == "fast" else StartLoss)
     assert len(effect.candidates) == 2
     assert {(outcome.effect.ref_codon, outcome.effect.alt_codon)
             for outcome in effect.candidates} == {("CTG", "CCG"), ("ATG", "ACG")}
     assert all(type(outcome.effect) is StartLoss for outcome in effect.candidates)
-    assert all(outcome.evidence["phase_state"] == "unknown" for outcome in effect.candidates)
+    if annotator == "fast":
+        assert all(c.evidence["phase_state"] == "unknown" for c in effect.candidates)
+    else:
+        assert all(h.evidence["phase_state"] == "unknown"
+                   for c in effect.candidates for h in c.hypotheses)
 
     without = somatic.effect_on_transcript(transcript)
     trans = somatic.effect_on_transcript(

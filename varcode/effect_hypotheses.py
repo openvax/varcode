@@ -171,6 +171,7 @@ class EffectHypothesis:
     phase_probability: Optional[float] = 1.0
     evidence: Mapping[str, Any] = field(default_factory=dict)
     enumeration_index: int = 0
+    baseline_splice_plan: Optional[SplicePlan] = None
 
 
 @dataclass(frozen=True)
@@ -320,11 +321,25 @@ def merge_classified_outcomes(outcomes, protein_flank=30, cdna_flank=90):
         group = tuple(groups[key])
         plans = [outcome.hypothesis.splice_plan for outcome in group]
         ordinal_keys = [
-            plan.ordinal_key if plan is not None else () for plan in plans]
+            (plan.ordinal_key if plan is not None else ()) + (
+                outcome.hypothesis.baseline_splice_plan.ordinal_key
+                if outcome.hypothesis.baseline_splice_plan is not None else ())
+            for outcome, plan in zip(group, plans)]
         probabilities = []
         for outcome, plan in zip(group, plans):
             splice_probability = (
                 plan.probability if plan is not None else 1.0)
+            baseline_plan = outcome.hypothesis.baseline_splice_plan
+            if baseline_plan is not None:
+                shared = outcome.hypothesis.evidence.get("shared_splice_sites", ())
+                active_mutant = dict(plan.choices) if plan is not None else {}
+                for key, option in baseline_plan.choices:
+                    if key in shared and key in active_mutant:
+                        continue
+                    if splice_probability is None or option.probability is None:
+                        splice_probability = None
+                    else:
+                        splice_probability *= option.probability
             phase_probability = outcome.hypothesis.phase_probability
             probabilities.append(
                 splice_probability * phase_probability
@@ -334,8 +349,11 @@ def merge_classified_outcomes(outcomes, protein_flank=30, cdna_flank=90):
         probability = (
             sum(probabilities)
             if all(value is not None for value in probabilities) else None)
-        phase_probabilities = [
-            outcome.hypothesis.phase_probability for outcome in group]
+        # Several splice plans can describe the same phase assignment. Count
+        # its mass once, rather than inflating it for each baseline choice.
+        phase_probabilities = dict(
+            (_phase_identity(outcome.hypothesis.phase),
+             outcome.hypothesis.phase_probability) for outcome in group).values()
         phase_mass = (
             sum(phase_probabilities)
             if all(value is not None for value in phase_probabilities)

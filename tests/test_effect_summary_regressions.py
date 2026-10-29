@@ -9,6 +9,9 @@ from varcode import EffectCollection, SpliceOutcomeSet, Variant, load_vcf
 from varcode.cli.effects_script import main as effects_main
 from varcode.effects import ExonicSpliceSite, effect_priority
 
+# Legacy wrapper contract; the default composition path has separate regression tests.
+pytestmark = pytest.mark.usefixtures("legacy_annotator")
+
 
 @pytest.fixture
 def splice_set():

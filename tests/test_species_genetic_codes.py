@@ -170,3 +170,20 @@ def test_yeast_orf_modification_retains_declared_code():
     assert annotation.effect.aa_ref == "T"
     assert annotation.effect.aa_alt == "L"
     assert annotation.outcomes[0].mutant.protein_sequence == "MLWG"
+
+
+@pytest.mark.parametrize("code,codon,expected", [
+    (1, "CNN", "X"), (1, "GCN", "A"), (1, "TGY", "C"),
+    (1, "TAR", "*"), (1, "TAN", "X"), (1, "NNN", "X"),
+    (1, "AGR", "R"), (2, "AGR", "*"), (2, "TGR", "W"),
+])
+def test_iupac_translation_preserves_resolved_and_unknown_residues(code, codon, expected):
+    table = codon_table_by_id(code)
+    assert translate_sequence("ATG" + codon + "GCT", table, to_stop=False) == "M" + expected + "A"
+    assert translate_sequence("ATG" + codon + "GCT", table) == (
+        "M" if expected == "*" else "M" + expected + "A")
+
+
+def test_invalid_codon_still_raises():
+    with pytest.raises(ValueError, match="Unknown codon"):
+        translate_sequence("ATGT?A")

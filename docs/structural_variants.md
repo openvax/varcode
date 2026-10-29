@@ -38,8 +38,9 @@ event. The event type is always available as `effect.variant.sv_type`
   UTR-only edits keep `FivePrimeUTR` / `ThreePrimeUTR` labels when the protein
   is unchanged.
 - **Several possible consequences.** When a breakpoint cuts an exon, or
-  splice/motif alternatives exist, a `StructuralVariantEffect` holds each
-  consequence in `.candidates`, and its description and priority reflect them.
+  splice/motif alternatives exist, `.candidates` retains each consequence.
+  Local layout results attach candidates to the preferred classified effect;
+  existing junction/fusion builders can return a `StructuralVariantEffect`.
   See [alternative outcomes](effect_annotation.md#alternative-outcomes).
 - **Gene fusions.** `GeneFusion` and `TranslocationToIntergenic`; see
   [fusion protein candidates](#fusion-protein-candidates).
@@ -59,13 +60,15 @@ Also note:
 - The annotated start codon is mapped through the retained transcript
   segments; a downstream ATG that survives a deletion does not rescue a
   deleted start.
-- Candidate evidence records `sv_type`, `splice_ambiguous`, and the
-  `reference_splicing` assumption; DUP models also record `tandem_duplication`.
-  `mutant_transcript` holds the modeled cDNA, translated protein, and evidence.
+- Shared layout candidates retain phase and both baseline/mutant splice plans
+  in their hypotheses, with full products in `outcomes`. Existing structural
+  builders record `sv_type`, `splice_ambiguous`, `reference_splicing`, and
+  `tandem_duplication` where applicable. `mutant_transcript` holds each
+  comparison's modeled cDNA, translated protein, and evidence.
 - A DNA rearrangement does not by itself establish a complete expressed fusion
   protein. Sequence may be unknown or partial; `None` is not an unchanged protein.
-- Not every SV effect has `.candidates`: check
-  `isinstance(effect, MultiOutcomeEffect)`.
+- Some results have no alternatives: use `getattr(effect, "candidates", ())`
+  rather than requiring a wrapper class.
 
 ## Filtering by protein change
 
@@ -82,11 +85,12 @@ SV effects report `modifies_protein_sequence` and `modifies_coding_sequence` as
 still encode the same protein. Comparisons use the transcript being annotated;
 for a fusion, the 5′ partner supplies the initiation site.
 
-The flags cover the whole candidate set: any changed alternative makes the flag
-`True`; otherwise an unresolved alternative makes it `None`. The filter retains
-the original set, including provenance, rather than selecting one candidate.
-Unresolved effects are kept by default. To test for a *known* unchanged SV, use
-`effect.modifies_protein_sequence is False`, not `not effect.modifies_protein_sequence`.
+For `MultiOutcomeEffect` wrappers, these flags cover the whole candidate set.
+For ordinary classified effects, they describe that particular comparison.
+The collection filter always considers all alternatives: any changed candidate
+wins, followed by unknown, followed by unchanged. It retains the original
+result with its evidence. Unresolved results are kept by default; a preferred
+silent comparison does not hide a protein-changing alternative.
 
 These flags describe existing predictions; they do not establish expression.
 Partial BND fragments and assemblies without a mapped ORF stay unresolved.

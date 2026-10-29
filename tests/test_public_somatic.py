@@ -14,9 +14,9 @@ from pyensembl import cached_release
 from varcode import load_vcf
 from varcode.effects import (
     AlternateStartCodon, IncompleteTranscript, NoncodingTranscript, Silent,
-    SpliceAcceptor, StopLoss,
+    StopLoss,
 )
-from varcode.splice_outcomes import SpliceOutcomeSet
+from varcode.effects.codon_tables import codon_table_for_transcript
 from varcode.transforms import pair_breakends
 
 from .public_somatic import (
@@ -101,11 +101,21 @@ def test_published_canine_consequences():
         unique_variants.add(variant)
         transcript = genome.transcript_by_id(row["Transcript_ID"])
         effect = variant.effect_on_transcript(transcript)
+        splice_effect = effect
         # VEP's exonic coding prediction assumes normal splicing. Preserve the
         # original outcome set and compare that explicitly conditional product.
         conditional = getattr(effect, "effect_if_splicing_unchanged", None)
         if conditional is not None:
             effect = conditional
+        elif getattr(effect, "realized_candidates", None):
+            normal = [outcome.effect for candidate in effect.realized_candidates
+                      for outcome in candidate.outcomes if all(
+                          option.mechanism == "normal"
+                          for plan in (outcome.hypothesis.baseline_splice_plan,
+                                       outcome.hypothesis.splice_plan)
+                          for _, option in plan.choices)]
+            if normal:
+                effect = normal[0]
         if isinstance(effect, (IncompleteTranscript, NoncodingTranscript)):
             reason = {
                 "transcript": transcript.id,
@@ -121,11 +131,19 @@ def test_published_canine_consequences():
 
         hgvs = row["HGVSp_Short"]
         original = transcript.protein_sequence
+        # Ensembl can write a non-ATG initiator as its internal residue (L/V).
+        # At a recognized annotated start, translation initiates with Met.
+        if transcript.coding_sequence[:3] in codon_table_for_transcript(transcript).start_codons:
+            original = "M" + original[1:]
         if row["Variant_Classification"] == "Splice_Site":
             assert row["Consequence"] == "splice_acceptor_variant"
-            assert isinstance(effect, SpliceOutcomeSet)
-            assert effect.disrupted_signal_class is SpliceAcceptor
-            materialize_effects([effect])
+            choices = [(key, option) for candidate in splice_effect.realized_candidates
+                       for outcome in candidate.outcomes
+                       for key, option in outcome.hypothesis.splice_plan.choices]
+            assert any(key.side == "acceptor" and option.evidence["strength"] == "lost"
+                       for key, option in choices)
+            assert any(option.mechanism == "exon_skip" for _, option in choices)
+            materialize_effects([splice_effect])
             counts["splice"] += 1
         elif hgvs == "p.M1?":
             # The paper leaves the protein outcome unknown. Varcode recognizes

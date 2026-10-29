@@ -35,6 +35,9 @@ from varcode import (
 )
 from varcode.effects.effect_classes import HaplotypeEffect
 
+# Legacy wrapper contract; the default composition path has separate regression tests.
+pytestmark = pytest.mark.usefixtures("legacy_annotator")
+
 
 # -----------------------------------------------------------------
 # apply_variants_to_transcript: multi-edit builder

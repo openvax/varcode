@@ -4,6 +4,7 @@ import dataclasses
 import pickle
 import subprocess
 import sys
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -46,21 +47,21 @@ ensembl_grch38 = cached_release(81)
 CFTR_TRANSCRIPT_ID = "ENST00000003084"
 
 
-def test_transcript_model_annotator_is_registered_but_not_default(request):
+def test_transcript_model_annotator_is_default(request):
     annotator = get_annotator("transcript_model")
 
     assert annotator.name == "transcript_model"
     assert isinstance(annotator, TranscriptModelEffectAnnotator)
-    configured = request.config.getoption("--annotator") or "fast"
+    configured = request.config.getoption("--annotator") or "transcript_model"
     assert get_default_annotator() is get_annotator(configured)
 
 
-def test_transcript_model_import_does_not_promote_experiment():
+def test_default_is_transcript_model_in_fresh_process():
     subprocess.run([
         sys.executable, "-c",
         "import varcode.transcript_model; "
         "from varcode import get_default_annotator; "
-        "assert get_default_annotator().name == 'fast'",
+        "assert get_default_annotator().name == 'transcript_model'",
     ], check=True)
 
 
@@ -183,6 +184,57 @@ def test_multiple_somatic_variants_are_realized_on_one_product():
     assert result.aa_ref == "Q"
     assert result.aa_alt == "R"
     assert result.variants == variants
+
+
+def test_removed_germline_splice_site_preserves_all_baseline_choices():
+    result = predict_transcript_model_effect(
+        (deletion(20, 22),), LongIntronTranscript(),
+        germline_variants=(point(23, "G", "A"),),
+        phase_resolver=SimpleNamespace(in_cis=lambda *args: True),
+        sequence_provider=long_provider())
+    outcomes = [o for c in result.candidates for o in c.outcomes]
+    baselines = {
+        o.hypothesis.baseline_splice_plan.choices[0][1].mechanism: o.baseline
+        for o in outcomes}
+    assert set(baselines) == {"normal", "exon_skip", "intron_retention", "cryptic"}
+    assert baselines["normal"].cdna_sequence == "ATGCAAGCTTAG"
+    assert baselines["exon_skip"].cdna_sequence == "ATGGCTTAG"
+    assert all(o.mutant.cdna_sequence == "ATGGCTTAG" for o in outcomes)
+    assert all(c.probability is None for c in result.candidates)
+
+
+def test_different_disrupted_motifs_do_not_force_same_baseline_mutant_mechanism():
+    result = predict_transcript_model_effect(
+        (point(24, "T", "C"),), LongIntronTranscript(),
+        germline_variants=(point(23, "G", "A"),),
+        phase_resolver=SimpleNamespace(in_cis=lambda *args: True),
+        sequence_provider=long_provider())
+    choices = {
+        (o.hypothesis.baseline_splice_plan.choices[0][1].mechanism,
+         o.hypothesis.splice_plan.choices[0][1].mechanism)
+        for c in result.candidates for o in c.outcomes}
+    assert len(choices) == 16
+    assert ("normal", "exon_skip") in choices
+    assert ("exon_skip", "normal") in choices
+
+
+def test_unchanged_germline_splice_site_couples_active_choices():
+    result = predict_transcript_model_effect(
+        (point(121, "C", "T"),), LongIntronTranscript(),
+        germline_variants=(point(23, "G", "A"),),
+        phase_resolver=SimpleNamespace(in_cis=lambda *args: True),
+        sequence_provider=long_provider())
+    shared_mechanisms = set()
+    for candidate in result.candidates:
+        for outcome in candidate.outcomes:
+            hypothesis = outcome.hypothesis
+            baseline = dict(hypothesis.baseline_splice_plan.choices)
+            mutant = dict(hypothesis.splice_plan.choices)
+            for key in hypothesis.evidence["shared_splice_sites"]:
+                if key in baseline and key in mutant:
+                    assert baseline[key].mechanism == mutant[key].mechanism
+                    shared_mechanisms.add(baseline[key].mechanism)
+    assert shared_mechanisms == {"normal", "exon_skip", "intron_retention", "cryptic"}
 
 
 def test_combined_phase_and_splice_hypotheses_obey_global_cap():

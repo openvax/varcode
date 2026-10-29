@@ -182,3 +182,24 @@ def test_synonymous_position_uses_assembled_patient_coding_coordinates(reverse):
     assert effect.original_protein_sequence == effect.mutant_protein_sequence == "MQQA"
     assert effect.baseline_transcript.cdna_sequence == "ATGCAACAAGCTTAG"
     assert effect.mutant_transcript.cdna_sequence == "ATGCAACAAGCCTAG"
+
+
+@pytest.mark.parametrize("changed_unknown", [False, True])
+def test_reference_ambiguity_does_not_hide_or_invent_protein_changes(changed_unknown):
+    from varcode.effect_hypotheses import RealizedTranscriptProduct
+    from varcode.effects import Substitution, Unresolved
+
+    transcript = Transcript()
+    def product(cdna, protein):
+        return RealizedTranscriptProduct(
+            transcript, cdna, protein, start_codon_present=True,
+            evidence={"start_codon_offset": 0, "genomic_positions": tuple(range(1, 13))})
+    baseline = product("ATGCNNGCTTAA", "MXA")
+    mutant = (product("ATGTNNGCTTAA", "MXA") if changed_unknown else
+              product("ATGCNNGGTTAA", "MXG"))
+    variant = SimpleNamespace(contig="x", start=4 if changed_unknown else 8, end=8)
+    effect = classify_products(variant, transcript, baseline, mutant)
+    assert isinstance(effect, Unresolved if changed_unknown else Substitution)
+    assert effect.baseline_transcript.cdna_sequence == baseline.cdna_sequence
+    assert effect.mutant_transcript.cdna_sequence == mutant.cdna_sequence
+    assert effect.modifies_protein_sequence is (None if changed_unknown else True)

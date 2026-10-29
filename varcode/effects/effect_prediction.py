@@ -84,14 +84,9 @@ def predict_variant_effects(
     """Determine the effects of a variant on any transcripts it overlaps.
     Returns an EffectCollection object.
 
-    Splice-disrupting effects (where the variant lands in the canonical
-    splice window — see :class:`SpliceDonor` / :class:`SpliceAcceptor` /
-    :class:`ExonicSpliceSite` / :class:`IntronicSpliceSite`) are always
-    returned as a :class:`SpliceOutcomeSet` wrapping the candidate
-    mechanisms. Candidates are computed lazily — only the cheap
-    ``NormalSplicing`` candidate is built eagerly; ``ExonSkipping`` /
-    ``IntronRetention`` / cryptic candidates materialise on first
-    ``.candidates`` access. See ``varcode.splice_outcomes`` for details.
+    The default returns classified baseline/mutant comparisons with their
+    alternatives in ``candidates``. Legacy splice-signal effects returned by
+    explicitly selected annotators retain their SpliceOutcomeSet wrapper.
 
     Parameters
     ----------
@@ -107,19 +102,14 @@ def predict_variant_effects(
         Which registered :class:`EffectAnnotator` to use per-transcript.
         ``None`` (default) picks up whatever is currently set via
         :func:`set_default_annotator` / :func:`use_annotator` — today
-        that's ``"fast"``. A string is looked up in the registry;
+        that's ``"transcript_model"``. A string is looked up in the registry;
         an instance is used directly. See openvax/varcode#271.
 
     germline : GermlineContext or None
-        Optional patient germline context. When non-empty, every per-
-        transcript effect is computed against the patient's germline-
-        applied transcript instead of the reference. Codons / splice
-        signals where germline overlaps the somatic produce per-
-        haplotype possibility sets when phase is unknown (a
-        :class:`PhaseCandidateSet`); identical inherited alleles are
-        reported as germline overlap, without inferring LOH. ``None`` or :meth:`GermlineContext.empty` falls
-        through to today's reference-relative behaviour byte-
-        identically. See openvax/varcode#268.
+        Optional supplied patient alleles. The default considers the full
+        transcript span and retains phase/splice alternatives in its candidate
+        comparisons. Omission uses the annotation reference. Identical inherited
+        alleles are reported without inferring LOH.
 
     phase_resolver : PhaseResolver or None
         Optional phase-evidence source. Consumed two ways: by
@@ -202,7 +192,7 @@ def predict_variant_effects(
         annotator_version=annotator_version,
         annotated_at=annotated_at,
     )
-    # SpliceOutcomeSet is always-on. Lazy import to avoid circular deps;
+    # Preserve the wrapper contract for legacy splice-signal effects.
     # splice_outcomes lives at the package root and consumes effect_classes.
     from ..splice_outcomes import wrap_splice_effects_in_collection
     collection = wrap_splice_effects_in_collection(collection)
@@ -233,12 +223,8 @@ def predict_variant_effect_on_transcript(
         """Return the transcript effect (such as FrameShift) that results from
         applying this genomic variant to a particular transcript.
 
-        Splice-disrupting effects are wrapped in a
-        :class:`varcode.splice_outcomes.SpliceOutcomeSet` carrying the
-        candidate mechanisms (always-on as of varcode 6.0). The
-        wrapper is lazy — only the cheap ``NormalSplicing`` candidate
-        is built eagerly; the rest materialise on ``.candidates``
-        access.
+        Uses the same selected annotator and candidate contract as effects().
+        Explicit legacy annotators keep their splice-signal wrappers.
 
         Parameters
         ----------
@@ -262,7 +248,7 @@ def predict_variant_effect_on_transcript(
 def _predict_variant_effect_on_transcript_raw(variant, transcript):
         """The raw classifier — returns the unwrapped splice-signal
         class (``ExonicSpliceSite`` / ``SpliceDonor`` etc.) for
-        splice-disrupting variants. The public entry point wraps the
+        legacy splice prediction. The public entry point wraps the
         result in a ``SpliceOutcomeSet``.
         """
 

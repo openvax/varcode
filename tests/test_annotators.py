@@ -62,7 +62,7 @@ def test_fast_annotator_annotator_is_registered():
 
 
 def test_default_annotator_matches_active_configuration(request):
-    configured = request.config.getoption("--annotator") or "fast"
+    configured = request.config.getoption("--annotator") or "transcript_model"
     default = get_default_annotator()
     assert default is get_annotator(configured)
 
@@ -128,7 +128,7 @@ def test_fast_annotator_annotator_matches_effect_on_transcript():
     from varcode import SpliceOutcomeSet
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id("ENST00000003084")
-    direct = variant.effect_on_transcript(transcript)
+    direct = variant.effect_on_transcript(transcript, annotator="fast")
     annotated = FastEffectAnnotator().annotate_on_transcript(
         variant, transcript)
     assert isinstance(direct, SpliceOutcomeSet)
@@ -155,14 +155,13 @@ def test_annotator_types_exported_at_package_level():
 # ====================================================================
 
 
-def test_variant_effects_default_uses_fast_annotator():
+def test_variant_effects_default_uses_transcript_model():
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
-    # No annotator kwarg — should still produce the same output the
-    # fast annotator produces, since fast is the default.
+    # Ordinary calls use the shared pipeline.
     default_effects = variant.effects()
-    explicit_fast_annotator = variant.effects(annotator="fast")
+    explicit_model = variant.effects(annotator="transcript_model")
     assert [type(e).__name__ for e in default_effects] == \
-           [type(e).__name__ for e in explicit_fast_annotator]
+           [type(e).__name__ for e in explicit_model]
 
 
 def test_variant_effects_accepts_annotator_name_string():
@@ -356,7 +355,7 @@ def test_protein_diff_parity_on_exonic_splice_site():
     from varcode.effects import ExonicSpliceSite
     variant = Variant("7", 117531114, "G", "T", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id("ENST00000003084")
-    direct = variant.effect_on_transcript(transcript)
+    direct = variant.effect_on_transcript(transcript, annotator="fast")
     sdiff = ProteinDiffEffectAnnotator().annotate_on_transcript(
         variant, transcript)
     assert isinstance(direct, SpliceOutcomeSet)

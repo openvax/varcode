@@ -10,9 +10,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Annotator registry with one built-in default and optional experiments.
+"""Annotator registry with one shared default and explicit compatibility choices.
 
-``fast`` handles point edits and rearrangements. Experimental annotators
+``transcript_model`` composes transcript consequences. Other annotators
 can decline individual inputs by returning ``NotImplemented``; no static
 capability declaration or implicit fallback is used.
 """
@@ -33,7 +33,7 @@ from ..transcript_model import TranscriptModelEffectAnnotator
 
 _AnnotatorT = TypeVar("_AnnotatorT", bound="EffectAnnotator")
 _REGISTRY: dict[str, EffectAnnotator] = {}
-_DEFAULT_NAME = "fast"
+_DEFAULT_NAME = "transcript_model"
 
 
 def register_annotator(annotator: _AnnotatorT) -> _AnnotatorT:
@@ -74,7 +74,7 @@ def get_annotator(name: str) -> EffectAnnotator:
 
 def get_default_annotator() -> EffectAnnotator:
     """Return the annotator currently configured as the default
-    (``"fast"`` unless changed via :func:`set_default_annotator` or
+    (``"transcript_model"`` unless changed via :func:`set_default_annotator` or
     :func:`use_annotator`).
     """
     return _REGISTRY[_DEFAULT_NAME]

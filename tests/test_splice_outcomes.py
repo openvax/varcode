@@ -48,6 +48,9 @@ from varcode.effects import (
 )
 from varcode.splice_outcomes import enumerate_splice_outcomes
 
+# Legacy wrapper contract; the default composition path has separate regression tests.
+pytestmark = pytest.mark.usefixtures("legacy_annotator")
+
 
 ensembl_grch38 = cached_release(81)
 CFTR_TRANSCRIPT_ID = "ENST00000003084"

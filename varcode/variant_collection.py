@@ -208,7 +208,6 @@ class VariantCollection(Collection):
         from .annotators.registry import resolve_annotator
         from .effects.effect_prediction import _validate_transcript_filter
         from .phasing import (
-            apply_phase_resolver_to_effects,
             build_haplotype_effects,
         )
 
@@ -239,7 +238,6 @@ class VariantCollection(Collection):
                     germline=germline, phase_resolver=phase_resolver,
                     transcript_filter=transcript_filter))
         if phase_resolver is not None:
-            apply_phase_resolver_to_effects(per_variant, phase_resolver)
             # Joint cis-variant effects sit alongside the per-variant
             # ones (#269). Consumers pick whichever granularity they
             # need; top-priority sort still reflects the highest
