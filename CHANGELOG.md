@@ -1,5 +1,14 @@
 # Change Log
 
+## v10.22.4
+
+- Reject malformed consumed SV INFO scalar types and incomplete or reversed
+  CIPOS/CIEND pairs with actionable ValueError messages (#657). Preserve valid
+  signed intervals and singleton scalar lists without mutating source metadata.
+- Retain confidence intervals on paired and single breakends. Select per-ALT
+  confidence-interval pairs during VCF loading while retaining
+  the complete original INFO mapping and ALT indexes in record metadata.
+
 ## v10.22.3
 
 - Keep failed cis germline/somatic comparisons explicitly unresolved instead

@@ -219,6 +219,17 @@ it does not establish that the queried region is absent.
 
 ::: varcode.parse_symbolic_alt
 
+SV parsing raises `ValueError` for malformed consumed INFO fields, including
+Boolean string fields, noninteger END values and incomplete or reversed
+CIPOS/CIEND pairs. Valid signed confidence offsets are preserved on symbolic,
+paired-breakend and single-breakend objects. Missing intervals remain `None`;
+they are not converted to a claim of exact localization.
+
+Direct parsing accepts the confidence pair for one ALT. The VCF loader selects
+the corresponding pair from VCF 4.5 per-ALT vectors while retaining the complete
+original INFO mapping and ALT indexes in metadata. Older shared two-value
+intervals remain accepted. No source mapping is modified in place.
+
 ::: varcode.SV_TYPES
 
 ## Genotypes
