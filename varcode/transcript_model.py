@@ -12,9 +12,12 @@
 
 """Experimental transcript model: hypotheses → products → classification."""
 
+from dataclasses import replace
+
 from .effect_hypotheses import (
     ClassifiedOutcome,
     EffectHypothesis,
+    RealizedTranscriptProduct,
     SplicePlan,
     enumerate_splice_plans,
     merge_classified_outcomes,
@@ -181,6 +184,91 @@ def _unique_alleles(variants):
     return tuple(unique)
 
 
+def _refine_transcript_model_effect(effect, observed):
+    """Reconcile RNA products into the existing phase/splice outcomes.
+
+    Exact full-product matches support every compatible hypothesis, including
+    distinct baselines that produce the same RNA. Partial or unmatched models
+    remain explicit observed products with an unresolved comparison; their
+    missing reference/phase mapping is never supplied by a DNA prediction.
+    RNA support changes ordering, not probabilities or translation evidence.
+    """
+    from .mutant_transcript import MutantTranscript
+
+    observed = tuple(observed)
+    if not observed:
+        return effect
+    outcomes = [outcome for candidate in effect.realized_candidates
+                for outcome in candidate.outcomes]
+    changed = False
+    for observation in observed:
+        model = observation.effect.mutant_transcript
+        model_evidence = model.evidence or {} if model is not None else {}
+        record = {**model_evidence, **observation.evidence, "source": observation.source,
+                  "variant": observation.effect.variant}
+        partial = any(status in ("junction_fragment", "retained_reference_fragment")
+                      or isinstance(status, str) and status.startswith("partial")
+                      for status in (model_evidence.get("sequence_status"),
+                                     observation.evidence.get("sequence_status")))
+        completed = ("reference_completion" in record
+                     or observation.source == "varcode_reference_completion")
+        matches = [i for i, outcome in enumerate(outcomes)
+                   if model is not None and model.cdna_sequence and not partial and not completed
+                   and not outcome.hypothesis.evidence.get("rna_observation")
+                   and model.cdna_sequence == outcome.mutant.cdna_sequence]
+        if matches:
+            for i in matches:
+                outcome = outcomes[i]
+                support = tuple(outcome.mutant.evidence.get("rna_support", ()))
+                if record not in support:
+                    mutant = replace(outcome.mutant, evidence={
+                        **outcome.mutant.evidence, "rna_support": support + (record,)})
+                    outcomes[i] = replace(outcome, mutant=mutant)
+                    changed = True
+            continue
+        if any(outcome.hypothesis.evidence.get("rna_observation") == record
+               and outcome.mutant.cdna_sequence == (model.cdna_sequence if model else None)
+               for outcome in outcomes):
+            continue
+        if model is None:
+            model = MutantTranscript(reference_transcript=effect.transcript,
+                                     reference_segments=(), annotator_name=observation.source)
+        mutant = RealizedTranscriptProduct(
+            effect.transcript, model.cdna_sequence, model.mutant_protein_sequence,
+            evidence={**(model.evidence or {}), "rna_observation": record,
+                      "unresolved_mechanisms": ("rna_transcript_comparison",),
+                      "unresolved_reason": "Supplied RNA model is not mapped to a supported phase/splice comparison"})
+        outcomes.append(ClassifiedOutcome(
+            EffectHypothesis(phase_probability=None, evidence={
+                "phase_state": "unknown", "rna_observation": record},
+                enumeration_index=len(outcomes)), observation.effect,
+            RealizedTranscriptProduct(effect.transcript, None, None), mutant))
+        changed = True
+
+    if not changed:
+        return effect
+
+    # Reclassify through the same path as DNA products. Fresh effects also
+    # keep refinement from mutating the original candidate graph.
+    refined = []
+    for outcome in outcomes:
+        result = classify_products(
+            effect.variant, effect.transcript, outcome.baseline, outcome.mutant)
+        result.variants = getattr(outcome.effect, "variants", getattr(effect, "variants", (effect.variant,)))
+        result.splice_signal = getattr(outcome.effect, "splice_signal", None)
+        if outcome.hypothesis.evidence.get("rna_observation"):
+            # Preserve the producer's partial structure and completeness as-is.
+            if outcome.effect.mutant_transcript is not None:
+                result.mutant_transcript = outcome.effect.mutant_transcript
+        refined.append(replace(outcome, effect=result))
+    result = _attach_candidate_set(order_realized_candidates(
+        merge_classified_outcomes(refined), effect_priority))
+    for name in ("germline_unknown", "phase_source", "annotator", "annotator_version"):
+        if name in effect.__dict__:
+            setattr(result, name, getattr(effect, name))
+    return result
+
+
 def predict_transcript_model_effect(
         variants, transcript, germline_variants=(), phase_resolver=None,
         sequence_provider=None, max_hypotheses=64, max_phase_hypotheses=None,
@@ -313,10 +401,10 @@ def _realize_outcomes(
             baseline_plan = _baseline_plan(
                 transcript, baseline_runs, baseline_statuses, plan,
                 shared_keys, baseline_fixed)
-            baseline_product, baseline_unresolved = realize_splice_plan(
+            baseline_product, _ = realize_splice_plan(
                 transcript, baseline_layout, baseline_plan,
                 tuple(baseline_statuses.values()))
-            mutant_product, mutant_unresolved = realize_splice_plan(
+            mutant_product, _ = realize_splice_plan(
                 transcript, mutant_layout, plan,
                 tuple(mutant_statuses.values()))
             hypothesis = EffectHypothesis(
@@ -331,15 +419,8 @@ def _realize_outcomes(
                     "shared_splice_sites": tuple(sorted(shared_keys)),
                 },
                 enumeration_index=enumeration_index)
-            unresolved = mutant_unresolved + baseline_unresolved
-            if unresolved:
-                mechanism = unresolved[0]
-                result = Unresolved(
-                    primary, transcript, mechanism=mechanism,
-                    reason="genomic splice realization not available")
-            else:
-                result = classify_products(
-                    primary, transcript, baseline_product, mutant_product)
+            result = classify_products(
+                primary, transcript, baseline_product, mutant_product)
             result.variants = variants
             result.splice_signal = tuple(sorted(mutant_statuses)) or None
             outcome = ClassifiedOutcome(
@@ -409,20 +490,10 @@ class TranscriptModelEffectAnnotator:
             self, variants, transcript, germline_ctx, phase_resolver):
         from .germline import Completeness
 
-        germline = {}
-        for variant in variants:
-            if getattr(variant, "is_structural", False):
-                start = variant.affected_start
-                end = variant.affected_end
-            else:
-                start = variant.trimmed_base1_start
-                end = variant.trimmed_base1_end
-            start = max(transcript.start, start - 90)
-            end = min(transcript.end, end + 90)
-            for allele in germline_ctx.variants_in_window(
-                    variant.contig, start, end):
-                germline[allele] = None
-        germline = tuple(germline)
+        # A full patient product must include supplied alleles across the
+        # transcript, including sequence that a retention path may expose.
+        germline = germline_ctx.variants_in_window(
+            transcript.contig, transcript.start, transcript.end)
         result = self._predict_variants(
             variants, transcript,
             germline_variants=germline,
@@ -431,8 +502,8 @@ class TranscriptModelEffectAnnotator:
             homozygous_germline=germline_ctx.homozygous(germline))
         if result is NotImplemented:
             return result
-        if (not germline and germline_ctx.completeness in (
-                Completeness.SPARSE, Completeness.HOTSPOTS_ONLY)):
+        if germline_ctx.completeness in (
+                Completeness.SPARSE, Completeness.HOTSPOTS_ONLY):
             result.germline_unknown = True
         return result
 
@@ -440,7 +511,7 @@ class TranscriptModelEffectAnnotator:
             self, variants, transcript, germline_ctx=None, phase_resolver=None):
         """Realize the whole cis group with phase/splice alternatives.
 
-        Keep supplied RNA models as observations alongside modeled candidates;
+        Reconcile supplied RNA models with the same phase/splice products;
         a per-variant observation need not cover every edit in the group.
         """
         if germline_ctx:
@@ -456,5 +527,18 @@ class TranscriptModelEffectAnnotator:
                     mt = observed(variant, transcript)
                     if mt is not None:
                         observations.append((variant, mt))
-            result.observed_mutant_transcripts = tuple(observations)
+            if observations and getattr(result, "realized_candidates", None):
+                from .rna_evidence import make_rna_outcome
+                candidates = []
+                for variant, model in observations:
+                    observed_effect = Unresolved(
+                        variant, transcript, mechanism="rna_transcript_comparison")
+                    observed_effect.mutant_transcript = model
+                    candidates.append(make_rna_outcome(
+                        observed_effect, source=model.annotator_name,
+                        extra_evidence=model.evidence))
+                result = _refine_transcript_model_effect(result, candidates)
+            elif observations:
+                # BND/assembly delegation has its existing observation contract.
+                result.observed_mutant_transcripts = tuple(observations)
         return result

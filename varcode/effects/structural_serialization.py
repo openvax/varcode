@@ -21,7 +21,7 @@ class _EffectReference(DataclassSerializable):
 # Explicit post-construction annotation state. Do not archive caches, logger
 # handles, or arbitrary implementation attributes from __dict__.
 _ATTACHED_FIELDS = (
-    "mutant_transcript", "affected_exons", "candidate_evidence", "_cryptic_candidates",
+    "mutant_transcript", "baseline_transcript", "affected_exons", "candidate_evidence", "_cryptic_candidates",
     "_splice_candidates", "_extra_candidates", "_original_protein_sequence",
     "_mutant_protein_sequence", "_modifies_coding_sequence",
     "_modifies_protein_sequence", "modifies_coding_sequence",
@@ -45,32 +45,34 @@ _ALTERNATIVE_FIELDS = {
 
 
 def _model_types():
+    from ..mutant_transcript import MutantTranscript, ReferenceSegment, TranscriptEdit, _AssembledAllele
     from ..effect_hypotheses import (
         ClassifiedOutcome, EffectHypothesis, RealizedEffectCandidate,
         RealizedTranscriptProduct, SpliceOption, SplicePlan, SpliceSiteKey,
     )
-    return (ClassifiedOutcome, EffectHypothesis, RealizedEffectCandidate,
+    return (MutantTranscript, ReferenceSegment, TranscriptEdit, _AssembledAllele,
+            ClassifiedOutcome, EffectHypothesis, RealizedEffectCandidate,
             RealizedTranscriptProduct, SpliceOption, SplicePlan, SpliceSiteKey)
 
 
 def structural_effect_to_dict(root, *, schema="structural_effect_schema"):
     """Archive a native graph, or project one inert ``orf_comparison_schema`` outcome."""
     from .effect_classes import MutationEffect, PhaseCandidateSet, StructuralVariantEffect
+    from ..variant import Variant
+    from ..structural_variant import StructuralVariant
 
     indices = {}
     nodes = []
     model_types = _model_types()
     comparison = schema == "orf_comparison_schema"
     orf = schema == "orf_effect_schema" or comparison
-    special_types = ()
+    special_types = (Variant, StructuralVariant)
     if orf:
         from orfdata import ReferenceORF
         from pyensembl import Transcript
         from ..orf import _ORFTranscript
         from ..orf_serialization import (
             _ReferenceGenome, _ReferenceTranscript, orf_graph_types, record_fields)
-        from ..variant import Variant
-        from ..structural_variant import StructuralVariant
         model_types += orf_graph_types()
         special_types = (ReferenceORF, _ORFTranscript, Variant, StructuralVariant)
 
@@ -93,8 +95,10 @@ def structural_effect_to_dict(root, *, schema="structural_effect_schema"):
                 if orf and isinstance(value, _ORFTranscript):
                     nodes[indices[key]] = (type(value), encode(dict(reference=value.reference_orf)), {})
                     return _EffectReference(indices[key])
-                if orf and isinstance(value, Variant):
-                    state = {**value.to_dict(), "genome": _ReferenceGenome.capture(value.genome)}
+                if isinstance(value, Variant):
+                    state = value.to_dict()
+                    if orf:
+                        state = {**state, "genome": _ReferenceGenome.capture(value.genome)}
                     nodes[indices[key]] = (type(value), encode(state), {})
                     return _EffectReference(indices[key])
                 if type(value) in model_types:
@@ -139,6 +143,8 @@ def structural_effect_to_dict(root, *, schema="structural_effect_schema"):
 
 def structural_effect_from_dict(root_class, state, *, schema="structural_effect_schema"):
     from .effect_classes import MutationEffect
+    from ..variant import Variant
+    from ..structural_variant import StructuralVariant
 
     if schema == "orf_comparison_schema":
         raise ValueError("Comparison projections are inert, not reconstructable effect graphs")
@@ -148,13 +154,11 @@ def structural_effect_from_dict(root_class, state, *, schema="structural_effect_
     if not nodes or nodes[0][0] is not root_class:
         raise ValueError("Effect root class does not match archive")
     model_types = _model_types()
-    special_types = ()
+    special_types = (Variant, StructuralVariant)
     if schema == "orf_effect_schema":
         from orfdata import ReferenceORF
         from ..orf import _ORFTranscript
         from ..orf_serialization import orf_graph_types
-        from ..variant import Variant
-        from ..structural_variant import StructuralVariant
         model_types += orf_graph_types()
         special_types = (ReferenceORF, _ORFTranscript, Variant, StructuralVariant)
     for cls, _, attached in nodes:

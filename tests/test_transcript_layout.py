@@ -162,3 +162,23 @@ def test_exonic_variant_removed_by_splicing_is_silent_not_intronic():
 
     assert type(consequence) is Silent
     assert consequence.excluded_from_mrna is True
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_synonymous_position_uses_assembled_patient_coding_coordinates(reverse):
+    from .test_splice_graph import point
+
+    transcript = Transcript(reverse)
+    layout = GenomicLayout.from_transcript(
+        transcript, flank=0, sequence_provider=provider(reverse))
+    layout = layout.apply_structural_variant(
+        structural("DUP", *((11, 13) if reverse else (6, 8))))
+    baseline = realize_exon_path(transcript, layout)
+    somatic = point(6, "A", "G") if reverse else point(13, "T", "C")
+    mutant = realize_exon_path(transcript, layout.apply_point_variant(somatic))
+    effect = classify_products(somatic, transcript, baseline, mutant)
+    assert isinstance(effect, Silent)
+    assert effect.short_description == "p.A4="
+    assert effect.original_protein_sequence == effect.mutant_protein_sequence == "MQQA"
+    assert effect.baseline_transcript.cdna_sequence == "ATGCAACAAGCTTAG"
+    assert effect.mutant_transcript.cdna_sequence == "ATGCAACAAGCCTAG"

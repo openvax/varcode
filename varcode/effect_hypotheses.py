@@ -27,9 +27,12 @@ mutant molecule alone is identical.
 
 import itertools
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Mapping, Optional, Tuple
 
 from .errors import HypothesisLimitError
+
+if TYPE_CHECKING:
+    from .mutant_transcript import MutantTranscript
 
 
 @dataclass(frozen=True, order=True)
@@ -182,6 +185,23 @@ class RealizedTranscriptProduct:
     start_codon_present: Optional[bool] = None
     evidence: Mapping[str, Any] = field(default_factory=dict)
 
+    def to_mutant_transcript(self) -> "MutantTranscript":
+        """Expose this product through the standard transcript-sequence API.
+
+        Keep the mapped CDS and origin evidence with the sequence. An absent
+        annotated start does not establish an alternative translated protein.
+        """
+        from .mutant_transcript import MutantTranscript
+        context = dict(
+            reference_transcript=self.transcript,
+            mutant_protein_sequence=(
+                None if self.start_codon_present is False else self.protein_sequence),
+            annotator_name="transcript_model",
+            evidence=dict(self.evidence))
+        if self.cdna_sequence is not None:
+            return MutantTranscript.from_sequence(self.cdna_sequence, **context)
+        return MutantTranscript(reference_segments=(), **context)
+
     def local_protein(self, offset, flank=30):
         """Protein window around a change, or the full product if unknown."""
         if self.protein_sequence is None:
@@ -241,13 +261,17 @@ class ClassifiedOutcome:
     change_cdna_offset: Optional[int] = None
 
     def merge_key(self, protein_flank=30, cdna_flank=90):
-        """Identity of the comparison, not merely the mutant product."""
+        """Full comparison identity, including distant sequence differences.
+
+        Flank arguments remain accepted for compatibility; local equivalence
+        cannot establish that two full transcripts are interchangeable.
+        """
         key = (
             _effect_identity(self.effect),
-            self.baseline.local_protein(self.change_aa_offset, protein_flank),
-            self.mutant.local_protein(self.change_aa_offset, protein_flank),
-            self.baseline.local_cdna(self.change_cdna_offset, cdna_flank),
-            self.mutant.local_cdna(self.change_cdna_offset, cdna_flank),
+            self.baseline.protein_sequence,
+            self.mutant.protein_sequence,
+            self.baseline.cdna_sequence,
+            self.mutant.cdna_sequence,
             self.baseline.junction_signature,
             self.mutant.junction_signature,
         )
@@ -330,13 +354,21 @@ def merge_classified_outcomes(outcomes, protein_flank=30, cdna_flank=90):
 def order_realized_candidates(candidates, effect_priority_fn):
     """Order candidates without pretending ordinal rules are probabilities."""
     candidates = tuple(candidates)
-    all_calibrated = bool(candidates) and all(
-        candidate.probability is not None for candidate in candidates)
+    predicted = tuple(candidate for candidate in candidates if not all(
+        outcome.hypothesis.evidence.get("rna_observation")
+        for outcome in candidate.outcomes))
+    all_calibrated = bool(predicted) and all(
+        candidate.probability is not None for candidate in predicted)
 
     def key(candidate):
+        supported = any(outcome.mutant.evidence.get("rna_support")
+                        for outcome in candidate.outcomes)
+        observed_only = all(outcome.hypothesis.evidence.get("rna_observation")
+                            for outcome in candidate.outcomes)
         probability_key = (
-            -candidate.probability if all_calibrated else 0.0)
+            -candidate.probability if all_calibrated and not observed_only else 0.0)
         return (
+            0 if supported else (2 if observed_only else 1),
             probability_key,
             candidate.ordinal_key,
             -effect_priority_fn(candidate.effect),

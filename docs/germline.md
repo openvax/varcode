@@ -27,6 +27,15 @@ With many unphased germline variants nearby, the result is unresolved instead;
 see the [phase enumeration limit](#phase-enumeration-limit).
 No annotator selection is needed.
 
+The default lookup is local to the somatic codon/splice signal. When a
+comparison is assembled, `effect.baseline_transcript` and
+`effect.mutant_transcript` retain the actual selected edits and full sequences,
+including inherited residues outside the changed amino acid. They do not
+imply that distant germline calls were considered. For composition across
+the full transcript, use the opt-in
+[transcript-model path](experimental_annotators.md#comparing-annotators), which
+uses the same `germline=`, `phase_resolver=` and `rna_resolver=` inputs.
+
 ## Constructing a `GermlineContext`
 
 Choose the source that matches your input:

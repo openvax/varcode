@@ -22,7 +22,7 @@ from .cryptic_exons import (
     score_donor,
 )
 from .genomic_layout import SequenceUnavailable
-from .effects.classify import classify_from_protein_diff
+from .effects.classify import _attach_transcript_models, classify_from_protein_diff
 from .effects.codon_tables import (
     codon_table_for_transcript,
     translate_sequence,
@@ -35,8 +35,8 @@ from .effects.effect_classes import (
     Silent,
     StartLoss,
     ThreePrimeUTR,
+    Unresolved,
 )
-from .mutant_transcript import MutantTranscript
 
 
 @dataclass(frozen=True)
@@ -206,22 +206,6 @@ def _start_codon_first_position(transcript):
     return max(positions) if transcript.on_backward_strand else min(positions)
 
 
-def _start_offset(layout, selected_runs, transcript):
-    target = _start_codon_first_position(transcript)
-    if target is None:
-        return None
-    cdna_offset = 0
-    for run in selected_runs:
-        run_layout = layout.slice(run.layout_start, run.layout_end)
-        for index, (_, contig, position, kind) in enumerate(
-                run_layout.base(i) for i in range(run_layout.length)):
-            if (contig == transcript.contig and position == target
-                    and kind != "inverted"):
-                return cdna_offset + index
-        cdna_offset += run.length
-    return None
-
-
 def _translate_from_start(transcript, cdna, start, pieces):
     """Return protein, start presence and codon at the mapped CDS start."""
     if start is None:
@@ -243,36 +227,42 @@ def _translate_from_start(transcript, cdna, start, pieces):
     return "M" + protein[1:], True, start_codon
 
 
-def realize_exon_path(transcript, layout, kept_run_keys=None):
-    """Splice selected exon runs and translate from the mapped CDS start."""
-    runs = build_exon_runs(transcript, layout)
-    if kept_run_keys is None:
-        selected = runs
-    else:
-        kept = set(kept_run_keys)
-        selected = tuple(run for run in runs if run.key in kept)
-    run_layouts = tuple(
-        layout.slice(run.layout_start, run.layout_end) for run in selected)
-    cdna = "".join(run_layout.materialize() for run_layout in run_layouts)
-    genomic_positions = tuple(
-        position
-        for run_layout in run_layouts
-        for _, position, _ in run_layout.origins())
-    start = _start_offset(layout, selected, transcript)
+def _assemble_product(transcript, layout, intervals, junctions, evidence):
+    """Assemble and translate one selected path without losing base origins."""
+    pieces = tuple(layout.slice(start, end) for start, end in intervals)
+    cdna = "".join(piece.materialize() for piece in pieces)
+    origins = tuple(origin for piece in pieces for origin in piece.origins())
+    target = _start_codon_first_position(transcript)
+    start = next((i for i, (contig, position, kind) in enumerate(origins)
+                  if contig == transcript.contig and position == target
+                  and kind != "inverted"), None) if target is not None else None
     protein, start_present, start_codon = _translate_from_start(
-        transcript, cdna, start, run_layouts)
+        transcript, cdna, start, pieces)
     return RealizedTranscriptProduct(
         transcript=transcript,
         cdna_sequence=cdna,
         protein_sequence=protein,
-        junction_signature=junction_signature(transcript, selected),
+        junction_signature=junctions,
         start_codon_present=start_present,
         evidence={
+            **evidence,
             "start_codon": start_codon,
             "start_codon_offset": start,
-            "exon_runs": tuple(run.key for run in selected),
-            "genomic_positions": genomic_positions,
+            "genomic_positions": tuple(position for _, position, _ in origins),
         })
+
+
+def realize_exon_path(transcript, layout, kept_run_keys=None):
+    """Splice selected exon runs and translate through the shared assembler."""
+    runs = build_exon_runs(transcript, layout)
+    kept = set(kept_run_keys) if kept_run_keys is not None else None
+    selected = runs if kept_run_keys is None else tuple(
+        run for run in runs if run.key in kept)
+    return _assemble_product(
+        transcript, layout,
+        tuple((run.layout_start, run.layout_end) for run in selected),
+        junction_signature(transcript, selected),
+        {"exon_runs": tuple(run.key for run in selected)})
 
 
 def _best_cryptic_boundary(layout, canonical_offset, side, scan_flank=50):
@@ -381,60 +371,36 @@ def realize_splice_plan(
             continue
         unresolved.append(option.mechanism)
 
-    if unresolved:
-        return realize_exon_path(transcript, layout, plan.kept_runs), tuple(
-            unresolved)
-
-    intervals = _coalesce_intervals(tuple(
-        tuple(bounds[run.key]) for run in selected))
-    pieces = tuple(layout.slice(start, end) for start, end in intervals)
-    try:
-        cdna = "".join(piece.materialize() for piece in pieces)
-    except SequenceUnavailable:
-        sequence_dependent = tuple(
-            option.mechanism
-            for _, option in plan.choices
-            if option.mechanism in ("intron_retention", "cryptic"))
-        return realize_exon_path(
-            transcript, layout, plan.kept_runs), sequence_dependent
-    genomic_positions = tuple(
-        position
-        for piece in pieces
-        for _, position, _ in piece.origins())
-
-    target = _start_codon_first_position(transcript)
-    start_offset = None
-    if target is not None:
-        consumed = 0
-        for piece in pieces:
-            origins = piece.origins()
-            for index, (contig, position, kind) in enumerate(origins):
-                if (contig == transcript.contig and position == target
-                        and kind != "inverted"):
-                    start_offset = consumed + index
-                    break
-            if start_offset is not None:
-                break
-            consumed += piece.length
-    protein, start_present, start_codon = _translate_from_start(
-        transcript, cdna, start_offset, pieces)
     evidence = {
-        "start_codon": start_codon,
-        "start_codon_offset": start_offset,
         "exon_runs": tuple(run.key for run in selected),
-        "genomic_positions": genomic_positions,
         "splice_choices": tuple(
             (key, option.mechanism) for key, option in plan.choices),
         "resolved_splice_choices": tuple(resolved_choices),
     }
-    return RealizedTranscriptProduct(
-        transcript=transcript,
-        cdna_sequence=cdna,
-        protein_sequence=protein,
-        junction_signature=_junctions_for_bounds(
-            transcript, layout, selected, bounds),
-        start_codon_present=start_present,
-        evidence=evidence), ()
+
+    def unavailable(mechanisms):
+        mechanisms = tuple(mechanisms)
+        return RealizedTranscriptProduct(
+            transcript, None, None,
+            evidence={**evidence, "sequence_status": "unavailable",
+                      "unresolved_mechanisms": mechanisms}), mechanisms
+
+    if unresolved:
+        return unavailable(unresolved)
+    intervals = _coalesce_intervals(tuple(
+        tuple(bounds[run.key]) for run in selected))
+    try:
+        product = _assemble_product(
+            transcript, layout, intervals,
+            _junctions_for_bounds(transcript, layout, selected, bounds), evidence)
+    except SequenceUnavailable:
+        sequence_dependent = tuple(
+            option.mechanism for _, option in plan.choices
+            if option.mechanism in ("intron_retention", "cryptic"))
+        if not sequence_dependent:
+            raise
+        return unavailable(sequence_dependent)
+    return product, ()
 
 
 def _variant_interval(variant):
@@ -471,6 +437,15 @@ def _unchanged_product_effect(variant, transcript, mutant):
     stop_offsets = tuple(transcript.stop_codon_spliced_offsets)
     cds_end = max(stop_offsets) + 1 if stop_offsets else (
         cds_start + 3 * len(str(transcript.protein_sequence)))
+    mutant_origins = mutant.evidence.get("genomic_positions", ())
+    mapped_offsets = [i for i, position in enumerate(mutant_origins)
+                      if position is not None and start <= position <= end]
+    protein = str(transcript.protein_sequence)
+    if mapped_offsets and mutant.evidence.get("start_codon_offset") is not None:
+        first_offset = min(mapped_offsets)
+        cds_start = mutant.evidence["start_codon_offset"]
+        protein = mutant.protein_sequence
+        cds_end = cds_start + 3 * (len(protein) + 1)
     # On the reverse strand, inserted bases precede their genomic anchor.
     # Anchoring on the retained first CDS base leaves the insertion in the UTR.
     if (first_offset < cds_start
@@ -480,12 +455,9 @@ def _unchanged_product_effect(variant, transcript, mutant):
     if first_offset >= cds_end:
         return ThreePrimeUTR(variant, transcript)
     aa_pos = (first_offset - cds_start) // 3
-    reference_protein = str(transcript.protein_sequence)
     aa_ref = (
-        reference_protein[aa_pos]
-        if 0 <= aa_pos < len(reference_protein) else "")
+        protein[aa_pos] if 0 <= aa_pos < len(protein) else "")
     effect = Silent(variant, transcript, aa_pos=aa_pos, aa_ref=aa_ref)
-    mutant_origins = mutant.evidence.get("genomic_positions", ())
     if mutant_origins:
         effect.excluded_from_mrna = not any(
             start <= position <= end for position in mutant_origins
@@ -495,27 +467,34 @@ def _unchanged_product_effect(variant, transcript, mutant):
 
 def classify_products(variant, transcript, baseline, mutant):
     """Classify a mutant product against the patient's baseline product."""
+    baseline_model = baseline.to_mutant_transcript()
+    mutant_model = mutant.to_mutant_transcript()
+
+    def finish(effect):
+        return _attach_transcript_models(
+            effect, mutant_model, baseline_model,
+            baseline_model.mutant_protein_sequence)
+
+    if (baseline.protein_sequence is None or mutant.protein_sequence is None
+            or baseline.start_codon_present is False):
+        unresolved = tuple(mutant.evidence.get("unresolved_mechanisms", ())) + tuple(
+            baseline.evidence.get("unresolved_mechanisms", ()))
+        return finish(Unresolved(
+            variant, transcript, mechanism=unresolved[0] if unresolved else "transcript_comparison",
+            reason=mutant.evidence.get("unresolved_reason") or
+            "A translated baseline and mutant product are required for comparison"))
     if baseline.start_codon_present and not mutant.start_codon_present:
-        context = dict(reference_transcript=transcript,
-                       annotator_name="transcript_model", evidence=dict(mutant.evidence))
-        model = (MutantTranscript.from_sequence(mutant.cdna_sequence, **context)
-                 if mutant.cdna_sequence is not None else MutantTranscript(**context))
-        return StartLoss(variant, transcript, mutant_transcript=model,
+        return finish(StartLoss(variant, transcript, mutant_transcript=mutant_model,
                          ref_codon=baseline.evidence.get("start_codon"),
-                         ref_codon_offset=baseline.evidence.get("start_codon_offset"))
+                         ref_codon_offset=baseline.evidence.get("start_codon_offset")))
     if baseline.protein_sequence == mutant.protein_sequence:
         ref_codon = baseline.evidence.get("start_codon")
         alt_codon = mutant.evidence.get("start_codon")
         if (baseline.start_codon_present and mutant.start_codon_present
                 and ref_codon and alt_codon and ref_codon != alt_codon):
-            return AlternateStartCodon(
-                variant, transcript, ref_codon=ref_codon, alt_codon=alt_codon)
-        return _unchanged_product_effect(variant, transcript, mutant)
-    mutant_transcript = MutantTranscript(
-        reference_transcript=transcript,
-        cdna_sequence=mutant.cdna_sequence,
-        mutant_protein_sequence=mutant.protein_sequence,
-        annotator_name="transcript_model")
+            return finish(AlternateStartCodon(
+                variant, transcript, ref_codon=ref_codon, alt_codon=alt_codon))
+        return finish(_unchanged_product_effect(variant, transcript, mutant))
     def coding_sequence(product):
         origins = product.evidence.get("genomic_positions", ())
         target = _start_codon_first_position(transcript)
@@ -538,4 +517,6 @@ def classify_products(variant, transcript, baseline, mutant):
         mut_protein=mutant.protein_sequence or "",
         length_delta=len(mutant_coding) - len(reference_coding),
         frame_change_aa_offset=frame_change,
-        mutant_transcript=mutant_transcript)
+        mutant_transcript=mutant_model,
+        baseline_transcript=baseline_model,
+        coding_start=mutant.evidence.get("start_codon_offset"))

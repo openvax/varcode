@@ -201,3 +201,25 @@ def test_ordering_prefers_fewer_cis_variants_after_rank_and_priority():
 
     assert [type(candidate.effect).__name__ for candidate in ordered] == [
         "reference-like", "cis"]
+
+
+def test_full_products_with_identical_local_windows_do_not_merge():
+    outcomes = tuple(ClassifiedOutcome(
+        EffectHypothesis(), effect(),
+        product("M" + "A" * 100 + residue, "ATG" + "GCT" * 100 + codon),
+        product("M" + "G" + "A" * 99 + residue, "ATGGGT" + "GCT" * 99 + codon),
+        change_aa_offset=1, change_cdna_offset=3)
+        for residue, codon in (("S", "TCT"), ("R", "CGT")))
+    assert len(merge_classified_outcomes(outcomes)) == 2
+
+
+def test_unmapped_rna_does_not_disable_calibrated_prediction_order():
+    baseline = product("MQA")
+    outcomes = [ClassifiedOutcome(
+        EffectHypothesis(phase_probability=p), effect(name), baseline, product(protein))
+        for p, name, protein in ((0.2, "rare", "MGA"), (0.8, "common", "MRA"))]
+    outcomes.append(ClassifiedOutcome(
+        EffectHypothesis(phase_probability=None, evidence={"rna_observation": {"source": "reads"}}),
+        effect("Unresolved"), product(None, None), product("MA", "ATGGCT")))
+    candidates = order_realized_candidates(merge_classified_outcomes(outcomes), lambda e: 1)
+    assert [type(c.effect).__name__ for c in candidates] == ["common", "rare", "Unresolved"]

@@ -346,8 +346,10 @@ def apply_phase_resolver_to_effects(effects, phase_resolver):
     :class:`MutationEffect`) to attach observed
     :class:`MutantTranscript` objects when the resolver has evidence.
 
-    Mutates each effect in place by setting
-    ``effect.mutant_transcript``. Effects whose transcript isn't
+    Transcript-model effects use the shared RNA refinement path and replace
+    the collection entry, preserving the DNA products and unresolved partial
+    observations. Other effects retain the established in-place assignment
+    to ``effect.mutant_transcript``. Effects whose transcript isn't
     resolvable or whose ``(variant, transcript)`` has no observed
     transcript are left untouched — so this is safe to call on a mixed
     collection where only some variants have RNA evidence.
@@ -356,19 +358,32 @@ def apply_phase_resolver_to_effects(effects, phase_resolver):
         return effects
     if not hasattr(phase_resolver, "mutant_transcript"):
         return effects
+    replacements = []
+    changed = False
     for e in effects:
         transcript = getattr(e, "transcript", None)
         variant = getattr(e, "variant", None)
         if variant is None or transcript is None:
+            replacements.append(e)
             continue
         mt = phase_resolver.mutant_transcript(variant, transcript)
         if mt is not None:
-            # Intentional mutation: the effect's mutant_transcript
-            # slot was either None (point variants, cryptic stubs,
-            # etc.) or populated from DNA-only inference. An observed
-            # mutant transcript is higher-confidence evidence, so it
-            # wins.
-            e.mutant_transcript = mt
+            if getattr(e, "realized_candidates", None):
+                from .effects.effect_classes import Unresolved
+                from .rna_evidence import make_rna_outcome
+                from .transcript_model import _refine_transcript_model_effect
+
+                observed = Unresolved(variant, transcript, "rna_transcript_comparison")
+                observed.mutant_transcript = mt
+                e = _refine_transcript_model_effect(e, (make_rna_outcome(
+                    observed, source=mt.annotator_name, extra_evidence=mt.evidence),))
+                changed = True
+            else:
+                e.mutant_transcript = mt
+        replacements.append(e)
+    if changed:
+        from .rna_evidence import _replace_effects
+        return _replace_effects(effects, replacements)
     return effects
 
 

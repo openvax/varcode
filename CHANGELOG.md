@@ -1,5 +1,23 @@
 # Change Log
 
+## v10.23.0
+
+- Retain the actual baseline and mutant transcript models on composed effects,
+  including inherited amino acids outside the somatic change. Use patient
+  protein lengths and offsets for stop/frameshift classification; preserve
+  models and shared variant identity through JSON/pickle (#659).
+- Centralize transcript-model interval assembly and translation. Unresolved
+  retention/cryptic paths have unavailable sequences instead of borrowing the
+  canonical transcript (#421, #659).
+- Collect transcript-model germline evidence across the full transcript span
+  and merge only identical full-product comparisons, preserving distant
+  sequence differences and unknown phase (#660).
+- Reconcile RNA through existing transcript-model candidates: exact full-cDNA
+  matches support compatible hypotheses; partial/unmapped observations retain
+  their sequences as unresolved comparisons. Preserve alternatives and source
+  evidence without inventing phase, reference completion or probabilities.
+  The default annotator and its local germline lookup remain unchanged.
+
 ## v10.22.4
 
 - Reject malformed consumed SV INFO scalar types and incomplete or reversed

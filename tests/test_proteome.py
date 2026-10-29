@@ -112,13 +112,13 @@ def test_coding_substitution_and_offline_roundtrip(effect, tmp_path, monkeypatch
     assert json.loads(json.dumps(graph(restored))) == json.loads(json.dumps(graph(predicted)))
 
 
-def test_full_products_beneath_a_locally_merged_candidate(effect):
+def test_full_products_remain_distinct_when_local_changes_match(effect):
     prefix = "M" + "A" * 75
     first = outcome(effect, baseline=prefix + "Q", mutant=prefix + "R")
     second = outcome(effect, baseline=prefix + "Q", mutant=prefix + "S", index=1)
-    candidate, = merge_classified_outcomes([first, second])
-    assert len(candidate.outcomes) == 2  # differences beyond the local merge window
-    effect.realized_candidates = (candidate,)
+    candidates = merge_classified_outcomes([first, second])
+    assert len(candidates) == 2  # differences beyond the former local merge window
+    effect.realized_candidates = candidates
     predicted = to_proteome([effect])
     assert {e.sequence for e in predicted} == {prefix + "R", prefix + "S"}
     assert len(comparisons(predicted)) == 2
