@@ -127,6 +127,34 @@ import dataclasses
 ctx = dataclasses.replace(ctx, max_phase_hypotheses=16)
 ```
 
+## When a patient comparison cannot be built
+
+The default annotator does not support every combination of inherited and
+somatic edits. For example, an intronic splice-site variant cannot be applied
+directly to an already-spliced cDNA, and overlapping edits can conflict.
+If a hypothesis contains cis germline edits that cannot be composed, or the
+required baseline/joint protein is unavailable, its result is `Unresolved`
+with `mechanism="germline_composition"` and an explanatory `reason`.
+
+The result retains `reference_effect`, the somatic annotation **without**
+germline context, for inspection and severity ranking. That diagnostic is not
+a patient-relative consequence. The unresolved result itself has no mutant
+protein sequence, and both change flags remain `None`, not `False`.
+
+For known phase, inspect the returned effect directly. For unknown phase,
+inspect each `PhaseCandidateSet.candidates` entry: a failed cis hypothesis
+remains unresolved, while a trans hypothesis can retain its ordinary reference
+annotation. Candidate evidence preserves the cis germline variants. Both the
+phase alternatives and diagnostic reference effects survive native JSON and
+pickle round-trips. Unresolved status does not supply missing phase evidence
+or imply that the somatic variant is harmless.
+
+Supported patient-baseline comparisons, including start-loss codon details,
+are unchanged. When all nearby germline edits are in trans, the affected
+haplotype has the reference baseline and reference-relative annotation remains
+appropriate. For broader composition support, see the opt-in
+[transcript-model annotator](experimental_annotators.md#transcript-model-results).
+
 ## Loss of heterozygosity (LOH)
 
 When a reported somatic allele matches the supplied germline, Varcode returns
@@ -163,8 +191,9 @@ and somatic alleles, applying each inherited allele once; see
 ## Limitations
 
 - **Germline-disrupted splice sites get no explicit downgrade.**
-  Classification runs against the patient's signal, but there's no
-  "germline already broke this, downgrade severity" path.
+  The default cannot compose all cis germline/splice hypotheses; unsupported
+  comparisons remain unresolved as described above. It does not infer that a
+  noncanonical signal is inactive or automatically reduce splice severity.
 - **Subclonal somatic and CNV dosage are not modeled.** Every
   somatic variant is treated as 100% present.
 - **Hypothesis cap of 8** by default when phase is unknown across
