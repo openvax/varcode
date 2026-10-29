@@ -30,6 +30,9 @@
 - Align generated API documentation and compatibility docstrings with the
   shared default. Enable the existing resource-aware parallel test runner in
   CI without reducing public-cohort or Python/pandas coverage (#666).
+- Measure the existing default-annotation throughput benchmark without
+  coverage tracing, retaining its 100 ms/variant limit and normal functional
+  test coverage; use a monotonic timer and deterministic warmup (#667).
 
 ## v10.23.0
 

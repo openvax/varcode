@@ -10,9 +10,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import print_function, division, absolute_import
 import time
 
+import pytest
 from pyensembl import cached_release
 
 from varcode.util import random_variants
@@ -24,21 +24,27 @@ from varcode.util import random_variants
 ensembl_grch38 = cached_release(81)
 
 def _time_variant_annotation(variant_collection):
-    start_t = time.time()
+    start_t = time.perf_counter()
     effects = variant_collection.effects()
-    end_t = time.time()
+    end_t = time.perf_counter()
     assert len(effects.groupby_variant()) == len(variant_collection)
     elapsed_t = end_t - start_t
     return elapsed_t
 
 
+@pytest.mark.no_cover
 def test_effect_timing(
         n_variants=100,
         random_seed=0,
         n_warmup_variants=5):
+    """Measure default throughput without coverage's tracing overhead.
+
+    Functional tests cover annotation separately. Keep the same runtime
+    budget for the ordinary default pipeline, using a reproducible warmup.
+    """
     warmup_collection = random_variants(
         n_warmup_variants,
-        random_seed=None,
+        random_seed=1,
         ensembl=ensembl_grch38)
     warmup_collection.effects()
 
