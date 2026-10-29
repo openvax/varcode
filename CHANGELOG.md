@@ -1,5 +1,18 @@
 # Change Log
 
+## v10.22.3
+
+- Keep failed cis germline/somatic comparisons explicitly unresolved instead
+  of silently returning a reference-only consequence (#421). This includes
+  splice edits the cDNA builder cannot compose, conflicting edits and missing
+  baseline/joint proteins. Preserve phase alternatives and a labeled
+  `reference_effect` for inspection and severity ranking; unresolved protein
+  sequences and change flags remain unavailable/unknown.
+- Preserve existing all-trans and supported patient-baseline predictions,
+  including germline-aware start-loss codon details.
+- Fix native serialization of ordinary germline phase candidates (#655),
+  including unresolved comparisons and their diagnostic reference evidence.
+
 ## v10.22.2
 
 - Make chromosome resolver and missing-contig exception exports explicit for

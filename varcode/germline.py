@@ -615,9 +615,8 @@ class GermlineContext:
 # Not handled (refinements that don't change this API):
 #   * Splice-signal recomputation when germline already disrupts a
 #     splice site varcode would otherwise classify against (#363).
-#     Falls out partially because the patient transcript carries the
-#     germline edits, but downgrade-by-already-broken needs targeted
-#     work.
+#     Unsupported cis comparisons remain unresolved; a reference-only
+#     diagnostic does not establish the patient's splice consequence.
 #   * Coverage-track-aware "unknown" regions (for SPARSE contexts
 #     with explicit BedGraph coverage).
 # Mitochondrial codon table (NCBI table 2) is selected automatically
@@ -643,8 +642,9 @@ def apply_germline_to_transcript(transcript, germline_ctx, somatic_variant=None)
       somatic's window (per :func:`default_germline_window`); else
       applies all germline variants overlapping any exon of the
       transcript.
-    * If germline edits conflict (overlapping cDNA ranges) or land
-      outside the CDS, returns ``None`` and the caller falls back.
+    * If germline edits conflict or cannot be mapped to the spliced
+      transcript, returns ``None``. That is not a reference-like baseline;
+      callers must retain the unavailable patient comparison explicitly.
 
     The returned object is the same shape that
     :func:`varcode.mutant_transcript.apply_variants_to_transcript`
@@ -981,7 +981,10 @@ def _classify_against_patient_baseline(
     Returns a :class:`MutationEffect` instance. The effect's class
     (Missense, FrameShift, etc.) reflects the diff against the
     patient's baseline — not the reference's — when ``hypothesis.cis``
-    is non-empty.
+    is non-empty. If those edits cannot be composed or the required proteins
+    are unavailable, return ``Unresolved`` rather than discard the cis edits.
+    Its ``reference_effect`` is diagnostic reference-only evidence, not a
+    patient-relative prediction.
 
     For the all-trans case (``hypothesis.cis`` empty), the patient
     baseline is identical to the reference, so the diff degenerates
@@ -997,18 +1000,24 @@ def _classify_against_patient_baseline(
     cis_germline = list(hypothesis.cis)
     baseline = None
 
+    def unavailable(reason):
+        from .effects import Unresolved, predict_variant_effect_on_transcript
+        reference = predict_variant_effect_on_transcript(
+            somatic_variant, transcript, annotator="fast")
+        # With no cis edits there is no patient/reference distinction to lose.
+        if not cis_germline:
+            return reference
+        return Unresolved(
+            somatic_variant, transcript, mechanism="germline_composition",
+            reason=reason, reference_effect=reference)
+
     # Patient baseline: just the cis germline applied. Empty cis →
     # baseline is the reference transcript (no edits).
     if cis_germline:
         baseline = apply_variants_to_transcript(cis_germline, transcript)
         if baseline is None:
-            # The germline edits conflict (overlapping cDNA ranges) or
-            # land outside the CDS — fall back to reference-relative
-            # classification of the somatic alone. The caller still
-            # sees a per-hypothesis result; it just degenerates.
-            from .effects import predict_variant_effect_on_transcript
-            return predict_variant_effect_on_transcript(
-                somatic_variant, transcript, annotator="fast")
+            return unavailable(
+                "Cis germline edits could not be applied to the reference transcript")
         baseline_protein = baseline.mutant_protein_sequence
         baseline_length_delta = baseline.total_length_delta
     else:
@@ -1026,20 +1035,16 @@ def _classify_against_patient_baseline(
     # Post-somatic: cis germline + somatic on the same haplotype.
     joint_variants = cis_germline + [somatic_variant]
     joint = apply_variants_to_transcript(joint_variants, transcript)
-    if joint is None or joint.mutant_protein_sequence is None:
-        # Joint build failed (conflicting edits, or somatic lands
-        # before CDS start) — fall back to reference-relative
-        # classification of the somatic alone.
-        from .effects import predict_variant_effect_on_transcript
-        return predict_variant_effect_on_transcript(
-            somatic_variant, transcript, annotator="fast")
+    if joint is None:
+        return unavailable(
+            "Cis germline and somatic edits could not be applied together to the reference transcript")
+    if joint.mutant_protein_sequence is None:
+        return unavailable(
+            "Protein sequence is unavailable for the joint germline/somatic transcript")
 
     if baseline_protein is None:
-        # Edge: transcript has no reference protein (incomplete or
-        # non-coding got past our gate); fall back.
-        from .effects import predict_variant_effect_on_transcript
-        return predict_variant_effect_on_transcript(
-            somatic_variant, transcript, annotator="fast")
+        return unavailable(
+            "Protein sequence is unavailable for the patient germline baseline")
 
     # Length delta of the somatic alone, after stripping the germline-
     # only baseline shift. classify_from_protein_diff expects the diff
@@ -1088,6 +1093,8 @@ def predict_germline_aware_effect(
       :func:`_classify_against_patient_baseline`.
     * **Phase unknown** — classify each hypothesis and wrap them in a
       :class:`~varcode.effects.effect_classes.PhaseCandidateSet`.
+    * **Cis composition unavailable** — keep an ``Unresolved`` result for
+      that hypothesis, with its reference-only annotation in ``reference_effect``.
     * **Too many hypotheses** — a :class:`~varcode.HypothesisLimit`
       recording the phase partition and the reference-relative effect.
 

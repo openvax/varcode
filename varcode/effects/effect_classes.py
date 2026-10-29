@@ -39,7 +39,7 @@ class MutationEffect(Serializable):
 
     _effect_graph_fields = (
         "realized_candidates", "germline_phase_state",
-        "germline_variants_in_window", "germline_unknown")
+        "germline_variants_in_window", "germline_unknown", "germline_variants")
 
     def __init__(self, variant):
         self.variant = variant
@@ -448,15 +448,45 @@ class Unresolved(TranscriptMutationEffect):
     ``mechanism="unsupported_annotation"`` means the selected annotator
     returned ``NotImplemented`` for this input. ``reason`` explains why;
     unresolved does not mean the variant is harmless.
+
+    ``reference_effect``, when supplied, retains a reference-only annotation
+    for inspection and severity ranking. It is not the unresolved patient's
+    consequence: sequence and change accessors remain unavailable/unknown.
+
+    Parameters
+    ----------
+    variant : Variant or StructuralVariant
+        The edit whose consequence is unresolved.
+    transcript : transcript-like
+        The reference transcript used for annotation.
+    mechanism : str
+        Machine-readable source of uncertainty.
+    reason : str, optional
+        Human-readable explanation of the missing comparison.
+    reference_effect : MutationEffect, optional
+        Reference-only diagnostic and ranking anchor, when available.
     """
 
     modifies_coding_sequence = None
     modifies_protein_sequence = None
 
-    def __init__(self, variant, transcript, mechanism, reason=None):
+    def __init__(self, variant, transcript, mechanism: str, reason: str | None = None,
+                 reference_effect: MutationEffect | None = None) -> None:
         TranscriptMutationEffect.__init__(self, variant, transcript)
         self.mechanism = mechanism
         self.reason = reason
+        self.reference_effect = reference_effect
+
+    @property
+    def priority_class(self) -> type[MutationEffect]:
+        """Retain reference severity without asserting a patient consequence."""
+        from .effect_ordering import (
+            select_between_exonic_splice_site_and_alternate_effect)
+        if self.reference_effect is None:
+            return Unresolved
+        ranked = select_between_exonic_splice_site_and_alternate_effect(
+            self.reference_effect)
+        return getattr(ranked, "priority_class", None) or type(ranked)
 
     @property
     def short_description(self):
@@ -482,21 +512,9 @@ class HypothesisLimit(Unresolved):
             reason += " (%d unphased germline variants)" % len(phase.unphased)
         Unresolved.__init__(
             self, variant, transcript, mechanism="hypothesis_limit",
-            reason=reason)
+            reason=reason, reference_effect=reference_effect)
         self.max_hypotheses = max_hypotheses
         self.phase = phase
-        self.reference_effect = reference_effect
-
-    @property
-    def priority_class(self):
-        """Rank as ``reference_effect`` would in top-priority selection."""
-        from .effect_ordering import (
-            select_between_exonic_splice_site_and_alternate_effect)
-        if self.reference_effect is None:
-            return Unresolved
-        ranked = select_between_exonic_splice_site_and_alternate_effect(
-            self.reference_effect)
-        return getattr(ranked, "priority_class", None) or type(ranked)
 
 
 class NoncodingTranscript(TranscriptMutationEffect):

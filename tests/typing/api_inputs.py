@@ -9,7 +9,7 @@ from pyensembl import Transcript
 from varcode import (
     ContigResolution, ContigResolver, EffectAnnotator, EffectCollection,
     InvalidContigError, MutationEffect, MutantTranscript, ORFAnnotation,
-    Variant, VariantCollection,
+    Unresolved, Variant, VariantCollection,
     get_annotator, get_default_annotator, register_annotator, resolve_annotator,
     set_default_annotator, use_annotator,
     load_maf, load_maf_dataframe, load_vcf, normalize_contig_name, resolve_contig_name,
@@ -82,6 +82,11 @@ def check_annotation_workflow(
     if effect.mutant_protein_sequence is not None:
         assert_type(effect.mutant_protein_sequence, str)
     assert_type(InvalidContigError("missing"), InvalidContigError)
+    unresolved = Unresolved(
+        variant, transcript, "germline_composition", reference_effect=effect)
+    assert_type(unresolved.reference_effect, MutationEffect | None)
+    assert_type(unresolved.priority_class, type[MutationEffect])
+    Unresolved(variant, transcript, "missing", reference_effect="missense")  # type: ignore[arg-type]
 
     plugin = DecliningAnnotator()
     assert_type(register_annotator(plugin), DecliningAnnotator)

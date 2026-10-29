@@ -450,8 +450,10 @@ def apply_variant_to_transcript(variant, transcript):
     * Reference allele doesn't match the transcript's cDNA at the
       computed offset.
 
-    Callers that get ``None`` should fall back to the fast
-    :class:`EffectAnnotator`, as the protein-diff annotator does.
+    A caller annotating only this reference-relative edit may use the fast
+    :class:`EffectAnnotator` when the model is unavailable. A failed patient
+    haplotype comparison must instead remain unresolved: dropping supplied
+    cis germline edits would change the comparison being made.
     """
     from pyensembl import Transcript
 
