@@ -313,8 +313,16 @@ def _realize_outcomes(
     primary = somatic_variants[0]
     outcomes = []
     enumeration_index = 0
+    # Complete nucleotide alleles may cross a transcript boundary by more
+    # than the splice scan flank. Keep their full genomic span before exon
+    # projection; extending the layout does not extend the transcript.
+    flank = 50
+    for variant in (*somatic_variants, *(v for h in phase_hypotheses for v in h.cis)):
+        if not getattr(variant, "is_structural", False):
+            flank = max(flank, transcript.start - variant.trimmed_base1_start + 50,
+                        variant.trimmed_base1_end - transcript.end + 50)
     reference = GenomicLayout.from_transcript(
-        transcript, flank=50, sequence_provider=sequence_provider)
+        transcript, flank=flank, sequence_provider=sequence_provider)
     for phase_hypothesis in phase_hypotheses:
         baseline_layout = reference.apply_variants(phase_hypothesis.cis)
         mutant_layout = baseline_layout.apply_variants(somatic_variants)

@@ -11,7 +11,7 @@ import json
 import pytest
 from pyensembl import cached_release
 
-from varcode import load_vcf
+from varcode import Variant, load_vcf
 from varcode.effects import (
     AlternateStartCodon, IncompleteTranscript, NoncodingTranscript, Silent,
     StopLoss,
@@ -69,6 +69,26 @@ def test_every_public_vcf_allele_loads_and_annotates(name):
             effects = event.effects(raise_on_error=True)
             assert effects
             materialize_effects(effects)
+
+
+@pytest.mark.parametrize("name,contig,position,transcript_id", [
+    ("colo829-nygc-v6.vcf.gz", "1", 31764184, "ENST00000398542"),
+    ("hcc1395-lancet2-two-tech.vcf.gz", "13", 19958465, "ENST00000610343"),
+])
+def test_public_deletions_crossing_transcript_bounds_keep_exact_cdna(name, contig, position, transcript_id):
+    row = next(row for row in vcf_rows(name)
+               if row[0].removeprefix("chr") == contig
+               and int(row[1]) <= position < int(row[1]) + len(row[3]))
+    genome = cached_release(93)
+    variant = Variant(contig, int(row[1]), row[3], row[4], genome)
+    transcript = genome.transcript_by_id(transcript_id)
+    deleted = [transcript.spliced_offset(p) for exon in transcript.exons
+               for p in range(max(exon.start, variant.start), min(exon.end, variant.end) + 1)]
+    expected = transcript.sequence[:min(deleted)] + transcript.sequence[max(deleted) + 1:]
+    effect, = [e for e in variant.effects() if e.transcript_id == transcript_id]
+    assert effect.baseline_transcript.cdna_sequence == transcript.sequence
+    assert effect.mutant_transcript.cdna_sequence == expected
+    assert effect.modifies_protein_sequence is False
 
 
 def test_every_hcc1395_consensus_sv_loads_and_annotates():

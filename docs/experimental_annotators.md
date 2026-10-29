@@ -128,6 +128,12 @@ or `Unresolved`, with alternatives in `candidates`. Code requiring
 `SpliceOutcomeSet`, `LargeDeletion`, `PhaseCandidateSet` or `HaplotypeEffect`
 results can explicitly select `annotator="fast"`. Existing classes, imports and
 serialized results remain supported. A candidate rank is not a probability.
+
+The shared default builds full baseline/mutant products and retains uncertainty;
+this costs more CPU and memory than the legacy local classifier, especially
+across large call sets or many transcripts. For workflows requiring the older
+throughput and result contract, select `annotator="fast"` explicitly.
+
 Collection filtering and effect priority consider every candidate, so a
 preferred silent comparison cannot hide a protein-changing alternative. The
 selected effect's own sequence properties describe that comparison; use

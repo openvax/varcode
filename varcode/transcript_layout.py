@@ -263,7 +263,7 @@ def realize_exon_path(transcript, layout, kept_run_keys=None):
         {"exon_runs": tuple(run.key for run in selected)})
 
 
-def _best_cryptic_boundary(layout, canonical_offset, side, scan_flank=50):
+def _best_cryptic_boundary(layout, canonical_offset, side, valid_interval, scan_flank=50):
     """Return the best non-canonical interbase offset and motif score."""
     scan_start = max(0, canonical_offset - scan_flank)
     scan_end = min(layout.length, canonical_offset + scan_flank)
@@ -280,6 +280,8 @@ def _best_cryptic_boundary(layout, canonical_offset, side, scan_flank=50):
         if boundary == canonical_local:
             continue
         candidate = (scan_start + boundary, score)
+        if not valid_interval[0] <= candidate[0] <= valid_interval[1]:
+            continue
         if best is None or candidate[1] > best[1]:
             best = candidate
     return best
@@ -348,11 +350,19 @@ def realize_splice_plan(
                 unresolved.append(option.mechanism)
             continue
         if option.mechanism == "cryptic":
+            if (key.side == "donor" and index + 1 == len(selected)
+                    or key.side == "acceptor" and index == 0):
+                unresolved.append(option.mechanism)
+                continue
+            valid_interval = (
+                (bounds[run.key][0] + 1, bounds[selected[index + 1].key][0] - 1)
+                if key.side == "donor" else
+                (bounds[selected[index - 1].key][1] + 1, bounds[run.key][1] - 1))
             canonical = (
                 run.layout_end if key.side == "donor" else run.layout_start)
             try:
                 cryptic = _best_cryptic_boundary(
-                    layout, canonical, key.side, scan_flank)
+                    layout, canonical, key.side, valid_interval, scan_flank)
             except (SequenceUnavailable, KeyError, ValueError):
                 cryptic = None
             if cryptic is None:

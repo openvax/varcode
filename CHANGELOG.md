@@ -13,7 +13,9 @@
   changed amino acid (#663). Avoid repeated locus queries for unedited splice
   coordinates and reuse the selected transcript when genomic DNA is absent.
   Keep insertion/stop and synonymous-codon details, and retain protein-changing
-  alternatives during collection filtering and priority ranking.
+  alternatives during collection filtering and priority ranking. Include full
+  nucleotide alleles crossing transcript bounds; reject cryptic sites without
+  a usable exon segment and retained splice partner.
 - Translate valid IUPAC reference codons to a uniquely determined residue or
   `X`, preserving uncertain residues in complete transcript products (#664).
   Invalid symbols still raise errors.

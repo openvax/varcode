@@ -456,3 +456,26 @@ def test_transcript_model_annotator_routes_bnd_through_verified_fusion_builder(m
     assert result.partner_transcript.id == "ENST00000264712"
     assert result.mutant_protein_sequence == (
         "MMSYLKQPPYGMNGLGLAGPAMDLLHPSVGYPETS")
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_nucleotide_deletion_can_extend_beyond_transcript_flank(reverse):
+    from varcode.nucleotides import reverse_complement
+    from .test_splice_graph import FORWARD
+
+    transcript = Transcript(reverse)
+    chromosome = (reverse_complement(FORWARD) if reverse else FORWARD) + "A" * 200
+    variant = point(18, chromosome[17:100], "")
+    result = predict_transcript_model_effect(
+        (variant,), transcript, sequence_provider=lambda contig, start, end: chromosome[start - 1:end])
+    positions = sorted(p for exon in transcript.exons
+                       for p in range(exon.start, exon.end + 1) if p < 18)
+    expected = "".join(chromosome[p - 1] for p in positions)
+    if reverse:
+        expected = reverse_complement(expected)
+    products = [outcome.mutant.cdna_sequence for candidate in result.candidates
+                for outcome in candidate.outcomes]
+    assert expected in products
+    assert all(position is None or not 18 <= position <= 100
+               for candidate in result.candidates for outcome in candidate.outcomes
+               for position in outcome.mutant.evidence.get("genomic_positions", ()))
