@@ -21,6 +21,7 @@ than silently dropping rows.
 """
 
 import re
+from numbers import Integral
 from typing import Optional
 
 from .structural_variant import StructuralVariant, SV_TYPES
@@ -142,15 +143,71 @@ def _extract_info_scalar(info, key):
     each row carries exactly one inserted sequence — so the natural
     consumer wants the bare string.
 
-    Multi-element lists pass through unchanged. INSSEQ/SVINSSEQ are
-    conventionally Number=1; a multi-value list is malformed input
-    and we'd rather surface the unexpected shape than silently coerce
-    (e.g. by joining) and confuse a downstream type-checker.
+    Reject multiple values instead of selecting an unspecified ALT.
     """
     val = _extract_info(info, key)
-    if isinstance(val, list) and len(val) == 1:
-        return val[0]
+    if isinstance(val, (list, tuple)):
+        if len(val) != 1:
+            raise ValueError('INFO/%s requires one value for the selected ALT' % key)
+        val = val[0]
     return val
+
+
+def _string_info(info, key: str) -> Optional[str]:
+    """Read an optional consumed string field; flags are not string values."""
+    value = _extract_info_scalar(info, key)
+    if value is None or value == '.':
+        return None
+    if not isinstance(value, str) or not value:
+        raise ValueError('INFO/%s requires a nonempty string' % key)
+    return value
+
+
+def _integer_value(value, key: str) -> int:
+    """Require an integer or its literal spelling; never truncate floats."""
+    if isinstance(value, bool) or not (isinstance(value, Integral)
+            or isinstance(value, str) and re.fullmatch(r'[+-]?\d+', value)):
+        raise ValueError('INFO/%s requires integer values' % key)
+    return int(value)
+
+
+def _end_info(info) -> Optional[int]:
+    value = _extract_info_scalar(info, 'END')
+    return None if value is None or value == '.' else _integer_value(value, 'END')
+
+
+def _confidence_interval(info, key: str) -> Optional[tuple[int, int]]:
+    """Read one ALT's ordered confidence offsets, retaining signed values."""
+    value = _extract_info(info, key)
+    if value is None or value == '.':
+        return None
+    values = value.split(',') if isinstance(value, str) else value
+    if isinstance(values, (tuple, list)) and len(values) == 1 and values[0] in (None, '.'):
+        return None  # A header parser may represent the whole-field '.' as [None].
+    if not isinstance(values, (tuple, list)) or len(values) != 2:
+        raise ValueError('INFO/%s requires two confidence-interval offsets for the selected ALT' % key)
+    if all(item is None or item == '.' for item in values):
+        return None
+    lower, upper = (_integer_value(item, key) for item in values)
+    if lower > upper:
+        raise ValueError('INFO/%s confidence-interval offsets must be ordered' % key)
+    return lower, upper
+
+
+def _confidence_info_for_alt(info, index: int, count: int):
+    """Select per-ALT CI pairs, retaining shared legacy pairs.
+
+    The loader keeps the complete original mapping in record metadata. Direct
+    single-ALT parsing receives already selected fields and remains strict.
+    """
+    if info is None or count == 1:
+        return info
+    selected = dict(info)
+    for key in ('CIPOS', 'CIEND'):
+        values = selected.get(key)
+        if isinstance(values, (tuple, list)) and len(values) == 2 * count:
+            selected[key] = values[2 * index:2 * index + 2]
+    return selected
 
 
 # Copy-number ALT, captured separately from the generic symbolic regex
@@ -183,6 +240,11 @@ def parse_symbolic_alt(
     the same as for :class:`~varcode.Variant` and apply to both
     ``contig`` and a breakend's mate contig. The VCF loader forwards
     its own settings.
+
+    Consumed INFO fields must have valid scalar types; CIPOS/CIEND must be
+    ordered pairs for this ALT. Malformed values raise ValueError. A singleton
+    list is accepted for scalar fields. Missing confidence intervals remain
+    unknown; this parser does not invent precision or modify the supplied INFO.
     """
     if not alt:
         return None
@@ -214,10 +276,12 @@ def parse_symbolic_alt(
             subtype = token
             top = "BND"
 
-        end = _extract_info(info, "END") or start
-        svtype_from_info = _extract_info(info, "SVTYPE")
-        ci_start = _extract_info(info, "CIPOS")
-        ci_end = _extract_info(info, "CIEND")
+        end = _end_info(info)
+        if end is None:
+            end = start
+        svtype_from_info = _string_info(info, "SVTYPE")
+        ci_start = _confidence_interval(info, "CIPOS")
+        ci_end = _confidence_interval(info, "CIEND")
 
         # INFO/SVTYPE overrides when present and recognized.
         if svtype_from_info and svtype_from_info.upper() in SV_TYPES:
@@ -232,8 +296,8 @@ def parse_symbolic_alt(
         alt_assembly = None
         if top == "INS":
             alt_assembly = (
-                _extract_info_scalar(info, "INSSEQ")
-                or _extract_info_scalar(info, "SVINSSEQ"))
+                _string_info(info, "INSSEQ")
+                or _string_info(info, "SVINSSEQ"))
 
         sv_info = {}
         if subtype:
@@ -295,10 +359,12 @@ def parse_symbolic_alt(
             mate_contig=mate_contig,
             mate_start=mate_pos,
             mate_orientation=orientation,
-            info={"mateid": (_extract_info(info, "MATEID")
-                             or _extract_info(info, "PARID")),
+            ci_start=_confidence_interval(info, "CIPOS"),
+            ci_end=_confidence_interval(info, "CIEND"),
+            info={"mateid": (_string_info(info, "MATEID")
+                             or _string_info(info, "PARID")),
                   "bnd_anchor": prefix or suffix,
-                  "svtype": _extract_info_scalar(info, "SVTYPE")},
+                  "svtype": _string_info(info, "SVTYPE")},
             genome=genome,
             normalize_contig_names=normalize_contig_names,
             convert_ucsc_contig_names=convert_ucsc_contig_names,
@@ -316,10 +382,12 @@ def parse_symbolic_alt(
             sv_type="BND",
             alt=alt,
             ref=ref or "N",
+            ci_start=_confidence_interval(info, "CIPOS"),
+            ci_end=_confidence_interval(info, "CIEND"),
             info={"single_breakend": True,
                   "bnd_anchor": (m.group("joined_before")
                                  or m.group("joined_after")),
-                  "svtype": _extract_info_scalar(info, "SVTYPE")},
+                  "svtype": _string_info(info, "SVTYPE")},
             genome=genome,
             normalize_contig_names=normalize_contig_names,
             convert_ucsc_contig_names=convert_ucsc_contig_names,

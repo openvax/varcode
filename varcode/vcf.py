@@ -406,13 +406,13 @@ def dataframes_to_variant_collection(
 
                 variant: Variant | None
                 if symbolic:
-                    from .sv_allele_parser import parse_symbolic_alt
+                    from .sv_allele_parser import _confidence_info_for_alt, parse_symbolic_alt
                     variant = parse_symbolic_alt(
                         contig=chrom,
                         start=int(pos),
                         ref=ref,
                         alt=alt,
-                        info=info,
+                        info=_confidence_info_for_alt(info, alt_num, len(alts.split(','))),
                         genome=structural_variant_genome,
                         normalize_contig_names=variant_kwargs.get(
                             "normalize_contig_names", True),
