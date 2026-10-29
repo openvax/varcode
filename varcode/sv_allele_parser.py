@@ -21,8 +21,9 @@ than silently dropping rows.
 """
 
 import re
+from collections.abc import Mapping
 from numbers import Integral
-from typing import Optional
+from typing import Any, Optional
 
 from .structural_variant import StructuralVariant, SV_TYPES
 
@@ -87,6 +88,7 @@ def breakend_mate(alt):
     if breakend_sides(alt) is None:
         return None
     m = _BREAKEND_RE.match(alt)
+    assert m is not None  # The same immutable ALT passed breakend_sides above.
     return (m.group("mate_contig"), int(m.group("mate_pos")),
             m.group("open") + m.group("close"))
 
@@ -114,6 +116,7 @@ def breakend_inserted_sequence(ref, alt):
     if sides is None or not ref or len(ref) != 1:
         return None
     match = _BREAKEND_RE.match(alt)
+    assert match is not None  # Orientation validation above requires this match.
     ref = ref.upper()
     if sides[0] == "left":
         bases = match.group("prefix").upper()
@@ -122,20 +125,19 @@ def breakend_inserted_sequence(ref, alt):
     return bases[:-1] if bases.endswith(ref) else None
 
 
-def _extract_info(info, key):
+def _extract_info(info: Optional[Mapping[str, Any]], key: str) -> Any:
     """Pull an INFO field value, handling list-of-ints from CIPOS /
-    CIEND and plain ints/strings otherwise. Returns ``None`` if
-    missing or unparseable rather than raising — the VCF loader
-    should surface malformed rows via the normal filter, not crash
-    here."""
+    CIEND and plain ints/strings otherwise. Missing fields return None;
+    malformed consumed values are validated by their field-specific readers.
+    """
     if info is None:
         return None
-    if hasattr(info, "get"):
-        return info.get(key)
-    return None
+    if not isinstance(info, Mapping):
+        raise ValueError('SV INFO must be a mapping')
+    return info.get(key)
 
 
-def _extract_info_scalar(info, key):
+def _extract_info_scalar(info: Optional[Mapping[str, Any]], key: str) -> Any:
     """Like :func:`_extract_info` but unwraps a single-element list
     to its sole value. The header-driven INFO parser keeps undeclared
     String fields as 1-element lists (no ``Number=1`` to unwrap on);
@@ -153,7 +155,7 @@ def _extract_info_scalar(info, key):
     return val
 
 
-def _string_info(info, key: str) -> Optional[str]:
+def _string_info(info: Optional[Mapping[str, Any]], key: str) -> Optional[str]:
     """Read an optional consumed string field; flags are not string values."""
     value = _extract_info_scalar(info, key)
     if value is None or value == '.':
@@ -163,20 +165,21 @@ def _string_info(info, key: str) -> Optional[str]:
     return value
 
 
-def _integer_value(value, key: str) -> int:
+def _integer_value(value: object, key: str) -> int:
     """Require an integer or its literal spelling; never truncate floats."""
-    if isinstance(value, bool) or not (isinstance(value, Integral)
-            or isinstance(value, str) and re.fullmatch(r'[+-]?\d+', value)):
-        raise ValueError('INFO/%s requires integer values' % key)
-    return int(value)
+    if isinstance(value, Integral) and not isinstance(value, bool):
+        return int(value)
+    if isinstance(value, str) and re.fullmatch(r'[+-]?\d+', value):
+        return int(value)
+    raise ValueError('INFO/%s requires integer values' % key)
 
 
-def _end_info(info) -> Optional[int]:
+def _end_info(info: Optional[Mapping[str, Any]]) -> Optional[int]:
     value = _extract_info_scalar(info, 'END')
     return None if value is None or value == '.' else _integer_value(value, 'END')
 
 
-def _confidence_interval(info, key: str) -> Optional[tuple[int, int]]:
+def _confidence_interval(info: Optional[Mapping[str, Any]], key: str) -> Optional[tuple[int, int]]:
     """Read one ALT's ordered confidence offsets, retaining signed values."""
     value = _extract_info(info, key)
     if value is None or value == '.':
@@ -194,7 +197,7 @@ def _confidence_interval(info, key: str) -> Optional[tuple[int, int]]:
     return lower, upper
 
 
-def _confidence_info_for_alt(info, index: int, count: int):
+def _confidence_info_for_alt(info: Optional[Mapping[str, Any]], index: int, count: int) -> Optional[Mapping[str, Any]]:
     """Select per-ALT CI pairs, retaining shared legacy pairs.
 
     The loader keeps the complete original mapping in record metadata. Direct
@@ -221,7 +224,7 @@ def parse_symbolic_alt(
         start: int,
         ref: str,
         alt: str,
-        info=None,
+        info: Optional[Mapping[str, Any]] = None,
         genome=None,
         normalize_contig_names: bool = True,
         convert_ucsc_contig_names: Optional[bool] = None,
@@ -323,8 +326,8 @@ def parse_symbolic_alt(
             alt=alt,
             ref=ref or "N",
             alt_assembly=alt_assembly,
-            ci_start=tuple(ci_start) if ci_start else None,
-            ci_end=tuple(ci_end) if ci_end else None,
+            ci_start=ci_start,
+            ci_end=ci_end,
             info=sv_info,
             genome=genome,
             normalize_contig_names=normalize_contig_names,

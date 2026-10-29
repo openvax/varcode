@@ -70,3 +70,8 @@ def test_vcf_loader_does_not_hide_malformed_interval(tmp_path):
         '1\t100\tbad\tN\tN[2:300[\t.\tPASS\tCIPOS=0\n')
     with pytest.raises(ValueError, match='INFO/CIPOS'):
         load_vcf(str(path), genome='GRCh38', parse_structural_variants=True)
+
+
+def test_invalid_info_container_is_reported_as_an_input_error():
+    with pytest.raises(ValueError, match='SV INFO must be a mapping'):
+        parse_symbolic_alt('1', 100, 'N', 'N[2:300[', True, genome='GRCh38')

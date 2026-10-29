@@ -72,6 +72,7 @@ files = [
     "varcode/variant_collection.py",
     "varcode/effects/effect_collection.py",
     "varcode/vcf.py",
+    "varcode/sv_allele_parser.py",
     "varcode/maf.py",
     "varcode/proteome.py",
     "tests/typing/api_inputs.py",
