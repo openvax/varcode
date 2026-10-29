@@ -74,6 +74,7 @@ def check_annotation_workflow(
     assert_type(effect.aa_mutation_start_offset, int | None)
     assert_type(effect.aa_mutation_end_offset, int | None)
     assert_type(effect.mutant_transcript, MutantTranscript | None)
+    assert_type(effect.baseline_transcript, MutantTranscript | None)
     assert_type(effect.orf_annotation, ORFAnnotation | None)
     assert_type(effect.gene_id, str | None)
     assert_type(effect.transcript_id, str | None)

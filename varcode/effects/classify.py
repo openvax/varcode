@@ -48,6 +48,17 @@ from .effect_classes import (
 )
 
 
+def _attach_transcript_models(effect, mutant_transcript, baseline_transcript=None,
+                              ref_protein=None):
+    """Keep the products used for classification on the ordinary effect API."""
+    effect.baseline_transcript = baseline_transcript
+    if mutant_transcript is not None and effect.mutant_transcript is None:
+        effect.mutant_transcript = mutant_transcript
+    if ref_protein is not None:
+        effect._original_protein_sequence = ref_protein
+    return effect
+
+
 def classify_from_protein_diff(
         variant,
         transcript,
@@ -69,7 +80,8 @@ def classify_from_protein_diff(
     variant : Variant
     transcript : pyensembl.Transcript
     ref_protein : str
-        Reference protein sequence (from ``transcript.protein_sequence``).
+        Baseline protein sequence: the reference or the patient's inherited
+        product. Returned sequence accessors retain this actual comparison.
     mut_protein : str
         Mutant protein sequence (translated from the mutated cDNA,
         stopping at the first stop codon).
@@ -81,7 +93,8 @@ def classify_from_protein_diff(
         changed tail, the effect is a :class:`FrameShift`.
     mutant_transcript : MutantTranscript or None
         Optional edit-level context for the already-materialized
-        mutant transcript. When present, the classifier can preserve
+        mutant transcript, retained on every returned effect. When present,
+        the classifier can preserve
         insertion semantics for premature-stop calls that would
         otherwise look like a substitution-plus-truncation in a
         whole-protein diff.
@@ -109,12 +122,16 @@ def classify_from_protein_diff(
     -------
     MutationEffect subclass instance
     """
+    def finish(effect):
+        return _attach_transcript_models(
+            effect, mutant_transcript, baseline_transcript, ref_protein)
+
     if ref_protein == mut_protein:
-        return Silent(
+        return finish(Silent(
             variant=variant,
             transcript=transcript,
             aa_pos=0,
-            aa_ref=ref_protein[:1] if ref_protein else "")
+            aa_ref=ref_protein[:1] if ref_protein else ""))
 
     # Start loss: mutant protein doesn't begin with M.
     if start_complete and (not mut_protein or (mut_protein[0] != "M" and ref_protein and ref_protein[0] == "M")):
@@ -124,8 +141,8 @@ def classify_from_protein_diff(
             baseline = start_loss_details(None, transcript, baseline_transcript)
             reference = dict(ref_codon=baseline["alt_codon"],
                              ref_codon_offset=baseline["alt_codon_offset"])
-        return StartLoss(variant=variant, transcript=transcript,
-                         mutant_transcript=mutant_transcript, **reference)
+        return finish(StartLoss(variant=variant, transcript=transcript,
+                         mutant_transcript=mutant_transcript, **reference))
 
     ref_delta, alt_delta, prefix, suffix = trim_shared_flanking_strings(
         ref_protein, mut_protein)
@@ -147,25 +164,25 @@ def classify_from_protein_diff(
         # Guard: if the mutation offset is past the end of the reference protein, the
         # edit is in the stop-codon / 3'UTR region. That's a StopLoss, not a FrameShift.
         if stop_complete and (fs_offset if frame_change_aa_offset is None else frame_change_aa_offset) >= len(ref_protein):
-            return StopLoss(
+            return finish(StopLoss(
                 variant=variant,
                 transcript=transcript,
                 aa_ref="",
-                aa_alt=fs_shifted)
+                aa_alt=fs_shifted, original_protein_sequence=ref_protein))
         if frame_change_aa_offset is not None:
             fs_offset = min(fs_offset, frame_change_aa_offset)
             fs_shifted = mut_protein[fs_offset:]
         # No novel residues after the shared prefix -> an immediate stop (true truncation).
         if len(fs_shifted) == 0:
-            return FrameShiftTruncation(
+            return finish(FrameShiftTruncation(
                 variant=variant,
                 transcript=transcript,
-                stop_codon_offset=fs_offset)
-        return FrameShift(
+                stop_codon_offset=fs_offset, original_protein_sequence=ref_protein))
+        return finish(FrameShift(
             variant=variant,
             transcript=transcript,
             aa_mutation_start_offset=fs_offset,
-            shifted_sequence=fs_shifted)
+            shifted_sequence=fs_shifted, original_protein_sequence=ref_protein))
 
     # A mutant protein that is shorter than the reference and truncated
     # at the tail is only a PrematureStop if the mutant CDS actually
@@ -211,12 +228,12 @@ def classify_from_protein_diff(
             if edit.is_insertion and edit.cdna_start >= cds_start:
                 if (edit.cdna_start - cds_start) % 3 == 0:
                     aa_ref = ""
-        return PrematureStop(
+        return finish(PrematureStop(
             variant=variant,
             transcript=transcript,
             aa_mutation_start_offset=aa_offset,
             aa_ref=aa_ref,
-            aa_alt=alt_delta)
+            aa_alt=alt_delta, original_protein_sequence=ref_protein))
 
     # Stop loss: mutant protein longer than reference, the change
     # extends past the original stop. Two routes into this branch:
@@ -238,49 +255,49 @@ def classify_from_protein_diff(
     if (stop_complete and len(mut_protein) > len(ref_protein)
             and aa_offset + n_ref >= len(ref_protein)
             and (n_ref > 0 or not is_cdna_pure_insertion)):
-        return StopLoss(
+        return finish(StopLoss(
             variant=variant,
             transcript=transcript,
             aa_ref=ref_delta,
-            aa_alt=alt_delta)
+            aa_alt=alt_delta, original_protein_sequence=ref_protein))
 
     # Silent (after trimming — all changes cancelled out).
     if n_ref == 0 and n_alt == 0:
-        return Silent(
+        return finish(Silent(
             variant=variant,
             transcript=transcript,
             aa_pos=aa_offset,
-            aa_ref=prefix + suffix)
+            aa_ref=prefix + suffix))
 
     # Deletion.
     if n_alt == 0:
-        return Deletion(
+        return finish(Deletion(
             variant=variant,
             transcript=transcript,
             aa_mutation_start_offset=aa_offset,
-            aa_ref=ref_delta)
+            aa_ref=ref_delta))
 
     # Insertion.
     if n_ref == 0:
-        return Insertion(
+        return finish(Insertion(
             variant=variant,
             transcript=transcript,
             aa_mutation_start_offset=aa_offset,
-            aa_alt=alt_delta)
+            aa_alt=alt_delta))
 
     # Substitution (simple 1:1).
     if n_ref == 1 and n_alt == 1:
-        return Substitution(
+        return finish(Substitution(
             variant=variant,
             transcript=transcript,
             aa_mutation_start_offset=aa_offset,
             aa_ref=ref_delta,
-            aa_alt=alt_delta)
+            aa_alt=alt_delta))
 
     # Complex substitution (multi-residue edit).
-    return ComplexSubstitution(
+    return finish(ComplexSubstitution(
         variant=variant,
         transcript=transcript,
         aa_mutation_start_offset=aa_offset,
         aa_ref=ref_delta,
-        aa_alt=alt_delta)
+        aa_alt=alt_delta))

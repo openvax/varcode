@@ -41,6 +41,22 @@ sites. Without a calibrated scorer, mechanism preference is an ordering rule,
 not a probability. Selecting this experiment does not guarantee that every
 structural or combined input is supported.
 
+Use the same entry point as more evidence becomes available:
+
+```python
+effects = variant.effects(
+    annotator="transcript_model",
+    germline=germline_ctx,       # or None when unavailable
+    phase_resolver=phaser,       # or None when phase is unknown
+    rna_resolver=rna_evidence,   # or None when no RNA models are available
+)
+```
+
+The germline lookup covers the whole transcript span, including introns that
+a splice hypothesis may retain. This can expose more phase uncertainty than
+the default annotator's local lookup. Sparse/hotspot contexts retain
+`germline_unknown=True` even when some inherited alleles are supplied.
+
 Through `effects(germline=...)`, the transcript model uses the same phase cap
 as the default path (`GermlineContext.max_phase_hypotheses`, default 8). It
 also caps the combined phase × splice outcomes at `max_hypotheses=64`, which is
@@ -71,8 +87,10 @@ listing alleles in a collection alone does not assert that they are in cis.
 
 ## Transcript-model results
 
-Use the [sequence accessors](transcript_models.md#sequence-access) for a single
-effect, including the same checks for missing sequences and partial structures.
+Use `effect.baseline_transcript` and `effect.mutant_transcript` for the products
+used in classification, and the usual `original_protein_sequence` and
+`mutant_protein_sequence` properties for proteins. Candidate effects use these
+same accessors. See [sequence availability](transcript_models.md#sequence-access).
 
 The ordinary and experimental candidate wrappers are not interchangeable:
 
@@ -104,6 +122,23 @@ for candidate in getattr(experimental, "candidates", ()):
 ```
 
 ## Known limitations
+
+RNA evidence refines the existing hypothesis candidates. An exact match to a
+full predicted cDNA adds `rna_support` to that product's evidence and ranks
+supported comparisons first. All compatible phase baselines remain, and
+unobserved alternatives are retained. Read counts do not become probabilities,
+and RNA sequence agreement does not prove translation.
+
+Partial or unmatched RNA models retain their actual supplied sequence as an
+`Unresolved` candidate with an unavailable baseline. No reference sequence is
+appended, and no phase or CDS mapping is inferred. Such observations follow the
+DNA candidates in ordering. The same behavior applies to RNA models supplied
+by a phase resolver for a known-cis group; no separate observation list is
+needed on this path. Legacy delegated BND/assembly results keep their existing
+contracts. Arbitrary mapped RNA-to-patient-baseline reconstruction remains
+work for [#421](https://github.com/openvax/varcode/issues/421).
+Models containing assumed reference completion do not count as full observed
+RNA support, even when their completed cDNA matches a prediction.
 
 - Combined variants: the selected annotator makes known-cis joint predictions
   through `VariantCollection.effects(phase_resolver=...)`. The default and

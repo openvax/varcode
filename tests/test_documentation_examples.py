@@ -209,11 +209,13 @@ def test_documentation_experimental_result_access(kind):
         variant = StructuralVariant(
             "7", transcript.start + 50, "CNV", end=transcript.start + 100,
             genome=genome)
-    namespace = dict(varcode=varcode, variant=variant, transcript=transcript)
+    namespace = dict(varcode=varcode, variant=variant, transcript=transcript,
+                     germline_ctx=None, phaser=None, rna_evidence=None)
     advanced_blocks = _blocks("docs/experimental_annotators.md")
     assert "comparison =" in advanced_blocks[0]
-    assert "candidate.outcomes" in advanced_blocks[1]
-    _run(advanced_blocks[:2], namespace)
+    assert "rna_resolver=" in advanced_blocks[1]
+    assert "candidate.outcomes" in advanced_blocks[2]
+    _run(advanced_blocks[:3], namespace)
     _run(_blocks("docs/transcript_models.md"), namespace)
     candidates = getattr(namespace["experimental"], "candidates", ())
     if kind == "point":

@@ -312,7 +312,7 @@ def test_effects_dispatches_realized_annotator_with_germline_context():
 
 def test_transcript_model_dispatch_preserves_sparse_germline_uncertainty_flag():
     somatic = Variant("7", 117531100, "T", "A", ensembl_grch38)
-    distant = Variant("7", 117587799, "C", "T", ensembl_grch38)
+    distant = Variant("7", 117587799, "A", "C", ensembl_grch38)
     context = GermlineContext.from_variants(
         [distant], reference_name="GRCh38",
         completeness=Completeness.SPARSE)

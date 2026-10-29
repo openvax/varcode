@@ -39,7 +39,8 @@ class MutationEffect(Serializable):
 
     _effect_graph_fields = (
         "realized_candidates", "germline_phase_state",
-        "germline_variants_in_window", "germline_unknown", "germline_variants")
+        "germline_variants_in_window", "germline_unknown", "germline_variants",
+        "baseline_transcript")
 
     def __init__(self, variant):
         self.variant = variant
@@ -154,11 +155,13 @@ class MutationEffect(Serializable):
 
     @property
     def original_protein_sequence(self) -> str | None:
-        """Amino acid sequence of a coding transcript (without the nucleotide
-        variant/mutation)
+        """Pre-somatic protein: the assembled patient baseline when supplied,
+        otherwise the reference protein. None means unavailable.
         """
         if hasattr(self, "_original_protein_sequence"):
             return self._original_protein_sequence
+        if self.baseline_transcript is not None:
+            return self.baseline_transcript.mutant_protein_sequence
         if self.transcript:
             return self.transcript.protein_sequence
         else:
@@ -203,7 +206,18 @@ class MutationEffect(Serializable):
     # protein sequence?
     modifies_protein_sequence: bool | None = False
 
-    mutant_protein_sequence: str | None = None
+    @property
+    def mutant_protein_sequence(self) -> str | None:
+        """Protein from the assembled transcript, when one is available."""
+        if "_mutant_protein_sequence" in self.__dict__:
+            return self._mutant_protein_sequence
+        if self.mutant_transcript is not None:
+            return self.mutant_transcript.mutant_protein_sequence
+        return None
+
+    @mutant_protein_sequence.setter
+    def mutant_protein_sequence(self, sequence: str | None) -> None:
+        self._mutant_protein_sequence = sequence
 
     # which residues in the mutant protein sequence are different from
     # the original?
@@ -218,6 +232,13 @@ class MutationEffect(Serializable):
     # assembled-contig MutantTranscript post-hoc via
     # :func:`varcode.phasing.apply_phase_resolver_to_effects`.
     mutant_transcript: "MutantTranscript | None" = None
+    baseline_transcript: "MutantTranscript | None" = None
+    """The actual pre-somatic transcript used for a composed comparison.
+
+    None means no baseline model was retained. A model whose sequence is None
+    instead records an explicitly unavailable product. The model uses the
+    same MutantTranscript representation as the post-somatic product.
+    """
 
 
 class MultiOutcomeEffect(MutationEffect):
@@ -451,7 +472,9 @@ class Unresolved(TranscriptMutationEffect):
 
     ``reference_effect``, when supplied, retains a reference-only annotation
     for inspection and severity ranking. It is not the unresolved patient's
-    consequence: sequence and change accessors remain unavailable/unknown.
+    consequence: its sequences never substitute for an unavailable patient
+    product. Supplied transcript models may retain known sequences while
+    the comparison and change flags remain unresolved.
 
     Parameters
     ----------
@@ -1338,6 +1361,8 @@ class KnownAminoAcidChange(NonsilentCodingMutation):
 
     @memoized_property
     def mutant_protein_sequence(self):
+        if self.mutant_transcript is not None:
+            return self.mutant_transcript.mutant_protein_sequence
         original = self.original_protein_sequence
         prefix = original[:self.aa_mutation_start_offset]
         suffix = original[self.aa_mutation_start_offset + len(self.aa_ref):]
@@ -1453,11 +1478,17 @@ class PrematureStop(KnownAminoAcidChange):
             transcript,
             aa_mutation_start_offset,
             aa_ref="",
-            aa_alt=""):
+            aa_alt="",
+            original_protein_sequence: str | None = None):
         """
         Insertion of premature stop codon, possibly preceded by a substitution
         of `aa_ref` amino acids for `aa_alt` alternative residues.
+
+        ``original_protein_sequence`` supplies the patient baseline when it
+        differs from the reference transcript; coordinates refer to that protein.
         """
+        if original_protein_sequence is not None:
+            self._original_protein_sequence = original_protein_sequence
         if "*" in aa_ref:
             raise ValueError(
                 ("Unexpected aa_ref = '%s', should only include amino acids "
@@ -1475,13 +1506,13 @@ class PrematureStop(KnownAminoAcidChange):
             aa_alt=aa_alt)
         self.stop_codon_offset = aa_mutation_start_offset + len(aa_alt)
 
-        if self.stop_codon_offset >= len(transcript.protein_sequence):
+        if self.stop_codon_offset >= len(self.original_protein_sequence):
             raise ValueError(
                 ("Premature stop codon cannot be at position %d"
                  " since the original protein of %s has length %d") % (
                     self.stop_codon_offset,
                     transcript,
-                    len(transcript.protein_sequence)))
+                    len(self.original_protein_sequence)))
 
     @property
     def short_description(self):
@@ -1499,6 +1530,8 @@ class PrematureStop(KnownAminoAcidChange):
 
     @memoized_property
     def mutant_protein_sequence(self):
+        if self.mutant_transcript is not None:
+            return self.mutant_transcript.mutant_protein_sequence
         prefix = self.original_protein_sequence[:self.aa_mutation_start_offset]
         return prefix + self.aa_alt
 
@@ -1509,7 +1542,11 @@ class StopLoss(KnownAminoAcidChange):
             variant,
             transcript,
             aa_ref,
-            aa_alt):
+            aa_alt,
+            original_protein_sequence: str | None = None):
+        """Extend the supplied baseline protein, or the reference when omitted."""
+        if original_protein_sequence is not None:
+            self._original_protein_sequence = original_protein_sequence
         # StopLoss assumes that we deleted some codons ending with a
         # stop codon
         if "*" in aa_ref:
@@ -1521,7 +1558,8 @@ class StopLoss(KnownAminoAcidChange):
                 "If no amino acids added by StopLoss then it should be Silent")
         # subtract 1 for the stop codon
         n_ref_amino_acids = len(aa_ref)
-        protein_length = len(transcript.protein_sequence)
+        protein_length = len(original_protein_sequence if original_protein_sequence is not None
+                             else transcript.protein_sequence)
         aa_mutation_start_offset = protein_length - n_ref_amino_acids
         KnownAminoAcidChange.__init__(
             self,
@@ -1550,14 +1588,21 @@ class FrameShift(KnownAminoAcidChange):
             variant,
             transcript,
             aa_mutation_start_offset,
-            shifted_sequence):
+            shifted_sequence,
+            original_protein_sequence: str | None = None):
         """Frameshift mutation preserves all the amino acids up to
         aa_mutation_start_offset and then replaces the rest of the protein with
         new (frameshifted) sequence. Unlike an insertion, where we denote with
         aa_ref as the chracter before the variant sequence, a frameshift starts
         at aa_ref.
+
+        ``original_protein_sequence`` is the patient baseline when supplied.
         """
-        aa_ref = transcript.protein_sequence[aa_mutation_start_offset:]
+        if original_protein_sequence is not None:
+            self._original_protein_sequence = original_protein_sequence
+        protein = (original_protein_sequence if original_protein_sequence is not None
+                   else transcript.protein_sequence)
+        aa_ref = protein[aa_mutation_start_offset:]
         KnownAminoAcidChange.__init__(
             self,
             variant=variant,
@@ -1572,6 +1617,8 @@ class FrameShift(KnownAminoAcidChange):
 
     @memoized_property
     def mutant_protein_sequence(self):
+        if self.mutant_transcript is not None:
+            return self.mutant_transcript.mutant_protein_sequence
         original_aa_sequence = self.original_protein_sequence
         prefix = original_aa_sequence[:self.aa_mutation_start_offset]
         return prefix + self.shifted_sequence
@@ -1592,14 +1639,16 @@ class FrameShiftTruncation(PrematureStop, FrameShift):
             variant,
             transcript,
             stop_codon_offset,
-            aa_ref=""):
+            aa_ref="",
+            original_protein_sequence: str | None = None):
         PrematureStop.__init__(
             self,
             variant=variant,
             transcript=transcript,
             aa_mutation_start_offset=stop_codon_offset,
             aa_ref=aa_ref,
-            aa_alt="")
+            aa_alt="",
+            original_protein_sequence=original_protein_sequence)
 
     @property
     def shifted_sequence(self):

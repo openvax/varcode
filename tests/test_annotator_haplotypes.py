@@ -162,7 +162,12 @@ def test_rna_observation_is_preserved_with_its_provenance(name, variants, transc
     effects = VariantCollection(variants).effects(annotator=name, phase_resolver=resolver)
     joint, = joint_effects(effects, transcript)
     if name == "transcript_model":
-        assert joint.observed_mutant_transcripts == ((variants[1], observed),)
+        candidate = joint.candidates[-1]
+        assert isinstance(candidate.effect, Unresolved)
+        assert candidate.effect.mutant_transcript is observed
+        assert candidate.outcomes[0].baseline.cdna_sequence is None
+        assert candidate.hypotheses[0].evidence["rna_observation"]["source"] == "rna_source"
+        assert candidate.hypotheses[0].evidence["rna_observation"]["variant"] == variants[1]
         assert joint.mutant_protein_sequence != observed.mutant_protein_sequence
     else:
         assert joint.mutant_transcript is observed
@@ -270,9 +275,12 @@ def test_joint_membership_and_provenance_survive_json(name, variants, transcript
     if name == "declining":
         assert joint.reason == original.reason
     elif name == "transcript_model":
-        (variant, model), = joint.observed_mutant_transcripts
-        assert variant == variants[1]
+        candidate = joint.candidates[-1]
+        assert isinstance(candidate.effect, Unresolved)
+        model = candidate.effect.mutant_transcript
         assert model.mutant_protein_sequence == "MA"
         assert model.annotator_name == "rna_source"
+        assert candidate.outcomes[0].baseline.cdna_sequence is None
+        assert candidate.hypotheses[0].evidence["rna_observation"]["variant"] == variants[1]
     else:
         assert joint.mutant_protein_sequence == "MA"

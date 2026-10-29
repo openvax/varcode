@@ -17,10 +17,35 @@ protein = effect.mutant_protein_sequence
 model = effect.mutant_transcript
 cdna = model.cdna_sequence if model is not None else None
 evidence = model.evidence if model is not None else None
+baseline = effect.baseline_transcript
+baseline_cdna = baseline.cdna_sequence if baseline is not None else None
+baseline_protein = effect.original_protein_sequence
 ```
 
 `None` means unavailable. It does not establish an unchanged protein, an absent
 transcript, or a harmless variant.
+
+For a composed comparison, `baseline_transcript` and `mutant_transcript` are
+the actual products used to classify the effect. `original_protein_sequence`
+is then the patient baseline, including inherited changes, and amino-acid
+offsets refer to that baseline. The annotation reference remains available as
+`effect.reference_transcript`. These models and sequences survive JSON and
+pickle round trips.
+
+The transcript-model annotator assembles selected exon, retained-intron and
+cryptic-splice intervals through one cDNA/translation path. Unavailable paths
+have `None` sequences; they never substitute the canonical transcript. Each
+candidate exposes its own products through the same effect accessors. Products
+with different distant sequences remain distinct candidates, even if their
+local amino-acid changes match.
+
+The scope of the germline comparison matters: the default `fast` and
+`protein_diff` paths consider a local window around the somatic variant. Their
+retained models include those selected edits, not every supplied patient allele.
+For full-transcript composition, select `annotator="transcript_model"`; it
+considers supplied germline calls across the transcript span. Unknown phase
+still produces alternatives or a hypothesis limit, and missing germline calls
+cannot be recovered. See [experimental annotation](experimental_annotators.md).
 
 ## Selenocysteine
 

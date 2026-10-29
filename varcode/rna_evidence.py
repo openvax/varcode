@@ -35,13 +35,12 @@ Usage::
     # Or apply post-hoc to an existing collection:
     apply_rna_evidence_to_effects(effects, resolver)
 
-    # Each affected effect gains observed candidates alongside its
-    # DNA-predicted ones. Filter by source:
+    # Ordinary and transcript-model candidates expose their sequences here:
     for effect in effects:
         for candidate in getattr(effect, "candidates", ()):
-            if candidate.source != "varcode":
-                # An RNA-observed isoform.
-                ...
+            model = candidate.effect.mutant_transcript
+            if model is not None:
+                print(model.cdna_sequence, model.evidence)
 """
 from __future__ import annotations
 
@@ -245,15 +244,15 @@ def apply_rna_evidence_to_effects(effects: Iterable, resolver) -> Iterable:
     the additive side-channel behavior: observed candidates are stashed
     on ``_extra_candidates`` and exposed through ``.candidates``.
 
-    Single-outcome point-variant effects (Missense, FrameShift, etc.) are left
-    untouched even when the resolver has evidence — those classes
-    don't expose a multi-candidate view, and replacing them with a
-    multi-outcome wrapper would break downstream ``isinstance`` checks.
-    Producers that need to surface RNA observations on point variants
-    should report them as a separate :class:`MultiOutcomeEffect` rather
-    than mutating an existing single-outcome one. (The point-variant
-    diff is generally already correct from DNA, so this is rarely an
-    issue in practice.) Single-outcome structural calls (e.g. Intronic) are
+    Transcript-model effects reconcile observations through their existing
+    phase/splice candidates. Exact full-cDNA matches rank supported products
+    first while retaining all compatible baselines and alternatives. Partial
+    or unmatched products remain unresolved comparisons with their actual
+    supplied sequence and an unknown baseline. Counts do not become
+    probabilities; no reference completion or phase is inferred.
+
+    Single-outcome point-variant effects without transcript-model candidates
+    are left untouched. Single-outcome structural calls (e.g. Intronic) are
     wrapped in StructuralVariantEffect when observations exist, retaining the
     DNA classification alongside the imported models.
 
@@ -276,7 +275,8 @@ def apply_rna_evidence_to_effects(effects: Iterable, resolver) -> Iterable:
     changed = False
     for effect in effects:
         is_structural = getattr(getattr(effect, "variant", None), "is_structural", False)
-        if not isinstance(effect, MultiOutcomeEffect) and not is_structural:
+        realized = getattr(effect, "realized_candidates", None)
+        if not isinstance(effect, MultiOutcomeEffect) and not is_structural and not realized:
             replacements.append(effect)
             continue
         variant = getattr(effect, "variant", None)
@@ -284,15 +284,18 @@ def apply_rna_evidence_to_effects(effects: Iterable, resolver) -> Iterable:
         if variant is None or transcript is None:
             replacements.append(effect)
             continue
-        observed = resolver.observed_outcomes(variant, transcript)
-        if not observed:
-            replacements.append(effect)
-            continue
         # Coerce to tuple eagerly so we don't keep a generator that
         # would silently exhaust on a second candidates() read.
-        observed_tuple = tuple(observed)
+        members = getattr(effect, "variants", (variant,)) if realized else (variant,)
+        observed_tuple = tuple(observation for member in members
+                               for observation in resolver.observed_outcomes(member, transcript))
         if not observed_tuple:
             replacements.append(effect)
+            continue
+        if realized:
+            from .transcript_model import _refine_transcript_model_effect
+            replacements.append(_refine_transcript_model_effect(effect, observed_tuple))
+            changed = True
             continue
         if not isinstance(effect, MultiOutcomeEffect):
             # An intronic/noncoding DNA call must not hide an observed SV model.

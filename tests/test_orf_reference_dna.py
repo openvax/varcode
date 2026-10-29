@@ -54,14 +54,14 @@ def reference_dna(request, tmp_path):
         record = replace(model.record(), taxon_id=9606, species="homo_sapiens", source="test")
         return genome, record.bind(transcript)
 
-    yield build, 150 if not request.param else 250
+    yield build, 150 if not request.param else 250, "".join(dna)
     for genome in reversed(genomes):
         genome.close()
 
 
 @pytest.mark.parametrize("source", ["native", "override"])
 def test_ordinary_orf_and_collection_calls_use_available_intronic_dna(reference_dna, source):
-    build, position = reference_dna
+    build, position, _ = reference_dna
     genome, reference = build(source)
     assert reference_range(genome, "1", position, position) == "A"
     variant = Variant("1", position, "A", "G", genome=genome)
@@ -75,7 +75,7 @@ def test_ordinary_orf_and_collection_calls_use_available_intronic_dna(reference_
 
 
 def test_missing_dna_stays_unresolved_and_explicit_provider_is_honored(reference_dna):
-    build, position = reference_dna
+    build, position, dna = reference_dna
     genome, reference = build("missing")
     variant = Variant("1", position, "A", "G", genome=genome)
     result = variant.effects(extra_orfs=[reference]).orf_annotations[0]
@@ -84,7 +84,7 @@ def test_missing_dna_stays_unresolved_and_explicit_provider_is_honored(reference
 
     def provider(contig, start, end):
         calls.append((contig, start, end))
-        return "A" * (end - start + 1)
+        return dna[start - 1:end]
 
     explicit = annotate_orf_variants([variant], reference, sequence_provider=provider)
     assert type(explicit.effect).__name__ == "Intronic"
@@ -95,7 +95,7 @@ def test_missing_dna_stays_unresolved_and_explicit_provider_is_honored(reference
 @pytest.mark.parametrize("kind", ["splice_snv", "local_sv", "cis_group"])
 def test_splice_structural_and_cis_products_use_intronic_dna(reference_dna, source, kind):
     from varcode import StructuralVariant
-    build, _ = reference_dna
+    build, _, _ = reference_dna
     genome, reference = build(source)
     transcript = reference.transcript
     exons = sorted(transcript.exons, key=lambda e: e.start)
