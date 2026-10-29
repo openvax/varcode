@@ -26,7 +26,9 @@ See [annotation choices](experimental_annotators.md) for alternatives and
 
 ::: varcode.use_annotator
 
-## Experimental transcript model
+<a id="experimental-transcript-model"></a>
+
+## Shared transcript model
 
 This is the default annotator; `annotator="fast"` selects the compatibility
 implementation. The former `realized` name and public imports remain aliases.

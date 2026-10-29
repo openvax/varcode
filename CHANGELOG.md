@@ -27,6 +27,9 @@
   accessors. Explicit `annotator="fast"` retains the Varcode 10 implementation
   and its splice/phase/haplotype/SV wrapper types. Existing imports and archives
   remain supported; see the annotation migration guide.
+- Align generated API documentation and compatibility docstrings with the
+  shared default. Enable the existing resource-aware parallel test runner in
+  CI without reducing public-cohort or Python/pandas coverage (#666).
 
 ## v10.23.0
 
