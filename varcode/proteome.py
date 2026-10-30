@@ -33,7 +33,7 @@ _COORDINATES = {
     "reference_segments": "0-based half-open in each segment source's coordinate system",
     "variants": "native Varcode coordinates; small variants are 1-based, inclusive",
 }
-_BUILTIN_ANNOTATORS = {"fast", "protein_diff", "realized", "transcript_model"}
+_BUILTIN_ANNOTATORS = {"fast", "protein_diff", "realized", "transcript_model", "created_orf"}
 
 
 def _json(value):
@@ -81,6 +81,8 @@ def _variants(effect, annotation=None):
 
 
 def _model(effect, annotation=None):
+    if getattr(effect, "discovered_orf", None) is not None:
+        return effect.discovered_orf
     bound = getattr(effect, "orf", None)
     if annotation is not None:
         return annotation.record or annotation.reference
@@ -247,6 +249,14 @@ def _product(product=None, *, effect=None, baseline=False):
             cdna_sequence=product.cdna_sequence,
             start_complete=product.start_codon_present, stop_complete=stop,
             native=_archive(product))
+    discovered = getattr(effect, "discovered_orf", None)
+    if discovered is not None:
+        model = effect.baseline_transcript if baseline else effect.mutant_transcript
+        return dict(protein_sequence=model.mutant_protein_sequence,
+                    cdna_sequence=model.cdna_sequence,
+                    start_complete=None if baseline else True,
+                    stop_complete=None if baseline else discovered.termination == "observed_stop",
+                    native=_archive(model))
     sequence = (getattr(effect, "original_protein_sequence", None) if baseline else
                 getattr(effect, "mutant_protein_sequence", None))
     transcript = getattr(effect, "reference_transcript" if baseline else "mutant_transcript", None)
@@ -362,7 +372,7 @@ class _Export:
         reason = getattr(outcome, "unresolved_reason", None)
         status, omitted = _status(effect, baseline_data, mutant_data, reason)
         reference, taxon, transcripts = self.scope(effect, annotation)
-        hypothesis = getattr(outcome, "hypothesis", None)
+        hypothesis = getattr(outcome, "hypothesis", None) or getattr(effect, "hypothesis", None)
         record_model = _model(effect, annotation)
         genes = _genes(effect, transcripts)
         gene_ids = _ids([gene.id for gene in genes] + [getattr(record_model, "gene_id", None),

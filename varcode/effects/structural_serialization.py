@@ -45,12 +45,14 @@ _ALTERNATIVE_FIELDS = {
 
 
 def _model_types():
+    from ..orf_discovery import DiscoveredORF, ORFDiscoveryPolicy
     from ..mutant_transcript import MutantTranscript, ReferenceSegment, TranscriptEdit, _AssembledAllele
     from ..effect_hypotheses import (
         ClassifiedOutcome, EffectHypothesis, RealizedEffectCandidate,
         RealizedTranscriptProduct, SpliceOption, SplicePlan, SpliceSiteKey,
     )
-    return (MutantTranscript, ReferenceSegment, TranscriptEdit, _AssembledAllele,
+    return (DiscoveredORF, ORFDiscoveryPolicy,
+            MutantTranscript, ReferenceSegment, TranscriptEdit, _AssembledAllele,
             ClassifiedOutcome, EffectHypothesis, RealizedEffectCandidate,
             RealizedTranscriptProduct, SpliceOption, SplicePlan, SpliceSiteKey)
 

@@ -140,6 +140,7 @@ class MutationEffect(Serializable):
     transcript: Any | None = None
     gene: Any | None = None
     orf_annotation: "ORFAnnotation | None" = None
+    discovered_orf: Any | None = None
 
     @property
     def orf(self):
@@ -1253,6 +1254,37 @@ class NonsilentCodingMutation(CodingMutation):
     @property
     def modifies_protein_sequence(self):
         return True
+
+
+class StartGain(TranscriptMutationEffect):
+    """A newly created initiation hypothesis on a paired mutant RNA.
+
+    ``discovered_orf`` describes the mutant frame; ``orf`` remains None because
+    no reference ORF is asserted. The conditional peptide is available through
+    the usual mutant accessor. Baseline translation and actual initiation are
+    unknown, so the protein-change flag and original protein remain None.
+    """
+
+    modifies_coding_sequence = True
+    modifies_protein_sequence = None
+
+    def __init__(self, variant, transcript, discovered_orf, baseline_transcript,
+                 mutant_transcript, discovery_policy, hypothesis=None, source_evidence=None):
+        super().__init__(variant, transcript)
+        self.discovered_orf = discovered_orf
+        self.baseline_transcript = baseline_transcript
+        self.mutant_transcript = mutant_transcript
+        self.discovery_policy = discovery_policy
+        self.hypothesis = hypothesis
+        self.source_evidence = source_evidence or {}
+        self.annotator = "created_orf"
+        from ..version import __version__
+        self.annotator_version = __version__
+
+    @property
+    def short_description(self):
+        return "start-gain %s at RNA offset %d (conditional)" % (
+            self.discovered_orf.start_codon, self.discovered_orf.start)
 
 
 class StartLoss(NonsilentCodingMutation):

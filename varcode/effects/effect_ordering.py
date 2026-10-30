@@ -45,6 +45,7 @@ from .effect_classes import (
     SpliceAcceptor,
     SpliceDonor,
     StartLoss,
+    StartGain,
     StopLoss,
     Substitution,
     ThreePrimeUTR,
@@ -82,6 +83,7 @@ transcript_effect_priority_list = [
     # mutations to the upstream 5' UTR may change the ORF (reading frame),
     # so give 5' UTR mutations higher prioriry
     FivePrimeUTR,
+    StartGain,
     Silent,
     # intronic variants near the splice boundaries but which aren't
     # the two nucleotides closest to the exon

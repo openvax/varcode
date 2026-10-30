@@ -438,6 +438,8 @@ class EffectCollection(Collection):
             getattr(e.variant, "is_structural", False) for e in self) else ()
         orf_columns = ("orf_id", "orf_source", "orf_unresolved_reason") if any(
             e.orf_annotation is not None for e in self) else ()
+        discovery_columns = ("discovered_orf_id", "discovered_orf_termination") if any(
+            e.discovered_orf is not None for e in self) else ()
         splice_columns = ("splice_signal",) if any(
             isinstance(e, SpliceOutcomeSet) for e in self) else ()
         start_loss_columns = (
@@ -478,6 +480,9 @@ class EffectCollection(Collection):
                 signal = effect.disrupted_signal_class
                 row['splice_signal'] = signal.__name__ if signal is not None else None
             annotation = effect.orf_annotation
+            if effect.discovered_orf is not None:
+                row['discovered_orf_id'] = effect.discovered_orf.orf_id
+                row['discovered_orf_termination'] = effect.discovered_orf.termination
             if annotation is not None:
                 row['orf_id'] = annotation.orf_id
                 row['orf_source'] = annotation.record.source
@@ -488,9 +493,9 @@ class EffectCollection(Collection):
         frame = pd.DataFrame.from_records(
             [row_from_effect(effect) for effect in self],
             columns=(self._DATAFRAME_COLUMNS + structural_columns + orf_columns
-                     + splice_columns + start_loss_columns),
+                     + splice_columns + start_loss_columns + discovery_columns),
         )
-        if include_archive and (self.orf_annotations or start_loss_columns):
+        if include_archive and (self.orf_annotations or start_loss_columns or discovery_columns):
             frame["effect_json"] = [effect.to_json() for effect in self]
         return frame
 
