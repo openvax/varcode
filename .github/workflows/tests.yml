@@ -56,7 +56,7 @@ jobs:
           GTFPARSE_REQUIREMENT: ${{ matrix.gtfparse }}
         run: |
           python -m pip install --upgrade pip
-          python -m pip install flake8 pytest pytest-cov coveralls build 'setuptools>=64'
+          python -m pip install flake8 pytest pytest-cov pytest-xdist coveralls build 'setuptools>=64'
           python -m pip install -r requirements.txt "$PANDAS_REQUIREMENT" "$GTFPARSE_REQUIREMENT"
       - name: Verify, build and install the source distribution
         run: |
@@ -112,10 +112,13 @@ jobs:
           pyensembl install --release 99 --species dog
           pyensembl install --release 2020_10 --species dog
           echo "After installing Ensembl releases" && df -h
+      - name: Check default annotation throughput before the full suite
+        working-directory: ${{ runner.temp }}/varcode-sdist
+        run: python -m pytest --cov=varcode/ -q -s tests/test_timings.py
       - name: Run unit tests from the source distribution
         working-directory: ${{ runner.temp }}/varcode-sdist
         run: |
-          ./test.sh --cov-report=xml:coverage.xml
+          ./test.sh --dist=worksteal --cov-report=xml:coverage.xml
       # Experimental annotators may decline inputs. Compare protein_diff on
       # the shared point-edit domain; the full suite above separately checks
       # SV refusal, partial plugins, and explicit dual-annotator regressions.

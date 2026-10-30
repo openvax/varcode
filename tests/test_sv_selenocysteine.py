@@ -18,6 +18,9 @@ from varcode.effects import (
 )
 from varcode.effects import structural
 
+# Legacy wrapper contract; the default composition path has separate regression tests.
+pytestmark = pytest.mark.usefixtures("legacy_annotator")
+
 # GPX1 (-), GPX4 (+), SEPP1 (-, ten Sec), TXNRD1 (+, Sec is the penultimate residue).
 SELENOPROTEINS = ["ENST00000419783", "ENST00000354171", "ENST00000514985", "ENST00000525566"]
 

@@ -49,7 +49,7 @@ nav:
       - Phasing: phasing.md
       - VariantCollection transforms: transforms.md
       - ncORF annotation with ORFdata: uorf_annotations.md
-      - Experimental annotators: experimental_annotators.md
+      - Annotation pipeline and compatibility: experimental_annotators.md
   - Reference:
       - Varcode, Isovar & Vaxrank: library_roles.md
       - Transcript models: transcript_models.md

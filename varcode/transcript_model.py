@@ -10,16 +10,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Experimental transcript model: hypotheses → products → classification."""
+"""Shared transcript model: hypotheses → products → classification."""
 
 from dataclasses import replace
+from functools import lru_cache
 
 from .effect_hypotheses import (
     ClassifiedOutcome,
     EffectHypothesis,
     RealizedTranscriptProduct,
-    SplicePlan,
-    enumerate_splice_plans,
     merge_classified_outcomes,
     order_realized_candidates,
 )
@@ -30,13 +29,14 @@ from .effects.effect_classes import (
     NoncodingTranscript,
     Unresolved,
 )
-from .effects.effect_ordering import effect_priority
-from .errors import HypothesisLimitError
-from .genome_sequence import reference_range
+from .effects.effect_ordering import _classification_priority
+from .errors import HypothesisLimitError, ReferenceMismatchError
+from .genome_sequence import _plus_strand_slice, reference_range
 from .genomic_layout import GenomicLayout, NonlocalStructuralEdit
 from .germline import (
     _check_max_hypotheses, detect_germline_overlap, partition_germline_by_phase)
-from .splice_graph import disrupted_splice_sites, splice_axes
+from .nucleotides import reverse_complement
+from .splice_graph import disrupted_splice_sites, enumerate_paired_splice_plans
 from .transcript_layout import (
     build_exon_runs,
     classify_products,
@@ -45,9 +45,16 @@ from .transcript_layout import (
 from .version import __version__ as _varcode_version
 
 
-def _provider_for_genome(genome):
+def _provider_for_genome(genome, transcript):
+    """Reuse the selected annotation when DNA is absent; keep DNA priority."""
+    has_dna = getattr(genome, "fasta", None) is not None
+
+    @lru_cache(maxsize=1024)
     def provider(contig, start, end):
-        sequence = reference_range(genome, contig, start, end)
+        sequence = ("" if has_dna or contig != transcript.contig else
+                    _plus_strand_slice(transcript, start, end))
+        if not sequence:
+            sequence = reference_range(genome, contig, start, end)
         if not sequence:
             from .genomic_layout import SequenceUnavailable
             raise SequenceUnavailable(
@@ -76,80 +83,6 @@ def _status_map(transcript, layout):
     return runs, {status.key: status for status in statuses}
 
 
-def _combined_mutant_axes(
-        baseline_statuses, mutant_statuses, transcript,
-        baseline_run_keys, mutant_run_keys):
-    """Return mutant axes, shared keys, and fixed baseline mechanisms."""
-    axes = []
-    shared = set()
-    baseline_fixed = {}
-    all_keys = sorted(set(baseline_statuses) | set(mutant_statuses))
-    for key in all_keys:
-        baseline = baseline_statuses.get(key)
-        mutant = mutant_statuses.get(key)
-        if (baseline is not None and mutant is not None
-                and baseline.strength == mutant.strength
-                and baseline.reason == mutant.reason):
-            if mutant.strength == "lost":
-                axes.extend(splice_axes(
-                    transcript, (mutant,), mutant_run_keys))
-                shared.add(key)
-            # Weak germline-only changes remain canonical without a scorer.
-            continue
-        if mutant is not None:
-            axes.extend(splice_axes(
-                transcript, (mutant,), mutant_run_keys))
-        if baseline is not None and baseline.strength == "lost":
-            baseline_fixed[key] = splice_axes(
-                transcript, (baseline,), baseline_run_keys)[0].options[0]
-    return tuple(axes), frozenset(shared), baseline_fixed
-
-
-def _selected_mechanisms(plan):
-    return {key: option for key, option in plan.choices}
-
-
-def _baseline_plan(
-        transcript, baseline_runs, baseline_statuses, mutant_plan,
-        shared_keys, baseline_fixed):
-    """Map shared mutant choices and baseline-only disruptions to baseline."""
-    kept = {run.key for run in baseline_runs}
-    selected = _selected_mechanisms(mutant_plan)
-    choices = []
-    for key in shared_keys:
-        option = selected.get(key)
-        if option is None:
-            # The corresponding mutant site disappeared behind another graph
-            # rewrite. Baseline still has it, so use its declared first choice.
-            status = baseline_statuses[key]
-            option = _option_for_mechanism(
-                status, selected=None, transcript=transcript,
-                run_keys=tuple(run.key for run in baseline_runs))
-        else:
-            option = _option_for_mechanism(
-                baseline_statuses[key], option.mechanism, transcript,
-                tuple(run.key for run in baseline_runs))
-        choices.append((key, option))
-        if option.mechanism == "exon_skip":
-            kept.discard(baseline_statuses[key].run_key)
-    for key, option in baseline_fixed.items():
-        choices.append((key, option))
-        if option.mechanism == "exon_skip":
-            kept.discard(baseline_statuses[key].run_key)
-    return SplicePlan(
-        choices=tuple(sorted(choices, key=lambda choice: choice[0])),
-        kept_runs=tuple(run.key for run in baseline_runs if run.key in kept))
-
-
-def _option_for_mechanism(status, selected, transcript, run_keys):
-    """Return the first option, or the option matching ``selected``."""
-    axis = splice_axes(transcript, (status,), run_keys)[0]
-    if selected is None:
-        return axis.options[0]
-    return next(
-        option for option in axis.options if option.mechanism == selected)
-
-
 def _change_cdna_offset(variant, transcript):
     start = (
         variant.affected_start
@@ -168,7 +101,7 @@ def _attach_candidate_set(ordered):
     top_effect.realized_candidates = ordered
     top_effect.most_likely_candidate = top
     top_effect.highest_priority_candidate = max(
-        ordered, key=lambda candidate: effect_priority(candidate.effect))
+        ordered, key=lambda candidate: _classification_priority(candidate.effect))
     top_effect.probability = top.probability
     top_effect.mechanism_rank = top.ordinal_key
     top_effect.hypotheses = top.hypotheses
@@ -262,7 +195,7 @@ def _refine_transcript_model_effect(effect, observed):
                 result.mutant_transcript = outcome.effect.mutant_transcript
         refined.append(replace(outcome, effect=result))
     result = _attach_candidate_set(order_realized_candidates(
-        merge_classified_outcomes(refined), effect_priority))
+        merge_classified_outcomes(refined), _classification_priority))
     for name in ("germline_unknown", "phase_source", "annotator", "annotator_version"):
         if name in effect.__dict__:
             setattr(result, name, getattr(effect, name))
@@ -307,27 +240,22 @@ def predict_transcript_model_effect(
         result.variants = variants
         return result
     primary = somatic_variants[0]
-    if (getattr(primary, "sv_type", None) in ("DUP", "INV")
-            and primary.alt_assembly):
+    sv_type = getattr(primary, "sv_type", None)
+    assembled = sv_type in ("DEL", "DUP", "INV") and primary.alt_assembly
+    nonlocal_span = sv_type in ("DEL", "DUP", "INV") and (
+        primary.affected_start < transcript.start
+        or primary.affected_end > transcript.end)
+    junction_record = sv_type is not None and any(
+        bracket in getattr(primary, "symbolic_alt", "") for bracket in "[]")
+    if sv_type in ("BND", "CNV", "INV") or assembled or nonlocal_span or junction_record:
         if len(variants) != 1 or germline_variants:
             return Unresolved(
-                primary, transcript, mechanism="assembled_structural_haplotype",
-                reason="Composition with an assembled allele requires mapped variant coordinates")
-        # Preserve supplied full transcript assemblies using the same path as
-        # the structural annotator; never replace them with a clipped layout.
-        from .effects.structural import predict_structural_variant_effect
-        return predict_structural_variant_effect(primary, transcript)
-    if getattr(primary, "sv_type", None) == "BND":
-        if len(variants) != 1 or germline_variants:
-            return Unresolved(
-                primary, transcript, mechanism="breakend_haplotype",
-                reason=(
-                    "BND composition with additional phased variants "
-                    "requires an assembled allele"))
-        # The established fusion builder already resolves partner transcript,
-        # orientation, fused cDNA and translation from this same BND. Keep it
-        # as the BND realization path while the layout engine handles local
-        # span variants.
+                primary, transcript, mechanism="structural_haplotype",
+                reason=("Composition across a supplied assembly or nonlocal junction "
+                        "requires mapped patient-baseline coordinates"))
+        # One established builder owns fusion partners, junction inserts and
+        # supplied transcript assemblies. A finite single-transcript layout
+        # must not replace those products with a clipped local span.
         from .effects.structural import predict_structural_variant_effect
         return predict_structural_variant_effect(primary, transcript)
     if not transcript.is_protein_coding:
@@ -335,7 +263,7 @@ def predict_transcript_model_effect(
     if not transcript.complete:
         return IncompleteTranscript(primary, transcript)
     if sequence_provider is None:
-        sequence_provider = _provider_for_genome(primary.genome)
+        sequence_provider = _provider_for_genome(primary.genome, transcript)
 
     phase = partition_germline_by_phase(
         primary, germline_variants, phase_resolver,
@@ -346,6 +274,18 @@ def predict_transcript_model_effect(
             phase.hypotheses(max_phase_hypotheses),
             sequence_provider, max_hypotheses,
             phase_source=getattr(phase_resolver, "phase_source", None))
+    except ReferenceMismatchError as error:
+        expected, observed = error.genomic_expected_ref, error.genomic_observed_ref
+        if transcript.on_backward_strand:
+            expected, observed = reverse_complement(expected), reverse_complement(observed)
+        try:
+            offset = transcript.spliced_offset(error.genome_start)
+        except (KeyError, ValueError):
+            offset = None
+        raise ReferenceMismatchError(
+            error.variant, transcript, expected, observed,
+            transcript_offset=offset, genome_start=error.genome_start,
+            genome_end=error.genome_end) from error
     except NonlocalStructuralEdit as error:
         return Unresolved(
             primary, transcript, mechanism="nonlocal_structural_variant",
@@ -358,7 +298,7 @@ def predict_transcript_model_effect(
         result.variants = variants
         return result
     candidates = merge_classified_outcomes(outcomes)
-    ordered = order_realized_candidates(candidates, effect_priority)
+    ordered = order_realized_candidates(candidates, _classification_priority)
     return _attach_candidate_set(ordered)
 
 
@@ -373,34 +313,35 @@ def _realize_outcomes(
     primary = somatic_variants[0]
     outcomes = []
     enumeration_index = 0
+    # Complete nucleotide alleles may cross a transcript boundary by more
+    # than the splice scan flank. Keep their full genomic span before exon
+    # projection; extending the layout does not extend the transcript.
+    flank = 50
+    for variant in (*somatic_variants, *(v for h in phase_hypotheses for v in h.cis)):
+        if not getattr(variant, "is_structural", False):
+            flank = max(flank, transcript.start - variant.trimmed_base1_start + 50,
+                        variant.trimmed_base1_end - transcript.end + 50)
+    reference = GenomicLayout.from_transcript(
+        transcript, flank=flank, sequence_provider=sequence_provider)
     for phase_hypothesis in phase_hypotheses:
-        reference = GenomicLayout.from_transcript(
-            transcript, flank=50, sequence_provider=sequence_provider)
         baseline_layout = reference.apply_variants(phase_hypothesis.cis)
         mutant_layout = baseline_layout.apply_variants(somatic_variants)
         baseline_runs, baseline_statuses = _status_map(
             transcript, baseline_layout)
         mutant_runs, mutant_statuses = _status_map(transcript, mutant_layout)
-        axes, shared_keys, baseline_fixed = _combined_mutant_axes(
-            baseline_statuses, mutant_statuses, transcript,
-            tuple(run.key for run in baseline_runs),
-            tuple(run.key for run in mutant_runs))
-        if axes:
-            try:
-                plans = enumerate_splice_plans(
-                    axes, tuple(run.key for run in mutant_runs),
-                    max_plans=max_hypotheses - len(outcomes))
-            except HypothesisLimitError as error:
-                raise HypothesisLimitError(max_hypotheses) from error
-        else:
-            plans = (SplicePlan(
-                choices=(),
-                kept_runs=tuple(run.key for run in mutant_runs)),)
+        shared_keys = frozenset(
+            key for key in baseline_statuses.keys() & mutant_statuses.keys()
+            if baseline_statuses[key] == mutant_statuses[key])
+        try:
+            plans = enumerate_paired_splice_plans(
+                transcript, baseline_statuses.values(), mutant_statuses.values(),
+                tuple(run.key for run in baseline_runs),
+                tuple(run.key for run in mutant_runs), shared_keys,
+                max_plans=max_hypotheses - len(outcomes))
+        except HypothesisLimitError as error:
+            raise HypothesisLimitError(max_hypotheses) from error
 
-        for plan in plans:
-            baseline_plan = _baseline_plan(
-                transcript, baseline_runs, baseline_statuses, plan,
-                shared_keys, baseline_fixed)
+        for baseline_plan, plan in plans:
             baseline_product, _ = realize_splice_plan(
                 transcript, baseline_layout, baseline_plan,
                 tuple(baseline_statuses.values()))
@@ -410,6 +351,7 @@ def _realize_outcomes(
             hypothesis = EffectHypothesis(
                 phase=_phase_items(phase_hypothesis),
                 splice_plan=plan,
+                baseline_splice_plan=baseline_plan,
                 phase_probability=_phase_probability(
                     phase_hypotheses, phase_hypothesis),
                 evidence={
@@ -455,7 +397,7 @@ def _reference_effect(
 
 
 class TranscriptModelEffectAnnotator:
-    """Experimental, opt-in annotator backed by the transcript model."""
+    """Default annotator backed by the shared transcript model."""
 
     name = "transcript_model"
     version = _varcode_version
@@ -520,25 +462,6 @@ class TranscriptModelEffectAnnotator:
         else:
             result = self._predict_variants(variants, transcript)
         if result is not NotImplemented:
-            observed = getattr(phase_resolver, "mutant_transcript", None)
-            observations = []
-            if observed is not None:
-                for variant in variants:
-                    mt = observed(variant, transcript)
-                    if mt is not None:
-                        observations.append((variant, mt))
-            if observations and getattr(result, "realized_candidates", None):
-                from .rna_evidence import make_rna_outcome
-                candidates = []
-                for variant, model in observations:
-                    observed_effect = Unresolved(
-                        variant, transcript, mechanism="rna_transcript_comparison")
-                    observed_effect.mutant_transcript = model
-                    candidates.append(make_rna_outcome(
-                        observed_effect, source=model.annotator_name,
-                        extra_evidence=model.evidence))
-                result = _refine_transcript_model_effect(result, candidates)
-            elif observations:
-                # BND/assembly delegation has its existing observation contract.
-                result.observed_mutant_transcripts = tuple(observations)
+            from .phasing import apply_phase_resolver_to_effects
+            result = apply_phase_resolver_to_effects([result], phase_resolver)[0]
         return result

@@ -34,6 +34,11 @@ from varcode import (
     query_in_cis,
 )
 
+import pytest
+
+# Compatibility tests for the legacy observed-model overwrite contract.
+pytestmark = pytest.mark.usefixtures("legacy_annotator")
+
 
 ensembl_grch38 = cached_release(81)
 CFTR_ID = "ENST00000003084"

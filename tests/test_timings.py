@@ -10,9 +10,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import print_function, division, absolute_import
+from pathlib import Path
+import subprocess
+import sys
 import time
 
+import pytest
 from pyensembl import cached_release
 
 from varcode.util import random_variants
@@ -24,21 +27,22 @@ from varcode.util import random_variants
 ensembl_grch38 = cached_release(81)
 
 def _time_variant_annotation(variant_collection):
-    start_t = time.time()
+    start_t = time.perf_counter()
     effects = variant_collection.effects()
-    end_t = time.time()
+    end_t = time.perf_counter()
     assert len(effects.groupby_variant()) == len(variant_collection)
     elapsed_t = end_t - start_t
     return elapsed_t
 
 
-def test_effect_timing(
+def _check_effect_timing(
         n_variants=100,
         random_seed=0,
         n_warmup_variants=5):
+    """Check the default pipeline's throughput after a reproducible warmup."""
     warmup_collection = random_variants(
         n_warmup_variants,
-        random_seed=None,
+        random_seed=1,
         ensembl=ensembl_grch38)
     warmup_collection.effects()
 
@@ -51,5 +55,25 @@ def test_effect_timing(
     assert elapsed_t / n_variants < 0.1, \
         "Should be faster than 100ms / variant!"
 
+
+@pytest.mark.no_cover
+def test_effect_timing():
+    """Measure ordinary execution independently of earlier suite state.
+
+    Public-cohort tests retain large reference and annotation caches. A fresh
+    interpreter keeps their allocation/GC history and coverage instrumentation
+    out of this throughput measurement. Imports and warmup remain outside the
+    timer; annotation still uses the default pipeline and the original budget.
+    """
+    result = subprocess.run(
+        [sys.executable, "-m", "tests.test_timings"],
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        timeout=120)
+    print(result.stdout)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 if __name__ == "__main__":
-    test_effect_timing()
+    _check_effect_timing()

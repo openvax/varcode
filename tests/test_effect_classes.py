@@ -266,6 +266,7 @@ def test_stop_gain_with_extra_amino_acids():
         modifies_coding_sequence=True,
         modifies_protein_sequence=True)
 
+@pytest.mark.usefixtures("legacy_annotator")
 def test_exon_loss():
     # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
     # Chromosome 17: 43,044,295-43,125,370 reverse strand.
@@ -291,6 +292,7 @@ def test_exon_loss():
         modifies_protein_sequence=True)
 
 
+@pytest.mark.usefixtures("legacy_annotator")
 def test_exonic_splice_site():
     # transcript BBRCA1-001 ENST00000357654 (looked up Ensembl 79)
     # Chromosome 17: 43,044,295-43,125,370 reverse strand.
@@ -615,6 +617,7 @@ def test_insertion_nonfinal_stop_gain():
         modifies_coding_sequence=True,
         modifies_protein_sequence=True)
 
+@pytest.mark.usefixtures("legacy_annotator")
 def test_variant_ending_after_exon():
     variant = Variant(
         contig="11",

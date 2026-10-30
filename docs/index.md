@@ -55,6 +55,6 @@ per transcript, and "top priority" means most severe, not most likely.
 - [Varcode, Isovar, and Vaxrank](library_roles.md): which library does what.
 - [Transcript models](transcript_models.md): cDNA, partial structures, and missing sequence.
 - [Effect types](effect_types.md) and [API reference](api.md): classes and parameters.
-- [Experimental annotators](experimental_annotators.md): optional alternative implementations.
+- [Annotation pipeline and compatibility](experimental_annotators.md): the default pipeline and explicit alternatives.
 - [Writing an annotator](annotator_contract.md): plugging in your own model.
 - [Changelog](changelog.md): release history.

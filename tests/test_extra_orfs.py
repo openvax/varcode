@@ -270,7 +270,9 @@ def test_collection_cis_products_keep_original_rna_identity():
 
 def test_observed_canonical_protein_is_not_attached_to_extra_orf(native):
     variant, reference, _ = native
-    resolver = SimpleNamespace(mutant_transcript=lambda variant, transcript: object())
+    from varcode import MutantTranscript
+    resolver = SimpleNamespace(mutant_transcript=lambda variant, transcript:
+                               MutantTranscript.from_sequence("ATGAAATAA"))
     with pytest.raises(NotImplementedError, match="base origins"):
         variant.effects(extra_orfs=[reference], phase_resolver=resolver)
     result = variant.effects(extra_orfs=[reference], phase_resolver=resolver, raise_on_error=False)

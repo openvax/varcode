@@ -43,6 +43,9 @@ from varcode.effects.effect_classes import (
 )
 from varcode.effect_candidates import EffectCandidate
 
+# Legacy wrapper contract; the default composition path has separate regression tests.
+pytestmark = pytest.mark.usefixtures("legacy_annotator")
+
 
 ensembl_grch38 = cached_release(81)
 CFTR_ID = "ENST00000003084"

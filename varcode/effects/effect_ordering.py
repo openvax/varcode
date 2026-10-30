@@ -155,7 +155,18 @@ def effect_priority(effect):
     ``priority_class`` attribute — used by wrapper classes like
     :class:`varcode.splice_outcomes.SpliceOutcomeSet` to delegate to
     the wrapped effect's class.
+
+    Shared transcript comparisons rank by their most severe retained
+    candidate. Selecting an effect never drops its other hypotheses.
     """
+    candidates = getattr(effect, "realized_candidates", None)
+    if candidates:
+        return max(_classification_priority(candidate.effect) for candidate in candidates)
+    return _classification_priority(effect)
+
+
+def _classification_priority(effect):
+    """Priority of this classified comparison, independent of alternatives."""
     cls = getattr(effect, "priority_class", None) or effect.__class__
     return transcript_effect_priority_dict.get(cls, -1)
 

@@ -131,7 +131,7 @@ def test_insertion_disrupting_sec_codon_creates_a_stop():
     t = _transcript("ENST00000354171")
     variant = Variant("19", 1105403, "", "GAC", t.genome)
     layout = GenomicLayout.from_transcript(
-        t, sequence_provider=_provider_for_genome(t.genome))
+        t, sequence_provider=_provider_for_genome(t.genome, t))
     product = realize_exon_path(t, layout.apply_point_variant(variant))
     # The new TGA retains only the annotated Sec codon's first base.
     assert product.protein_sequence == t.protein_sequence[:72]

@@ -13,6 +13,9 @@ from varcode.effects.effect_classes import PhaseCandidateSet
 from varcode.nucleotides import reverse_complement
 from varcode.splice_outcomes import SpliceOutcomeSet
 
+# Legacy wrapper contract; the default composition path has separate regression tests.
+pytestmark = pytest.mark.usefixtures("legacy_annotator")
+
 
 @pytest.fixture
 def transcript():

@@ -10,7 +10,7 @@ from pyensembl import cached_release
 
 import varcode
 from varcode import EffectCandidate, StructuralVariant, Variant
-from varcode.effects.effect_classes import HaplotypeEffect
+from varcode.effects import Deletion
 from varcode.effect_hypotheses import RealizedEffectCandidate
 
 
@@ -65,7 +65,7 @@ def test_documentation_first_steps(path, count, input_directory):
     if path == "docs/phasing.md":
         variants = namespace["phased_variants"]
         assert namespace["phaser"].in_cis(*variants) is True
-        assert any(isinstance(effect, HaplotypeEffect)
+        assert any(len(getattr(effect, "variants", ())) > 1
                    for effect in namespace["effects"])
 
 
@@ -162,9 +162,9 @@ def test_documentation_api_objects_have_one_heading():
 
 def test_documentation_splice_accessors():
     namespace = _run(_blocks("docs/splice_variants.md"))
-    assert isinstance(namespace["splice_set"], varcode.SpliceOutcomeSet)
-    assert namespace["coding"] is not None
-    assert namespace["preferred"] is not None
+    assert isinstance(namespace["effect"], Deletion)
+    assert namespace["normal_effects"]
+    assert namespace["effect"].most_likely_candidate.effect is namespace["effect"]
 
 
 def test_documentation_moved_sections_keep_incoming_links():
@@ -217,7 +217,7 @@ def test_documentation_experimental_result_access(kind):
     assert "candidate.outcomes" in advanced_blocks[2]
     _run(advanced_blocks[:3], namespace)
     _run(_blocks("docs/transcript_models.md"), namespace)
-    candidates = getattr(namespace["experimental"], "candidates", ())
+    candidates = getattr(namespace["effect"], "candidates", ())
     if kind == "point":
         assert candidates and all(isinstance(c, RealizedEffectCandidate)
                                   for c in candidates)
@@ -225,5 +225,4 @@ def test_documentation_experimental_result_access(kind):
     elif kind == "BND":
         assert candidates and all(isinstance(c, EffectCandidate) for c in candidates)
     else:
-        assert not candidates
-        assert isinstance(namespace["experimental"], varcode.Unresolved)
+        assert namespace["effect"].modifies_protein_sequence is None

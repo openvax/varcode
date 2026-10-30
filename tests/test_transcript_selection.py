@@ -92,7 +92,7 @@ def test_rejecting_every_transcript_does_not_invent_gene_only_effects(variant):
     # No genuine transcript-free gene overlap: the right answer is empty.
     variant._gene_ids = ["g1"]
     result = variant.effects(transcript_filter=lambda t: False)
-    assert len(result) == 0 and result.annotator == "fast" and result.annotated_at
+    assert len(result) == 0 and result.annotator == "transcript_model" and result.annotated_at
 
 
 @pytest.mark.parametrize("position,expected", [(500, Intragenic), (1100, Intergenic)])

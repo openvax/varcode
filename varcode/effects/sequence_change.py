@@ -23,7 +23,8 @@ def modification_status(effect, attribute):
             continue
         seen.add(id(current))
         candidates = (current.candidates
-                      if isinstance(current, MultiOutcomeEffect) else ())
+                      if isinstance(current, MultiOutcomeEffect)
+                      or getattr(current, "realized_candidates", None) else ())
         if isinstance(current, StructuralVariantEffect):
             if any(candidate.effect is current for candidate in candidates):
                 evaluated = True

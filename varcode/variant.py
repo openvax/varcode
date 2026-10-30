@@ -479,11 +479,10 @@ class Variant(Serializable):
     ) -> EffectCollection:
         """Predict the variant's effects on overlapping transcripts.
 
-        Splice-disrupting effects are always wrapped in a
-        :class:`varcode.splice_outcomes.SpliceOutcomeSet` carrying the
-        candidate mechanisms (normal splicing, exon skipping, intron
-        retention, cryptic splice). Mechanism candidates are computed
-        lazily, so the wrap is cheap. See openvax/varcode#262, #391.
+        The default composes phase, splice and local structural edits into
+        baseline/mutant transcript comparisons. The ranked effect retains
+        alternatives in ``candidates``. Explicit ``annotator="fast"`` preserves
+        the legacy splice/phase/SV wrappers.
 
         Parameters
         ----------
@@ -495,44 +494,29 @@ class Variant(Serializable):
 
         annotator : str, EffectAnnotator, or None
             Per-call annotator override. ``None`` uses the currently
-            configured default (``"fast"`` today; swappable via
+            configured default (``"transcript_model"``; swappable via
             :func:`varcode.set_default_annotator` or
             :func:`varcode.use_annotator`). String names are resolved
             against the registry. See openvax/varcode#271.
 
         phase_resolver : resolver object or None
-            Optional phase-evidence source (typically a
-            :class:`~varcode.phasing.MolecularPhaseResolver` wrapping an
-            upstream RNA-phasing tool, or
-            :class:`~varcode.phasing.VCFPhaseResolver`). When provided
-            and the resolver has an observed mutant transcript for
-            ``(self, transcript)``, the returned effect's
-            ``mutant_transcript`` is populated with that observed
-            transcript — the protein is the protein actually observed
-            in RNA rather than one inferred from the reference. See
-            openvax/varcode#269.
+            Optional source of cis/trans constraints and externally supplied
+            transcript models. Observed models refine the same candidates;
+            partial/unmatched models stay unresolved with their actual sequence.
+            RNA sequence does not establish translation or missing phase.
 
         rna_resolver : RNAEvidenceResolver or None
-            Optional RNA-observed-outcome source. When provided, any
-            :class:`~varcode.MultiOutcomeEffect` in the result is
-            refined with observed candidates from the resolver. Splice
-            mechanism sets are replaced by reconciled copies that track
-            added RNA candidates and excluded DNA predictions; other
-            multi-outcome effects keep the additive candidate behavior.
-            See openvax/varcode#259.
+            Optional source of observed outcomes. Exact full-cDNA matches
+            support compatible hypotheses without discarding other baselines.
+            Missing sequence remains unavailable; counts are not probabilities.
+            Legacy annotators retain their documented reconciliation behavior.
 
         germline : GermlineContext or None
-            Optional patient-germline context. When non-empty, every
-            per-transcript effect is computed against the patient's
-            germline-applied transcript instead of the reference.
-            Codons / splice signals where germline overlaps the
-            somatic and phase is unknown produce a
-            :class:`PhaseCandidateSet` with one outcome per
-            haplotype hypothesis; an identical inherited allele returns
-            ``GermlineAlleleOverlap`` with LOH unassessed. ``None`` or
-            :meth:`GermlineContext.empty` falls through to today's
-            reference-relative behaviour byte-identically. See
-            openvax/varcode#268.
+            Supplied patient alleles across the transcript span. Unknown phase
+            produces candidate comparisons or HypothesisLimit; known cis alleles
+            modify both baseline and mutant. An identical inherited allele
+            returns GermlineAlleleOverlap, with LOH unassessed. Omission uses the
+            annotation reference and cannot recover missing patient information.
 
         extra_orfs : str, ORFdata rule, ORFCatalog or iterable of ReferenceORF, optional
             Additional reference coding frames, supplied by ORFdata. ``"all"``

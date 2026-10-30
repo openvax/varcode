@@ -12,9 +12,10 @@
 
 """One built-in default annotator and optional partial implementations.
 
-``fast`` owns point-variant and structural routing. ``protein_diff`` and
-``transcript_model`` remain experimental alternatives. Third parties register any
-object satisfying :class:`EffectAnnotator`; they need no capability list.
+``transcript_model`` is the shared default. ``fast`` retains the compatibility
+implementation, and ``protein_diff`` is an alternative for point edits. Third
+parties register any object satisfying :class:`EffectAnnotator`; they need no
+capability list.
 """
 
 from __future__ import annotations
@@ -57,7 +58,7 @@ class EffectAnnotator(Protocol):
     Return Python's ``NotImplemented`` singleton when this particular input
     is unsupported. Public prediction APIs expose it as an ``Unresolved``
     effect with a reason, retaining this annotator's provenance. They never
-    silently replace an experimental result with the default's prediction.
+    silently replace a selected annotator's result with another's prediction.
     ``None`` is invalid; exceptions retain normal error-handling semantics.
 
     Optionally exposes ``version`` (string) — used in CSV provenance

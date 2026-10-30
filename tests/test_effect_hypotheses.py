@@ -10,6 +10,7 @@ from varcode.effect_hypotheses import (
     RealizedTranscriptProduct,
     SpliceAxis,
     SpliceOption,
+    SplicePlan,
     SpliceSiteKey,
     enumerate_splice_plans,
     merge_classified_outcomes,
@@ -223,3 +224,31 @@ def test_unmapped_rna_does_not_disable_calibrated_prediction_order():
         effect("Unresolved"), product(None, None), product("MA", "ATGGCT")))
     candidates = order_realized_candidates(merge_classified_outcomes(outcomes), lambda e: 1)
     assert [type(c.effect).__name__ for c in candidates] == ["common", "rare", "Unresolved"]
+
+
+@pytest.mark.parametrize("shared,expected", [(True, 0.2), (False, 0.08)])
+def test_baseline_splice_probability_counts_shared_active_site_once(shared, expected):
+    key = SpliceSiteKey("donor", 4)
+    plan = SplicePlan(((key, SpliceOption("normal", 0, probability=0.4)),), (4,))
+    hypothesis = EffectHypothesis(
+        splice_plan=plan, baseline_splice_plan=plan, phase_probability=0.5,
+        evidence={"shared_splice_sites": (key,) if shared else ()})
+    candidate, = merge_classified_outcomes((ClassifiedOutcome(
+        hypothesis, effect(), product("MAA"), product("MGA")),))
+    assert candidate.probability == pytest.approx(expected)
+    assert candidate.phase_mass == pytest.approx(0.5)
+
+
+def test_merged_baseline_alternatives_count_phase_mass_once():
+    key = SpliceSiteKey("donor", 4)
+    outcomes = tuple(ClassifiedOutcome(
+        EffectHypothesis(
+            phase=(("g", "cis"),), phase_probability=0.5,
+            baseline_splice_plan=SplicePlan(((key, SpliceOption(
+                mechanism, rank, probability=p)),), (4,))),
+        effect(), product("MAA"), product("MGA"))
+        for mechanism, rank, p in (("normal", 0, 0.3), ("cryptic", 1, 0.7)))
+    candidate, = merge_classified_outcomes(outcomes)
+    assert candidate.probability == pytest.approx(0.5)
+    assert candidate.phase_mass == pytest.approx(0.5)
+    assert len(candidate.hypotheses) == 2

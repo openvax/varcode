@@ -59,6 +59,49 @@ def _attach_transcript_models(effect, mutant_transcript, baseline_transcript=Non
     return effect
 
 
+def _pure_insertion_offset(mutant_transcript, baseline_transcript):
+    """Locate a pure cDNA insertion from edits or the actual paired products."""
+    if mutant_transcript is None:
+        return None
+    if len(mutant_transcript.edits) == 1:
+        edit = mutant_transcript.edits[0]
+        return edit.cdna_start if edit.is_insertion else None
+    if baseline_transcript is not None:
+        baseline = baseline_transcript.cdna_sequence
+        mutant = mutant_transcript.cdna_sequence
+        if baseline is not None and mutant is not None:
+            ref, alt, prefix, _ = trim_shared_flanking_strings(baseline, mutant)
+            if not ref and alt:
+                before = baseline_transcript.evidence.get("genomic_positions", ())
+                after = mutant_transcript.evidence.get("genomic_positions", ())
+                if len(before) == len(baseline) and len(after) == len(mutant):
+                    offset = next((i for i, pair in enumerate(zip(before, after))
+                                   if pair[0] != pair[1] or baseline[i] != mutant[i]),
+                                  len(baseline))
+                    # Equal bases must not shift a mapped codon-aligned insert
+                    # into the next reference codon during string trimming.
+                    if baseline == mutant[:offset] + mutant[offset + len(alt):]:
+                        return offset
+                return len(prefix)
+    return None
+
+
+def _same_mapped_stop(baseline, mutant, ref_protein, mut_protein):
+    """Whether both products terminate at the same retained reference codon."""
+    stops = []
+    for model, protein in ((baseline, ref_protein), (mutant, mut_protein)):
+        evidence = getattr(model, "evidence", None) or {}
+        start = evidence.get("start_codon_offset")
+        if start is None or model.cdna_sequence is None:
+            return False
+        offset = start + 3 * len(protein)
+        origins = evidence.get("genomic_positions", ())[offset:offset + 3]
+        if len(origins) != 3 or any(position is None for position in origins):
+            return False
+        stops.append((origins, model.cdna_sequence[offset:offset + 3]))
+    return stops[0] == stops[1]
+
+
 def classify_from_protein_diff(
         variant,
         transcript,
@@ -101,7 +144,8 @@ def classify_from_protein_diff(
 
     frame_change_aa_offset : int or None
         First affected coding codon when a realized path supplies nucleotide
-        coordinates. Distinguishes a coding frameshift whose amino acids
+        coordinates. Used for classification, not protein-change numbering.
+        Distinguishes a coding frameshift whose amino acids
         coincidentally match the reference from a stop-codon extension.
     baseline_transcript : MutantTranscript or None
         Patient baseline, when the comparison includes cis germline edits.
@@ -169,7 +213,15 @@ def classify_from_protein_diff(
                 transcript=transcript,
                 aa_ref="",
                 aa_alt=fs_shifted, original_protein_sequence=ref_protein))
-        if frame_change_aa_offset is not None:
+        # The DNA frame-change coordinate distinguishes stop loss above;
+        # protein notation starts at the first changed amino acid, even when
+        # the first shifted codon happens to encode the same residue.
+        if (frame_change_aa_offset is not None and (
+                fs_offset >= len(ref_protein) or (stop_observed is False and not fs_shifted))):
+            # A coding frameshift can preserve every reference residue before
+            # extending past its stop. Anchor that case to its mapped coding
+            # change; there is no changed reference residue to index. A
+            # partial product running out of sequence likewise proves no stop.
             fs_offset = min(fs_offset, frame_change_aa_offset)
             fs_shifted = mut_protein[fs_offset:]
         # No novel residues after the shared prefix -> an immediate stop (true truncation).
@@ -213,7 +265,9 @@ def classify_from_protein_diff(
     # truncated tail).
     if (len(mut_protein) < len(ref_protein)
             and aa_offset + n_alt == len(mut_protein)
-            and not mutant_translation_ran_off_end):
+            and not mutant_translation_ran_off_end
+            and not _same_mapped_stop(baseline_transcript, mutant_transcript,
+                                      ref_protein, mut_protein)):
         aa_ref = ref_protein[aa_offset] if aa_offset < len(ref_protein) else ref_delta
 
         # Whole-protein trimming can't distinguish a codon-aligned
@@ -222,12 +276,11 @@ def classify_from_protein_diff(
         # edit provenance when available so pure insertions keep
         # aa_ref="" (matching the historical #174/#175 behaviour
         # preserved by the fast annotator).
-        if mutant_transcript is not None and len(mutant_transcript.edits) == 1:
-            edit = mutant_transcript.edits[0]
+        insertion_offset = _pure_insertion_offset(mutant_transcript, baseline_transcript)
+        if insertion_offset is not None:
             cds_start = min(transcript.start_codon_spliced_offsets) if coding_start is None else coding_start
-            if edit.is_insertion and edit.cdna_start >= cds_start:
-                if (edit.cdna_start - cds_start) % 3 == 0:
-                    aa_ref = ""
+            if insertion_offset >= cds_start and (insertion_offset - cds_start) % 3 == 0:
+                aa_ref = ""
         return finish(PrematureStop(
             variant=variant,
             transcript=transcript,
@@ -248,10 +301,8 @@ def classify_from_protein_diff(
     #      cDNA edit kind via ``mutant_transcript`` to distinguish
     #      "stop codon mutated → StopLoss" from "in-frame insertion
     #      before stop → Insertion". Closes #319.
-    is_cdna_pure_insertion = (
-        mutant_transcript is not None
-        and len(mutant_transcript.edits) == 1
-        and mutant_transcript.edits[0].is_insertion)
+    is_cdna_pure_insertion = _pure_insertion_offset(
+        mutant_transcript, baseline_transcript) is not None
     if (stop_complete and len(mut_protein) > len(ref_protein)
             and aa_offset + n_ref >= len(ref_protein)
             and (n_ref > 0 or not is_cdna_pure_insertion)):

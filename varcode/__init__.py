@@ -14,7 +14,7 @@
 """Predict variant consequences with explicit transcript and evidence context.
 
 Start with :class:`Variant`, :func:`load_vcf`, and :meth:`Variant.effects`.
-The default annotator is ``fast``; alternative implementations are opt-in.
+The default annotator is ``transcript_model``; ``fast`` is an explicit compatibility option.
 Public imports below include compatibility names retained for existing callers.
 """
 

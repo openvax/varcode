@@ -255,10 +255,17 @@ class GenomicLayout:
         exon projection operate on intervals and remain proportional to the
         number of segments rather than the genomic span.
         """
-        return tuple(
-            (segment.contig, segment.genomic_position(i), segment.origin_kind)
-            for segment in self.segments
-            for i in range(segment.length))
+        origins = []
+        for segment in self.segments:
+            if segment.start is None:
+                origins.extend([(None, None, segment.origin_kind)] * segment.length)
+            else:
+                positions = (range(segment.start, segment.end + 1)
+                             if segment.strand == "+" else
+                             range(segment.end, segment.start - 1, -1))
+                origins.extend((segment.contig, position, segment.origin_kind)
+                               for position in positions)
+        return tuple(origins)
 
     def base(self, offset):
         """Return ``(base, contig, position, origin_kind)`` at an offset."""
@@ -278,7 +285,7 @@ class GenomicLayout:
 
     def origin(self, offset):
         """Return ``(contig, position, origin_kind)`` without fetching bases."""
-        if offset < 0 or offset >= self.length:
+        if offset < 0:
             raise IndexError(offset)
         consumed = 0
         for segment in self.segments:
@@ -407,6 +414,12 @@ class GenomicLayout:
                 expected = (
                     ref if strand == "+" else reverse_complement(ref))
                 if existing.upper() != expected:
+                    if all(segment.origin_kind in ("reference", "duplicated")
+                           for segment in self.slice(low, high).segments):
+                        from .errors import ReferenceMismatchError
+                        forward = existing if strand == "+" else reverse_complement(existing)
+                        raise ReferenceMismatchError(
+                            variant, None, forward, ref, genome_start=start, genome_end=end)
                     raise ValueError(
                         "Reference allele %r does not match realized layout "
                         "%r at %s:%d-%d" % (

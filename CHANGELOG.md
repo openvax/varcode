@@ -1,5 +1,40 @@
 # Change Log
 
+## v11.0.0
+
+- Make the shared transcript model the default: ordinary effects now compose
+  germline baselines, known-cis groups, local structural edits and splice
+  alternatives through one sequence/classification path (#421).
+- Preserve every graph-valid baseline splice alternative, coupling unchanged
+  active sites without conflating differently edited motifs. Do not call
+  unchanged annotated noncanonical splice sites disrupted (#662).
+- Preserve existing nonlocal fusion candidates and junction insertions; restore
+  genomic reference-mismatch diagnostics and number frameshifts from the first
+  changed amino acid (#663). Avoid repeated locus queries for unedited splice
+  coordinates and reuse the selected transcript when genomic DNA is absent.
+  Keep insertion/stop and synonymous-codon details, and retain protein-changing
+  alternatives during collection filtering and priority ranking. Include full
+  nucleotide alleles crossing transcript bounds; reject cryptic sites without
+  a usable exon segment and retained splice partner.
+- Translate valid IUPAC reference codons to a uniquely determined residue or
+  `X`, preserving uncertain residues in complete transcript products (#664).
+  Invalid symbols still raise errors.
+- Record baseline splice plans in existing hypotheses; retain full baseline
+  and mutant products, unknown sequence, and uncalibrated probabilities.
+- Reuse one phase/RNA model adapter and remove duplicate collection processing.
+  Read alignment and assembly remain upstream in Isovar.
+- Breaking default result change: use candidate effects and their transcript
+  accessors. Explicit `annotator="fast"` retains the Varcode 10 implementation
+  and its splice/phase/haplotype/SV wrapper types. Existing imports and archives
+  remain supported; see the annotation migration guide.
+- Align generated API documentation and compatibility docstrings with the
+  shared default. Enable the existing resource-aware parallel test runner in
+  CI without reducing public-cohort or Python/pandas coverage (#666).
+- Measure the existing default-annotation throughput benchmark in a fresh,
+  untraced interpreter, retaining its 100 ms/variant limit and normal functional
+  test coverage. Use a monotonic timer and deterministic warmup; check throughput
+  before the full CI suite as well as within it (#667).
+
 ## v10.23.0
 
 - Retain the actual baseline and mutant transcript models on composed effects,

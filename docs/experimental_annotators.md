@@ -1,28 +1,23 @@
-# Experimental annotators
+# Annotation pipeline and compatibility
 
-**Most users don't need this page.** The default annotator already predicts
-protein sequences and handles structural variants; use
-[effects()](effect_annotation.md) without selecting an implementation.
-
-Varcode also includes two opt-in implementations, `protein_diff` and
-`transcript_model`, for comparing predictions. They do not support every input
-the default handles.
+Since Varcode 11, the default `transcript_model` annotator uses one path for
+reference edits, patient germline baselines, known-cis groups and splice
+alternatives: realize the baseline and mutant transcripts, then classify their
+sequence difference. Read collection, alignment and RNA assembly remain in
+upstream tools such as Isovar. Varcode consumes their supplied models.
 
 ## Supported inputs
 
 | Selection | Method | Inputs |
 |---|---|---|
-| Default (omit `annotator=`) | Predicts small-edit and structural consequences; compares small edits against a patient baseline when supplied | Small variants and SVs. Germline/phase context for small edits, but not general SV-plus-germline combinations. |
-| `annotator="protein_diff"` | Edits and translates transcripts, then compares proteins; shares the default's splice, location, and germline helpers | Small variants. SVs are unsupported. |
-| `annotator="transcript_model"` | Builds transcripts for phase/splice hypotheses, compares each with the patient baseline, and merges equivalent results | Small variants and local DEL/DUP/INV. Insertions need `alt_assembly`; CNVs are unsupported. |
+| Default, or `annotator="transcript_model"` | Composes phase/splice hypotheses and compares each product with its patient baseline | Small variants and local DEL/DUP; sequence insertions need `alt_assembly`. Reuses existing structural builders for junctions, inversions and supplied assemblies. |
+| `annotator="fast"` | Compatibility implementation from Varcode 10 | Small variants and SVs; local germline lookup; limited joint composition. |
+| `annotator="protein_diff"` | Alternative protein-difference implementation | Small variants; shares legacy splice, location and germline helpers; no SV support. |
 
-The transcript-model experiment delegates BNDs to the structural helper; it does
-not resolve BND-plus-haplotype combinations. DUP/INV events that extend beyond
-its layout are left unresolved; see [limitations](#known-limitations).
-
-The default's registry name is `fast`; it appears in provenance but need not be
-passed explicitly. `protein_diff` is an alternative implementation, not an
-option you need for protein output.
+Typed junctions, BNDs, inversions, nonlocal rearrangements and supplied
+transcript assemblies reuse the existing structural builders. Combining these
+with germline or other cis edits requires mapped patient-baseline coordinates
+and remains unresolved. CNVs retain dosage uncertainty. See [limitations](#known-limitations).
 
 ## Comparing annotators
 
@@ -31,21 +26,19 @@ Given a `variant` and one of its `transcript` objects, selection is explicit:
 ```python
 effect = variant.effect_on_transcript(transcript)  # ordinary use
 comparison = variant.effect_on_transcript(transcript, annotator="protein_diff")
-experimental = variant.effect_on_transcript(transcript, annotator="transcript_model")
+legacy = variant.effect_on_transcript(transcript, annotator="fast")
 ```
 
 The transcript model can use `germline=` and `phase_resolver=` context. Canonical
 and exon-skip paths need only transcript annotation; a genome with reference
 FASTA additionally supplies sequence for intron retention and cryptic splice
 sites. Without a calibrated scorer, mechanism preference is an ordering rule,
-not a probability. Selecting this experiment does not guarantee that every
-structural or combined input is supported.
+not a probability. No implementation resolves every structural or combined input.
 
 Use the same entry point as more evidence becomes available:
 
 ```python
 effects = variant.effects(
-    annotator="transcript_model",
     germline=germline_ctx,       # or None when unavailable
     phase_resolver=phaser,       # or None when phase is unknown
     rna_resolver=rna_evidence,   # or None when no RNA models are available
@@ -54,12 +47,11 @@ effects = variant.effects(
 
 The germline lookup covers the whole transcript span, including introns that
 a splice hypothesis may retain. This can expose more phase uncertainty than
-the default annotator's local lookup. Sparse/hotspot contexts retain
+the legacy annotator's local lookup. Sparse/hotspot contexts retain
 `germline_unknown=True` even when some inherited alleles are supplied.
 
-Through `effects(germline=...)`, the transcript model uses the same phase cap
-as the default path (`GermlineContext.max_phase_hypotheses`, default 8). It
-also caps the combined phase × splice outcomes at `max_hypotheses=64`, which is
+Through `effects(germline=...)`, the transcript model uses the context phase cap (`GermlineContext.max_phase_hypotheses`, default 8). It
+also caps the combined phase × baseline-splice × mutant-splice outcomes at `max_hypotheses=64`, which is
 the phase cap too when `predict_transcript_model_effect` is called directly.
 Exceeding either returns a [`HypothesisLimit`](germline.md#phase-enumeration-limit)
 rather than a partial set of candidates.
@@ -92,15 +84,15 @@ used in classification, and the usual `original_protein_sequence` and
 `mutant_protein_sequence` properties for proteins. Candidate effects use these
 same accessors. See [sequence availability](transcript_models.md#sequence-access).
 
-The ordinary and experimental candidate wrappers are not interchangeable:
+The shared pipeline and legacy candidate wrappers expose different details:
 
 | Candidate type | Shared access | Additional information |
 |---|---|---|
-| `EffectCandidate` (ordinary splice/SV/RNA outcome sets) | `candidate.effect` | `source`, `evidence`; sequences are on the effect or its optional `mutant_transcript` |
+| `EffectCandidate` (legacy splice/SV sets and imported RNA) | `candidate.effect` | `source`, `evidence`; sequences are on the effect or its optional `mutant_transcript` |
 | `RealizedEffectCandidate` (transcript-model hypothesis pipeline) | `candidate.effect` | `outcomes`, `hypotheses`, `probability`, `ordinal_key`; each outcome has `baseline` and `mutant` products with `cdna_sequence`, `protein_sequence` and `evidence` |
 
-The experiment returns an ordinary top effect with candidates attached, not
-necessarily a `MultiOutcomeEffect`. Its BND delegation uses ordinary candidates;
+The default returns an ordinary top effect with candidates attached, not
+necessarily a `MultiOutcomeEffect`. Its structural builders use ordinary candidates;
 early noncoding, incomplete or unresolved results may have no candidates at all.
 Inspect the returned shape rather than assuming it from the annotator name:
 
@@ -108,8 +100,8 @@ Inspect the returned shape rather than assuming it from the annotator name:
 from varcode import EffectCandidate
 from varcode.effect_hypotheses import RealizedEffectCandidate
 
-print(experimental.short_description)
-for candidate in getattr(experimental, "candidates", ()):
+print(effect.short_description)
+for candidate in getattr(effect, "candidates", ()):
     print(candidate.effect.short_description)
     if isinstance(candidate, RealizedEffectCandidate):
         # A merged candidate can retain several hypotheses and their products.
@@ -120,6 +112,32 @@ for candidate in getattr(experimental, "candidates", ()):
         print(candidate.source, candidate.evidence)
         print(candidate.effect.mutant_protein_sequence)
 ```
+
+### Baseline splice uncertainty
+
+Each hypothesis records `baseline_splice_plan` and `splice_plan`. Unchanged
+active sites share a mechanism between baseline and mutant. If the site changes
+or disappears on one side, all compatible baseline choices remain; Varcode does
+not select an arbitrary patient splice product. Both plans are graph-valid.
+Unchanged annotated noncanonical sites are not called variant-induced loss.
+
+### Migrating from Varcode 10
+
+Ordinary calls now return a classified effect such as `Deletion`, `Substitution`
+or `Unresolved`, with alternatives in `candidates`. Code requiring
+`SpliceOutcomeSet`, `LargeDeletion`, `PhaseCandidateSet` or `HaplotypeEffect`
+results can explicitly select `annotator="fast"`. Existing classes, imports and
+serialized results remain supported. A candidate rank is not a probability.
+
+The shared default builds full baseline/mutant products and retains uncertainty;
+this costs more CPU and memory than the legacy local classifier, especially
+across large call sets or many transcripts. For workflows requiring the older
+throughput and result contract, select `annotator="fast"` explicitly.
+
+Collection filtering and effect priority consider every candidate, so a
+preferred silent comparison cannot hide a protein-changing alternative. The
+selected effect's own sequence properties describe that comparison; use
+`highest_priority_candidate.effect` when you need the most severe alternative.
 
 ## Known limitations
 
@@ -135,23 +153,23 @@ appended, and no phase or CDS mapping is inferred. Such observations follow the
 DNA candidates in ordering. The same behavior applies to RNA models supplied
 by a phase resolver for a known-cis group; no separate observation list is
 needed on this path. Legacy delegated BND/assembly results keep their existing
-contracts. Arbitrary mapped RNA-to-patient-baseline reconstruction remains
-work for [#421](https://github.com/openvax/varcode/issues/421).
+contracts. Read-based transcript reconstruction belongs upstream; broader mapped
+rearrangement consequence support is tracked in
+[#466](https://github.com/openvax/varcode/issues/466).
 Models containing assumed reference completion do not count as full observed
 RNA support, even when their completed cDNA matches a prediction.
 
 - Combined variants: the selected annotator makes known-cis joint predictions
-  through `VariantCollection.effects(phase_resolver=...)`. The default and
-  `protein_diff` build point-edit haplotypes; joint germline and structural
-  composition requires the opt-in `transcript_model`. Unsupported groups remain
+  through `VariantCollection.effects(phase_resolver=...)`. The default composes
+  germline, splice and local structural edits. `fast` and `protein_diff` retain
+  their legacy point-edit haplotype behavior. Unsupported groups remain
   explicit unresolved results. See the [joint contract](annotator_contract.md#joint-haplotypes).
-- Rearrangements beyond the layout: the transcript model leaves an overlapping
-  DUP/INV unresolved when either boundary extends beyond its finite genomic
-  layout, because a clipped copy of the interval cannot establish the complete
-  rearranged transcript or an unchanged protein
-  ([#449](https://github.com/openvax/varcode/issues/449)). Fully represented
-  local events still use the layout model, and supplied transcript assemblies
-  keep their sequence, with unmapped CDS/translation uncertainty preserved.
+- Rearrangements beyond the layout: existing structural builders retain their
+  fusion candidates and supplied transcript sequences. A clipped DUP/INV cannot
+  establish an unchanged protein or a complete rearranged transcript
+  ([#449](https://github.com/openvax/varcode/issues/449)); unavailable sequence
+  and unmapped CDS/translation remain uncertain. Local symbolic DEL/DUP events
+  use the shared genomic layout.
 
 Unresolved results report `None`, not `False`, for sequence-change flags.
 `drop_silent_and_noncoding()` retains them by default; see

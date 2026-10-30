@@ -37,6 +37,11 @@ from varcode.effects.effect_prediction import _canonical_splice_base
 
 from .common import expect_effect
 
+import pytest
+
+# Legacy wrapper contract; the default composition path has separate regression tests.
+pytestmark = pytest.mark.usefixtures("legacy_annotator")
+
 ensembl_grch38 = cached_release(81)
 
 CFTR_TRANSCRIPT_ID = "ENST00000003084"

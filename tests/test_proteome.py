@@ -613,7 +613,8 @@ def test_exporter_version_does_not_change_native_prediction_identity(effect, mon
     assert len(first.merge(second).proteins) == 1
 
 
-def test_default_germline_phase_candidates_export_and_archive(tmp_path):
+@pytest.mark.usefixtures("legacy_annotator")
+def test_legacy_germline_phase_candidates_export_and_archive(tmp_path):
     from varcode import GermlineContext
     from varcode.effects.structural_serialization import structural_effect_from_dict, structural_effect_to_dict
     from .test_germline_effects import _somatic, _same_codon_germline, CFTR_ID

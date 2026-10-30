@@ -73,6 +73,7 @@ def test_candidates_from_effects_tags_source():
     assert all(o.source == "test_source" for o in outcomes)
 
 
+@pytest.mark.usefixtures("legacy_annotator")
 def test_exonic_splice_site_exposes_outcomes():
     """Real integration: an SNV at the last base of an exon yields a
     SpliceOutcomeSet wrapping an ExonicSpliceSite. The set is a

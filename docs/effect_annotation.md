@@ -93,30 +93,29 @@ predictions but keeps unresolved ones by default; see
 
 ## Alternative outcomes
 
-When Varcode can't decide between several possible consequences, it returns a
-`MultiOutcomeEffect` holding every candidate instead of guessing. This happens
-for splice variants, structural variants, and variants whose phase relative to
-a nearby germline variant is unknown:
+The default pipeline attaches alternatives to an ordinary classified effect.
+Iterate `candidates` without requiring a wrapper class:
 
 ```python
-from varcode import MultiOutcomeEffect
-
-if isinstance(effect, MultiOutcomeEffect):
-    for candidate in effect.candidates:
-        print(candidate.effect.short_description)
-        print(candidate.effect.mutant_protein_sequence)
-        print(candidate.source, candidate.evidence)
+for candidate in getattr(effect, "candidates", ()):
+    comparison = candidate.effect
+    print(comparison.short_description)
+    print(comparison.original_protein_sequence)
+    print(comparison.mutant_protein_sequence)
 ```
 
-Two shortcuts pick a single candidate, and they answer different questions:
+For shared transcript results, `most_likely_candidate.effect` is the preferred
+comparison and `highest_priority_candidate.effect` is the most severe one.
+Preference can reflect a splice rule or supplied RNA support; it is not a
+calibrated probability. Each candidate retains its `outcomes`, including the
+baseline/mutant products and phase/splice hypotheses. See
+[the result contract](experimental_annotators.md#transcript-model-results).
 
-- `most_likely_effect` returns the first candidate in the order the predictor
-  listed them. That order reflects the predictor's preference; it is not a
-  calibrated probability.
-- `highest_priority_effect` returns the most severe candidate.
-
-When you report a candidate's sequence, keep its `candidate.source` (which
-predictor or evidence produced it) and `candidate.evidence` alongside it.
+Existing structural builders and explicit `annotator="fast"` can return
+`MultiOutcomeEffect` wrappers. Those expose `most_likely_effect`,
+`highest_priority_effect`, and candidates with `source` and `evidence` fields.
+Keep this provenance when reporting a candidate's sequence. Collections filter
+and rank across all candidates while retaining the complete result.
 
 <a id="choose-a-deeper-topic"></a>
 
@@ -127,6 +126,6 @@ predictor or evidence produced it) and `candidate.evidence` alongside it.
 - [Germline](germline.md) and [phasing](phasing.md): patient-specific baselines and linked variants.
 - <a id="how-it-composes"></a><a id="the-four-primitives"></a>[Transcript models](transcript_models.md): cDNA, partial structures, and missing sequences.
 - <a id="provenance"></a>[Saving results](csv.md#annotation-provenance): tables, provenance, and round-trip limits.
-- <a id="annotator-selection"></a><a id="advanced-annotators-and-implementation-limits"></a><a id="what-the-optional-implementations-change"></a><a id="reading-sequences-and-alternatives"></a><a id="current-boundaries-and-legacy-names"></a>[Experimental annotators](experimental_annotators.md): optional implementations and their limits.
+- <a id="annotator-selection"></a><a id="advanced-annotators-and-implementation-limits"></a><a id="what-the-optional-implementations-change"></a><a id="reading-sequences-and-alternatives"></a><a id="current-boundaries-and-legacy-names"></a>[Annotation pipeline and compatibility](experimental_annotators.md): default results, migration, and implementation limits.
 - <a id="writing-an-annotator"></a><a id="downstream-consumers"></a>[Writing an annotator](annotator_contract.md): custom implementations and unsupported inputs.
 - [Effect types](effect_types.md) and [API reference](api.md): class definitions and parameters.

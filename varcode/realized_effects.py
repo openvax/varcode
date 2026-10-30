@@ -1,4 +1,4 @@
-"""Compatibility aliases for the experimental :mod:`varcode.transcript_model`.
+"""Compatibility aliases for the shared :mod:`varcode.transcript_model`.
 
 New callers should use ``TranscriptModelEffectAnnotator`` and
 ``predict_transcript_model_effect``. The old imports remain valid.

@@ -556,7 +556,7 @@ def _annotate_orf_variants(variants, record, transcript, *, genome_build,
         return _unavailable_annotation(view, variants, "orf_genomic_mapping_unavailable", metadata)
     if sequence_provider is None:
         from .transcript_model import _provider_for_genome
-        sequence_provider = _provider_for_genome(variants[0].genome)
+        sequence_provider = _provider_for_genome(variants[0].genome, transcript)
     provider = _reference_provider(view, sequence_provider)
     try:
         # Validate original genomic REF, including VCF padding anchors. Layout

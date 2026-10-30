@@ -13,6 +13,11 @@
 from varcode import Variant, SpliceOutcomeSet
 from varcode.effects import ExonicSpliceSite, PrematureStop, effect_priority
 
+import pytest
+
+# Legacy wrapper contract; the default composition path has separate regression tests.
+pytestmark = pytest.mark.usefixtures("legacy_annotator")
+
 
 def test_STAT1_stop_gain_at_exon_boundary():
     # Preserve the stop-gain ranking while retaining splice alternatives.
