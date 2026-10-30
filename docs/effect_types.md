@@ -75,6 +75,12 @@ sequence form. Use the formatter again when a range label is wanted.
 
 ::: varcode.effects.effect_classes.StartLoss
 
+::: varcode.effects.effect_classes.StartGain
+
+`StartGain` is produced by the opt-in [created-ORF search](created_orfs.md).
+It retains paired RNA and a conditional peptide with a dedicated mutant coding
+model; baseline initiation and actual translation remain unassessed.
+
 ### Start-loss nucleotide details
 
 `StartLoss` retains the known sequence change while leaving
