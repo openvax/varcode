@@ -1,0 +1,2924 @@
+[
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 3,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "17",
+    "position": 27242469,
+    "ref": "C",
+    "alt": "T",
+    "gene_id": "ENSCAFG00845014458",
+    "gene": "FAM98A",
+    "consequence": "missense_variant",
+    "cdna_position": 997,
+    "protein_position": 333,
+    "amino_acids": "Ala/Thr",
+    "filter": "PASS",
+    "genotypes": [
+      "0/1 ",
+      "0/1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845025867",
+      "ENSCAFT00845025876"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845025867",
+      "ENSCAFT00845025876"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 4,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "6",
+    "position": 36875456,
+    "ref": "T",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845018848",
+    "gene": "DNAAF8",
+    "consequence": "missense_variant",
+    "cdna_position": 580,
+    "protein_position": 194,
+    "amino_acids": "Ile/Val",
+    "filter": "PASS",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845033296"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845033296"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 5,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "6",
+    "position": 36875345,
+    "ref": "C",
+    "alt": "G",
+    "gene_id": "ENSCAFG00845018848",
+    "gene": "DNAAF8",
+    "consequence": "missense_variant",
+    "cdna_position": 691,
+    "protein_position": 231,
+    "amino_acids": "Glu/Gln",
+    "filter": "PASS",
+    "genotypes": [
+      "0/1 ",
+      "0/1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845033296"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845033296"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 6,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "6",
+    "position": 25877321,
+    "ref": "T",
+    "alt": "G",
+    "gene_id": "ENSCAFG00845009136",
+    "gene": "CCP110",
+    "consequence": "missense_variant",
+    "cdna_position": 2158,
+    "protein_position": 720,
+    "amino_acids": "Ser/Arg",
+    "filter": "PASS",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845016105",
+      "ENSCAFT00845016145",
+      "ENSCAFT00845016175",
+      "ENSCAFT00845016206"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845016145",
+      "ENSCAFT00845016175",
+      "ENSCAFT00845016206"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 7,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "6",
+    "position": 25877323,
+    "ref": "A",
+    "alt": "T",
+    "gene_id": "ENSCAFG00845009136",
+    "gene": "CCP110",
+    "consequence": "missense_variant",
+    "cdna_position": 2156,
+    "protein_position": 719,
+    "amino_acids": "Ile/Lys",
+    "filter": "PASS",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845016105",
+      "ENSCAFT00845016145",
+      "ENSCAFT00845016175",
+      "ENSCAFT00845016206"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845016145",
+      "ENSCAFT00845016175",
+      "ENSCAFT00845016206"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 8,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "7",
+    "position": 42641742,
+    "ref": "T",
+    "alt": "G",
+    "gene_id": "ENSCAFG00845014266",
+    "gene": "ADAR",
+    "consequence": "missense_variant",
+    "cdna_position": 1214,
+    "protein_position": 405,
+    "amino_acids": "Phe/Cys",
+    "filter": "PASS",
+    "genotypes": [
+      "0/1 ",
+      "0/1"
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845025529"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845025529"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 9,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "22",
+    "position": 2146168,
+    "ref": "G",
+    "alt": "A",
+    "gene_id": "ENSCAFG00845023073",
+    "gene": "EBPL",
+    "consequence": "missense_variant",
+    "cdna_position": 703,
+    "protein_position": 235,
+    "amino_acids": "Asp/Asn",
+    "filter": "VQSRTrancheSNP99.00to99.90",
+    "genotypes": [
+      "0/1 ",
+      "0/1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845040717"
+    ],
+    "independent_matches": [],
+    "status": "only incomplete native transcript models"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 10,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "28",
+    "position": 9182127,
+    "ref": "T",
+    "alt": "G",
+    "gene_id": "ENSCAFG00845023271",
+    "gene": "SORBS1",
+    "consequence": "missense_variant",
+    "cdna_position": 599,
+    "protein_position": 200,
+    "amino_acids": "Lys/Thr",
+    "filter": "PASS",
+    "genotypes": [
+      "0/1 ",
+      "0/1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845041402",
+      "ENSCAFT00845041830",
+      "ENSCAFT00845042129",
+      "ENSCAFT00845042466",
+      "ENSCAFT00845042737",
+      "ENSCAFT00845042937",
+      "ENSCAFT00845043226",
+      "ENSCAFT00845043467",
+      "ENSCAFT00845043694",
+      "ENSCAFT00845044000"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845041402"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 11,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "33",
+    "position": 7500825,
+    "ref": "T",
+    "alt": "G",
+    "gene_id": "ENSCAFG00845019194",
+    "gene": "ABI3BP",
+    "consequence": "missense_variant",
+    "cdna_position": 1820,
+    "protein_position": 607,
+    "amino_acids": "Lys/Thr",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0/1 ",
+      "0/1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845033936",
+      "ENSCAFT00845034187",
+      "ENSCAFT00845034417",
+      "ENSCAFT00845034623",
+      "ENSCAFT00845035193",
+      "ENSCAFT00845035625",
+      "ENSCAFT00845035800"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845035193"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 12,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "1",
+    "position": 114504397,
+    "ref": "G",
+    "alt": "A",
+    "gene_id": "ENSCAFG00845004728",
+    "gene": "IFNL1",
+    "consequence": "stop_gain_variant",
+    "cdna_position": 421,
+    "protein_position": 141,
+    "amino_acids": "Arg/*",
+    "filter": "VQSRTrancheSNP99.00to99.90",
+    "genotypes": [
+      "0/1 ",
+      "0/1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [],
+    "independent_matches": [],
+    "status": "no overlapping transcript from the published gene in pinned annotation"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 13,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "6",
+    "position": 11091689,
+    "ref": "C",
+    "alt": "T",
+    "gene_id": "ENSCAFG00845009230",
+    "gene": "TECPR1",
+    "consequence": "missense_variant",
+    "cdna_position": 644,
+    "protein_position": 215,
+    "amino_acids": "Pro/Leu",
+    "filter": "PASS",
+    "genotypes": [
+      "0/1 ",
+      "0/1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845016274",
+      "ENSCAFT00845016395",
+      "ENSCAFT00845016506",
+      "ENSCAFT00845016633"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845016274",
+      "ENSCAFT00845016506"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 14,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "6",
+    "position": 36875327,
+    "ref": "C",
+    "alt": "A",
+    "gene_id": "ENSCAFG00845018848",
+    "gene": "DNAAF8",
+    "consequence": "missense_variant",
+    "cdna_position": 709,
+    "protein_position": 237,
+    "amino_acids": "Ala/Ser",
+    "filter": "PASS",
+    "genotypes": [
+      "0/1 ",
+      "0/1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845033296"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845033296"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 15,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "10",
+    "position": 17573453,
+    "ref": "G",
+    "alt": "T",
+    "gene_id": "ENSCAFG00845005369",
+    "gene": "PPP6R2",
+    "consequence": "missense_variant",
+    "cdna_position": 2929,
+    "protein_position": 977,
+    "amino_acids": "Leu/Met",
+    "filter": "PASS",
+    "genotypes": [
+      "0|1 ",
+      "1|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845009558",
+      "ENSCAFT00845009575",
+      "ENSCAFT00845009607",
+      "ENSCAFT00845009643",
+      "ENSCAFT00845009671"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845009575"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 16,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "10",
+    "position": 17573454,
+    "ref": "C",
+    "alt": "A",
+    "gene_id": "ENSCAFG00845005369",
+    "gene": "PPP6R2",
+    "consequence": "missense_variant",
+    "cdna_position": 2928,
+    "protein_position": 976,
+    "amino_acids": "Glu/Asp",
+    "filter": "PASS",
+    "genotypes": [
+      "0|1 ",
+      "1|1  "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845009558",
+      "ENSCAFT00845009575",
+      "ENSCAFT00845009607",
+      "ENSCAFT00845009643",
+      "ENSCAFT00845009671"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845009575"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 17,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "20",
+    "position": 55578606,
+    "ref": "G",
+    "alt": "T",
+    "gene_id": "ENSCAFG00845014253",
+    "gene": "PLIN3",
+    "consequence": "missense_variant",
+    "cdna_position": 88,
+    "protein_position": 30,
+    "amino_acids": "Val/Leu",
+    "filter": "PASS",
+    "genotypes": [
+      "0/1 ",
+      "0/1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845025527"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845025527"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 18,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "30",
+    "position": 27810257,
+    "ref": "T",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845019944",
+    "gene": "TPM1",
+    "consequence": "missense_variant",
+    "cdna_position": 433,
+    "protein_position": 145,
+    "amino_acids": "Ser/Pro",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845035152",
+      "ENSCAFT00845035271",
+      "ENSCAFT00845035378",
+      "ENSCAFT00845035428",
+      "ENSCAFT00845035579",
+      "ENSCAFT00845035640",
+      "ENSCAFT00845035755",
+      "ENSCAFT00845035826"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845035579"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 19,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "10",
+    "position": 20568050,
+    "ref": "T",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845009628",
+    "gene": "CELSR1",
+    "consequence": "missense_variant",
+    "cdna_position": 8116,
+    "protein_position": 2706,
+    "amino_acids": "Ser/Pro",
+    "filter": "PASS",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845016982"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845016982"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 20,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "18",
+    "position": 53312051,
+    "ref": "G",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845028223",
+    "gene": "ATG2A",
+    "consequence": "missense_variant",
+    "cdna_position": 3977,
+    "protein_position": 1326,
+    "amino_acids": "Arg/Pro",
+    "filter": "VQSRTrancheSNP99.00to99.90",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845049807"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845049807"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 21,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "30",
+    "position": 27810248,
+    "ref": "A",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845019944",
+    "gene": "TPM1",
+    "consequence": "missense_variant",
+    "cdna_position": 424,
+    "protein_position": 142,
+    "amino_acids": "Thr/Pro",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845035152",
+      "ENSCAFT00845035271",
+      "ENSCAFT00845035378",
+      "ENSCAFT00845035428",
+      "ENSCAFT00845035579",
+      "ENSCAFT00845035640",
+      "ENSCAFT00845035755",
+      "ENSCAFT00845035826"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845035579"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 22,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "24",
+    "position": 26223104,
+    "ref": "T",
+    "alt": "G",
+    "gene_id": "ENSCAFG00845026596",
+    "gene": "SOGA1",
+    "consequence": "missense_variant",
+    "cdna_position": 3027,
+    "protein_position": 1009,
+    "amino_acids": "Gln/His",
+    "filter": "PASS",
+    "genotypes": [
+      "0/1 ",
+      "0/1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845046876"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845046876"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 23,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "20",
+    "position": 48699135,
+    "ref": "A",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845022295",
+    "gene": "PKN1",
+    "consequence": "splice_donor_variant&intron_variant",
+    "cdna_position": 39,
+    "protein_position": ".",
+    "amino_acids": ".",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845039351",
+      "ENSCAFT00845039831"
+    ],
+    "independent_matches": [],
+    "status": "splice annotation; no observed mutant RNA or protein supplied"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 24,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "1",
+    "position": 104043576,
+    "ref": "A",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845004231",
+    "gene": "NLRP12",
+    "consequence": "splice_acceptor_variant&intron_variant",
+    "cdna_position": 2238,
+    "protein_position": ".",
+    "amino_acids": ".",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845007595",
+      "ENSCAFT00845007597",
+      "ENSCAFT00845007607",
+      "ENSCAFT00845007612"
+    ],
+    "independent_matches": [],
+    "status": "splice annotation; no observed mutant RNA or protein supplied"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 25,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "1",
+    "position": 104043577,
+    "ref": "G",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845004231",
+    "gene": "NLRP12",
+    "consequence": "splice_acceptor_variant&intron_variant",
+    "cdna_position": 2238,
+    "protein_position": ".",
+    "amino_acids": ".",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845007595",
+      "ENSCAFT00845007597",
+      "ENSCAFT00845007607",
+      "ENSCAFT00845007612"
+    ],
+    "independent_matches": [],
+    "status": "splice annotation; no observed mutant RNA or protein supplied"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 26,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "18",
+    "position": 54077999,
+    "ref": "A",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845030770",
+    "gene": "MACROD1",
+    "consequence": "missense_variant",
+    "cdna_position": 1139,
+    "protein_position": 380,
+    "amino_acids": "His/Pro",
+    "filter": "VQSRTrancheSNP99.00to99.90",
+    "genotypes": [
+      "0|1 ",
+      "0/1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845054680",
+      "ENSCAFT00845054687",
+      "ENSCAFT00845054696",
+      "ENSCAFT00845054705"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845054680"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 27,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "18",
+    "position": 54077989,
+    "ref": "T",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845030770",
+    "gene": "MACROD1",
+    "consequence": "missense_variant",
+    "cdna_position": 1129,
+    "protein_position": 377,
+    "amino_acids": "Ser/Pro",
+    "filter": "PASS",
+    "genotypes": [
+      "0/1 ",
+      "0/1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845054680",
+      "ENSCAFT00845054687",
+      "ENSCAFT00845054696",
+      "ENSCAFT00845054705"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845054680"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 28,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "18",
+    "position": 54077995,
+    "ref": "A",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845030770",
+    "gene": "MACROD1",
+    "consequence": "missense_variant",
+    "cdna_position": 1135,
+    "protein_position": 379,
+    "amino_acids": "Thr/Pro",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0|1 ",
+      "0/1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845054680",
+      "ENSCAFT00845054687",
+      "ENSCAFT00845054696",
+      "ENSCAFT00845054705"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845054680"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 29,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "5",
+    "position": 41804238,
+    "ref": "C",
+    "alt": "T",
+    "gene_id": "ENSCAFG00845023192",
+    "gene": "SREBF1",
+    "consequence": "missense_variant",
+    "cdna_position": 5218,
+    "protein_position": 1740,
+    "amino_acids": "Ala/Thr",
+    "filter": "PASS",
+    "genotypes": [
+      "0/1 ",
+      "0/1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845041397",
+      "ENSCAFT00845041568"
+    ],
+    "independent_matches": [],
+    "status": "published amino-acid position or substitution differs from pinned native models"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 30,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "31",
+    "position": 29472282,
+    "ref": "A",
+    "alt": "G",
+    "gene_id": "ENSCAFG00845026139",
+    "gene": "RUNX1",
+    "consequence": "missense_variant",
+    "cdna_position": 1270,
+    "protein_position": 424,
+    "amino_acids": "Ser/Pro",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845046111",
+      "ENSCAFT00845046187",
+      "ENSCAFT00845046247",
+      "ENSCAFT00845046326",
+      "ENSCAFT00845046393"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845046187"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 31,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "3",
+    "position": 92482217,
+    "ref": "A",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845000982",
+    "gene": "FGFRL1",
+    "consequence": "missense_variant",
+    "cdna_position": 106,
+    "protein_position": 36,
+    "amino_acids": "Thr/Pro",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0|1 ",
+      "0/1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [],
+    "independent_matches": [],
+    "status": "no overlapping transcript from the published gene in pinned annotation"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 32,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "3",
+    "position": 92482211,
+    "ref": "A",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845000982",
+    "gene": "FGFRL1",
+    "consequence": "missense_variant",
+    "cdna_position": 100,
+    "protein_position": 34,
+    "amino_acids": "Thr/Pro",
+    "filter": "VQSRTrancheSNP99.00to99.90",
+    "genotypes": [
+      "0|1 ",
+      "0/1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [],
+    "independent_matches": [],
+    "status": "no overlapping transcript from the published gene in pinned annotation"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 33,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "10",
+    "position": 32322689,
+    "ref": "T",
+    "alt": "G",
+    "gene_id": "ENSCAFG00845011667",
+    "gene": "BTBD11",
+    "consequence": "missense_variant",
+    "cdna_position": 1075,
+    "protein_position": 359,
+    "amino_acids": "Asn/His",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0/1 ",
+      "0/1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845021159",
+      "ENSCAFT00845021221",
+      "ENSCAFT00845021370"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845021159",
+      "ENSCAFT00845021221"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 34,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "5",
+    "position": 64737851,
+    "ref": "G",
+    "alt": "A",
+    "gene_id": "ENSCAFG00845002914",
+    "gene": "CBFA2T3",
+    "consequence": "missense_variant",
+    "cdna_position": 1729,
+    "protein_position": 577,
+    "amino_acids": "Ala/Thr",
+    "filter": "VQSRTrancheSNP99.00to99.90",
+    "genotypes": [
+      "0/1 ",
+      "0/1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845005184",
+      "ENSCAFT00845005204",
+      "ENSCAFT00845005221"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845005184"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 35,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "8",
+    "position": 43597140,
+    "ref": "G",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845004154",
+    "gene": "SUSD6",
+    "consequence": "missense_variant",
+    "cdna_position": 155,
+    "protein_position": 52,
+    "amino_acids": "Arg/Pro",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845007439"
+    ],
+    "independent_matches": [],
+    "status": "only incomplete native transcript models"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 36,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "8",
+    "position": 4246742,
+    "ref": "G",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845004600",
+    "gene": "EMC9",
+    "consequence": "missense_variant",
+    "cdna_position": 127,
+    "protein_position": 43,
+    "amino_acids": "Arg/Gly",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0/1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845008231",
+      "ENSCAFT00845008236"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845008231",
+      "ENSCAFT00845008236"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 37,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "3",
+    "position": 61987099,
+    "ref": "C",
+    "alt": "G",
+    "gene_id": "ENSCAFG00845012210",
+    "gene": "TNIP2",
+    "consequence": "missense_variant",
+    "cdna_position": 53,
+    "protein_position": 18,
+    "amino_acids": "Ala/Gly",
+    "filter": "VQSRTrancheSNP99.00to99.90",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845021778",
+      "ENSCAFT00845021808"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845021778",
+      "ENSCAFT00845021808"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 38,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "27",
+    "position": 22735686,
+    "ref": "G",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845013534",
+    "gene": "BCAT1",
+    "consequence": "missense_variant",
+    "cdna_position": 67,
+    "protein_position": 23,
+    "amino_acids": "Ala/Pro",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845024121",
+      "ENSCAFT00845024154"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845024121",
+      "ENSCAFT00845024154"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 39,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "36",
+    "position": 4465850,
+    "ref": "C",
+    "alt": "G",
+    "gene_id": "ENSCAFG00845026973",
+    "gene": "PKP4",
+    "consequence": "missense_variant",
+    "cdna_position": 127,
+    "protein_position": 43,
+    "amino_acids": "Arg/Gly",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845047555",
+      "ENSCAFT00845047661",
+      "ENSCAFT00845047793",
+      "ENSCAFT00845047991",
+      "ENSCAFT00845048085"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845047555",
+      "ENSCAFT00845047661",
+      "ENSCAFT00845047793",
+      "ENSCAFT00845047991",
+      "ENSCAFT00845048085"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 40,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "36",
+    "position": 4465853,
+    "ref": "C",
+    "alt": "G",
+    "gene_id": "ENSCAFG00845026973",
+    "gene": "PKP4",
+    "consequence": "missense_variant",
+    "cdna_position": 130,
+    "protein_position": 44,
+    "amino_acids": "ArgGly",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845047555",
+      "ENSCAFT00845047661",
+      "ENSCAFT00845047793",
+      "ENSCAFT00845047991",
+      "ENSCAFT00845048085"
+    ],
+    "independent_matches": [],
+    "status": "published amino-acid field has no unambiguous substitution delimiter"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 41,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "5",
+    "position": 71100745,
+    "ref": "C",
+    "alt": "G",
+    "gene_id": "ENSCAFG00845020541",
+    "gene": "ATMIN",
+    "consequence": "missense_variant",
+    "cdna_position": 187,
+    "protein_position": 63,
+    "amino_acids": "Ala/Pro",
+    "filter": "VQSRTrancheSNP99.00to99.90",
+    "genotypes": [
+      "0/1 ",
+      "0/1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845036260"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845036260"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 42,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "15",
+    "position": 1840160,
+    "ref": "C",
+    "alt": "G",
+    "gene_id": "ENSCAFG00845008667",
+    "gene": "FOXO6",
+    "consequence": "missense_variant",
+    "cdna_position": 1418,
+    "protein_position": 473,
+    "amino_acids": "Ser/Thr",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845015236"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845015236"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 43,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "15",
+    "position": 1840161,
+    "ref": "T",
+    "alt": "G",
+    "gene_id": "ENSCAFG00845008667",
+    "gene": "FOXO6",
+    "consequence": "missense_variant",
+    "cdna_position": 1417,
+    "protein_position": 473,
+    "amino_acids": "Ser/Arg",
+    "filter": "VQSRTrancheSNP99.00to99.90",
+    "genotypes": [
+      "0|1  ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845015236"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845015236"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 44,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "9",
+    "position": 19770789,
+    "ref": "G",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845008184",
+    "gene": "FAM171A2",
+    "consequence": "missense_variant",
+    "cdna_position": 2140,
+    "protein_position": 714,
+    "amino_acids": "Ala/Pro",
+    "filter": "VQSRTrancheSNP99.00to99.90",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845014389"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845014389"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-carcinoma.xlsx",
+    "source_row": 45,
+    "source_sha256": "ec7b5b9e066f304e8a6de03a0b72721b4bf525742db9304c2e2360150872987c",
+    "contig": "9",
+    "position": 19770792,
+    "ref": "G",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845008184",
+    "gene": "FAM171A2",
+    "consequence": "missense_variant",
+    "cdna_position": 2143,
+    "protein_position": 715,
+    "amino_acids": "Ala/Pro",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845014389"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845014389"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 3,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "4",
+    "position": 74594292,
+    "ref": "A",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845001462",
+    "gene": "ADAMTS12",
+    "consequence": "missense_variant",
+    "cdna_position": 1225,
+    "protein_position": 409,
+    "amino_acids": "Asn/His",
+    "filter": "PASS",
+    "genotypes": [
+      "0/1 ",
+      "0/1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845002522",
+      "ENSCAFT00845002573",
+      "ENSCAFT00845002606",
+      "ENSCAFT00845002654"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845002573"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 4,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "6",
+    "position": 25877323,
+    "ref": "A",
+    "alt": "T",
+    "gene_id": "ENSCAFG00845009136",
+    "gene": "CCP110",
+    "consequence": "missense_variant",
+    "cdna_position": 2156,
+    "protein_position": 719,
+    "amino_acids": "Ile/Lys",
+    "filter": "PASS",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845016105",
+      "ENSCAFT00845016145",
+      "ENSCAFT00845016175",
+      "ENSCAFT00845016206"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845016145",
+      "ENSCAFT00845016175",
+      "ENSCAFT00845016206"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 5,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "20",
+    "position": 46629545,
+    "ref": "A",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845030050",
+    "gene": "EPS15L1",
+    "consequence": "missense_variant",
+    "cdna_position": 2537,
+    "protein_position": 846,
+    "amino_acids": "His/Pro",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845053258",
+      "ENSCAFT00845053289",
+      "ENSCAFT00845053323",
+      "ENSCAFT00845053350",
+      "ENSCAFT00845053386",
+      "ENSCAFT00845053438",
+      "ENSCAFT00845053482",
+      "ENSCAFT00845053520",
+      "ENSCAFT00845053569",
+      "ENSCAFT00845053583"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845053289"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 6,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "24",
+    "position": 18849497,
+    "ref": "A",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845015805",
+    "gene": "PCED1A",
+    "consequence": "missense_variant",
+    "cdna_position": 941,
+    "protein_position": 314,
+    "amino_acids": "Gln/Pro",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0/1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845028140"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845028140"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 7,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "24",
+    "position": 18849498,
+    "ref": "G",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845015805",
+    "gene": "PCED1A",
+    "consequence": "missense_variant",
+    "cdna_position": 942,
+    "protein_position": 314,
+    "amino_acids": "Gln/His",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0/1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845028140"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845028140"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 8,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "33",
+    "position": 7500825,
+    "ref": "T",
+    "alt": "G",
+    "gene_id": "ENSCAFG00845019194",
+    "gene": "ABI3BP",
+    "consequence": "missense_variant",
+    "cdna_position": 1820,
+    "protein_position": 607,
+    "amino_acids": "Lys/Thr",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0/1 ",
+      "0/1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845033936",
+      "ENSCAFT00845034187",
+      "ENSCAFT00845034417",
+      "ENSCAFT00845034623",
+      "ENSCAFT00845035193",
+      "ENSCAFT00845035625",
+      "ENSCAFT00845035800"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845035193"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 9,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "3",
+    "position": 60206903,
+    "ref": "C",
+    "alt": "T",
+    "gene_id": "ENSCAFG00845008918",
+    "gene": "AFAP1",
+    "consequence": "missense_variant",
+    "cdna_position": 757,
+    "protein_position": 253,
+    "amino_acids": "Gly/Arg",
+    "filter": "PASS",
+    "genotypes": [
+      "0/1  ",
+      "0/1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845015714",
+      "ENSCAFT00845015829",
+      "ENSCAFT00845015920"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845015714",
+      "ENSCAFT00845015829",
+      "ENSCAFT00845015920"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 10,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "7",
+    "position": 9581544,
+    "ref": "T",
+    "alt": "G",
+    "gene_id": "ENSCAFG00845003339",
+    "gene": "RD3",
+    "consequence": "missense_variant",
+    "cdna_position": 289,
+    "protein_position": 97,
+    "amino_acids": "Ile/Leu",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0/1 ",
+      "0/1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845005931"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845005931"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 11,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "26",
+    "position": 24662099,
+    "ref": "A",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845022934",
+    "gene": "PATZ1",
+    "consequence": "missense_variant",
+    "cdna_position": 1976,
+    "protein_position": 659,
+    "amino_acids": "Phe/Cys",
+    "filter": "PASS",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845040472",
+      "ENSCAFT00845040505"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845040505"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 12,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "38",
+    "position": 22134130,
+    "ref": "G",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845030760",
+    "gene": "ATP1A4",
+    "consequence": "missense_variant",
+    "cdna_position": 203,
+    "protein_position": 68,
+    "amino_acids": "Ala/Gly",
+    "filter": "VQSRTrancheSNP99.00to99.90",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [],
+    "independent_matches": [],
+    "status": "no overlapping transcript from the published gene in pinned annotation"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 13,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "5",
+    "position": 65116616,
+    "ref": "T",
+    "alt": "G",
+    "gene_id": "ENSCAFG00845003692",
+    "gene": "ZNF469",
+    "consequence": "missense_variant",
+    "cdna_position": 2269,
+    "protein_position": 757,
+    "amino_acids": "Thr/Pro",
+    "filter": "PASS",
+    "genotypes": [
+      "0/1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845006606"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845006606"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 14,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "24",
+    "position": 18099887,
+    "ref": "A",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845014358",
+    "gene": "ADAM33",
+    "consequence": "missense_variant",
+    "cdna_position": 2164,
+    "protein_position": 722,
+    "amino_acids": "Thr/Pro",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0/1 ",
+      "0/1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845025698",
+      "ENSCAFT00845025732",
+      "ENSCAFT00845025934"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845025732"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 15,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "32",
+    "position": 21061485,
+    "ref": "A",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845023493",
+    "gene": "TSPAN5",
+    "consequence": "splice_donor_variant&intron_variant",
+    "cdna_position": 21,
+    "protein_position": ".",
+    "amino_acids": ".",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845041510"
+    ],
+    "independent_matches": [],
+    "status": "splice annotation; no observed mutant RNA or protein supplied"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 16,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "5",
+    "position": 65116610,
+    "ref": "T",
+    "alt": "G",
+    "gene_id": "ENSCAFG00845003692",
+    "gene": "ZNF469",
+    "consequence": "missense_variant",
+    "cdna_position": 2275,
+    "protein_position": 759,
+    "amino_acids": "Thr/Pro",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0/1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845006606"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845006606"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 17,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "12",
+    "position": 13081292,
+    "ref": "A",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845011002",
+    "gene": "CAPN11",
+    "consequence": "missense_variant",
+    "cdna_position": 2174,
+    "protein_position": 725,
+    "amino_acids": "His/Pro",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845019443",
+      "ENSCAFT00845019564"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845019443"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 18,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "12",
+    "position": 5848421,
+    "ref": "A",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845009107",
+    "gene": "ETV7",
+    "consequence": "missense_variant",
+    "cdna_position": 56,
+    "protein_position": 19,
+    "amino_acids": "Val/Gly",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0/1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845016223"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845016223"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 19,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "12",
+    "position": 13081288,
+    "ref": "G",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845011002",
+    "gene": "CAPN11",
+    "consequence": "missense_variant",
+    "cdna_position": 2170,
+    "protein_position": 724,
+    "amino_acids": "Ala/Pro",
+    "filter": "VQSRTrancheSNP99.00to99.90",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845019443",
+      "ENSCAFT00845019564"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845019443"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 20,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "18",
+    "position": 54077989,
+    "ref": "T",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845030770",
+    "gene": "MACROD1",
+    "consequence": "missense_variant",
+    "cdna_position": 1129,
+    "protein_position": 377,
+    "amino_acids": "Ser/Pro",
+    "filter": "PASS",
+    "genotypes": [
+      "0/1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845054680",
+      "ENSCAFT00845054687",
+      "ENSCAFT00845054696",
+      "ENSCAFT00845054705"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845054680"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 21,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "18",
+    "position": 54077995,
+    "ref": "A",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845030770",
+    "gene": "MACROD1",
+    "consequence": "missense_variant",
+    "cdna_position": 1135,
+    "protein_position": 379,
+    "amino_acids": "Thr/Pro",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845054680",
+      "ENSCAFT00845054687",
+      "ENSCAFT00845054696",
+      "ENSCAFT00845054705"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845054680"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 22,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "18",
+    "position": 54077999,
+    "ref": "A",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845030770",
+    "gene": "MACROD1",
+    "consequence": "missense_variant",
+    "cdna_position": 1139,
+    "protein_position": 380,
+    "amino_acids": "His/Pro",
+    "filter": "VQSRTrancheSNP99.00to99.90",
+    "genotypes": [
+      "0|1  ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845054680",
+      "ENSCAFT00845054687",
+      "ENSCAFT00845054696",
+      "ENSCAFT00845054705"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845054680"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 23,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "19",
+    "position": 37066359,
+    "ref": "G",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845007269",
+    "gene": "NCKAP5",
+    "consequence": "missense_variant",
+    "cdna_position": 101,
+    "protein_position": 34,
+    "amino_acids": "Ala/Gly",
+    "filter": "PASS",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [],
+    "independent_matches": [],
+    "status": "no overlapping transcript from the published gene in pinned annotation"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 24,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "10",
+    "position": 29570323,
+    "ref": "A",
+    "alt": "G",
+    "gene_id": "ENSCAFG00845009904",
+    "gene": "TOM1",
+    "consequence": "missense_variant",
+    "cdna_position": 1456,
+    "protein_position": 486,
+    "amino_acids": "Trp/Arg",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845017488",
+      "ENSCAFT00845017568",
+      "ENSCAFT00845017660",
+      "ENSCAFT00845017738"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845017738"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 25,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "13",
+    "position": 37727250,
+    "ref": "T",
+    "alt": "A",
+    "gene_id": "ENSCAFG00845015729",
+    "gene": "TIGD5",
+    "consequence": "missense_variant",
+    "cdna_position": 1105,
+    "protein_position": 369,
+    "amino_acids": "Cys/Ser",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845028029"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845028029"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 26,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "18",
+    "position": 45833690,
+    "ref": "G",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845006136",
+    "gene": "EXT2",
+    "consequence": "missense_variant",
+    "cdna_position": 2422,
+    "protein_position": 808,
+    "amino_acids": "Arg/Gly",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [],
+    "independent_matches": [],
+    "status": "no overlapping transcript from the published gene in pinned annotation"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 27,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "6",
+    "position": 6464567,
+    "ref": "A",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845003394",
+    "gene": "MLXIPL",
+    "consequence": "missense_variant&splice_region_variant",
+    "cdna_position": 1729,
+    "protein_position": 577,
+    "amino_acids": "Thr/Pro",
+    "filter": "PASS",
+    "genotypes": [
+      "0|1 ",
+      "0/1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845006030",
+      "ENSCAFT00845006046"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845006046"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 28,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "9",
+    "position": 1126454,
+    "ref": "G",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845010019",
+    "gene": "CCDC137",
+    "consequence": "missense_variant",
+    "cdna_position": 326,
+    "protein_position": 109,
+    "amino_acids": "Ala/Gly",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845017642"
+    ],
+    "independent_matches": [],
+    "status": "only incomplete native transcript models"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 29,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "18",
+    "position": 39505715,
+    "ref": "T",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845022144",
+    "gene": "TNKS1BP1",
+    "consequence": "missense_variant",
+    "cdna_position": 1537,
+    "protein_position": 513,
+    "amino_acids": "Ser/Pro",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845039058"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845039058"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 30,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "18",
+    "position": 38461718,
+    "ref": "C",
+    "alt": "G",
+    "gene_id": "ENSCAFG00845018289",
+    "gene": "CNTF",
+    "consequence": "missense_variant",
+    "cdna_position": 196,
+    "protein_position": 66,
+    "amino_acids": "Ala/Pro",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845032335",
+      "ENSCAFT00845032473",
+      "ENSCAFT00845032581"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845032335",
+      "ENSCAFT00845032473",
+      "ENSCAFT00845032581"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 31,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "1",
+    "position": 114358753,
+    "ref": "T",
+    "alt": "G",
+    "gene_id": "ENSCAFG00845004599",
+    "gene": "SUPT5H",
+    "consequence": "missense_variant",
+    "cdna_position": 82,
+    "protein_position": 28,
+    "amino_acids": "Thr/Pro",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845008234"
+    ],
+    "independent_matches": [],
+    "status": "published amino-acid position or substitution differs from pinned native models"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 32,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "18",
+    "position": 38461712,
+    "ref": "C",
+    "alt": "G",
+    "gene_id": "ENSCAFG00845018289",
+    "gene": "CNTF",
+    "consequence": "missense_variant",
+    "cdna_position": 202,
+    "protein_position": 68,
+    "amino_acids": "Ala/Pro",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845032335",
+      "ENSCAFT00845032473",
+      "ENSCAFT00845032581"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845032335",
+      "ENSCAFT00845032473",
+      "ENSCAFT00845032581"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 33,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "18",
+    "position": 38461715,
+    "ref": "C",
+    "alt": "G",
+    "gene_id": "ENSCAFG00845018289",
+    "gene": "CNTF",
+    "consequence": "missense_variant",
+    "cdna_position": 199,
+    "protein_position": 67,
+    "amino_acids": "Ala/Pro",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845032335",
+      "ENSCAFT00845032473",
+      "ENSCAFT00845032581"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845032335",
+      "ENSCAFT00845032473",
+      "ENSCAFT00845032581"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 34,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "26",
+    "position": 7879881,
+    "ref": "A",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845024210",
+    "gene": "KDM2B",
+    "consequence": "missense_variant",
+    "cdna_position": 164,
+    "protein_position": 55,
+    "amino_acids": "His/Pro",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845042741"
+    ],
+    "independent_matches": [],
+    "status": "published amino-acid position or substitution differs from pinned native models"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 35,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "27",
+    "position": 10529896,
+    "ref": "A",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845029210",
+    "gene": "IRAK4",
+    "consequence": "missense_variant",
+    "cdna_position": 40,
+    "protein_position": 14,
+    "amino_acids": "Trp/Gly",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845051698"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845051698"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 36,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "17",
+    "position": 38617037,
+    "ref": "A",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845012886",
+    "gene": "EIF2AK3",
+    "consequence": "missense_variant",
+    "cdna_position": 196,
+    "protein_position": 66,
+    "amino_acids": "Thr/Pro",
+    "filter": "PASS",
+    "genotypes": [
+      "0/1",
+      "0/1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845022920",
+      "ENSCAFT00845022998"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845022920",
+      "ENSCAFT00845022998"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 37,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "8",
+    "position": 44733358,
+    "ref": "G",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845007871",
+    "gene": "MAP3K9",
+    "consequence": "missense_variant",
+    "cdna_position": 116,
+    "protein_position": 39,
+    "amino_acids": "Ala/Gly",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845013928",
+      "ENSCAFT00845014021"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845014021"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 38,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "10",
+    "position": 27472320,
+    "ref": "A",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845005267",
+    "gene": "SOX10",
+    "consequence": "missense_variant",
+    "cdna_position": 203,
+    "protein_position": 68,
+    "amino_acids": "Gln/Pro",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0/1 ",
+      "0/1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845009393"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845009393"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 39,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "24",
+    "position": 45418146,
+    "ref": "T",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845015558",
+    "gene": "FAM217B",
+    "consequence": "missense_variant",
+    "cdna_position": 880,
+    "protein_position": 294,
+    "amino_acids": "Ser/Pro",
+    "filter": "PASS",
+    "genotypes": [
+      "0|1 ",
+      "0/1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845027750"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845027750"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 40,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "27",
+    "position": 10529892,
+    "ref": "G",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845029210",
+    "gene": "IRAK4",
+    "consequence": "missense_variant",
+    "cdna_position": 44,
+    "protein_position": 15,
+    "amino_acids": "Ala/Gly",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845051698"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845051698"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 41,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "37",
+    "position": 25976243,
+    "ref": "G",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845030261",
+    "gene": "SPEG",
+    "consequence": "missense_variant",
+    "cdna_position": 886,
+    "protein_position": 296,
+    "amino_acids": "Ala/Pro",
+    "filter": "VQSRTrancheSNP99.00to99.90",
+    "genotypes": [
+      "0/1 ",
+      "0/1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845053716",
+      "ENSCAFT00845053725",
+      "ENSCAFT00845053741",
+      "ENSCAFT00845053770"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845053716"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 42,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "8",
+    "position": 44733344,
+    "ref": "G",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845007871",
+    "gene": "MAP3K9",
+    "consequence": "missense_variant",
+    "cdna_position": 130,
+    "protein_position": 44,
+    "amino_acids": "Arg/Gly",
+    "filter": "VQSRTrancheSNP99.00to99.90",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845013928",
+      "ENSCAFT00845014021"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845014021"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 43,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "8",
+    "position": 44733353,
+    "ref": "G",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845007871",
+    "gene": "MAP3K9",
+    "consequence": "missense_variant",
+    "cdna_position": 121,
+    "protein_position": 41,
+    "amino_acids": "Arg/Gly",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845013928",
+      "ENSCAFT00845014021"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845014021"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 44,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "9",
+    "position": 49330835,
+    "ref": "A",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845024228",
+    "gene": "ANAPC2",
+    "consequence": "missense_variant",
+    "cdna_position": 563,
+    "protein_position": 188,
+    "amino_acids": "Gln/Pro",
+    "filter": "VQSRTrancheSNP99.00to99.90",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845042766",
+      "ENSCAFT00845042813"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845042766",
+      "ENSCAFT00845042813"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 45,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "9",
+    "position": 49330836,
+    "ref": "G",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845024228",
+    "gene": "ANAPC2",
+    "consequence": "missense_variant",
+    "cdna_position": 564,
+    "protein_position": 188,
+    "amino_acids": "Gln/His",
+    "filter": "VQSRTrancheSNP99.00to99.90",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845042766",
+      "ENSCAFT00845042813"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845042766",
+      "ENSCAFT00845042813"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 46,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "16",
+    "position": 24652217,
+    "ref": "G",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845017026",
+    "gene": "FNTA",
+    "consequence": "missense_variant",
+    "cdna_position": 304,
+    "protein_position": 102,
+    "amino_acids": "Ala/Pro",
+    "filter": "PASS",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845030242",
+      "ENSCAFT00845030337"
+    ],
+    "independent_matches": [],
+    "status": "published amino-acid position or substitution differs from pinned native models"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 47,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "19",
+    "position": 52329346,
+    "ref": "G",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845007654",
+    "gene": "LYPD6B",
+    "consequence": "missense_variant",
+    "cdna_position": 496,
+    "protein_position": 166,
+    "amino_acids": "Ala/Pro",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845013523",
+      "ENSCAFT00845013553"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845013523"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 48,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "19",
+    "position": 52329353,
+    "ref": "G",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845007654",
+    "gene": "LYPD6B",
+    "consequence": "missense_variant",
+    "cdna_position": 503,
+    "protein_position": 168,
+    "amino_acids": "Arg/Pro",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845013523",
+      "ENSCAFT00845013553"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845013523"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 49,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "9",
+    "position": 44538939,
+    "ref": "C",
+    "alt": "G",
+    "gene_id": "ENSCAFG00845011653",
+    "gene": "CORO6",
+    "consequence": "missense_variant",
+    "cdna_position": 28,
+    "protein_position": 10,
+    "amino_acids": "Ala/Pro",
+    "filter": "PASS",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845020690"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845020690"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 50,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "5",
+    "position": 83104420,
+    "ref": "G",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845011750",
+    "gene": "CMTM2",
+    "consequence": "missense_variant",
+    "cdna_position": 421,
+    "protein_position": 141,
+    "amino_acids": "Arg/Gly",
+    "filter": "PASS",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [],
+    "independent_matches": [],
+    "status": "no overlapping transcript from the published gene in pinned annotation"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 51,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "5",
+    "position": 83104425,
+    "ref": "G",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845011750",
+    "gene": "CMTM2",
+    "consequence": "missense_variant",
+    "cdna_position": 416,
+    "protein_position": 139,
+    "amino_acids": "Ala/Gly",
+    "filter": "VQSRTrancheSNP99.00to99.90",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [],
+    "independent_matches": [],
+    "status": "no overlapping transcript from the published gene in pinned annotation"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 52,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "8",
+    "position": 72892298,
+    "ref": "G",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845023117",
+    "gene": "BTBD6",
+    "consequence": "missense_variant",
+    "cdna_position": 958,
+    "protein_position": 320,
+    "amino_acids": "Ala/Pro",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845040963",
+      "ENSCAFT00845041113",
+      "ENSCAFT00845041214"
+    ],
+    "independent_matches": [],
+    "status": "published amino-acid position or substitution differs from pinned native models"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 53,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "8",
+    "position": 72892305,
+    "ref": "G",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845023117",
+    "gene": "BTBD6",
+    "consequence": "missense_variant",
+    "cdna_position": 965,
+    "protein_position": 322,
+    "amino_acids": "Arg/Pro",
+    "filter": "VQSRTrancheSNP99.00to99.90",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845040963",
+      "ENSCAFT00845041113",
+      "ENSCAFT00845041214"
+    ],
+    "independent_matches": [],
+    "status": "published amino-acid position or substitution differs from pinned native models"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 54,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "27",
+    "position": 10529881,
+    "ref": "G",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845029210",
+    "gene": "IRAK4",
+    "consequence": "missense_variant",
+    "cdna_position": 55,
+    "protein_position": 19,
+    "amino_acids": "Arg/Gly",
+    "filter": "VQSRTrancheSNP99.00to99.90",
+    "genotypes": [
+      "0/1 ",
+      "0/1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845051698"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845051698"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 55,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "5",
+    "position": 83104285,
+    "ref": "C",
+    "alt": "G",
+    "gene_id": "ENSCAFG00845011750",
+    "gene": "CMTM2",
+    "consequence": "missense_variant",
+    "cdna_position": 556,
+    "protein_position": 186,
+    "amino_acids": "Ala/Pro",
+    "filter": "VQSRTrancheSNP99.00to99.90",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [],
+    "independent_matches": [],
+    "status": "no overlapping transcript from the published gene in pinned annotation"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 56,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "5",
+    "position": 83104287,
+    "ref": "C",
+    "alt": "G",
+    "gene_id": "ENSCAFG00845011750",
+    "gene": "CMTM2",
+    "consequence": "missense_variant",
+    "cdna_position": 554,
+    "protein_position": 185,
+    "amino_acids": "Arg/Pro",
+    "filter": "VQSRTrancheSNP99.00to99.90",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [],
+    "independent_matches": [],
+    "status": "no overlapping transcript from the published gene in pinned annotation"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 57,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "5",
+    "position": 83104410,
+    "ref": "G",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845011750",
+    "gene": "CMTM2",
+    "consequence": "missense_variant",
+    "cdna_position": 431,
+    "protein_position": 144,
+    "amino_acids": "Ala/Gly",
+    "filter": "PASS",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [],
+    "independent_matches": [],
+    "status": "no overlapping transcript from the published gene in pinned annotation"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 58,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "9",
+    "position": 826431,
+    "ref": "C",
+    "alt": "G",
+    "gene_id": "ENSCAFG00845007524",
+    "gene": "FASN",
+    "consequence": "missense_variant",
+    "cdna_position": 304,
+    "protein_position": 102,
+    "amino_acids": "Arg/Gly",
+    "filter": "VQSRTrancheSNP99.90to100.00",
+    "genotypes": [
+      "0|1 ",
+      "0|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [
+      "ENSCAFT00845013295",
+      "ENSCAFT00845013435"
+    ],
+    "independent_matches": [
+      "ENSCAFT00845013435"
+    ],
+    "status": "published amino acid and position reproduced from native RNA"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 59,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "17",
+    "position": 319709,
+    "ref": "A",
+    "alt": "C",
+    "gene_id": "ENSCAFG00845016743",
+    "gene": "SH3YL1",
+    "consequence": "missense_variant",
+    "cdna_position": 478,
+    "protein_position": 160,
+    "amino_acids": "Trp/Gly",
+    "filter": "VQSRTrancheSNP99.00to99.90",
+    "genotypes": [
+      "0|1 ",
+      "1|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [],
+    "independent_matches": [],
+    "status": "no overlapping transcript from the published gene in pinned annotation"
+  },
+  {
+    "source_file": "dog-sarcoma.xlsx",
+    "source_row": 60,
+    "source_sha256": "b99375685469661e0fd8c22b80e4db5abcea0466838317271e9247707f2c22fe",
+    "contig": "20",
+    "position": 45239123,
+    "ref": "C",
+    "alt": "T",
+    "gene_id": "ENSCAFG00845022784",
+    "gene": "JUND",
+    "consequence": "missense_variant",
+    "cdna_position": 6470,
+    "protein_position": 2157,
+    "amino_acids": "Ala/Val",
+    "filter": "VQSRTrancheSNP99.00to99.90",
+    "genotypes": [
+      "0|1 ",
+      "1|1 "
+    ],
+    "source": "https://doi.org/10.1371/journal.pone.0307792",
+    "transcript_ids": [],
+    "independent_matches": [],
+    "status": "no overlapping transcript from the published gene in pinned annotation"
+  }
+]

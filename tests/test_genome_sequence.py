@@ -155,14 +155,21 @@ def test_genome_rewrap_overrides_fasta(ensembl, cftr_position):
 
 @pytest.mark.parametrize("with_override", [False, True])
 def test_restore_legacy_pickled_genome(ensembl, with_override):
+    import copyreg
+
     # The public Genome's pickle state through 10.10.x stored .fasta
-    # directly. Emulate that old state without the new private fields.
-    legacy = Genome.__new__(Genome)
-    legacy.__dict__.update(
+    # directly. Emit the old reconstruction/state protocol, independently
+    # of today's Serializable.__reduce__ and its portable-FASTA contract.
+    state = dict(
         _ensembl=ensembl,
         fasta=_DictBackedFasta({"1": "acgt"}) if with_override else None,
         _missing_reference_warned=False)
-    restored = pickle.loads(pickle.dumps(legacy))
+
+    class LegacyPayload:
+        def __reduce__(self):
+            return copyreg._reconstructor, (Genome, object, None), state
+
+    restored = pickle.loads(pickle.dumps(LegacyPayload()))
     assert restored.reference_name == ensembl.reference_name
     assert restored.sequence("1", 1, 4) == ("ACGT" if with_override else "")
     assert "FASTA" in repr(restored)

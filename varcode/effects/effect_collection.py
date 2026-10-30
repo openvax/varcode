@@ -13,7 +13,8 @@
 from __future__ import annotations
 
 from collections import OrderedDict
-from typing import TYPE_CHECKING
+from collections.abc import Callable, Iterable, Iterator, Sequence
+from typing import TYPE_CHECKING, Self, TypeVar, overload
 
 import pandas as pd
 from sercol import Collection
@@ -27,6 +28,9 @@ from ..csv_helpers import (
     warn_on_version_drift,
     write_metadata_header,
 )
+from ..reference_metadata import (
+    REFERENCE_COLUMNS, reference_metadata, common_reference_metadata, csv_genomes,
+)
 from ..version import __version__ as _varcode_version
 from .common import validate_deletion_notation
 
@@ -39,6 +43,8 @@ from .effect_ordering import (
 
 if TYPE_CHECKING:
     from .effect_classes import MutationEffect
+
+_Key = TypeVar("_Key")
 
 
 def _default_effect_sort_key(effect):
@@ -127,7 +133,28 @@ class EffectCollection(Collection):
             annotator_version=self.annotator_version,
             annotated_at=self.annotated_at)
 
-    def clone_with_new_elements(self, new_elements):
+    def __iter__(self) -> Iterator[MutationEffect]:
+        return super().__iter__()
+
+    @overload
+    def __getitem__(self, index: int) -> MutationEffect: ...
+
+    @overload
+    def __getitem__(self, index: slice) -> Sequence[MutationEffect]: ...
+
+    def __getitem__(self, index: int | slice) -> MutationEffect | Sequence[MutationEffect]:
+        """Index an effect or slice the underlying sequence (not a collection)."""
+        return super().__getitem__(index)
+
+    def filter(self, filter_fn: Callable[[MutationEffect], bool]) -> Self:
+        """Select effects while retaining collection type and provenance."""
+        return super().filter(filter_fn)
+
+    def groupby(self, key_fn: Callable[[MutationEffect], _Key]) -> dict[_Key, Self]:
+        """Group effects into collections retaining their native metadata."""
+        return super().groupby(key_fn)
+
+    def clone_with_new_elements(self, new_elements: Iterable[MutationEffect]) -> Self:
         # Forward annotator provenance explicitly — sercol's base
         # clone_with_new_elements only carries distinct/sort_key/sources,
         # so without this the cloned collection would silently lose
@@ -394,7 +421,7 @@ class EffectCollection(Collection):
         "gene_id", "gene_name",
         "transcript_id", "transcript_name",
         "effect_type", "effect",
-    )
+    ) + REFERENCE_COLUMNS
 
     def to_dataframe(self, include_archive=False, *, deletion_notation="sequence"):
         """Build a summary; optionally retain full graphs in ``effect_json``.
@@ -441,6 +468,7 @@ class EffectCollection(Collection):
             row['transcript_id'] = effect.transcript_id
             row['transcript_name'] = effect.transcript_name
 
+            row.update(reference_metadata(getattr(effect.variant, 'genome', None)))
             row['effect_type'] = effect.__class__.__name__
             row['effect'] = effect.format_short_description(deletion_notation=deletion_notation)
             if isinstance(effect, StartLoss):
@@ -493,7 +521,7 @@ class EffectCollection(Collection):
 
         metadata = OrderedDict()
         metadata["varcode_version"] = _varcode_version
-        metadata["reference_name"] = self._serialized_reference_name()
+        metadata.update(common_reference_metadata(e.variant.genome for e in self if e.variant is not None))
         # Annotator provenance. Each field is skipped
         # when None by write_metadata_header.
         metadata["annotator"] = self.annotator
@@ -567,7 +595,7 @@ class EffectCollection(Collection):
 
         header = read_metadata_header(path)
         df = pd.read_csv(
-            path, comment="#", dtype={"chr": str, "contig": str})
+            path, comment="#", dtype={"chr": str, "contig": str, **dict.fromkeys(REFERENCE_COLUMNS, str)})
         if "effect_json" in df:
             from .effect_classes import MutationEffect
             if df["effect_json"].isna().any():
@@ -581,6 +609,10 @@ class EffectCollection(Collection):
             result = cls(effects, sort_key=False,
                          annotator=header.get("annotator"), annotator_version=header.get("annotator_version"),
                          annotated_at=header.get("annotated_at"))
+            for index, effect in enumerate(result):
+                csv_genomes(df.iloc[[index]], header, effect.variant.genome)
+            if genome is not None:
+                csv_genomes(df, header, genome)
             summary = result.to_dataframe()
             # Refuse a stale payload after spreadsheet edits to identifying
             # columns. Empty alleles and missing transcript IDs normalize alike.
@@ -593,15 +625,6 @@ class EffectCollection(Collection):
                         raise ValueError("CSV %s disagrees with its archived effect_json" % column)
             return result
         warn_on_version_drift(header, _varcode_version, path)
-        if genome is None:
-            genome = header.get("reference_name")
-        if genome is None:
-            raise ValueError(
-                "from_csv needs a reference genome: pass the `genome` "
-                "argument explicitly, or write the CSV with "
-                "`to_csv(include_header=True)` so `# reference_name=...` "
-                "is recorded in the header. Neither was found at %s." % path)
-
         # Accept either "contig" or "chr" as the contig column so
         # CSVs are interchangeable between VariantCollection and
         # EffectCollection (openvax/varcode#274). Declaring both in
@@ -635,9 +658,9 @@ class EffectCollection(Collection):
         effect_types = df["effect_type"]
 
         effects = []
-        resolved_genome = None
-        for contig, start, ref, alt, transcript_id, effect_type in zip(
-                contigs, starts, refs, alts, transcript_ids, effect_types):
+        genomes = csv_genomes(df, header, genome)
+        for contig, start, ref, alt, transcript_id, effect_type, genome in zip(
+                contigs, starts, refs, alts, transcript_ids, effect_types, genomes):
             variant = Variant(
                 contig=contig,
                 start=start,
@@ -645,10 +668,7 @@ class EffectCollection(Collection):
                 alt=alt,
                 genome=genome,
             )
-            # Cache the resolved pyensembl.Genome from the first variant
-            # so subsequent transcript lookups don't pay the inference cost.
-            if resolved_genome is None:
-                resolved_genome = variant.ensembl
+            resolved_genome = variant.ensembl
             if pd.isna(transcript_id) or transcript_id == "":
                 # Row is for an intergenic / intragenic effect — no
                 # transcript context. Rebuild by running the full effect

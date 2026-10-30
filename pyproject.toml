@@ -35,8 +35,8 @@ include = ["varcode", "varcode.*"]
 "Bug Tracker" = "https://github.com/openvax/varcode/issues"
 
 [project.optional-dependencies]
-orf = ["orfdata[pyensembl]>=0.39.0,<1"]
-uorf = ["orfdata[pyensembl]>=0.39.0,<1"]
+orf = ["orfdata>=0.43.0,<1"]
+uorf = ["orfdata>=0.43.0,<1"]
 rna = ["pysam>=0.21"]
 test-data = ["osteosarc>=0.14.4,<0.16", "biopython>=1.85"]
 lint = ["ruff", "mypy==2.4.0"]
@@ -64,6 +64,7 @@ ignore = ["E501", "F841", "E731", "E741", "E722", "E721"]
 python_version = "3.11"
 files = [
     "varcode/effect_traversal.py",
+    "varcode/effect_candidates.py",
     "varcode/contigs.py",
     "varcode/nucleotides.py",
     "varcode/reference.py",

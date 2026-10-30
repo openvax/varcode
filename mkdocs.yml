@@ -41,6 +41,7 @@ nav:
       - Protein collections & FASTA: proteome.md
       - Troubleshooting: errors.md
   - Advanced workflows:
+      - Native mouse, dog & T2T references: native_references.md
       - Splice variants: splice_variants.md
       - Structural variants: structural_variants.md
       - Comparing SV callers: sv_comparison.md

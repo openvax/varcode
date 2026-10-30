@@ -29,6 +29,8 @@ import os
 import warnings
 from typing import Any, Optional
 
+from serializable import Serializable
+
 # Module-level imports of the lookup helpers. Functions in this file
 # call into them on hot paths; per-call imports would add measurable
 # overhead in tight loops (e.g. left-alignment shifts in #369).
@@ -41,7 +43,7 @@ from .genome_sequence import (
 from .reference import infer_genome
 
 
-class Genome:
+class Genome(Serializable):
     """Pyensembl ``Genome`` + optional chromosome FASTA.
 
     Two source layers under one object:
@@ -155,6 +157,29 @@ class Genome:
         # consumers (cryptic_exons, etc.). Bound to this Genome's
         # lifetime — no module-level cache to invalidate.
         self._missing_reference_warned = False
+
+    # A DNA wrapper keeps its existing identity semantics, independently of
+    # Serializable's value-based default implementations.
+    __eq__ = object.__eq__
+    __hash__ = object.__hash__
+
+    def to_dict(self):
+        """Archive the exact annotation and an explicit FASTA path, never an open reader.
+
+        Borrowed in-memory readers have no portable installation to reopen and
+        raise instead of silently losing chromosome DNA. ORF/proteome snapshots
+        retain their sequence and reference metadata independently of this API.
+        """
+        fasta = self._fasta_override
+        path = None if fasta is None else getattr(fasta, "filename", None)
+        if fasta is not None and not isinstance(path, (str, bytes, os.PathLike)):
+            raise TypeError("Cannot archive a Genome with an in-memory FASTA reader; "
+                            "use a filesystem FASTA or a native PyEnsembl DNA source")
+        return dict(ensembl_release=self._ensembl,
+                    fasta=None if path is None else os.path.abspath(os.fsdecode(path)),
+                    verify=False)
+
+    __str__ = object.__str__
 
     @property
     def fasta(self):
