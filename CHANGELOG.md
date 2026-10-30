@@ -1,5 +1,18 @@
 # Change Log
 
+## v11.3.0
+
+- Add opt-in bounded discovery of newly created initiation codons over paired
+  transcript-model or explicitly mapped RNA products (#583). Preserve phase,
+  source paths, base ancestry, search limits, unavailable comparisons and partial
+  peptides. Coordinate shifts alone never establish a new start.
+- Expose conditional StartGain effects through the shared host/sequence fields,
+  with a distinct discovered-ORF model rather than a fabricated reference ORF.
+  Keep baseline initiation, mutant translation and downstream regulation unknown.
+- Preserve discovery models and reference identities through JSON, pickle, CSV
+  and Proteome, including mapped RNA without a focal DNA allele. Validate the
+  published CDKN2A c.-34G>T start gain against independent pinned RefSeq sequence.
+
 ## v11.2.0
 
 - Type collection iteration, indexing, filtering, cloning and grouping while

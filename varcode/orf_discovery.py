@@ -11,8 +11,8 @@ import json
 
 from serializable import DataclassSerializable
 
-from .effect_hypotheses import RealizedTranscriptProduct
-from .effect_traversal import candidate_children, iter_effects
+from .effect_hypotheses import RealizedEffectCandidate, RealizedTranscriptProduct
+from .effect_traversal import iter_candidate_paths
 from .effects.codon_tables import codon_table_for_transcript
 from .effects.effect_classes import MutationEffect, StartGain
 from .mutant_transcript import MutantTranscript
@@ -123,6 +123,8 @@ def _origins(product):
     transcript = product.transcript
     if positions is None or transcript is None:
         return None
+    if any(p is not None and (type(p) is not int or p < 1) for p in positions):
+        raise ValueError("genomic_positions require positive integers or None")
     strand = "-" if transcript.on_backward_strand else "+"
     return tuple(None if p is None else (str(transcript.contig), p, strand) for p in positions)
 
@@ -180,13 +182,22 @@ def discover_created_orfs_in_products(baseline, mutant, *, variant=None, policy=
 
     if before is None or after is None:
         return assessment("unavailable", ("paired_rna_sequence_unavailable",))
-    transcript = mutant.transcript
-    if transcript is None or baseline.transcript is None:
+    selected_transcript = mutant.transcript
+    transcript = getattr(selected_transcript, "reference_transcript", selected_transcript)
+    baseline_host = getattr(baseline.transcript, "reference_transcript", baseline.transcript)
+    if transcript is None or baseline_host is None:
         return assessment("unavailable", ("host_transcript_unavailable",))
+    if transcript.genome is None or baseline_host.genome is None:
+        return assessment("unavailable", ("host_genome_unavailable",))
     reference = reference_metadata(transcript.genome)
-    if (baseline.transcript.id != transcript.id
-            or reference_metadata(baseline.transcript.genome) != reference):
+    evidence.update(reference=reference, transcript_id=transcript.id)
+    if (baseline_host.id != transcript.id
+            or reference_metadata(baseline_host.genome) != reference):
         raise ValueError("Paired products must use the same host transcript and reference identity")
+    if variant is not None and reference_metadata(variant.genome) != reference:
+        raise ValueError("Variant and RNA products must use the same reference identity")
+    if "U" in (getattr(transcript, "protein_sequence", None) or ""):
+        return assessment("unavailable", ("recoded_transcript_requires_explicit_model",))
     if any(product.evidence.get("partial") or product.evidence.get("partial_sequence")
            for product in (baseline, mutant)):
         return assessment("unavailable", ("partial_rna_comparison",))
@@ -198,7 +209,11 @@ def discover_created_orfs_in_products(baseline, mutant, *, variant=None, policy=
     if len(old_origins) != len(before) or len(new_origins) != len(after):
         raise ValueError("A base origin is required for every RNA nucleotide")
     before, after = before.upper(), after.upper()
-    table = codon_table_for_transcript(transcript)
+    if before == after:
+        # A different source placement alone cannot create an RNA start when
+        # the entire paired RNA is identical.
+        return assessment("complete", (), scanned=len(after))
+    table = codon_table_for_transcript(selected_transcript)
     if set(policy.start_codons) & table.stop_codons:
         raise ValueError("A discovery start codon is a stop in the selected genetic code")
     triples = defaultdict(list)
@@ -226,6 +241,8 @@ def discover_created_orfs_in_products(baseline, mutant, *, variant=None, policy=
             continue
         old_codons = tuple(triples.get(origins, ())) if not unmapped else ()
         if any(c in policy.start_codons for c in old_codons):
+            if any(c not in policy.start_codons for c in old_codons):
+                reasons.append("ambiguous_baseline_ancestry")
             continue
         if any(set(c) - set("ACGT") for c in old_codons):
             reasons.append("ambiguous_baseline_codon")
@@ -274,25 +291,28 @@ def discover_created_orfs(effect, *, policy=None):
     policy = ORFDiscoveryPolicy() if policy is None else policy
     if not isinstance(policy, ORFDiscoveryPolicy):
         raise TypeError("policy must be ORFDiscoveryPolicy")
-    assessments, seen = [], set()
-    for node in iter_effects(effect):
-        candidates = getattr(node, "realized_candidates", ())
-        for candidate in candidates:
-            for outcome in candidate.outcomes:
-                if id(outcome) in seen:
-                    continue
-                seen.add(id(outcome))
-                if len(assessments) == policy.max_products:
-                    assessments.append(ORFDiscoveryAssessment(
-                        "bounded", ("product_limit",), (), 0, None, None, {}))
-                    return ORFDiscovery(policy, tuple(assessments))
+    assessments = []
+    for node, path in iter_candidate_paths(effect):
+        candidate = next((item for item in reversed(path)
+                          if isinstance(item, RealizedEffectCandidate) and item.effect is node), None)
+        context = dict(source_effect=type(node).__name__, candidate_path=tuple(
+            dict(source=getattr(item, "source", None), evidence=_plain(getattr(item, "evidence", {})),
+                 ordinal_key=getattr(item, "ordinal_key", None)) for item in path))
+        if node is not None and node.reference_transcript is not None:
+            context.update(transcript_id=node.transcript_id,
+                           reference=reference_metadata(node.reference_transcript.genome))
+        outcomes = candidate.outcomes if candidate is not None else (None,)
+        for outcome in outcomes:
+            if len(assessments) == policy.max_products:
+                assessments.append(ORFDiscoveryAssessment(
+                    "bounded", ("product_limit",), (), 0, None, None, context))
+                return ORFDiscovery(policy, tuple(assessments))
+            if outcome is None:
+                assessments.append(ORFDiscoveryAssessment(
+                    "unavailable", ("paired_products_unavailable",), (), 0, None, None, context))
+            else:
                 assessments.append(discover_created_orfs_in_products(
                     outcome.baseline, outcome.mutant, variant=node.variant, policy=policy,
                     hypothesis=outcome.hypothesis,
-                    source_evidence=dict(source_effect=type(outcome.effect).__name__,
-                                         probability=candidate.probability, phase_mass=candidate.phase_mass)))
-        if not candidates and not candidate_children(node):
-            assessments.append(ORFDiscoveryAssessment(
-                "unavailable", ("paired_products_unavailable",), (), 0, None, None,
-                dict(source_effect=type(node).__name__)))
+                    source_evidence=dict(context, probability=candidate.probability, phase_mass=candidate.phase_mass)))
     return ORFDiscovery(policy, tuple(assessments))

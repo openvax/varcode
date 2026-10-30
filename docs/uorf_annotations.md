@@ -299,8 +299,10 @@ use `varcode.orf` and the bound reference API above. `annotate_orf_product`
 retains its original dictionary return for existing RNA exporters; new Python
 code should use `annotate_orf_rna_product`. `ORFAnnotation.data` remains an
 export alias; construct annotations with native fields rather than a `data`
-dictionary. The model catalogue is not exhaustive ORF discovery: new starts
-and downstream CDS regulation are unassessed.
+dictionary. The model catalogue is not exhaustive ORF discovery: supplied-model
+annotations leave new starts and downstream CDS regulation unassessed. Use the
+separate opt-in [created-start search](created_orfs.md) to inspect paired RNA
+products under an explicit policy; it does not infer downstream regulation.
 
 ## Reference identity
 

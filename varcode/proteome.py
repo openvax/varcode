@@ -77,7 +77,7 @@ def _variants(effect, annotation=None):
     if annotation is not None:
         return annotation.variants
     return getattr(effect, "variants", ()) or (
-        (effect.variant,) if effect is not None else ())
+        (effect.variant,) if effect is not None and effect.variant is not None else ())
 
 
 def _model(effect, annotation=None):
@@ -314,7 +314,7 @@ def _identity(value, defaults, contexts=()):
                for gene in _genes(effect) if not transcripts],
         model=None if model is None else dict(
             orf_id=model.orf_id, source=model.source, transcript_id=model.transcript_id,
-            reference=None if model.reference_context is None else model.reference_context.key),
+            reference=None if getattr(model, "reference_context", None) is None else model.reference_context.key),
         source=_source(effect, defaults, contexts, annotation), contexts=contexts,
         mechanism=getattr(effect, "mechanism", None))
     for name, context in (("mechanism_context", _mechanism_context(effect)),
