@@ -112,6 +112,9 @@ jobs:
           pyensembl install --release 99 --species dog
           pyensembl install --release 2020_10 --species dog
           echo "After installing Ensembl releases" && df -h
+      - name: Check default annotation throughput before the full suite
+        working-directory: ${{ runner.temp }}/varcode-sdist
+        run: python -m pytest --cov=varcode/ -q -s tests/test_timings.py
       - name: Run unit tests from the source distribution
         working-directory: ${{ runner.temp }}/varcode-sdist
         run: |

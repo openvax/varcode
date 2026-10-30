@@ -10,6 +10,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from pathlib import Path
+import subprocess
+import sys
 import time
 
 import pytest
@@ -32,16 +35,11 @@ def _time_variant_annotation(variant_collection):
     return elapsed_t
 
 
-@pytest.mark.no_cover
-def test_effect_timing(
+def _check_effect_timing(
         n_variants=100,
         random_seed=0,
         n_warmup_variants=5):
-    """Measure default throughput without coverage's tracing overhead.
-
-    Functional tests cover annotation separately. Keep the same runtime
-    budget for the ordinary default pipeline, using a reproducible warmup.
-    """
+    """Check the default pipeline's throughput after a reproducible warmup."""
     warmup_collection = random_variants(
         n_warmup_variants,
         random_seed=1,
@@ -57,5 +55,25 @@ def test_effect_timing(
     assert elapsed_t / n_variants < 0.1, \
         "Should be faster than 100ms / variant!"
 
+
+@pytest.mark.no_cover
+def test_effect_timing():
+    """Measure ordinary execution independently of earlier suite state.
+
+    Public-cohort tests retain large reference and annotation caches. A fresh
+    interpreter keeps their allocation/GC history and coverage instrumentation
+    out of this throughput measurement. Imports and warmup remain outside the
+    timer; annotation still uses the default pipeline and the original budget.
+    """
+    result = subprocess.run(
+        [sys.executable, "-m", "tests.test_timings"],
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        timeout=120)
+    print(result.stdout)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 if __name__ == "__main__":
-    test_effect_timing()
+    _check_effect_timing()
