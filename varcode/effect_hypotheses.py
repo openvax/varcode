@@ -33,6 +33,7 @@ from .errors import HypothesisLimitError
 
 if TYPE_CHECKING:
     from .mutant_transcript import MutantTranscript
+    from .effects.effect_classes import MutationEffect
 
 
 @dataclass(frozen=True, order=True)
@@ -255,7 +256,7 @@ class ClassifiedOutcome:
     """An effect classified between a baseline and mutant product."""
 
     hypothesis: EffectHypothesis
-    effect: Any
+    effect: "MutationEffect"
     baseline: RealizedTranscriptProduct
     mutant: RealizedTranscriptProduct
     change_aa_offset: Optional[int] = None
@@ -286,7 +287,7 @@ class ClassifiedOutcome:
 class RealizedEffectCandidate:
     """Merged equivalent outcomes with all hypothesis provenance retained."""
 
-    effect: Any
+    effect: "MutationEffect"
     outcomes: Tuple[ClassifiedOutcome, ...]
     ordinal_key: Tuple[int, ...]
     probability: Optional[float]

@@ -23,6 +23,18 @@ See [effect annotation](effect_annotation.md) for result access and the
 
 ::: varcode.candidates_from_effects
 
+## Traversal
+
+Ordinary classified effects can have alternatives without being a
+`MultiOutcomeEffect`. Use these helpers for shared transcript, structural,
+legacy and noncanonical ORF results alike.
+
+::: varcode.candidate_children
+
+::: varcode.iter_effects
+
+::: varcode.iter_effect_paths
+
 ## Splice candidates
 
 See [splice variants](splice_variants.md) for the distinction between signal

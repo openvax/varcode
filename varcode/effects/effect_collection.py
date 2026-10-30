@@ -13,7 +13,8 @@
 from __future__ import annotations
 
 from collections import OrderedDict
-from typing import TYPE_CHECKING
+from collections.abc import Callable, Iterable, Iterator, Sequence
+from typing import TYPE_CHECKING, Self, TypeVar, overload
 
 import pandas as pd
 from sercol import Collection
@@ -39,6 +40,8 @@ from .effect_ordering import (
 
 if TYPE_CHECKING:
     from .effect_classes import MutationEffect
+
+_Key = TypeVar("_Key")
 
 
 def _default_effect_sort_key(effect):
@@ -127,7 +130,28 @@ class EffectCollection(Collection):
             annotator_version=self.annotator_version,
             annotated_at=self.annotated_at)
 
-    def clone_with_new_elements(self, new_elements):
+    def __iter__(self) -> Iterator[MutationEffect]:
+        return super().__iter__()
+
+    @overload
+    def __getitem__(self, index: int) -> MutationEffect: ...
+
+    @overload
+    def __getitem__(self, index: slice) -> Sequence[MutationEffect]: ...
+
+    def __getitem__(self, index: int | slice) -> MutationEffect | Sequence[MutationEffect]:
+        """Index an effect or slice the underlying sequence (not a collection)."""
+        return super().__getitem__(index)
+
+    def filter(self, filter_fn: Callable[[MutationEffect], bool]) -> Self:
+        """Select effects while retaining collection type and provenance."""
+        return super().filter(filter_fn)
+
+    def groupby(self, key_fn: Callable[[MutationEffect], _Key]) -> dict[_Key, Self]:
+        """Group effects into collections retaining their native metadata."""
+        return super().groupby(key_fn)
+
+    def clone_with_new_elements(self, new_elements: Iterable[MutationEffect]) -> Self:
         # Forward annotator provenance explicitly — sercol's base
         # clone_with_new_elements only carries distinct/sort_key/sources,
         # so without this the cloned collection would silently lose

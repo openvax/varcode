@@ -1,5 +1,13 @@
 # Maintaining the public API and documentation
 
+The common traversal helpers (`candidate_children`, `iter_effects`, and
+`iter_effect_paths`) cover both candidate shapes with typed effect access.
+Collection iteration, indexing, filtering, cloning and generic grouping are
+typed; slicing preserves Sercol's underlying-sequence return rather than
+silently creating a new collection. Subclass-preserving clones/groups/filters
+retain the existing metadata behavior. Broader model protocols, specialized
+grouping/set operations, and subclass field annotations remain gradual (#653).
+
 The public reference and type annotations should describe the same behavior
 users get from a normal installation. Preserve established callers while
 improving clarity; naming consistency alone is not a reason to change a return

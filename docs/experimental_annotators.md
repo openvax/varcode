@@ -123,6 +123,38 @@ Unchanged annotated noncanonical sites are not called variant-induced loss.
 
 ### Migrating from Varcode 10
 
+Use `iter_effects(effect)` for filtering across all alternatives. It yields the
+selected effect first and then every reachable effect once by object identity,
+including nested legacy wrappers. Do not require `MultiOutcomeEffect`: an
+ordinary `Intronic` or `Silent` can carry a protein-changing alternative.
+
+```python
+from varcode import iter_effects, iter_effect_paths
+from varcode.effect_hypotheses import RealizedEffectCandidate
+
+changed = any(e.modifies_protein_sequence is True for e in iter_effects(effect))
+for comparison, path in iter_effect_paths(effect):
+    print(comparison.short_description, comparison.mutant_protein_sequence)
+    for candidate in path:
+        if isinstance(candidate, RealizedEffectCandidate):
+            for outcome in candidate.outcomes:
+                print(outcome.baseline.protein_sequence, outcome.mutant.protein_sequence)
+                print(outcome.hypothesis.evidence)
+        else:
+            print(candidate.source, candidate.evidence)
+```
+
+`iter_effect_paths` yields the root with an empty path, then each candidate
+occurrence with its complete route. Shared effects under different evidence
+remain separate. A self-reference or cycle-closing edge is yielded with its
+evidence and not expanded again. This traversal includes intermediate wrappers
+and is not a list of unique products: use each realized candidate's `outcomes`
+to report its exact patient-baseline comparisons, or `to_proteome()` for the
+complete product/evidence export. `None` sequences and change flags stay unknown.
+`candidate_children()` exposes only direct children in producer order, including
+externally attached alternatives. These helpers do not rerun annotation or infer
+phase, probability, or translation evidence.
+
 Ordinary calls now return a classified effect such as `Deletion`, `Substitution`
 or `Unresolved`, with alternatives in `candidates`. Code requiring
 `SpliceOutcomeSet`, `LargeDeletion`, `PhaseCandidateSet` or `HaplotypeEffect`

@@ -75,6 +75,8 @@ files = [
     "varcode/sv_allele_parser.py",
     "varcode/maf.py",
     "varcode/proteome.py",
+    "varcode/effect_traversal.py",
+    "varcode/effect_candidates.py",
     "tests/typing/api_inputs.py",
 ]
 follow_imports = "silent"

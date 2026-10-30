@@ -56,9 +56,12 @@ varcode's built-ins.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Tuple
+from typing import TYPE_CHECKING, Any, Mapping, Tuple
 
 from serializable import DataclassSerializable
+
+if TYPE_CHECKING:
+    from .effects.effect_classes import MutationEffect
 
 
 @dataclass(frozen=True)
@@ -89,7 +92,7 @@ class EffectCandidate(DataclassSerializable):
         the call site rather than rely on a rigid schema here.
     """
 
-    effect: Any  # MutationEffect — typed loosely to avoid import cycle
+    effect: "MutationEffect"
     source: str = "varcode"
     evidence: Mapping[str, Any] = field(default_factory=dict)
 
@@ -102,7 +105,7 @@ class EffectCandidate(DataclassSerializable):
 
 
 def candidates_from_effects(
-        effects: Tuple[Any, ...],
+        effects: Tuple["MutationEffect", ...],
         source: str = "varcode") -> Tuple[EffectCandidate, ...]:
     """Wrap a tuple of :class:`MutationEffect` instances as
     :class:`EffectCandidate` objects with a shared ``source`` string.

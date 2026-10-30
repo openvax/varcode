@@ -1,5 +1,16 @@
 # Change Log
 
+## v11.1.0
+
+- Expose typed candidate children, identity-deduplicated effect traversal, and
+  provenance-preserving effect paths across ordinary/shared and legacy results
+  (#653). Self-candidates and cycles terminate without dropping their evidence.
+- Share candidate enumeration with filtering, priority ranking, and proteome
+  export; retain externally attached alternatives on shared transcript results.
+- Type collection iteration, indexing, filtering, cloning and grouping without
+  changing their runtime metadata or slice behavior. Repair `exactly_equal()`
+  to compare current record metadata instead of calling a removed method (#670).
+
 ## v11.0.0
 
 - Make the shared transcript model the default: ordinary effects now compose

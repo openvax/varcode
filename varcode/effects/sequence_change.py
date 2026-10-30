@@ -12,19 +12,13 @@ def modification_status(effect, attribute):
     Walk by identity because SVs include themselves among their candidates.
     Read their local status directly, avoiding recursive property calls.
     """
-    from .effect_classes import MultiOutcomeEffect, StructuralVariantEffect
+    from .effect_classes import StructuralVariantEffect
+    from ..effect_traversal import candidate_children, iter_effects
 
-    pending, seen = [effect], set()
     unknown = False
     evaluated = False
-    while pending:
-        current = pending.pop()
-        if id(current) in seen:
-            continue
-        seen.add(id(current))
-        candidates = (current.candidates
-                      if isinstance(current, MultiOutcomeEffect)
-                      or getattr(current, "realized_candidates", None) else ())
+    for current in iter_effects(effect):
+        candidates = candidate_children(current)
         if isinstance(current, StructuralVariantEffect):
             if any(candidate.effect is current for candidate in candidates):
                 evaluated = True
@@ -39,7 +33,6 @@ def modification_status(effect, attribute):
         if status is True:
             return True
         unknown |= status is None
-        pending.extend(candidate.effect for candidate in candidates)
     return None if unknown or not evaluated else False
 
 

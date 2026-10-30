@@ -3,6 +3,7 @@
 from pathlib import Path
 from types import NotImplementedType
 from typing import assert_type
+from collections.abc import Sequence
 
 from pyensembl import Transcript
 
@@ -13,7 +14,9 @@ from varcode import (
     get_annotator, get_default_annotator, register_annotator, resolve_annotator,
     set_default_annotator, use_annotator,
     load_maf, load_maf_dataframe, load_vcf, normalize_contig_name, resolve_contig_name,
+    Candidate, CandidatePath, EffectCandidate, candidate_children, iter_effects, iter_effect_paths,
 )
+from varcode.effect_hypotheses import RealizedEffectCandidate
 from varcode.nucleotides import normalize_nucleotide_string
 from varcode.vcf import read_vcf_into_dataframe
 
@@ -62,11 +65,37 @@ def check_annotation_workflow(
 ) -> None:
     assert_type(variant.effects(), EffectCollection)
     assert_type(variants.effects(), EffectCollection)
+    assert_type(next(iter(variants)), Variant)
+    assert_type(variants[0], Variant)
+    assert_type(variants[:1], Sequence[Variant])
+    assert_type(variants.filter(lambda v: v.start > 0), VariantCollection)
+    assert_type(variants.groupby(lambda v: v.contig), dict[str, VariantCollection])
     effects = variant.effects(annotator="fast", raise_on_error=False)
+    assert_type(next(iter(effects)), MutationEffect)
+    assert_type(effects[0], MutationEffect)
+    assert_type(effects[:1], Sequence[MutationEffect])
+    assert_type(effects.filter(lambda e: e.modifies_protein_sequence is True), EffectCollection)
+    assert_type(effects.groupby(lambda e: e.transcript_id), dict[str | None, EffectCollection])
+    assert_type(effects.clone_with_new_elements([]), EffectCollection)
     assert_type(effects.drop_silent_and_noncoding(), EffectCollection)
     assert_type(effects.top_priority_effect(), MutationEffect)
     assert_type(variant.effect_on_transcript(transcript), MutationEffect)
     effect = variant.effect_on_transcript(transcript)
+    assert_type(candidate_children(effect), tuple[Candidate, ...])
+    for child in iter_effects(effect):
+        assert_type(child, MutationEffect)
+    for child, path in iter_effect_paths(effect):
+        assert_type(child, MutationEffect)
+        assert_type(path, CandidatePath)
+        for candidate in path:
+            assert_type(candidate.effect, MutationEffect)
+            if isinstance(candidate, RealizedEffectCandidate):
+                for outcome in candidate.outcomes:
+                    assert_type(outcome.baseline.protein_sequence, str | None)
+                    assert_type(outcome.effect, MutationEffect)
+    EffectCandidate("not an effect")  # type: ignore[arg-type]
+    iter_effects("not an effect")  # type: ignore[arg-type]
+    effects[0].not_a_real_field  # type: ignore[attr-defined]
     assert_type(effect.mutant_protein_sequence, str | None)
     assert_type(effect.original_protein_sequence, str | None)
     assert_type(effect.modifies_protein_sequence, bool | None)

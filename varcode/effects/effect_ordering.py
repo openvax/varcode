@@ -159,9 +159,10 @@ def effect_priority(effect):
     Shared transcript comparisons rank by their most severe retained
     candidate. Selecting an effect never drops its other hypotheses.
     """
-    candidates = getattr(effect, "realized_candidates", None)
+    from ..effect_traversal import candidate_children, iter_effects
+    candidates = candidate_children(effect) if getattr(effect, "realized_candidates", None) is not None else ()
     if candidates:
-        return max(_classification_priority(candidate.effect) for candidate in candidates)
+        return max(_classification_priority(current) for current in iter_effects(effect))
     return _classification_priority(effect)
 
 

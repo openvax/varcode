@@ -69,6 +69,9 @@ from .cryptic_exons import (
     score_donor,
 )
 from .effect_candidates import EffectCandidate, candidates_from_effects
+from .effect_traversal import (
+    Candidate, CandidatePath, candidate_children, iter_effects, iter_effect_paths,
+)
 from .phasing import (
     MolecularPhaseResolver,
     MutantTranscriptSource,
@@ -182,6 +185,11 @@ __all__ = [
     # Unified multi-outcome type (openvax/varcode#299)
     "EffectCandidate",
     "candidates_from_effects",
+    "Candidate",
+    "CandidatePath",
+    "candidate_children",
+    "iter_effects",
+    "iter_effect_paths",
     "predict_realized_effect",
     "predict_transcript_model_effect",
 
