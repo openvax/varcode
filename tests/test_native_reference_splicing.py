@@ -6,7 +6,7 @@ import pytest
 from Bio.Seq import Seq
 
 from varcode import (
-    MutantTranscript, RNAEvidence, StructuralVariant, Variant, iter_effects, make_rna_outcome,
+    MutantTranscript, RNAEvidence, StructuralVariant, Variant, iter_candidate_effects, make_rna_outcome,
 )
 from varcode.effects import Unresolved
 from varcode.genome_sequence import reference_range
@@ -50,7 +50,7 @@ def test_native_intronic_dna_yields_exact_retained_intron_rna(native_genomes, ca
     coding = expected_rna[cds_start:]
     expected_protein = str(Seq(coding[:len(coding) // 3 * 3]).translate(to_stop=True))
     effect = variant.effect_on_transcript(transcript)
-    candidates = list(iter_effects(effect))
+    candidates = list(iter_candidate_effects(effect))
     retained = [e for e in candidates if e.mutant_transcript is not None
                 and e.mutant_transcript.cdna_sequence == expected_rna]
     assert retained
@@ -79,7 +79,7 @@ def test_ap2s1_observed_del17_junction_survives_rna_evidence(native_genomes):
     results = variant.effects(
         rna_resolver=RNAEvidence([make_rna_outcome(observed, source="PMID:29479578")]),
         transcript_filter=lambda t: t.id == transcript.id)
-    candidates = [e for root in results for e in iter_effects(root)
+    candidates = [e for root in results for e in iter_candidate_effects(root)
                   if e.mutant_protein_sequence == case["expected_protein"]]
     assert candidates
     # Reference completion does not manufacture a fully observed patient baseline.
@@ -102,4 +102,4 @@ def test_chm13_structural_deletion_matches_independent_real_sequence(native_geno
     assert reference_range(genome, transcript.contig, a, b) == transcript.sequence[offset:offset+9]
     effects = variant.effects(transcript_filter=lambda t: t.id == transcript.id)
     assert any(e.mutant_protein_sequence == protein and e.mutant_transcript.cdna_sequence == rna
-               for root in effects for e in iter_effects(root))
+               for root in effects for e in iter_candidate_effects(root))

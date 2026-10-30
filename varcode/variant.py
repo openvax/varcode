@@ -37,6 +37,8 @@ from .effects import (
 )
 
 class Variant(Serializable):
+    contig: str
+
     __slots__ = (
         "contig",
         "start",

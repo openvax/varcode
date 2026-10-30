@@ -2,6 +2,8 @@
 
 ## v11.2.0
 
+- Type collection iteration, indexing, filtering, cloning and grouping while
+  retaining native metadata; repair exact record comparison (#670).
 - Pin assembly, species, annotation name/release and accession in variant/effect
   tables and validate CSV imports. Preserve resolved genomes and filesystem DNA
   in JSON/pickle archives (#673).

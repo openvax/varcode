@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from varcode import Variant, VariantCollection, iter_effects
+from varcode import Variant, VariantCollection, iter_candidate_effects
 from .native_reference_fixture import CASES, DATA
 from . import native_reference_fixture
 
@@ -31,7 +31,7 @@ def test_public_coding_variant_full_protein(native_genomes, case, mode):
     assert transcript.strand == case["strand"]
     assert transcript.protein_sequence == case["reference_protein"]
     effects = variant.effects(**({"annotator": "fast"} if mode == "fast" else {}))
-    candidates = [candidate for root in effects for candidate in iter_effects(root)
+    candidates = [candidate for root in effects for candidate in iter_candidate_effects(root)
                   if candidate.transcript_id == transcript.id]
     assert any(effect.mutant_protein_sequence == case["expected_protein"]
                for effect in candidates), [(type(e).__name__, e.short_description)
@@ -47,7 +47,7 @@ def test_brindled_mouse_allele_combines_two_published_cis_changes(native_genomes
     effects = VariantCollection(variants).effects(
         phase_resolver=SimpleNamespace(in_cis=lambda *args, **kwargs: True))
     assert any(e.mutant_protein_sequence == expected
-               for root in effects for e in iter_effects(root))
+               for root in effects for e in iter_candidate_effects(root))
 
 
 def test_mouse_mitochondrial_minus_strand_uses_vertebrate_code(native_genomes):
@@ -83,4 +83,4 @@ def test_chm13_new_sequence_keeps_both_duplicated_transcript_identities(native_g
     for case in cases:
         assert any(e.transcript_id == case["transcript"]
                    and e.mutant_protein_sequence == case["expected_protein"]
-                   for root in effects for e in iter_effects(root))
+                   for root in effects for e in iter_candidate_effects(root))

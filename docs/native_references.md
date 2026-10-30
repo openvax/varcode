@@ -25,7 +25,7 @@ arbitrary intronic sequence is unavailable. Loading is offline.
 
 ```python
 from orfdata import load_genome
-from varcode import Variant, iter_effects
+from varcode import Variant, iter_candidate_effects
 
 dna = (
     "https://ftp.ensembl.org/pub/rapid-release/species/Homo_sapiens/"
@@ -37,7 +37,9 @@ assert genome.sequence("22", 21798486, 21798486) == "T"
 variant = Variant("22", 21798486, "T", "C", genome=genome)
 effects = variant.effects()
 for root in effects:
-    for effect in iter_effects(root):
+    for effect in iter_candidate_effects(root):
+        if effect is None:
+            continue  # Unresolved traversal, not an unchanged prediction.
         print(effect.transcript_id, effect.short_description,
               effect.mutant_protein_sequence)
 effects.to_csv("chm13-effects.csv")

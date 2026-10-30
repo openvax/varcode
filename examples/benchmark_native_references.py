@@ -13,7 +13,7 @@ from time import perf_counter
 
 from pyensembl import cached_release
 
-from varcode import Variant, iter_effects
+from varcode import Variant, iter_candidate_effects
 from varcode.reference_metadata import reference_metadata
 from varcode.version import __version__
 
@@ -47,7 +47,7 @@ def main():
         # for both implementations; neither gets a cached effect-only timing.
         effects = Variant(*key, genome=genome).effects(annotator=mode)
         for root in effects:
-            for effect in iter_effects(root):
+            for effect in iter_candidate_effects(root):
                 _ = effect.mutant_protein_sequence
         return effects
 
@@ -61,7 +61,7 @@ def main():
         first_pass = perf_counter() - start
         failures, checked = [], 0
         for key, rows in groups.items():
-            effects = [e for root in products[key] for e in iter_effects(root)]
+            effects = [e for root in products[key] for e in iter_candidate_effects(root)]
             for case in rows:
                 if "expected_cdna" not in case or "protein_expectation" in case:
                     continue

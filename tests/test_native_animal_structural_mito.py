@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from varcode import StructuralVariant, Variant, iter_effects
+from varcode import StructuralVariant, Variant, iter_candidate_effects
 from varcode.effects import StartLoss
 from .native_reference_fixture import DATA
 from . import native_reference_fixture
@@ -106,7 +106,7 @@ def test_public_native_mouse_and_dog_deletions(native_genomes, case):
     variant = StructuralVariant(
         case["contig"], case["start"], "DEL", end=case["end"], genome=genome
     )
-    candidates = list(iter_effects(variant.effect_on_transcript(transcript)))
+    candidates = list(iter_candidate_effects(variant.effect_on_transcript(transcript)))
     matching = [
         e
         for e in candidates

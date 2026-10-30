@@ -3,6 +3,7 @@
 from pathlib import Path
 from types import NotImplementedType
 from typing import assert_type
+from collections.abc import Sequence
 
 from pyensembl import Transcript
 
@@ -76,7 +77,19 @@ def check_annotation_workflow(
 ) -> None:
     assert_type(variant.effects(), EffectCollection)
     assert_type(variants.effects(), EffectCollection)
+    assert_type(next(iter(variants)), Variant)
+    assert_type(variants[0], Variant)
+    assert_type(variants[:1], Sequence[Variant])
+    assert_type(variants.filter(lambda v: v.start > 0), VariantCollection)
+    assert_type(variants.groupby(lambda v: v.contig), dict[str, VariantCollection])
     effects = variant.effects(annotator="fast", raise_on_error=False)
+    assert_type(next(iter(effects)), MutationEffect)
+    assert_type(effects[0], MutationEffect)
+    assert_type(effects[:1], Sequence[MutationEffect])
+    assert_type(effects.filter(lambda e: e.modifies_protein_sequence is True), EffectCollection)
+    assert_type(effects.groupby(lambda e: e.transcript_id), dict[str | None, EffectCollection])
+    assert_type(effects.clone_with_new_elements([]), EffectCollection)
+    effects[0].not_a_real_field  # type: ignore[attr-defined]
     assert_type(effects.drop_silent_and_noncoding(), EffectCollection)
     assert_type(effects.top_priority_effect(), MutationEffect)
     assert_type(variant.effect_on_transcript(transcript), MutationEffect)

@@ -13,7 +13,8 @@
 from __future__ import annotations
 
 from collections import OrderedDict
-from typing import TYPE_CHECKING, Any
+from collections.abc import Callable, Iterable, Iterator, Sequence
+from typing import TYPE_CHECKING, Any, Self, TypeVar, overload
 import warnings
 
 import pandas as pd
@@ -40,6 +41,8 @@ from .version import __version__ as _varcode_version
 
 if TYPE_CHECKING:
     from .annotators import EffectAnnotator
+
+_Key = TypeVar("_Key")
 
 
 class VariantCollection(Collection):
@@ -115,7 +118,28 @@ class VariantCollection(Collection):
             sources=self.sources,
             source_to_metadata_dict=self.source_to_metadata_dict)
 
-    def clone_with_new_elements(self, new_elements):
+    def __iter__(self) -> Iterator[Variant]:
+        return super().__iter__()
+
+    @overload
+    def __getitem__(self, index: int) -> Variant: ...
+
+    @overload
+    def __getitem__(self, index: slice) -> Sequence[Variant]: ...
+
+    def __getitem__(self, index: int | slice) -> Variant | Sequence[Variant]:
+        """Index a variant or slice the underlying sequence (not a collection)."""
+        return super().__getitem__(index)
+
+    def filter(self, filter_fn: Callable[[Variant], bool]) -> Self:
+        """Select variants while retaining collection type and metadata."""
+        return super().filter(filter_fn)
+
+    def groupby(self, key_fn: Callable[[Variant], _Key]) -> dict[_Key, Self]:
+        """Group variants into collections retaining their native metadata."""
+        return super().groupby(key_fn)
+
+    def clone_with_new_elements(self, new_elements: Iterable[Variant]) -> Self:
         """
         Create another VariantCollection of the same class and with
         same state (including metadata) but possibly different entries.
@@ -383,20 +407,24 @@ class VariantCollection(Collection):
             value_dict=gene_expression_dict,
             threshold=min_expression_value)
 
-    def exactly_equal(self, other):
+    def exactly_equal(self, other: object) -> bool:
         '''
-        Comparison between VariantCollection instances that takes into account
-        the info field of Variant instances.
+        Compare ordered variants, sources, record metadata and structural INFO.
 
         Returns
         ----------
-        True if the variants in this collection equal the variants in the other
-        collection. The Variant.info fields are included in the comparison.
+        bool
+            True when collection types, variants and their source metadata
+            match. Unlike ordinary equality, include caller INFO and other
+            per-record fields. Returns False for unrelated input.
         '''
         return (
-            self.__class__ == other.__class__ and
-            len(self) == len(other) and
-            all(x.exactly_equal(y) for (x, y) in zip(self, other)))
+            isinstance(other, VariantCollection) and
+            self == other and
+            self.sources == other.sources and
+            self.source_to_metadata_dict == other.source_to_metadata_dict and
+            all(getattr(x, "info", None) == getattr(y, "info", None)
+                for x, y in zip(self, other)))
 
     @classmethod
     def _merge_metadata_dictionaries(cls, dictionaries):
