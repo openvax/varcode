@@ -23,6 +23,17 @@ See [effect annotation](effect_annotation.md) for result access and the
 
 ::: varcode.candidates_from_effects
 
+## Candidate traversal
+
+See [traversing candidates](experimental_annotators.md#traversing-candidates)
+for terminal comparisons, provenance paths and unresolved states.
+
+::: varcode.get_effect_candidates
+
+::: varcode.iter_candidate_paths
+
+::: varcode.iter_candidate_effects
+
 ## Splice candidates
 
 See [splice variants](splice_variants.md) for the distinction between signal
@@ -47,5 +58,7 @@ offline provenance, alternatives and reference composition.
 ## Priority ordering
 
 ::: varcode.effect_priority
+
+::: varcode.classification_priority
 
 ::: varcode.top_priority_effect

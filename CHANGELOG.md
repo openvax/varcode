@@ -1,5 +1,17 @@
 # Change Log
 
+## v11.1.0
+
+- Add typed public candidate traversal for ordinary transcript-model results
+  and legacy outcome sets (#653). Preserve original wrappers, patient baselines,
+  phase and RNA evidence on distinct paths; expose identity-deduplicated terminal
+  effects separately for filtering. Self-candidates terminate once, while empty
+  sets and longer cycles remain explicitly unknown.
+- Expose `classification_priority` for ranking a concrete comparison separately
+  from the candidate-aware `effect_priority`. Share immediate child enumeration
+  with sequence-change filtering and proteome export. Keep the selected effect's
+  own sequence/change properties unchanged.
+
 ## v11.0.0
 
 - Make the shared transcript model the default: ordinary effects now compose

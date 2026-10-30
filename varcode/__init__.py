@@ -69,6 +69,9 @@ from .cryptic_exons import (
     score_donor,
 )
 from .effect_candidates import EffectCandidate, candidates_from_effects
+from .effect_traversal import (
+    Candidate, CandidatePath, get_effect_candidates, iter_candidate_paths, iter_candidate_effects,
+)
 from .phasing import (
     MolecularPhaseResolver,
     MutantTranscriptSource,
@@ -116,6 +119,7 @@ from .maf import load_maf, load_maf_dataframe
 from .vcf import load_vcf, load_vcf_fast
 from .effects import (
     effect_priority,
+    classification_priority,
     top_priority_effect,
     EffectCollection,
     MultiOutcomeEffect,
@@ -143,6 +147,8 @@ __all__ = [
     "load_vcf_samples", "compare_samples", "check_sample_identity",
     "__version__",
     "to_proteome",
+    "Candidate", "CandidatePath", "get_effect_candidates",
+    "iter_candidate_paths", "iter_candidate_effects",
 
     # basic classes
     "Variant",
@@ -230,6 +236,7 @@ __all__ = [
 
     # effects
     "effect_priority",
+    "classification_priority",
     "top_priority_effect",
     "MultiOutcomeEffect",
     "MutationEffect",

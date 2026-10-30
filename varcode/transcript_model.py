@@ -29,7 +29,7 @@ from .effects.effect_classes import (
     NoncodingTranscript,
     Unresolved,
 )
-from .effects.effect_ordering import _classification_priority
+from .effects.effect_ordering import classification_priority
 from .errors import HypothesisLimitError, ReferenceMismatchError
 from .genome_sequence import _plus_strand_slice, reference_range
 from .genomic_layout import GenomicLayout, NonlocalStructuralEdit
@@ -101,7 +101,7 @@ def _attach_candidate_set(ordered):
     top_effect.realized_candidates = ordered
     top_effect.most_likely_candidate = top
     top_effect.highest_priority_candidate = max(
-        ordered, key=lambda candidate: _classification_priority(candidate.effect))
+        ordered, key=lambda candidate: classification_priority(candidate.effect))
     top_effect.probability = top.probability
     top_effect.mechanism_rank = top.ordinal_key
     top_effect.hypotheses = top.hypotheses
@@ -195,7 +195,7 @@ def _refine_transcript_model_effect(effect, observed):
                 result.mutant_transcript = outcome.effect.mutant_transcript
         refined.append(replace(outcome, effect=result))
     result = _attach_candidate_set(order_realized_candidates(
-        merge_classified_outcomes(refined), _classification_priority))
+        merge_classified_outcomes(refined), classification_priority))
     for name in ("germline_unknown", "phase_source", "annotator", "annotator_version"):
         if name in effect.__dict__:
             setattr(result, name, getattr(effect, name))
@@ -298,7 +298,7 @@ def predict_transcript_model_effect(
         result.variants = variants
         return result
     candidates = merge_classified_outcomes(outcomes)
-    ordered = order_realized_candidates(candidates, _classification_priority)
+    ordered = order_realized_candidates(candidates, classification_priority)
     return _attach_candidate_set(ordered)
 
 

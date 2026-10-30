@@ -7,6 +7,8 @@ from typing import assert_type
 from pyensembl import Transcript
 
 from varcode import (
+    Candidate, CandidatePath, classification_priority, get_effect_candidates,
+    iter_candidate_effects, iter_candidate_paths,
     ContigResolution, ContigResolver, EffectAnnotator, EffectCollection,
     InvalidContigError, MutationEffect, MutantTranscript, ORFAnnotation,
     Unresolved, Variant, VariantCollection,
@@ -16,6 +18,18 @@ from varcode import (
 )
 from varcode.nucleotides import normalize_nucleotide_string
 from varcode.vcf import read_vcf_into_dataframe
+
+
+def check_candidate_traversal(effect: MutationEffect) -> None:
+    assert_type(get_effect_candidates(effect), tuple[Candidate, ...])
+    for terminal, path in iter_candidate_paths(effect):
+        assert_type(terminal, MutationEffect | None)
+        assert_type(path, CandidatePath)
+        if terminal is not None:
+            assert_type(classification_priority(terminal), int)
+    for terminal in iter_candidate_effects(effect):
+        assert_type(terminal, MutationEffect | None)
+    iter_candidate_paths("not an effect")  # type: ignore[arg-type]
 
 
 def check_inputs(variant: Variant, other: object, path: Path) -> None:

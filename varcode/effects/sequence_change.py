@@ -2,6 +2,8 @@
 
 import operator
 
+from ..effect_traversal import get_effect_candidates
+
 from .codon_tables import codon_table_for_transcript, translate_sequence
 from .selenocysteine import reference_selenocysteine, segment_selenocysteine
 
@@ -12,7 +14,7 @@ def modification_status(effect, attribute):
     Walk by identity because SVs include themselves among their candidates.
     Read their local status directly, avoiding recursive property calls.
     """
-    from .effect_classes import MultiOutcomeEffect, StructuralVariantEffect
+    from .effect_classes import StructuralVariantEffect
 
     pending, seen = [effect], set()
     unknown = False
@@ -22,9 +24,7 @@ def modification_status(effect, attribute):
         if id(current) in seen:
             continue
         seen.add(id(current))
-        candidates = (current.candidates
-                      if isinstance(current, MultiOutcomeEffect)
-                      or getattr(current, "realized_candidates", None) else ())
+        candidates = get_effect_candidates(current)
         if isinstance(current, StructuralVariantEffect):
             if any(candidate.effect is current for candidate in candidates):
                 evaluated = True
