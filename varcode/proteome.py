@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Iterable
 from serializable.helpers import to_json
 
 from .effect_candidates import EffectCandidate
+from .effect_traversal import get_effect_candidates
 from .effect_hypotheses import ClassifiedOutcome, RealizedEffectCandidate
 from .effects import EffectCollection, Failure, HypothesisLimit, MutationEffect, Unresolved
 from .effects.structural_serialization import structural_effect_to_dict
@@ -450,11 +451,7 @@ class _Export:
             # Self-candidates expose the primary outcome of structural effects.
             return [self.comparison(value, event_id, contexts=contexts, annotation=annotation)]
         ancestors = (*ancestors, id(value))
-        candidates = getattr(value, "realized_candidates", None)
-        if candidates is not None:
-            candidates = tuple(candidates) + tuple(getattr(value, "_extra_candidates", ()))
-        else:
-            candidates = getattr(value, "candidates", None)
+        candidates = get_effect_candidates(value)
         if candidates:
             return [status for candidate in candidates for status in self.walk(
                 candidate, event_id, contexts=contexts, annotation=annotation, ancestors=ancestors)]

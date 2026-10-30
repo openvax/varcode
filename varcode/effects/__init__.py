@@ -15,6 +15,7 @@ from __future__ import print_function, division, absolute_import
 from .effect_collection import EffectCollection
 from .effect_ordering import (
     effect_priority,
+    classification_priority,
     top_priority_effect,
 )
 from .effect_prediction import (
@@ -75,6 +76,7 @@ __all__ = [
     "EffectCollection",
     # effect ordering
     "effect_priority",
+    "classification_priority",
     "top_priority_effect",
 
     # prediction functions

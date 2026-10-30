@@ -11,6 +11,7 @@
 # limitations under the License.
 
 from .effect_classes import (
+    MutationEffect,
     AlternateStartCodon,
     ComplexSubstitution,
     CrypticExonCandidate,
@@ -159,14 +160,23 @@ def effect_priority(effect):
     Shared transcript comparisons rank by their most severe retained
     candidate. Selecting an effect never drops its other hypotheses.
     """
-    candidates = getattr(effect, "realized_candidates", None)
-    if candidates:
-        return max(_classification_priority(candidate.effect) for candidate in candidates)
-    return _classification_priority(effect)
+    from ..effect_traversal import iter_candidate_effects
+
+    if getattr(effect, "realized_candidates", None):
+        return max(
+            (classification_priority(candidate) for candidate in iter_candidate_effects(effect)
+             if candidate is not None), default=classification_priority(effect))
+    return classification_priority(effect)
 
 
-def _classification_priority(effect):
-    """Priority of this classified comparison, independent of alternatives."""
+def classification_priority(effect: MutationEffect) -> int:
+    """Rank this classification alone, independent of attached alternatives.
+
+    Use this for selecting among concrete candidate effects. In contrast,
+    :func:`effect_priority` ranks transcript-model results by their most severe
+    alternative. Legacy wrappers retain their declared ``priority_class``.
+    Neither ranking is a probability or evidence of translation.
+    """
     cls = getattr(effect, "priority_class", None) or effect.__class__
     return transcript_effect_priority_dict.get(cls, -1)
 

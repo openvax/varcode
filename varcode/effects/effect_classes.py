@@ -256,10 +256,10 @@ class MultiOutcomeEffect(MutationEffect):
     * :attr:`priority_class` — effect class whose priority this set
       adopts (read by :func:`varcode.effects.effect_priority`).
 
-    Downstream consumers filter for multi-outcome results with
-    ``isinstance(effect, MultiOutcomeEffect)``, so new wrappers (RNA
-    evidence #259, germline-aware #268, SV-at-breakpoint) implement
-    the same protocol uniformly (#382).
+    This marker describes legacy outcome containers. Ordinary classified
+    effects can also carry candidates. Downstream consumers should use
+    :func:`varcode.iter_candidate_paths` or :func:`varcode.iter_candidate_effects`
+    to traverse both shapes without relying on this marker alone.
 
     External integrations (RNA evidence, SpliceAI scoring, etc.)
     attach extra candidates post-hoc via the ``_extra_candidates``

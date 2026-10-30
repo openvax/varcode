@@ -113,6 +113,45 @@ for candidate in getattr(effect, "candidates", ()):
         print(candidate.effect.mutant_protein_sequence)
 ```
 
+### Traversing candidates
+
+Since 11.1, use the shared traversal API for both result shapes:
+
+```python
+from varcode import iter_candidate_paths, iter_candidate_effects, classification_priority
+
+for terminal, path in iter_candidate_paths(effect):
+    if terminal is None:
+        continue  # An empty outcome set or cycle is unresolved, not unchanged.
+    print(terminal.short_description, terminal.mutant_protein_sequence)
+    for candidate in path:
+        if isinstance(candidate, RealizedEffectCandidate):
+            for outcome in candidate.outcomes:
+                print(outcome.baseline.protein_sequence, outcome.hypothesis.evidence)
+        else:
+            print(candidate.source, candidate.evidence)
+
+known_effects = [e for e in iter_candidate_effects(effect) if e is not None]
+most_severe = max(known_effects, key=classification_priority, default=None)
+```
+
+`get_effect_candidates(effect)` returns immediate wrappers in producer order,
+including externally attached observations. `iter_candidate_paths` follows
+those wrappers to terminal comparisons, retaining every distinct path and all
+realized outcomes. A bare effect has an empty path: traversal does not invent a
+source label. An ordinary selected comparison with alternative-only candidates
+is retained too. Legacy outcome sets are containers; their own comparison is
+included only through a self-candidate. Other wrapper/selected nodes are not
+emitted as extra terminal comparisons. A self-candidate terminates at itself;
+longer cycles and empty containers yield `None` with their original path.
+
+`iter_candidate_effects` deduplicates terminal effects by object identity and
+yields at most one `None`. It is appropriate for availability/filtering checks,
+not for exporting hypotheses: different paths to one effect can have different
+patient baselines or evidence. No helper fills unavailable sequence or changes
+the selected effect's flags. Use `classification_priority` to rank a concrete
+comparison; `effect_priority` considers alternatives on transcript-model results.
+
 ### Baseline splice uncertainty
 
 Each hypothesis records `baseline_splice_plan` and `splice_plan`. Unchanged
