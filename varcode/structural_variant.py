@@ -318,7 +318,11 @@ class StructuralVariant(Variant):
             normalize_contig_names: bool = True,
             convert_ucsc_contig_names=None,
             affected_start: Optional[int] = None,
-            affected_end: Optional[int] = None):
+            affected_end: Optional[int] = None,
+            *,
+            original_reference_name=None,
+            original_genome_was_ucsc=None,
+            original_genome=None):
         if sv_type not in SV_TYPES:
             raise ValueError(
                 "Unknown sv_type %r (expected one of %s)"
@@ -340,7 +344,10 @@ class StructuralVariant(Variant):
             ensembl=ensembl,
             allow_extended_nucleotides=True,
             normalize_contig_names=normalize_contig_names,
-            convert_ucsc_contig_names=convert_ucsc_contig_names)
+            convert_ucsc_contig_names=convert_ucsc_contig_names,
+            original_reference_name=original_reference_name,
+            original_genome_was_ucsc=original_genome_was_ucsc,
+            original_genome=original_genome)
 
         # Override end position — base Variant ignores end for SNVs
         # but we need it as an explicit SV endpoint.
@@ -601,8 +608,7 @@ class StructuralVariant(Variant):
         return Variant.__hash__(self)
 
     def to_dict(self):
-        """The constructor arguments, so serialization (JSON, pickle)
-        round-trips every SV field rather than only the base locus."""
+        """Constructor state and input labels, retaining every SV field."""
         return dict(
             contig=self.original_contig,
             start=self.original_start,
@@ -619,6 +625,9 @@ class StructuralVariant(Variant):
             ci_end=self.ci_end,
             alt_assembly=self.alt_assembly,
             info=self.info,
-            genome=self.original_genome,
+            genome=self.genome,
+            original_reference_name=self.original_reference_name,
+            original_genome_was_ucsc=self.original_genome_was_ucsc,
+            original_genome=(self.original_genome if isinstance(self.original_genome, (str, int)) else None),
             normalize_contig_names=self.normalize_contig_names,
             convert_ucsc_contig_names=self.convert_ucsc_contig_names)

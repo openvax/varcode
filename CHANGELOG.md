@@ -1,5 +1,22 @@
 # Change Log
 
+## v11.2.0
+
+- Pin assembly, species, annotation name/release and accession in variant/effect
+  tables and validate CSV imports. Preserve resolved genomes and filesystem DNA
+  in JSON/pickle archives (#673).
+- Add 100 public native GRCm39, ROS_Cfam and CHM13 variant/transcript cases,
+  independent protein expectations, actual intronic DNA and complete source
+  audits. Cover mouse cis/mitochondrial alleles, dog splice products, and CHM13
+  duplicated/newly resolved loci and controlled structural products. Six further
+  cases cover public mouse/dog deletions and separately pinned dog mitochondrial
+  variants, retaining reference and source-annotation discrepancies.
+- Document installation through CHM13 annotation and add a native-reference
+  correctness/speed benchmark. Require ORFdata 0.43+ for pinned taxonomy and
+  explicit chromosome DNA. Coordinate liftover remains explicit (#243).
+- Verify unified ncORF candidate fields with distinct phased patient baselines;
+  retain the known Ap2s1 cryptic-site discovery limitation (#675).
+
 ## v11.1.0
 
 - Add typed public candidate traversal for ordinary transcript-model results

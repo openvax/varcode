@@ -31,6 +31,9 @@ from .csv_helpers import (
     write_metadata_header,
 )
 from .errors import InvalidContigError, SampleNotFoundError
+from .reference_metadata import (
+    REFERENCE_COLUMNS, reference_metadata, common_reference_metadata, csv_genomes,
+)
 from .genotype import Genotype, Zygosity
 from .variant import Variant, variant_ascending_position_sort_key
 from .version import __version__ as _varcode_version
@@ -483,7 +486,7 @@ class VariantCollection(Collection):
 
     _DATAFRAME_COLUMNS = (
         "chr", "start", "ref", "alt", "gene_name", "gene_id",
-    )
+    ) + REFERENCE_COLUMNS
 
     def _missing_contigs(self, raise_on_error):
         """Check this dataset, retaining unavailable annotations explicitly."""
@@ -539,6 +542,7 @@ class VariantCollection(Collection):
                 ("gene_name", gene_names),
                 ("gene_id", gene_ids)
             ])
+            row.update(reference_metadata(variant.genome))
             row.update((name, getattr(variant, name, None)) for name in structural_columns)
             if diagnostics:
                 row.update(annotation_status="Failure" if error is not None else "ok",
@@ -574,7 +578,7 @@ class VariantCollection(Collection):
 
         metadata = OrderedDict()
         metadata["varcode_version"] = _varcode_version
-        metadata["reference_name"] = self._serialized_reference_name()
+        metadata.update(common_reference_metadata(v.genome for v in self))
         with open(path, "w") as f:
             write_metadata_header(f, metadata)
             df.to_csv(f, index=False)
@@ -629,21 +633,12 @@ class VariantCollection(Collection):
         """
         header = read_metadata_header(path)
         warn_on_version_drift(header, _varcode_version, path)
-        if genome is None:
-            genome = header.get("reference_name")
-        if genome is None:
-            raise ValueError(
-                "from_csv needs a reference genome: pass the `genome` "
-                "argument explicitly, or write the CSV with "
-                "`to_csv(include_header=True)` so `# reference_name=...` "
-                "is recorded in the header. Neither was found at %s." % path)
-
         # Accept either "chr" or "contig" as the contig column so
         # CSVs are interchangeable between VariantCollection and
         # EffectCollection (openvax/varcode#274). Declaring both in
         # dtype is a no-op for whichever column is absent.
         df = pd.read_csv(
-            path, comment="#", dtype={"chr": str, "contig": str})
+            path, comment="#", dtype={"chr": str, "contig": str, **dict.fromkeys(REFERENCE_COLUMNS, str)})
         reject_structural_csv(df)
         contig_col = resolve_contig_column(df.columns)
         if contig_col is None:
@@ -667,6 +662,7 @@ class VariantCollection(Collection):
         refs = df["ref"].fillna("")
         alts = df["alt"].fillna("")
 
+        genomes = csv_genomes(df, header, genome)
         variants = [
             Variant(
                 contig=contig,
@@ -675,7 +671,7 @@ class VariantCollection(Collection):
                 alt=alt,
                 genome=genome,
             )
-            for contig, start, ref, alt in zip(contigs, starts, refs, alts)
+            for contig, start, ref, alt, genome in zip(contigs, starts, refs, alts, genomes)
         ]
         return cls(
             variants=variants,

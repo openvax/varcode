@@ -77,7 +77,11 @@ class Variant(Serializable):
             ensembl=None,
             allow_extended_nucleotides=False,
             normalize_contig_names=True,
-            convert_ucsc_contig_names=None):
+            convert_ucsc_contig_names=None,
+            *,
+            original_reference_name=None,
+            original_genome_was_ucsc=None,
+            original_genome=None):
         """
         Construct a Variant object.
 
@@ -118,6 +122,10 @@ class Variant(Serializable):
             coverted, such as "chr1" to "1". If the default value (None) is used
             then it defaults to whether or not a UCSC genome was pass in for
             the 'genome' argument.
+
+        original_reference_name, original_genome_was_ucsc, original_genome : optional
+            Saved input provenance when reconstructing a pinned genome. These
+            labels do not resolve another annotation or convert coordinates.
         """
 
         # first initialize the fields we use to cache lists of overlapping
@@ -161,6 +169,13 @@ class Variant(Serializable):
                 getattr(self.genome, "assembly", self.reference_name)]
         else:
             self.original_reference_name = self.reference_name
+
+        if original_reference_name is not None:
+            self.original_reference_name = original_reference_name
+        if original_genome_was_ucsc is not None:
+            self.original_genome_was_ucsc = original_genome_was_ucsc
+        if original_genome is not None:
+            self.original_genome = original_genome
 
         self.original_contig = contig
 
@@ -288,7 +303,10 @@ class Variant(Serializable):
             start=self.original_start,
             ref=self.original_ref,
             alt=self.original_alt,
-            genome=self.original_genome,
+            genome=self.genome,
+            original_reference_name=self.original_reference_name,
+            original_genome_was_ucsc=self.original_genome_was_ucsc,
+            original_genome=(self.original_genome if isinstance(self.original_genome, (str, int)) else None),
             allow_extended_nucleotides=self.allow_extended_nucleotides,
             normalize_contig_names=self.normalize_contig_names,
             convert_ucsc_contig_names=self.convert_ucsc_contig_names)

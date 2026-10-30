@@ -244,7 +244,9 @@ def test_variant_collection_from_csv_raises_without_genome_or_header():
     variants = [Variant("17", 43082404, "C", "T", "GRCh38")]
     path = _tmp_csv()
     try:
-        VariantCollection(variants=variants).to_csv(path, include_header=False)
+        # A legacy summary without either row identity or a metadata header.
+        from varcode.reference_metadata import REFERENCE_COLUMNS
+        VariantCollection(variants=variants).to_dataframe().drop(columns=list(REFERENCE_COLUMNS)).to_csv(path, index=False)
         try:
             VariantCollection.from_csv(path)
         except ValueError as e:
@@ -288,7 +290,8 @@ def test_effect_collection_from_csv_raises_without_genome_or_header():
     ec = variant.effects()
     path = _tmp_csv()
     try:
-        ec.to_csv(path, include_header=False)
+        from varcode.reference_metadata import REFERENCE_COLUMNS
+        ec.to_dataframe().drop(columns=list(REFERENCE_COLUMNS)).to_csv(path, index=False)
         try:
             EffectCollection.from_csv(path)
         except ValueError as e:
@@ -321,7 +324,7 @@ def test_effect_collection_to_csv_emits_annotator_header():
     try:
         ec.to_csv(path)
         with open(path) as f:
-            head = "".join(f.readline() for _ in range(8))
+            head = "".join(line for line in f if line.startswith("#"))
     finally:
         os.unlink(path)
     assert "# annotator=" in head
