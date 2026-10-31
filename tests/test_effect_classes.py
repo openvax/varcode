@@ -505,7 +505,7 @@ def generate_silent_stop_codon_effects():
             transcript_id,
             Silent)
 
-@pytest.mark.parametrize(['variant', 'transcript_id', 'effect_class'], generate_silent_stop_codon_effects())
+@pytest.mark.parametrize(['variant', 'transcript_id', 'effect_class'], list(generate_silent_stop_codon_effects()))
 def test_silent_stop_codons(variant, transcript_id, effect_class):
     expect_effect(
         variant,
