@@ -50,7 +50,7 @@ def generate_reference_name_aliases():
                     assembly_name
                 )
 
-@pytest.mark.parametrize(['candidate', 'assembly_name'], generate_reference_name_aliases())
+@pytest.mark.parametrize(['candidate', 'assembly_name'], list(generate_reference_name_aliases()))
 def test_infer_reference_name_aliases(candidate, assembly_name):
     eq_(infer_reference_name(candidate), assembly_name)
     
@@ -64,7 +64,7 @@ def generate_reference_name_fasta_filenames():
                     assembly_name
                 )
 
-@pytest.mark.parametrize(['candidate', 'assembly_name'], generate_reference_name_fasta_filenames())
+@pytest.mark.parametrize(['candidate', 'assembly_name'], list(generate_reference_name_fasta_filenames()))
 def test_reference_name_fasta_filenames(candidate, assembly_name):
     eq_(infer_reference_name(candidate), assembly_name)
 

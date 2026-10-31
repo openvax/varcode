@@ -61,7 +61,7 @@ def generate_dbnsfp_validation_set():
         'dna_ref',
         'dna_alt',
         'aa_pos',
-        'aa_alt'], generate_dbnsfp_validation_set())
+        'aa_alt'], list(generate_dbnsfp_validation_set()))
 def test_dbnsfp_validation_set_transcript_mutation(
         ensembl_transcript_id,
         chrom,

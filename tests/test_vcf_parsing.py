@@ -295,7 +295,8 @@ class TestGetMetadata:
     examples of both shapes."""
 
     @pytest.fixture(scope="class")
-    def header(self):
+    @classmethod
+    def header(cls):
         path = os.path.join(
             DATA_DIR, "real_callers", "mutect2_example.vcf")
         return VCFHeader.from_path(path)

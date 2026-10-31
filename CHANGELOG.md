@@ -1,5 +1,11 @@
 # Change Log
 
+## v11.3.1
+
+- Stop renaming MAF columns in place, which pandas has deprecated for removal.
+- Replace deprecated pytest generator parameters and instance-method
+  class-scoped fixtures in the test suite.
+
 ## v11.3.0
 
 - Add opt-in bounded discovery of newly created initiation codons over paired

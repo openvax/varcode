@@ -264,7 +264,8 @@ class TestTrioEndToEndExpectedShapes:
     """
 
     @pytest.fixture(scope="class")
-    def parsed_rows(self):
+    @classmethod
+    def parsed_rows(cls):
         h = VCFHeader.from_path(TRIO_PATH)
         rows = []
         with open(TRIO_PATH) as fh:

@@ -103,7 +103,7 @@ def load_maf_dataframe(
             # MAFs in the wild have capitalization differences in their
             # column names, normalize them to always use the names above
             if expected.lower() == actual.lower():
-                df.rename(columns={actual: expected}, inplace=True)
+                df = df.rename(columns={actual: expected})
             else:
                 error_message = (
                     "Expected column %s but got %s" % (expected, actual))
