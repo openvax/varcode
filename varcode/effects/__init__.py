@@ -53,6 +53,7 @@ from .effect_classes import (
     PrematureStop,
     FrameShiftTruncation,
     StartLoss,
+    StartGain,
     FrameShift,
     ExonLoss,
     # Structural-variant effect classes
@@ -115,6 +116,7 @@ __all__ = [
     "PrematureStop",
     "FrameShiftTruncation",
     "StartLoss",
+    "StartGain",
     "FrameShift",
     "ExonLoss",
 

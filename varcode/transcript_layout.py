@@ -247,6 +247,10 @@ def _assemble_product(transcript, layout, intervals, junctions, evidence):
             "start_codon": start_codon,
             "start_codon_offset": start,
             "genomic_positions": tuple(position for _, position, _ in origins),
+            # None alone cannot distinguish a known insertion from unmapped
+            # external RNA. Discovery consumes this explicit distinction.
+            "inserted_base_offsets": tuple(i for i, (_, _, kind) in enumerate(origins)
+                                            if kind == "inserted"),
         })
 
 

@@ -293,3 +293,11 @@ from .orf import (
     annotate_orf_variants, annotate_orf_rna_product, annotate_orf_product,
     predict_orf_effects, load_orf_catalog,
 )
+
+from .orf_discovery import (
+    DiscoveredORF, ORFDiscovery, ORFDiscoveryAssessment, ORFDiscoveryPolicy,
+    discover_created_orfs, discover_created_orfs_in_products,
+)
+
+__all__ += ["DiscoveredORF", "ORFDiscovery", "ORFDiscoveryAssessment", "ORFDiscoveryPolicy",
+            "discover_created_orfs", "discover_created_orfs_in_products"]

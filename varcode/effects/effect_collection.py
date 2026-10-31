@@ -47,6 +47,11 @@ if TYPE_CHECKING:
 _Key = TypeVar("_Key")
 
 
+def _effect_genome(effect):
+    """RNA-derived effects can have a host reference without a focal DNA allele."""
+    return getattr(effect.variant, "genome", None) or getattr(effect.reference_transcript, "genome", None)
+
+
 def _default_effect_sort_key(effect):
     """Default sort key for EffectCollection: highest-priority effects
     first. Negating the priority integer turns Python's ascending sort
@@ -438,6 +443,8 @@ class EffectCollection(Collection):
             getattr(e.variant, "is_structural", False) for e in self) else ()
         orf_columns = ("orf_id", "orf_source", "orf_unresolved_reason") if any(
             e.orf_annotation is not None for e in self) else ()
+        discovery_columns = ("discovered_orf_id", "discovered_orf_termination") if any(
+            e.discovered_orf is not None for e in self) else ()
         splice_columns = ("splice_signal",) if any(
             isinstance(e, SpliceOutcomeSet) for e in self) else ()
         start_loss_columns = (
@@ -459,7 +466,7 @@ class EffectCollection(Collection):
         def row_from_effect(effect):
             row: OrderedDict[str, object] = OrderedDict()
 
-            row['variant'] = str(effect.variant.short_description)
+            row['variant'] = getattr(effect.variant, "short_description", None)
             for field_name in variant_properties:
                 # if effect.variant is None then this column value will be None
                 row[field_name] = getattr(effect.variant, field_name, None)
@@ -468,7 +475,7 @@ class EffectCollection(Collection):
             row['transcript_id'] = effect.transcript_id
             row['transcript_name'] = effect.transcript_name
 
-            row.update(reference_metadata(getattr(effect.variant, 'genome', None)))
+            row.update(reference_metadata(_effect_genome(effect)))
             row['effect_type'] = effect.__class__.__name__
             row['effect'] = effect.format_short_description(deletion_notation=deletion_notation)
             if isinstance(effect, StartLoss):
@@ -478,6 +485,9 @@ class EffectCollection(Collection):
                 signal = effect.disrupted_signal_class
                 row['splice_signal'] = signal.__name__ if signal is not None else None
             annotation = effect.orf_annotation
+            if effect.discovered_orf is not None:
+                row['discovered_orf_id'] = effect.discovered_orf.orf_id
+                row['discovered_orf_termination'] = effect.discovered_orf.termination
             if annotation is not None:
                 row['orf_id'] = annotation.orf_id
                 row['orf_source'] = annotation.record.source
@@ -488,9 +498,9 @@ class EffectCollection(Collection):
         frame = pd.DataFrame.from_records(
             [row_from_effect(effect) for effect in self],
             columns=(self._DATAFRAME_COLUMNS + structural_columns + orf_columns
-                     + splice_columns + start_loss_columns),
+                     + splice_columns + start_loss_columns + discovery_columns),
         )
-        if include_archive and (self.orf_annotations or start_loss_columns):
+        if include_archive and (self.orf_annotations or start_loss_columns or discovery_columns):
             frame["effect_json"] = [effect.to_json() for effect in self]
         return frame
 
@@ -521,7 +531,7 @@ class EffectCollection(Collection):
 
         metadata = OrderedDict()
         metadata["varcode_version"] = _varcode_version
-        metadata.update(common_reference_metadata(e.variant.genome for e in self if e.variant is not None))
+        metadata.update(common_reference_metadata(_effect_genome(e) for e in self))
         # Annotator provenance. Each field is skipped
         # when None by write_metadata_header.
         metadata["annotator"] = self.annotator
@@ -610,16 +620,17 @@ class EffectCollection(Collection):
                          annotator=header.get("annotator"), annotator_version=header.get("annotator_version"),
                          annotated_at=header.get("annotated_at"))
             for index, effect in enumerate(result):
-                csv_genomes(df.iloc[[index]], header, effect.variant.genome)
+                csv_genomes(df.iloc[[index]], header, _effect_genome(effect))
             if genome is not None:
                 csv_genomes(df, header, genome)
             summary = result.to_dataframe()
             # Refuse a stale payload after spreadsheet edits to identifying
             # columns. Empty alleles and missing transcript IDs normalize alike.
             for column in ("contig", "start", "ref", "alt", "transcript_id", "effect_type", "orf_id", "orf_source",
-                           "ref_codon", "alt_codon", "codon_change_status", "alt_codon_amino_acid"):
+                           "ref_codon", "alt_codon", "codon_change_status", "alt_codon_amino_acid",
+                           "discovered_orf_id", "discovered_orf_termination"):
                 if column in df and column in summary:
-                    original = df[column].fillna("").astype(str).tolist()
+                    original = df[column].astype(object).fillna("").astype(str).tolist()
                     restored = summary[column].fillna("").astype(str).tolist()
                     if original != restored:
                         raise ValueError("CSV %s disagrees with its archived effect_json" % column)
@@ -630,6 +641,8 @@ class EffectCollection(Collection):
         # EffectCollection (openvax/varcode#274). Declaring both in
         # dtype is a no-op for whichever column is absent.
         reject_structural_csv(df)
+        if "discovered_orf_id" in df and df["discovered_orf_id"].notna().any():
+            raise ValueError("Discovered ORF CSV rows require effect_json; canonical reannotation loses discovery")
         if "orf_id" in df and df["orf_id"].notna().any():
             raise ValueError("Extra ORF CSV rows require their reference coding models; "
                              "canonical transcript re-annotation would lose the ORF. "
