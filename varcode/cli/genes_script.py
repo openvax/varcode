@@ -34,14 +34,14 @@ logger = logging.getLogger(__name__)
 arg_parser = make_variants_parser(
     description="Annotate variants with overlapping gene names")
 arg_parser.add_argument(
-    "--output-csv", help="CSV output: chr, start, ref, alt, gene_name, gene_id, plus SV fields")
+    "--output-csv", "--output", "-o", dest="output_csv", help="CSV output: chr, start, ref, alt, gene_name, gene_id, plus SV fields")
 
 def main(args_list=None):
     """
     Script which loads variants and annotates them with overlapping genes.
 
     Example usage:
-        varcode-genes
+        varcode genes
             --vcf mutect.vcf \
             --vcf strelka.vcf \
             --maf tcga_brca.maf \

@@ -1,5 +1,12 @@
 # Change Log
 
+## v11.3.2
+
+- `varcode` is now a single command with subcommands `effects`, `genes` and
+  `check-samples`; `varcode genes` is the same as `varcode-genes`, which keeps
+  working. `varcode` with no subcommand still means `varcode effects`. Add
+  `varcode --version` and `-o`/`--output` as synonyms for `--output-csv`.
+
 ## v11.3.1
 
 - Stop renaming MAF columns in place, which pandas has deprecated for removal.
