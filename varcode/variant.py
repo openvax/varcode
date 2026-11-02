@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from .annotators import EffectAnnotator
     from .effects import EffectCollection, MutationEffect
 
+from .circular_origin import outside_origin_joined_transcript
 from .contigs import normalize_contig_name, _convert_ucsc_contig_name
 from .nucleotides import (
     normalize_nucleotide_string,
@@ -410,10 +411,18 @@ class Variant(Serializable):
 
     @property
     def transcripts(self):
+        """
+        Return Transcript objects for all transcripts which overlap this
+        variant. A transcript joined across a circular origin does not
+        overlap the stretch between its 3' and 5' ends.
+        """
         if self._transcripts is None:
             self._check_that_genome_has_contig()
-            self._transcripts = self.genome.transcripts_at_locus(
-                self.contig, self.start, self.end)
+            self._transcripts = [
+                transcript for transcript in self.genome.transcripts_at_locus(
+                    self.contig, self.start, self.end)
+                if not outside_origin_joined_transcript(
+                    transcript, self.start, self.end)]
         return self._transcripts
 
     @property

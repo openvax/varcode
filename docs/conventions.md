@@ -67,6 +67,14 @@ parameter documentation specifies its interval convention. Chromosome-name
 resolution changes spelling within a supplied vocabulary; it does not convert
 coordinates between assemblies.
 
+Exons are read in transcript order (`exon_number`), never re-sorted by
+coordinate. A transcript annotated across the origin of a circular contig,
+such as hepatitis B polymerase (`join(2307..3215,1..1623)`), steps back once
+onto base 1. That step is the origin: contiguous sequence, not a splice
+junction. The stretch between such a transcript's 3' and 5' ends is outside
+it. Exons that step back anywhere else raise `ValueError`, because varcode
+does not know the contig's length.
+
 ## Selecting an annotator
 
 Pass `annotator=` explicitly when different calls need different implementations.

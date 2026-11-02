@@ -28,6 +28,7 @@ Coordinates are one-based and inclusive.  Segment order is molecule order;
 from dataclasses import dataclass, field
 from typing import Callable, Optional, Tuple
 
+from .circular_origin import origin_join_flanks
 from .nucleotides import reverse_complement
 
 
@@ -231,10 +232,21 @@ class GenomicLayout:
     @classmethod
     def from_transcript(
             cls, transcript, flank=50, sequence_provider=None):
-        """Create a transcript-oriented layout around ``transcript``."""
+        """Create a transcript-oriented layout around ``transcript``.
+
+        A transcript joined across a circular origin is laid out in
+        transcript order, the block before the origin first.
+        """
+        strand = "-" if transcript.on_backward_strand else "+"
+        blocks = origin_join_flanks(transcript, flank)
+        if blocks is not None:
+            return cls(
+                segments=tuple(
+                    LayoutSegment(transcript.contig, start, end, strand=strand)
+                    for start, end in blocks),
+                sequence_provider=sequence_provider)
         start = max(1, transcript.start - flank)
         end = transcript.end + flank
-        strand = "-" if transcript.on_backward_strand else "+"
         return cls.from_interval(
             transcript.contig, start, end, strand, sequence_provider)
 

@@ -70,13 +70,6 @@ class _ExonFragment:
     copy_group: str
 
 
-def _ordered_exons(transcript):
-    return tuple(sorted(
-        transcript.exons,
-        key=lambda exon: exon.start,
-        reverse=transcript.on_backward_strand))
-
-
 def _gap_is_inserted(layout, start, end):
     if start == end:
         return True
@@ -92,7 +85,7 @@ def build_exon_runs(transcript, layout):
     duplicated exon is a distinct occurrence, while inverted (antisense)
     sequence is intentionally excluded.
     """
-    exons = _ordered_exons(transcript)
+    exons = tuple(transcript.exons)
     transcript_strand = "-" if transcript.on_backward_strand else "+"
     fragments = []
     layout_offset = 0
@@ -424,7 +417,7 @@ def _variant_interval(variant):
 def _unchanged_product_effect(variant, transcript, mutant):
     """Classify by genomic location when the translated protein is unchanged."""
     start, end = _variant_interval(variant)
-    exons = _ordered_exons(transcript)
+    exons = tuple(transcript.exons)
     overlapping_positions = []
     for exon in exons:
         overlap_start = max(start, exon.start)

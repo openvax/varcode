@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from ..nucleotides import reverse_complement
 from pyensembl import Transcript
 
+from ..circular_origin import outside_origin_joined_transcript
 from ..common import groupby_field
 from ..errors import ReferenceMismatchError
 
@@ -162,11 +163,18 @@ def predict_variant_effects(
         transcripts_grouped_by_gene = \
             groupby_field(transcripts, 'gene_id')
 
+        # genes whose only transcripts are joined across a circular origin
+        # and whose linear span alone reaches this variant
+        genes_outside_origin_joins = 0
+
         # want effects in the list grouped by the gene they come from
         for gene_id in sorted(gene_ids):
             if gene_id not in transcripts_grouped_by_gene:
                 # intragenic variant overlaps a gene but not any transcripts
                 gene = variant.genome.gene_by_id(gene_id)
+                if _outside_origin_joined_gene(gene, variant):
+                    genes_outside_origin_joins += 1
+                    continue
                 effects.append(Intragenic(variant, gene))
             else:
                 # gene ID  has transcripts overlapped by this variant
@@ -185,6 +193,8 @@ def predict_variant_effects(
                             variant, transcript, error)
                         effect = Failure(variant, transcript, error=str(error))
                     effects.append(effect)
+        if genes_outside_origin_joins == len(gene_ids):
+            effects = [Intergenic(variant)]
     annotated_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
     collection = EffectCollection(
         effects,
@@ -197,6 +207,16 @@ def predict_variant_effects(
     from ..splice_outcomes import wrap_splice_effects_in_collection
     collection = wrap_splice_effects_in_collection(collection)
     return collection
+
+
+def _outside_origin_joined_gene(gene, variant):
+    """Whether a gene reaches ``variant`` only through origin-joined spans."""
+    if gene.start != 1:
+        return False
+    transcripts = gene.transcripts
+    return bool(transcripts) and all(
+        outside_origin_joined_transcript(transcript, variant.start, variant.end)
+        for transcript in transcripts)
 
 
 def predict_variant_effect_on_transcript_or_failure(variant, transcript):

@@ -1,5 +1,18 @@
 # Change Log
 
+## v11.3.4
+
+- Annotate transcripts joined across the origin of a circular contig, such as
+  hepatitis B polymerase (`join(2307..3215,1..1623)`), in transcript order
+  (#686). The default annotator laid them out in coordinate order. It called
+  every variant after the origin `FivePrimeUTR` and truncated the protein for
+  variants before it.
+- Treat a circular origin as contiguous sequence in both annotators, with no
+  donor or acceptor there. Variants between an origin-joined transcript's 3'
+  and 5' ends are outside it, not intronic.
+- Refuse exons that step back along the strand anywhere but once onto base 1,
+  instead of silently re-sorting them by coordinate.
+
 ## v11.3.3
 
 - Stop warning that a reference is ambiguous when its file name matches only

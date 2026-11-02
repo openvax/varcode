@@ -14,6 +14,7 @@
 
 from dataclasses import dataclass
 
+from .circular_origin import origin_join_index
 from .effect_hypotheses import (
     SpliceAxis,
     SpliceOption,
@@ -172,15 +173,18 @@ def disrupted_splice_sites(transcript, layout, runs=None):
     if runs is None:
         runs = build_exon_runs(transcript, layout)
     n_exons = len(transcript.exons)
+    # The exons on either side of a circular origin meet without an intron.
+    join = origin_join_index(transcript)
+    exon_before_origin = None if join is None else join + 1
     statuses = []
     for run in runs:
-        if run.exon_number < n_exons:
+        if run.exon_number < n_exons and run.exon_number != exon_before_origin:
             strength, reason = donor_status(transcript, layout, run)
             if strength != "intact":
                 statuses.append(SpliceSiteStatus(
                     SpliceSiteKey("donor", run.exon_number, run.occurrence),
                     run.key, strength, reason, _site_context(layout, run, "donor")))
-        if run.exon_number > 1:
+        if run.exon_number > 1 and run.exon_number - 1 != exon_before_origin:
             strength, reason = acceptor_status(transcript, layout, run)
             if strength != "intact":
                 statuses.append(SpliceSiteStatus(
