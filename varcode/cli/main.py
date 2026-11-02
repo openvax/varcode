@@ -31,6 +31,9 @@ Run `varcode <subcommand> --help` for the options of each subcommand.
 """
 
 
+SUBCOMMANDS = ("effects", "genes", "check-samples")
+
+
 def run_subcommand(name, args):
     """
     Run one ``varcode`` subcommand, importing its module only when needed.
@@ -49,7 +52,7 @@ def run_subcommand(name, args):
 
     Raises
     ------
-    KeyError
+    ValueError
         If ``name`` is not a subcommand.
     """
     if name == "effects":
@@ -59,11 +62,10 @@ def run_subcommand(name, args):
     elif name == "check-samples":
         from .sample_checks import main as subcommand_main
     else:
-        raise KeyError(name)
+        raise ValueError(
+            "Unknown varcode subcommand %r; expected one of %s"
+            % (name, ", ".join(SUBCOMMANDS)))
     return subcommand_main(args)
-
-
-SUBCOMMANDS = ("effects", "genes", "check-samples")
 
 
 def main(argv=None):

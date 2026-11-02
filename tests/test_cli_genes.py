@@ -69,5 +69,5 @@ def test_output_is_synonym_for_output_csv():
 
 def test_run_subcommand_rejects_unknown_name():
     from varcode.cli.main import run_subcommand
-    with pytest.raises(KeyError):
+    with pytest.raises(ValueError, match="Unknown varcode subcommand 'nope'"):
         run_subcommand("nope", [])
