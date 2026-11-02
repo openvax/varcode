@@ -49,6 +49,12 @@ varcode = "varcode.cli.main:main"
 markers = [
     "parity: fast vs protein_diff byte-for-byte parity harness (tests/test_protein_diff_parity.py). Runs by default; also selectable with `pytest -m parity`.",
 ]
+# Test genomes have no chromosome FASTA, and this warning fires once per
+# genome in whichever test reaches it first. tests/test_genome_sequence.py
+# checks the warning itself.
+filterwarnings = [
+    "ignore:cryptic_exons. no reference sequence:UserWarning",
+]
 
 [tool.ruff.lint]
 select = ["E", "F"]

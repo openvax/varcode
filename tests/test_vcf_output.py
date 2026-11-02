@@ -10,6 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from contextlib import nullcontext
 import tempfile
 from pathlib import Path
 
@@ -53,6 +54,13 @@ def _merge_metadata_naive(variants):
 
 
 
+# Each has one REF == ALT record, which load_vcf skips with a warning.
+REF_IDENTICAL_FIXTURES = {
+    'somatic_hg19_14muts.space_in_sample_name.vcf',
+    'somatic_hg19_14muts.vcf',
+}
+
+
 def _do_roundtrip_test(filenames, convert_ucsc_to_grch37=False):
 
     def load_fn(filename):
@@ -64,7 +72,11 @@ def _do_roundtrip_test(filenames, convert_ucsc_to_grch37=False):
     def load_variants():
         variant_collections = []
         for filename in filenames:
-            variant_collections.append(load_fn(filename)(data_path(filename)))
+            skipped = (
+                pytest.warns(UserWarning, match="reference-identical ALT")
+                if filename in REF_IDENTICAL_FIXTURES else nullcontext())
+            with skipped:
+                variant_collections.append(load_fn(filename)(data_path(filename)))
         return variant_collections[0].union(*variant_collections[1:])
 
     variants = load_variants()

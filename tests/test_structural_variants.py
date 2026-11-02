@@ -346,7 +346,8 @@ def test_vcf_loader_skips_svs_by_default():
     )
     path = _write_vcf(body)
     try:
-        vc = load_vcf(path, genome="GRCh38")
+        with pytest.warns(UserWarning, match="Skipped 1 symbolic/breakend allele"):
+            vc = load_vcf(path, genome="GRCh38")
     finally:
         os.unlink(path)
     # Only the normal SNV survives.

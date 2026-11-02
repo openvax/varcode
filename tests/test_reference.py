@@ -35,38 +35,61 @@ reference_test_cases = {
     ],
 }
 
+# These resolve with a warning: the first file name names no assembly, and
+# in the second "job36" contains NCBI36's alias "b36".
+AMBIGUOUS_REFERENCE_PATHS = {
+    '##reference=file:///var/lib/cwl/ncbi36/homo_sapiens.d1.vd1.fa':
+        "could not be matched against filename",
+    '##reference=file:///var/lib/cwl/job367935311_index_001zdr/GRCh38.job36.d1.vd1.fa':
+        "More than one reference",
+}
+
 def test_most_recent_assembly():
     eq_(most_recent_assembly_name(['ncbi36', 'grch38']), 'grch38')
     eq_(most_recent_assembly_name(['ncbi36', 'grch38', '37mm']), 'grch38')
     eq_(most_recent_assembly_name(['ncbi36']), 'ncbi36')
     eq_(most_recent_assembly_name(['ncbi36', '35']), 'ncbi36')
 def generate_reference_name_aliases():
-    with warnings.catch_warnings(record=True) as w:
-        for assembly_name, aliases in ensembl_reference_aliases.items():
-            candidate_list = [assembly_name] + list(aliases)
-            for candidate in candidate_list:
-                yield (                
-                    candidate,
-                    assembly_name
-                )
+    for assembly_name, aliases in ensembl_reference_aliases.items():
+        candidate_list = [assembly_name] + list(aliases)
+        for candidate in candidate_list:
+            yield (
+                candidate,
+                assembly_name
+            )
 
 @pytest.mark.parametrize(['candidate', 'assembly_name'], list(generate_reference_name_aliases()))
 def test_infer_reference_name_aliases(candidate, assembly_name):
     eq_(infer_reference_name(candidate), assembly_name)
     
 def generate_reference_name_fasta_filenames():
-    with warnings.catch_warnings(record=True):
-        for assembly_name, aliases in reference_test_cases.items():
-            candidate_list = [assembly_name] + list(aliases)
-            for candidate in candidate_list:
-                yield (
-                    candidate,
-                    assembly_name
-                )
+    for assembly_name, aliases in reference_test_cases.items():
+        candidate_list = [assembly_name] + list(aliases)
+        for candidate in candidate_list:
+            yield (
+                candidate,
+                assembly_name
+            )
 
 @pytest.mark.parametrize(['candidate', 'assembly_name'], list(generate_reference_name_fasta_filenames()))
 def test_reference_name_fasta_filenames(candidate, assembly_name):
-    eq_(infer_reference_name(candidate), assembly_name)
+    if candidate in AMBIGUOUS_REFERENCE_PATHS:
+        # Bypass memoization so the warning fires whatever ran first.
+        with pytest.warns(UserWarning, match=AMBIGUOUS_REFERENCE_PATHS[candidate]):
+            eq_(infer_reference_name.__wrapped__(candidate), assembly_name)
+    else:
+        eq_(infer_reference_name(candidate), assembly_name)
+
+
+@pytest.mark.parametrize(["name", "reference_name"], [
+    ("CanFam3.1", "CanFam3.1"),
+    ("/ref/CanFam3.1.dna.toplevel.fa", "CanFam3.1"),
+    ("GRCh37_hg19.fa", "GRCh37"),
+])
+def test_ensembl_and_ucsc_names_of_one_assembly_are_not_ambiguous(name, reference_name):
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert infer_reference_name.__wrapped__(name) == reference_name
 
 
 

@@ -47,7 +47,8 @@ def test_symbolic_cnv_allele_is_skipped():
         "22\t51179100\tnormal_snv\tA\tG\t100\tPASS\t.\n"
     )
     try:
-        vc = load_vcf(path, genome="GRCh37")
+        with pytest.warns(UserWarning, match="Skipped 1 symbolic/breakend allele"):
+            vc = load_vcf(path, genome="GRCh37")
     finally:
         os.unlink(path)
     # The normal SNV should load, the symbolic allele should be skipped.
@@ -61,7 +62,8 @@ def test_symbolic_insertion_allele_is_skipped():
         "22\t51068654\tALU_test\tG\t<INS:ME:ALU>\t100\tPASS\t.\n"
     )
     try:
-        vc = load_vcf(path, genome="GRCh37")
+        with pytest.warns(UserWarning, match="Skipped 1 symbolic/breakend allele"):
+            vc = load_vcf(path, genome="GRCh37")
     finally:
         os.unlink(path)
     assert len(vc) == 0, \
@@ -75,7 +77,8 @@ def test_breakend_allele_is_skipped():
         "17\t198983\tnormal\tC\tT\t100\tPASS\t.\n"
     )
     try:
-        vc = load_vcf(path, genome="GRCh37")
+        with pytest.warns(UserWarning, match="Skipped 1 symbolic/breakend allele"):
+            vc = load_vcf(path, genome="GRCh37")
     finally:
         os.unlink(path)
     assert len(vc) == 1, \
@@ -89,7 +92,8 @@ def test_multiallelic_with_one_symbolic_and_one_normal_keeps_normal():
         "22\t51179178\tmixed\tA\tG,<CN0>\t100\tPASS\t.\n"
     )
     try:
-        vc = load_vcf(path, genome="GRCh37")
+        with pytest.warns(UserWarning, match="Skipped 1 symbolic/breakend allele"):
+            vc = load_vcf(path, genome="GRCh37")
     finally:
         os.unlink(path)
     assert len(vc) == 1, \
@@ -108,7 +112,8 @@ def test_mixed_vcf_with_many_symbolic_alleles_does_not_crash():
         "22\t51179100\tnormal\tA\tG\t100\tPASS\t.\n"
     )
     try:
-        vc = load_vcf(path, genome="GRCh37")
+        with pytest.warns(UserWarning, match="Skipped 3 symbolic/breakend allele"):
+            vc = load_vcf(path, genome="GRCh37")
     finally:
         os.unlink(path)
     assert len(vc) == 1, "Expected 1 variant after filtering symbolic alleles"
