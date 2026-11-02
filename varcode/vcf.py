@@ -17,6 +17,7 @@ import urllib.parse
 import urllib.request
 import logging
 from collections import OrderedDict
+from typing import Literal
 from warnings import warn
 
 import pandas
@@ -535,7 +536,7 @@ def read_vcf_into_dataframe(
     else:
         raise NotImplementedError("Only local files are supported.")
 
-    compression = None
+    compression: Literal["gzip", "bz2"] | None = None
     if path.endswith(".gz"):
         compression = "gzip"
     elif path.endswith(".bz2"):
