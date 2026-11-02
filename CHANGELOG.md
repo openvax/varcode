@@ -1,5 +1,11 @@
 # Change Log
 
+## v11.3.2
+
+- Type VCF compression as the literal values pandas accepts, and pin
+  pandas-stubs in the lint extra so mypy checks pandas calls the same way in
+  every environment.
+
 ## v11.3.1
 
 - Stop renaming MAF columns in place, which pandas has deprecated for removal.
