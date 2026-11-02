@@ -2,6 +2,7 @@
 [![Coverage Status](https://coveralls.io/repos/openvax/varcode/badge.svg?branch=main&service=github)](https://coveralls.io/github/openvax/varcode?branch=main)
 [![PyPI](https://img.shields.io/pypi/v/varcode.svg?maxAge=1000)](https://pypi.org/project/varcode/)
 [![PyPI downloads](https://img.shields.io/pypi/dm/varcode.svg)](https://pypistats.org/packages/varcode)
+[![Docs](https://img.shields.io/badge/docs-openvax.github.io%2Fvarcode-blue)](https://openvax.github.io/varcode/)
 
 # Varcode
 
@@ -11,7 +12,15 @@ overlapping transcript, Varcode reports the predicted consequence (for example
 a substitution such as `p.L159M`, a frameshift, or a gene fusion). Where the
 sequence can be determined, it also gives the mutant protein.
 
-## Installation
+In the [OpenVax](https://github.com/openvax) tools, Varcode reads gene
+annotations through [PyEnsembl](https://github.com/openvax/pyensembl).
+[Isovar](https://github.com/openvax/isovar) reconstructs variant sequences from
+RNA reads, and [Topiary](https://github.com/openvax/topiary) and
+[Vaxrank](https://github.com/openvax/vaxrank) use Varcode's predicted proteins
+to choose and rank candidate peptides; see
+[how the libraries fit together](https://openvax.github.io/varcode/library_roles/).
+
+## Install
 
 Requires Python 3.11 or later:
 
@@ -24,6 +33,11 @@ The second command downloads the gene annotation and transcript sequences used
 in the example below (Ensembl 81, GRCh38). For your own data, choose an
 annotation that matches your input's genome build; see
 [reference setup](https://openvax.github.io/varcode/getting_started/#reference-data).
+
+Optional extras: `varcode[orf]` adds [ORFdata](https://github.com/openvax/orfdata)
+for [noncanonical ORF consequences](https://openvax.github.io/varcode/uorf_annotations/),
+and `varcode[rna]` adds pysam for
+[phasing variants from RNA-seq reads](https://openvax.github.io/varcode/phasing/#rna-evidence).
 
 <a id="example"></a>
 
@@ -38,8 +52,14 @@ variant = Variant("7", 117_531_100, "T", "A", genome=81)
 transcript = variant.genome.transcript_by_id("ENST00000003084")
 effect = variant.effect_on_transcript(transcript)
 
-print(effect.short_description)  # p.L159M
+print(effect.gene.name, effect.short_description)
 protein = effect.mutant_protein_sequence
+print(protein[158])  # Python offsets start at zero
+```
+
+```text
+CFTR p.L159M
+M
 ```
 
 Annotate every variant in a VCF called against the same genome build, and
@@ -54,79 +74,73 @@ for variant, effect in effects.top_priority_effect_per_variant().items():
     print(variant.short_description, effect.short_description)
 ```
 
-Or from the command line:
+For a VCF containing only the variant above, this prints:
+
+```text
+chr7 g.117531100T>A p.L159M
+```
+
+<a id="reading-results"></a>
+
+Before relying on the output, read
+[how to read results](https://openvax.github.io/varcode/getting_started/#how-to-read-results).
+In short: each prediction belongs to one transcript; "top priority" means most
+severe, not most likely; `None` means unknown, not unchanged; and a predicted
+protein is not evidence that it is expressed.
+
+## Command line
+
+The `varcode` command annotates variant files without writing Python and saves
+one row per variant and transcript:
 
 ```bash
 varcode --genome GRCh38 --vcf variants.vcf --output-csv effects.csv
 ```
 
-<a id="reading-results"></a>
-
-## Reading the results
-
-- **One variant, many transcripts.** Each prediction belongs to one
-  transcript, and a variant's effect can differ between transcripts.
-  `top_priority_effect_per_variant()` picks one per variant for a summary.
-- **"Top priority" means most severe, not most likely.** The ranking is
-  Varcode's ordering of consequence severity. It is not a probability, a
-  pathogenicity score, or a clinical classification.
-- **Some effects have several possible outcomes.** Splice variants,
-  structural variants, and variants with unknown phase keep all their
-  candidate outcomes rather than guessing one.
-- **`None` means unknown, not unchanged.** A missing protein sequence means
-  Varcode could not determine it.
-- **Predictions are not observations.** A predicted protein doesn't show that
-  the transcript or protein is expressed.
+`varcode check-samples` screens a cohort of VCFs for possible sample mix-ups.
+See the [command-line guide](https://openvax.github.io/varcode/getting_started/#command-line)
+and [sample identity checks](https://openvax.github.io/varcode/sample_identity/).
 
 <a id="further-reading"></a>
+<a id="effect-types"></a>
+<a id="coordinate-system"></a>
 
-## Learn more
+## Documentation
 
-The [documentation](https://openvax.github.io/varcode/) starts with a
-[getting-started guide](https://openvax.github.io/varcode/getting_started/).
-Guides by topic:
+Full documentation: [openvax.github.io/varcode](https://openvax.github.io/varcode/).
 
-- [Effect annotation](https://openvax.github.io/varcode/effect_annotation/):
-  SNVs, indels, and multi-base substitutions, classified as coding changes
-  (substitution, frameshift, premature stop, ...) or by location (UTR, intron,
-  splice site, intergenic).
-- [Splice variants](https://openvax.github.io/varcode/splice_variants/):
-  possible outcomes such as exon skipping, intron retention, or a cryptic
-  splice site, each with its own predicted protein when it can be determined.
-- [Structural variants](https://openvax.github.io/varcode/structural_variants/):
-  transcript consequences and gene-fusion candidates for deletions,
-  duplications, inversions, and breakends.
+- [Getting started](https://openvax.github.io/varcode/getting_started/): reference
+  data, one variant, a VCF, saving results, and
+  [coordinate conventions](https://openvax.github.io/varcode/getting_started/#coordinate-conventions).
+- [Effect annotation](https://openvax.github.io/varcode/effect_annotation/) and
+  [saving results](https://openvax.github.io/varcode/csv/) (CSV, JSON, VCF).
+- [Sample queries](https://openvax.github.io/varcode/genotype/) for multi-sample VCFs.
+- [Splice variants](https://openvax.github.io/varcode/splice_variants/) and
+  [structural variants](https://openvax.github.io/varcode/structural_variants/),
+  including gene-fusion candidates.
 - [Germline](https://openvax.github.io/varcode/germline/),
   [phasing](https://openvax.github.io/varcode/phasing/), and
   [observed RNA](https://openvax.github.io/varcode/rna_structures/): optional
   patient context that refines predictions.
-- [Sample queries](https://openvax.github.io/varcode/genotype/) and
-  [identity checks](https://openvax.github.io/varcode/sample_identity/): select
-  a sample's variants, or screen a cohort for possible sample mix-ups.
-- [Saving results](https://openvax.github.io/varcode/csv/): CSV, JSON, and VCF
-  export, and what each keeps.
-- [Reference ORF consequences](https://openvax.github.io/varcode/uorf_annotations/):
-  install `varcode[orf]` and pass `extra_orfs="all"` (or an evidence name such
-  as `"ms"` or `"immunopeptidomics"`, or an ORFdata rule) to `variant.effects` for ordinary and additional coding consequences
-  together, using ORFdata's ORFs for the variant's genome; a catalogue or
-  bound ORFs also work. Access the reference through `effect.orf` and native
-  outcomes through `effect.orf_annotation`.
+- [Effect types](https://openvax.github.io/varcode/effect_types/) and the
+  [API reference](https://openvax.github.io/varcode/api/).
 
-<a id="effect-types"></a>
-<a id="coordinate-system"></a>
+## Development
 
-Reference pages cover [effect types](https://openvax.github.io/varcode/effect_types/),
-[coordinate conventions](https://openvax.github.io/varcode/getting_started/#coordinate-conventions),
-and the [API](https://openvax.github.io/varcode/api/).
+```bash
+./develop.sh   # editable install into the active environment
+./lint.sh      # Ruff and mypy
+./test.sh      # pytest; needs the Ensembl releases listed in CONTRIBUTING.md
+mkdocs build --strict
+```
 
-Varcode is part of the [OpenVax](https://github.com/openvax) tools.
-[Isovar](https://github.com/openvax/isovar) reconstructs variant sequences from
-RNA reads, and [Vaxrank](https://github.com/openvax/vaxrank) evaluates the resulting
-protein/peptide candidates; see
-[how the libraries fit together](https://openvax.github.io/varcode/library_roles/).
+See [CONTRIBUTING.md](https://github.com/openvax/varcode/blob/main/CONTRIBUTING.md)
+for the development environment and reference data, and the
+[changelog](https://github.com/openvax/varcode/blob/main/CHANGELOG.md) for
+release history. For bugs or questions,
+[open an issue](https://github.com/openvax/varcode/issues).
 
-For bugs or questions, [open an issue](https://github.com/openvax/varcode/issues).
-Contributions are welcome; see
-[CONTRIBUTING.md](https://github.com/openvax/varcode/blob/main/CONTRIBUTING.md)
-and the [changelog](https://github.com/openvax/varcode/blob/main/CHANGELOG.md).
-Varcode is released under the [Apache 2.0 license](https://github.com/openvax/varcode/blob/main/LICENSE).
+## License
+
+Varcode is released under the
+[Apache 2.0 license](https://github.com/openvax/varcode/blob/main/LICENSE).

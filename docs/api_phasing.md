@@ -1,5 +1,6 @@
 # Phasing and germline API
 
+Signatures for phase resolvers and germline context.
 See [Phasing](phasing.md) and [Germline-aware annotation](germline.md)
 for input requirements and examples.
 

@@ -1,5 +1,7 @@
 # Effects API
 
+Signatures for effects, effect collections, candidate traversal, splice
+candidates and priority ordering.
 See [effect annotation](effect_annotation.md) for result access and the
 [effect catalog](effect_types.md) for individual consequence classes.
 
