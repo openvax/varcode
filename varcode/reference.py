@@ -273,10 +273,16 @@ def infer_reference_name(reference_name_or_path):
     elif len(file_name_matches) > 1:
         # separate logic for >1 vs 1 to give informative warning
         match = choose_best_assembly_name(file_name_matches)
-        warn(
-            ('More than one reference ({}) matches path in header ({}); '
-             'the most recent one ({}) was used.').format(
-                ','.join(file_name_matches), reference_name_or_path, match))
+        # A UCSC name (canFam3 inside CanFam3.1) is the same assembly, so
+        # only matches naming different assemblies are ambiguous.
+        assemblies = {
+            ucsc_to_ensembl_reference_names.get(name, name)
+            for name in file_name_matches}
+        if len(assemblies) > 1:
+            warn(
+                ('More than one reference ({}) matches path in header ({}); '
+                 'the most recent one ({}) was used.').format(
+                    ','.join(file_name_matches), reference_name_or_path, match))
     elif len(full_path_matches) >= 1:
         # combine full-path logic since warning is the same
         match = choose_best_assembly_name(full_path_matches)
