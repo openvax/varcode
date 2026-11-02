@@ -1,5 +1,15 @@
 # Change Log
 
+## v11.3.3
+
+- Stop warning that a reference is ambiguous when its file name matches only
+  one assembly under its Ensembl and UCSC names, such as `CanFam3.1`,
+  `CanFam3.1.dna.toplevel.fa` or `GRCh37_hg19.fa`. The chosen assembly is
+  unchanged.
+- Assert the warnings tests trigger on purpose (skipped symbolic and REF == ALT
+  alleles, ambiguous reference paths, unoriented HCC1395 translocations), and
+  ignore the once-per-genome no-FASTA cryptic-exon warning across the suite.
+
 ## v11.3.2
 
 - Type VCF compression as the literal values pandas accepts, and pin

@@ -11,6 +11,7 @@
 # limitations under the License.
 
 import os
+import warnings
 
 import pytest 
 
@@ -28,6 +29,10 @@ RUN_TESTS_REQUIRING_INTERNET = bool(int(
     os.environ.get("RUN_TESTS_REQUIRING_INTERNET", 0)))
 
 HG19_VCF_FILENAME = data_path("somatic_hg19_14muts.vcf")
+# One of its 14 records has REF == ALT, which load_vcf skips with a warning.
+# test_load_vcf_local checks the warning; other tests here just load the file.
+REF_IDENTICAL_SKIP = "Skipped 1 reference-identical ALT allele"
+pytestmark = pytest.mark.filterwarnings("ignore:%s:UserWarning" % REF_IDENTICAL_SKIP)
 HG19_VCF_EXTERNAL_URL = (
     "https://raw.githubusercontent.com/hammerlab/varcode/master/test/data/somatic_hg19_14muts.vcf")
 
@@ -37,25 +42,30 @@ HG19_VCF_EXTERNAL_URL = (
 #   "https://raw.githubusercontent.com/hammerlab/varcode/faster-vcf-parsing/test/data/somatic_hg19_14muts.vcf")
 
 def test_load_vcf_local():
-    variants = load_vcf(HG19_VCF_FILENAME)
+    with pytest.warns(UserWarning, match=REF_IDENTICAL_SKIP):
+        variants = load_vcf(HG19_VCF_FILENAME)
     assert variants.reference_names() == {"GRCh37"}
     assert len(variants) == 13
 
-    variants = load_vcf(HG19_VCF_FILENAME + ".gz")
+    with pytest.warns(UserWarning, match=REF_IDENTICAL_SKIP):
+        variants = load_vcf(HG19_VCF_FILENAME + ".gz")
     assert variants.reference_names() == {"GRCh37"}
     assert len(variants) == 13
 
-    variants = load_vcf("file://%s" % HG19_VCF_FILENAME)
+    with pytest.warns(UserWarning, match=REF_IDENTICAL_SKIP):
+        variants = load_vcf("file://%s" % HG19_VCF_FILENAME)
     assert variants.reference_names() == {"GRCh37"}
     assert len(variants) == 13
 
-    variants = load_vcf("file://%s.gz" % HG19_VCF_FILENAME)
+    with pytest.warns(UserWarning, match=REF_IDENTICAL_SKIP):
+        variants = load_vcf("file://%s.gz" % HG19_VCF_FILENAME)
     assert variants.reference_names() == {"GRCh37"}
     assert len(variants) == 13
 
     # An extra slashe before an absolute path can confuse URL parsing.
     # Test that it can still be opened:
-    variants = load_vcf("/%s" % HG19_VCF_FILENAME)
+    with pytest.warns(UserWarning, match=REF_IDENTICAL_SKIP):
+        variants = load_vcf("/%s" % HG19_VCF_FILENAME)
     assert variants.reference_names() == {"GRCh37"}
     assert len(variants) == 13
 
@@ -141,7 +151,10 @@ def test_vcf_number_entries_duplicates():
     assert len(variants) == 3
 
 def generate_vcf_gene_names():
-    variants = load_vcf(HG19_VCF_FILENAME)
+    # Parameters load at collection, outside pytestmark's filter.
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", REF_IDENTICAL_SKIP, UserWarning)
+        variants = load_vcf(HG19_VCF_FILENAME)
     for variant in variants:
         yield (variants, variant)
 
