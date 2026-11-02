@@ -485,27 +485,26 @@ def test_cryptic_exons_warns_once_per_genome():
     # Reset the per-instance flag so the warning is armed.
     g._missing_reference_warned = False
 
+    # No release-81 transcript lies within the 500 bp scan window of
+    # either breakend (the first genes start at 1:11869 and 2:38814).
     sv = StructuralVariant(
-        contig="1", start=1_000_000, sv_type="BND",
-        alt="N]2:1000000]", mate_contig="2",
-        mate_start=1_000_000, mate_orientation="]]",
+        contig="1", start=1_000, sv_type="BND",
+        alt="N]2:1000]", mate_contig="2",
+        mate_start=1_000, mate_orientation="]]",
         genome=g,
     )
 
-    # First call — expect at most one warning (zero is also valid:
-    # transcripts may cover the position and Tier 2 returns content).
     with warnings.catch_warnings(record=True) as first:
         warnings.simplefilter("always")
         enumerate_from_structural_variant(sv, genome=g)
     first_no_ref = [w for w in first
                     if "no reference sequence" in str(w.message)]
-    # Second call — even if first warned, second should NOT.
+    # A second uncovered call on the same genome is silent.
     with warnings.catch_warnings(record=True) as second:
         warnings.simplefilter("always")
         enumerate_from_structural_variant(sv, genome=g)
     second_no_ref = [w for w in second
                      if "no reference sequence" in str(w.message)]
+    assert len(first_no_ref) == 1, [str(w.message) for w in first]
     assert not second_no_ref, [str(w.message) for w in second]
-    # If the first call warned at all, the dedup flag should now be set.
-    if first_no_ref:
-        assert g._missing_reference_warned is True
+    assert g._missing_reference_warned is True
