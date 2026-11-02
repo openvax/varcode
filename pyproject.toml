@@ -39,7 +39,7 @@ orf = ["orfdata>=0.43.0,<1"]
 uorf = ["orfdata>=0.43.0,<1"]
 rna = ["pysam>=0.21"]
 test-data = ["osteosarc>=0.14.4,<0.16", "biopython>=1.85"]
-lint = ["ruff", "mypy==2.4.0"]
+lint = ["ruff", "mypy==2.4.0", "pandas-stubs==3.0.5.260914"]
 
 [project.scripts]
 varcode-genes = "varcode.cli.genes_script:main"
@@ -48,6 +48,12 @@ varcode = "varcode.cli.main:main"
 [tool.pytest.ini_options]
 markers = [
     "parity: fast vs protein_diff byte-for-byte parity harness (tests/test_protein_diff_parity.py). Runs by default; also selectable with `pytest -m parity`.",
+]
+# Test genomes have no chromosome FASTA, and this warning fires once per
+# genome in whichever test reaches it first. tests/test_genome_sequence.py
+# checks the warning itself.
+filterwarnings = [
+    "ignore:cryptic_exons. no reference sequence:UserWarning",
 ]
 
 [tool.ruff.lint]

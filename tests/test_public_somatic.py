@@ -98,16 +98,26 @@ def test_every_hcc1395_consensus_sv_loads_and_annotates():
     assert Counter(row["SV_type"] for row in rows) == {
         "DEL": 717, "INS": 551, "DUP": 230, "TRA": 146, "INV": 133, "BND": 11}
     genome = cached_release(93)
-    for row in rows:
-        variant = hcc1395_structural_variant(row, genome)
-        assert variant.info["published_consensus"] == row
-        assert variant.alt_assembly is None
-        if row["SV_type"] in ("BND", "TRA"):
-            assert variant.mate_orientation is None
-            assert variant.mate_start == int(row["Pos2"])
-        effects = variant.effects(raise_on_error=True)
-        assert effects, row["SV_id"]
-        materialize_effects(effects)
+    translocations = set()
+    # The table gives each translocation's partner position but not its
+    # orientation, so annotation says which partner it assumed is 5'.
+    with pytest.warns(UserWarning, match="can't read the breakend orientation") as caught:
+        for row in rows:
+            variant = hcc1395_structural_variant(row, genome)
+            assert variant.info["published_consensus"] == row
+            assert variant.alt_assembly is None
+            if row["SV_type"] in ("BND", "TRA"):
+                assert variant.mate_orientation is None
+                assert variant.mate_start == int(row["Pos2"])
+                translocations.add(variant.short_description)
+            effects = variant.effects(raise_on_error=True)
+            assert effects, row["SV_id"]
+            materialize_effects(effects)
+    assumed = {
+        str(w.message).split(" of ", 1)[1].split(" from ALT", 1)[0]
+        for w in caught.list
+        if "can't read the breakend orientation" in str(w.message)}
+    assert assumed <= translocations
 
 
 def test_published_canine_consequences():
