@@ -21,6 +21,7 @@ from .cryptic_exons import (
     score_acceptor,
     score_donor,
 )
+from .circular_origin import TranscriptFrame
 from .genomic_layout import SequenceUnavailable
 from .effects.classify import _attach_transcript_models, classify_from_protein_diff
 from .effects.codon_tables import (
@@ -70,13 +71,6 @@ class _ExonFragment:
     copy_group: str
 
 
-def _ordered_exons(transcript):
-    return tuple(sorted(
-        transcript.exons,
-        key=lambda exon: exon.start,
-        reverse=transcript.on_backward_strand))
-
-
 def _gap_is_inserted(layout, start, end):
     if start == end:
         return True
@@ -92,7 +86,8 @@ def build_exon_runs(transcript, layout):
     duplicated exon is a distinct occurrence, while inverted (antisense)
     sequence is intentionally excluded.
     """
-    exons = _ordered_exons(transcript)
+    # Exons in the transcript's frame, as from_transcript lays it out.
+    exons = TranscriptFrame(transcript).exon_intervals
     transcript_strand = "-" if transcript.on_backward_strand else "+"
     fragments = []
     layout_offset = 0
@@ -100,9 +95,9 @@ def build_exon_runs(transcript, layout):
         if (segment.contig == transcript.contig
                 and segment.strand == transcript_strand
                 and segment.origin_kind != "inverted"):
-            for exon_number, exon in enumerate(exons, 1):
-                overlap_start = max(segment.start, exon.start)
-                overlap_end = min(segment.end, exon.end)
+            for exon_number, (exon_start, exon_end) in enumerate(exons, 1):
+                overlap_start = max(segment.start, exon_start)
+                overlap_end = min(segment.end, exon_end)
                 if overlap_start > overlap_end:
                     continue
                 if segment.strand == "+":
@@ -122,8 +117,8 @@ def build_exon_runs(transcript, layout):
                     exon_number=exon_number,
                     layout_start=layout_offset + within_start,
                     layout_end=layout_offset + within_end,
-                    reference_start=exon.start,
-                    reference_end=exon.end,
+                    reference_start=exon_start,
+                    reference_end=exon_end,
                     first_genomic_position=first_position,
                     last_genomic_position=last_position,
                     copy_group=copy_group))
@@ -184,15 +179,16 @@ def _is_canonical_junction(transcript, left, right):
 
 def junction_signature(transcript, runs):
     """Return non-reference exon joins in transcript order."""
+    genomic = TranscriptFrame(transcript).genomic
     signature = []
     for left, right in zip(runs, runs[1:]):
         if _is_canonical_junction(transcript, left, right):
             continue
         signature.append((
             transcript.contig,
-            left.last_genomic_position,
+            genomic(left.last_genomic_position),
             transcript.contig,
-            right.first_genomic_position,
+            genomic(right.first_genomic_position),
         ))
     return tuple(signature)
 
@@ -229,7 +225,9 @@ def _assemble_product(transcript, layout, intervals, junctions, evidence):
     """Assemble and translate one selected path without losing base origins."""
     pieces = tuple(layout.slice(start, end) for start, end in intervals)
     cdna = "".join(piece.materialize() for piece in pieces)
-    origins = tuple(origin for piece in pieces for origin in piece.origins())
+    origins = tuple(
+        (contig, layout.genomic(contig, position), kind)
+        for piece in pieces for contig, position, kind in piece.origins())
     target = _start_codon_first_position(transcript)
     start = next((i for i, (contig, position, kind) in enumerate(origins)
                   if contig == transcript.contig and position == target
@@ -310,6 +308,8 @@ def _junctions_for_bounds(transcript, layout, selected, bounds):
             continue
         left_contig, left_position, _ = layout.origin(left_end - 1)
         right_contig, right_position, _ = layout.origin(right_start)
+        left_position = layout.genomic(left_contig, left_position)
+        right_position = layout.genomic(right_contig, right_position)
         canonical = (
             left_end == left.layout_end
             and right_start == right.layout_start
@@ -377,8 +377,9 @@ def realize_splice_plan(
                 bounds[run.key][1] = boundary
             else:
                 bounds[run.key][0] = boundary
-            _, position, _ = layout.origin(
+            contig, position, _ = layout.origin(
                 boundary - 1 if key.side == "donor" else boundary)
+            position = layout.genomic(contig, position)
             resolved_choices.append((key, option.mechanism, position, score))
             continue
         unresolved.append(option.mechanism)
@@ -424,7 +425,7 @@ def _variant_interval(variant):
 def _unchanged_product_effect(variant, transcript, mutant):
     """Classify by genomic location when the translated protein is unchanged."""
     start, end = _variant_interval(variant)
-    exons = _ordered_exons(transcript)
+    exons = tuple(transcript.exons)
     overlapping_positions = []
     for exon in exons:
         overlap_start = max(start, exon.start)

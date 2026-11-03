@@ -1,5 +1,7 @@
 # Variants and files API
 
+Signatures for reference genomes, variants, genotypes, collection transforms,
+file loaders and exceptions.
 For examples, see [file loading](getting_started.md#load-a-file),
 [sample queries](genotype.md), and [transforms](transforms.md).
 

@@ -212,7 +212,7 @@ also distinguish [junction coordinates from affected spans](sv_reference.md#alle
 
 ## Dependency versions
 
-Varcode requires PyEnsembl 2.24.1+ and gtfparse 3.0.2+, and supports pandas
+Varcode requires PyEnsembl 2.30.0+ and gtfparse 3.0.2+, and supports pandas
 2.2.2+ and 3.x on Python 3.11 or later.
 
 To upgrade an existing environment to pandas 3, use Python 3.11 or later and

@@ -1,6 +1,6 @@
 # Change Log
 
-## v11.3.6
+## v11.5.0
 
 - `varcode` is now a single command with subcommands `effects`, `genes` and
   `check-samples`; `varcode genes` is the same as `varcode-genes`, which keeps
@@ -8,6 +8,47 @@
   `varcode --version` and `-o`/`--output` as synonyms for `--output-csv`.
 - `varcode --help` now lists the subcommands; the annotation options it used to
   show are under `varcode effects --help`.
+
+## v11.4.2
+
+- Documentation only. Reorganize the README into Install, Quick start (with
+  real output), Command line, Documentation, Development and License, and say
+  where Varcode sits among PyEnsembl, Isovar, Topiary and Vaxrank.
+- Correct the minimum PyEnsembl version in the getting-started guide (2.30.0,
+  matching `requirements.txt`), document the `varcode[rna]` extra needed by
+  `RNAReadPhasingSource`, and add a one-line summary to the API reference and
+  maintainer pages that lacked one.
+
+## v11.4.1
+
+- The annotation throughput test budgets CPU time instead of wall-clock time,
+  so other processes on the machine, including the suite's own parallel
+  workers, can no longer fail `./test.sh` or a deploy (#679). Annotation is
+  CPU-bound once warm. Under 20 competing processes on 10 cores, wall-clock
+  time rose 2.8× and CPU time 1.2×. CI no longer runs the test separately
+  before the suite.
+
+## v11.4.0
+
+- Annotate transcripts joined across the origin of a circular contig, such as
+  hepatitis B polymerase (`join(2307..3215,1..1623)`), in the transcript's own
+  frame (#686). The default annotator laid them out in coordinate order. It
+  called every variant after the origin `FivePrimeUTR` and truncated the
+  protein for variants before it. Both annotators treated the origin as a
+  splice junction.
+- Structural variants on such transcripts are read on the circle:
+  - deletions, duplications and inversions on either side of the origin;
+  - deletions that take both of the transcript's ends;
+  - deletions across the origin, written past the contig's end or as a
+    breakend junction that skips it;
+  - fusions with the circle at either end.
+- Exons meeting at an origin are one exon for exon skipping.
+- Variants, breakends and germline alleles between an origin-joined
+  transcript's 3' and 5' ends are outside it. `Variant.transcripts`, `genes`,
+  `gene_ids` and `gene_names`, and fusion-partner lookups, agree on this.
+- Exon order is shared by the layout, ORF, fusion-mapping and
+  reference-completion code. They follow annotated order across an origin and
+  coordinate order along the strand otherwise.
 
 ## v11.3.3
 

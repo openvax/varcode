@@ -27,12 +27,19 @@ from varcode.util import random_variants
 ensembl_grch38 = cached_release(81)
 
 def _time_variant_annotation(variant_collection):
-    start_t = time.perf_counter()
+    """Annotate a collection and time it.
+
+    Returns
+    -------
+    tuple of float
+        CPU seconds used by this process, and wall-clock seconds elapsed.
+    """
+    start_cpu, start_wall = time.process_time(), time.perf_counter()
     effects = variant_collection.effects()
-    end_t = time.perf_counter()
+    cpu_t = time.process_time() - start_cpu
+    wall_t = time.perf_counter() - start_wall
     assert len(effects.groupby_variant()) == len(variant_collection)
-    elapsed_t = end_t - start_t
-    return elapsed_t
+    return cpu_t, wall_t
 
 
 def _check_effect_timing(
@@ -50,10 +57,11 @@ def _check_effect_timing(
         n_variants,
         random_seed=random_seed,
         ensembl=ensembl_grch38)
-    elapsed_t = _time_variant_annotation(variant_collection)
-    print("Elapsed: %0.4f for %d variants" % (elapsed_t, n_variants))
-    assert elapsed_t / n_variants < 0.1, \
-        "Should be faster than 100ms / variant!"
+    cpu_t, wall_t = _time_variant_annotation(variant_collection)
+    print("CPU: %0.4f s, wall-clock: %0.4f s for %d variants" % (
+        cpu_t, wall_t, n_variants))
+    assert cpu_t / n_variants < 0.1, \
+        "Should use less than 100ms of CPU per variant!"
 
 
 @pytest.mark.no_cover
@@ -64,6 +72,10 @@ def test_effect_timing():
     interpreter keeps their allocation/GC history and coverage instrumentation
     out of this throughput measurement. Imports and warmup remain outside the
     timer; annotation still uses the default pipeline and the original budget.
+
+    The budget is on CPU time. Warm annotation is CPU-bound, so CPU time
+    tracks varcode's own cost, while wall-clock time also counts every other
+    process on the machine, including this suite's xdist workers (#679).
     """
     result = subprocess.run(
         [sys.executable, "-m", "tests.test_timings"],

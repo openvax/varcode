@@ -14,6 +14,7 @@
 
 from dataclasses import dataclass
 
+from .circular_origin import exon_number_before_origin, origin_partners
 from .effect_hypotheses import (
     SpliceAxis,
     SpliceOption,
@@ -74,7 +75,8 @@ def _motif_changed(transcript, layout, offsets, canonical):
         segment = layout.slice(offset, offset + 1).segments[0]
         source = segment.source_variant
         if source is not None and not getattr(source, "is_structural", False):
-            source_offset = position - source.trimmed_base1_start
+            source_offset = (
+                layout.genomic(contig, position) - source.trimmed_base1_start)
             reference = source.trimmed_ref[source_offset:source_offset + 1] or fallback
             if transcript.on_backward_strand:
                 reference = reverse_complement(reference)
@@ -172,15 +174,17 @@ def disrupted_splice_sites(transcript, layout, runs=None):
     if runs is None:
         runs = build_exon_runs(transcript, layout)
     n_exons = len(transcript.exons)
+    # The exons on either side of a circular origin meet without an intron.
+    exon_before_origin = exon_number_before_origin(transcript)
     statuses = []
     for run in runs:
-        if run.exon_number < n_exons:
+        if run.exon_number < n_exons and run.exon_number != exon_before_origin:
             strength, reason = donor_status(transcript, layout, run)
             if strength != "intact":
                 statuses.append(SpliceSiteStatus(
                     SpliceSiteKey("donor", run.exon_number, run.occurrence),
                     run.key, strength, reason, _site_context(layout, run, "donor")))
-        if run.exon_number > 1:
+        if run.exon_number > 1 and run.exon_number - 1 != exon_before_origin:
             strength, reason = acceptor_status(transcript, layout, run)
             if strength != "intact":
                 statuses.append(SpliceSiteStatus(
@@ -213,10 +217,13 @@ def splice_axes(transcript, statuses, run_keys=None):
     run_keys = tuple(run_keys or ())
     for status in statuses:
         mechanisms = _MECHANISM_ORDER[(status.key.side, status.strength)]
+        # Exons meeting at a circular origin are one exon on the circle and
+        # are skipped together.
+        skipped_exons = origin_partners(transcript, status.key.exon_number)
         options = []
         for rank, mechanism in enumerate(mechanisms):
             if (mechanism == "exon_skip"
-                    and status.key.exon_number in (1, n_exons)):
+                    and (1 in skipped_exons or n_exons in skipped_exons)):
                 continue
             kwargs = {
                 "mechanism": mechanism,
@@ -227,7 +234,10 @@ def splice_axes(transcript, statuses, run_keys=None):
                 },
             }
             if mechanism == "exon_skip":
-                kwargs["skipped_runs"] = (status.run_key,)
+                occurrence = status.run_key[1]
+                kwargs["skipped_runs"] = tuple(
+                    key for key in ((number, occurrence) for number in skipped_exons)
+                    if key == status.run_key or key in run_keys)
             else:
                 required = [status.run_key]
                 if mechanism == "intron_retention" and status.run_key in run_keys:
