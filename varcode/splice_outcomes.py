@@ -57,6 +57,7 @@ from typing import Tuple
 
 from serializable import DataclassSerializable
 
+from .circular_origin import origin_partners
 from .effects.classify import classify_from_protein_diff
 from .effects.codon_tables import codon_table_for_transcript, translate_sequence
 from .effects.selenocysteine import edited_selenocysteine
@@ -615,13 +616,26 @@ def _mechanism_order_for(splice_effect):
 
 def _affects_terminal_exon(splice_effect):
     """True if the splice signal belongs to its transcript's first or
-    last exon."""
+    last exon, counting exons joined at a circular origin as one."""
     transcript = getattr(splice_effect, "transcript", None)
     exon = _affected_exon(splice_effect)
     if transcript is None or exon is None:
         return False
     exons = transcript.exons
-    return exon.id in (exons[0].id, exons[-1].id)
+    return any(skipped.id in (exons[0].id, exons[-1].id)
+               for skipped in _skipped_exons(transcript, exon))
+
+
+def _skipped_exons(transcript, exon):
+    """The exons skipped with ``exon``: both exons meeting at a circular
+    origin, which are one exon on the circle, otherwise ``exon`` alone."""
+    exons = list(transcript.exons)
+    number = next((index for index, candidate in enumerate(exons, 1)
+                   if candidate.id == exon.id), None)
+    if number is None:
+        return (exon,)
+    return tuple(exons[partner - 1] for partner in
+                 origin_partners(transcript, number))
 
 
 # ---------------------------------------------------------------------
@@ -719,9 +733,11 @@ def _build_exon_skipping_candidate(splice_effect):
                 in_frame=False),
         )
 
-    in_frame = (exon_length(exon) % 3 == 0)
+    skipped = _skipped_exons(transcript, exon)
+    skipped_length = sum(exon_length(each) for each in skipped)
+    in_frame = (skipped_length % 3 == 0)
     mt = _build_exon_skip_mutant_transcript(
-        splice_effect.variant, transcript, exon)
+        splice_effect.variant, transcript, exon, skipped=skipped)
 
     if mt is None or mt.mutant_protein_sequence is None:
         # Couldn't compute protein (incomplete transcript, exon not
@@ -737,7 +753,7 @@ def _build_exon_skipping_candidate(splice_effect):
         )
 
     aa_fields = _aa_fields_from_protein_diff(
-        splice_effect.variant, transcript, mt, length_delta=-exon_length(exon))
+        splice_effect.variant, transcript, mt, length_delta=-skipped_length)
     return _wrap_in_candidate(
         ExonSkipping(
             variant=splice_effect.variant,
@@ -1355,7 +1371,7 @@ def _build_cryptic_splice_candidate(
 # ---------------------------------------------------------------------
 
 
-def _build_exon_skip_mutant_transcript(variant, transcript, exon):
+def _build_exon_skip_mutant_transcript(variant, transcript, exon, skipped=None):
     """Build a :class:`MutantTranscript` representing an exon skip.
 
     Deletes the exon's cDNA range from the transcript sequence and
@@ -1363,16 +1379,20 @@ def _build_exon_skip_mutant_transcript(variant, transcript, exon):
     skipped exon precedes the coding region (5'UTR exon). When the
     skipped exon contains the start codon, returns a MutantTranscript
     with an empty protein so the classifier emits StartLoss.
+    ``skipped`` names consecutive exons skipped together, by default
+    ``(exon,)``.
     """
     if not transcript.complete:
         return None
+    skipped = tuple(skipped or (exon,))
     try:
-        exon_start_in_tx = _exon_start_offset_in_transcript(
-            transcript, exon)
+        exon_start_in_tx = min(
+            _exon_start_offset_in_transcript(transcript, each)
+            for each in skipped)
     except (StopIteration, ValueError):
         return None
 
-    length = exon_length(exon)
+    length = sum(exon_length(each) for each in skipped)
     full_sequence = str(transcript.sequence)
 
     post_skip_cdna = (

@@ -17,6 +17,7 @@ import csv
 import gzip
 import os
 
+from .circular_origin import in_transcript_order
 from .rna_evidence import RNAEvidence, make_fusion_outcome
 from .effects.codon_tables import STANDARD
 from .mutant_transcript import ReferenceSegment, _AssembledAllele
@@ -146,8 +147,8 @@ def _reference_segments(bases, genome, sequence):
                 and hi - lo + 1 == len(sequence)):
             reference = reference.upper()
             cdna_offset = 0
-            for exon_start, exon_end in sorted(
-                    getattr(transcript, "exon_intervals", ()), reverse=transcript.strand == "-"):
+            for exon_start, exon_end in in_transcript_order(
+                    getattr(transcript, "exon_intervals", ()), transcript.strand == "-"):
                 for position in range(max(lo, exon_start), min(hi, exon_end) + 1):
                     if transcript.strand == "+":
                         i, ref = position - lo, cdna_offset + position - exon_start

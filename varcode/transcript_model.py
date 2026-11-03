@@ -32,6 +32,7 @@ from .effects.effect_classes import (
 from .effects.effect_ordering import classification_priority
 from .errors import HypothesisLimitError, ReferenceMismatchError
 from .genome_sequence import _plus_strand_slice, reference_range
+from .circular_origin import TranscriptFrame
 from .genomic_layout import GenomicLayout, NonlocalStructuralEdit
 from .germline import (
     _check_max_hypotheses, detect_germline_overlap, partition_germline_by_phase)
@@ -242,9 +243,8 @@ def predict_transcript_model_effect(
     primary = somatic_variants[0]
     sv_type = getattr(primary, "sv_type", None)
     assembled = sv_type in ("DEL", "DUP", "INV") and primary.alt_assembly
-    nonlocal_span = sv_type in ("DEL", "DUP", "INV") and (
-        primary.affected_start < transcript.start
-        or primary.affected_end > transcript.end)
+    nonlocal_span = sv_type in ("DEL", "DUP", "INV") and not TranscriptFrame(
+        transcript).contains(primary.affected_start, primary.affected_end)
     junction_record = sv_type is not None and any(
         bracket in getattr(primary, "symbolic_alt", "") for bracket in "[]")
     if sv_type in ("BND", "CNV", "INV") or assembled or nonlocal_span or junction_record:
@@ -317,10 +317,12 @@ def _realize_outcomes(
     # than the splice scan flank. Keep their full genomic span before exon
     # projection; extending the layout does not extend the transcript.
     flank = 50
+    frame = TranscriptFrame(transcript)
     for variant in (*somatic_variants, *(v for h in phase_hypotheses for v in h.cis)):
         if not getattr(variant, "is_structural", False):
-            flank = max(flank, transcript.start - variant.trimmed_base1_start + 50,
-                        variant.trimmed_base1_end - transcript.end + 50)
+            for start, end in frame.images(
+                    variant.trimmed_base1_start, variant.trimmed_base1_end):
+                flank = max(flank, frame.start - start + 50, end - frame.end + 50)
     reference = GenomicLayout.from_transcript(
         transcript, flank=flank, sequence_provider=sequence_provider)
     for phase_hypothesis in phase_hypotheses:
@@ -434,8 +436,12 @@ class TranscriptModelEffectAnnotator:
 
         # A full patient product must include supplied alleles across the
         # transcript, including sequence that a retention path may expose.
-        germline = germline_ctx.variants_in_window(
-            transcript.contig, transcript.start, transcript.end)
+        frame = TranscriptFrame(transcript)
+        germline = tuple(
+            variant
+            for start, end in frame.genomic_intervals(frame.start, frame.end)
+            for variant in germline_ctx.variants_in_window(
+                transcript.contig, start, end))
         result = self._predict_variants(
             variants, transcript,
             germline_variants=germline,

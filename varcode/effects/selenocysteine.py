@@ -119,7 +119,8 @@ def layout_selenocysteine(transcript, layouts):
             reference = None
             if contig == transcript.contig and kind != "inverted":
                 try:
-                    reference = transcript.spliced_offset(position)
+                    reference = transcript.spliced_offset(
+                        layout.genomic(contig, position))
                 except ValueError:
                     reference = None
             if reference is not None:
