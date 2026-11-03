@@ -526,16 +526,13 @@ def to_proteome(effects: Iterable | MutationEffect | EffectCandidate | RealizedE
 
     Notes
     -----
-    Requires the optional ``orf`` dependency. Reads native product and reference
+    Reads native product and reference
     transcript properties without rerunning annotation or translation. An exact common source reference scopes the
     result; missing or mixed references remain unscoped and require explicit
     compatibility when merged with a reference proteome. Unknown taxa remain
     unknown. Unsupported nonportable extension metadata raises an error.
     """
-    try:
-        from orfdata import Proteome
-    except ImportError as error:
-        raise ImportError("to_proteome requires the optional dependency: pip install 'varcode[orf]'") from error
+    from orfdata import Proteome
     defaults = {name: getattr(effects, name, None) for name in ("annotator", "annotator_version")}
     export = _Export(sample_id, run_id, defaults)
     collection = None

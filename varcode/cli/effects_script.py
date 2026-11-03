@@ -43,7 +43,8 @@ arg_parser.add_argument(
 arg_parser.add_argument(
     "--extra-orfs", action="append", metavar="EVIDENCE",
     help="Add ORFdata consequences: all, ribosome, ms, proteomics or immunopeptidomics. "
-         "Repeat to include ORFs with any selected evidence; requires varcode[orf].")
+         "Repeat to include ORFs with any selected evidence. Uses the ORF catalogues "
+         "installed for the genome; `orfdata setup` installs more.")
 
 arg_parser.add_argument(
     "--one-per-variant",

@@ -3,6 +3,7 @@
 from dataclasses import replace
 from types import SimpleNamespace
 
+import orfdata
 import pytest
 
 from varcode import EffectCollection, ReferenceMismatchError, Variant, annotate_orf_variants, to_proteome
@@ -11,8 +12,6 @@ from .test_extra_orfs import synthetic
 from . import transcript_orf_fixture
 
 orf_genome = transcript_orf_fixture.orf_genome
-
-orfdata = pytest.importorskip("orfdata")
 
 
 def source_orf(reverse=False, split=False, *, start=3, end=None, phase=0,

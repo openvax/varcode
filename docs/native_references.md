@@ -14,7 +14,7 @@ rapid **2022_07** annotation for **T2T-CHM13v2.0, GCA_009914755.4**. PyEnsembl
 ```sh
 python -m venv .venv
 . .venv/bin/activate
-python -m pip install --upgrade 'varcode[orf]' 'orfdata>=0.43.0' 'pyensembl>=2.32.3'
+python -m pip install --upgrade varcode 'orfdata>=0.44' 'pyensembl>=2.32.3'
 orfdata genomes install t2t-chm13 --genome-fasta \
   https://ftp.ensembl.org/pub/rapid-release/species/Homo_sapiens/GCA_009914755.4/ensembl/genome/Homo_sapiens-GCA_009914755.4-unmasked.fa.gz
 ```

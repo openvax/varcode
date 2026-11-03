@@ -181,14 +181,14 @@ varcode genes --genome GRCh38 --variant chr12 25245350 C T --output-csv genes.cs
 For SV/splice analysis with optional noncanonical ORFs:
 
 ```bash
-pip install 'varcode[orf]'
 varcode --genome GRCh38:81 --genome-fasta /data/GRCh38.fa \
   --vcf variants.vcf --extra-orfs all --output-csv effects.csv
 ```
 
 Use `--extra-orfs ms` to select ORFs with MS evidence. ORFdata chooses the
-catalogue for the reference species and assembly; missing data produces setup
-instructions. CSV files containing extra ORFs include an `effect_json` column
+catalogues for the reference species and assembly. If some are not installed,
+Varcode uses the installed ones, or none, and warns with the `orfdata` command
+that installs the rest. CSV files containing extra ORFs include an `effect_json` column
 so `EffectCollection.from_csv()` can restore the complete consequences.
 
 Inputs can be combined and repeated: `--vcf`, `--maf`, `--variant`, and
@@ -214,14 +214,13 @@ also distinguish [junction coordinates from affected spans](sv_reference.md#alle
 
 ## Dependency versions
 
-Varcode requires PyEnsembl 2.30.0+ and gtfparse 3.0.2+, and supports pandas
-2.2.2+ and 3.x on Python 3.11 or later.
+Varcode requires pandas 3, PyEnsembl 2.32.3+, gtfparse 3.0.2+ and ORFdata
+0.44+, on Python 3.11 or later.
 
-To upgrade an existing environment to pandas 3, use Python 3.11 or later and
-run:
+To upgrade an existing environment, use Python 3.11 or later and run:
 
 ```bash
-pip install --upgrade varcode pyensembl 'gtfparse>=3.0.2,<4' 'pandas>=3,<4'
+pip install --upgrade varcode 'pyensembl>=2.32.3' 'gtfparse>=3.0.2,<4' 'pandas>=3,<4' 'orfdata>=0.44'
 ```
 
 Environments shared with Topiary require Topiary 5.94.2 or later for its

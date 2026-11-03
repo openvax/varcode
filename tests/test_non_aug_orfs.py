@@ -3,6 +3,7 @@
 from dataclasses import replace
 from types import SimpleNamespace
 
+import orfdata
 import pytest
 
 from varcode import VariantCollection, annotate_orf_rna_product
@@ -14,8 +15,6 @@ from varcode.orf import _ORFTranscript, _reference_provider
 from varcode.transcript_layout import build_exon_runs, realize_exon_path, realize_splice_plan
 
 from .test_extra_orfs import synthetic
-
-orfdata = pytest.importorskip("orfdata", minversion="0.27.1")
 
 
 def declared_orf(start, reverse=False, split=False):

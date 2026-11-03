@@ -40,7 +40,6 @@ def test_bad_reference_or_orf_option_fails_before_annotating(options, message, m
 
 
 def test_cli_orf_selection_and_csv_round_trip(tmp_path):
-    pytest.importorskip("orfdata")
     path = tmp_path / "effects.csv"
     main(["--genome", "GRCh38:95", "--variant", "7", "66205486", "C", "G",
           "--extra-orfs", "ms", "--output-csv", str(path)])

@@ -155,7 +155,6 @@ def test_yeast_orf_modification_retains_declared_code():
     from pyensembl import cached_release
     from varcode import Variant, annotate_orf_variants
     from .test_uorf import Transcript
-    pytest.importorskip("orfdata")
     transcript = Transcript()
     transcript.contig = "MT"
     transcript.sequence = "CCCATGCTATGGGGGTAAATGAAATAA"

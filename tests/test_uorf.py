@@ -4,6 +4,7 @@ from dataclasses import replace
 import json
 from types import SimpleNamespace
 
+import orfdata
 import pytest
 from pyensembl import cached_release
 
@@ -13,8 +14,6 @@ from varcode.uorf import (
 )
 from varcode.effect_hypotheses import RealizedTranscriptProduct
 from varcode.nucleotides import reverse_complement
-
-orfdata = pytest.importorskip("orfdata")
 
 
 @pytest.fixture(scope="module")
