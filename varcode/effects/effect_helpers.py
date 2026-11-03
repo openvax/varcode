@@ -15,6 +15,7 @@ Helper functions for determine effect annotation for a variant
 """
 
 
+from ..circular_origin import exon_number_before_origin
 from ..nucleotides import PURINE_NUCLEOTIDES, AMINO_NUCLEOTIDES
 
 def variant_overlaps_interval(
@@ -116,7 +117,10 @@ def changes_exonic_splice_site(
     #
     # 3' splice site: YAG|R
     #
-    if exon_number > 1 and transcript_offset == exon_start_offset:
+    # The exons on either side of a circular origin meet without an intron.
+    exon_before_origin = exon_number_before_origin(transcript)
+    if (exon_number > 1 and exon_number - 1 != exon_before_origin
+            and transcript_offset == exon_start_offset):
         # if this is any exon past the first, check to see if it lost
         # the purine on its left side
         #
@@ -135,7 +139,7 @@ def changes_exonic_splice_site(
                     if next_base not in PURINE_NUCLEOTIDES:
                         return True
 
-    if exon_number < len(transcript.exons):
+    if exon_number < len(transcript.exons) and exon_number != exon_before_origin:
         # if the mutation affects an exon whose right end gets spliced
         # to a next exon, check if the variant alters the exon side of
         # 5' consensus splicing sequence

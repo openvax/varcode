@@ -4,6 +4,7 @@ from copy import deepcopy
 from dataclasses import replace
 from itertools import product
 
+from .circular_origin import in_transcript_order
 from .effect_candidates import EffectCandidate
 from .effects.codon_tables import codon_table_for_transcript, translate_sequence
 from .effects.effect_classes import GeneFusion, TranslocationToIntergenic
@@ -20,7 +21,8 @@ _ENDS = ("five_prime", "three_prime")
 def _genomic_pieces(transcript, start, end):
     """Inclusive genomic pieces for a cDNA interval, in transcript order."""
     offset = 0
-    for lo, hi in sorted(transcript.exon_intervals, reverse=transcript.strand == "-"):
+    for lo, hi in in_transcript_order(
+            transcript.exon_intervals, transcript.strand == "-"):
         length = hi - lo + 1
         a, b = max(start, offset) - offset, min(end, offset + length) - offset
         if a < b:

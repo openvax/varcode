@@ -23,11 +23,18 @@ one Python object per genomic base.
 
 Coordinates are one-based and inclusive.  Segment order is molecule order;
 ``strand`` says how the corresponding reference interval is traversed.
+
+A layout of a transcript joined across a circular origin is written in the
+transcript's frame (:mod:`varcode.circular_origin`): coordinates past the
+contig's length continue from base 1. ``circular_contigs`` gives each such
+contig's length, so genomic positions are located through their images in
+the frame.
 """
 
 from dataclasses import dataclass, field
-from typing import Callable, Optional, Tuple
+from typing import Callable, Mapping, Optional, Tuple
 
+from .circular_origin import TranscriptFrame
 from .nucleotides import reverse_complement
 
 
@@ -216,9 +223,16 @@ class GenomicLayout:
     segments: Tuple[LayoutSegment, ...]
     sequence_provider: Optional[Callable] = field(
         default=None, compare=False, repr=False)
+    circular_contigs: Mapping[str, int] = field(
+        default_factory=dict, compare=False, repr=False)
 
     def __post_init__(self):
         object.__setattr__(self, "segments", _coalesce(tuple(self.segments)))
+
+    def _derive(self, segments):
+        """A layout of ``segments`` sharing this layout's sequence and frame."""
+        return GenomicLayout(
+            segments, self.sequence_provider, self.circular_contigs)
 
     @classmethod
     def from_interval(
@@ -231,12 +245,29 @@ class GenomicLayout:
     @classmethod
     def from_transcript(
             cls, transcript, flank=50, sequence_provider=None):
-        """Create a transcript-oriented layout around ``transcript``."""
-        start = max(1, transcript.start - flank)
-        end = transcript.end + flank
+        """Create a transcript-oriented layout around ``transcript``.
+
+        A transcript joined across a circular origin is laid out in its
+        frame, as one interval through the origin. Its flanks share the
+        stretch between the transcript's ends and never wrap onto it.
+        """
         strand = "-" if transcript.on_backward_strand else "+"
-        return cls.from_interval(
-            transcript.contig, start, end, strand, sequence_provider)
+        frame = TranscriptFrame(transcript)
+        length = frame.contig_length
+        if length is None:
+            start = max(1, transcript.start - flank)
+            end = transcript.end + flank
+            return cls.from_interval(
+                transcript.contig, start, end, strand, sequence_provider)
+        between = max(0, length - (frame.end - frame.start + 1))
+        lower = min(flank, between - min(flank, between // 2))
+        upper = min(flank, between - lower)
+        return cls(
+            segments=(LayoutSegment(
+                transcript.contig, frame.start - lower, frame.end + upper,
+                strand=strand),),
+            sequence_provider=_provider_in_frame(sequence_provider, frame),
+            circular_contigs={transcript.contig: length})
 
     @property
     def length(self):
@@ -301,9 +332,8 @@ class GenomicLayout:
 
     def reversed(self):
         """Reverse-complement the molecule while preserving base origins."""
-        return GenomicLayout(
-            tuple(segment.reversed() for segment in reversed(self.segments)),
-            self.sequence_provider)
+        return self._derive(
+            tuple(segment.reversed() for segment in reversed(self.segments)))
 
     def _locate(self, contig, position, allowed_origin_kinds=None):
         """Locate the first matching reference base in molecule order."""
@@ -347,18 +377,45 @@ class GenomicLayout:
         if start < 0 or end < start or end > self.length:
             raise IndexError((start, end))
         _, from_start = self._split_at(start)
-        middle = GenomicLayout(from_start, self.sequence_provider)
+        middle = self._derive(from_start)
         selected, _ = middle._split_at(end - start)
-        return GenomicLayout(selected, self.sequence_provider)
+        return self._derive(selected)
 
     def replace(self, start, end, replacement=()):
         """Replace a half-open molecule interval with segments."""
         before, remainder = self._split_at(start)
-        after_layout = GenomicLayout(remainder, self.sequence_provider)
+        after_layout = self._derive(remainder)
         _, after = after_layout._split_at(end - start)
-        return GenomicLayout(
-            before + tuple(replacement) + after,
-            self.sequence_provider)
+        return self._derive(before + tuple(replacement) + after)
+
+    def genomic(self, contig, position):
+        """The genomic position of a layout coordinate on ``contig``."""
+        length = self.circular_contigs.get(contig)
+        if length is None or position is None:
+            return position
+        return (position - 1) % length + 1
+
+    def _images(self, contig, start, end):
+        """Images of genomic ``start..end`` in this layout's coordinates.
+
+        One on a linear contig. On a circular contig, each image that meets
+        the layout's reference sequence, or the interval itself when none
+        does: a transcript's two ends, or both copies of a terminally
+        redundant stretch, are each edited.
+        """
+        length = self.circular_contigs.get(contig)
+        if length is None:
+            return ((start, end),)
+        covered = [segment for segment in self.segments
+                   if segment.contig == contig and segment.start is not None]
+        if not covered:
+            return ((start, end),)
+        low = min(segment.start for segment in covered)
+        high = max(segment.end for segment in covered)
+        found = tuple(
+            (start + lap * length, end + lap * length) for lap in (-1, 0, 1)
+            if start + lap * length <= high and end + lap * length >= low)
+        return found or ((start, end),)
 
     def _span_offsets(self, contig, start, end):
         allowed = frozenset(("reference", "alternate"))
@@ -391,6 +448,17 @@ class GenomicLayout:
         ref = variant.trimmed_ref.upper()
         alt = variant.trimmed_alt.upper()
         start = variant.trimmed_base1_start
+        end = variant.trimmed_base1_end if ref else start
+        layout = self
+        for image_start, image_end in self._images(contig, start, end):
+            layout = layout._apply_point_image(
+                variant, contig, image_start, image_end, ref, alt,
+                validate_reference)
+        return layout
+
+    def _apply_point_image(
+            self, variant, contig, start, end, ref, alt, validate_reference):
+        """Apply a point allele at one image of its genomic span."""
         if not ref:
             anchor, _, _, segment = self._locate(
                 contig, start, frozenset(("reference", "alternate")))
@@ -401,7 +469,6 @@ class GenomicLayout:
                 origin_kind="inserted", source_variant=variant)
             return self.replace(insert_at, insert_at, (inserted,))
 
-        end = variant.trimmed_base1_end
         low, high, strand = self._span_offsets(contig, start, end)
         if validate_reference:
             try:
@@ -419,11 +486,15 @@ class GenomicLayout:
                         from .errors import ReferenceMismatchError
                         forward = existing if strand == "+" else reverse_complement(existing)
                         raise ReferenceMismatchError(
-                            variant, None, forward, ref, genome_start=start, genome_end=end)
+                            variant, None, forward, ref,
+                            genome_start=variant.trimmed_base1_start,
+                            genome_end=variant.trimmed_base1_end)
                     raise ValueError(
                         "Reference allele %r does not match realized layout "
                         "%r at %s:%d-%d" % (
-                            expected, existing, contig, start, end))
+                            expected, existing, contig,
+                            variant.trimmed_base1_start,
+                            variant.trimmed_base1_end))
         replacement = _point_replacement_segments(
             contig=contig,
             start=start,
@@ -446,13 +517,22 @@ class GenomicLayout:
             raise UnsupportedLayoutEdit("Use join_breakends for BND variants")
         if kind == "CNV":
             raise UnsupportedLayoutEdit("CNV direction is unresolved")
+        if kind == "INS" and not variant.alt_assembly:
+            raise SequenceUnavailable(
+                "INS requires alt_assembly to realize sequence")
+        span = ((variant.start, variant.start) if kind == "INS"
+                else (variant.affected_start, variant.affected_end))
+        layout = self
+        for start, end in self._images(variant.contig, *span):
+            layout = layout._apply_structural_image(variant, kind, start, end)
+        return layout
+
+    def _apply_structural_image(self, variant, kind, start, end):
+        """Apply a DEL, DUP, INV or INS at one image of its genomic span."""
         if kind == "INS":
             sequence = variant.alt_assembly
-            if not sequence:
-                raise SequenceUnavailable(
-                    "INS requires alt_assembly to realize sequence")
             anchor, _, _, segment = self._locate(
-                variant.contig, variant.start,
+                variant.contig, start,
                 frozenset(("reference", "alternate")))
             insert_at = anchor + 1 if segment.strand == "+" else anchor
             if segment.strand == "-":
@@ -462,8 +542,6 @@ class GenomicLayout:
                 origin_kind="inserted", source_variant=variant)
             return self.replace(insert_at, insert_at, (inserted,))
 
-        start = variant.affected_start
-        end = variant.affected_end
         covered = [
             segment
             for segment in self.segments
@@ -483,7 +561,9 @@ class GenomicLayout:
             raise NonlocalStructuralEdit(
                 "%s %s:%d-%d extends beyond layout %d-%d; "
                 "the complete rearrangement junctions are unavailable" % (
-                    kind, variant.contig, start, end, layout_start, layout_end))
+                    kind, variant.contig, variant.affected_start,
+                    variant.affected_end, self.genomic(variant.contig, layout_start),
+                    self.genomic(variant.contig, layout_end)))
         start = max(start, min(segment.start for segment in covered))
         end = min(end, max(segment.end for segment in covered))
         if start > end:
@@ -566,7 +646,7 @@ class GenomicLayout:
                 first = segment.end - overlap_end
                 last = segment.end - overlap_start + 1
             kept.append(segment.slice(first, last))
-        return GenomicLayout(tuple(kept), self.sequence_provider)
+        return self._derive(tuple(kept))
 
     def endpoint_origin(self, first):
         """Return ``(contig, position)`` for the first or last base."""
@@ -609,6 +689,20 @@ def _point_replacement_segments(
     return tuple(segments)
 
 
+def _provider_in_frame(provider, frame):
+    """Read frame coordinates of ``frame``'s contig as genomic sequence."""
+    if provider is None:
+        return None
+
+    def read(contig, start, end):
+        if contig != frame.contig:
+            return provider(contig, start, end)
+        return "".join(
+            provider(contig, low, high)
+            for low, high in frame.genomic_intervals(start, end))
+    return read
+
+
 def join_breakends(layout_a, breakend_a, layout_b, breakend_b):
     """Join two retained breakend sides into one oriented layout.
 
@@ -636,7 +730,9 @@ def join_breakends(layout_a, breakend_a, layout_b, breakend_b):
             breakend_b.contig, breakend_b.position):
         raise ValueError("Second breakend is not at the retained-side boundary")
     provider = layout_a.sequence_provider or layout_b.sequence_provider
-    return GenomicLayout(left.segments + right.segments, provider)
+    return GenomicLayout(
+        left.segments + right.segments, provider,
+        {**layout_b.circular_contigs, **layout_a.circular_contigs})
 
 
 def project_intervals(layout, intervals):
@@ -664,6 +760,5 @@ def project_intervals(layout, intervals):
             else:
                 first = segment.end - overlap_end
                 last = segment.end - overlap_start + 1
-            pieces.append(GenomicLayout(
-                (segment.slice(first, last),), layout.sequence_provider))
+            pieces.append(layout._derive((segment.slice(first, last),)))
     return tuple(pieces)

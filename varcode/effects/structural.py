@@ -40,6 +40,12 @@ from .selenocysteine import segment_selenocysteine
 from ..mutant_transcript import MutantTranscript, ReferenceSegment, TranscriptEdit
 # Existing assembled-SV pickles use this private module path.
 from ..mutant_transcript import _AssembledAllele  # noqa: F401
+from ..circular_origin import (
+    TranscriptFrame,
+    feature_overlaps,
+    transcript_exons,
+    transcripts_at_locus,
+)
 from ..structural_variant import junction_span_details
 from ..sv_allele_parser import breakend_sides, _breakend_local_side
 
@@ -67,7 +73,7 @@ def _exon_cdna_ranges(transcript):
     are offsets into ``transcript.sequence``.
     """
     offset = 0
-    for exon in transcript.exons:
+    for exon in transcript_exons(transcript):
         length = exon_length(exon)
         yield exon, offset, offset + length
         offset += length
@@ -156,10 +162,15 @@ def _local_event(variant, transcript):
     if variant.sv_type != "BND":
         return _LocalEvent.of(variant)
     gene = transcript.gene
+    frame = TranscriptFrame(transcript)
     for junction in variant.junctions:
         if not all(_contains(gene, end) for end in junction):
             continue
-        details = junction_span_details(junction)
+        # Typed in the transcript's frame, a junction that skips a circular
+        # origin is the deletion it reads as, not a duplication of the rest.
+        details = junction_span_details(tuple(
+            end._replace(position=frame.position(end.position))
+            for end in junction))
         if details is not None:
             return _LocalEvent(variant, *details, junctions=(junction,))
     return None
@@ -174,17 +185,32 @@ def _event_evidence(event):
     return evidence
 
 
-def _deletion_cdna_bounds(variant, transcript):
-    """Half-open cDNA span removed by a deletion, including an empty span.
+def _deleted_cdna_ranges(variant, transcript):
+    """Half-open cDNA spans removed by a deletion, including an empty span.
 
     An intron-only deletion removes no reference cDNA but can still insert
     bases at an exonic junction. Keep its position even when start == end.
+    There is one span per image of the deletion in the transcript's frame:
+    two when it runs through the stretch between the ends of a transcript
+    joined across a circular origin, taking both ends.
     """
-    low, high = _affected_span(variant)
-    first, last = (high, low) if transcript.on_backward_strand else (low, high)
-    start, _ = _exonic_bases_before(transcript, first)
-    end, exonic = _exonic_bases_before(transcript, last)
-    return start, end + int(exonic)
+    frame = TranscriptFrame(transcript)
+    ranges = []
+    for low, high in frame.images(*_affected_span(variant)):
+        first, last = (high, low) if transcript.on_backward_strand else (low, high)
+        start, _ = _frame_bases_before(frame, first)
+        end, exonic = _frame_bases_before(frame, last)
+        ranges.append((start, end + int(exonic)))
+    return tuple(sorted(ranges))
+
+
+def _contained_image(variant, transcript):
+    """The one frame image of ``variant``'s span within the transcript, or None."""
+    frame = TranscriptFrame(transcript)
+    inside = [
+        (low, high) for low, high in frame.images(*_affected_span(variant))
+        if frame.start <= low and high <= frame.end]
+    return inside[0] if len(inside) == 1 else None
 
 
 def _cdna_ranges_within_sv(variant, transcript):
@@ -197,11 +223,17 @@ def _cdna_ranges_within_sv(variant, transcript):
     if any(not _contains(transcript, end)
            for junction in variant.junctions for end in junction):
         return []
-    sv_start, sv_end = _affected_span(variant)
+    # An arc through the stretch between the ends of a transcript joined
+    # across a circular origin leaves the transcript, like an exterior end.
+    image = _contained_image(variant, transcript)
+    if image is None:
+        return []
+    sv_start, sv_end = image
     inside = []
     reverse = transcript.on_backward_strand
-    for exon, c_s, c_e in _exon_cdna_ranges(transcript):
-        ex_s, ex_e = exon.start, exon.end
+    frame_exons = TranscriptFrame(transcript).exon_intervals
+    for (ex_s, ex_e), (_, c_s, c_e) in zip(
+            frame_exons, _exon_cdna_ranges(transcript)):
         if ex_e < sv_start or ex_s > sv_end:
             continue
         # Clip exon to [sv_start, sv_end].
@@ -284,9 +316,10 @@ def _retains_five_prime_end(transcript, side):
 
 
 def _contains(feature, breakend):
-    """Whether ``feature`` (a transcript or gene) spans ``breakend``."""
-    return (str(feature.contig) == str(breakend.contig)
-            and feature.start <= breakend.position <= feature.end)
+    """Whether ``feature`` (a transcript, gene or exon) spans ``breakend``,
+    on the circle for one joined across a circular origin."""
+    return feature_overlaps(
+        feature, breakend.contig, breakend.position, breakend.position)
 
 
 def _cached(variant, key, compute):
@@ -310,22 +343,27 @@ def _exonic_bases_before(transcript, position):
     "Transcript-5' of" means a lower genomic coordinate on the forward
     strand and a higher one on the reverse strand.
     """
+    frame = TranscriptFrame(transcript)
+    return _frame_bases_before(frame, frame.position(position))
+
+
+def _frame_bases_before(frame, position):
+    """:func:`_exonic_bases_before` for a position in ``frame``."""
     offset = 0
-    reverse = transcript.on_backward_strand
-    for exon in transcript.exons:
-        length = exon_length(exon)
-        if reverse:
-            if exon.start > position:
+    for start, end in frame.exon_intervals:
+        length = end - start + 1
+        if frame.backward:
+            if start > position:
                 offset += length
-            elif exon.end >= position:
-                return offset + (exon.end - position), True
+            elif end >= position:
+                return offset + (end - position), True
             else:
                 return offset, False
         else:
-            if exon.end < position:
+            if end < position:
                 offset += length
-            elif exon.start <= position:
-                return offset + (position - exon.start), True
+            elif start <= position:
+                return offset + (position - start), True
             else:
                 return offset, False
     return offset, False
@@ -389,13 +427,24 @@ def _build_deletion_mutant_transcript(variant, transcript):
     needed. The consequence classifier maps the surviving CDS start
     and translates this model before returning it to callers.
     """
-    start, end = _deletion_cdna_bounds(variant, transcript)
+    ranges = _deleted_cdna_ranges(variant, transcript)
     insertion, evidence = _local_junction_insertion(variant, transcript)
-    prefix = (ReferenceSegment(transcript, 0, start, label="del_kept"),) if start else ()
     full_len = len(str(transcript.sequence))
-    suffix = ((ReferenceSegment(transcript, end, full_len, label="del_kept"),)
-              if end < full_len else ())
-    segments = prefix + insertion + suffix
+    segments = []
+    kept_from = 0
+    for index, (start, end) in enumerate(ranges):
+        if start > kept_from:
+            segments.append(
+                ReferenceSegment(transcript, kept_from, start, label="del_kept"))
+        # Both ends of a transcript across a circular origin lie in one
+        # junction; its bases follow what remains.
+        if index == len(ranges) - 1:
+            segments.extend(insertion)
+        kept_from = max(kept_from, end)
+    if kept_from < full_len:
+        segments.append(
+            ReferenceSegment(transcript, kept_from, full_len, label="del_kept"))
+    segments = tuple(segments)
     joined = None if "sequence_status" in evidence else "".join(
         s.source.sequence[s.start:s.end] for s in segments)
     return MutantTranscript(
@@ -634,7 +683,8 @@ def _build_translocation_mutant_transcript(variant, transcript):
     """
     side = _breakend_local_side(variant.symbolic_alt)
     if (side is None or str(variant.contig) != str(transcript.contig)
-            or not transcript.start <= variant.start <= transcript.end):
+            or not TranscriptFrame(transcript).overlaps(
+                variant.start, variant.start)):
         return None
     keep_five_prime = _retains_five_prime_end(transcript, side)
     cut = _cdna_cut(transcript, variant.start, keep_five_prime)
@@ -753,8 +803,9 @@ def _enumerate_and_attach_splice_outcomes(event, transcript, effect):
     sv_evidence = _event_evidence(event)
     attached = []
     seen_exons = set()
+    genomic = TranscriptFrame(transcript).genomic
     for bp in bp_positions:
-        window = _breakpoint_splice_window(transcript, bp)
+        window = _breakpoint_splice_window(transcript, genomic(bp))
         if window is None:
             continue
         splice_cls, exon, distance = window
@@ -872,11 +923,13 @@ def _local_consequence(event, transcript, affected, model):
                       "sequence_status": "unresolved_junction_insertion"})
     effect, model = _classify_structural_transcript(
         event, transcript, model, affected)
-    affected_start, affected_end = _affected_span(event)
+    frame = TranscriptFrame(transcript)
+    images = frame.images(*_affected_span(event))
     ambiguous = any(
-        exon.start < affected_start <= exon.end
-        or exon.start <= affected_end < exon.end
-        for exon in affected)
+        start < low <= end or start <= high < end
+        for start, end in frame.exon_intervals
+        for low, high in images
+        if start <= high and low <= end)
     evidence = {
         **_event_evidence(event),
         "splice_ambiguous": ambiguous,
@@ -960,34 +1013,39 @@ def _classify_structural_transcript(event, transcript, model, affected):
                        for s in model.reference_segments
                        if s.label == "junction_insertion")
     if event.sv_type in ("DEL", "CN0"):
-        start, end = _deletion_cdna_bounds(event, transcript)
-        edit = TranscriptEdit(start, end, inserted, variant)
+        ranges = _deleted_cdna_ranges(event, transcript)
+        edits = tuple(
+            TranscriptEdit(start, end, inserted if index == len(ranges) - 1 else "",
+                           variant)
+            for index, (start, end) in enumerate(ranges))
     elif event.sv_type == "DUP":
         inside = _cdna_ranges_within_sv(event, transcript)
         start = inside[-1][1]
-        edit = TranscriptEdit(start, start, inserted + "".join(
-            reference[s:e] for s, e in inside), variant)
+        edits = (TranscriptEdit(start, start, inserted + "".join(
+            reference[s:e] for s, e in inside), variant),)
     else:
         return unresolved("No mapped coding edit is available")
 
     stop = max(transcript.stop_codon_spliced_offsets) + 1
     reference_protein = str(transcript.protein_sequence)
     reference_protein = "M" + reference_protein[1:]
-    if edit.cdna_end <= reference_start:
+    after_stop = all(edit.cdna_start >= stop for edit in edits)
+    if all(edit.cdna_end <= reference_start for edit in edits):
         effect = FivePrimeUTR(variant, transcript)
-    elif edit.cdna_start >= stop and protein == reference_protein:
+    elif after_stop and protein == reference_protein:
         effect = ThreePrimeUTR(variant, transcript)
     else:
-        diff_model = replace(model, reference_segments=None, edits=(edit,))
+        diff_model = replace(model, reference_segments=None, edits=edits)
         effect = classify_from_protein_diff(
             variant, transcript, reference_protein, protein,
-            length_delta=edit.length_delta if edit.cdna_start < stop else 0,
+            length_delta=sum(
+                edit.length_delta for edit in edits if edit.cdna_start < stop),
             mutant_transcript=diff_model)
         # Concrete effects reconstruct their protein from the reference.
         # Use the same initiated reference passed to the diff classifier
         # (Ensembl can spell a CTG/TTG initiator as L).
         effect._original_protein_sequence = reference_protein
-        if edit.cdna_start >= stop:
+        if after_stop:
             effect._modifies_coding_sequence = False
     return effect, model
 
@@ -1026,8 +1084,11 @@ def _deletes_whole_transcript(variant, transcript):
     if (variant.sv_type not in ("DEL", "CN0") or variant.alt_assembly
             or str(variant.contig) != str(transcript.contig)):
         return False
-    start, end = _affected_span(variant)
-    return start <= transcript.start and transcript.end <= end
+    frame = TranscriptFrame(transcript)
+    covered = sum(
+        max(0, min(high, frame.end) - max(low, frame.start) + 1)
+        for low, high in frame.images(*_affected_span(variant)))
+    return covered >= frame.end - frame.start + 1
 
 
 def _overlapping_exons(variant, transcript):
@@ -1035,34 +1096,29 @@ def _overlapping_exons(variant, transcript):
     span on this transcript's contig. Contig mismatch => empty."""
     if str(variant.contig) != str(transcript.contig):
         return []
-    var_start, var_end = _affected_span(variant)
-    overlapping = []
-    for exon in transcript.exons:
-        if exon.end < var_start or exon.start > var_end:
-            continue
-        overlapping.append(exon)
-    return overlapping
+    frame = TranscriptFrame(transcript)
+    images = frame.images(*_affected_span(variant))
+    return [
+        exon for exon, (start, end) in zip(frame.exons, frame.exon_intervals)
+        if any(start <= high and low <= end for low, high in images)]
 
 
 def _intronic_or_intergenic(event, transcript):
     """Classify an SV that doesn't overlap any exon — either
     intronic (breakpoints inside the transcript envelope) or
     intergenic."""
-    var_start, var_end = _affected_span(event)
-    if (str(event.contig) == str(transcript.contig)
-            and var_start >= transcript.start
-            and var_end <= transcript.end):
+    image = (_contained_image(event, transcript)
+             if str(event.contig) == str(transcript.contig) else None)
+    if image is not None:
         # Inside the transcript envelope but outside every exon
         # => intronic.  Distance-to-exon detail is best-effort:
         # find the nearest exon start/end for diagnostic use.
-        nearest_exon = min(
-            transcript.exons,
-            key=lambda e: min(
-                abs(e.start - var_start),
-                abs(e.end - var_start)))
-        distance = min(
-            abs(nearest_exon.start - var_start),
-            abs(nearest_exon.end - var_start))
+        var_start = image[0]
+        frame = TranscriptFrame(transcript)
+        distance, nearest_exon = min(
+            (min(abs(start - var_start), abs(end - var_start)), index)
+            for index, (start, end) in enumerate(frame.exon_intervals))
+        nearest_exon = frame.exons[nearest_exon]
         return Intronic(
             variant=event.variant,
             transcript=transcript,
@@ -1166,7 +1222,7 @@ def _upstream_fusions(variant, transcript, assembly):
             model = assembly or _build_fusion_mutant_transcript(
                 transcript, transcript, near.position, partner, far.position,
                 inserted_sequence=inserted,
-                three_prime_start=exon_length(partner.exons[0]))
+                three_prime_start=exon_length(transcript_exons(partner)[0]))
             if model is not None and not assembly:
                 model = replace(model, evidence={
                     **dict(model.evidence or {}),
@@ -1194,14 +1250,17 @@ def _upstream_partners(variant, far):
                      if forward else
                      (max(1, position - MAX_UPSTREAM_PARTNER_DISTANCE), position - 1))
         try:
-            transcripts = variant.genome.transcripts_at_locus(
-                str(far.contig), low, high)
+            transcripts = transcripts_at_locus(
+                variant.genome, str(far.contig), low, high)
         except ValueError:
             return []
         partners = []
         for transcript in transcripts:
-            distance = (transcript.start - position if forward
-                        else position - transcript.end)
+            # The 5' end, which for a transcript across a circular origin
+            # is not its linear start.
+            first = transcript_exons(transcript)[0]
+            distance = (first.start - position if forward
+                        else position - first.end)
             if (transcript.is_protein_coding and len(transcript.exons) > 1
                     and transcript.strand == ("+" if forward else "-")
                     and 0 < distance <= MAX_UPSTREAM_PARTNER_DISTANCE):
@@ -1242,8 +1301,8 @@ def _coding_transcripts_at(variant, contig, position):
     the same question about the other end."""
     def lookup():
         try:
-            transcripts = variant.genome.transcripts_at_locus(
-                str(contig), int(position), int(position))
+            transcripts = transcripts_at_locus(
+                variant.genome, str(contig), int(position), int(position))
         except ValueError:
             # A contig the genome doesn't know, e.g. a mate on a
             # decoy or unplaced contig.

@@ -74,7 +74,8 @@ class _ReferenceTranscript(Serializable):
 
     def spliced_offset(self, position):
         offset = 0
-        for exon in sorted(self.exons, key=lambda e: e.start, reverse=self.on_backward_strand):
+        from .circular_origin import transcript_exons
+        for exon in transcript_exons(self):
             if exon.start <= position <= exon.end:
                 return offset + (exon.end - position if self.on_backward_strand else position - exon.start)
             offset += exon.length

@@ -1,5 +1,27 @@
 # Change Log
 
+## v11.4.0
+
+- Annotate transcripts joined across the origin of a circular contig, such as
+  hepatitis B polymerase (`join(2307..3215,1..1623)`), in the transcript's own
+  frame (#686). The default annotator laid them out in coordinate order. It
+  called every variant after the origin `FivePrimeUTR` and truncated the
+  protein for variants before it. Both annotators treated the origin as a
+  splice junction.
+- Structural variants on such transcripts are read on the circle:
+  - deletions, duplications and inversions on either side of the origin;
+  - deletions that take both of the transcript's ends;
+  - deletions across the origin, written past the contig's end or as a
+    breakend junction that skips it;
+  - fusions with the circle at either end.
+- Exons meeting at an origin are one exon for exon skipping.
+- Variants, breakends and germline alleles between an origin-joined
+  transcript's 3' and 5' ends are outside it. `Variant.transcripts`, `genes`,
+  `gene_ids` and `gene_names`, and fusion-partner lookups, agree on this.
+- Exon order is shared by the layout, ORF, fusion-mapping and
+  reference-completion code. They follow annotated order across an origin and
+  coordinate order along the strand otherwise.
+
 ## v11.3.3
 
 - Stop warning that a reference is ambiguous when its file name matches only
