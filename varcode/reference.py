@@ -57,20 +57,29 @@ ensembl_reference_aliases = {
     "GRCh37": ["B37", "NCBI37"],
     "GRCh38": ["B38", "NCBI38"],
 
-    # mouse assemblies
+    # Mouse assemblies, as NCBI Assembly's paired GenBank (GCA) and RefSeq
+    # (GCF) accessions. Only versioned accessions name one build: the
+    # unversioned GCA_000001635 is the series of every mouse build.
+    "NCBIM37": [
+        "GCA_000001635.1", "GCF_000001635.18",  # MGSCv37
+    ],
     "GRCm38": [
-        "GCF_000001635.24",  # GRCm38.p4
-        "GCF_000001635.23",  # GRCm38.p3
-        "GCF_000001635.22",  # GRCm38.p2
-        "GCF_000001635.21",  # GRCm38.p1
-        "GCF_000001635.20",  # GRCm38
-        "GCA_000001635", # TODO: what's the difference between GCA_ and GCF_?
-    ]
+        "GCA_000001635.2", "GCF_000001635.20",  # GRCm38
+        "GCA_000001635.3", "GCF_000001635.21",  # GRCm38.p1
+        "GCA_000001635.4", "GCF_000001635.22",  # GRCm38.p2
+        "GCA_000001635.5", "GCF_000001635.23",  # GRCm38.p3
+        "GCA_000001635.6", "GCF_000001635.24",  # GRCm38.p4
+        "GCA_000001635.7", "GCF_000001635.25",  # GRCm38.p5
+        "GCA_000001635.8", "GCF_000001635.26",  # GRCm38.p6
+    ],
+    "GRCm39": [
+        "GCA_000001635.9", "GCF_000001635.27",  # GRCm39
+    ],
 }
 
 ucsc_to_ensembl_reference_names = {
     # mouse
-    "mm9": "GRCm37",
+    "mm9": "NCBIM37",  # UCSC mm9 is NCBI Build 37
     "mm10": "GRCm38",
     "mm39": "GRCm39",
 

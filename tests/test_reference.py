@@ -133,13 +133,51 @@ def test_release_that_does_not_provide_the_assembly_is_rejected(name, message):
         infer_genome(name)
 
 
-@pytest.mark.parametrize("name", [
-    "mm39", "MM39", "/data/mm39.fa", "##reference=file:///ref/mm39.fa"])
-def test_mm39_is_the_ucsc_name_for_grcm39(name):
-    # UCSC mm39 is GRCm39 itself, so no coordinates change (#668).
+@pytest.mark.parametrize(["name", "ucsc_name", "assembly"], [
+    ("mm39", "mm39", "GRCm39"),
+    ("MM39", "mm39", "GRCm39"),
+    ("/data/mm39.fa", "mm39", "GRCm39"),
+    ("##reference=file:///ref/mm39.fa", "mm39", "GRCm39"),
+    ("mm10", "mm10", "GRCm38"),
+    # UCSC mm9 is NCBI Build 37; "GRCm37" is not an assembly (#690).
+    ("mm9", "mm9", "NCBIM37"),
+    ("/data/mm9.fa", "mm9", "NCBIM37"),
+])
+def test_ucsc_mouse_names_select_the_same_assembly(name, ucsc_name, assembly):
+    # A UCSC mouse build is its Ensembl assembly, so no coordinates change
+    # (#668).
     genome, converted = infer_genome(name)
     assert (genome.reference_name, genome.species.latin_name, converted) == (
-        "GRCm39", "mus_musculus", True)
+        assembly, "mus_musculus", True)
+    variant = Variant("chr7", 100, "A", "T", genome=name)
+    assert (variant.reference_name, variant.original_reference_name,
+            variant.contig) == (assembly, ucsc_name, "7")
+
+
+@pytest.mark.parametrize(["name", "assembly"], [
+    ("GCA_000001635.1", "NCBIM37"),
+    ("GCF_000001635.18", "NCBIM37"),
+    ("GCA_000001635.2", "GRCm38"),
+    ("GCA_000001635.8", "GRCm38"),
+    ("GCF_000001635.26", "GRCm38"),
+    ("GCA_000001635.9", "GRCm39"),
+    ("GCF_000001635.27", "GRCm39"),
+    ("/ref/GCA_000001635.9_GRCm39_genomic.fna", "GRCm39"),
+    ("/ref/GCF_000001635.26_GRCm38.p6_genomic.fna", "GRCm38"),
+])
+def test_mouse_accessions_name_their_own_build(name, assembly):
+    # Versioned accessions were read as "GRCm38, Ensembl release N" (#690).
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert infer_reference_name.__wrapped__(name) == assembly
+    genome, converted = infer_genome(name)
+    assert (genome.reference_name, converted) == (assembly, False)
+
+
+def test_unversioned_mouse_accession_names_no_single_build():
+    # GCA_000001635 is the series of every mouse build, not GRCm38 (#690).
+    with pytest.raises(ValueError, match="Failed to infer genome assembly name"):
+        infer_genome("GCA_000001635")
 
 
 def test_mm39_variants_from_vcf_api_and_cli_share_one_identity(tmp_path):
