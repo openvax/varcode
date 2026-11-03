@@ -1,5 +1,7 @@
 # RNA and transcripts API
 
+Signatures for mutant transcripts, observed RNA import, reference-completion
+hypotheses and RNA evidence.
 See [Transcript models](transcript_models.md) for sequence access and
 [RNA imports](rna_structures.md) for observed structures and Exacto predictions.
 

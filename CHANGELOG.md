@@ -1,5 +1,15 @@
 # Change Log
 
+## v11.4.2
+
+- Documentation only. Reorganize the README into Install, Quick start (with
+  real output), Command line, Documentation, Development and License, and say
+  where Varcode sits among PyEnsembl, Isovar, Topiary and Vaxrank.
+- Correct the minimum PyEnsembl version in the getting-started guide (2.30.0,
+  matching `requirements.txt`), document the `varcode[rna]` extra needed by
+  `RNAReadPhasingSource`, and add a one-line summary to the API reference and
+  maintainer pages that lacked one.
+
 ## v11.4.1
 
 - The annotation throughput test budgets CPU time instead of wall-clock time,
