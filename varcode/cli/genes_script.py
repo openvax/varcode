@@ -32,6 +32,7 @@ with resources.as_file(resources.files(__package__) / "logging.conf") as _loggin
 logger = logging.getLogger(__name__)
 
 arg_parser = make_variants_parser(
+    prog="varcode genes",
     description="Annotate variants with overlapping gene names")
 arg_parser.add_argument(
     "--output-csv", "--output", "-o", dest="output_csv", help="CSV output: chr, start, ref, alt, gene_name, gene_id, plus SV fields")

@@ -95,11 +95,12 @@ The `varcode` command annotates variant files without writing Python and saves
 one row per variant and transcript:
 
 ```bash
-varcode --genome GRCh38 --vcf variants.vcf --output-csv effects.csv
+varcode effects --genome GRCh38 --vcf variants.vcf --output-csv effects.csv
 ```
 
+`varcode genes` lists the genes each variant overlaps, and
 `varcode check-samples` screens a cohort of VCFs for possible sample mix-ups.
-See the [command-line guide](https://openvax.github.io/varcode/getting_started/#command-line)
+`varcode --help` lists the subcommands. See the [command-line guide](https://openvax.github.io/varcode/getting_started/#command-line)
 and [sample identity checks](https://openvax.github.io/varcode/sample_identity/).
 
 <a id="further-reading"></a>

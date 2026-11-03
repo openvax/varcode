@@ -61,6 +61,17 @@ def test_varcode_command_subcommands(capsys):
     assert exc_info.value.code == 1
 
 
+def test_subcommand_usage_names_the_subcommand(capsys):
+    # Bare `varcode <options>` means `varcode effects`, so a usage line
+    # without the subcommand would send `genes` options to `effects`.
+    from varcode.cli.main import main
+    for name in ("effects", "genes", "check-samples"):
+        with pytest.raises(SystemExit) as exc_info:
+            main([name, "--help"])
+        assert exc_info.value.code == 0
+        assert ("usage: varcode %s " % name) in capsys.readouterr().out
+
+
 def test_output_is_synonym_for_output_csv():
     from varcode.cli.genes_script import arg_parser
     assert arg_parser.parse_args(["-o", "x.csv"]).output_csv == "x.csv"
