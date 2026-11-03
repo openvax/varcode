@@ -36,8 +36,9 @@ def _contig(value, reference_name=None):
 
 
 def _positions(transcript):
-    """Genomic position of each transcript base; exons are in transcript order."""
-    return tuple(p for e in transcript.exons for p in (
+    """Genomic position of each transcript base, in transcript order."""
+    from .circular_origin import transcript_exons
+    return tuple(p for e in transcript_exons(transcript) for p in (
         range(e.end, e.start - 1, -1) if transcript.on_backward_strand
         else range(e.start, e.end + 1)))
 

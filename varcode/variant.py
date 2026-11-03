@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from .annotators import EffectAnnotator
     from .effects import EffectCollection, MutationEffect
 
-from .circular_origin import outside_origin_joined_transcript
+from . import circular_origin
 from .contigs import normalize_contig_name, _convert_ucsc_contig_name
 from .nucleotides import (
     normalize_nucleotide_string,
@@ -418,11 +418,8 @@ class Variant(Serializable):
         """
         if self._transcripts is None:
             self._check_that_genome_has_contig()
-            self._transcripts = [
-                transcript for transcript in self.genome.transcripts_at_locus(
-                    self.contig, self.start, self.end)
-                if not outside_origin_joined_transcript(
-                    transcript, self.start, self.end)]
+            self._transcripts = circular_origin.transcripts_at_locus(
+                self.genome, self.contig, self.start, self.end)
         return self._transcripts
 
     @property
@@ -451,8 +448,8 @@ class Variant(Serializable):
         """
         if self._genes is None:
             self._check_that_genome_has_contig()
-            self._genes = self.genome.genes_at_locus(
-                self.contig, self.start, self.end)
+            self._genes = circular_origin.genes_at_locus(
+                self.genome, self.contig, self.start, self.end)
         return self._genes
 
     @property
@@ -464,8 +461,8 @@ class Variant(Serializable):
         """
         if self._gene_ids is None:
             self._check_that_genome_has_contig()
-            self._gene_ids = self.genome.gene_ids_at_locus(
-                self.contig, self.start, self.end)
+            self._gene_ids = circular_origin.gene_ids_at_locus(
+                self.genome, self.contig, self.start, self.end)
         return self._gene_ids
 
     @property
@@ -477,8 +474,8 @@ class Variant(Serializable):
         """
         if self._gene_names is None:
             self._check_that_genome_has_contig()
-            self._gene_names = self.genome.gene_names_at_locus(
-                self.contig, self.start, self.end)
+            self._gene_names = circular_origin.gene_names_at_locus(
+                self.genome, self.contig, self.start, self.end)
         return self._gene_names
 
     @property

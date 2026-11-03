@@ -74,8 +74,8 @@ class _ReferenceTranscript(Serializable):
 
     def spliced_offset(self, position):
         offset = 0
-        # Captured in transcript order, which crosses a circular origin intact.
-        for exon in self.exons:
+        from .circular_origin import transcript_exons
+        for exon in transcript_exons(self):
             if exon.start <= position <= exon.end:
                 return offset + (exon.end - position if self.on_backward_strand else position - exon.start)
             offset += exon.length

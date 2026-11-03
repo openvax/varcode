@@ -67,13 +67,16 @@ parameter documentation specifies its interval convention. Chromosome-name
 resolution changes spelling within a supplied vocabulary; it does not convert
 coordinates between assemblies.
 
-Exons are read in transcript order (`exon_number`), never re-sorted by
-coordinate. A transcript annotated across the origin of a circular contig,
-such as hepatitis B polymerase (`join(2307..3215,1..1623)`), steps back once
-onto base 1. That step is the origin: contiguous sequence, not a splice
-junction. The stretch between such a transcript's 3' and 5' ends is outside
-it. Exons that step back anywhere else raise `ValueError`, because varcode
-does not know the contig's length.
+A transcript annotated across the origin of a circular contig, such as
+hepatitis B polymerase (`join(2307..3215,1..1623)`), keeps its exons in
+annotated order: they step back once onto base 1. Varcode reads that step as
+the origin: contiguous sequence, not a splice junction. It reads the contig's
+length from the exon meeting its end, and works in the transcript's frame,
+where the stretch from base 1 continues past the contig's length. Variants,
+structural variants and breakends between the transcript's 3' and 5' ends are
+outside it. A record crossing the origin can be written past the contig's end
+or as a breakend junction. Exons in any other order are read in coordinate
+order along the strand.
 
 ## Selecting an annotator
 
