@@ -1,5 +1,21 @@
 # Change Log
 
+## v11.5.1
+
+- Recognize `mm39`, UCSC's name for GRCm39, as a genome name, in a VCF
+  `##reference` header and in a reference path (#668). It selects the GRCm39
+  annotation and converts `chr` contig names, as `mm10` does for GRCm38. An
+  explicit GRCm38 release such as `mm39:95` is an error, not a substitute.
+- `mm9` selects NCBIM37, the build UCSC's mm9 is. It pointed at "GRCm37",
+  which is not an assembly name, so it failed (#690).
+- Mouse assembly accessions select their own build: the GenBank and RefSeq
+  accessions of NCBIM37, each GRCm38 patch and GRCm39, as listed by NCBI
+  Assembly. Before, `GCA_000001635.9` (GRCm39) and `GCA_000001635.8`
+  (GRCm38.p6) were read as "GRCm38, Ensembl release 9" and "release 8" and
+  failed, and the GRCm38.p5/p6 and GRCm39 RefSeq accessions were unknown.
+  The unversioned `GCA_000001635` names the whole series of mouse builds, so
+  it no longer means GRCm38 (#690).
+
 ## v11.5.0
 
 - `varcode` is now one command with subcommands `effects`, `genes` and
