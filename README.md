@@ -22,7 +22,7 @@ to choose and rank candidate peptides; see
 
 ## Install
 
-Requires Python 3.11 or later:
+<a id="installation"></a>Requires Python 3.11 or later:
 
 ```bash
 pip install varcode
@@ -81,6 +81,7 @@ chr7 g.117531100T>A p.L159M
 ```
 
 <a id="reading-results"></a>
+<a id="reading-the-results"></a>
 
 Before relying on the output, read
 [how to read results](https://openvax.github.io/varcode/getting_started/#how-to-read-results).
@@ -102,6 +103,7 @@ See the [command-line guide](https://openvax.github.io/varcode/getting_started/#
 and [sample identity checks](https://openvax.github.io/varcode/sample_identity/).
 
 <a id="further-reading"></a>
+<a id="learn-more"></a>
 <a id="effect-types"></a>
 <a id="coordinate-system"></a>
 
