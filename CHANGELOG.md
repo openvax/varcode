@@ -1,5 +1,14 @@
 # Change Log
 
+## v11.4.1
+
+- The annotation throughput test budgets CPU time instead of wall-clock time,
+  so other processes on the machine, including the suite's own parallel
+  workers, can no longer fail `./test.sh` or a deploy (#679). Annotation is
+  CPU-bound once warm. Under 20 competing processes on 10 cores, wall-clock
+  time rose 2.8× and CPU time 1.2×. CI no longer runs the test separately
+  before the suite.
+
 ## v11.4.0
 
 - Annotate transcripts joined across the origin of a circular contig, such as
