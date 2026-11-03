@@ -43,7 +43,9 @@ To pin the annotation exactly, pass `genome=` one of:
 
 An assembly name alone, such as `genome="GRCh38"`, uses the most recent
 installed numbered release of that assembly, or the newest numbered release
-when none is installed. Selecting a reference does not
+when none is installed. A UCSC name selects its Ensembl assembly, such as
+`"hg38"` for GRCh38, `"mm10"` for GRCm38 or `"mm39"` for GRCm39, and UCSC
+contig names such as `chr7` become Ensembl's `7`. Selecting a reference does not
 download data or convert variant coordinates.
 
 ### Chromosome DNA for SV and splice analysis

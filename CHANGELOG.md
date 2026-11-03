@@ -1,5 +1,12 @@
 # Change Log
 
+## v11.5.1
+
+- Recognize `mm39`, UCSC's name for GRCm39, as a genome name, in a VCF
+  `##reference` header and in a reference path (#668). It selects the GRCm39
+  annotation and converts `chr` contig names, as `mm10` does for GRCm38. An
+  explicit GRCm38 release such as `mm39:95` is an error, not a substitute.
+
 ## v11.5.0
 
 - `varcode` is now one command with subcommands `effects`, `genes` and

@@ -16,7 +16,9 @@ import warnings
 import pytest 
 from pyensembl import cached_release
 
-from varcode import Variant
+from varcode import Variant, load_vcf
+from varcode.cli.effects_script import arg_parser
+from varcode.cli.variant_args import variant_collection_from_args
 from varcode.reference import (
     ensembl_reference_aliases, infer_genome, infer_reference_name, most_recent_assembly_name)
 from .common import eq_
@@ -85,6 +87,7 @@ def test_reference_name_fasta_filenames(candidate, assembly_name):
     ("CanFam3.1", "CanFam3.1"),
     ("/ref/CanFam3.1.dna.toplevel.fa", "CanFam3.1"),
     ("GRCh37_hg19.fa", "GRCh37"),
+    ("GRCm39_mm39.fa", "GRCm39"),
 ])
 def test_ensembl_and_ucsc_names_of_one_assembly_are_not_ambiguous(name, reference_name):
     with warnings.catch_warnings():
@@ -107,6 +110,8 @@ def test_ensembl_and_ucsc_names_of_one_assembly_are_not_ambiguous(name, referenc
     ("GRCh38 93", 93, "homo_sapiens", False),
     ("hg38.93", 93, "homo_sapiens", True),
     ("mm10.95", 95, "mus_musculus", True),
+    ("mm39:110", 110, "mus_musculus", True),
+    ("mm39.110", 110, "mus_musculus", True),
 ])
 def test_reference_name_with_release_chooses_that_release(name, release, species, was_ucsc):
     genome, converted = infer_genome(name)
@@ -119,11 +124,41 @@ def test_reference_name_with_release_chooses_that_release(name, release, species
     ("GRCh38.75", "Assembly 'GRCh38' conflicts with selected GRCh37"),
     ("GRCh37:93", "Assembly 'GRCh37' conflicts with selected GRCh38"),
     ("GRCh38:40", "No genome for homo_sapiens in Ensembl release 40"),
+    # mm39 is GRCm39; a GRCm38 release is an error, not a substitute (#668).
+    ("mm39:95", "Assembly 'GRCm39' conflicts with selected GRCm38"),
 ])
 def test_release_that_does_not_provide_the_assembly_is_rejected(name, message):
     # Previously the release was dropped and the latest release used instead (#512).
     with pytest.raises(ValueError, match=message):
         infer_genome(name)
+
+
+@pytest.mark.parametrize("name", [
+    "mm39", "MM39", "/data/mm39.fa", "##reference=file:///ref/mm39.fa"])
+def test_mm39_is_the_ucsc_name_for_grcm39(name):
+    # UCSC mm39 is GRCm39 itself, so no coordinates change (#668).
+    genome, converted = infer_genome(name)
+    assert (genome.reference_name, genome.species.latin_name, converted) == (
+        "GRCm39", "mus_musculus", True)
+
+
+def test_mm39_variants_from_vcf_api_and_cli_share_one_identity(tmp_path):
+    path = tmp_path / "variants.vcf"
+    path.write_text(
+        "##fileformat=VCFv4.2\n"
+        "##reference=file:///ref/mm39.fa\n"
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
+        "chr7\t100\t.\tA\tT\t.\tPASS\t.\n")
+    from_vcf, = load_vcf(str(path))
+    from_api = Variant("chr7", 100, "A", "T", genome="mm39")
+    from_cli, = variant_collection_from_args(arg_parser.parse_args(
+        ["--genome", "mm39", "--variant", "chr7", "100", "A", "T"]))
+    from_json = Variant.from_json(from_api.to_json())
+    for variant in (from_vcf, from_api, from_cli, from_json):
+        assert (variant.genome.reference_name, variant.reference_name,
+                variant.original_reference_name, variant.contig) == (
+            "GRCm39", "GRCm39", "mm39", "7")
+    assert from_vcf == from_api == from_cli == from_json
 
 
 def test_variant_keeps_the_chosen_release_through_serialization():

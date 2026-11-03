@@ -72,6 +72,7 @@ ucsc_to_ensembl_reference_names = {
     # mouse
     "mm9": "GRCm37",
     "mm10": "GRCm38",
+    "mm39": "GRCm39",
 
     # human
     "hg18": "NCBI36",
