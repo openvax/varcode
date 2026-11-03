@@ -33,10 +33,12 @@ with resources.as_file(resources.files(__package__) / "logging.conf") as _loggin
 logger = logging.getLogger(__name__)
 
 arg_parser = make_variants_parser(
-    description="Annotate variants with overlapping gene names and predicted coding effects")
+    prog="varcode effects",
+    description="Annotate variants with overlapping gene names and predicted coding effects",
+    epilog="Other subcommands: varcode genes, varcode check-samples (see `varcode --help`)")
 
 arg_parser.add_argument(
-    "--output-csv", help="CSV output: variant coordinates, gene/transcript IDs, effect type and description, plus SV fields")
+    "--output-csv", "--output", "-o", dest="output_csv", help="CSV output: variant coordinates, gene/transcript IDs, effect type and description, plus SV fields")
 
 arg_parser.add_argument(
     "--extra-orfs", action="append", metavar="EVIDENCE",

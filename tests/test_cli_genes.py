@@ -48,3 +48,37 @@ def test_varcode_genes_script_missing_maf_exits_cleanly(capsys):
     assert len(stderr.splitlines()) == 1
     assert ": error: " in stderr
     assert "/nonexistent/x.maf" in stderr
+
+
+def test_varcode_command_subcommands(capsys):
+    from varcode.cli.main import main
+    assert main(["--version"]) == 0
+    assert "varcode" in capsys.readouterr().out
+    assert main(["--help"]) == 0
+    assert "genes" in capsys.readouterr().out
+    with pytest.raises(SystemExit) as exc_info:
+        main(["genes", "--maf", "/nonexistent/x.maf"])
+    assert exc_info.value.code == 1
+
+
+def test_subcommand_usage_names_the_subcommand(capsys):
+    # Bare `varcode <options>` means `varcode effects`, so a usage line
+    # without the subcommand would send `genes` options to `effects`.
+    from varcode.cli.main import main
+    for name in ("effects", "genes", "check-samples"):
+        with pytest.raises(SystemExit) as exc_info:
+            main([name, "--help"])
+        assert exc_info.value.code == 0
+        assert ("usage: varcode %s " % name) in capsys.readouterr().out
+
+
+def test_output_is_synonym_for_output_csv():
+    from varcode.cli.genes_script import arg_parser
+    assert arg_parser.parse_args(["-o", "x.csv"]).output_csv == "x.csv"
+    assert arg_parser.parse_args(["--output", "x.csv"]).output_csv == "x.csv"
+
+
+def test_run_subcommand_rejects_unknown_name():
+    from varcode.cli.main import run_subcommand
+    with pytest.raises(ValueError, match="Unknown varcode subcommand 'nope'"):
+        run_subcommand("nope", [])

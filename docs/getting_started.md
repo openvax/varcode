@@ -166,12 +166,14 @@ When interpreting them:
 
 ## Command line
 
-The `varcode` command annotates files without writing Python, and
-`varcode-genes` lists the genes each variant overlaps:
+The `varcode` command annotates files without writing Python. Its subcommands
+are `effects` (the default when none is given), `genes` (lists the genes each
+variant overlaps; the older `varcode-genes` command is an alias) and
+`check-samples`. `-o`/`--output` is a synonym for `--output-csv`.
 
 ```bash
-varcode --genome GRCh38 --vcf variants.vcf --output-csv effects.csv
-varcode-genes --genome GRCh38 --variant chr12 25245350 C T --output-csv genes.csv
+varcode effects --genome GRCh38 --vcf variants.vcf --output-csv effects.csv
+varcode genes --genome GRCh38 --variant chr12 25245350 C T --output-csv genes.csv
 ```
 
 For SV/splice analysis with optional noncanonical ORFs:

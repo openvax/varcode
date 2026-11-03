@@ -1,5 +1,16 @@
 # Change Log
 
+## v11.5.0
+
+- `varcode` is now one command with subcommands `effects`, `genes` and
+  `check-samples`. `varcode` with no subcommand still means `varcode effects`,
+  and `varcode-genes` keeps working as another name for `varcode genes`.
+- `varcode --help` now lists the subcommands; the annotation options it used to
+  show are under `varcode effects --help`. Each subcommand's usage and error
+  messages name it, as in `usage: varcode genes ...`.
+- New: `varcode --version`, and `-o`/`--output` as synonyms for `--output-csv`.
+- The README and getting-started guide use the subcommands.
+
 ## v11.4.2
 
 - Documentation only. Reorganize the README into Install, Quick start (with
