@@ -22,11 +22,8 @@ if TYPE_CHECKING:
 
 
 def load_orf_catalog(*args, **kwargs):
-    """Load the shared orfdata reference; install ``varcode[orf]`` to use it."""
-    try:
-        from orfdata import load_catalog as load
-    except ImportError as error:
-        raise ImportError("Install varcode[orf] for the shared reference catalogue") from error
+    """Load the shared ORFdata reference catalogue; see ``orfdata.load_catalog``."""
+    from orfdata import load_catalog as load
     return load(*args, **kwargs)
 
 

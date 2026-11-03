@@ -171,7 +171,6 @@ def test_patient_baseline_and_joint_edits_are_preserved():
 
 
 def test_source_declared_orf_retains_start_loss_context_and_provenance():
-    pytest.importorskip("orfdata")
     from .test_non_aug_orfs import declared_orf
     reference = declared_orf("GTG")
     variant = reference.transcript.variant(3, "GTG", "GCG")

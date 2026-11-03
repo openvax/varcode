@@ -24,9 +24,6 @@ jobs:
       matrix:
         include:
           - python-version: "3.11"
-            pandas: "pandas>=2.2.2,<3"
-            gtfparse: "gtfparse>=3.0.2,<4"
-          - python-version: "3.11"
             pandas: "pandas>=3,<4"
             gtfparse: "gtfparse>=3.0.2,<4"
           - python-version: "3.12"
@@ -66,7 +63,7 @@ jobs:
           tar -xzf "$RUNNER_TEMP"/varcode-dist/varcode-*.tar.gz --strip-components=1 -C "$RUNNER_TEMP/varcode-sdist"
           # The supported Osteosarc range covers this Python matrix;
           # run native adapter checks against the bundled historical snapshot.
-          python -m pip install "$RUNNER_TEMP/varcode-sdist[test-data,uorf,lint]"
+          python -m pip install "$RUNNER_TEMP/varcode-sdist[test-data,lint]"
           python -m pip check
           python -m pip show pandas pyensembl gtfparse
       - name: Lint with flake8

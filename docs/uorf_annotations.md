@@ -1,7 +1,7 @@
 # ncORF annotation with ORFdata
 
-Install `varcode[orf]` for the optional [orfdata](https://github.com/openvax/orfdata)
-reference layer. PyEnsembl supplies reference transcripts, orfdata supplies ORF
+[ORFdata](https://github.com/openvax/orfdata), installed with Varcode, is the
+ORF reference layer. PyEnsembl supplies reference transcripts, orfdata supplies ORF
 models and evidence, and Varcode compares those objects with altered products.
 This includes upstream and overlapping ORFs, internal/downstream frames, and
 ORFs on transcripts annotated as noncoding. The bundled catalogue is human
@@ -72,15 +72,16 @@ effects = variant.effects(extra_orfs=orfdata.RiboSeq() & orfdata.MS())
 
 The ORFs are placed once per genome and reused by later calls and by
 `VariantCollection.effects`. The same call works on other assemblies and
-species once ORFdata has what they need, and fails with the command that
-installs anything missing:
+species, using the ORFdata data installed for them. When some is missing,
+Varcode uses the installed catalogues and warns with the command that
+installs the rest; with none installed, variants get their ordinary effects.
+Each genome needs:
 
 - human GRCh38: the bundled catalogue, nothing to install;
 - human GRCh37, NCBI36 or T2T-CHM13: `orfdata setup --species human` for the
   chain files (and, for CHM13, `orfdata genomes install t2t-chm13` for the
   annotation);
-- mouse: `pip install "orfdata[data,build-data]"`, then `orfdata setup
-  --species mouse`, which builds the three mouse catalogues from their
+- mouse: `orfdata setup --species mouse`, which builds the three mouse catalogues from their
   sources (add `--accept-terms` for UCSC's GRCm38 and NCBIM37 chains).
 
 ORFs ORFdata could not place on the genome, for example because an older
@@ -294,7 +295,8 @@ TPST1–CRCP alternatives lack the native KIILSKISV peptide; each keeps its own 
 support and unresolved polarity/initiation status.
 
 The compatibility module `varcode.uorf` preserves the original upstream-specific
-call shapes and `varcode[uorf]` remains an installation alias. New code should
+call shapes. The `varcode[orf]` and `varcode[uorf]` extras remain, empty, so
+existing install commands keep working. New code should
 use `varcode.orf` and the bound reference API above. `annotate_orf_product`
 retains its original dictionary return for existing RNA exporters; new Python
 code should use `annotate_orf_rna_product`. `ORFAnnotation.data` remains an

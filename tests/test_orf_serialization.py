@@ -3,6 +3,7 @@
 from dataclasses import replace
 import json
 
+import orfdata
 import pytest
 
 from varcode import EffectCollection, VariantCollection
@@ -12,8 +13,6 @@ from . import test_extra_orfs
 from .test_extra_orfs import synthetic
 
 native = test_extra_orfs.native
-
-orfdata = pytest.importorskip("orfdata")
 
 
 def assert_annotation(before, after):

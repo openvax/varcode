@@ -6,6 +6,7 @@ import json
 import subprocess
 import sys
 
+import orfdata
 import pytest
 
 from varcode import (
@@ -24,8 +25,6 @@ from varcode.effects.effect_classes import PhaseCandidateSet
 from varcode.germline import PhasePartition
 from varcode.orf import ORFAnnotation, ORFOutcome, ORFProduct, annotate_orf_variants
 from varcode.orf_serialization import _Feature, _ReferenceGenome, _ReferenceTranscript
-
-orfdata = pytest.importorskip("orfdata")
 
 
 @pytest.fixture

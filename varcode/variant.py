@@ -491,7 +491,6 @@ class Variant(Serializable):
     def orf_effects(self, *, catalog=None, transcripts=None, **kwargs):
         """Additive reference-ORF consequences; see :mod:`varcode.orf`.
 
-        Requires ``varcode[uorf]`` only when using the default shared catalogue.
         Reference MS observations never imply mutant translation.
         """
         from .orf import predict_orf_effects

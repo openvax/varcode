@@ -34,9 +34,9 @@ in the example below (Ensembl 81, GRCh38). For your own data, choose an
 annotation that matches your input's genome build; see
 [reference setup](https://openvax.github.io/varcode/getting_started/#reference-data).
 
-Optional extras: `varcode[orf]` adds [ORFdata](https://github.com/openvax/orfdata)
-for [noncanonical ORF consequences](https://openvax.github.io/varcode/uorf_annotations/),
-and `varcode[rna]` adds pysam for
+Varcode installs [ORFdata](https://github.com/openvax/orfdata), which supplies
+the ORFs for [noncanonical ORF consequences](https://openvax.github.io/varcode/uorf_annotations/).
+The optional `varcode[rna]` extra adds pysam for
 [phasing variants from RNA-seq reads](https://openvax.github.io/varcode/phasing/#rna-evidence).
 
 <a id="example"></a>

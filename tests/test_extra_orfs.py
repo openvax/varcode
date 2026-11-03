@@ -3,6 +3,7 @@
 from dataclasses import replace
 from types import SimpleNamespace
 
+import orfdata
 import pytest
 from pyensembl import cached_release
 
@@ -10,8 +11,6 @@ from varcode import Genome, Variant, VariantCollection
 from varcode.effects import Failure, Substitution
 from varcode.germline import GermlineContext
 from .test_uorf import Transcript
-
-orfdata = pytest.importorskip("orfdata")
 
 
 @pytest.fixture(scope="module")
@@ -320,6 +319,66 @@ def test_orfdata_orfs_for_the_variants_own_genome(native, value):
     # Ordinary effects are unchanged.
     assert [(type(e), e.transcript_id) for e in effects if e.orf_annotation is None] == [
         (type(e), e.transcript_id) for e in variant.effects()]
+
+
+@pytest.fixture
+def missing_catalogues(monkeypatch):
+    """Make ORFdata report part of the default set missing; yield a setup taking the bundled state."""
+    from varcode.extra_orfs import clear_extra_orfs_cache
+
+    place = orfdata.extra_orfs
+    calls = []
+
+    def report(bundled_installed):
+        statuses = [s if s.name != "bundled" or bundled_installed else replace(s, installed=None)
+                    for s in orfdata.catalog_status()]
+
+        def extra_orfs(genome, evidence=None, **kwargs):
+            calls.append(kwargs.get("catalogs"))
+            if kwargs.get("catalogs") is None:
+                raise orfdata.NotInstalledError(
+                    "homo_sapiens GRCh38 ORFs need the riborf-human catalogue. Or install everything "
+                    "at once with 'orfdata setup --species homo_sapiens'")
+            return place(genome, evidence, **kwargs)
+
+        monkeypatch.setattr(orfdata, "extra_orfs", extra_orfs)
+        monkeypatch.setattr(orfdata, "catalog_status", lambda: statuses)
+        clear_extra_orfs_cache()
+        return calls
+
+    yield report
+    clear_extra_orfs_cache()  # Placements made from the stand-ins must not outlive them.
+
+
+def test_extra_orfs_use_the_installed_catalogues_when_others_are_missing(native, missing_catalogues):
+    import warnings
+
+    variant, _, _ = native
+    calls = missing_catalogues(bundled_installed=True)
+    with pytest.warns(UserWarning, match="installed ORFdata catalogues bundled only: .*orfdata setup"):
+        effects = variant.effects(extra_orfs="all")
+    assert calls == [None, ("bundled",)]
+    assert ("c7riboseqorf56", "p.P2A") in {
+        (e.orf.orf_id, e.short_description) for e in effects if e.orf is not None}
+    # Placed once per genome, so later calls neither warn nor place again.
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        variant.effects(extra_orfs="all")
+    assert len(calls) == 2
+
+
+def test_without_installed_catalogues_variants_get_their_ordinary_effects(native, missing_catalogues):
+    from varcode.extra_orfs import prepare_extra_orfs
+
+    variant, _, _ = native
+    calls = missing_catalogues(bundled_installed=False)
+    with pytest.warns(UserWarning, match="Annotating without extra ORFs: .*orfdata setup"):
+        effects = variant.effects(extra_orfs="all")
+    assert calls == [None]
+    assert [(type(e), e.transcript_id) for e in effects] == [
+        (type(e), e.transcript_id) for e in variant.effects()]
+    assert not effects.orf_annotations
+    assert prepare_extra_orfs("all").excluded(variant.genome) == ()
 
 
 def test_placements_are_made_once_per_genome_and_reused(native):

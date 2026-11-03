@@ -126,7 +126,7 @@ from varcode import load_vcf
 
 genome = EnsemblRelease(81, genome_fasta="/data/GRCh38.fa")
 variants = load_vcf("variants.vcf", genome=genome, parse_structural_variants=True)
-effects = variants.effects(extra_orfs="all")  # optional: requires varcode[orf]
+effects = variants.effects(extra_orfs="all")
 ```
 
 Construction and rewrapping do not open or download native DNA. The first

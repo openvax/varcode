@@ -10,8 +10,6 @@ from varcode.genome_sequence import reference_range
 from varcode.nucleotides import reverse_complement
 from .test_uorf import Transcript
 
-pytest.importorskip("orfdata")
-
 
 @pytest.fixture(params=[False, True], ids=["plus", "minus"])
 def reference_dna(request, tmp_path):

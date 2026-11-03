@@ -1,5 +1,20 @@
 # Change Log
 
+## v11.6.0
+
+- ORFdata is now a dependency, so `pip install varcode` can annotate
+  noncanonical ORFs (`extra_orfs`, `orf_effects`, `to_proteome`) without an
+  extra. The `varcode[orf]` and `varcode[uorf]` extras remain, empty, so
+  existing install commands keep working (part of #640).
+- `extra_orfs` uses only the ORFdata data that is installed. When some of a
+  genome's catalogues or chain files are missing, it uses the installed
+  catalogues; when none reaches the genome, variants get their ordinary
+  effects. Either way it warns, naming what is missing and the `orfdata`
+  command that installs it. Before, any missing catalogue was an error.
+- Require pandas 3 (`pandas>=3,<4`), PyEnsembl 2.32.3+ and ORFdata 0.44+.
+  ORFdata itself requires this pandas and PyEnsembl. CI no longer tests
+  pandas 2 (#612).
+
 ## v11.5.1
 
 - Recognize `mm39`, UCSC's name for GRCm39, as a genome name, in a VCF

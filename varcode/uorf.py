@@ -13,10 +13,9 @@ from .orf import (  # noqa: F401
 def load_uorf_catalog(*args, **kwargs):
     """Load the legacy upstream-ORF catalogue through ORFdata.
 
-    Arguments are forwarded to ``orfdata.load_uorf_catalog``. Requires the
-    ``varcode[orf]`` extra. Use :func:`varcode.load_orf_catalog` for the
-    general ORF catalogue; this compatibility function keeps its upstream-only
-    selection.
+    Arguments are forwarded to ``orfdata.load_uorf_catalog``. Use
+    :func:`varcode.load_orf_catalog` for the general ORF catalogue; this
+    compatibility function keeps its upstream-only selection.
     """
     from orfdata import load_uorf_catalog as load
     return load(*args, **kwargs)

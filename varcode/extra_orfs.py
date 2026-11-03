@@ -2,6 +2,7 @@
 
 from bisect import bisect_left, bisect_right
 from collections import OrderedDict
+from warnings import warn
 
 from .effects.effect_classes import Failure
 from .orf import (
@@ -58,9 +59,6 @@ class ExtraORFInput:
 
     def __init__(self, value, *, metadata=None, report_excluded=True):
         from orfdata import ORFCatalog, ReferenceORF
-
-        if not hasattr(ReferenceORF, "coding_positions"):
-            raise ImportError("extra_orfs needs orfdata>=0.39.0: pip install 'varcode[orf]'")
 
         self.catalog = value if isinstance(value, ORFCatalog) else None
         self.context = getattr(value, "reference", None) if self.catalog is None else None
@@ -166,6 +164,11 @@ class GenomeExtraORFs:
     needed, and places each ORF on every transcript carrying its exact
     coding path and protein.
 
+    Only installed ORFdata data is used. When some of the genome's catalogues
+    or chain files are not installed, the installed ones are used; when none
+    is, variants get only their ordinary effects. Either way a warning names
+    what is missing and the ``orfdata`` command that installs it.
+
     The ORFs ORFdata could not place on a genome (an older annotation may
     lack their transcript) are listed by :meth:`excluded`; a variant in one
     gets the ordinary effects, never an error. Placements for the last few
@@ -187,11 +190,7 @@ class GenomeExtraORFs:
             self._inputs.move_to_end(key)
             return self._inputs[key]
         try:
-            from orfdata import extra_orfs
-        except ImportError as error:
-            raise ImportError("extra_orfs needs orfdata>=0.39.0: pip install 'varcode[orf]'") from error
-        try:
-            placed = extra_orfs(genome, self.evidence)
+            placed = _place_installed(genome, self.evidence)
         except ValueError as error:
             if "ReferenceContext" not in str(error):
                 raise
@@ -199,7 +198,8 @@ class GenomeExtraORFs:
                 "%s. For extra_orfs, place ORFdata's ORFs with orfdata.extra_orfs(genome, evidence, "
                 "context=orfdata.ReferenceContext(...)) and pass the result"
                 % str(error).rstrip(".")) from error
-        found = (placed, ExtraORFInput(placed, metadata=_summary(placed.catalog), report_excluded=False))
+        found = (None, ExtraORFInput(())) if placed is None else (
+            placed, ExtraORFInput(placed, metadata=_summary(placed.catalog), report_excluded=False))
         self._inputs[key] = found
         while len(self._inputs) > self.max_genomes:
             self._inputs.popitem(last=False)
@@ -211,6 +211,8 @@ class GenomeExtraORFs:
     def excluded(self, genome):
         """ORFdata's ORFs that could not be placed on ``genome``, each with its reason."""
         placed = self._placed(genome)[0]
+        if placed is None:
+            return ()
         return tuple(placed.excluded) + tuple(getattr(placed, "unlifted", ()))
 
     def clear(self):
@@ -218,6 +220,46 @@ class GenomeExtraORFs:
 
     def effects(self, variant, **kwargs):
         return self.for_genome(variant.genome).effects(variant, **kwargs)
+
+
+_INSTALLED = ("bundled", "downloaded", "built")
+
+
+def _place_installed(genome, evidence):
+    """ORFdata's ORFs on ``genome`` from the catalogues installed for it, or None.
+
+    ``orfdata.extra_orfs`` needs the species' whole default set of
+    catalogues, and the chain files lifting them to the genome's assembly.
+    When some are missing, place the installed ones that reach the assembly;
+    when none do, return None. Either way, warn with ORFdata's message, which
+    names the command that installs the rest.
+    """
+    from orfdata import NotInstalledError, ReferenceContext, catalog_status, extra_orfs
+
+    try:
+        return extra_orfs(genome, evidence)
+    except NotInstalledError as error:
+        missing = error
+    reference = ReferenceContext.from_genome(genome)
+    names = tuple(dict.fromkeys(
+        status.name for status in catalog_status()
+        if status.species == reference.species and status.selected
+        and status.installed in _INSTALLED
+        and (status.genome_build == reference.genome_build or any(
+            lift["genome_build"] == reference.genome_build and lift["downloaded"]
+            for lift in status.lifts_to))))
+    placed = None
+    if names:
+        try:
+            placed = extra_orfs(genome, evidence, catalogs=names)
+        except NotInstalledError as error:
+            missing = error
+    if placed is None:
+        warn("Annotating without extra ORFs: %s" % missing, stacklevel=2)
+    else:
+        warn("Annotating extra ORFs from the installed ORFdata catalogues %s only: %s"
+             % (", ".join(names), missing), stacklevel=2)
+    return placed
 
 
 def _summary(catalog):
@@ -240,10 +282,7 @@ _RESOLVERS = {}
 
 def _resolver(evidence):
     import json
-    try:
-        from orfdata.evidence import evidence_rule
-    except ImportError as error:
-        raise ImportError("extra_orfs needs orfdata>=0.39.0: pip install 'varcode[orf]'") from error
+    from orfdata.evidence import evidence_rule
     evidence = evidence_rule(evidence)  # "ms" and MS() share placements; an unknown name raises here.
     key = None if evidence is None else json.dumps(evidence.to_dict(), sort_keys=True)
     if key not in _RESOLVERS:
@@ -258,10 +297,7 @@ def clear_extra_orfs_cache():
 
 
 def _is_rule(value):
-    try:
-        from orfdata import EvidenceRule
-    except ImportError:
-        return False
+    from orfdata import EvidenceRule
     return isinstance(value, EvidenceRule)
 
 

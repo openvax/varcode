@@ -3,7 +3,6 @@
 `effects.to_proteome()` converts Varcode's native results into ORFdata's `Proteome`.
 Use it to combine predicted proteins with a reference proteome, export FASTA,
 group equal sequences, or save the predictions and their provenance together.
-Install the optional integration with `pip install 'varcode[orf]'`.
 
 ```python
 import varcode
