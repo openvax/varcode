@@ -89,3 +89,35 @@ def eq_(x, y, s=None):
         assert x == y, "%s != %s" % (x, y)
     else:
         assert x == y, s
+
+# Independent sequence checks. Expected proteins and strand flips come from
+# Biotite (installed with ORFdata), never from Varcode's own translation or
+# nucleotide code, so a shared bug cannot make a test agree with itself.
+# Biotite rejects ambiguous bases such as N rather than guessing a residue.
+
+def translate_to_stop(dna):
+    """Standard-code protein of ``dna`` up to its first stop; a trailing partial codon is ignored."""
+    from biotite.sequence import NucleotideSequence
+
+    whole_codons = dna[:len(dna) // 3 * 3]
+    return str(NucleotideSequence(whole_codons).translate(complete=True)).split("*")[0]
+
+
+def translate_codon(codon):
+    """Standard-code residue of one codon, ``*`` for a stop."""
+    from biotite.sequence import NucleotideSequence
+
+    assert len(codon) == 3, codon
+    return str(NucleotideSequence(codon).translate(complete=True))
+
+
+def complement(dna):
+    from biotite.sequence import NucleotideSequence
+
+    return str(NucleotideSequence(dna).complement())
+
+
+def reverse_complement(dna):
+    from biotite.sequence import NucleotideSequence
+
+    return str(NucleotideSequence(dna).reverse().complement())

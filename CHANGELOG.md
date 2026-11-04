@@ -1,5 +1,12 @@
 # Change Log
 
+## v11.6.1
+
+- Tests only. The independent checks that translate or complement a sequence
+  use Biotite, which ORFdata already installs, instead of Biopython, and the
+  `test-data` extra no longer installs Biopython (part of #640). Biotite
+  rejects an ambiguous base such as N rather than translating it to X.
+
 ## v11.6.0
 
 - ORFdata is now a dependency, so `pip install varcode` can annotate

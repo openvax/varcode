@@ -10,7 +10,8 @@ The expected full peptide is an independent **sequence prediction**, not a claim
 of observed patient translation: replace G with T at CDS-start minus 34 in the
 frozen RefSeq RNA, begin at the preceding A (CDS-start minus 35), and translate
 to the first stop with Biopython's standard code. The test repeats this oracle
-and checks that the pinned Ensembl 95 ENST00000304494 coding path is identical.
+with Biotite's standard code and checks that the pinned Ensembl 95
+ENST00000304494 coding path is identical.
 The full RNAs differ in their 5' extent, so their start offsets are kept separate.
 No liftover or Varcode-derived expectation is used.
 

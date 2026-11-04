@@ -3,13 +3,13 @@
 from types import SimpleNamespace
 
 import pytest
-from Bio.Seq import Seq
 
 from varcode import (
     MutantTranscript, RNAEvidence, StructuralVariant, Variant, iter_candidate_effects, make_rna_outcome,
 )
 from varcode.effects import Unresolved
 from varcode.genome_sequence import reference_range
+from .common import reverse_complement, translate_to_stop
 from .native_reference_fixture import CASES
 from . import native_reference_fixture
 
@@ -42,13 +42,13 @@ def test_native_intronic_dna_yields_exact_retained_intron_rna(native_genomes, ca
     assert len(dna) == end - start + 1
     offset = edit_position - start
     altered = dna[:offset] + alt + dna[offset + len(ref):]
-    intron = str(Seq(altered).reverse_complement()) if transcript.strand == "-" else altered
+    intron = reverse_complement(altered) if transcript.strand == "-" else altered
     expected_rna = transcript.sequence[:rna_offset] + intron + transcript.sequence[rna_offset:]
     cds_start = min(transcript.start_codon_spliced_offsets)
     if rna_offset <= cds_start:
         cds_start += len(intron)
     coding = expected_rna[cds_start:]
-    expected_protein = str(Seq(coding[:len(coding) // 3 * 3]).translate(to_stop=True))
+    expected_protein = translate_to_stop(coding)
     effect = variant.effect_on_transcript(transcript)
     candidates = list(iter_candidate_effects(effect))
     retained = [e for e in candidates if e.mutant_transcript is not None
@@ -69,7 +69,7 @@ def test_ap2s1_observed_del17_junction_survives_rna_evidence(native_genomes):
     rna = transcript.sequence[:before] + transcript.sequence[after:]
     assert len(transcript.sequence) - len(rna) == 51
     coding = rna[start:]
-    assert str(Seq(coding[:len(coding)//3*3]).translate(to_stop=True)) == case["expected_protein"]
+    assert translate_to_stop(coding) == case["expected_protein"]
     observed = Unresolved(variant, transcript, "published_splice_junction")
     observed.mutant_transcript = MutantTranscript.from_sequence(
         rna, reference_transcript=transcript, mutant_protein_sequence=case["expected_protein"],
