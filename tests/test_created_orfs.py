@@ -5,7 +5,6 @@ import json
 from pathlib import Path
 import pickle
 
-from Bio.Seq import Seq
 import pytest
 from pyensembl import cached_release
 
@@ -16,6 +15,7 @@ from varcode import (
 from varcode.effect_hypotheses import RealizedTranscriptProduct
 from varcode.effects import StartGain
 from varcode.orf_serialization import _Feature, _ReferenceGenome, _ReferenceTranscript
+from .common import complement, translate_to_stop
 
 
 def host(sequence, reverse=False, table=1):
@@ -63,7 +63,7 @@ def test_published_cdkn2a_start_gain_has_independent_refseq_peptide(cdkn2a):
     assert sequence[offset] == "G" and offset == expected["cds_start"] - 34
     modified = sequence[:offset] + "T" + sequence[offset + 1:]
     coding = modified[expected["new_start"]:expected["stop_offset"] + 3]
-    assert str(Seq(coding).translate(to_stop=True)) == expected["expected_protein"]
+    assert translate_to_stop(coding) == expected["expected_protein"]
     # Different 5' transcript extents retain the exact same new coding path.
     start, end = native["new_start"], native["stop_offset"] + 3
     native_modified = transcript.sequence[:start + 1] + "T" + transcript.sequence[start + 2:]
@@ -279,7 +279,7 @@ def test_distinct_phase_baselines_with_same_peptide_are_not_deduplicated(cdkn2a)
     _, tx, variant = cdkn2a
     positions = tuple(p for exon in sorted(tx.exons, key=lambda exon: exon.start, reverse=True)
                       for p in range(exon.end, exon.start - 1, -1))
-    ref = str(Seq(tx.sequence[500]).complement())
+    ref = complement(tx.sequence[500])
     alt = next(base for base in "ACGT" if base != ref)
     germline = Variant("9", positions[500], ref, alt, genome=variant.genome)
     report = discover_created_orfs(variant.effect_on_transcript(

@@ -9,11 +9,11 @@ import json
 from pathlib import Path
 import re
 
-from Bio.Seq import Seq
 from pyensembl import cached_release
 import pytest
 
 from varcode import Variant
+from .common import translate_to_stop
 from varcode.effects import FrameShift, Substitution
 
 
@@ -82,7 +82,7 @@ def test_native_ros_cfam_published_consequences(ros_genome, record):
             + rna[rna_start + len(record["ref"]):])
         # Independent translation of the published cDNA edit (SNVs) or
         # genomic deletion (SPTBN1), including available downstream RNA.
-        expected = str(Seq(mutant_cds[:len(mutant_cds) // 3 * 3]).translate(to_stop=True))
+        expected = translate_to_stop(mutant_cds)
         effect = variant.effect_on_transcript(transcript)
         conditional = getattr(effect, "effect_if_splicing_unchanged", None)
         if conditional is not None:

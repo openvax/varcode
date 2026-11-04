@@ -4,11 +4,11 @@ import pickle
 from types import SimpleNamespace
 
 import pytest
-from Bio.Seq import Seq
 from pyensembl import cached_release
 
 from varcode import EffectCollection, GermlineContext, Variant
 from varcode.effects import Unresolved
+from .common import translate_to_stop
 
 
 @pytest.fixture
@@ -18,7 +18,7 @@ def cftr():
 
 def translated(cdna, transcript):
     coding = cdna[min(transcript.start_codon_spliced_offsets):]
-    return str(Seq(coding[:len(coding) // 3 * 3]).translate(to_stop=True))
+    return translate_to_stop(coding)
 
 
 def edited(sequence, transcript, variant):
@@ -148,8 +148,7 @@ def test_splice_products_assemble_supplied_bases_on_both_strands(reverse, with_s
             cdna = expected[mechanism]
             assert outcome.effect.mutant_transcript.cdna_sequence == cdna
             assert outcome.effect.original_protein_sequence == "MRA"
-            assert outcome.effect.mutant_protein_sequence == str(
-                Seq(cdna[:len(cdna) // 3 * 3]).translate(to_stop=True))
+            assert outcome.effect.mutant_protein_sequence == translate_to_stop(cdna)
 
 
 @pytest.mark.parametrize("mutant_protein,length_delta,expected_class,offset", [

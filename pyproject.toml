@@ -40,7 +40,7 @@ include = ["varcode", "varcode.*"]
 orf = []
 uorf = []
 rna = ["pysam>=0.21"]
-test-data = ["osteosarc>=0.14.4,<0.16", "biopython>=1.85"]
+test-data = ["osteosarc>=0.14.4,<0.16"]
 lint = ["ruff", "mypy==2.4.0", "pandas-stubs==3.0.5.260914"]
 
 [project.scripts]

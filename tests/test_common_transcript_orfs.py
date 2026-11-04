@@ -8,6 +8,7 @@ import pytest
 
 from varcode import EffectCollection, ReferenceMismatchError, Variant, annotate_orf_variants, to_proteome
 from varcode.effects import Unresolved
+from .common import complement, translate_codon
 from .test_extra_orfs import synthetic
 from . import transcript_orf_fixture
 
@@ -134,20 +135,18 @@ def test_unmapped_source_is_retained_as_explicitly_unavailable():
 
 
 def native_change(reference):
-    """Pick an internal single-codon edit; Biopython supplies an independent expected residue."""
-    from Bio.Seq import Seq
-
+    """Pick an internal single-codon edit; Biotite supplies an independent expected residue."""
     origin = reference.coding_origin
     offset = reference.coding_phase + 30
     codon = reference.coding_sequence[offset:offset+3]
     for base in "ACGT":
         alternate = base + codon[1:]
-        amino = str(Seq(alternate).translate())
-        if amino not in ("*", str(Seq(codon).translate())):
+        amino = translate_codon(alternate)
+        if amino not in ("*", translate_codon(codon)):
             break
     ref, alt = codon[0], base
     if reference.strand == "-":
-        ref, alt = str(Seq(ref).complement()), str(Seq(alt).complement())
+        ref, alt = complement(ref), complement(alt)
     variant = Variant(reference.contig, reference.coding_positions[offset], ref, alt,
                       genome=reference.transcript.genome)
     index = (offset - origin) // 3
