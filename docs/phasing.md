@@ -42,7 +42,7 @@ phase_resolver=phaser)` on the somatic variants you want to classify.
 ## RNA evidence
 
 For direct read/fragment co-occurrence in an RNA-seq BAM (requires pysam:
-`pip install 'varcode[rna]'`):
+`pip install 'varcode[rna]'`; pysam does not support Windows):
 
 ```python
 from varcode import MolecularPhaseResolver, RNAReadPhasingSource

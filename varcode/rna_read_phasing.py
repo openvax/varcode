@@ -147,6 +147,15 @@ class RNAReadPhasingSource:
         Unpaired reads are still accepted.
     skip_duplicates, skip_secondary, skip_supplementary : bool
         Standard SAM flag filters.
+
+    Raises
+    ------
+    ImportError
+        If pysam, the optional ``varcode[rna]`` dependency, is not
+        installed. pysam does not support Windows.
+    ValueError
+        If ``phasing_error_rate`` or ``max_p_value_for_phasing`` is not
+        between 0 and 1.
     """
 
     source = "rna_reads"
@@ -168,10 +177,12 @@ class RNAReadPhasingSource:
             skip_supplementary: bool = True):
         try:
             import pysam
-        except ImportError as e:
+        except ModuleNotFoundError as e:
+            if e.name != "pysam":
+                raise  # pysam is installed but broken; keep its own error
             raise ImportError(
-                "RNAReadPhasingSource requires pysam. Install with "
-                "`pip install varcode[rna]`.") from e
+                "RNAReadPhasingSource requires pysam: pip install 'varcode[rna]'. "
+                "pysam does not support Windows; use WSL there.") from e
         for name, value in (("phasing_error_rate", phasing_error_rate),
                             ("max_p_value_for_phasing", max_p_value_for_phasing)):
             if not 0 < value < 1:

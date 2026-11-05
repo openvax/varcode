@@ -1,5 +1,23 @@
 # Change Log
 
+## v11.6.2
+
+- pysam stays an optional dependency (`varcode[rna]`), and the reason is now
+  recorded with the extra: pysam has no Windows build, and only
+  `RNAReadPhasingSource` uses it (part of #640). Without pysam,
+  `RNAReadPhasingSource` raises an `ImportError` that gives the install
+  command and says pysam does not support Windows; the README, phasing
+  guide and the class's docstring say the same.
+- A pysam that is installed but fails to load now raises its own import
+  error instead of the install hint.
+- The `test-data` extra declares Biotite, which the tests import directly.
+  ORFdata 0.49.1 (released 2026-11-05) no longer installs it, so the 11.6.1
+  test suite fails in a fresh environment without it; Varcode's runtime does
+  not use Biotite.
+- CI installs the `rna` extra explicitly, rather than relying on Osteosarc to
+  bring pysam, and a test checks that Varcode and every module in it import
+  without pysam.
+
 ## v11.6.1
 
 - Tests only. The independent checks that translate or complement a sequence
