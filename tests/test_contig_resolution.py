@@ -199,7 +199,7 @@ def test_structural_breakend_mates_share_public_normalization():
 
 
 def test_resolved_names_can_fetch_from_an_actual_bam(tmp_path):
-    pysam = pytest.importorskip("pysam")
+    import pysam
     path = tmp_path / "aliases.bam"
     header = {"HD": {"VN": "1.6", "SO": "coordinate"}, "SQ": [
         {"SN": "chrM", "LN": 100}, {"SN": "chrUn_KI270438v1", "LN": 100},
@@ -240,7 +240,7 @@ def test_canonical_case_aliases_preserve_ambiguity_and_exact_names(query, names,
 
 
 def test_custom_reference_vocabulary_does_not_poison_unrelated_lookups(tmp_path):
-    pysam = pytest.importorskip("pysam")
+    import pysam
     names = ["0", "HPV16", "NC_007605.1", "hs37d5", "HLA-A*01:01:01:01", "chr6_apd_hap1"]
     path = tmp_path / "custom.bam"
     with pysam.AlignmentFile(path, "wb", header={"SQ": [{"SN": name, "LN": 100} for name in names]}) as bam:

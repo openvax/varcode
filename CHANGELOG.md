@@ -1,5 +1,19 @@
 # Change Log
 
+## v11.7.0
+
+- `rna` is now the only extra. The empty `orf` and `uorf` extras are removed;
+  ORFdata has been a core dependency since 11.6.0, and `pip install
+  'varcode[orf]'` still installs Varcode, with a warning that the extra no
+  longer exists.
+- The `test-data` and `lint` extras move to `test` and `lint` dependency
+  groups (PEP 735). They are for working on Varcode and are not published as
+  extras. With pip 25.1 or later: `pip install -e '.[rna]' --group test --group
+  lint`. CI, CONTRIBUTING and the test README use them.
+- Tests that need osteosarc, pysam or PyEnsembl now fail when it is missing
+  instead of being skipped, so an incomplete test environment can't silently
+  skip them. The `test` group installs all three.
+
 ## v11.6.3
 
 - Every supported NCBI genetic code is checked against Biotite's

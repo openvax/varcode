@@ -295,8 +295,7 @@ TPST1–CRCP alternatives lack the native KIILSKISV peptide; each keeps its own 
 support and unresolved polarity/initiation status.
 
 The compatibility module `varcode.uorf` preserves the original upstream-specific
-call shapes. The `varcode[orf]` and `varcode[uorf]` extras remain, empty, so
-existing install commands keep working. New code should
+call shapes; ORFdata installs with Varcode, so there is no ORF extra. New code should
 use `varcode.orf` and the bound reference API above. `annotate_orf_product`
 retains its original dictionary return for existing RNA exporters; new Python
 code should use `annotate_orf_rna_product`. `ORFAnnotation.data` remains an

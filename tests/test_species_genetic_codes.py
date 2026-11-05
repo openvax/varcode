@@ -112,7 +112,7 @@ def test_unscoped_provider_retains_standard_default(genetic_code):
     ("NC_012920.1", "mitochondrial"),
 ])
 def test_pyensembl_explicitly_unset_reference_code(contig, compartment):
-    pyensembl = pytest.importorskip("pyensembl", minversion="2.31.0")
+    import pyensembl
     genome = pyensembl.Genome("GRCh38", "test", reference_metadata={
         "translation_tables": {compartment: None},
         "contig_compartments": {"NC_012920.1": "mitochondrial"},
@@ -129,14 +129,14 @@ def test_pyensembl_explicitly_unset_reference_code(contig, compartment):
     ("GRCh38", "MT", 2), ("R64-1-1", "MT", 3),
 ])
 def test_pyensembl_scaffolds_and_known_organelles(reference, contig, code):
-    pyensembl = pytest.importorskip("pyensembl", minversion="2.31.0")
+    import pyensembl
     genome = pyensembl.Genome(reference, "test")
     transcript = pyensembl.Transcript("t", None, contig, 1, 9, "+", None, "g", genome)
     assert codon_table_for_transcript(transcript).ncbi_id == code
 
 
 def test_pyensembl_annotation_table_overrides_explicitly_unset_reference(tmp_path):
-    pyensembl = pytest.importorskip("pyensembl", minversion="2.31.0")
+    import pyensembl
     gtf = tmp_path / "declared.gtf"
     gtf.write_text(
         '1\ttest\tCDS\t1\t9\t.\t+\t0\tgene_id "g"; transcript_id "t"; transl_table "12";\n')

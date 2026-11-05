@@ -53,8 +53,8 @@ MAP2_HISTORICAL = ("2", 209694768, "CCTGGGCTACTGTGTGTTCAATA", "C")
 
 @pytest.fixture(scope="module")
 def shared_phasing_reads(tmp_path_factory):
-    osteosarc = pytest.importorskip("osteosarc", reason="install .[test-data]")
-    pysam = pytest.importorskip("pysam", reason="install .[rna]")
+    import osteosarc
+    import pysam
     from osteosarc.records import read_records, read_template
 
     root = Path(osteosarc.fetch_bundle("openvax-v2"))

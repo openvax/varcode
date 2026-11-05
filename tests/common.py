@@ -91,7 +91,7 @@ def eq_(x, y, s=None):
         assert x == y, s
 
 # Independent sequence checks. Expected proteins and strand flips come from
-# Biotite (from the test-data extra), never from Varcode's own translation or
+# Biotite (from the test dependency group), never from Varcode's own translation or
 # nucleotide code, so a shared bug cannot make a test agree with itself.
 # Before a stop, Biotite rejects an ambiguous base such as N (AlphabetError),
 # where Biopython read a uniquely determined residue (GCN as Ala) or X.

@@ -76,7 +76,7 @@ ESVEE_RECORDS = {
 
 @pytest.fixture(scope="module")
 def fusion_targets():
-    osteosarc = pytest.importorskip("osteosarc", reason="install .[test-data]")
+    import osteosarc
     recipe = json.loads(
         (Path(osteosarc.fetch_bundle("openvax-v2")) / "recipe.json").read_text())
     return {name: target for name, target in recipe["targets"].items()

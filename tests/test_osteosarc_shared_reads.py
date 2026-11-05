@@ -32,7 +32,7 @@ def shared_read_fields(osteosarc, label):
 
 
 def test_observed_junction_windows_come_from_their_shared_reads():
-    osteosarc = pytest.importorskip("osteosarc", reason="install .[test-data]")
+    import osteosarc
     for row in junction_records():
         (fields,) = shared_read_fields(osteosarc, row["label"])
         assert fields[0] == row["read_name"]
