@@ -42,9 +42,9 @@ class CodonTable:
     """Codon table with amino acid lookup + start/stop sets.
 
     ``forward_table`` maps sense codons to single-letter AAs; stop
-    codons are omitted (consult ``stop_codons`` for those). Matches
-    the BioPython ``CodonTable.unambiguous_dna_by_id[n]`` shape so
-    callers can be ported in-place.
+    codons are omitted (consult ``stop_codons`` for those).
+    ``start_codons`` and ``stop_codons`` are frozensets of DNA codons, and
+    ``ncbi_id`` and ``name`` identify the NCBI genetic code.
     """
     name: str
     ncbi_id: int

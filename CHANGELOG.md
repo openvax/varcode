@@ -1,5 +1,42 @@
 # Change Log
 
+## v11.6.3
+
+- Every supported NCBI genetic code is checked against Biotite's
+  independent copy of NCBI's tables: each codon's meaning, the stops and the
+  starts, translation of all 64 codons (upper and lower case) and of every
+  ambiguous codon (IUPAC codes and X; one meaning, or X), and alternative
+  starts read as Met only at the initiator. Codes 27, 28 and 31 stay refused
+  (part of #640).
+- Biotite's tables lack codes 32 and 33 and omit GTG from code 3's starts, and
+  Biotite 1.6 (Python 3.11) still reads CTG as Ala in codes 27-30. The test
+  corrects these from NCBI's gc.prt 4.6, which Varcode's packaged snapshot
+  matches (same SHA-256), rather than trusting either copy.
+- Follow-up to 11.6.1: the tests' `translate_to_stop` helper now stops at the
+  first stop codon, as Biopython's `to_stop` did, so bases after it (such as
+  an N in a 3' UTR) are never read. Before the stop, Biotite rejects an
+  ambiguous base, where Biopython read a uniquely determined residue (GCN as
+  Ala) or X. The complement helpers document that they return upper case,
+  and the canine fixture README says its translations use Biotite.
+- Outdated Biopython references are gone from docstrings, comments and docs,
+  since Varcode no longer uses Biopython: parameter types no longer say
+  `Bio.Seq`, porting notes are dropped, the transcript-models guide
+  points at `translate_sequence` instead of Biopython's documentation, and the
+  internal `bio_seq_to_str` helper is renamed `as_str` (no behaviour change).
+- The `varcode.effects.translate` module docstring now describes how a
+  transcript's genetic code is chosen. It said every non-mitochondrial
+  transcript uses table 1.
+- The new genetic-code test no longer repeats the refusal check for codes 27,
+  28 and 31, which `test_species_genetic_codes` already covers.
+- Remove `examples/varcode-quick_start.ipynb`, a Python 2-era notebook that
+  nothing linked to. Its useful content moved into the docs, where the
+  documentation tests run it: Getting started shows a change in its protein
+  context (`aa_mutation_start_offset`), and the effect-annotation guide gains
+  "Filter and group a collection" (`gene_counts`, `groupby_gene_name`,
+  `top_priority_effect_per_gene_id`, `filter_by_effect_priority`).
+- `EffectCollection.filter_by_effect_priority`'s docstring said it keeps
+  effects below the given class; it keeps those at least as severe.
+
 ## v11.6.2
 
 - pysam stays an optional dependency (`varcode[rna]`), and the reason is now

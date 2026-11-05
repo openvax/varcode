@@ -93,6 +93,16 @@ if protein is not None:
 the protein is unchanged. Some effects contain several possible outcomes, each
 with its own protein; see [alternative outcomes](effect_annotation.md#alternative-outcomes).
 
+To see a change in its protein context, slice the reference and mutant
+proteins around `aa_mutation_start_offset`, the zero-based position where the
+protein first changes:
+
+```python
+offset = effect.aa_mutation_start_offset                       # 158
+print(effect.original_protein_sequence[offset - 3:offset + 4])  # MFSLIYK
+print(protein[offset - 3:offset + 4])                           # MFSMIYK
+```
+
 ## Load a file
 
 Replace the path with your own VCF called against GRCh38:

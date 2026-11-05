@@ -42,9 +42,9 @@ def input_directory(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("path,count", [
     ("README.md", 2),
-    ("docs/getting_started.md", 5),
+    ("docs/getting_started.md", 6),
     ("docs/index.md", 1),
-    ("docs/effect_annotation.md", 3),
+    ("docs/effect_annotation.md", 4),
     ("docs/structural_variants.md", 1),
     ("docs/transforms.md", 1),
     ("docs/germline.md", 1),
@@ -60,6 +60,11 @@ def test_documentation_first_steps(path, count, input_directory):
         assert namespace["protein"][158] == "M"
     if path == "docs/getting_started.md":
         assert (input_directory / "effects.csv").is_file()
+        assert namespace["offset"] == 158
+    if path == "docs/effect_annotation.md":
+        assert len(namespace["cftr_effects"]) > 0
+        assert [e.short_description for e in namespace["most_severe"].values()] == ["p.L159M"]
+        assert all(e in namespace["effects"] for e in namespace["substitution_or_worse"])
     if path == "docs/structural_variants.md":
         assert namespace["variants"][0].is_structural
     if path == "docs/phasing.md":

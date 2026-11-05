@@ -270,8 +270,8 @@ class EffectCollection(Collection):
 
     def filter_by_effect_priority(self, min_priority_class):
         """
-        Create a new EffectCollection containing only effects whose priority
-        falls below the given class.
+        Create a new EffectCollection containing only effects at least as
+        severe as ``min_priority_class`` in Varcode's effect priority order.
         """
         min_priority = transcript_effect_priority_dict[min_priority_class]
         return self.filter(

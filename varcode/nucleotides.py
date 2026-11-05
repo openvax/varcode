@@ -55,9 +55,7 @@ _COMPLEMENT_TABLE = str.maketrans(
 def reverse_complement(sequence):
     """Reverse-complement a nucleotide string.
 
-    Preserves case and handles IUPAC ambiguity codes (#293). Replaces
-    ``Bio.Seq.reverse_complement`` so varcode doesn't pull in
-    biopython just for this one-line helper.
+    Preserves case and complements IUPAC ambiguity codes (#293).
     """
     return sequence.translate(_COMPLEMENT_TABLE)[::-1]
 

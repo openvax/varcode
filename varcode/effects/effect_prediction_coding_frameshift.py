@@ -44,7 +44,7 @@ def create_frameshift_effect(
         Codon offset (starting from 0 = start codon) of first non-reference
         amino acid in the variant protein
 
-    sequence_from_mutated_codon: Bio.Seq
+    sequence_from_mutated_codon : str
         Sequence of mutated cDNA, starting from first mutated codon, until
         the end of the transcript
 

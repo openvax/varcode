@@ -91,33 +91,45 @@ def eq_(x, y, s=None):
         assert x == y, s
 
 # Independent sequence checks. Expected proteins and strand flips come from
-# Biotite (installed with ORFdata), never from Varcode's own translation or
+# Biotite (from the test-data extra), never from Varcode's own translation or
 # nucleotide code, so a shared bug cannot make a test agree with itself.
-# Biotite rejects ambiguous bases such as N rather than guessing a residue.
+# Before a stop, Biotite rejects an ambiguous base such as N (AlphabetError),
+# where Biopython read a uniquely determined residue (GCN as Ala) or X.
 
 def translate_to_stop(dna):
-    """Standard-code protein of ``dna`` up to its first stop; a trailing partial codon is ignored."""
-    from biotite.sequence import NucleotideSequence
+    """Standard-code protein of ``dna`` up to its first stop, like Biopython's ``translate(to_stop=True)``.
 
-    whole_codons = dna[:len(dna) // 3 * 3]
-    return str(NucleotideSequence(whole_codons).translate(complete=True)).split("*")[0]
+    Codons after the first stop and a trailing partial codon are never read.
+    """
+    from biotite.sequence import CodonTable
+
+    table = CodonTable.default_table()
+    residues = []
+    for start in range(0, len(dna) // 3 * 3, 3):
+        residue = table[dna[start:start + 3].upper()]
+        if residue == "*":
+            break
+        residues.append(residue)
+    return "".join(residues)
 
 
 def translate_codon(codon):
     """Standard-code residue of one codon, ``*`` for a stop."""
-    from biotite.sequence import NucleotideSequence
+    from biotite.sequence import CodonTable
 
     assert len(codon) == 3, codon
-    return str(NucleotideSequence(codon).translate(complete=True))
+    return CodonTable.default_table()[codon.upper()]
 
 
 def complement(dna):
+    """Complement of ``dna``, always in upper case."""
     from biotite.sequence import NucleotideSequence
 
     return str(NucleotideSequence(dna).complement())
 
 
 def reverse_complement(dna):
+    """Reverse complement of ``dna``, always in upper case."""
     from biotite.sequence import NucleotideSequence
 
     return str(NucleotideSequence(dna).reverse().complement())
