@@ -27,8 +27,8 @@ python -m pip install build twine 'setuptools>=64'
 ```
 
 `rna` installs the optional BAM reader; `test-data` installs the pinned
-Osteosarc adapter. `lint` installs Ruff and the same pinned mypy version used
-in CI. `pytest-xdist` is optional: `test.sh` also runs serially.
+Osteosarc adapter and Biotite, which the tests use for independent sequence
+checks. `lint` installs Ruff and the same pinned mypy version used in CI. `pytest-xdist` is optional: `test.sh` also runs serially.
 Activate this environment before invoking the scripts so Python and its tools
 come from the same installation. `./develop.sh` installs just the editable
 library into the active environment.
