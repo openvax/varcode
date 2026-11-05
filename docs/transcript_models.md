@@ -98,5 +98,6 @@ and mutant product wrappers; see [its result format](experimental_annotators.md#
 Ambiguous reference codons retain their uniquely determined amino acid, or `X`
 when no unique residue is established. `X` is an unknown residue, including a
 possible stop for mixed sense/stop codons; it is not a concrete amino acid.
-The original cDNA remains available. See the
-[translation convention](https://biopython.org/docs/latest/api/Bio.Seq.html).
+The original cDNA remains available. `translate_sequence` in
+`varcode.effects.codon_tables` applies this rule under every supported NCBI
+genetic code.

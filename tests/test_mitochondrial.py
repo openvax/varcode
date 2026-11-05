@@ -20,8 +20,7 @@ NCBI table 2 (Vertebrate Mitochondrial):
   * AGG: standard Arg  -> mt stop
   * ATA: standard Ile  -> mt Met
 
-Also covers the local codon-table data structures (which exist so that
-varcode doesn't need BioPython just to enumerate 64 codons — see #293).
+Also covers Varcode's own codon-table data structures (#293).
 """
 
 from pyensembl import cached_release

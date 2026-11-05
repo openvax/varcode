@@ -127,7 +127,7 @@ def predict_in_frame_coding_effect(
     trimmed_cdna_alt : str
         Nucleotides to insert in place of the reference nucleotides
 
-    sequence_from_start_codon : Bio.Seq or str
+    sequence_from_start_codon : str
         Transcript sequence from the CDS start codon (including the 3' UTR).
         This sequence includes the 3' UTR since a mutation may delete the stop
         codon and we'll have to translate past the normal end of the CDS to

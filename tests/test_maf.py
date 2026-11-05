@@ -121,8 +121,8 @@ def test_load_utf8():
         variants = load_maf(
             data_path("ov.wustle.subset5.maf"), raise_on_error=True, encoding="utf-8")
         eq_(len(variants), 5)
-        # Make sure we avoid "TypeError: character mapping must return integer, None or unicode"
-        # from Bio.Seq.
+        # Regression: annotating this utf-8 MAF once raised "TypeError: character mapping
+        # must return integer, None or unicode" in the Biopython translation Varcode used then.
         _ = variants.effects()
 
 

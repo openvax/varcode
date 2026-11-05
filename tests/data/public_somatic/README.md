@@ -146,7 +146,7 @@ provide full-genome SV coverage.
 The papers do not specify transcript IDs for these records. Tests select
 complete current models compatible with each published coding position,
 check the published consequence, and independently translate the edited RNA
-using Biopython. For SNVs, the expected edit comes from the published cDNA
+using Biotite. For SNVs, the expected edit comes from the published cDNA
 position; for SPTBN1, it comes from the stated genomic deletion. Only STAT3
 Y640F and SPTBN1 Asn795fs have explicit protein descriptions in these selected
 source statements. Other peptide changes and the full frameshift tail are

@@ -89,6 +89,24 @@ To keep only effects that may change the protein, use
 predictions but keeps unresolved ones by default; see
 [filtering by protein change](structural_variants.md#filtering-by-protein-change).
 
+## Filter and group a collection
+
+```python
+from varcode.effects import Substitution
+
+print(variants.gene_counts())  # number of variants overlapping each gene name
+cftr_effects = variants.groupby_gene_name()["CFTR"].effects()
+most_severe = effects.drop_silent_and_noncoding().top_priority_effect_per_gene_id()
+substitution_or_worse = effects.filter_by_effect_priority(Substitution)
+```
+
+`groupby_gene_name()` returns a dict from gene name to the variants that
+overlap that gene; a variant overlapping several genes appears in each group.
+`top_priority_effect_per_gene_id()` returns a dict from gene ID to that gene's
+highest-priority effect. `filter_by_effect_priority(cls)` keeps the effects at
+least as severe as `cls` in Varcode's
+[priority order](api_effects.md#varcode.effect_priority).
+
 <a id="reading-alternatives"></a>
 
 ## Alternative outcomes

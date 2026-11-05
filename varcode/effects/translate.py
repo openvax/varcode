@@ -13,9 +13,13 @@
 """Helpers for cDNA -> protein translation.
 
 Codon tables live in :mod:`varcode.effects.codon_tables` as plain
-Python dicts/frozensets — no BioPython dependency for codon lookup.
-Mitochondrial transcripts are routed to NCBI translation table 2 via
-:func:`codon_table_for_transcript`; everything else uses table 1.
+Python dicts/frozensets built from NCBI's genetic codes.
+:func:`codon_table_for_transcript` picks each transcript's code: an
+explicit ``translation_table`` first, then a table the reference
+declares for the transcript's compartment, then NCBI's assignment for
+the species and compartment (e.g. table 2 for vertebrate mitochondria).
+Only nuclear transcripts with no species fall back to the standard
+table 1; otherwise a missing assignment raises ``ValueError``.
 """
 
 from .codon_tables import (
@@ -81,9 +85,7 @@ def translate(
     Returns
     -------
     str
-        Amino acid sequence (previously returned a ``Bio.Seq.Seq``;
-        now a plain string — all in-repo callers already use string
-        semantics).
+        Amino acid sequence.
     """
     seq = str(nucleotide_sequence)
     if truncate:

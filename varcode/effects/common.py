@@ -13,7 +13,8 @@
 
 
 
-def bio_seq_to_str(seq):
+def as_str(seq):
+    """Return ``seq`` as a plain ``str``, converting other string-like sequence types."""
     if type(seq) is str:
         return seq
     else:
