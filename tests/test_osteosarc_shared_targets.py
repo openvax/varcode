@@ -19,7 +19,7 @@ import pytest
 from pyensembl import cached_release
 
 from varcode import Variant
-from varcode.errors import ReferenceMismatchError
+from varcode.errors import InvalidContigError
 
 from .osteosarc_variants import read_fixture
 
@@ -27,7 +27,8 @@ from .osteosarc_variants import read_fixture
 ENSEMBL_RELEASES = {"GRCh38": 81, "GRCh37": 75}
 # hg19's chrM is NC_001807, not the rCRS that Ensembl names MT: hg19
 # chrM:12995 is rCRS MT:12994, the target MT_ND5-chrM-12994-GRCh37. Varcode
-# refuses the hg19 coordinate rather than annotate a different base.
+# keeps the hg19 contig rather than rename it onto MT, so annotation refuses
+# it rather than annotate a different base (#707).
 HG19_MITOCHONDRIAL = "MT_ND5-chrM-12994-hg19"
 
 
@@ -70,7 +71,8 @@ def test_every_shared_small_variant_annotates_and_the_annotators_agree(
     for name, target in sorted(small_variant_targets.items()):
         variant = shared_variant(target)
         if name == HG19_MITOCHONDRIAL:
-            with pytest.raises(ReferenceMismatchError):
+            assert variant.contig == "chrM"
+            with pytest.raises(InvalidContigError, match="NC_001807"):
                 variant.effects(annotator="fast")
             continue
         fast = effects_by_transcript(variant, "fast")

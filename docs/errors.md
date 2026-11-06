@@ -132,6 +132,15 @@ following the
 Explicit accession versions are preserved; names without a supported mapping
 remain unchanged. This does not lift coordinates between assemblies.
 
+For that reason, under GRCh37 (`hg19`) `chrM` and `M` are never renamed to
+`MT`. hg19's chrM is NC_001807, not the rCRS (NC_012920) that Ensembl names
+MT, and its positions are offset from it: hg19 chrM:12995 is rCRS MT:12994.
+Renaming would annotate other bases, usually without a reference mismatch to
+flag it. Such a variant keeps its contig, and annotating it raises
+`InvalidContigError` saying so (a `Failure` effect in collections). Give rCRS
+positions on `MT` instead. hg38's chrM is the rCRS, and `chrMT` is an rCRS
+name, so both still become `MT`.
+
 In Python, pass `raise_on_error=False` to `.effects()`. Each failed
 annotation becomes a `Failure` effect instead of an exception, and other
 transcripts can still annotate successfully:

@@ -52,6 +52,22 @@ MAF_COLUMN_NAMES = [
 ]
 
 
+# MAF columns kept as each variant's metadata.
+_METADATA_COLUMNS = (
+    'Hugo_Symbol', 'Center', 'Strand', 'Variant_Classification', 'Variant_Type',
+    'dbSNP_RS', 'dbSNP_Val_Status', 'Tumor_Sample_Barcode', 'Matched_Norm_Sample_Barcode')
+
+
+def _cell(row, column):
+    """A MAF cell, with an empty cell (which pandas reads as NaN) as None.
+
+    NaN can't be written as JSON, so a collection holding it in metadata
+    couldn't be saved with ``to_json`` (#704).
+    """
+    value = row[column]
+    return None if isnull(value) else value
+
+
 def load_maf_dataframe(
         path: str | os.PathLike[str], nrows: int | None = None,
         raise_on_error: bool = True, encoding: str | None = None) -> pandas.DataFrame:
@@ -67,9 +83,10 @@ def load_maf_dataframe(
         Optional limit to number of rows loaded
 
     raise_on_error : bool
-        Raise ``ValueError`` when one of the 19 required columns
-        (``MAF_COLUMN_NAMES``, matched case-insensitively) is missing or out
-        of order; otherwise log a warning.
+        Raise ``ValueError`` when the 19 required columns
+        (``MAF_COLUMN_NAMES``, matched case-insensitively) are out of order;
+        otherwise log a warning. A missing required column always raises
+        ``ValueError``, since the file can't be read as a MAF without it.
 
     encoding : str, optional
         Encoding to use for UTF when reading MAF file.
@@ -91,14 +108,10 @@ def load_maf_dataframe(
     found = {str(column).lower() for column in df.columns}
     missing = [name for name in MAF_COLUMN_NAMES if name.lower() not in found]
     if missing:
-        error_message = (
+        raise ValueError(
             "MAF file %s is missing %d of the %d required columns: %s (found: %s)" % (
                 path, len(missing), len(MAF_COLUMN_NAMES), ", ".join(missing),
                 ", ".join(map(str, df.columns))))
-        if raise_on_error:
-            raise ValueError(error_message)
-        else:
-            logging.warning(error_message)
 
     # check each pair of expected/actual column names to make sure they match
     for expected, actual in zip(MAF_COLUMN_NAMES, df.columns):
@@ -130,9 +143,10 @@ def load_maf(
 
     The ``NCBI_Build`` column selects each variant's reference. UCSC contig
     names, such as the ``chr7`` and ``chrM`` in GDC GRCh38 MAFs, become
-    Ensembl's ``7`` and ``MT``. A GRCh37 row on ``chrM`` or ``M`` is an
-    error (or, with ``raise_on_error=False``, skipped with a warning): hg19's
-    chrM is not the rCRS sequence Ensembl names MT, and its positions differ.
+    Ensembl's ``7`` and ``MT``. In a GRCh37 MAF, ``chrM`` and ``M`` keep their
+    names and fail annotation: hg19's chrM is not the rCRS that Ensembl names
+    MT, and its positions are offset from it. Empty cells become None in each
+    variant's metadata.
 
     Parameters
     ----------
@@ -152,7 +166,9 @@ def load_maf(
         Don't keep repeated variants
 
     raise_on_error : bool
-        Raise an exception upon encountering an error or just log a warning.
+        Raise ``ValueError`` for a row that can't be read as a variant (no
+        contig, or no tumor allele that differs from the reference), or log
+        a warning and skip it. A missing required column always raises.
 
     encoding : str, optional
         Encoding to use for UTF when reading MAF file.
@@ -202,40 +218,23 @@ def load_maf(
             genome, _ = infer_genome(reference_name)
             ensembl_objects[ncbi_build] = genome
 
-        # hg19's chrM (NC_001807) is not the rCRS that Ensembl's GRCh37 names
-        # MT, and its positions are offset from it, so renaming it would
-        # annotate other bases (#707). GRCh38's chrM is the rCRS.
-        if (getattr(genome, "assembly", genome.reference_name) == "GRCh37"
-                and str(contig).upper() in ("M", "CHRM")):
+        # The alt is the first tumor allele that differs from the reference.
+        # An empty cell (NaN) is no allele, not the alt "nan".
+        alts = [allele for allele in (_cell(x, "Tumor_Seq_Allele1"), _cell(x, "Tumor_Seq_Allele2"))
+                if allele is not None and allele != ref]
+        if not alts:
             error_message = (
-                "GRCh37 MAF row on contig %s: hg19's chrM is not Ensembl's MT "
-                "(the rCRS) and its positions differ; give rCRS positions on "
-                "contig MT" % contig)
+                "No tumor allele differs from reference %s: %s" % (ref, x))
             if raise_on_error:
                 raise ValueError(error_message)
             else:
                 logging.warning(error_message)
                 continue
-
-        # have to try both Tumor_Seq_Allele1 and Tumor_Seq_Allele2
-        # to figure out which is different from the reference allele
-        if x.Tumor_Seq_Allele1 != ref:
-            alt = x.Tumor_Seq_Allele1
-        else:
-            if x.Tumor_Seq_Allele2 == ref:
-                error_message = (
-                    "Both tumor alleles agree with reference %s: %s" % (
-                        ref, x,))
-                if raise_on_error:
-                    raise ValueError(error_message)
-                else:
-                    logging.warning(error_message)
-                    continue
-            alt = x.Tumor_Seq_Allele2
+        alt = alts[0]
 
         # GDC GRCh38 MAFs name contigs "chr7" and "chrM"; Ensembl
         # annotation names them "7" and "MT", as load_vcf converts them.
-        # (GRCh37 chrM rows were refused above.)
+        # Variant leaves hg19's chrM alone, since it isn't Ensembl's MT (#707).
         variant = Variant(
             contig,
             start_pos,
@@ -246,19 +245,10 @@ def load_maf(
 
         # keep metadata about the variant and its TCGA annotation
         metadata[variant] = {
-            'Hugo_Symbol': x.Hugo_Symbol,
-            'Center': x.Center,
-            'Strand': x.Strand,
-            'Variant_Classification': x.Variant_Classification,
-            'Variant_Type': x.Variant_Type,
-            'dbSNP_RS': x.dbSNP_RS,
-            'dbSNP_Val_Status': x.dbSNP_Val_Status,
-            'Tumor_Sample_Barcode': x.Tumor_Sample_Barcode,
-            'Matched_Norm_Sample_Barcode': x.Matched_Norm_Sample_Barcode,
-        }
+            column: _cell(x, column) for column in _METADATA_COLUMNS}
         for optional_col in optional_cols:
             if optional_col in x:
-                metadata[variant][optional_col] = x[optional_col]
+                metadata[variant][optional_col] = _cell(x, optional_col)
 
         variants.append(variant)
 

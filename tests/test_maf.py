@@ -169,21 +169,50 @@ def test_missing_required_columns_are_named_in_spec_order(tmp_path):
         "Variant_Type, Tumor_Seq_Allele1, dbSNP_RS, dbSNP_Val_Status, Tumor_Sample_Barcode, "
         "Matched_Norm_Sample_Barcode, Match_Norm_Seq_Allele1, Match_Norm_Seq_Allele2 "
         "(found: %s)" % ", ".join(columns))
-    with pytest.raises(ValueError) as caught:
-        load_maf_dataframe(maf)
-    assert str(caught.value) == "MAF file %s %s" % (maf, message)
+    # raise_on_error=False skips unreadable rows; without these columns none can be read (#708).
+    for load in (load_maf_dataframe, load_maf):
+        for raise_on_error in (True, False):
+            with pytest.raises(ValueError) as caught:
+                load(maf, raise_on_error=raise_on_error)
+            assert str(caught.value) == "MAF file %s %s" % (maf, message)
 
 
 @pytest.mark.parametrize("build", ["37", "GRCh37", "hg19"])
 @pytest.mark.parametrize("contig", ["chrM", "M"])
-def test_grch37_chrm_rows_are_refused_rather_than_renamed_to_rcrs(tmp_path, build, contig):
+def test_grch37_chrm_rows_keep_their_name_and_fail_annotation(tmp_path, build, contig):
     # hg19's chrM is not the rCRS that Ensembl's GRCh37 names MT, and its
     # positions are offset (hg19 chrM:12995 is rCRS MT:12994), #707.
+    from varcode.errors import InvalidContigError
     from varcode.maf import MAF_COLUMN_NAMES
 
     maf = _write_maf(tmp_path / "hg19.maf", MAF_COLUMN_NAMES,
                      [_maf_row(build, contig, "12995", "A", "G"),
                       _maf_row(build, "MT", "12994", "A", "G")])
-    with pytest.raises(ValueError, match="hg19's chrM is not Ensembl's MT"):
-        load_maf(maf)
-    assert [(v.contig, v.start) for v in load_maf(maf, raise_on_error=False)] == [("MT", 12994)]
+    hg19_mt, rcrs_mt = sorted(load_maf(maf), key=lambda v: v.contig != contig)
+    assert (hg19_mt.contig, rcrs_mt.contig) == (contig, "MT")
+    with pytest.raises(InvalidContigError, match="NC_001807"):
+        hg19_mt.effects()
+
+
+def test_empty_cells_are_none_and_the_collection_round_trips_through_json(tmp_path):
+    # pandas reads an empty cell as NaN, which JSON can't hold (#704). GDC MAFs
+    # leave dbSNP_Val_Status empty; some writers leave Tumor_Seq_Allele1 empty.
+    from varcode import VariantCollection
+    from varcode.maf import MAF_COLUMN_NAMES
+
+    row = _maf_row("GRCh38", "chr7", "140753336", "A", "T")
+    row[MAF_COLUMN_NAMES.index("dbSNP_RS")] = ""
+    row[MAF_COLUMN_NAMES.index("Tumor_Seq_Allele1")] = ""
+    maf = _write_maf(tmp_path / "gdc.maf", MAF_COLUMN_NAMES + ["t_alt_count", "vaf"],
+                     [row + ["12", ""]])
+    variants = load_maf(maf, optional_cols=["t_alt_count", "vaf"])
+    variant, = variants
+    assert variant.alt == "T"
+    metadata = variants.metadata[variant]
+    assert metadata["dbSNP_RS"] is None and metadata["dbSNP_Val_Status"] is None
+    assert metadata["vaf"] is None and metadata["t_alt_count"] == 12
+    restored = VariantCollection.from_json(variants.to_json())
+    assert restored == variants
+    assert restored.metadata[variant] == metadata
+    # The bundled TCGA fixture has empty cells too.
+    assert VariantCollection.from_json(tcga_ov_variants.to_json()) == tcga_ov_variants

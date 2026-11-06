@@ -1,7 +1,21 @@
 # Change Log
 
-## v11.7.2
+## v11.8.0
 
+Behaviour change: hg19 `chrM` variants are no longer annotated as rCRS `MT`.
+
+- Under GRCh37 (`hg19`), `chrM` and `M` are no longer renamed to `MT` by
+  `Variant`, `load_vcf`, `load_maf` or the CLI (#707). hg19's chrM is
+  NC_001807, not the rCRS (NC_012920) that Ensembl names MT, and its positions
+  are offset from it (hg19 chrM:12995 is rCRS MT:12994). Renaming annotated
+  other bases, and only a reference mismatch at the shifted base could catch
+  it. Such variants now keep their contig, and annotating one raises
+  `InvalidContigError` saying why (a `Failure` effect in collections, with
+  the usual summary warning); give rCRS positions on `MT` instead. hg38's
+  `chrM` and the rCRS name `chrMT` still become `MT`. `ContigResolver` is
+  unchanged: it matches spellings, not sequences, as documented. The osteosarc
+  hg19 `MT_ND5` target now fails this way instead of with
+  `ReferenceMismatchError`.
 - `load_maf` converts UCSC contig names to Ensembl's, as `load_vcf` and the
   CLI's `--variant` already did (#680). GDC GRCh38 MAFs write `chr7` and
   `chrM`; those variants kept the UCSC names and failed annotation with
@@ -9,15 +23,19 @@
   become `7` and `MT`. Variant JSON records each variant's conversion setting,
   so JSON written from a MAF by an earlier version still holds `chr7` with
   conversion off; reload the MAF to fix it.
-- GRCh37 MAF rows on `chrM` or `M` are refused (`ValueError`; skipped with a
-  warning when `raise_on_error=False`) rather than renamed: hg19's chrM is
-  NC_001807, not the rCRS that Ensembl's GRCh37 names MT, and its positions
-  are offset from it (hg19 chrM:12995 is rCRS MT:12994). Such rows failed
-  annotation before, too. `load_vcf` and `Variant` still rename hg19 `chrM`;
-  that is #707.
+- Empty MAF cells are `None` in variant metadata instead of `NaN`, so a
+  MAF-loaded collection can be saved with `to_json` (#704); before, nearly
+  every GDC MAF and the bundled TCGA fixture failed with "Out of range float
+  values are not JSON compliant". An empty `Tumor_Seq_Allele1` or `2` is no
+  longer read as the alt allele "nan".
 - A MAF missing required columns now names them, in the order of the spec, and
   lists the columns it found (#681). The old message gave only the counts and
   a pandas `Index` repr.
+- A missing required column always raises `ValueError`, in both `load_maf`
+  and `load_maf_dataframe` (#708). With `raise_on_error=False`, `load_maf`
+  used to log a warning and then crash with `AttributeError`.
+  `raise_on_error=False` still downgrades unreadable rows and out-of-order
+  columns to warnings.
 
 ## v11.7.1
 

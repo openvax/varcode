@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from .effects import EffectCollection, MutationEffect
 
 from . import circular_origin
-from .contigs import normalize_contig_name, _convert_ucsc_contig_name
+from .contigs import normalize_contig_name, _convert_ucsc_contig_name, _is_hg19_mitochondrion
 from .nucleotides import (
     normalize_nucleotide_string,
     STANDARD_NUCLEOTIDES,
@@ -403,9 +403,13 @@ class Variant(Serializable):
         # Different annotation datasets can share an assembly name. Query
         # this genome's contigs; pyensembl caches the query per database.
         if self.contig not in self.genome.contigs():
-            raise InvalidContigError("Invalid contig name '%s' for reference '%s'" % (
-                self.contig,
-                self.reference_name))
+            message = "Invalid contig name '%s' for reference '%s'" % (
+                self.contig, self.reference_name)
+            if _is_hg19_mitochondrion(self.contig, getattr(self.genome, "assembly", self.reference_name)):
+                message += (
+                    ": hg19's chrM (NC_001807) is not the rCRS that Ensembl names MT, "
+                    "and its positions are offset from it; give rCRS positions on contig MT")
+            raise InvalidContigError(message)
 
 
 
@@ -698,12 +702,16 @@ class Variant(Serializable):
         "MT") when ``convert_ucsc_contig_names`` is set. Shared with
         StructuralVariant so breakend mates are named like the variant's
         own contig.
+
+        Under GRCh37, ``chrM`` and ``M`` are never converted: hg19's chrM is
+        not the rCRS that Ensembl names MT, and its positions are offset from
+        it (#707). Such a variant keeps its contig and fails annotation.
         """
+        assembly = getattr(self.genome, "assembly", self.reference_name)
+        convert = self.convert_ucsc_contig_names and not _is_hg19_mitochondrion(contig, assembly)
         if self.normalize_contig_names:
-            return normalize_contig_name(
-                contig, reference_name=getattr(self.genome, "assembly", self.reference_name),
-                convert_ucsc=self.convert_ucsc_contig_names)
-        if self.convert_ucsc_contig_names:
+            return normalize_contig_name(contig, reference_name=assembly, convert_ucsc=convert)
+        if convert:
             contig = self._convert_ucsc_contig_name_to_ensembl(contig)
         return contig
 

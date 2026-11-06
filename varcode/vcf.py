@@ -244,8 +244,6 @@ def load_vcf(
         'distinct': distinct
     }
 
-    # TODO: drop chrMT variants from hg19 and warn user about it
-
     return dataframes_to_variant_collection(
         df_iterator,
         source_path=path,

@@ -97,7 +97,9 @@ These are spelling rules, **not sequence or coordinate equivalence checks**.
 Callers must establish compatible references before using matched names.
 The assembly-specific [UCSC hg19 alias table](https://hgdownload.soe.ucsc.edu/goldenPath/hg19/bigZips/hg19.chromAlias.txt)
 and [hg38 alias table](https://hgdownload.soe.ucsc.edu/goldenPath/hg38/bigZips/hg38.chromAlias.txt)
-even assign different sequence accessions to `chrM`. The
+even assign different sequence accessions to `chrM`, so under GRCh37 the
+resolver still matches `chrM` to `MT` as a spelling while `Variant` refuses to
+place a variant there ([annotation errors](errors.md#continuing-past-errors)). The
 [NCBI sequence report](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/reference-docs/data-reports/genome-sequence/)
 records names and accessions within a specific assembly. This API performs no
 liftover and does not infer RefSeq/GenBank accession equivalence.

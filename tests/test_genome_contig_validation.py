@@ -118,6 +118,31 @@ def test_ucsc_scaffold_accessions_preserve_versions(name, genome, expected):
     assert Variant.from_json(variant.to_json()).contig == expected
 
 
+@pytest.mark.parametrize("name,genome,expected", [
+    # hg19's chrM is NC_001807, not the rCRS that Ensembl's GRCh37 names MT, and
+    # its positions are offset (hg19 chrM:12995 is rCRS MT:12994), #707.
+    ("chrM", "hg19", "chrM"), ("chrm", "hg19", "chrM"), ("chrM", 75, "chrM"), ("M", 75, "M"),
+    # chrMT is a chr-prefixed rCRS MT; hg38's chrM is the rCRS.
+    ("chrMT", "hg19", "MT"), ("MT", 75, "MT"), ("chrM", "hg38", "MT"), ("M", 81, "MT"),
+])
+def test_hg19_chrm_is_not_renamed_to_rcrs_mt(name, genome, expected):
+    variant = Variant(name, 12995, "A", "G", genome=genome, convert_ucsc_contig_names=True)
+    assert variant.contig == expected
+    assert Variant.from_json(variant.to_json()).contig == expected
+    sv = StructuralVariant("1", 150, "BND", genome=genome, mate_contig=name,
+                           mate_start=12995, convert_ucsc_contig_names=True)
+    assert sv.mate_contig == expected
+
+
+def test_hg19_chrm_variants_fail_annotation_with_the_reason():
+    variant = Variant("chrM", 12995, "A", "G", genome="hg19")
+    with pytest.raises(ValueError, match=r"hg19's chrM \(NC_001807\) is not the rCRS"):
+        variant.effects()
+    with pytest.warns(UserWarning, match="1 variants? on contigs absent"):
+        effects = VariantCollection([variant]).effects()
+    assert isinstance(effects[0], Failure)
+
+
 def test_mapping_does_not_substitute_a_different_accession_version(make_genome):
     genome = make_genome("version-two-only", ["KI270438.2"])
     variant = Variant("chrUn_KI270438v1", 150, "A", "T", genome=genome, convert_ucsc_contig_names=True)
