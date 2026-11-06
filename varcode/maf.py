@@ -129,8 +129,10 @@ def load_maf(
     Load reference name and Variant objects from MAF filename.
 
     The ``NCBI_Build`` column selects each variant's reference. UCSC contig
-    names, such as the ``chr7`` and ``chrM`` in GDC MAFs, become Ensembl's
-    ``7`` and ``MT``.
+    names, such as the ``chr7`` and ``chrM`` in GDC GRCh38 MAFs, become
+    Ensembl's ``7`` and ``MT``. A GRCh37 row on ``chrM`` or ``M`` is an
+    error (or, with ``raise_on_error=False``, skipped with a warning): hg19's
+    chrM is not the rCRS sequence Ensembl names MT, and its positions differ.
 
     Parameters
     ----------
@@ -200,6 +202,21 @@ def load_maf(
             genome, _ = infer_genome(reference_name)
             ensembl_objects[ncbi_build] = genome
 
+        # hg19's chrM (NC_001807) is not the rCRS that Ensembl's GRCh37 names
+        # MT, and its positions are offset from it, so renaming it would
+        # annotate other bases (#707). GRCh38's chrM is the rCRS.
+        if (getattr(genome, "assembly", genome.reference_name) == "GRCh37"
+                and str(contig).upper() in ("M", "CHRM")):
+            error_message = (
+                "GRCh37 MAF row on contig %s: hg19's chrM is not Ensembl's MT "
+                "(the rCRS) and its positions differ; give rCRS positions on "
+                "contig MT" % contig)
+            if raise_on_error:
+                raise ValueError(error_message)
+            else:
+                logging.warning(error_message)
+                continue
+
         # have to try both Tumor_Seq_Allele1 and Tumor_Seq_Allele2
         # to figure out which is different from the reference allele
         if x.Tumor_Seq_Allele1 != ref:
@@ -218,6 +235,7 @@ def load_maf(
 
         # GDC GRCh38 MAFs name contigs "chr7" and "chrM"; Ensembl
         # annotation names them "7" and "MT", as load_vcf converts them.
+        # (GRCh37 chrM rows were refused above.)
         variant = Variant(
             contig,
             start_pos,

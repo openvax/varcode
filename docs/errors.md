@@ -124,9 +124,10 @@ Collection methods accept `raise_on_error=True` for strict handling. Their
 default (`None`) still raises other annotation errors. Single-variant
 `Variant.effects()` remains strict by default.
 
-With UCSC name conversion enabled (the VCF and CLI default; always on for MAFs), accession-bearing
-names such as `chrUn_KI270438v1` become `KI270438.1`. GRCh37 names such as
-`chrUn_gl000216` become `GL000216.1`, following the
+With UCSC name conversion enabled (the VCF and CLI default, and always for
+MAFs), accession-bearing names such as `chrUn_KI270438v1` become
+`KI270438.1`. GRCh37 names such as `chrUn_gl000216` become `GL000216.1`,
+following the
 [UCSC hg19 alias table](https://hgdownload.soe.ucsc.edu/goldenPath/hg19/bigZips/hg19.chromAlias.txt).
 Explicit accession versions are preserved; names without a supported mapping
 remain unchanged. This does not lift coordinates between assemblies.

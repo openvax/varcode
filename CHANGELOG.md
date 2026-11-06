@@ -9,6 +9,12 @@
   become `7` and `MT`. Variant JSON records each variant's conversion setting,
   so JSON written from a MAF by an earlier version still holds `chr7` with
   conversion off; reload the MAF to fix it.
+- GRCh37 MAF rows on `chrM` or `M` are refused (`ValueError`; skipped with a
+  warning when `raise_on_error=False`) rather than renamed: hg19's chrM is
+  NC_001807, not the rCRS that Ensembl's GRCh37 names MT, and its positions
+  are offset from it (hg19 chrM:12995 is rCRS MT:12994). Such rows failed
+  annotation before, too. `load_vcf` and `Variant` still rename hg19 `chrM`;
+  that is #707.
 - A MAF missing required columns now names them, in the order of the spec, and
   lists the columns it found (#681). The old message gave only the counts and
   a pandas `Index` repr.

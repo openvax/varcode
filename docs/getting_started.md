@@ -122,7 +122,9 @@ and breakend records are skipped with a warning. See the
 
 For a MAF, use `variants = varcode.load_maf("variants.maf")` after importing
 `varcode`; the MAF's build information supplies the reference, and UCSC contig
-names such as GDC's `chr7` and `chrM` become Ensembl's `7` and `MT`. See
+names such as GDC's `chr7` and `chrM` become Ensembl's `7` and `MT`. A GRCh37
+MAF can't use `chrM`, since hg19's chrM is not the rCRS sequence Ensembl
+calls MT and its positions differ. See
 [file-loading parameters](api_variants.md#file-loading) for format-specific options.
 
 Both loaders accept strings and text path objects, such as

@@ -140,16 +140,18 @@ def _write_maf(path, columns, rows):
     return str(path)
 
 
+def _maf_row(build, chromosome, position, ref, alt):
+    return ["GENE", "0", ".", build, chromosome, position, position, "+",
+            "Missense_Mutation", "SNP", ref, ref, alt, "novel", "", "T", "N", ref, ref]
+
+
 def test_gdc_chr_prefixed_contigs_are_annotated_as_ensembl_contigs(tmp_path):
     # GDC GRCh38 MAFs write "chr7" and "chrM"; Ensembl names these "7" and "MT" (#680).
     from varcode.maf import MAF_COLUMN_NAMES
 
-    def row(chromosome, position, ref, alt):
-        return ["GENE", "0", ".", "GRCh38", chromosome, position, position, "+",
-                "Missense_Mutation", "SNP", ref, ref, alt, "novel", "", "T", "N", ref, ref]
-
     maf = _write_maf(tmp_path / "gdc.maf", MAF_COLUMN_NAMES,
-                     [row("chr7", "140753336", "A", "T"), row("chrM", "6000", "C", "T")])
+                     [_maf_row("GRCh38", "chr7", "140753336", "A", "T"),
+                      _maf_row("GRCh38", "chrM", "6000", "C", "T")])
     braf, mt = load_maf(maf)
     assert (braf.contig, mt.contig) == ("7", "MT")
     assert braf == Variant("7", 140753336, "A", "T", "GRCh38")
@@ -170,3 +172,18 @@ def test_missing_required_columns_are_named_in_spec_order(tmp_path):
     with pytest.raises(ValueError) as caught:
         load_maf_dataframe(maf)
     assert str(caught.value) == "MAF file %s %s" % (maf, message)
+
+
+@pytest.mark.parametrize("build", ["37", "GRCh37", "hg19"])
+@pytest.mark.parametrize("contig", ["chrM", "M"])
+def test_grch37_chrm_rows_are_refused_rather_than_renamed_to_rcrs(tmp_path, build, contig):
+    # hg19's chrM is not the rCRS that Ensembl's GRCh37 names MT, and its
+    # positions are offset (hg19 chrM:12995 is rCRS MT:12994), #707.
+    from varcode.maf import MAF_COLUMN_NAMES
+
+    maf = _write_maf(tmp_path / "hg19.maf", MAF_COLUMN_NAMES,
+                     [_maf_row(build, contig, "12995", "A", "G"),
+                      _maf_row(build, "MT", "12994", "A", "G")])
+    with pytest.raises(ValueError, match="hg19's chrM is not Ensembl's MT"):
+        load_maf(maf)
+    assert [(v.contig, v.start) for v in load_maf(maf, raise_on_error=False)] == [("MT", 12994)]
