@@ -133,3 +133,40 @@ def test_maf_column_case_normalization_preserves_order(tmp_path):
     columns = [MAF_COLUMN_NAMES[0].lower()] + MAF_COLUMN_NAMES[1:]
     path.write_text("\t".join(columns) + "\n")
     assert load_maf_dataframe(str(path)).columns.tolist() == MAF_COLUMN_NAMES
+
+
+def _write_maf(path, columns, rows):
+    path.write_text("\n".join("\t".join(row) for row in [columns, *rows]) + "\n")
+    return str(path)
+
+
+def test_gdc_chr_prefixed_contigs_are_annotated_as_ensembl_contigs(tmp_path):
+    # GDC GRCh38 MAFs write "chr7" and "chrM"; Ensembl names these "7" and "MT" (#680).
+    from varcode.maf import MAF_COLUMN_NAMES
+
+    def row(chromosome, position, ref, alt):
+        return ["GENE", "0", ".", "GRCh38", chromosome, position, position, "+",
+                "Missense_Mutation", "SNP", ref, ref, alt, "novel", "", "T", "N", ref, ref]
+
+    maf = _write_maf(tmp_path / "gdc.maf", MAF_COLUMN_NAMES,
+                     [row("chr7", "140753336", "A", "T"), row("chrM", "6000", "C", "T")])
+    braf, mt = load_maf(maf)
+    assert (braf.contig, mt.contig) == ("7", "MT")
+    assert braf == Variant("7", 140753336, "A", "T", "GRCh38")
+    assert braf.effects().top_priority_effect().short_description == "p.V600E"
+    assert mt.genes and mt.genes[0].contig == "MT"
+
+
+def test_missing_required_columns_are_named_in_spec_order(tmp_path):
+    # The eight columns someone might write by hand for one variant (#681).
+    columns = ["Hugo_Symbol", "Chromosome", "Start_Position", "End_Position",
+               "Reference_Allele", "Tumor_Seq_Allele2", "NCBI_Build", "Variant_Classification"]
+    maf = _write_maf(tmp_path / "in.maf", columns, [])
+    message = (
+        "is missing 11 of the 19 required columns: Entrez_Gene_Id, Center, Strand, "
+        "Variant_Type, Tumor_Seq_Allele1, dbSNP_RS, dbSNP_Val_Status, Tumor_Sample_Barcode, "
+        "Matched_Norm_Sample_Barcode, Match_Norm_Seq_Allele1, Match_Norm_Seq_Allele2 "
+        "(found: %s)" % ", ".join(columns))
+    with pytest.raises(ValueError) as caught:
+        load_maf_dataframe(maf)
+    assert str(caught.value) == "MAF file %s %s" % (maf, message)

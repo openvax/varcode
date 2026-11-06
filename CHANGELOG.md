@@ -1,5 +1,18 @@
 # Change Log
 
+## v11.7.2
+
+- `load_maf` converts UCSC contig names to Ensembl's, as `load_vcf` and the
+  CLI's `--variant` already did (#680). GDC GRCh38 MAFs write `chr7` and
+  `chrM`; those variants kept the UCSC names and failed annotation with
+  `InvalidContigError` (found through isovar on osteosarcoma data). They now
+  become `7` and `MT`. Variant JSON records each variant's conversion setting,
+  so JSON written from a MAF by an earlier version still holds `chr7` with
+  conversion off; reload the MAF to fix it.
+- A MAF missing required columns now names them, in the order of the spec, and
+  lists the columns it found (#681). The old message gave only the counts and
+  a pandas `Index` repr.
+
 ## v11.7.1
 
 - Tests only. The test that times annotation no longer fails on a heavily

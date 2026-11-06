@@ -67,7 +67,9 @@ def load_maf_dataframe(
         Optional limit to number of rows loaded
 
     raise_on_error : bool
-        Raise an exception upon encountering an error or log an error
+        Raise ``ValueError`` when one of the 19 required columns
+        (``MAF_COLUMN_NAMES``, matched case-insensitively) is missing or out
+        of order; otherwise log a warning.
 
     encoding : str, optional
         Encoding to use for UTF when reading MAF file.
@@ -75,8 +77,6 @@ def load_maf_dataframe(
     path = os.fspath(path)
     if not isinstance(path, str):
         raise TypeError("Path to MAF must resolve to str, got %s" % type(path).__name__)
-
-    n_basic_columns = len(MAF_COLUMN_NAMES)
 
     df = pandas.read_csv(
         path,
@@ -88,10 +88,13 @@ def load_maf_dataframe(
         nrows=nrows,
         encoding=encoding)
 
-    if len(df.columns) < n_basic_columns:
+    found = {str(column).lower() for column in df.columns}
+    missing = [name for name in MAF_COLUMN_NAMES if name.lower() not in found]
+    if missing:
         error_message = (
-            "Too few columns in MAF file %s, expected %d but got  %d : %s" % (
-                path, n_basic_columns, len(df.columns), df.columns))
+            "MAF file %s is missing %d of the %d required columns: %s (found: %s)" % (
+                path, len(missing), len(MAF_COLUMN_NAMES), ", ".join(missing),
+                ", ".join(map(str, df.columns))))
         if raise_on_error:
             raise ValueError(error_message)
         else:
@@ -124,6 +127,10 @@ def load_maf(
         nrows=None) -> VariantCollection:
     """
     Load reference name and Variant objects from MAF filename.
+
+    The ``NCBI_Build`` column selects each variant's reference. UCSC contig
+    names, such as the ``chr7`` and ``chrM`` in GDC MAFs, become Ensembl's
+    ``7`` and ``MT``.
 
     Parameters
     ----------
@@ -209,12 +216,15 @@ def load_maf(
                     continue
             alt = x.Tumor_Seq_Allele2
 
+        # GDC GRCh38 MAFs name contigs "chr7" and "chrM"; Ensembl
+        # annotation names them "7" and "MT", as load_vcf converts them.
         variant = Variant(
             contig,
             start_pos,
             str(ref),
             str(alt),
-            genome)
+            genome,
+            convert_ucsc_contig_names=True)
 
         # keep metadata about the variant and its TCGA annotation
         metadata[variant] = {

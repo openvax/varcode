@@ -121,7 +121,8 @@ and breakend records are skipped with a warning. See the
 [structural variant guide](structural_variants.md#basic-usage).
 
 For a MAF, use `variants = varcode.load_maf("variants.maf")` after importing
-`varcode`; the MAF's build information supplies the reference. See
+`varcode`; the MAF's build information supplies the reference, and UCSC contig
+names such as GDC's `chr7` and `chrM` become Ensembl's `7` and `MT`. See
 [file-loading parameters](api_variants.md#file-loading) for format-specific options.
 
 Both loaders accept strings and text path objects, such as
