@@ -113,22 +113,55 @@ def load_maf_dataframe(
                 path, len(missing), len(MAF_COLUMN_NAMES), ", ".join(missing),
                 ", ".join(map(str, df.columns))))
 
-    # check each pair of expected/actual column names to make sure they match
+    # MAFs in the wild have capitalization differences in their column
+    # names; give a required one the spec's spelling wherever it is, unless
+    # that spelling is already there (TCGA MAFs have both Strand and strand).
+    spelled: dict[str, str] = {}
+    for column in df.columns:
+        spelled.setdefault(str(column).lower(), column)
+    df = df.rename(columns={
+        spelled[name.lower()]: name for name in MAF_COLUMN_NAMES if name not in df.columns})
     for expected, actual in zip(MAF_COLUMN_NAMES, df.columns):
         if expected != actual:
-            # MAFs in the wild have capitalization differences in their
-            # column names, normalize them to always use the names above
-            if expected.lower() == actual.lower():
-                df = df.rename(columns={actual: expected})
+            error_message = "Expected column %s but got %s" % (expected, actual)
+            if raise_on_error:
+                raise ValueError(error_message)
             else:
-                error_message = (
-                    "Expected column %s but got %s" % (expected, actual))
-                if raise_on_error:
-                    raise ValueError(error_message)
-                else:
-                    logging.warning(error_message)
+                logging.warning(error_message)
 
     return df
+
+def _row_variant(x, genomes):
+    """The Variant in MAF row ``x``; ValueError if the row can't be read as one.
+
+    ``genomes`` caches the genome of each ``NCBI_Build`` value, since one MAF
+    can mix builds.
+    """
+    empty = [column for column in ("NCBI_Build", "Chromosome", "Start_Position", "Reference_Allele")
+             if _cell(x, column) is None]
+    if empty:
+        raise ValueError("MAF row has no %s: %s" % (", ".join(empty), x))
+    ref = x.Reference_Allele
+
+    ncbi_build = x.NCBI_Build
+    if ncbi_build not in genomes:
+        reference_name = "B%d" % ncbi_build if isinstance(ncbi_build, int) else str(ncbi_build)
+        genomes[ncbi_build], _ = infer_genome(reference_name)
+
+    # The alt is the first tumor allele that differs from the reference.
+    # An empty cell (NaN) is no allele, not the alt "nan".
+    alts = [allele for allele in (_cell(x, "Tumor_Seq_Allele1"), _cell(x, "Tumor_Seq_Allele2"))
+            if allele is not None and allele != ref]
+    if not alts:
+        raise ValueError("No tumor allele differs from reference %s: %s" % (ref, x))
+
+    # GDC GRCh38 MAFs name contigs "chr7" and "chrM"; Ensembl annotation
+    # names them "7" and "MT", as load_vcf converts them. Variant leaves
+    # hg19's chrM alone, since it isn't Ensembl's MT (#707).
+    return Variant(
+        x.Chromosome, x.Start_Position, str(ref), str(alts[0]), genomes[ncbi_build],
+        convert_ucsc_contig_names=True)
+
 
 def load_maf(
         path: str | os.PathLike[str],
@@ -166,9 +199,10 @@ def load_maf(
         Don't keep repeated variants
 
     raise_on_error : bool
-        Raise ``ValueError`` for a row that can't be read as a variant (no
-        contig, or no tumor allele that differs from the reference), or log
-        a warning and skip it. A missing required column always raises.
+        Raise ``ValueError`` for a row that can't be read as a variant (an
+        empty build, contig, position or reference allele, no tumor allele
+        that differs from the reference, or an invalid allele or build), or
+        log a warning and skip it. A missing required column always raises.
 
     encoding : str, optional
         Encoding to use for UTF when reading MAF file.
@@ -188,60 +222,17 @@ def load_maf(
     if len(maf_df) == 0 and raise_on_error:
         raise ValueError("Empty MAF file %s" % path)
 
-    ensembl_objects: dict[str | int, EnsemblGenome | Genome] = {}
+    genomes: dict[str | int, EnsemblGenome | Genome] = {}
     variants = []
     metadata = {}
     for _, x in maf_df.iterrows():
-        contig = x.Chromosome
-        if isnull(contig):
-            error_message = "Invalid contig name: %s" % (contig,)
+        try:
+            variant = _row_variant(x, genomes)
+        except ValueError as error:
             if raise_on_error:
-                raise ValueError(error_message)
-            else:
-                logging.warning(error_message)
-                continue
-
-        start_pos = x.Start_Position
-        ref = x.Reference_Allele
-
-        # it's possible in a MAF file to have multiple Ensembl releases
-        # mixed in a single MAF file (the genome assembly is
-        # specified by the NCBI_Build column)
-        ncbi_build = x.NCBI_Build
-        if ncbi_build in ensembl_objects:
-            genome = ensembl_objects[ncbi_build]
-        else:
-            if isinstance(ncbi_build, int):
-                reference_name = "B%d" % ncbi_build
-            else:
-                reference_name = str(ncbi_build)
-            genome, _ = infer_genome(reference_name)
-            ensembl_objects[ncbi_build] = genome
-
-        # The alt is the first tumor allele that differs from the reference.
-        # An empty cell (NaN) is no allele, not the alt "nan".
-        alts = [allele for allele in (_cell(x, "Tumor_Seq_Allele1"), _cell(x, "Tumor_Seq_Allele2"))
-                if allele is not None and allele != ref]
-        if not alts:
-            error_message = (
-                "No tumor allele differs from reference %s: %s" % (ref, x))
-            if raise_on_error:
-                raise ValueError(error_message)
-            else:
-                logging.warning(error_message)
-                continue
-        alt = alts[0]
-
-        # GDC GRCh38 MAFs name contigs "chr7" and "chrM"; Ensembl
-        # annotation names them "7" and "MT", as load_vcf converts them.
-        # Variant leaves hg19's chrM alone, since it isn't Ensembl's MT (#707).
-        variant = Variant(
-            contig,
-            start_pos,
-            str(ref),
-            str(alt),
-            genome,
-            convert_ucsc_contig_names=True)
+                raise
+            logging.warning("Skipping MAF row: %s", error)
+            continue
 
         # keep metadata about the variant and its TCGA annotation
         metadata[variant] = {

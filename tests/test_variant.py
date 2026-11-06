@@ -193,15 +193,17 @@ def test_deserialization_old_keywords():
     eq_(variant.allow_extended_nucleotides, False)
 
 def test_hg19_chromosome_names():
-    # trimming of mithochondrial name
-    eq_(Variant("M", 1, "A", "G", "hg19", convert_ucsc_contig_names=True).contig, "MT")
+    # hg19's mitochondrion is not Ensembl's rCRS MT, so conversion keeps it
+    # chrM (#707); hg38's is, so it becomes MT.
+    eq_(Variant("M", 1, "A", "G", "hg19", convert_ucsc_contig_names=True).contig, "chrM")
     eq_(Variant("M", 1, "A", "G", "hg19", convert_ucsc_contig_names=False).contig, "M")
+    eq_(Variant("chrM", 1, "A", "G", "hg38", convert_ucsc_contig_names=True).contig, "MT")
 
-    eq_(Variant("chrM", 1, "A", "G", "hg19", convert_ucsc_contig_names=True).contig, "MT")
+    eq_(Variant("chrM", 1, "A", "G", "hg19", convert_ucsc_contig_names=True).contig, "chrM")
     eq_(Variant("chrM", 1, "A", "G", "hg19", convert_ucsc_contig_names=False).contig, "chrM")
 
     # uppercase
-    eq_(Variant("chrm", 1, "A", "G", "hg19", convert_ucsc_contig_names=True).contig, "MT")
+    eq_(Variant("chrm", 1, "A", "G", "hg19", convert_ucsc_contig_names=True).contig, "chrM")
     eq_(Variant("chrm", 1, "A", "G", "hg19", convert_ucsc_contig_names=False).contig, "chrM")
 
     # trimming of 'chr' prefix from hg19

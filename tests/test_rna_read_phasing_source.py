@@ -637,3 +637,27 @@ def test_low_quality_disagreement_does_not_override_clean_mate(tmp_path):
         assert source.supports_variant(v2) == 2
     finally:
         source.close()
+
+
+@pytest.mark.parametrize("bam_contigs,variant_contig,genome,expected", [
+    # Under GRCh37, hg19's chrM and the rCRS MT are different sequences (#707).
+    (["chrM"], "MT", "GRCh37", None),
+    (["MT"], "chrM", "hg19", None),
+    (["chrM"], "chrM", "hg19", "chrM"),
+    (["chrMT"], "MT", "GRCh37", "chrMT"),
+    # hg38's chrM is the rCRS.
+    (["chrM"], "MT", "GRCh38", "chrM"),
+    (["MT"], "chrM", "hg38", "MT"),
+])
+def test_bam_mitochondrion_is_matched_only_to_the_same_sequence(
+        tmp_path, bam_contigs, variant_contig, genome, expected):
+    bam_path = tmp_path / "mt.bam"
+    header = {"HD": {"VN": "1.6"}, "SQ": [{"SN": name, "LN": 17000} for name in bam_contigs]}
+    with pysam.AlignmentFile(bam_path, "wb", header=header):
+        pass
+    pysam.index(str(bam_path))
+    source = RNAReadPhasingSource(str(bam_path))
+    try:
+        assert source._bam_contig(Variant(variant_contig, 12995, "A", "G", genome)) == expected
+    finally:
+        source.close()

@@ -58,7 +58,8 @@ downstream integrations without forcing them into the core class:
 
 from typing import Any, Mapping, NamedTuple, Optional, Tuple
 
-from .contigs import normalize_contig_name
+from .contigs import _HG19_MITOCHONDRION_NOTE, _annotation_contig_name, _is_hg19_mitochondrion
+from .errors import InvalidContigError
 
 from .variant import Variant
 
@@ -413,9 +414,21 @@ class StructuralVariant(Variant):
                 raise ValueError(
                     "%s=%r contradicts breakend ALT %r" % (field, given, alt))
 
+    def _check_that_genome_has_contig(self):
+        """Also refuse a mate on hg19's chrM, which annotation would otherwise
+        call intergenic although the mitochondrion is annotated, as MT at
+        other positions (#707). Mates on other unknown contigs, such as
+        decoys, stay allowed."""
+        super()._check_that_genome_has_contig()
+        if self.mate_contig is not None and _is_hg19_mitochondrion(
+                self.mate_contig, getattr(self.genome, "assembly", self.reference_name)):
+            raise InvalidContigError("Breakend mate on contig '%s' for reference '%s': %s" % (
+                self.mate_contig, self.reference_name, _HG19_MITOCHONDRION_NOTE))
+
     def _ensembl_contig_name(self, contig):
-        return normalize_contig_name(
-            contig, reference_name=getattr(self.genome, "assembly", self.reference_name))
+        # The annotation name, so an hg19 chrM mate never matches MT (#707).
+        return _annotation_contig_name(
+            contig, getattr(self.genome, "assembly", self.reference_name))
 
     @property
     def is_structural(self) -> bool:

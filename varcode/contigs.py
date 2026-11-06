@@ -42,6 +42,27 @@ def _is_hg19_mitochondrion(contig: str | int, reference_name: str | None) -> boo
     return _is_grch37(reference_name) and str(contig).upper() in ("CHRM", "M")
 
 
+# Appended to errors about a GRCh37 chrM, which Ensembl's annotation lacks.
+_HG19_MITOCHONDRION_NOTE = (
+    "hg19's chrM (NC_001807) is not the rCRS that Ensembl names MT, and its "
+    "positions are offset from it; give rCRS positions on contig MT (if this "
+    "chrM is already the rCRS, as in GENCODE's GRCh37, rename it MT)")
+
+
+def _annotation_contig_name(
+        contig: str | int, reference_name: str | None, convert_ucsc: bool = True) -> str:
+    """The name of ``contig`` in Ensembl annotation of ``reference_name``.
+
+    As :func:`normalize_contig_name`, except that hg19's mitochondrion has no
+    Ensembl name, so UCSC conversion leaves it ``chrM`` rather than renaming
+    it onto the rCRS ``MT`` (#707). The public function, and so
+    :class:`ContigResolver`, only matches spellings and still pairs them.
+    """
+    if convert_ucsc and _is_hg19_mitochondrion(contig, reference_name):
+        return "chrM"
+    return normalize_contig_name(contig, reference_name=reference_name, convert_ucsc=convert_ucsc)
+
+
 def _convert_ucsc_contig_name(contig: str, reference_name: str | None) -> str:
     """Convert spelling only; also used by Variant with normalization disabled."""
     match = re.fullmatch(

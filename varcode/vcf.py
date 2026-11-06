@@ -136,6 +136,8 @@ def load_vcf(
         Convert chromosome names from hg19 (e.g. "chr1") to equivalent names
         for GRCh37 (e.g. "1"). By default this is set to True. If None, it
         also evaluates to True if the genome of the VCF is a UCSC reference.
+        hg19's "chrM" stays "chrM": it is not the rCRS that Ensembl names MT,
+        so its variants can't be annotated (see :class:`Variant`).
 
     genome_fasta : str, path-like, or FASTA object, optional
         Optionally attach a chromosome FASTA to the resolved genome

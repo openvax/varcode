@@ -28,8 +28,9 @@ def load_orf_catalog(*args, **kwargs):
 
 
 def _contig(value, reference_name=None):
-    from .contigs import normalize_contig_name
-    return normalize_contig_name(str(value), reference_name=reference_name)
+    # The annotation name, so an hg19 chrM variant never matches an MT ORF (#707).
+    from .contigs import _annotation_contig_name
+    return _annotation_contig_name(str(value), reference_name)
 
 
 def _positions(transcript):

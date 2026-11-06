@@ -181,9 +181,9 @@ libraries depend on:
 - NR2F2 at its GRCh37 position;
 - MT_ND5 in rCRS (`MT:12994`) and hg19 (`chrM:12995`) coordinates.
 
-hg19's `chrM` is not the rCRS sequence Ensembl uses, so Varcode raises
-`ReferenceMismatchError` for the hg19 coordinate rather than annotate a
-different base; the test pins that.
+hg19's `chrM` is not the rCRS sequence Ensembl uses, so Varcode keeps the
+hg19 contig as `chrM` rather than rename it onto `MT`, and annotating it
+raises `InvalidContigError` (#707); the test pins that.
 
 The recipe's 12 SV targets are tested with the esvee calls behind them. Six
 come from `tests/data/osteosarc_esvee_somatic.vcf` and esvee alleles written

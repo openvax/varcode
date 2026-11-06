@@ -23,7 +23,9 @@ if TYPE_CHECKING:
     from .effects import EffectCollection, MutationEffect
 
 from . import circular_origin
-from .contigs import normalize_contig_name, _convert_ucsc_contig_name, _is_hg19_mitochondrion
+from .contigs import (
+    _HG19_MITOCHONDRION_NOTE, _annotation_contig_name, _convert_ucsc_contig_name,
+    _is_hg19_mitochondrion)
 from .nucleotides import (
     normalize_nucleotide_string,
     STANDARD_NUCLEOTIDES,
@@ -124,7 +126,9 @@ class Variant(Serializable):
             Setting this argument to True causes UCSC chromosome names to be
             coverted, such as "chr1" to "1". If the default value (None) is used
             then it defaults to whether or not a UCSC genome was pass in for
-            the 'genome' argument.
+            the 'genome' argument. Under GRCh37, "chrM" and "M" become "chrM",
+            not "MT": hg19's chrM is not the rCRS that Ensembl names MT, so
+            such a variant can't be annotated.
 
         original_reference_name, original_genome_was_ucsc, original_genome : optional
             Saved input provenance when reconstructing a pinned genome. These
@@ -406,9 +410,7 @@ class Variant(Serializable):
             message = "Invalid contig name '%s' for reference '%s'" % (
                 self.contig, self.reference_name)
             if _is_hg19_mitochondrion(self.contig, getattr(self.genome, "assembly", self.reference_name)):
-                message += (
-                    ": hg19's chrM (NC_001807) is not the rCRS that Ensembl names MT, "
-                    "and its positions are offset from it; give rCRS positions on contig MT")
+                message += ": " + _HG19_MITOCHONDRION_NOTE
             raise InvalidContigError(message)
 
 
@@ -703,17 +705,18 @@ class Variant(Serializable):
         StructuralVariant so breakend mates are named like the variant's
         own contig.
 
-        Under GRCh37, ``chrM`` and ``M`` are never converted: hg19's chrM is
-        not the rCRS that Ensembl names MT, and its positions are offset from
-        it (#707). Such a variant keeps its contig and fails annotation.
+        Under GRCh37, conversion leaves ``chrM`` and ``M`` as ``chrM``:
+        hg19's chrM is not the rCRS that Ensembl names MT, and its positions
+        are offset from it (#707). Such a variant fails annotation.
         """
         assembly = getattr(self.genome, "assembly", self.reference_name)
-        convert = self.convert_ucsc_contig_names and not _is_hg19_mitochondrion(contig, assembly)
         if self.normalize_contig_names:
-            return normalize_contig_name(contig, reference_name=assembly, convert_ucsc=convert)
-        if convert:
-            contig = self._convert_ucsc_contig_name_to_ensembl(contig)
-        return contig
+            return _annotation_contig_name(contig, assembly, self.convert_ucsc_contig_names)
+        if not self.convert_ucsc_contig_names:
+            return contig
+        if _is_hg19_mitochondrion(contig, assembly):
+            return "chrM"
+        return self._convert_ucsc_contig_name_to_ensembl(contig)
 
     def _convert_ucsc_contig_name_to_ensembl(self, contig):
         """

@@ -318,18 +318,28 @@ class VariantCollection(Collection):
         """
         return {variant.original_reference_name for variant in self}
 
+    def _overlapping(self, attribute):
+        """Each variant's ``attribute`` (genes, gene IDs, ...) for grouping.
+
+        A variant on a contig absent from the annotation, such as hg19's chrM
+        (#707), overlaps nothing; the one summary warning ``effects()`` gives
+        names it, rather than the whole collection failing.
+        """
+        missing = self._missing_contigs(raise_on_error=None)
+        return lambda variant: () if variant in missing else getattr(variant, attribute)
+
     def groupby_gene(self):
-        return self.multi_groupby(lambda x: x.genes)
+        return self.multi_groupby(self._overlapping("genes"))
 
     def groupby_gene_name(self):
         """
         Group variants by the gene names they overlap, which may put each
         variant in multiple groups.
         """
-        return self.multi_groupby(lambda x: x.gene_names)
+        return self.multi_groupby(self._overlapping("gene_names"))
 
     def groupby_gene_id(self):
-        return self.multi_groupby(lambda x: x.gene_ids)
+        return self.multi_groupby(self._overlapping("gene_ids"))
 
     def gene_counts(self):
         """
@@ -380,7 +390,7 @@ class VariantCollection(Collection):
             Threshold above which we'll keep an effect in the result collection
         """
         return self.filter_any_above_threshold(
-            multi_key_fn=lambda variant: variant.transcript_ids,
+            multi_key_fn=self._overlapping("transcript_ids"),
             value_dict=transcript_expression_dict,
             threshold=min_expression_value)
 
@@ -403,7 +413,7 @@ class VariantCollection(Collection):
             Threshold above which we'll keep an effect in the result collection
         """
         return self.filter_any_above_threshold(
-            multi_key_fn=lambda effect: effect.gene_ids,
+            multi_key_fn=self._overlapping("gene_ids"),
             value_dict=gene_expression_dict,
             threshold=min_expression_value)
 

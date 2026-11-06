@@ -21,6 +21,8 @@ from collections import defaultdict
 from math import exp, lgamma, log, log1p
 from typing import Optional, Sequence
 
+from .contigs import _is_grch37
+
 
 _CIGAR_MATCH = 0
 _CIGAR_INSERTION = 1
@@ -323,10 +325,13 @@ class RNAReadPhasingSource:
             candidates.append(variant.contig[3:])
         else:
             candidates.append("chr" + variant.contig)
-        if variant.contig == "MT":
-            candidates.extend(["M", "chrM"])
-        elif variant.contig in ("M", "chrM"):
-            candidates.extend(["MT", "chrMT"])
+        # Under GRCh37, chrM/M is hg19's mitochondrion and MT/chrMT the rCRS:
+        # different sequences, offset from each other, never aliases (#707).
+        if not _is_grch37(getattr(variant, "reference_name", None)):
+            if variant.contig == "MT":
+                candidates.extend(["M", "chrM"])
+            elif variant.contig in ("M", "chrM"):
+                candidates.extend(["MT", "chrMT"])
         references = set(self._bam.references)
         for contig in candidates:
             if contig in references:

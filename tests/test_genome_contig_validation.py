@@ -121,7 +121,8 @@ def test_ucsc_scaffold_accessions_preserve_versions(name, genome, expected):
 @pytest.mark.parametrize("name,genome,expected", [
     # hg19's chrM is NC_001807, not the rCRS that Ensembl's GRCh37 names MT, and
     # its positions are offset (hg19 chrM:12995 is rCRS MT:12994), #707.
-    ("chrM", "hg19", "chrM"), ("chrm", "hg19", "chrM"), ("chrM", 75, "chrM"), ("M", 75, "M"),
+    ("chrM", "hg19", "chrM"), ("chrm", "hg19", "chrM"), ("CHRM", "hg19", "chrM"),
+    ("chrM", 75, "chrM"), ("M", 75, "chrM"),
     # chrMT is a chr-prefixed rCRS MT; hg38's chrM is the rCRS.
     ("chrMT", "hg19", "MT"), ("MT", 75, "MT"), ("chrM", "hg38", "MT"), ("M", 81, "MT"),
 ])
@@ -141,6 +142,35 @@ def test_hg19_chrm_variants_fail_annotation_with_the_reason():
     with pytest.warns(UserWarning, match="1 variants? on contigs absent"):
         effects = VariantCollection([variant]).effects()
     assert isinstance(effects[0], Failure)
+
+
+def test_a_breakend_mate_on_hg19_chrm_is_a_failure_not_intergenic():
+    # Without the refusal, the mate's missing annotation read as intergenic,
+    # though it sits in MT-ND5 (#707).
+    sv = StructuralVariant("chr7", 140453136, "BND", alt="G[chrM:12995[", ref="A", genome="hg19")
+    assert sv.mate_contig == "chrM"
+    with pytest.raises(ValueError, match="Breakend mate on contig 'chrM'.*NC_001807"):
+        sv.effects()
+    with pytest.warns(UserWarning, match="1 variants? on contigs absent"):
+        effects = VariantCollection([sv]).effects()
+    assert [type(effect) for effect in effects] == [Failure]
+    # JSON from 11.7 stored the mate already renamed to MT; it now contradicts the ALT.
+    stored = sv.to_dict()
+    stored["mate_contig"] = "MT"
+    with pytest.raises(ValueError, match="contradicts breakend ALT"):
+        StructuralVariant(**stored)
+
+
+def test_gene_grouping_skips_hg19_chrm_variants_with_one_warning():
+    braf = Variant("chr7", 140453136, "A", "T", genome="hg19")
+    variants = VariantCollection([braf, Variant("chrM", 12995, "A", "G", genome="hg19")])
+    with pytest.warns(UserWarning, match="1 variants? on contigs absent.*GRCh37:chrM"):
+        assert variants.gene_counts() == {"BRAF": 1}
+    with pytest.warns(UserWarning, match="1 variants? on contigs absent"):
+        assert set(variants.groupby_gene_id()) == {gene.id for gene in braf.genes}
+    expression = {transcript.id: 10.0 for transcript in braf.transcripts}
+    with pytest.warns(UserWarning, match="1 variants? on contigs absent"):
+        assert list(variants.filter_by_transcript_expression(expression)) == [braf]
 
 
 def test_mapping_does_not_substitute_a_different_accession_version(make_genome):

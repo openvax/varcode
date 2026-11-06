@@ -188,8 +188,8 @@ def test_grch37_chrm_rows_keep_their_name_and_fail_annotation(tmp_path, build, c
     maf = _write_maf(tmp_path / "hg19.maf", MAF_COLUMN_NAMES,
                      [_maf_row(build, contig, "12995", "A", "G"),
                       _maf_row(build, "MT", "12994", "A", "G")])
-    hg19_mt, rcrs_mt = sorted(load_maf(maf), key=lambda v: v.contig != contig)
-    assert (hg19_mt.contig, rcrs_mt.contig) == (contig, "MT")
+    hg19_mt, rcrs_mt = sorted(load_maf(maf), key=lambda v: v.contig == "MT")
+    assert (hg19_mt.contig, hg19_mt.original_contig, rcrs_mt.contig) == ("chrM", contig, "MT")
     with pytest.raises(InvalidContigError, match="NC_001807"):
         hg19_mt.effects()
 
@@ -216,3 +216,40 @@ def test_empty_cells_are_none_and_the_collection_round_trips_through_json(tmp_pa
     assert restored.metadata[variant] == metadata
     # The bundled TCGA fixture has empty cells too.
     assert VariantCollection.from_json(tcga_ov_variants.to_json()) == tcga_ov_variants
+
+
+@pytest.mark.parametrize("column,value,message", [
+    ("Reference_Allele", "", "has no Reference_Allele"),
+    ("Start_Position", "", "has no Start_Position"),
+    ("NCBI_Build", "", "has no NCBI_Build"),
+    ("Tumor_Seq_Allele2", "Z", "Invalid character"),
+])
+def test_unreadable_rows_raise_or_are_skipped_with_a_warning(tmp_path, caplog, column, value, message):
+    from varcode.maf import MAF_COLUMN_NAMES
+
+    bad = _maf_row("GRCh38", "chr7", "140753336", "A", "T")
+    bad[MAF_COLUMN_NAMES.index(column)] = value
+    maf = _write_maf(tmp_path / "rows.maf", MAF_COLUMN_NAMES,
+                     [bad, _maf_row("GRCh38", "chr7", "140753337", "C", "G")])
+    with pytest.raises(ValueError, match=message):
+        load_maf(maf)
+    variant, = load_maf(maf, raise_on_error=False)
+    assert variant.start == 140753337
+    assert "Skipping MAF row" in caplog.text and message in caplog.text
+
+
+def test_required_columns_differing_only_in_case_are_found_anywhere(tmp_path):
+    # Before, only a column in its spec position was respelled, so "chromosome"
+    # elsewhere passed the missing-column check and then wasn't found (#708).
+    from varcode.maf import MAF_COLUMN_NAMES
+
+    columns = list(MAF_COLUMN_NAMES)
+    chromosome, strand = columns.index("Chromosome"), columns.index("Strand")
+    columns[chromosome], columns[strand] = "Strand", "chromosome"
+    row = _maf_row("GRCh38", "chr7", "140753336", "A", "T")
+    row[chromosome], row[strand] = row[strand], row[chromosome]
+    maf = _write_maf(tmp_path / "case.maf", columns, [row])
+    with pytest.raises(ValueError, match="Expected column Chromosome but got Strand"):
+        load_maf(maf)
+    variant, = load_maf(maf, raise_on_error=False)
+    assert variant.contig == "7"

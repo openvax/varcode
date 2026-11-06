@@ -4,18 +4,30 @@
 
 Behaviour change: hg19 `chrM` variants are no longer annotated as rCRS `MT`.
 
-- Under GRCh37 (`hg19`), `chrM` and `M` are no longer renamed to `MT` by
-  `Variant`, `load_vcf`, `load_maf` or the CLI (#707). hg19's chrM is
-  NC_001807, not the rCRS (NC_012920) that Ensembl names MT, and its positions
-  are offset from it (hg19 chrM:12995 is rCRS MT:12994). Renaming annotated
-  other bases, and only a reference mismatch at the shifted base could catch
-  it. Such variants now keep their contig, and annotating one raises
-  `InvalidContigError` saying why (a `Failure` effect in collections, with
-  the usual summary warning); give rCRS positions on `MT` instead. hg38's
-  `chrM` and the rCRS name `chrMT` still become `MT`. `ContigResolver` is
-  unchanged: it matches spellings, not sequences, as documented. The osteosarc
-  hg19 `MT_ND5` target now fails this way instead of with
-  `ReferenceMismatchError`.
+- Under GRCh37 (`hg19`), UCSC name conversion no longer renames `chrM` or `M`
+  to `MT`; it leaves them `chrM` (#707). hg19's chrM is NC_001807, not the
+  rCRS (NC_012920) that Ensembl names MT, and its positions are offset from it
+  (hg19 chrM:12995 is rCRS MT:12994). Renaming annotated other bases, caught
+  only when the base at the shifted position differed from the variant's ref.
+  - This applies to `Variant`, `load_vcf`, `load_maf`, the CLI, breakend mates
+    and the ORF and RNA-phasing contig matching. RNA phasing no longer reads
+    an hg19 BAM's `chrM` for a GRCh37 `MT` variant, or the reverse.
+  - Annotating such a variant, or a breakend whose mate is on it (previously
+    called intergenic), raises `InvalidContigError` saying why. In collections
+    it is a `Failure` with the usual summary warning. If your `chrM` already is
+    the rCRS, as in GENCODE's GRCh37, rename it `MT`.
+  - Structural-variant JSON written by earlier versions stored such a mate as
+    `MT`; reloading it now raises, since the mate contradicts the ALT.
+  - hg38's `chrM` and the rCRS name `chrMT` still become `MT`.
+    `ContigResolver` is unchanged: it matches spellings, not sequences, as
+    documented. The osteosarc hg19 `MT_ND5` target now fails this way instead
+    of with `ReferenceMismatchError`.
+- `gene_counts()`, `groupby_gene()`, `groupby_gene_name()`,
+  `groupby_gene_id()` and the transcript/gene expression filters now follow
+  `effects()`'s missing-contig policy: a variant on a contig absent from the
+  annotation overlaps no genes and is named in one warning, instead of the
+  whole call raising `InvalidContigError`. hg19 VCFs often have `chrM` calls,
+  which would otherwise break these calls.
 - `load_maf` converts UCSC contig names to Ensembl's, as `load_vcf` and the
   CLI's `--variant` already did (#680). GDC GRCh38 MAFs write `chr7` and
   `chrM`; those variants kept the UCSC names and failed annotation with
@@ -24,18 +36,22 @@ Behaviour change: hg19 `chrM` variants are no longer annotated as rCRS `MT`.
   so JSON written from a MAF by an earlier version still holds `chr7` with
   conversion off; reload the MAF to fix it.
 - Empty MAF cells are `None` in variant metadata instead of `NaN`, so a
-  MAF-loaded collection can be saved with `to_json` (#704); before, nearly
+  MAF-loaded collection can be saved with `to_json` (#704). Before, nearly
   every GDC MAF and the bundled TCGA fixture failed with "Out of range float
-  values are not JSON compliant". An empty `Tumor_Seq_Allele1` or `2` is no
-  longer read as the alt allele "nan".
+  values are not JSON compliant". An empty tumor allele is no longer taken as
+  the alt.
 - A MAF missing required columns now names them, in the order of the spec, and
   lists the columns it found (#681). The old message gave only the counts and
   a pandas `Index` repr.
 - A missing required column always raises `ValueError`, in both `load_maf`
   and `load_maf_dataframe` (#708). With `raise_on_error=False`, `load_maf`
   used to log a warning and then crash with `AttributeError`.
-  `raise_on_error=False` still downgrades unreadable rows and out-of-order
-  columns to warnings.
+- With `raise_on_error=False`, `load_maf` now skips, with a warning, every row
+  it can't read as a variant: an empty build, contig, position or reference
+  allele, no tumor allele that differs from the reference, or an invalid
+  allele or build. Some of these used to abort the whole load. Required
+  columns that differ only in case are found wherever they are, not only in
+  their spec position.
 
 ## v11.7.1
 
