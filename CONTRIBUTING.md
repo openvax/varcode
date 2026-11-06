@@ -21,14 +21,16 @@ From the repository root:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -e '.[rna,test-data,lint]' pytest pytest-cov pytest-xdist
+python -m pip install -e '.[rna]' --group test --group lint
 python -m pip install mkdocs mkdocs-material 'mkdocstrings[python]'
 python -m pip install build twine 'setuptools>=64'
 ```
 
-`rna` installs the optional BAM reader; `test-data` installs the pinned
-Osteosarc adapter and Biotite, which the tests use for independent sequence
-checks. `lint` installs Ruff and the same pinned mypy version used in CI. `pytest-xdist` is optional: `test.sh` also runs serially.
+`rna` installs the optional BAM reader. The `test` and `lint` dependency groups
+(pip 25.1 or later) hold what working on Varcode needs: `test` has the pinned
+Osteosarc adapter, Biotite for independent sequence checks, pysam and pytest;
+`lint` has Ruff and the same pinned mypy version used in CI. `test.sh` also
+runs serially if `pytest-xdist` is missing.
 Activate this environment before invoking the scripts so Python and its tools
 come from the same installation. `./develop.sh` installs just the editable
 library into the active environment.

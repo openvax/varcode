@@ -34,7 +34,7 @@ Before telling the user a change is "complete":
 ## Code Style
 
 - Python 3.11+
-- Lint: Ruff and mypy (config in `pyproject.toml`; install the `lint` extra)
+- Lint: Ruff and mypy (config in `pyproject.toml`; install the `lint` dependency group)
 - Docstrings: numpy style
 - Public API changes: follow `docs/dev/api-quality.md`; keep explicit exports,
   generated reference entries, and static consumer checks in sync. Document

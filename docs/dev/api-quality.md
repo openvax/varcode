@@ -105,7 +105,7 @@ tables. Preserve existing page URLs and useful anchors when reorganizing.
 
 ## Validation
 
-Install `.[lint]` for type/lint checks and MkDocs, Material for MkDocs, and
+Install the `lint` dependency group (`pip install --group lint`) for type/lint checks and MkDocs, Material for MkDocs, and
 `mkdocstrings[python]` for documentation builds. Run:
 
 ```bash

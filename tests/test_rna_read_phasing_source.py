@@ -12,6 +12,7 @@
 
 from unittest.mock import Mock
 
+import pysam
 import pytest
 
 from varcode import (
@@ -23,7 +24,6 @@ from varcode import (
 )
 from varcode.rna_read_phasing import four_gamete_phase
 
-pysam = pytest.importorskip("pysam")
 
 
 def _quality_array(length, low_at=None):

@@ -35,20 +35,26 @@ include = ["varcode", "varcode.*"]
 "Bug Tracker" = "https://github.com/openvax/varcode/issues"
 
 [project.optional-dependencies]
-# ORFdata is a core dependency. These names stay so existing
-# `varcode[orf]` and `varcode[uorf]` installs keep working.
-orf = []
-uorf = []
 # pysam stays optional: it has no Windows build, and only
 # RNAReadPhasingSource (RNA-seq read phasing) uses it.
 rna = ["pysam>=0.21"]
-# The tests import Biotite directly for independent sequence checks.
-test-data = ["osteosarc>=0.14.4,<0.16", "biotite>=1.6"]
-lint = ["ruff", "mypy==2.4.0", "pandas-stubs==3.0.5.260914"]
 
 [project.scripts]
 varcode-genes = "varcode.cli.genes_script:main"
 varcode = "varcode.cli.main:main"
+
+[dependency-groups]
+# For working on Varcode, not for using it, so these are not published as
+# extras (PEP 735). With pip 25.1+: pip install -e '.[rna]' --group test --group lint
+test = [
+    "osteosarc>=0.14.4,<0.16",  # patient-data fixtures
+    "biotite>=1.6",  # independent sequence checks
+    "pysam>=0.21",  # RNA read phasing tests
+    "pytest",
+    "pytest-cov",
+    "pytest-xdist",
+]
+lint = ["ruff", "mypy==2.4.0", "pandas-stubs==3.0.5.260914"]
 
 [tool.pytest.ini_options]
 markers = [

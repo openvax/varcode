@@ -3,11 +3,11 @@
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+import pysam
 import pytest
 
 from varcode import MolecularPhaseResolver, RNAReadPhasingSource, Variant
 
-pysam = pytest.importorskip("pysam")
 
 # GRCh38 MAP2, Ensembl ENST00000360351.8; public osteosarc audit (#441).
 LEFT = 209694764

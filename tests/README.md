@@ -31,10 +31,9 @@ It needs `setuptools>=64`, as installed by the contributor setup. The build
 uses the installed backend without downloading build dependencies.
 
 CI builds and unpacks the source distribution outside the checkout, installs
-that source with the `test-data` extra, and runs the full suite and parity
-checks from the unpacked directory on Python 3.11–3.14. Python 3.11 tests
-both pandas 2 and 3; Python 3.12–3.14 and the parity gate use pandas 3.
-All jobs require gtfparse 3.0.2+.
+that source with the `rna` extra and the `test` and `lint` dependency groups,
+and runs the full suite and parity checks from the unpacked directory on
+Python 3.11–3.14, all with pandas 3 and gtfparse 3.0.2+.
 To reproduce this
 locally, first install the development tools and reference releases from
 [CONTRIBUTING.md](../CONTRIBUTING.md), then:
@@ -44,7 +43,7 @@ python -m build --sdist --outdir /tmp/varcode-dist
 mkdir /tmp/varcode-sdist
 tar -xzf /tmp/varcode-dist/varcode-X.Y.Z.tar.gz --strip-components=1 -C /tmp/varcode-sdist
 cd /tmp/varcode-sdist
-python -m pip install '.[test-data]'
+python -m pip install '.[rna]' --group test
 ./test.sh
 ```
 
@@ -110,11 +109,11 @@ separate from export and tests.
 
 The targeted GPX4 and BRCA1 regressions use Ensembl 81. Offline integration
 checks use the public osteosarc dataset through the published
-osteosarc 0.14.x/0.15.x adapter (`>=0.14.4,<0.16`) from the optional `test-data` extra
+osteosarc 0.14.x/0.15.x adapter (`>=0.14.4,<0.16`) from the `test` dependency group
 (Python 3.11+):
 
 ```sh
-python -m pip install -e '.[test-data]'
+python -m pip install -e . --group test
 python -m pytest -q tests/test_osteosarc_dataset.py
 ```
 
@@ -215,7 +214,7 @@ it. `tests/test_osteosarc_shared_reads.py` reads those three members through
 `osteosarc.bundle_file` and checks each record's read name, source sequence hash and window against them:
 
 ```sh
-python -m pip install -e '.[test-data]'
+python -m pip install -e . --group test
 python -m pytest -q tests/test_osteosarc_shared_targets.py tests/test_osteosarc_shared_reads.py \
     tests/test_osteosarc_shared_fusions.py
 ```
@@ -291,7 +290,7 @@ synthetic tests separately cover the germline/subclone rule fixed in #527.
 To reproduce, install the reference data as described in `CONTRIBUTING.md`, then:
 
 ```sh
-python -m pip install -e '.[test-data,rna]'
+python -m pip install -e '.[rna]' --group test
 python -m pytest -q tests/test_osteosarc_rna_phasing.py
 ```
 

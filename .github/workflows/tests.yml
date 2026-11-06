@@ -63,7 +63,7 @@ jobs:
           tar -xzf "$RUNNER_TEMP"/varcode-dist/varcode-*.tar.gz --strip-components=1 -C "$RUNNER_TEMP/varcode-sdist"
           # The supported Osteosarc range covers this Python matrix;
           # run native adapter checks against the bundled historical snapshot.
-          python -m pip install "$RUNNER_TEMP/varcode-sdist[rna,test-data,lint]"
+          python -m pip install "$RUNNER_TEMP/varcode-sdist[rna]" --group "$RUNNER_TEMP/varcode-sdist/pyproject.toml:test" --group "$RUNNER_TEMP/varcode-sdist/pyproject.toml:lint"
           python -m pip check
           python -m pip show pandas pyensembl gtfparse
       - name: Lint with flake8
