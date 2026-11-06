@@ -1,11 +1,12 @@
 """CLI imports must not depend on setuptools' removed pkg_resources API."""
 
 from pathlib import Path
-import subprocess
 import sys
 import textwrap
 
 import pytest
+
+from .common import run_with_cpu_limit
 
 
 @pytest.mark.parametrize("module", ["effects_script", "genes_script"])
@@ -28,10 +29,10 @@ def test_cli_help_without_pkg_resources(module):
         module = importlib.import_module(sys.argv[1])
         module.main(["--help"])
     """)
-    result = subprocess.run(
-        [sys.executable, "-c", code, "varcode.cli." + module],
+    result = run_with_cpu_limit(
+        [sys.executable, "-c", code, "varcode.cli." + module], cpu_seconds=60,
         cwd=Path(__file__).resolve().parents[1],
-        capture_output=True, text=True, timeout=60)
+        capture_output=True, text=True)
     assert result.returncode == 0, result.stdout + result.stderr
     assert "usage:" in result.stdout.lower()
     assert "--output-csv" in result.stdout

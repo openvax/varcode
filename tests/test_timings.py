@@ -11,7 +11,6 @@
 # limitations under the License.
 
 from pathlib import Path
-import subprocess
 import sys
 import time
 
@@ -19,6 +18,8 @@ import pytest
 from pyensembl import cached_release
 
 from varcode.util import random_variants
+
+from .common import run_with_cpu_limit
 
 # Pin to an installed release. genome_for_reference_name("GRCh38") (the
 # random_variants default) resolves to pyensembl's latest release, which is
@@ -75,16 +76,26 @@ def test_effect_timing():
 
     The budget is on CPU time. Warm annotation is CPU-bound, so CPU time
     tracks varcode's own cost, while wall-clock time also counts every other
-    process on the machine, including this suite's xdist workers (#679).
+    process on the machine, including this suite's xdist workers (#679). The
+    guard on the whole child, imports and warmup included, is on CPU time for
+    the same reason (#702).
     """
-    result = subprocess.run(
+    result = run_with_cpu_limit(
         [sys.executable, "-m", "tests.test_timings"],
+        cpu_seconds=120,
         cwd=Path(__file__).resolve().parents[1],
         capture_output=True,
-        text=True,
-        timeout=120)
+        text=True)
     print(result.stdout)
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_cpu_limit_stops_a_spinning_child_but_not_a_waiting_one():
+    with pytest.raises(AssertionError, match="more than 1 s of CPU"):
+        run_with_cpu_limit([sys.executable, "-c", "while True: pass"], cpu_seconds=1)
+    # Waiting, like a child starved of CPU on a loaded machine, doesn't count against the limit.
+    waiting = run_with_cpu_limit([sys.executable, "-c", "import time; time.sleep(2)"], cpu_seconds=1)
+    assert waiting.returncode == 0
 
 
 if __name__ == "__main__":

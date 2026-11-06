@@ -10,6 +10,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import resource
+import signal
+import subprocess
+
 
 expected_effect_properties = [
     'gene',
@@ -133,3 +137,27 @@ def reverse_complement(dna):
     from biotite.sequence import NucleotideSequence
 
     return str(NucleotideSequence(dna).reverse().complement())
+
+
+# Stops a child that blocks without using CPU, for example on the network. It
+# is a backstop, not a speed limit: a healthy child needs far less, even on a
+# heavily loaded machine (the timing child took about 120 s at a load average
+# of 166 on 10 cores, #702).
+_BLOCKED_CHILD_SECONDS = 600
+
+
+def run_with_cpu_limit(args, cpu_seconds, **kwargs):
+    """``subprocess.run(args, **kwargs)``, failing if the child uses more than ``cpu_seconds`` of CPU.
+
+    The limit is on the child's own CPU time (``RLIMIT_CPU``; POSIX only),
+    which other processes on the machine don't consume. A wall-clock timeout
+    also counts every other process, so it fails a healthy child on a loaded
+    machine (#702).
+    """
+    limits = (cpu_seconds, cpu_seconds + 1)  # built here: the child should only call setrlimit
+    result = subprocess.run(
+        args, preexec_fn=lambda: resource.setrlimit(resource.RLIMIT_CPU, limits),
+        timeout=_BLOCKED_CHILD_SECONDS, **kwargs)
+    assert result.returncode != -signal.SIGXCPU, (
+        "child used more than %d s of CPU: %s" % (cpu_seconds, args))
+    return result

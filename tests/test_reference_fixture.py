@@ -2,10 +2,11 @@
 
 import os
 from pathlib import Path
-import subprocess
 import sys
 
 import pytest
+
+from .common import run_with_cpu_limit
 
 
 @pytest.mark.parametrize("cache_state", ["empty", "partial", "stale_index"])
@@ -59,12 +60,12 @@ with patch.object(Genome, "_set_local_paths", forbid_source_acquisition):
 
 assert snapshot() == before
 '''
-    result = subprocess.run(
-        [sys.executable, "-c", script],
+    result = run_with_cpu_limit(
+        [sys.executable, "-c", script], cpu_seconds=30,
         cwd=Path(__file__).resolve().parents[1],
         env=dict(os.environ, PYENSEMBL_CACHE_DIR=str(tmp_path),
                  VARCODE_TEST_CACHE_STATE=cache_state),
-        capture_output=True, text=True, timeout=30)
+        capture_output=True, text=True)
     assert result.returncode == 0, result.stdout + result.stderr
 
 
@@ -106,10 +107,10 @@ with patch.object(Genome, "_set_local_paths", forbid_source_acquisition):
 assert not attempts, "optional fixture tried to acquire missing sources"
 assert snapshot() == before
 '''
-    result = subprocess.run(
-        [sys.executable, "-c", script],
+    result = run_with_cpu_limit(
+        [sys.executable, "-c", script], cpu_seconds=30,
         cwd=Path(__file__).resolve().parents[1],
         env=dict(os.environ, PYENSEMBL_CACHE_DIR=str(tmp_path),
                  VARCODE_TEST_CACHE_STATE=cache_state),
-        capture_output=True, text=True, timeout=30)
+        capture_output=True, text=True)
     assert result.returncode == 0, result.stdout + result.stderr
