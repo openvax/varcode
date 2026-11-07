@@ -47,7 +47,8 @@ when none is installed. A UCSC name selects its Ensembl assembly, such as
 `"hg38"` for GRCh38, `"mm10"` for GRCm38 or `"mm39"` for GRCm39, and UCSC
 contig names such as `chr7` become Ensembl's `7`. Selecting a reference does not
 download data or convert variant coordinates; for that reason hg19's `chrM`
-stays `chrM` (see [annotation errors](errors.md#continuing-past-errors)).
+stays `chrM`, unless a VCF header declares it at the rCRS length (see
+[annotation errors](errors.md#continuing-past-errors)).
 
 ### Chromosome DNA for SV and splice analysis
 

@@ -141,10 +141,14 @@ Annotating such a variant raises `InvalidContigError` saying so. In
 collections it becomes a `Failure` with the summary warning, and gene
 grouping (`gene_counts()`, `groupby_gene*()`, `detailed_string()`, the
 expression filters) leaves it out with the same warning. A breakend whose mate
-is on hg19's chrM keeps the genes on its own side; only its effects fail the
-same way. Give rCRS positions on `MT` instead; if your `chrM` already is the
-rCRS, as in GENCODE's GRCh37, rename it `MT`. hg38's chrM is the rCRS, and
-`chrMT` is an rCRS name, so both still become `MT`.
+is on hg19's chrM, or on any other contig the annotation lacks (a decoy, EBV,
+an unplaced scaffold), is annotated as `TranslocationToUnannotatedContig` on
+its own side, not as intergenic. Give rCRS positions on `MT` instead. If your
+`chrM` already is the rCRS, as in GENCODE's GRCh37, pass `chrm_is_rcrs=True`
+to `Variant`; `load_vcf` does this when the VCF header declares `chrM` at the
+rCRS length (`##contig=<ID=chrM,length=16569>`; hg19's is 16571). A MAF has no
+such header. hg38's chrM is the rCRS, and `chrMT` is an rCRS name, so both
+still become `MT`.
 
 In Python, pass `raise_on_error=False` to `.effects()`. Each failed
 annotation becomes a `Failure` effect instead of an exception, and other

@@ -33,6 +33,7 @@ from .effect_classes import (
     StructuralVariantEffect,
     ThreePrimeUTR,
     TranslocationToIntergenic,
+    TranslocationToUnannotatedContig,
     Unresolved,
 )
 from .effect_helpers import exon_length
@@ -46,8 +47,6 @@ from ..circular_origin import (
     transcript_exons,
     transcripts_at_locus,
 )
-from ..contigs import _HG19_MITOCHONDRION_NOTE, _is_hg19_mitochondrion
-from ..errors import InvalidContigError
 from ..structural_variant import junction_span_details
 from ..sv_allele_parser import breakend_sides, _breakend_local_side
 
@@ -1057,7 +1056,8 @@ def _annotate_breakend(variant, transcript, assembly=None):
     junction leaves ``transcript``'s gene. If the join links this
     transcript sense-to-sense with a protein-coding transcript at the
     mate, report :class:`GeneFusion`; otherwise
-    :class:`TranslocationToIntergenic`.
+    :class:`TranslocationToUnannotatedContig` when the mate's contig has no
+    annotation, else :class:`TranslocationToIntergenic`.
     """
     if variant.junctions:
         # With a resolved alt_assembly the caller has already
@@ -1070,12 +1070,26 @@ def _annotate_breakend(variant, transcript, assembly=None):
             variant, transcript, assembly)
         if fusion is not None:
             return fusion
+    model = assembly or _build_translocation_mutant_transcript(variant, transcript)
+    partner_contig = _unannotated_partner_contig(variant, transcript)
+    if partner_contig is not None:
+        return TranslocationToUnannotatedContig(
+            variant=variant, transcript=transcript,
+            partner_contig=partner_contig, mutant_transcript=model)
     return TranslocationToIntergenic(
-        variant=variant,
-        transcript=transcript,
-        mutant_transcript=assembly or (
-            _build_translocation_mutant_transcript(
-                variant, transcript)))
+        variant=variant, transcript=transcript, mutant_transcript=model)
+
+
+def _unannotated_partner_contig(variant, transcript):
+    """The first contig, at a junction end leaving ``transcript``'s gene,
+    that the annotation has no genes on, or None. pyensembl finds no
+    transcripts on such a contig, which doesn't make the mate intergenic
+    (#709)."""
+    annotated = variant.genome.contigs()
+    for _, far in _junction_ends(variant, transcript):
+        if str(far.contig) not in annotated:
+            return str(far.contig)
+    return None
 
 # -- utilities ------------------------------------------------------
 
@@ -1302,18 +1316,12 @@ def _coding_transcripts_at(variant, contig, position):
     variant, since every transcript at one end of a junction asks
     the same question about the other end."""
     def lookup():
-        assembly = getattr(variant.genome, "assembly", variant.reference_name)
-        if _is_hg19_mitochondrion(contig, assembly) and str(contig) not in variant.genome.contigs():
-            # Not intergenic: the mitochondrion is annotated, as MT at other
-            # positions (#707). This variant's own side is still annotated.
-            raise InvalidContigError("Breakend mate on contig '%s' for reference '%s': %s" % (
-                contig, variant.reference_name, _HG19_MITOCHONDRION_NOTE))
         try:
             transcripts = transcripts_at_locus(
                 variant.genome, str(contig), int(position), int(position))
         except ValueError:
-            # A contig the genome doesn't know, e.g. a mate on a
-            # decoy or unplaced contig.
+            # A contig the genome doesn't know, e.g. a mate on a decoy or
+            # unplaced contig; _annotate_breakend reports it (#709).
             return []
         return [t for t in transcripts if t.is_protein_coding]
 

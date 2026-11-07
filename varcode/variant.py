@@ -54,6 +54,7 @@ class Variant(Serializable):
         "normalize_contig_names",
         "original_genome_was_ucsc",
         "convert_ucsc_contig_names",
+        "chrm_is_rcrs",
         "allow_extended_nucleotides",
         "original_contig",
         "original_ref",
@@ -86,7 +87,8 @@ class Variant(Serializable):
             *,
             original_reference_name=None,
             original_genome_was_ucsc=None,
-            original_genome=None):
+            original_genome=None,
+            chrm_is_rcrs=False):
         """
         Construct a Variant object.
 
@@ -128,7 +130,14 @@ class Variant(Serializable):
             then it defaults to whether or not a UCSC genome was pass in for
             the 'genome' argument. Under GRCh37, "chrM" and "M" become "chrM",
             not "MT": hg19's chrM is not the rCRS that Ensembl names MT, so
-            such a variant can't be annotated.
+            such a variant can't be annotated, unless ``chrm_is_rcrs`` is set.
+
+        chrm_is_rcrs : bool, default False
+            Under GRCh37, this input's "chrM" or "M" is the rCRS that Ensembl
+            names MT (as in GENCODE's GRCh37), not hg19's NC_001807, so UCSC
+            conversion names it "MT". :func:`load_vcf` sets it when the header
+            declares chrM at the rCRS length, 16,569 bp. No effect under
+            other builds, whose chrM is the rCRS.
 
         original_reference_name, original_genome_was_ucsc, original_genome : optional
             Saved input provenance when reconstructing a pinned genome. These
@@ -190,6 +199,7 @@ class Variant(Serializable):
             self.convert_ucsc_contig_names = self.original_genome_was_ucsc
         else:
             self.convert_ucsc_contig_names = convert_ucsc_contig_names
+        self.chrm_is_rcrs = bool(chrm_is_rcrs)
 
         self.contig = self._normalize_contig_name(contig)
 
@@ -305,7 +315,7 @@ class Variant(Serializable):
         We want the original values (un-normalized) field values while
         serializing since normalization will happen in __init__.
         """
-        return dict(
+        state = dict(
             contig=self.original_contig,
             start=self.original_start,
             ref=self.original_ref,
@@ -317,6 +327,9 @@ class Variant(Serializable):
             allow_extended_nucleotides=self.allow_extended_nucleotides,
             normalize_contig_names=self.normalize_contig_names,
             convert_ucsc_contig_names=self.convert_ucsc_contig_names)
+        if self.chrm_is_rcrs:
+            state["chrm_is_rcrs"] = True
+        return state
 
     @property
     def trimmed_ref(self):
@@ -409,7 +422,8 @@ class Variant(Serializable):
         if self.contig not in self.genome.contigs():
             message = "Invalid contig name '%s' for reference '%s'" % (
                 self.contig, self.reference_name)
-            if _is_hg19_mitochondrion(self.contig, getattr(self.genome, "assembly", self.reference_name)):
+            if _is_hg19_mitochondrion(self.contig, getattr(self.genome, "assembly", self.reference_name),
+                                      self.chrm_is_rcrs):
                 message += ": " + _HG19_MITOCHONDRION_NOTE
             raise InvalidContigError(message)
 
@@ -707,14 +721,16 @@ class Variant(Serializable):
 
         Under GRCh37, conversion leaves ``chrM`` and ``M`` as ``chrM``:
         hg19's chrM is not the rCRS that Ensembl names MT, and its positions
-        are offset from it (#707). Such a variant fails annotation.
+        are offset from it (#707). Such a variant fails annotation, unless
+        ``chrm_is_rcrs`` declares this chrM the rCRS (#710).
         """
         assembly = getattr(self.genome, "assembly", self.reference_name)
         if self.normalize_contig_names:
-            return _annotation_contig_name(contig, assembly, self.convert_ucsc_contig_names)
+            return _annotation_contig_name(
+                contig, assembly, self.convert_ucsc_contig_names, self.chrm_is_rcrs)
         if not self.convert_ucsc_contig_names:
             return contig
-        if _is_hg19_mitochondrion(contig, assembly):
+        if _is_hg19_mitochondrion(contig, assembly, self.chrm_is_rcrs):
             return "chrM"
         return self._convert_ucsc_contig_name_to_ensembl(contig)
 

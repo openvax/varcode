@@ -10,6 +10,7 @@ from numbers import Integral, Real
 from math import comb
 import sys
 
+from .contigs import _RCRS_LENGTH
 from .genotype import parse_gt_string
 from .vcf_parsing import FieldDef, RESERVED_FORMAT, RESERVED_INFO
 
@@ -148,7 +149,9 @@ def variants_to_vcf(variants, variant_to_metadata, out=None, header=None):
         Original INFO/FORMAT declarations to retain their types and cardinality.
         Otherwise declarations are inferred from values and standard FORMAT
         fields. Other source headers are not preserved; this is not a lossless
-        archive of the source VCF.
+        archive of the source VCF. A chrM that a variant declares to be the rCRS
+        (``chrm_is_rcrs``) is declared at the rCRS length, so ``load_vcf``
+        reads it back as MT.
     """
     variants = list(variants)
     records = _records(variants, variant_to_metadata)
@@ -173,6 +176,9 @@ def variants_to_vcf(variants, variant_to_metadata, out=None, header=None):
     lines = ["##fileformat=VCFv4.2"]
     if references:
         lines.append("##reference=%s" % next(iter(references)))
+    for contig in sorted({str(v.original_contig) for v in variants if getattr(v, "chrm_is_rcrs", False)
+                          and str(v.original_contig).upper() in ("CHRM", "M")}):
+        lines.append("##contig=<ID=%s,length=%d>" % (contig, _RCRS_LENGTH))
     for kind, fields in declarations.items():
         for name, field in fields.items():
             number = {None: ".", -1: "A", -2: "G", -3: "R"}.get(field.number, field.number)

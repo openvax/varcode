@@ -7,7 +7,7 @@ from itertools import product
 from .circular_origin import in_transcript_order
 from .effect_candidates import EffectCandidate
 from .effects.codon_tables import codon_table_for_transcript, translate_sequence
-from .effects.effect_classes import GeneFusion, TranslocationToIntergenic
+from .effects.effect_classes import GeneFusion, TranslocationToIntergenic, TranslocationToUnannotatedContig
 from .effects.selenocysteine import segment_selenocysteine
 from .effects.sequence_change import _retained_start
 from .mutant_transcript import ReferenceSegment
@@ -258,6 +258,9 @@ def reference_completion_hypotheses(
             annotator_name=_SOURCE, evidence=evidence), five)
         if isinstance(effect, GeneFusion):
             result = GeneFusion(effect.variant, five, three, mutant_transcript=completed)
+        elif isinstance(effect, TranslocationToUnannotatedContig):
+            result = TranslocationToUnannotatedContig(
+                effect.variant, five, effect.partner_contig, mutant_transcript=completed)
         else:
             result = TranslocationToIntergenic(effect.variant, five, mutant_transcript=completed)
         result.candidate_evidence = completed.evidence

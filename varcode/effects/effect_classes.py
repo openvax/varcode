@@ -1990,6 +1990,27 @@ class TranslocationToIntergenic(StructuralVariantEffect):
     short_description = "sv-translocation-intergenic"
 
 
+class TranslocationToUnannotatedContig(TranslocationToIntergenic):
+    """A breakend that forms no known gene fusion because its mate lies on
+    a contig the annotation doesn't cover: a decoy, EBV, an unplaced or alt
+    scaffold, or hg19's chrM under Ensembl's GRCh37 (whose MT is the rCRS,
+    at other positions). Whether the mate is intergenic is unknown, so a
+    fusion with it is not ruled out. ``partner_contig`` names the mate's
+    contig. The local side is annotated as for
+    :class:`TranslocationToIntergenic`, which this specializes."""
+
+    short_description = "sv-translocation-unannotated-contig"
+
+    def __init__(
+            self, variant, transcript, partner_contig,
+            mutant_transcript=None, primary_effects=None):
+        TranslocationToIntergenic.__init__(
+            self, variant, transcript,
+            primary_effects=primary_effects,
+            mutant_transcript=mutant_transcript)
+        self.partner_contig = partner_contig
+
+
 class CrypticExonCandidate(MutationEffect):
     """A region where an SV has brought novel sequence into range
     of the transcript, and motif scoring flags a plausible new

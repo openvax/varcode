@@ -64,6 +64,7 @@ from .effect_classes import (
     LargeDuplication,
     StructuralVariantEffect,
     TranslocationToIntergenic,
+    TranslocationToUnannotatedContig,
     # Splice-mechanism effect classes (#382)
     SpliceMechanismEffect,
     NormalSplicing,
@@ -128,6 +129,7 @@ __all__ = [
     "LargeDuplication",
     "StructuralVariantEffect",
     "TranslocationToIntergenic",
+    "TranslocationToUnannotatedContig",
 
     # Splice-mechanism effect classes (#382)
     "SpliceMechanismEffect",

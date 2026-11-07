@@ -171,10 +171,10 @@ class VariantCollection(Collection):
         ----------
         raise_on_error : bool or None, optional
             By default, retain missing-contig records as Failure effects and
-            warn once, but raise other annotation errors. This includes a
-            variant whose annotation needs another missing contig, such as a
-            breakend mate on hg19's chrM. True also raises for missing
-            contigs; False retains all annotation failures.
+            warn once, but raise other annotation errors. True also raises for
+            missing contigs; False retains all annotation failures. A breakend
+            whose mate is on a missing contig is annotated, as
+            :class:`~varcode.effects.TranslocationToUnannotatedContig`.
 
         annotator : str, EffectAnnotator, or None
             Per-call annotator override applied to every variant in
@@ -258,29 +258,14 @@ class VariantCollection(Collection):
         missing = self._missing_contigs(raise_on_error)
         strict = raise_on_error is not False
         per_variant = []
-        # Variants whose annotation needs a contig the annotation lacks
-        # beyond their own, e.g. a breakend mate on hg19's chrM (#707).
-        needs_missing = []
         for variant in self:
             if variant in missing:
                 per_variant.append(Failure(variant, error=missing[variant]))
-                continue
-            try:
+            else:
                 per_variant.extend(variant.effects(
                     raise_on_error=strict, annotator=annotator_instance,
                     germline=germline, phase_resolver=phase_resolver,
                     transcript_filter=transcript_filter))
-            except InvalidContigError as error:
-                if raise_on_error is True:
-                    raise
-                per_variant.append(Failure(variant, error=str(error)))
-                needs_missing.append(variant)
-        if needs_missing:
-            warnings.warn("%d variants need contigs absent from the annotation: %s; "
-                          "retained as failures" % (len(needs_missing), "; ".join(
-                              "%s (%s)" % (variant.short_description, variant.reference_name)
-                              for variant in needs_missing)),
-                          UserWarning, stacklevel=2)
         if phase_resolver is not None:
             # Joint cis-variant effects sit alongside the per-variant
             # ones (#269). Consumers pick whichever granularity they
@@ -293,8 +278,7 @@ class VariantCollection(Collection):
             from .rna_evidence import apply_rna_evidence_to_effects
             apply_rna_evidence_to_effects(per_variant, rna_resolver)
         if prepared is not None:
-            failed = set(missing).union(needs_missing)
-            additional = [effect for variant in self if variant not in failed for effect in prepared.effects(
+            additional = [effect for variant in self if variant not in missing for effect in prepared.effects(
                 variant, raise_on_error=strict, germline=germline,
                 phase_resolver=phase_resolver, rna_resolver=rna_resolver,
                 transcript_filter=transcript_filter)]

@@ -130,6 +130,7 @@ Effects on the transcripts at the record's own breakpoint:
 |---|---|---|
 | Intergenic | anything | `Intergenic` |
 | In a coding gene | intergenic | `TranslocationToIntergenic`, plus fusion candidates for [partners starting just past the mate](#partners-starting-just-past-the-other-end) |
+| In a coding gene | on a contig the annotation lacks (decoy, EBV, unplaced, hg19's `chrM` under GRCh37) | `TranslocationToUnannotatedContig`, naming it in `partner_contig` |
 | In a coding gene | in a non-coding gene only (e.g. MALAT1) | `TranslocationToIntergenic` |
 | In a coding gene | in a coding gene, opposite roles | `GeneFusion` |
 | In a coding gene | in a coding gene, head to head or tail to tail | `TranslocationToIntergenic` |
@@ -138,7 +139,9 @@ Effects on the transcripts at the record's own breakpoint:
 | In a coding gene | ALT isn't a breakend | `GeneFusion` treating this transcript as the 5' partner, with a warning |
 
 `TranslocationToIntergenic` therefore means "a breakend that doesn't form
-a gene fusion", not only "the mate is intergenic".
+a gene fusion", not only "the mate is intergenic". Its subclass
+`TranslocationToUnannotatedContig` says the mate's contig has no annotation, so
+a fusion there isn't ruled out; it ranks just above `TranslocationToIntergenic`.
 
 Its reference-derived `mutant_transcript` contains only the retained local
 5' prefix or 3' suffix, including the base at an exonic breakpoint. Intronic

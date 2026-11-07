@@ -169,6 +169,7 @@ Two outcomes apply before any SV logic:
 |---|---|
 | `GeneFusion` | The SV joins this transcript sense-to-sense with a coding transcript in another gene. |
 | `TranslocationToIntergenic` | A breakend in this transcript that doesn't form a gene fusion. |
+| `TranslocationToUnannotatedContig` | A `TranslocationToIntergenic` whose mate is on a contig the annotation lacks, so a fusion there isn't ruled out; `partner_contig` names it. |
 | `StartLoss` | The annotated initiation codon is not retained. |
 | `Deletion` / `Insertion` | An in-frame protein deletion / insertion. |
 | `FrameShift` | A spliced coding edit changes the reading frame. |

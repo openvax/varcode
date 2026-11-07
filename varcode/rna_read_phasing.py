@@ -21,7 +21,9 @@ from collections import defaultdict
 from math import exp, lgamma, log, log1p
 from typing import Optional, Sequence
 
-from .contigs import _is_grch37
+from .contigs import _RCRS_LENGTH, _is_grch37
+
+_MITOCHONDRION_NAMES = ("M", "CHRM", "MT", "CHRMT")
 
 
 _CIGAR_MATCH = 0
@@ -328,20 +330,29 @@ class RNAReadPhasingSource:
             candidates.append(variant.contig[3:])
         else:
             candidates.append("chr" + variant.contig)
-        # Under GRCh37, chrM/M is hg19's mitochondrion and MT/chrMT the rCRS:
-        # different sequences, offset from each other, never aliases (#707).
-        if not _is_grch37(assembly):
-            if variant.contig == "MT":
-                candidates.extend(["M", "chrM"])
-            elif variant.contig in ("M", "chrM"):
-                candidates.extend(["MT", "chrMT"])
+        if variant.contig == "MT":
+            candidates.extend(["M", "chrM"])
+        elif variant.contig in ("M", "chrM"):
+            candidates.extend(["MT", "chrMT"])
         references = set(self._bam.references)
         for contig in candidates:
-            if contig in references:
+            if contig in references and self._same_mitochondrion(variant.contig, contig, assembly):
                 self._contig_cache[key] = contig
                 return contig
         self._contig_cache[key] = None
         return None
+
+    def _same_mitochondrion(self, contig, bam_contig, assembly):
+        """Whether ``bam_contig`` can hold the variant's ``contig``. Under GRCh37,
+        chrM/M is hg19's mitochondrion and MT/chrMT the rCRS: different
+        sequences, offset from each other (#707). A BAM's chrM or M is the
+        rCRS when the header gives it the rCRS length, as GENCODE's GRCh37
+        does (#710). Other builds' chrM is the rCRS."""
+        if not _is_grch37(assembly) or contig.upper() not in _MITOCHONDRION_NAMES:
+            return True
+        rcrs = bam_contig.upper() in ("MT", "CHRMT") or (
+            self._bam.get_reference_length(bam_contig) == _RCRS_LENGTH)
+        return rcrs == (contig.upper() in ("MT", "CHRMT"))
 
     def _passes_read_filters(self, read):
         if read.is_unmapped:

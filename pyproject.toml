@@ -50,6 +50,7 @@ test = [
     "osteosarc>=0.14.4,<0.16",  # patient-data fixtures
     "biotite>=1.6",  # independent sequence checks
     "pysam>=0.21",  # RNA read phasing tests
+    "setuptools>=64",  # tests/test_source_distribution.py builds an sdist in-process
     "pytest",
     "pytest-cov",
     "pytest-xdist",

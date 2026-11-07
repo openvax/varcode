@@ -202,6 +202,7 @@ def _build_combined(a, b, a_id, b_id):
         info=_merge_info(a, b, a_id, b_id),
         genome=a.genome,
         normalize_contig_names=False,
+        chrm_is_rcrs=a.chrm_is_rcrs,
     )
     combined.source_variants = (a, b)
     return combined
@@ -726,6 +727,7 @@ def _left_align_one(variant, reference_range_fn):
         allow_extended_nucleotides=getattr(
             variant, "allow_extended_nucleotides", False),
         normalize_contig_names=False,
+        chrm_is_rcrs=getattr(variant, "chrm_is_rcrs", False),
     )
     shifted.source_variants = (variant,)
     return shifted, partial
