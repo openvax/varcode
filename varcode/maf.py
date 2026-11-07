@@ -52,6 +52,22 @@ MAF_COLUMN_NAMES = [
 ]
 
 
+# MAF columns kept as each variant's metadata.
+_METADATA_COLUMNS = (
+    'Hugo_Symbol', 'Center', 'Strand', 'Variant_Classification', 'Variant_Type',
+    'dbSNP_RS', 'dbSNP_Val_Status', 'Tumor_Sample_Barcode', 'Matched_Norm_Sample_Barcode')
+
+
+def _cell(row, column):
+    """A MAF cell, with an empty cell (which pandas reads as NaN) as None.
+
+    NaN can't be written as JSON, so a collection holding it in metadata
+    couldn't be saved with ``to_json`` (#704).
+    """
+    value = row[column]
+    return None if isnull(value) else value
+
+
 def load_maf_dataframe(
         path: str | os.PathLike[str], nrows: int | None = None,
         raise_on_error: bool = True, encoding: str | None = None) -> pandas.DataFrame:
@@ -67,7 +83,10 @@ def load_maf_dataframe(
         Optional limit to number of rows loaded
 
     raise_on_error : bool
-        Raise an exception upon encountering an error or log an error
+        Raise ``ValueError`` when the 19 required columns
+        (``MAF_COLUMN_NAMES``, matched case-insensitively) are out of order;
+        otherwise log a warning. A missing required column always raises
+        ``ValueError``, since the file can't be read as a MAF without it.
 
     encoding : str, optional
         Encoding to use for UTF when reading MAF file.
@@ -75,8 +94,6 @@ def load_maf_dataframe(
     path = os.fspath(path)
     if not isinstance(path, str):
         raise TypeError("Path to MAF must resolve to str, got %s" % type(path).__name__)
-
-    n_basic_columns = len(MAF_COLUMN_NAMES)
 
     df = pandas.read_csv(
         path,
@@ -88,31 +105,70 @@ def load_maf_dataframe(
         nrows=nrows,
         encoding=encoding)
 
-    if len(df.columns) < n_basic_columns:
-        error_message = (
-            "Too few columns in MAF file %s, expected %d but got  %d : %s" % (
-                path, n_basic_columns, len(df.columns), df.columns))
-        if raise_on_error:
-            raise ValueError(error_message)
-        else:
-            logging.warning(error_message)
+    found = {str(column).lower() for column in df.columns}
+    missing = [name for name in MAF_COLUMN_NAMES if name.lower() not in found]
+    if missing:
+        raise ValueError(
+            "MAF file %s is missing %d of the %d required columns: %s (found: %s)" % (
+                path, len(missing), len(MAF_COLUMN_NAMES), ", ".join(missing),
+                ", ".join(map(str, df.columns))))
 
-    # check each pair of expected/actual column names to make sure they match
+    # MAFs in the wild have capitalization differences in their column
+    # names; give a required one the spec's spelling wherever it is, unless
+    # that spelling is already there (TCGA MAFs have both Strand and strand).
+    spelled: dict[str, str] = {}
+    for column in df.columns:
+        spelled.setdefault(str(column).lower(), column)
+    df = df.rename(columns={
+        spelled[name.lower()]: name for name in MAF_COLUMN_NAMES if name not in df.columns})
     for expected, actual in zip(MAF_COLUMN_NAMES, df.columns):
         if expected != actual:
-            # MAFs in the wild have capitalization differences in their
-            # column names, normalize them to always use the names above
-            if expected.lower() == actual.lower():
-                df = df.rename(columns={actual: expected})
+            error_message = "Expected column %s but got %s" % (expected, actual)
+            if raise_on_error:
+                raise ValueError(error_message)
             else:
-                error_message = (
-                    "Expected column %s but got %s" % (expected, actual))
-                if raise_on_error:
-                    raise ValueError(error_message)
-                else:
-                    logging.warning(error_message)
+                logging.warning(error_message)
 
     return df
+
+def _integral(value):
+    """An integral float as an int: pandas reads a numeric column with an
+    empty cell as floats, so build 37 becomes 37.0 and chromosome 7 7.0."""
+    return int(value) if isinstance(value, float) and value.is_integer() else value
+
+
+def _reference_name(build):
+    """A MAF ``NCBI_Build`` value as a reference name: 37, 37.0 and "37" are B37."""
+    build = _integral(build)
+    return "B%d" % int(build) if isinstance(build, int) or str(build).isdigit() else str(build)
+
+
+def _row_variant(x, genomes):
+    """The Variant in MAF row ``x``; ValueError if the row can't be read as one.
+
+    ``genomes`` maps each ``NCBI_Build`` value to its genome, since one MAF
+    can mix builds.
+    """
+    empty = [column for column in ("NCBI_Build", "Chromosome", "Start_Position", "Reference_Allele")
+             if _cell(x, column) is None]
+    if empty:
+        raise ValueError("MAF row has no %s: %s" % (", ".join(empty), x))
+    ref = x.Reference_Allele
+
+    # The alt is the first tumor allele that differs from the reference.
+    # An empty cell (NaN) is no allele, not the alt "nan".
+    alts = [allele for allele in (_cell(x, "Tumor_Seq_Allele1"), _cell(x, "Tumor_Seq_Allele2"))
+            if allele is not None and allele != ref]
+    if not alts:
+        raise ValueError("No tumor allele differs from reference %s: %s" % (ref, x))
+
+    # GDC GRCh38 MAFs name contigs "chr7" and "chrM"; Ensembl annotation
+    # names them "7" and "MT", as load_vcf converts them. Variant leaves
+    # hg19's chrM alone, since it isn't Ensembl's MT (#707).
+    return Variant(
+        _integral(x.Chromosome), x.Start_Position, str(ref), str(alts[0]), genomes[x.NCBI_Build],
+        convert_ucsc_contig_names=True)
+
 
 def load_maf(
         path: str | os.PathLike[str],
@@ -124,6 +180,13 @@ def load_maf(
         nrows=None) -> VariantCollection:
     """
     Load reference name and Variant objects from MAF filename.
+
+    The ``NCBI_Build`` column selects each variant's reference. UCSC contig
+    names, such as the ``chr7`` and ``chrM`` in GDC GRCh38 MAFs, become
+    Ensembl's ``7`` and ``MT``. In a GRCh37 MAF, ``chrM`` and ``M`` keep their
+    names and fail annotation: hg19's chrM is not the rCRS that Ensembl names
+    MT, and its positions are offset from it. Empty cells become None in each
+    variant's metadata.
 
     Parameters
     ----------
@@ -143,7 +206,11 @@ def load_maf(
         Don't keep repeated variants
 
     raise_on_error : bool
-        Raise an exception upon encountering an error or just log a warning.
+        Raise ``ValueError`` for a row that can't be read as a variant (an
+        empty build, contig, position or reference allele, no tumor allele
+        that differs from the reference, or an invalid allele), or log a
+        warning and skip it. A missing required column or an unrecognised
+        ``NCBI_Build`` always raises.
 
     encoding : str, optional
         Encoding to use for UTF when reading MAF file.
@@ -163,74 +230,28 @@ def load_maf(
     if len(maf_df) == 0 and raise_on_error:
         raise ValueError("Empty MAF file %s" % path)
 
-    ensembl_objects: dict[str | int, EnsemblGenome | Genome] = {}
+    # An unrecognised build is a file-level error, raised once rather than
+    # skipped row by row (one MAF can mix builds).
+    genomes: dict[str | int | float, EnsemblGenome | Genome] = {
+        build: infer_genome(_reference_name(build))[0]
+        for build in maf_df.NCBI_Build.dropna().unique()}
     variants = []
     metadata = {}
     for _, x in maf_df.iterrows():
-        contig = x.Chromosome
-        if isnull(contig):
-            error_message = "Invalid contig name: %s" % (contig,)
+        try:
+            variant = _row_variant(x, genomes)
+        except ValueError as error:
             if raise_on_error:
-                raise ValueError(error_message)
-            else:
-                logging.warning(error_message)
-                continue
-
-        start_pos = x.Start_Position
-        ref = x.Reference_Allele
-
-        # it's possible in a MAF file to have multiple Ensembl releases
-        # mixed in a single MAF file (the genome assembly is
-        # specified by the NCBI_Build column)
-        ncbi_build = x.NCBI_Build
-        if ncbi_build in ensembl_objects:
-            genome = ensembl_objects[ncbi_build]
-        else:
-            if isinstance(ncbi_build, int):
-                reference_name = "B%d" % ncbi_build
-            else:
-                reference_name = str(ncbi_build)
-            genome, _ = infer_genome(reference_name)
-            ensembl_objects[ncbi_build] = genome
-
-        # have to try both Tumor_Seq_Allele1 and Tumor_Seq_Allele2
-        # to figure out which is different from the reference allele
-        if x.Tumor_Seq_Allele1 != ref:
-            alt = x.Tumor_Seq_Allele1
-        else:
-            if x.Tumor_Seq_Allele2 == ref:
-                error_message = (
-                    "Both tumor alleles agree with reference %s: %s" % (
-                        ref, x,))
-                if raise_on_error:
-                    raise ValueError(error_message)
-                else:
-                    logging.warning(error_message)
-                    continue
-            alt = x.Tumor_Seq_Allele2
-
-        variant = Variant(
-            contig,
-            start_pos,
-            str(ref),
-            str(alt),
-            genome)
+                raise
+            logging.warning("Skipping MAF row: %s", error)
+            continue
 
         # keep metadata about the variant and its TCGA annotation
         metadata[variant] = {
-            'Hugo_Symbol': x.Hugo_Symbol,
-            'Center': x.Center,
-            'Strand': x.Strand,
-            'Variant_Classification': x.Variant_Classification,
-            'Variant_Type': x.Variant_Type,
-            'dbSNP_RS': x.dbSNP_RS,
-            'dbSNP_Val_Status': x.dbSNP_Val_Status,
-            'Tumor_Sample_Barcode': x.Tumor_Sample_Barcode,
-            'Matched_Norm_Sample_Barcode': x.Matched_Norm_Sample_Barcode,
-        }
+            column: _cell(x, column) for column in _METADATA_COLUMNS}
         for optional_col in optional_cols:
             if optional_col in x:
-                metadata[variant][optional_col] = x[optional_col]
+                metadata[variant][optional_col] = _cell(x, optional_col)
 
         variants.append(variant)
 

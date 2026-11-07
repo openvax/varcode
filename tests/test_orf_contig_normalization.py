@@ -73,3 +73,23 @@ def test_ucsc_accession_aliases_match_orf_variants_and_rna_origins(release, sour
                             variant.ref, variant.alt, transcript.genome)
     with pytest.raises(ValueError, match="contig mismatch"):
         annotate_orf_variants([wrong_version], reference)
+
+
+@pytest.mark.parametrize("contig,reference_name,expected", [
+    ("chrM", "GRCh37", "chrM"), ("M", "GRCh37", "chrM"), ("MT", "GRCh37", "MT"),
+    ("chrMT", "GRCh37", "MT"), ("chrM", "GRCh38", "MT"),
+])
+def test_orf_contigs_never_pair_hg19_chrm_with_rcrs_mt(contig, reference_name, expected):
+    # hg19's chrM is not the rCRS that Ensembl names MT (#707).
+    from varcode.orf import _contig
+    assert _contig(contig, reference_name) == expected
+
+
+def test_extra_orf_spans_compare_contigs_with_their_builds():
+    from types import SimpleNamespace
+    from varcode.extra_orfs import _overlaps
+
+    record = SimpleNamespace(contig="MT", genome_build="GRCh37",
+                             coding_blocks=[(12900, 13100)], initiation_context=None)
+    assert _overlaps(Variant("MT", 12995, "A", "G", 75), record)
+    assert not _overlaps(Variant("chrM", 12995, "A", "G", "hg19"), record)

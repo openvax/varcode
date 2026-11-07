@@ -24,6 +24,45 @@ def _check_reference_name(reference_name: str | None) -> None:
             raise ValueError("reference_name cannot be empty")
 
 
+_GRCH37_NAMES = frozenset({"grch37", "hg19", "b37", "ncbi37"})
+
+
+def _is_grch37(reference_name: str | None) -> bool:
+    return reference_name is not None and reference_name.strip().lower() in _GRCH37_NAMES
+
+
+def _is_hg19_mitochondrion(contig: str | int, reference_name: str | None) -> bool:
+    """True for ``chrM`` or ``M`` (any case) under GRCh37/hg19.
+
+    hg19's chrM is NC_001807, not the rCRS (NC_012920) that Ensembl's GRCh37
+    names MT, and its positions are offset from it: hg19 chrM:12995 is rCRS
+    MT:12994. A variant there must not be renamed onto MT (#707). hg38's chrM
+    is the rCRS, and ``chrMT`` is a chr-prefixed rCRS ``MT``.
+    """
+    return _is_grch37(reference_name) and str(contig).upper() in ("CHRM", "M")
+
+
+# Appended to errors about a GRCh37 chrM, which Ensembl's annotation lacks.
+_HG19_MITOCHONDRION_NOTE = (
+    "hg19's chrM (NC_001807) is not the rCRS that Ensembl names MT, and its "
+    "positions are offset from it; give rCRS positions on contig MT (if this "
+    "chrM is already the rCRS, as in GENCODE's GRCh37, rename it MT)")
+
+
+def _annotation_contig_name(
+        contig: str | int, reference_name: str | None, convert_ucsc: bool = True) -> str:
+    """The name of ``contig`` in Ensembl annotation of ``reference_name``.
+
+    As :func:`normalize_contig_name`, except that hg19's mitochondrion has no
+    Ensembl name, so UCSC conversion leaves it ``chrM`` rather than renaming
+    it onto the rCRS ``MT`` (#707). The public function, and so
+    :class:`ContigResolver`, only matches spellings and still pairs them.
+    """
+    if convert_ucsc and _is_hg19_mitochondrion(contig, reference_name):
+        return "chrM"
+    return normalize_contig_name(contig, reference_name=reference_name, convert_ucsc=convert_ucsc)
+
+
 def _convert_ucsc_contig_name(contig: str, reference_name: str | None) -> str:
     """Convert spelling only; also used by Variant with normalization disabled."""
     match = re.fullmatch(
@@ -33,8 +72,7 @@ def _convert_ucsc_contig_name(contig: str, reference_name: str | None) -> str:
         return "%s.%s" % (match[1].upper(), match[2])
     # UCSC hg19.chromAlias.txt assigns these unversioned names to version 1.
     # Never infer that version from a target vocabulary or a newer assembly.
-    if reference_name is not None and reference_name.strip().lower() in {
-            "grch37", "hg19", "b37", "ncbi37"}:
+    if _is_grch37(reference_name):
         match = re.fullmatch(r"chr(?:Un|[0-9XYM]+)_(gl000[0-9]{3})(?:_random)?", contig)
         if match and 191 <= int(match[1][-3:]) <= 249:
             return match[1].upper() + ".1"

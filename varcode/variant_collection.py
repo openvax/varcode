@@ -171,8 +171,10 @@ class VariantCollection(Collection):
         ----------
         raise_on_error : bool or None, optional
             By default, retain missing-contig records as Failure effects and
-            warn once, but raise other annotation errors. True also raises for
-            missing contigs; False retains all annotation failures.
+            warn once, but raise other annotation errors. This includes a
+            variant whose annotation needs another missing contig, such as a
+            breakend mate on hg19's chrM. True also raises for missing
+            contigs; False retains all annotation failures.
 
         annotator : str, EffectAnnotator, or None
             Per-call annotator override applied to every variant in
@@ -256,14 +258,29 @@ class VariantCollection(Collection):
         missing = self._missing_contigs(raise_on_error)
         strict = raise_on_error is not False
         per_variant = []
+        # Variants whose annotation needs a contig the annotation lacks
+        # beyond their own, e.g. a breakend mate on hg19's chrM (#707).
+        needs_missing = []
         for variant in self:
             if variant in missing:
                 per_variant.append(Failure(variant, error=missing[variant]))
-            else:
+                continue
+            try:
                 per_variant.extend(variant.effects(
                     raise_on_error=strict, annotator=annotator_instance,
                     germline=germline, phase_resolver=phase_resolver,
                     transcript_filter=transcript_filter))
+            except InvalidContigError as error:
+                if raise_on_error is True:
+                    raise
+                per_variant.append(Failure(variant, error=str(error)))
+                needs_missing.append(variant)
+        if needs_missing:
+            warnings.warn("%d variants need contigs absent from the annotation: %s; "
+                          "retained as failures" % (len(needs_missing), "; ".join(
+                              "%s (%s)" % (variant.short_description, variant.reference_name)
+                              for variant in needs_missing)),
+                          UserWarning, stacklevel=2)
         if phase_resolver is not None:
             # Joint cis-variant effects sit alongside the per-variant
             # ones (#269). Consumers pick whichever granularity they
@@ -276,7 +293,8 @@ class VariantCollection(Collection):
             from .rna_evidence import apply_rna_evidence_to_effects
             apply_rna_evidence_to_effects(per_variant, rna_resolver)
         if prepared is not None:
-            additional = [effect for variant in self if variant not in missing for effect in prepared.effects(
+            failed = set(missing).union(needs_missing)
+            additional = [effect for variant in self if variant not in failed for effect in prepared.effects(
                 variant, raise_on_error=strict, germline=germline,
                 phase_resolver=phase_resolver, rna_resolver=rna_resolver,
                 transcript_filter=transcript_filter)]
@@ -318,24 +336,50 @@ class VariantCollection(Collection):
         """
         return {variant.original_reference_name for variant in self}
 
+    def _overlapping(self, attribute):
+        """Each variant's ``attribute`` (genes, gene IDs, ...) for grouping.
+
+        A variant on a contig absent from the annotation, such as hg19's chrM
+        (#707), overlaps nothing and is named in one summary warning, as in
+        ``effects()``, rather than the whole collection failing.
+        """
+        missing = self._missing_contigs(raise_on_error=None, outcome="left out", stacklevel=4)
+        return lambda variant: () if variant in missing else getattr(variant, attribute)
+
     def groupby_gene(self):
-        return self.multi_groupby(lambda x: x.genes)
+        """
+        Group variants by the genes they overlap, which may put each variant
+        in multiple groups.
+        A variant on a contig absent from the annotation (e.g. hg19's chrM)
+        overlaps nothing; one warning names such variants.
+        """
+        return self.multi_groupby(self._overlapping("genes"))
 
     def groupby_gene_name(self):
         """
         Group variants by the gene names they overlap, which may put each
         variant in multiple groups.
+        A variant on a contig absent from the annotation (e.g. hg19's chrM)
+        overlaps nothing; one warning names such variants.
         """
-        return self.multi_groupby(lambda x: x.gene_names)
+        return self.multi_groupby(self._overlapping("gene_names"))
 
     def groupby_gene_id(self):
-        return self.multi_groupby(lambda x: x.gene_ids)
+        """
+        Group variants by the gene IDs they overlap, which may put each
+        variant in multiple groups.
+        A variant on a contig absent from the annotation (e.g. hg19's chrM)
+        overlaps nothing; one warning names such variants.
+        """
+        return self.multi_groupby(self._overlapping("gene_ids"))
 
     def gene_counts(self):
         """
         Returns number of elements overlapping each gene name. Expects the
         derived class (VariantCollection or EffectCollection) to have
         an implementation of groupby_gene_name.
+        A variant on a contig absent from the annotation (e.g. hg19's chrM)
+        overlaps nothing; one warning names such variants.
         """
         return {
             gene_name: len(group)
@@ -370,6 +414,9 @@ class VariantCollection(Collection):
         expression value in the transcript_expression_dict argument is greater
         than min_expression_value.
 
+        A variant on a contig absent from the annotation (e.g. hg19's chrM)
+        overlaps no transcript, so it is filtered out; one warning names it.
+
         Parameters
         ----------
         transcript_expression_dict : dict
@@ -380,7 +427,7 @@ class VariantCollection(Collection):
             Threshold above which we'll keep an effect in the result collection
         """
         return self.filter_any_above_threshold(
-            multi_key_fn=lambda variant: variant.transcript_ids,
+            multi_key_fn=self._overlapping("transcript_ids"),
             value_dict=transcript_expression_dict,
             threshold=min_expression_value)
 
@@ -393,6 +440,9 @@ class VariantCollection(Collection):
         expression value in the transcript_expression_dict argument is greater
         than min_expression_value.
 
+        A variant on a contig absent from the annotation (e.g. hg19's chrM)
+        overlaps no gene, so it is filtered out; one warning names it.
+
         Parameters
         ----------
         gene_expression_dict : dict
@@ -403,7 +453,7 @@ class VariantCollection(Collection):
             Threshold above which we'll keep an effect in the result collection
         """
         return self.filter_any_above_threshold(
-            multi_key_fn=lambda effect: effect.gene_ids,
+            multi_key_fn=self._overlapping("gene_ids"),
             value_dict=gene_expression_dict,
             threshold=min_expression_value)
 
@@ -516,8 +566,12 @@ class VariantCollection(Collection):
         "chr", "start", "ref", "alt", "gene_name", "gene_id",
     ) + REFERENCE_COLUMNS
 
-    def _missing_contigs(self, raise_on_error):
-        """Check this dataset, retaining unavailable annotations explicitly."""
+    def _missing_contigs(self, raise_on_error, outcome="retained as failures", stacklevel=3):
+        """Check this dataset, retaining unavailable annotations explicitly.
+
+        ``outcome`` says, in the one summary warning, what happens to the
+        variants on contigs absent from the annotation.
+        """
         missing = {}
         for variant in self:
             try:
@@ -533,9 +587,8 @@ class VariantCollection(Collection):
                     raise
         if missing:
             names = sorted({"%s:%s" % (v.reference_name, v.contig) for v in missing})
-            warnings.warn("%d variants on contigs absent from the annotation: %s; "
-                          "retained as failures" % (len(missing), ", ".join(names)),
-                          UserWarning, stacklevel=3)
+            warnings.warn("%d variants on contigs absent from the annotation: %s; %s" % (
+                len(missing), ", ".join(names), outcome), UserWarning, stacklevel=stacklevel)
         return missing
 
     def to_dataframe(self, raise_on_error=None):

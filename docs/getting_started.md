@@ -46,7 +46,8 @@ installed numbered release of that assembly, or the newest numbered release
 when none is installed. A UCSC name selects its Ensembl assembly, such as
 `"hg38"` for GRCh38, `"mm10"` for GRCm38 or `"mm39"` for GRCm39, and UCSC
 contig names such as `chr7` become Ensembl's `7`. Selecting a reference does not
-download data or convert variant coordinates.
+download data or convert variant coordinates; for that reason hg19's `chrM`
+stays `chrM` (see [annotation errors](errors.md#continuing-past-errors)).
 
 ### Chromosome DNA for SV and splice analysis
 
@@ -121,7 +122,9 @@ and breakend records are skipped with a warning. See the
 [structural variant guide](structural_variants.md#basic-usage).
 
 For a MAF, use `variants = varcode.load_maf("variants.maf")` after importing
-`varcode`; the MAF's build information supplies the reference. See
+`varcode`; the MAF's build information supplies the reference, and UCSC contig
+names such as GDC's `chr7` and `chrM` become Ensembl's `7` and `MT`, except
+hg19's `chrM` in a GRCh37 MAF. See
 [file-loading parameters](api_variants.md#file-loading) for format-specific options.
 
 Both loaders accept strings and text path objects, such as

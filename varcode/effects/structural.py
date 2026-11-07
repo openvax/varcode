@@ -46,6 +46,8 @@ from ..circular_origin import (
     transcript_exons,
     transcripts_at_locus,
 )
+from ..contigs import _HG19_MITOCHONDRION_NOTE, _is_hg19_mitochondrion
+from ..errors import InvalidContigError
 from ..structural_variant import junction_span_details
 from ..sv_allele_parser import breakend_sides, _breakend_local_side
 
@@ -1300,6 +1302,12 @@ def _coding_transcripts_at(variant, contig, position):
     variant, since every transcript at one end of a junction asks
     the same question about the other end."""
     def lookup():
+        assembly = getattr(variant.genome, "assembly", variant.reference_name)
+        if _is_hg19_mitochondrion(contig, assembly) and str(contig) not in variant.genome.contigs():
+            # Not intergenic: the mitochondrion is annotated, as MT at other
+            # positions (#707). This variant's own side is still annotated.
+            raise InvalidContigError("Breakend mate on contig '%s' for reference '%s': %s" % (
+                contig, variant.reference_name, _HG19_MITOCHONDRION_NOTE))
         try:
             transcripts = transcripts_at_locus(
                 variant.genome, str(contig), int(position), int(position))
