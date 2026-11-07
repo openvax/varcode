@@ -9,7 +9,7 @@ from varcode.effects import Failure
 
 @pytest.fixture
 def make_genome(tmp_path):
-    def make(name, contigs, version=1):
+    def make(name, contigs, version=1, reference_name="GRCh38"):
         gtf = tmp_path / (name + ".gtf")
         rows = []
         for contig in contigs:
@@ -24,7 +24,7 @@ def make_genome(tmp_path):
                     % (contig, feature, attributes))
         gtf.write_text("".join(rows))
         genome = AnnotationGenome(
-            reference_name="GRCh38",
+            reference_name=reference_name,
             annotation_name="test",
             annotation_version=version,
             gtf_path_or_url=str(gtf),
@@ -144,27 +144,47 @@ def test_hg19_chrm_variants_fail_annotation_with_the_reason():
     assert isinstance(effects[0], Failure)
 
 
-def test_a_breakend_mate_on_hg19_chrm_is_a_failure_not_intergenic():
+def test_a_breakend_mate_on_hg19_chrm_fails_its_effects_not_its_own_side():
     # Without the refusal, the mate's missing annotation read as intergenic,
-    # though it sits in MT-ND5 (#707).
+    # though it sits in MT-ND5 (#707). The BRAF side is still annotated.
     sv = StructuralVariant("chr7", 140453136, "BND", alt="G[chrM:12995[", ref="A", genome="hg19")
     assert sv.mate_contig == "chrM"
+    assert [gene.name for gene in sv.genes] == ["BRAF"]
     with pytest.raises(ValueError, match="Breakend mate on contig 'chrM'.*NC_001807"):
         sv.effects()
-    with pytest.warns(UserWarning, match="1 variants? on contigs absent"):
-        effects = VariantCollection([sv]).effects()
+    assert {type(effect).__name__ for effect in sv.effects(raise_on_error=False)} == {
+        "Failure", "NoncodingTranscript"}
+    variants = VariantCollection([sv])
+    with pytest.warns(UserWarning, match=r"1 variants need contigs absent.*chrM:12995"):
+        effects = variants.effects()
     assert [type(effect) for effect in effects] == [Failure]
-    # JSON from 11.7 stored the mate already renamed to MT; it now contradicts the ALT.
+    assert list(variants.to_dataframe().gene_name) == ["BRAF"]
+    assert variants.gene_counts() == {"BRAF": 1}
+
+
+def test_sv_json_from_11_7_keeps_the_alts_hg19_chrm_mate():
+    # 11.7 stored this mate as MT; the ALT names it, so the ALT's contig wins.
+    sv = StructuralVariant("chr7", 140453136, "BND", alt="G[chrM:12995[", ref="A", genome="hg19")
     stored = sv.to_dict()
     stored["mate_contig"] = "MT"
+    assert StructuralVariant(**stored).mate_contig == "chrM"
+    stored["mate_contig"] = "5"
     with pytest.raises(ValueError, match="contradicts breakend ALT"):
         StructuralVariant(**stored)
+
+
+def test_a_genome_that_has_chrm_annotates_a_chrm_mate(make_genome):
+    # e.g. a GENCODE-style GRCh37 annotation, whose chrM is the rCRS.
+    genome = make_genome("gencode37", ["7", "chrM"], reference_name="GRCh37")
+    sv = StructuralVariant("7", 150, "BND", alt="G[chrM:150[", ref="A", genome=genome)
+    assert sv.mate_contig == "chrM"
+    assert not any(isinstance(effect, Failure) for effect in sv.effects())
 
 
 def test_gene_grouping_skips_hg19_chrm_variants_with_one_warning():
     braf = Variant("chr7", 140453136, "A", "T", genome="hg19")
     variants = VariantCollection([braf, Variant("chrM", 12995, "A", "G", genome="hg19")])
-    with pytest.warns(UserWarning, match="1 variants? on contigs absent.*GRCh37:chrM"):
+    with pytest.warns(UserWarning, match="1 variants? on contigs absent.*GRCh37:chrM; left out"):
         assert variants.gene_counts() == {"BRAF": 1}
     with pytest.warns(UserWarning, match="1 variants? on contigs absent"):
         assert set(variants.groupby_gene_id()) == {gene.id for gene in braf.genes}

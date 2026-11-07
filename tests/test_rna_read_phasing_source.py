@@ -661,3 +661,18 @@ def test_bam_mitochondrion_is_matched_only_to_the_same_sequence(
         assert source._bam_contig(Variant(variant_contig, 12995, "A", "G", genome)) == expected
     finally:
         source.close()
+
+
+def test_bam_contig_cache_is_per_build(tmp_path):
+    bam_path = tmp_path / "hg19.bam"
+    with pysam.AlignmentFile(bam_path, "wb", header={
+            "HD": {"VN": "1.6"}, "SQ": [{"SN": "chrM", "LN": 16571}]}):
+        pass
+    pysam.index(str(bam_path))
+    source = RNAReadPhasingSource(str(bam_path))
+    try:
+        # The same contig name means a different sequence in each build (#707).
+        assert source._bam_contig(Variant("MT", 12995, "A", "G", "GRCh38")) == "chrM"
+        assert source._bam_contig(Variant("MT", 12995, "A", "G", "GRCh37")) is None
+    finally:
+        source.close()

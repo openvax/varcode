@@ -58,8 +58,7 @@ downstream integrations without forcing them into the core class:
 
 from typing import Any, Mapping, NamedTuple, Optional, Tuple
 
-from .contigs import _HG19_MITOCHONDRION_NOTE, _annotation_contig_name, _is_hg19_mitochondrion
-from .errors import InvalidContigError
+from .contigs import _annotation_contig_name, normalize_contig_name
 
 from .variant import Variant
 
@@ -390,21 +389,27 @@ class StructuralVariant(Variant):
     def _take_mate_from_alt(self, alt):
         """Fill the mate fields a breakend ALT names and the caller left
         unset, and reject set ones that contradict it (#553). Contigs
-        compare by their Ensembl-style names, since the ALT keeps the
-        caller's spelling while :attr:`mate_contig` may be converted."""
+        compare by spelling, since the ALT keeps the caller's spelling while
+        :attr:`mate_contig` may be converted. Where two such spellings are
+        different sequences, the ALT's wins: JSON from 11.7 stored an hg19
+        ``chrM`` mate as ``MT``, which is not hg19's chrM (#707)."""
         # Local import: sv_allele_parser imports this module.
         from .sv_allele_parser import breakend_mate
         named = breakend_mate(alt)
         if named is None:
             return
         contig, start, orientation = named
+        assembly = getattr(self.genome, "assembly", self.reference_name)
         if self.mate_contig is None:
             self.mate_contig = self._normalize_contig_name(contig)
-        elif self._ensembl_contig_name(self.mate_contig) != (
-                self._ensembl_contig_name(contig)):
+        elif normalize_contig_name(self.mate_contig, reference_name=assembly) != (
+                normalize_contig_name(contig, reference_name=assembly)):
             raise ValueError(
                 "mate_contig=%r contradicts breakend ALT %r"
                 % (self.mate_contig, alt))
+        elif _annotation_contig_name(self.mate_contig, assembly) != (
+                _annotation_contig_name(contig, assembly)):
+            self.mate_contig = _annotation_contig_name(contig, assembly)
         for field, value in (
                 ("mate_start", start), ("mate_orientation", orientation)):
             given = getattr(self, field)
@@ -413,22 +418,6 @@ class StructuralVariant(Variant):
             elif given != value:
                 raise ValueError(
                     "%s=%r contradicts breakend ALT %r" % (field, given, alt))
-
-    def _check_that_genome_has_contig(self):
-        """Also refuse a mate on hg19's chrM, which annotation would otherwise
-        call intergenic although the mitochondrion is annotated, as MT at
-        other positions (#707). Mates on other unknown contigs, such as
-        decoys, stay allowed."""
-        super()._check_that_genome_has_contig()
-        if self.mate_contig is not None and _is_hg19_mitochondrion(
-                self.mate_contig, getattr(self.genome, "assembly", self.reference_name)):
-            raise InvalidContigError("Breakend mate on contig '%s' for reference '%s': %s" % (
-                self.mate_contig, self.reference_name, _HG19_MITOCHONDRION_NOTE))
-
-    def _ensembl_contig_name(self, contig):
-        # The annotation name, so an hg19 chrM mate never matches MT (#707).
-        return _annotation_contig_name(
-            contig, getattr(self.genome, "assembly", self.reference_name))
 
     @property
     def is_structural(self) -> bool:

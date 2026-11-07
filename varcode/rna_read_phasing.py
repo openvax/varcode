@@ -317,7 +317,10 @@ class RNAReadPhasingSource:
         )
 
     def _bam_contig(self, variant):
-        key = variant.contig
+        assembly = getattr(getattr(variant, "genome", None), "assembly", None) or getattr(
+            variant, "reference_name", None)
+        # The answer depends on the build (below), so it is part of the key.
+        key = (assembly, variant.contig)
         if key in self._contig_cache:
             return self._contig_cache[key]
         candidates = [variant.contig]
@@ -327,7 +330,7 @@ class RNAReadPhasingSource:
             candidates.append("chr" + variant.contig)
         # Under GRCh37, chrM/M is hg19's mitochondrion and MT/chrMT the rCRS:
         # different sequences, offset from each other, never aliases (#707).
-        if not _is_grch37(getattr(variant, "reference_name", None)):
+        if not _is_grch37(assembly):
             if variant.contig == "MT":
                 candidates.extend(["M", "chrM"])
             elif variant.contig in ("M", "chrM"):

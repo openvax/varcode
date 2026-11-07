@@ -253,3 +253,31 @@ def test_required_columns_differing_only_in_case_are_found_anywhere(tmp_path):
         load_maf(maf)
     variant, = load_maf(maf, raise_on_error=False)
     assert variant.contig == "7"
+
+
+def test_numeric_builds_and_chromosomes_survive_an_empty_cell(tmp_path, caplog):
+    # TCGA MAFs write build 37; one empty cell makes pandas read 37.0, and
+    # chromosome 7 as 7.0. Mixed "37"/"GRCh37" columns are strings.
+    from varcode.maf import MAF_COLUMN_NAMES
+
+    rows = [_maf_row("37", "7", "140453136", "A", "T"), _maf_row("37", "7", "140453137", "C", "G"),
+            _maf_row("", "", "140453138", "T", "A")]
+    maf = _write_maf(tmp_path / "tcga.maf", MAF_COLUMN_NAMES, rows)
+    with pytest.raises(ValueError, match="has no NCBI_Build, Chromosome"):
+        load_maf(maf)
+    variants = load_maf(maf, raise_on_error=False)
+    assert [(v.contig, v.start, v.reference_name) for v in variants] == [
+        ("7", 140453136, "GRCh37"), ("7", 140453137, "GRCh37")]
+    rows[2] = _maf_row("GRCh37", "7", "140453138", "T", "A")
+    assert len(load_maf(_write_maf(tmp_path / "mixed.maf", MAF_COLUMN_NAMES, rows))) == 3
+
+
+def test_an_unrecognised_build_fails_the_file_once(tmp_path):
+    from varcode.maf import MAF_COLUMN_NAMES
+
+    maf = _write_maf(tmp_path / "future.maf", MAF_COLUMN_NAMES,
+                     [_maf_row("GRCh99", "7", str(140453136 + i), "A", "T") for i in range(3)])
+    for raise_on_error in (True, False):
+        with pytest.raises(ValueError, match="GRCh99"):
+            load_maf(maf, raise_on_error=raise_on_error)
+

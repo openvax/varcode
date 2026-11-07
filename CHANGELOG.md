@@ -10,24 +10,30 @@ Behaviour change: hg19 `chrM` variants are no longer annotated as rCRS `MT`.
   (hg19 chrM:12995 is rCRS MT:12994). Renaming annotated other bases, caught
   only when the base at the shifted position differed from the variant's ref.
   - This applies to `Variant`, `load_vcf`, `load_maf`, the CLI, breakend mates
-    and the ORF and RNA-phasing contig matching. RNA phasing no longer reads
-    an hg19 BAM's `chrM` for a GRCh37 `MT` variant, or the reverse.
-  - Annotating such a variant, or a breakend whose mate is on it (previously
-    called intergenic), raises `InvalidContigError` saying why. In collections
-    it is a `Failure` with the usual summary warning. If your `chrM` already is
-    the rCRS, as in GENCODE's GRCh37, rename it `MT`.
-  - Structural-variant JSON written by earlier versions stored such a mate as
-    `MT`; reloading it now raises, since the mate contradicts the ALT.
+    and the ORF contig matching.
+  - RNA phasing no longer reads an hg19 BAM's `chrM` for a GRCh37 `MT`
+    variant, or the reverse; its BAM contig cache is now per build.
+  - Annotating such a variant raises `InvalidContigError` saying why; in
+    collections it is a `Failure` with the usual summary warning. If your
+    `chrM` already is the rCRS, as in GENCODE's GRCh37, rename it `MT`.
+  - A breakend whose mate is on hg19's `chrM` keeps its own side's genes and
+    transcripts, but its effects fail the same way instead of calling the
+    partner intergenic. In collection `effects()` it is a `Failure` with a
+    warning that names it, instead of failing the call. A genome that really
+    has a `chrM` contig is unaffected.
+  - Structural-variant JSON written by 11.7 stored such a mate as `MT`; it
+    now loads with the mate the ALT names, `chrM`.
   - hg38's `chrM` and the rCRS name `chrMT` still become `MT`.
     `ContigResolver` is unchanged: it matches spellings, not sequences, as
-    documented. The osteosarc hg19 `MT_ND5` target now fails this way instead
-    of with `ReferenceMismatchError`.
+    documented.
+  - The osteosarc hg19 `MT_ND5` target now fails with `InvalidContigError`
+    instead of `ReferenceMismatchError`.
 - `gene_counts()`, `groupby_gene()`, `groupby_gene_name()`,
-  `groupby_gene_id()` and the transcript/gene expression filters now follow
-  `effects()`'s missing-contig policy: a variant on a contig absent from the
-  annotation overlaps no genes and is named in one warning, instead of the
-  whole call raising `InvalidContigError`. hg19 VCFs often have `chrM` calls,
-  which would otherwise break these calls.
+  `groupby_gene_id()`, `detailed_string()` and the transcript/gene expression
+  filters now follow `effects()`'s missing-contig policy. A variant on a contig
+  absent from the annotation overlaps no genes and is named in one warning,
+  instead of the whole call raising `InvalidContigError`. hg19 VCFs often have
+  `chrM` calls, which would otherwise break these calls.
 - `load_maf` converts UCSC contig names to Ensembl's, as `load_vcf` and the
   CLI's `--variant` already did (#680). GDC GRCh38 MAFs write `chr7` and
   `chrM`; those variants kept the UCSC names and failed annotation with
@@ -45,13 +51,17 @@ Behaviour change: hg19 `chrM` variants are no longer annotated as rCRS `MT`.
   a pandas `Index` repr.
 - A missing required column always raises `ValueError`, in both `load_maf`
   and `load_maf_dataframe` (#708). With `raise_on_error=False`, `load_maf`
-  used to log a warning and then crash with `AttributeError`.
-- With `raise_on_error=False`, `load_maf` now skips, with a warning, every row
-  it can't read as a variant: an empty build, contig, position or reference
-  allele, no tumor allele that differs from the reference, or an invalid
-  allele or build. Some of these used to abort the whole load. Required
-  columns that differ only in case are found wherever they are, not only in
-  their spec position.
+  used to log a warning and then crash with `AttributeError`. So does an
+  unrecognised `NCBI_Build`, once for the file.
+- With `raise_on_error=False`, `load_maf` skips with a warning each row that
+  has an empty build, contig, position or reference allele, no tumor allele
+  that differs from the reference, or an invalid allele. Several of these
+  used to abort the whole load.
+- Numeric `NCBI_Build` and `Chromosome` values read the same whether pandas
+  sees them as integers, floats (as it does when a column has an empty cell:
+  `37.0`, `7.0`) or strings (`"37"` beside `"GRCh37"`). Required columns that
+  differ only in case are found wherever they are, not only in their spec
+  position.
 
 ## v11.7.1
 

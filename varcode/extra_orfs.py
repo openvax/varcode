@@ -18,12 +18,18 @@ def _span(record):
         positions.extend(record.initiation_context.genomic_positions)
     if not positions or record.contig is None:
         return None
-    return _contig(record.contig), min(positions) - 6, max(positions) + 6
+    return (_contig(record.contig, getattr(record, "genome_build", None)),
+            min(positions) - 6, max(positions) + 6)
+
+
+def _variant_contig(variant):
+    # With the build, so hg19's chrM never pairs with an MT ORF (#707).
+    return _contig(variant.contig, getattr(variant.genome, "assembly", variant.reference_name))
 
 
 def _overlaps(variant, record):
     contig, start, end = _span(record)
-    return _contig(variant.contig) == contig and variant.start <= end and variant.end >= start
+    return _variant_contig(variant) == contig and variant.start <= end and variant.end >= start
 
 
 class _SpanIndex:
@@ -45,7 +51,7 @@ class _SpanIndex:
             self._contigs[contig] = ([item[0] for item in items], max(item[1] - item[0] for item in items), items)
 
     def overlapping(self, variant):
-        found = self._contigs.get(_contig(variant.contig))
+        found = self._contigs.get(_variant_contig(variant))
         if found is None:
             return list(self._unmapped)
         starts, widest, items = found

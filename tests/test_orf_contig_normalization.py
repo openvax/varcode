@@ -83,3 +83,13 @@ def test_orf_contigs_never_pair_hg19_chrm_with_rcrs_mt(contig, reference_name, e
     # hg19's chrM is not the rCRS that Ensembl names MT (#707).
     from varcode.orf import _contig
     assert _contig(contig, reference_name) == expected
+
+
+def test_extra_orf_spans_compare_contigs_with_their_builds():
+    from types import SimpleNamespace
+    from varcode.extra_orfs import _overlaps
+
+    record = SimpleNamespace(contig="MT", genome_build="GRCh37",
+                             coding_blocks=[(12900, 13100)], initiation_context=None)
+    assert _overlaps(Variant("MT", 12995, "A", "G", 75), record)
+    assert not _overlaps(Variant("chrM", 12995, "A", "G", "hg19"), record)

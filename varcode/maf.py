@@ -131,10 +131,22 @@ def load_maf_dataframe(
 
     return df
 
+def _integral(value):
+    """An integral float as an int: pandas reads a numeric column with an
+    empty cell as floats, so build 37 becomes 37.0 and chromosome 7 7.0."""
+    return int(value) if isinstance(value, float) and value.is_integer() else value
+
+
+def _reference_name(build):
+    """A MAF ``NCBI_Build`` value as a reference name: 37, 37.0 and "37" are B37."""
+    build = _integral(build)
+    return "B%d" % int(build) if isinstance(build, int) or str(build).isdigit() else str(build)
+
+
 def _row_variant(x, genomes):
     """The Variant in MAF row ``x``; ValueError if the row can't be read as one.
 
-    ``genomes`` caches the genome of each ``NCBI_Build`` value, since one MAF
+    ``genomes`` maps each ``NCBI_Build`` value to its genome, since one MAF
     can mix builds.
     """
     empty = [column for column in ("NCBI_Build", "Chromosome", "Start_Position", "Reference_Allele")
@@ -142,11 +154,6 @@ def _row_variant(x, genomes):
     if empty:
         raise ValueError("MAF row has no %s: %s" % (", ".join(empty), x))
     ref = x.Reference_Allele
-
-    ncbi_build = x.NCBI_Build
-    if ncbi_build not in genomes:
-        reference_name = "B%d" % ncbi_build if isinstance(ncbi_build, int) else str(ncbi_build)
-        genomes[ncbi_build], _ = infer_genome(reference_name)
 
     # The alt is the first tumor allele that differs from the reference.
     # An empty cell (NaN) is no allele, not the alt "nan".
@@ -159,7 +166,7 @@ def _row_variant(x, genomes):
     # names them "7" and "MT", as load_vcf converts them. Variant leaves
     # hg19's chrM alone, since it isn't Ensembl's MT (#707).
     return Variant(
-        x.Chromosome, x.Start_Position, str(ref), str(alts[0]), genomes[ncbi_build],
+        _integral(x.Chromosome), x.Start_Position, str(ref), str(alts[0]), genomes[x.NCBI_Build],
         convert_ucsc_contig_names=True)
 
 
@@ -201,8 +208,9 @@ def load_maf(
     raise_on_error : bool
         Raise ``ValueError`` for a row that can't be read as a variant (an
         empty build, contig, position or reference allele, no tumor allele
-        that differs from the reference, or an invalid allele or build), or
-        log a warning and skip it. A missing required column always raises.
+        that differs from the reference, or an invalid allele), or log a
+        warning and skip it. A missing required column or an unrecognised
+        ``NCBI_Build`` always raises.
 
     encoding : str, optional
         Encoding to use for UTF when reading MAF file.
@@ -222,7 +230,11 @@ def load_maf(
     if len(maf_df) == 0 and raise_on_error:
         raise ValueError("Empty MAF file %s" % path)
 
-    genomes: dict[str | int, EnsemblGenome | Genome] = {}
+    # An unrecognised build is a file-level error, raised once rather than
+    # skipped row by row (one MAF can mix builds).
+    genomes: dict[str | int | float, EnsemblGenome | Genome] = {
+        build: infer_genome(_reference_name(build))[0]
+        for build in maf_df.NCBI_Build.dropna().unique()}
     variants = []
     metadata = {}
     for _, x in maf_df.iterrows():
