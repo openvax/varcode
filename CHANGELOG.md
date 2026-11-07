@@ -31,6 +31,9 @@
   declared rCRS `chrM`); otherwise it is hg19's and holds only hg19 `chrM`
   variants. 11.8.0 never paired it with `MT` and always with an hg19 `chrM`
   variant, whatever its length.
+- The `test` dependency group includes `setuptools`, which
+  `tests/test_source_distribution.py` needs to build an sdist; a fresh
+  `uv venv` doesn't have it.
 
 ## v11.8.0
 
