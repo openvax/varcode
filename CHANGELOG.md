@@ -1,5 +1,17 @@
 # Change Log
 
+## v11.7.1
+
+- Tests only. The test that times annotation no longer fails on a heavily
+  loaded machine (#702). Its throughput budget was already on CPU time (#679),
+  but the guard on its whole subprocess was 120 s of wall-clock time, which a
+  healthy child exceeded at a load average of 166 and stopped a deploy. The
+  guard is now 120 s of the child's own CPU time (it normally uses about 7 s),
+  via a shared `run_with_cpu_limit` test helper. The CLI and reference-fixture
+  subprocess tests, which had 60 s and 30 s wall-clock timeouts, use it too. A
+  10-minute wall-clock backstop still stops a child that blocks without using
+  CPU, for example on the network.
+
 ## v11.7.0
 
 - `rna` is now the only extra. The empty `orf` and `uorf` extras are removed;
