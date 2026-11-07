@@ -31,34 +31,44 @@ def _is_grch37(reference_name: str | None) -> bool:
     return reference_name is not None and reference_name.strip().lower() in _GRCH37_NAMES
 
 
-def _is_hg19_mitochondrion(contig: str | int, reference_name: str | None) -> bool:
-    """True for ``chrM`` or ``M`` (any case) under GRCh37/hg19.
+def _is_hg19_mitochondrion(
+        contig: str | int, reference_name: str | None, chrm_is_rcrs: bool = False) -> bool:
+    """True for ``chrM`` or ``M`` (any case) under GRCh37/hg19, unless the
+    input declares its chrM to be the rCRS (``chrm_is_rcrs``, #710).
 
     hg19's chrM is NC_001807, not the rCRS (NC_012920) that Ensembl's GRCh37
     names MT, and its positions are offset from it: hg19 chrM:12995 is rCRS
     MT:12994. A variant there must not be renamed onto MT (#707). hg38's chrM
     is the rCRS, and ``chrMT`` is a chr-prefixed rCRS ``MT``.
     """
-    return _is_grch37(reference_name) and str(contig).upper() in ("CHRM", "M")
+    return (not chrm_is_rcrs and _is_grch37(reference_name)
+            and str(contig).upper() in ("CHRM", "M"))
+
+
+# The rCRS (NC_012920) is 16,569 bp; hg19's chrM (NC_001807) is 16,571 bp.
+_RCRS_LENGTH = 16569
 
 
 # Appended to errors about a GRCh37 chrM, which Ensembl's annotation lacks.
 _HG19_MITOCHONDRION_NOTE = (
     "hg19's chrM (NC_001807) is not the rCRS that Ensembl names MT, and its "
     "positions are offset from it; give rCRS positions on contig MT (if this "
-    "chrM is already the rCRS, as in GENCODE's GRCh37, rename it MT)")
+    "chrM is already the rCRS, as in GENCODE's GRCh37, pass chrm_is_rcrs=True; "
+    "load_vcf does when the VCF header gives chrM the rCRS length, 16569)")
 
 
 def _annotation_contig_name(
-        contig: str | int, reference_name: str | None, convert_ucsc: bool = True) -> str:
+        contig: str | int, reference_name: str | None, convert_ucsc: bool = True,
+        chrm_is_rcrs: bool = False) -> str:
     """The name of ``contig`` in Ensembl annotation of ``reference_name``.
 
     As :func:`normalize_contig_name`, except that hg19's mitochondrion has no
     Ensembl name, so UCSC conversion leaves it ``chrM`` rather than renaming
-    it onto the rCRS ``MT`` (#707). The public function, and so
-    :class:`ContigResolver`, only matches spellings and still pairs them.
+    it onto the rCRS ``MT`` (#707), unless ``chrm_is_rcrs`` says this chrM is
+    the rCRS (#710). The public function, and so :class:`ContigResolver`,
+    only matches spellings and still pairs them.
     """
-    if convert_ucsc and _is_hg19_mitochondrion(contig, reference_name):
+    if convert_ucsc and _is_hg19_mitochondrion(contig, reference_name, chrm_is_rcrs):
         return "chrM"
     return normalize_contig_name(contig, reference_name=reference_name, convert_ucsc=convert_ucsc)
 

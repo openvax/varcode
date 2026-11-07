@@ -22,10 +22,11 @@ from warnings import warn
 
 import pandas
 
+from .contigs import _RCRS_LENGTH, _is_grch37
 from .reference import infer_genome
 from .variant import Variant, variant_ascending_position_sort_key
 from .variant_collection import VariantCollection
-from .vcf_parsing import VCFHeader
+from .vcf_parsing import VCFHeader, _split_struct_fields
 
 
 logger = logging.getLogger(__name__)
@@ -52,6 +53,19 @@ def _is_symbolic_allele(alt):
     if alt == "*":
         return True
     return False
+
+
+def _declares_rcrs_chrm(header):
+    """Whether the header's ``##contig`` lines give chrM (or M) only the rCRS
+    length, as GENCODE's GRCh37 does; hg19's chrM is 16,571 bp (#710)."""
+    lengths = set()
+    for line in header.metadata.get("contig", ()):
+        line = line.strip()
+        if line.startswith("<") and line.endswith(">"):
+            fields = _split_struct_fields(line[1:-1])
+            if fields.get("ID", "").upper() in ("CHRM", "M"):
+                lengths.add(fields.get("length", "").strip())
+    return lengths == {str(_RCRS_LENGTH)}
 
 
 def load_vcf(
@@ -137,7 +151,10 @@ def load_vcf(
         for GRCh37 (e.g. "1"). By default this is set to True. If None, it
         also evaluates to True if the genome of the VCF is a UCSC reference.
         hg19's "chrM" stays "chrM": it is not the rCRS that Ensembl names MT,
-        so its variants can't be annotated (see :class:`Variant`).
+        so its variants can't be annotated (see :class:`Variant`). Under
+        GRCh37, a header that declares chrM at the rCRS length (16,569 bp, as
+        in GENCODE's GRCh37) marks it as the rCRS, so it becomes "MT"; each
+        variant then has ``chrm_is_rcrs`` set.
 
     genome_fasta : str, path-like, or FASTA object, optional
         Optionally attach a chromosome FASTA to the resolved genome
@@ -210,6 +227,10 @@ def load_vcf(
     # so variants retain both their reference identity and contig convention.
     original_genome = genome
     genome, genome_was_ucsc = infer_genome(genome)
+    chrm_is_rcrs = (_is_grch37(getattr(genome, "assembly", genome.reference_name))
+                    and _declares_rcrs_chrm(header))
+    if chrm_is_rcrs:
+        logger.info("%s declares chrM at the rCRS length; naming it MT", path)
     if genome_was_ucsc:
         genome = original_genome
 
@@ -240,6 +261,8 @@ def load_vcf(
         'normalize_contig_names': normalize_contig_names,
         'convert_ucsc_contig_names': convert_ucsc_contig_names,
     }
+    if chrm_is_rcrs:
+        variant_kwargs['chrm_is_rcrs'] = True
 
     variant_collection_kwargs = {
         'sort_key': sort_key,
@@ -419,6 +442,7 @@ def dataframes_to_variant_collection(
                             "normalize_contig_names", True),
                         convert_ucsc_contig_names=variant_kwargs.get(
                             "convert_ucsc_contig_names"),
+                        chrm_is_rcrs=variant_kwargs.get("chrm_is_rcrs", False),
                     )
                     if variant is None:
                         n_skipped_unparseable += 1

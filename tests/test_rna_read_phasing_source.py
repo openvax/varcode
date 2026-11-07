@@ -663,6 +663,30 @@ def test_bam_mitochondrion_is_matched_only_to_the_same_sequence(
         source.close()
 
 
+@pytest.mark.parametrize("length,expected", [
+    (16569, {"MT": "chrM", "declared": "chrM", "hg19": None}),  # GENCODE's GRCh37: the rCRS
+    (16571, {"MT": None, "declared": None, "hg19": "chrM"}),  # hg19's NC_001807
+])
+def test_a_grch37_bam_mitochondrion_is_told_apart_by_its_length(tmp_path, length, expected):
+    bam_path = tmp_path / "grch37.bam"
+    with pysam.AlignmentFile(bam_path, "wb", header={
+            "HD": {"VN": "1.6"}, "SQ": [{"SN": "chrM", "LN": length}]}):
+        pass
+    pysam.index(str(bam_path))
+    source = RNAReadPhasingSource(str(bam_path))
+    try:
+        # The header says which sequence the BAM's chrM is (#707, #710).
+        variants = {
+            "MT": Variant("MT", 12994, "G", "A", "GRCh37"),
+            "declared": Variant("chrM", 12994, "G", "A", "GRCh37",
+                                convert_ucsc_contig_names=True, chrm_is_rcrs=True),
+            "hg19": Variant("chrM", 12995, "G", "A", "GRCh37", convert_ucsc_contig_names=True),
+        }
+        assert {name: source._bam_contig(v) for name, v in variants.items()} == expected
+    finally:
+        source.close()
+
+
 def test_bam_contig_cache_is_per_build(tmp_path):
     bam_path = tmp_path / "hg19.bam"
     with pysam.AlignmentFile(bam_path, "wb", header={

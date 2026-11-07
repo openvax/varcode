@@ -228,6 +228,7 @@ def parse_symbolic_alt(
         genome=None,
         normalize_contig_names: bool = True,
         convert_ucsc_contig_names: Optional[bool] = None,
+        chrm_is_rcrs: bool = False,
 ) -> Optional[StructuralVariant]:
     """Parse a single symbolic or breakend ALT into a
     :class:`StructuralVariant`. Returns ``None`` if the ALT is not
@@ -239,10 +240,10 @@ def parse_symbolic_alt(
     them — the ALT shape alone is enough to distinguish symbolic
     from breakend from inline.
 
-    ``normalize_contig_names`` and ``convert_ucsc_contig_names`` mean
-    the same as for :class:`~varcode.Variant` and apply to both
-    ``contig`` and a breakend's mate contig. The VCF loader forwards
-    its own settings.
+    ``normalize_contig_names``, ``convert_ucsc_contig_names`` and
+    ``chrm_is_rcrs`` mean the same as for :class:`~varcode.Variant` and
+    apply to both ``contig`` and a breakend's mate contig. The VCF loader
+    forwards its own settings.
 
     Consumed INFO fields must have valid scalar types; CIPOS/CIEND must be
     ordered pairs for this ALT. Malformed values raise ValueError. A singleton
@@ -332,6 +333,7 @@ def parse_symbolic_alt(
             genome=genome,
             normalize_contig_names=normalize_contig_names,
             convert_ucsc_contig_names=convert_ucsc_contig_names,
+            chrm_is_rcrs=chrm_is_rcrs,
         )
 
     # Breakend: t[CHROM:POS[ etc. Four orientation shapes per §5.4.
@@ -371,6 +373,7 @@ def parse_symbolic_alt(
             genome=genome,
             normalize_contig_names=normalize_contig_names,
             convert_ucsc_contig_names=convert_ucsc_contig_names,
+            chrm_is_rcrs=chrm_is_rcrs,
         )
 
     # Single breakend: ``.ACGT`` / ``ACGT.``. There's no mate to point
@@ -394,6 +397,7 @@ def parse_symbolic_alt(
             genome=genome,
             normalize_contig_names=normalize_contig_names,
             convert_ucsc_contig_names=convert_ucsc_contig_names,
+            chrm_is_rcrs=chrm_is_rcrs,
         )
 
     # Spanning-deletion placeholder. VCF 4.2+ uses ``*`` to mean "this

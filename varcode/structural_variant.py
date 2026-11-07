@@ -265,8 +265,8 @@ class StructuralVariant(Variant):
         doesn't model (HOMLEN, SVMETHOD, MATEID, etc.). Kept as
         a Mapping so callers can pass whatever shape their caller
         produces.
-    genome, ensembl, normalize_contig_names, convert_ucsc_contig_names
-        Same meaning as :class:`Variant`.
+    genome, ensembl, normalize_contig_names, convert_ucsc_contig_names, chrm_is_rcrs
+        Same meaning as :class:`Variant`; they name ``mate_contig`` too.
     affected_start, affected_end : int, optional
         Inclusive affected-region coordinates. Defaults to ``start`` and
         ``end`` respectively. Primarily used for typed breakend pairs whose
@@ -322,7 +322,8 @@ class StructuralVariant(Variant):
             *,
             original_reference_name=None,
             original_genome_was_ucsc=None,
-            original_genome=None):
+            original_genome=None,
+            chrm_is_rcrs=False):
         if sv_type not in SV_TYPES:
             raise ValueError(
                 "Unknown sv_type %r (expected one of %s)"
@@ -347,7 +348,8 @@ class StructuralVariant(Variant):
             convert_ucsc_contig_names=convert_ucsc_contig_names,
             original_reference_name=original_reference_name,
             original_genome_was_ucsc=original_genome_was_ucsc,
-            original_genome=original_genome)
+            original_genome=original_genome,
+            chrm_is_rcrs=chrm_is_rcrs)
 
         # Override end position — base Variant ignores end for SNVs
         # but we need it as an explicit SV endpoint.
@@ -407,9 +409,9 @@ class StructuralVariant(Variant):
             raise ValueError(
                 "mate_contig=%r contradicts breakend ALT %r"
                 % (self.mate_contig, alt))
-        elif _annotation_contig_name(self.mate_contig, assembly) != (
-                _annotation_contig_name(contig, assembly)):
-            self.mate_contig = _annotation_contig_name(contig, assembly)
+        elif _annotation_contig_name(self.mate_contig, assembly, chrm_is_rcrs=self.chrm_is_rcrs) != (
+                _annotation_contig_name(contig, assembly, chrm_is_rcrs=self.chrm_is_rcrs)):
+            self.mate_contig = _annotation_contig_name(contig, assembly, chrm_is_rcrs=self.chrm_is_rcrs)
         for field, value in (
                 ("mate_start", start), ("mate_orientation", orientation)):
             given = getattr(self, field)
@@ -611,7 +613,7 @@ class StructuralVariant(Variant):
 
     def to_dict(self):
         """Constructor state and input labels, retaining every SV field."""
-        return dict(
+        state = dict(
             contig=self.original_contig,
             start=self.original_start,
             sv_type=self.sv_type,
@@ -633,3 +635,6 @@ class StructuralVariant(Variant):
             original_genome=(self.original_genome if isinstance(self.original_genome, (str, int)) else None),
             normalize_contig_names=self.normalize_contig_names,
             convert_ucsc_contig_names=self.convert_ucsc_contig_names)
+        if self.chrm_is_rcrs:
+            state["chrm_is_rcrs"] = True
+        return state

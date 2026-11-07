@@ -1,5 +1,37 @@
 # Change Log
 
+## v11.9.0
+
+- New effect `TranslocationToUnannotatedContig`, a subclass of
+  `TranslocationToIntergenic`, for a breakend whose mate is on a contig the
+  annotation lacks: a decoy, EBV, an unplaced or alt scaffold, or hg19's
+  `chrM` under GRCh37 (#709). Such mates were called intergenic, though
+  nothing showed that; a fusion there isn't ruled out. `partner_contig` names
+  the contig, and the effect ranks just above `TranslocationToIntergenic`.
+  Code that checks `isinstance(effect, TranslocationToIntergenic)` still
+  matches it, and reference completion keeps the subclass. Allowlists of exact
+  classes, such as vaxrank's native serialization, need to add it.
+  - A breakend with its mate on hg19's `chrM` now gets this effect on its own
+    side instead of failing with `InvalidContigError` (11.8.0). Collection
+    `effects()` no longer turns such a variant into a `Failure` or warns
+    about it.
+- `Variant` and `StructuralVariant` take `chrm_is_rcrs=True` for an input
+  whose `chrM` (or `M`) is the rCRS, as in GENCODE's GRCh37 (#710). Under
+  GRCh37, UCSC conversion then names it `MT`, as for hg38, instead of keeping
+  it as hg19's `chrM`. It is stored in JSON only when set.
+  - `load_vcf` sets it under GRCh37 when the header declares `chrM` at the
+    rCRS length (`##contig=<ID=chrM,length=16569>`). hg19's chrM is 16,571 bp
+    and stays refused, as does a `chrM` with no declared length. MAFs have no
+    such header.
+  - `variants_to_vcf` declares such a `chrM` at the rCRS length, so the VCF it
+    writes loads back as `MT`. `pair_breakends` and `left_align_indels` keep
+    the flag.
+- RNA phasing tells a GRCh37 BAM's `chrM` (or `M`) apart by its header
+  length: at 16,569 bp it is the rCRS and holds `MT` variants (including a
+  declared rCRS `chrM`); otherwise it is hg19's and holds only hg19 `chrM`
+  variants. 11.8.0 never paired it with `MT` and always with an hg19 `chrM`
+  variant, whatever its length.
+
 ## v11.8.0
 
 Behaviour change: hg19 `chrM` variants are no longer annotated as rCRS `MT`.

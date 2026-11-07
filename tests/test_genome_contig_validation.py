@@ -1,10 +1,14 @@
 """Contig validation belongs to the annotation dataset, not its assembly name."""
 
+import warnings
+
 import pytest
 from pyensembl import Genome as AnnotationGenome, cached_release
 
 from varcode import EffectCollection, Genome, Variant, VariantCollection, StructuralVariant, load_vcf
-from varcode.effects import Failure
+from varcode.effects import Failure, TranslocationToIntergenic, TranslocationToUnannotatedContig
+from varcode.effects.effect_ordering import effect_priority
+from varcode.vcf_output import variants_to_vcf
 
 
 @pytest.fixture
@@ -144,22 +148,51 @@ def test_hg19_chrm_variants_fail_annotation_with_the_reason():
     assert isinstance(effects[0], Failure)
 
 
-def test_a_breakend_mate_on_hg19_chrm_fails_its_effects_not_its_own_side():
-    # Without the refusal, the mate's missing annotation read as intergenic,
-    # though it sits in MT-ND5 (#707). The BRAF side is still annotated.
+def test_a_breakend_mate_on_hg19_chrm_is_unannotated_not_intergenic():
+    # hg19's chrM has no Ensembl GRCh37 name (#707), so nothing shows the mate
+    # is intergenic, though it sits in MT-ND5. The BRAF side keeps its effect (#709).
     sv = StructuralVariant("chr7", 140453136, "BND", alt="G[chrM:12995[", ref="A", genome="hg19")
     assert sv.mate_contig == "chrM"
-    assert [gene.name for gene in sv.genes] == ["BRAF"]
-    with pytest.raises(ValueError, match="Breakend mate on contig 'chrM'.*NC_001807"):
-        sv.effects()
-    assert {type(effect).__name__ for effect in sv.effects(raise_on_error=False)} == {
-        "Failure", "NoncodingTranscript"}
+    effects = sv.effects()
+    assert {type(effect).__name__ for effect in effects} == {
+        "TranslocationToUnannotatedContig", "NoncodingTranscript"}
+    top = effects.top_priority_effect()
+    assert (type(top), top.gene_name, top.partner_contig) == (
+        TranslocationToUnannotatedContig, "BRAF", "chrM")
     variants = VariantCollection([sv])
-    with pytest.warns(UserWarning, match=r"1 variants need contigs absent.*chrM:12995"):
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
         effects = variants.effects()
-    assert [type(effect) for effect in effects] == [Failure]
+    assert not [w for w in caught if "absent from the annotation" in str(w.message)]
+    assert not any(isinstance(effect, Failure) for effect in effects)
+    assert effects.top_priority_effect().partner_contig == "chrM"
     assert list(variants.to_dataframe().gene_name) == ["BRAF"]
     assert variants.gene_counts() == {"BRAF": 1}
+
+
+@pytest.mark.parametrize("genome,position,alt,expected", [
+    # A decoy and EBV, which Ensembl doesn't annotate (#709).
+    (75, 140453136, "G[hs37d5:1000[", "hs37d5"),
+    (81, 140753336, "G[chrEBV:1000[", "chrEBV"),
+    # An annotated contig, intergenic at the mate.
+    (75, 140453136, "G[1:1000[", None),
+])
+def test_a_mate_on_an_unannotated_contig_is_not_called_intergenic(genome, position, alt, expected):
+    sv = StructuralVariant("7", position, "BND", alt=alt, ref="A", genome=genome)
+    braf = [effect for effect in sv.effects() if isinstance(effect, TranslocationToIntergenic)]
+    assert braf and {effect.gene_name for effect in braf} == {"BRAF"}
+    assert {getattr(effect, "partner_contig", None) for effect in braf} == {expected}
+    if expected is None:
+        assert {type(effect) for effect in braf} == {TranslocationToIntergenic}
+        return
+    effect = braf[0]
+    # A fusion with an unknown gene there isn't ruled out.
+    intergenic = TranslocationToIntergenic(sv, effect.transcript)
+    assert effect_priority(effect) > effect_priority(intergenic)
+    clone = TranslocationToUnannotatedContig.from_json(effect.to_json())
+    assert (clone.partner_contig, clone.transcript) == (expected, effect.transcript)
+    restored = EffectCollection.from_json(EffectCollection([effect]).to_json())
+    assert restored[0].partner_contig == expected
 
 
 def test_sv_json_from_11_7_keeps_the_alts_hg19_chrm_mate():
@@ -191,6 +224,70 @@ def test_gene_grouping_skips_hg19_chrm_variants_with_one_warning():
     expression = {transcript.id: 10.0 for transcript in braf.transcripts}
     with pytest.warns(UserWarning, match="1 variants? on contigs absent"):
         assert list(variants.filter_by_transcript_expression(expression)) == [braf]
+
+
+def test_a_chrm_declared_to_be_the_rcrs_is_named_mt():
+    # GENCODE's GRCh37 names the rCRS chrM; rCRS MT:12994 is MT-ND5 (#710).
+    variant = Variant("chrM", 12994, "G", "A", genome=75,
+                      convert_ucsc_contig_names=True, chrm_is_rcrs=True)
+    assert variant.contig == "MT"
+    assert variant.effects().top_priority_effect().short_description == "p.A220T"
+    assert Variant.from_json(variant.to_json()).contig == "MT"
+    assert "chrm_is_rcrs" not in Variant("chrM", 12994, "G", "A", genome=75).to_dict()
+    sv = StructuralVariant("chr7", 140453136, "BND", alt="A[chrM:12994[", ref="A", genome=75,
+                           convert_ucsc_contig_names=True, chrm_is_rcrs=True)
+    assert sv.mate_contig == "MT"
+    assert StructuralVariant.from_json(sv.to_json()).mate_contig == "MT"
+    assert not any(isinstance(effect, TranslocationToUnannotatedContig) for effect in sv.effects())
+
+
+@pytest.mark.parametrize("length,genome,expected", [
+    ("16569", "GRCh37", "MT"),  # GENCODE's GRCh37: the rCRS (#710)
+    ("16569", "hg19", "MT"),
+    ("16571", "GRCh37", "chrM"),  # hg19's NC_001807 (#707)
+    (None, "GRCh37", "chrM"),  # no evidence either way
+    ("16569", "GRCh38", "MT"),  # hg38's chrM is the rCRS anyway
+])
+def test_load_vcf_tells_the_mitochondrion_by_its_declared_length(tmp_path, length, genome, expected):
+    path = tmp_path / "mito.vcf"
+    path.write_text(
+        "##fileformat=VCFv4.2\n"
+        "##contig=<ID=chr7,length=159138663>\n"
+        "##contig=<ID=chrM%s>\n"
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
+        "chrM\t12994\t.\tG\tA\t.\tPASS\t.\n"
+        "chr7\t140453136\tbnd1\tA\tA[chrM:12994[\t.\tPASS\tSVTYPE=BND\n"
+        % ("" if length is None else ",length=" + length))
+    variants = load_vcf(str(path), genome=genome, parse_structural_variants=True)
+    small = next(v for v in variants if not isinstance(v, StructuralVariant))
+    sv = next(v for v in variants if isinstance(v, StructuralVariant))
+    assert (small.contig, sv.mate_contig) == (expected, expected)
+    declared = expected == "MT" and genome != "GRCh38"
+    assert small.chrm_is_rcrs is sv.chrm_is_rcrs is declared
+    if declared:
+        effects = VariantCollection([small]).effects()
+        assert [e.short_description for e in effects if e.gene_name == "MT-ND5"] == ["p.A220T"]
+        # Writing it out declares the rCRS length, so it reads back as MT.
+        written = tmp_path / "written.vcf"
+        with written.open("w") as out:
+            variants_to_vcf([small], variants.source_to_metadata_dict[str(path)], out=out)
+        assert "##contig=<ID=chrM,length=16569>" in written.read_text()
+        assert [v.contig for v in load_vcf(str(written), genome=genome)] == ["MT"]
+
+
+def test_paired_breakends_keep_a_declared_rcrs_chrm(tmp_path):
+    from varcode.transforms import pair_breakends
+    path = tmp_path / "pair.vcf"
+    path.write_text(
+        "##fileformat=VCFv4.2\n"
+        "##contig=<ID=chr7,length=159138663>\n"
+        "##contig=<ID=chrM,length=16569>\n"
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
+        "chr7\t140453136\tbnd1\tA\tA[chrM:12994[\t.\tPASS\tSVTYPE=BND;MATEID=bnd2\n"
+        "chrM\t12994\tbnd2\tG\t]chr7:140453136]G\t.\tPASS\tSVTYPE=BND;MATEID=bnd1\n")
+    combined, = pair_breakends(load_vcf(str(path), genome="GRCh37", parse_structural_variants=True))
+    assert combined.chrm_is_rcrs
+    assert {combined.contig, combined.mate_contig} == {"7", "MT"}
 
 
 def test_mapping_does_not_substitute_a_different_accession_version(make_genome):

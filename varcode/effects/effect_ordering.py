@@ -50,6 +50,7 @@ from .effect_classes import (
     Substitution,
     ThreePrimeUTR,
     TranslocationToIntergenic,
+    TranslocationToUnannotatedContig,
     Unresolved,
 )
 from ..common import apply_groupby
@@ -105,6 +106,9 @@ transcript_effect_priority_list = [
     # ComplexSubstitution and below stop-codon / frame-shifting
     # coding effects (#340).
     TranslocationToIntergenic,
+    # A mate on a contig the annotation lacks could still fuse with an
+    # unknown gene there, so rank it just above an intergenic mate (#709).
+    TranslocationToUnannotatedContig,
     # mutation which changes the start codon from e.g. ATG > TTG that can
     # be interpreted as silent but also has some chance of causing an
     # alternative ORF

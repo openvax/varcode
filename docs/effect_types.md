@@ -13,7 +13,7 @@ from the source docstrings; this is reference material, not a required first rea
 | [Coding changes](#coding-effects) | `Substitution`, `Insertion`, `Deletion`, `FrameShift`, `PrematureStop`, `Silent` |
 | [Noncoding and untranslated regions](#noncoding-effects) | `Intronic`, `FivePrimeUTR`, `ThreePrimeUTR`, `NoncodingTranscript`, `Intergenic` |
 | [Splice effects](#splice-effects) | `SpliceOutcomeSet`, with `NormalSplicing`, `ExonSkipping`, `IntronRetention`, or cryptic-site candidates |
-| [Structural effects](#structural-effects) | `StructuralVariantEffect`, `GeneFusion`, `TranslocationToIntergenic` |
+| [Structural effects](#structural-effects) | `StructuralVariantEffect`, `GeneFusion`, `TranslocationToIntergenic`, `TranslocationToUnannotatedContig` |
 | [Linked variants and phase](#haplotype-effects) | `HaplotypeEffect`, `PhaseCandidateSet` |
 | [Inherited allele overlap](germline.md#loss-of-heterozygosity-loh) | `GermlineAlleleOverlap`: no new allele sequence; LOH unassessed |
 | [Unknown results and failures](#unknown-results) | `Unresolved`, `HypothesisLimit`, `IncompleteTranscript`, `Failure` |
@@ -210,6 +210,8 @@ Legacy event-type classes remain importable; the default annotator emits
 ::: varcode.effects.effect_classes.GeneFusion
 
 ::: varcode.effects.effect_classes.TranslocationToIntergenic
+
+::: varcode.effects.effect_classes.TranslocationToUnannotatedContig
 
 ## Haplotype effects
 
