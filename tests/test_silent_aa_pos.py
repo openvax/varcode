@@ -45,7 +45,7 @@ def _effect(ref, alt, start=99772782):
         alt=alt,
         genome="GRCm38",
     )
-    transcript = variant.ensembl.transcript_by_id(TRANSCRIPT_ID)
+    transcript = variant.genome.transcript_by_id(TRANSCRIPT_ID)
     return variant.effect_on_transcript(transcript)
 
 

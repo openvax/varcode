@@ -34,7 +34,7 @@ def test_silent_short_description_uses_hgvs_format():
         alt="G",
         genome="GRCm38",
     )
-    transcript = variant.ensembl.transcript_by_id(TRANSCRIPT_ID)
+    transcript = variant.genome.transcript_by_id(TRANSCRIPT_ID)
     effect = variant.effect_on_transcript(transcript)
     assert effect.__class__ is Silent
     # HGVS: p.{aa_ref}{1-indexed pos}=
@@ -51,7 +51,7 @@ def test_silent_short_description_for_multi_codon_synonymous():
         alt="GT",
         genome="GRCm38",
     )
-    transcript = variant.ensembl.transcript_by_id(TRANSCRIPT_ID)
+    transcript = variant.genome.transcript_by_id(TRANSCRIPT_ID)
     effect = variant.effect_on_transcript(transcript)
     assert effect.__class__ is Silent
     # aa_ref is 'RL', 1-indexed pos is 6.

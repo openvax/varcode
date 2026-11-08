@@ -66,7 +66,7 @@ original attribution.
 
 ## Rebuilding
 
-`notes/build_native_reference_fixtures.py` requires Biopython, openpyxl, PyEnsembl
+`scripts/build_native_reference_fixtures.py` requires Biopython, openpyxl, PyEnsembl
 2.32.3+, ORFdata 0.43+, installed mouse 115 and dog 2020_10 references, and the
 pinned CHM13 installation. It never imports Varcode. Supply downloaded originals:
 
@@ -83,7 +83,7 @@ pinned CHM13 installation. It never imports Varcode. Supply downloaded originals
 - `dog-mito-NC_002008.4.gb`: NCBI EFetch `rettype=gbwithparts` for NC_002008.4.
 
 ```sh
-python notes/build_native_reference_fixtures.py \
+python scripts/build_native_reference_fixtures.py \
   --sources /path/to/public-inputs --chm13-cache /path/to/orfdata-cache \
   --chm13-dna /path/to/chm13v2.0.fa.gz --dna-contig-prefix chr
 ```

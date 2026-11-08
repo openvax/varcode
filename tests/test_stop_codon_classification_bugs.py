@@ -57,7 +57,7 @@ def test_250_snv_in_stop_codon_with_immediate_utr_stop_is_stoploss():
         alt="G",
         genome="GRCm38",
     )
-    transcript = variant.ensembl.transcript_by_id("ENSMUST00000232637")
+    transcript = variant.genome.transcript_by_id("ENSMUST00000232637")
     effect = variant.effect_on_transcript(transcript)
     assert effect.__class__ is StopLoss, \
         "Expected StopLoss, got %s" % effect.__class__.__name__
@@ -75,7 +75,7 @@ def test_250b_second_snv_in_stop_codon_with_immediate_utr_stop_is_stoploss():
         alt="T",
         genome="GRCm38",
     )
-    transcript = variant.ensembl.transcript_by_id("ENSMUST00000061695")
+    transcript = variant.genome.transcript_by_id("ENSMUST00000061695")
     effect = variant.effect_on_transcript(transcript)
     assert effect.__class__ is StopLoss, \
         "Expected StopLoss, got %s" % effect.__class__.__name__
@@ -97,7 +97,7 @@ def test_205_stop_codon_snv_is_stoploss_when_utr_has_consecutive_stops():
         alt="C",
         genome="GRCm38",
     )
-    transcript = variant.ensembl.transcript_by_id("ENSMUST00000006221")
+    transcript = variant.genome.transcript_by_id("ENSMUST00000006221")
     effect = variant.effect_on_transcript(transcript)
     assert effect.__class__ is StopLoss, \
         "Expected StopLoss, got %s" % effect.__class__.__name__
@@ -123,7 +123,7 @@ def test_201_synonymous_insertion_before_stop_is_silent():
         alt="CATATAA",
         genome="GRCm38",
     )
-    transcript = variant.ensembl.transcript_by_id("ENSMUST00000086738")
+    transcript = variant.genome.transcript_by_id("ENSMUST00000086738")
     effect = variant.effect_on_transcript(transcript)
     assert effect.__class__ is Silent, \
         "Expected Silent, got %s (%s)" % (
@@ -172,7 +172,7 @@ def _coding_effect(effect):
 
 def test_394_stop_deletion_with_empty_3p_utr_is_deletion():
     variant = _mapk3_stop_deletion_variant()
-    transcript = variant.ensembl.transcript_by_id("ENST00000395199")
+    transcript = variant.genome.transcript_by_id("ENST00000395199")
     # precondition for the bug: this transcript has no 3' UTR sequence
     assert transcript.three_prime_utr_sequence == ""
 
@@ -203,7 +203,7 @@ def test_394_same_deletion_with_nonempty_3p_utr_stays_stoploss():
     # stop-loss reads through and adds residues, so this must remain a
     # StopLoss (guards against over-broadening the Deletion fallback).
     variant = _mapk3_stop_deletion_variant()
-    transcript = variant.ensembl.transcript_by_id("ENST00000403394")
+    transcript = variant.genome.transcript_by_id("ENST00000403394")
     assert len(transcript.three_prime_utr_sequence) > 0
 
     effect = _coding_effect(variant.effect_on_transcript(transcript))
@@ -220,7 +220,7 @@ def test_394_predict_in_frame_empty_3p_utr_is_deletion_unit():
     # predict_in_frame_coding_effect: deleting the final residue codon plus
     # the stop codon (in-frame) on a transcript with no 3' UTR.
     variant = _mapk3_stop_deletion_variant()
-    transcript = variant.ensembl.transcript_by_id("ENST00000395199")
+    transcript = variant.genome.transcript_by_id("ENST00000395199")
     assert transcript.three_prime_utr_sequence == ""
 
     start = transcript.first_start_codon_spliced_offset
@@ -265,7 +265,7 @@ def test_394_default_annotator_agrees_on_deletion():
         alt="",
         genome="GRCh37",
     )
-    transcript = variant.ensembl.transcript_by_id("ENST00000395199")
+    transcript = variant.genome.transcript_by_id("ENST00000395199")
     assert transcript.three_prime_utr_sequence == ""
 
     effect = _coding_effect(variant.effect_on_transcript(transcript))
@@ -291,7 +291,7 @@ def test_394_genuine_premature_stop_still_classified_as_premature_stop():
         alt="CTA",
         genome="GRCh38",
     )
-    transcript = variant.ensembl.transcript_by_id("ENST00000357654")
+    transcript = variant.genome.transcript_by_id("ENST00000357654")
     effect = _coding_effect(variant.effect_on_transcript(transcript))
     assert effect.__class__ is PrematureStop, \
         "Expected PrematureStop, got %s (%s)" % (

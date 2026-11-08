@@ -13,7 +13,7 @@
 """Offline NCBI genetic codes and species/compartment assignments.
 
 The packaged snapshot records its NCBI source hashes. Refresh it with
-``notes/build_genetic_code_data.py``. Context-dependent stop/sense codes
+``scripts/build_genetic_code_data.py``. Context-dependent stop/sense codes
 remain unsupported rather than silently losing their recoding semantics.
 """
 

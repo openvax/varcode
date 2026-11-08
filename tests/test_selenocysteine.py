@@ -40,7 +40,7 @@ GPX1_TRANSCRIPT_ID = "ENST00000419783"
 
 
 def _gpx1_variant(contig_pos, ref, alt):
-    return Variant("3", contig_pos, ref, alt, ensembl=ensembl_grch38)
+    return Variant("3", contig_pos, ref, alt, genome=ensembl_grch38)
 
 
 def test_substitution_at_selenocysteine_reports_U_not_stop():

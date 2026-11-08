@@ -286,11 +286,11 @@ def load_vcf(
 
 def load_vcf_fast(*args, **kwargs):
     """
-    Same as load_vcf, keeping this name for backwards compatibility.
+    Deprecated alias for :func:`load_vcf`; warns with ``DeprecationWarning``.
     """
     warn(
         "load_vcf_fast is deprecated and has been renamed to load_vcf",
-        DeprecationWarning)
+        DeprecationWarning, stacklevel=2)
     return load_vcf(*args, **kwargs)
 
 

@@ -12,7 +12,7 @@
 
 from .common import eq_
 
-from varcode import load_vcf, load_vcf_fast, Variant
+from varcode import load_vcf, Variant
 from varcode.effects import Substitution
 from pyensembl import Genome, EnsemblRelease
 from .data import data_path
@@ -60,7 +60,7 @@ def test_specific_variant_mouse_with_explicit_urls():
         start=101177240,
         ref="G",
         alt="T",
-        ensembl=explicit_url_genome)
+        genome=explicit_url_genome)
     effects = variant.effects()
     eq_(len(effects), 2)
     substitution_effects = [
@@ -89,7 +89,7 @@ def test_specific_variant_mouse_with_ensembl_genome():
         start=101177240,
         ref="G",
         alt="T",
-        ensembl=ensembl_mouse_genome)
+        genome=ensembl_mouse_genome)
     effects = variant.effects()
     eq_(len(effects), 2)
     substitution_effects = [

@@ -1,6 +1,6 @@
 """Build the offline genetic-code snapshot from NCBI gc.prt and Taxonomy XML.
 
-Usage: python notes/build_genetic_code_data.py gc.prt taxonomy.xml output.json
+Usage: python scripts/build_genetic_code_data.py gc.prt taxonomy.xml output.json
 Sources: https://ftp.ncbi.nlm.nih.gov/entrez/misc/data/gc.prt
 and EUtils efetch.fcgi?db=taxonomy&id=<taxon IDs>&retmode=xml.
 No network access at build or annotation time; review refreshed data in a PR.

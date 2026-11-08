@@ -40,30 +40,15 @@ parser.add_argument(
     action="store_false",
     default=True)
 
-parser.add_argument(
-    "--pyvcf",
-    help="use pyvcf implementation",
-    action="store_true",
-    default=False)
-
 def run():
     args = parser.parse_args()
 
-    extra_args = {}
-    if not args.info_field:
-        extra_args["include_info"] = False
-
     start = time.time()
 
-    if args.pyvcf:
-        result = varcode.load_vcf(
-            args.path,
-            allow_extended_nucleotides=True)
-    else:
-        result = varcode.load_vcf_fast(
-            args.path,
-            allow_extended_nucleotides=True,
-            **extra_args)
+    result = varcode.load_vcf(
+        args.path,
+        allow_extended_nucleotides=True,
+        include_info=args.info_field)
 
     print("Loaded %d variants in %0.3f sec. " % (
         len(result), time.time() - start))

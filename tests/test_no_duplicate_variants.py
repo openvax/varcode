@@ -15,9 +15,9 @@ from varcode import Variant, VariantCollection
 
 def test_drop_duplicates():
     ensembl = EnsemblRelease(78)
-    v1 = Variant("1", 3000, "A", "G", ensembl=ensembl)
-    v1_copy = Variant("1", 3000, "A", "G", ensembl=ensembl)
-    v2 = Variant("2", 10, "G", "T", ensembl=ensembl)
+    v1 = Variant("1", 3000, "A", "G", genome=ensembl)
+    v1_copy = Variant("1", 3000, "A", "G", genome=ensembl)
+    v2 = Variant("2", 10, "G", "T", genome=ensembl)
     collection_without_duplicates = VariantCollection(
         variants=[v1, v1, v1_copy, v2])
     assert len(collection_without_duplicates) == 2

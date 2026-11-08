@@ -35,7 +35,7 @@ def test_issue167_insertion_of_stop_codon():
     CHROM  POS ID  REF ALT QUAL    FILTER  INFO    FORMAT
     chr1    99772782    .   ACTG    ATGA    5000    .   .   .
     """
-    variant = Variant("chr1", 99772782, "A", "ATGA", ensembl="mm10")
+    variant = Variant("chr1", 99772782, "A", "ATGA", genome="mm10")
     expect_effect(
         variant=variant,
         effect_class=PrematureStop,
@@ -162,7 +162,7 @@ def test_issue172_insertion_after_stop_codon():
     #CHROM  POS ID  REF ALT QUAL    FILTER  INFO    FORMAT
     chr1    100484701   .   A   ACAGCAG 5000    .   .   .
     """
-    variant = Variant("chr1", 100484701, "A", "ACAGCAG", ensembl="mm10")
+    variant = Variant("chr1", 100484701, "A", "ACAGCAG", genome="mm10")
     expect_effect(
         variant=variant,
         effect_class=Silent)
