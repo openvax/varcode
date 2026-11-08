@@ -132,6 +132,30 @@ def test_alt_indexes_phase_and_chr_aliases_do_not_define_identity(tmp_path):
     assert compare_samples(a, b)["germline"]["genotype_concordance"] == 1
 
 
+def _mitochondrial_tumor(tmp_path, name, chrom, reference, metadata=""):
+    rows = [[chrom, 100 + 10 * i, ".", "A", "G", ".", "PASS", ".", "GT:DP:GQ", "0/1:30:60"]
+            for i in range(10)]
+    path = _vcf(tmp_path, name, ["T"], rows, reference=reference, metadata=metadata)
+    return load_vcf_samples(path, kind="somatic")[0]
+
+
+@pytest.mark.parametrize("chrom,reference,metadata,shared", [
+    # hg38's chrM is the rCRS that GRCh38 names MT (#691).
+    ("chrM", "hg38", "", 10),
+    ("chrMT", "GRCh38", "", 10),
+    # hg19's chrM (16,571 bp) is not the rCRS that GRCh37 names MT; positions differ.
+    ("chrM", "hg19", "", 0),
+    ("chrM", "hg19", "##contig=<ID=chrM,length=16571>\n", 0),
+    # A GRCh37 chrM declared at the rCRS length is MT, as load_vcf reads it.
+    ("chrM", "GRCh37", "##contig=<ID=chrM,length=16569>\n", 10),
+])
+def test_mitochondrial_contig_names_follow_load_vcf(tmp_path, chrom, reference, metadata, shared):
+    build = "GRCh37" if reference in ("hg19", "GRCh37") else "GRCh38"
+    mt = _mitochondrial_tumor(tmp_path, "mt.vcf", "MT", build)
+    other = _mitochondrial_tumor(tmp_path, "other.vcf", chrom, reference, metadata)
+    assert compare_samples(mt, other)["somatic"]["shared_variants"] == shared
+
+
 def test_gvcf_blocks_and_unknown_alleles_are_not_imputed(tmp_path):
     rows = [_row(1, "0/1:30:60", alt="C,<NON_REF>"),
             _row(2, "0/2:30:60", alt="C,<NON_REF>"),
@@ -263,7 +287,8 @@ def test_sv_normalization_deduplicates_reciprocal_breakends(tmp_path):
     assert sample.qc["unsupported_or_imprecise_somatic_alleles"] == 2
 
 
-@pytest.mark.parametrize("call,fmt", [("0/2", "GT"), ("9/.", "GT"), ("0/1:NaN", "GT:DP"),
+@pytest.mark.parametrize("call,fmt", [("0/2", "GT"), ("9/.", "GT"), ("-1/1", "GT"), ("0|1/1", "GT"),
+                                      ("0/1:NaN", "GT:DP"),
                                       ("0/1:-1", "GT:DP"), ("10,2,3", "AD"),
                                       ("1.2", "AF"), ("0/1:30:extra", "GT:DP")])
 def test_malformed_evidence_is_an_error_with_line_number(tmp_path, call, fmt):
@@ -284,6 +309,15 @@ def test_roles_builds_and_sample_selection_are_explicit(tmp_path):
     with pytest.raises(ValueError, match="Declare assembly"):
         load_vcf_samples(path)
     assert load_vcf_samples(path, assembly="hg38")[0].assembly == "GRCh38"
+    with pytest.raises(ValueError, match="Unsupported assembly"):
+        load_vcf_samples(path, assembly="NCBI36")
+    path = _vcf(tmp_path, "old-build.vcf", ["S"], [], reference="file:///refs/NCBI36.fa")
+    with pytest.raises(ValueError, match="unsupported: NCBI36"):
+        load_vcf_samples(path)
+    with pytest.raises(ValueError, match="contradicts"):
+        load_vcf_samples(path, assembly="GRCh37")
+    path = _vcf(tmp_path, "fasta.vcf", ["S"], [], reference="file:///refs/ucsc.hg19.fasta")
+    assert load_vcf_samples(path)[0].assembly == "GRCh37"
     path = _vcf(tmp_path, "duplicate.vcf", ["S", "S"], [])
     with pytest.raises(ValueError, match="unique sample"):
         load_vcf_samples(path)
