@@ -53,12 +53,24 @@ Use documented root imports for common operations. Topic modules expose
 additional specialized APIs. Names beginning with an underscore are internal;
 their signatures are not extension contracts.
 
-`genome=` is the canonical reference argument. The older `ensembl=` argument is
-retained for compatibility. `load_vcf_fast` is deprecated in favor of
-`load_vcf`. The old `realized` annotator names refer to the shared
-transcript-model implementation. The [uORF wrappers](api_orfs.md#upstream-orf-compatibility-api)
-retain their upstream-only defaults, so changing names alone can change which
-catalogue is used.
+`genome=` is the canonical reference argument. The old `realized` annotator
+names refer to the shared transcript-model implementation. The
+[uORF wrappers](api_orfs.md#upstream-orf-compatibility-api) retain their
+upstream-only defaults, so changing names alone can change which catalogue is
+used.
+
+### Deprecated names
+
+These names still work, and Varcode itself no longer uses them. They will be
+removed in the next major release.
+
+| Deprecated | Use instead | Warns now |
+|---|---|---|
+| `ensembl=` on `Variant`, `StructuralVariant` and `varcode.util.random_variants` | `genome=` | no |
+| `Variant.ensembl` | `Variant.genome` | no |
+| `StopLoss.extended_protein_sequence` | `aa_alt` | no |
+| `load_vcf_fast` | `load_vcf` | yes |
+| `detect_loh` | `detect_germline_overlap` for allele matching; `detect_loh` always returns `None` | yes |
 
 Variant positions and reference lookup helpers use one-based genomic
 coordinates. cDNA/protein offsets used for Python indexing are zero-based;

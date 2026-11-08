@@ -77,7 +77,7 @@ _PDIFF = ProteinDiffEffectAnnotator()
 
 
 def _annotate(variant, transcript_id, annotator):
-    transcript = variant.ensembl.transcript_by_id(transcript_id)
+    transcript = variant.genome.transcript_by_id(transcript_id)
     return annotator.annotate_on_transcript(variant, transcript)
 
 

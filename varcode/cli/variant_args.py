@@ -163,7 +163,7 @@ def parse_position(position):
 
 def download_and_install_reference_data(variant_collections):
     unique_genomes = {
-        variant.ensembl
+        variant.genome
         for variant_collection in variant_collections
         for variant in variant_collection
     }

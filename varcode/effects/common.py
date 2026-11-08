@@ -11,16 +11,6 @@
 # limitations under the License.
 
 
-
-
-def as_str(seq):
-    """Return ``seq`` as a plain ``str``, converting other string-like sequence types."""
-    if type(seq) is str:
-        return seq
-    else:
-        return str(seq)
-
-
 def validate_deletion_notation(deletion_notation):
     if deletion_notation not in ("sequence", "range"):
         raise ValueError("deletion_notation must be 'sequence' or 'range', got %r" % (deletion_notation,))

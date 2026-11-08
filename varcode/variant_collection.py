@@ -378,7 +378,7 @@ class VariantCollection(Collection):
             # in case we are combining variants with different Ensembl releases
             # use them all to gather gene names
             gene_names = {
-                variant.ensembl.gene_name_of_gene_id(gene_id)
+                variant.genome.gene_name_of_gene_id(gene_id)
                 for variant in variant_group
             }
             gene_name_str = ", ".join(sorted(gene_names))

@@ -1,5 +1,30 @@
 # Change Log
 
+## v11.9.2
+
+- Varcode no longer calls its own deprecated names (#693). Library code reads
+  `variant.genome` instead of `variant.ensembl`, `StopLoss.short_description`
+  uses `aa_alt` instead of `extended_protein_sequence`, and the test suite
+  uses `genome=` throughout. `tests/test_deprecated_aliases.py` checks that
+  each old name still works. `load_vcf_fast` had no test before.
+  - `varcode.util.random_variants` takes `genome=`; `ensembl=` stays as its
+    old name, and passing both raises `ValueError`.
+  - API conventions list the deprecated names, their replacements, and
+    which ones warn, in one "Deprecated names" table. All are removed in the
+    next major release.
+  - `ensembl=` and `Variant.ensembl` don't warn yet: vaxrank, isovar, topiary
+    and osteosarc still use them, and topiary turns warnings into test errors.
+  - `load_vcf_fast`'s warning now points at the caller's line.
+  - The internal `as_str` helper, which was `str()`, is gone.
+- Removed the Python 2 `from __future__ import print_function, division,
+  absolute_import` lines from four modules (#696).
+- `notes/` keeps only the 2026-09-24 audit (#694). The genetic-code and native
+  reference fixture builders moved to `scripts/`. The finished plans were
+  deleted: their issues are closed or the work has shipped, and the PRs and
+  this file are their record. One was a byte-identical copy of another.
+  `tests/benchmark_vcf_load.py` drops its `--pyvcf` option, which ran the
+  same loader.
+
 ## v11.9.1
 
 - `load_vcf_samples` and `varcode check-samples` read VCFs with varcode's own

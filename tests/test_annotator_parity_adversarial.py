@@ -73,7 +73,7 @@ def _is_known_divergence(fast_class, fast_desc, pdiff_class, pdiff_desc):
 def _assert_parity(variant, transcript_id, msg=""):
     """Assert both annotators produce the same effect class and
     short_description on the given transcript."""
-    transcript = variant.ensembl.transcript_by_id(transcript_id)
+    transcript = variant.genome.transcript_by_id(transcript_id)
     leg = _fast_annotator.annotate_on_transcript(variant, transcript)
     pd = _pdiff.annotate_on_transcript(variant, transcript)
     lt = type(leg).__name__

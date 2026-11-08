@@ -317,7 +317,7 @@ class EffectCollection(Collection):
             gene_effects_groups = variant_effects.groupby_gene_id()
             for (gene_id, gene_effects) in gene_effects_groups.items():
                 if gene_id:
-                    gene_name = variant.ensembl.gene_name_of_gene_id(gene_id)
+                    gene_name = variant.genome.gene_name_of_gene_id(gene_id)
                     lines.append("  Gene: %s (%s)" % (gene_name, gene_id))
                 # place transcript effects with more significant impact
                 # on top (e.g. FrameShift should go before NoncodingTranscript)
@@ -681,7 +681,7 @@ class EffectCollection(Collection):
                 alt=alt,
                 genome=genome,
             )
-            resolved_genome = variant.ensembl
+            resolved_genome = variant.genome
             if pd.isna(transcript_id) or transcript_id == "":
                 # Row is for an intergenic / intragenic effect — no
                 # transcript context. Rebuild by running the full effect

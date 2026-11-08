@@ -54,7 +54,7 @@ def expect_effect(
         effects = variant.effects()
         effect = effects.top_priority_effect()
     else:
-        transcript = variant.ensembl.transcript_by_id(transcript_id)
+        transcript = variant.genome.transcript_by_id(transcript_id)
         effect = variant.effect_on_transcript(transcript)
     check_effect_properties(effect)
     if effect_class is not None:

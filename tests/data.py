@@ -46,19 +46,19 @@ snp_rs4244285 = Variant(
     start=94781859,
     ref="G",
     alt="A",
-    ensembl=ENSEMBL_GRCH38)
+    genome=ENSEMBL_GRCH38)
 snp_rs1537415 = Variant(
     contig=9,
     start=135637876,
     ref="C",
     alt="G",
-    ensembl=ENSEMBL_GRCH38)
+    genome=ENSEMBL_GRCH38)
 snp_rs3892097 = Variant(
     contig=22,
     start=42524947,
     ref="G",
     alt="A",
-    ensembl=ENSEMBL_GRCH38)
+    genome=ENSEMBL_GRCH38)
 
 db_snp_variants = VariantCollection([
     snp_rs4244285,

@@ -22,7 +22,7 @@ from varcode.effects import (
 )
 
 def _get_effect(chrom, pos, dna_ref, dna_alt, transcript_id):
-    variant = Variant(chrom, pos, dna_ref, dna_alt, ensembl=ensembl)
+    variant = Variant(chrom, pos, dna_ref, dna_alt, genome=ensembl)
     effects = variant.effects()
     transcript_dict = effects.top_priority_effect_per_transcript_id()
     assert transcript_id in transcript_dict, \

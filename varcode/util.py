@@ -27,14 +27,15 @@ def random_variants(
         deletions=True,
         insertions=True,
         random_seed=None,
-        ensembl=None):
+        ensembl=None,
+        genome=None):
     """
     Generate a VariantCollection with random variants that overlap
     at least one complete coding transcript.
 
     Parameters
     ----------
-    ensembl : pyensembl.EnsemblRelease, optional
+    genome : pyensembl.Genome, optional
         Explicit genome to draw transcripts from. When ``None`` (default)
         the genome is resolved from ``genome_name`` via
         :func:`genome_for_reference_name`, which picks pyensembl's *latest*
@@ -42,16 +43,23 @@ def random_variants(
         ``cached_release(81)``) when the caller needs deterministic data
         that is actually installed — ``genome_for_reference_name`` can
         resolve to a release that hasn't been downloaded.
-    """
-    rng = random.Random(random_seed)
-    if ensembl is None:
-        ensembl = genome_for_reference_name(genome_name)
 
-    if ensembl in _transcript_ids_cache:
-        transcript_ids = _transcript_ids_cache[ensembl]
+    ensembl : pyensembl.Genome, optional
+        Deprecated name for ``genome``. Passing both raises ``ValueError``.
+    """
+    if ensembl is not None:
+        if genome is not None:
+            raise ValueError("Pass genome= or its deprecated name ensembl=, not both")
+        genome = ensembl
+    rng = random.Random(random_seed)
+    if genome is None:
+        genome = genome_for_reference_name(genome_name)
+
+    if genome in _transcript_ids_cache:
+        transcript_ids = _transcript_ids_cache[genome]
     else:
-        transcript_ids = ensembl.transcript_ids()
-        _transcript_ids_cache[ensembl] = transcript_ids
+        transcript_ids = genome.transcript_ids()
+        _transcript_ids_cache[genome] = transcript_ids
 
     variants = []
 
@@ -60,7 +68,7 @@ def random_variants(
     for _ in range(count * 100):
         if len(variants) < count:
             transcript_id = rng.choice(transcript_ids)
-            transcript = ensembl.transcript_by_id(transcript_id)
+            transcript = genome.transcript_by_id(transcript_id)
 
             if not transcript.complete:
                 continue
@@ -93,7 +101,7 @@ def random_variants(
                     base1_genomic_position,
                     ref=ref,
                     alt=alt,
-                    ensembl=ensembl)
+                    genome=genome)
                 # Force the lazy contig validation NOW, through the exact path
                 # effect prediction uses: Variant.transcripts calls
                 # _check_that_genome_has_contig, which reads a process-wide

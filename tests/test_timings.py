@@ -51,13 +51,13 @@ def _check_effect_timing(
     warmup_collection = random_variants(
         n_warmup_variants,
         random_seed=1,
-        ensembl=ensembl_grch38)
+        genome=ensembl_grch38)
     warmup_collection.effects()
 
     variant_collection = random_variants(
         n_variants,
         random_seed=random_seed,
-        ensembl=ensembl_grch38)
+        genome=ensembl_grch38)
     cpu_t, wall_t = _time_variant_annotation(variant_collection)
     print("CPU: %0.4f s, wall-clock: %0.4f s for %d variants" % (
         cpu_t, wall_t, n_variants))

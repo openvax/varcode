@@ -38,7 +38,7 @@ def test_insertion_of_stop_codon_uses_ins_notation_in_short_description():
         alt="ATAA",
         genome="GRCm38",
     )
-    transcript = variant.ensembl.transcript_by_id("ENSMUST00000086738")
+    transcript = variant.genome.transcript_by_id("ENSMUST00000086738")
     effect = variant.effect_on_transcript(transcript)
     assert effect.__class__ is PrematureStop, \
         "Expected PrematureStop, got %s" % effect.__class__.__name__
