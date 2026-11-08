@@ -50,6 +50,16 @@ download data or convert variant coordinates; for that reason hg19's `chrM`
 stays `chrM`, unless a VCF header declares it at the rCRS length (see
 [annotation errors](errors.md#continuing-past-errors)).
 
+Without `genome=`, `load_vcf` reads the build from the VCF's `##reference`
+header, usually the path of the reference FASTA. It recognizes an assembly name
+or alias in the file name, such as `GRCh38` or `b37`, and these common names
+that contain none:
+
+- `hs37d5`, `human_g1k_v37` (1000 Genomes) and `Homo_sapiens_assembly19`
+  (Broad b37) are GRCh37, with contigs named `1` and `MT`.
+- `Homo_sapiens_assembly38` (Broad) and bwa-kit's `hs38`, `hs38a` and `hs38DH`
+  are GRCh38 with UCSC contig names, so they are read as `hg38`.
+
 ### Chromosome DNA for SV and splice analysis
 
 Transcript FASTA contains exons. Supply a chromosome FASTA to also resolve

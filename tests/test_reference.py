@@ -180,6 +180,66 @@ def test_unversioned_mouse_accession_names_no_single_build():
         infer_genome("GCA_000001635")
 
 
+@pytest.mark.parametrize(["path", "reference_name"], [
+    # 1000 Genomes b37 builds, named 1..22, X, Y, MT (#712).
+    ("file:///refs/hs37d5.fa", "GRCh37"),
+    ("hs37d5.fa.gz", "GRCh37"),
+    ("/refs/hs37.fa", "GRCh37"),
+    ("/refs/human_g1k_v37.fasta", "GRCh37"),
+    ("/refs/human_g1k_v37_decoy.fasta", "GRCh37"),
+    # Broad/GATK b37. The Broad's own bucket files it under hg19/, but its
+    # contigs are named 1 and MT, not chr1 and chrM.
+    ("file:///refs/Homo_sapiens_assembly19.fasta", "GRCh37"),
+    ("gs://gcp-public-data--broad-references/hg19/v0/Homo_sapiens_assembly19.fasta",
+     "GRCh37"),
+    # GRCh38 builds named chr1..chr22, chrX, chrY, chrM, as hg38 is.
+    ("file:///refs/Homo_sapiens_assembly38.fasta", "hg38"),
+    ("/refs/hs38DH.fa", "hg38"),
+    ("/refs/hs38a.fa", "hg38"),
+    ("/refs/GRCh38/hs38.fa", "hg38"),
+])
+def test_common_reference_file_names_name_their_build(path, reference_name):
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert infer_reference_name.__wrapped__(path) == reference_name
+
+
+@pytest.mark.parametrize("name,release,assembly,converted", [
+    ("hs37d5", 75, "GRCh37", False),
+    ("human_g1k_v37", 75, "GRCh37", False),
+    ("Homo_sapiens_assembly19", 75, "GRCh37", False),
+    ("Homo_sapiens_assembly38", 93, "GRCh38", True),
+    ("hs38", 93, "GRCh38", True),
+    ("hs38a", 93, "GRCh38", True),
+    ("hs38DH", 93, "GRCh38", True),
+])
+@pytest.mark.parametrize("separator", [":", ".", "_", "-", " "])
+def test_reference_file_aliases_preserve_requested_release(
+        name, release, assembly, converted, separator):
+    genome, was_ucsc = infer_genome("%s%s%s" % (name, separator, release))
+    assert (genome.reference_name, genome.release, was_ucsc) == (assembly, release, converted)
+    conflicting_release = 93 if assembly == "GRCh37" else 75
+    with pytest.raises(ValueError, match="conflicts with selected"):
+        infer_genome("%s%s%s" % (name, separator, conflicting_release))
+
+
+@pytest.mark.parametrize(["reference", "chrom", "assembly", "original"], [
+    ("file:///refs/hs37d5.fa", "1", "GRCh37", "GRCh37"),
+    ("file:///refs/Homo_sapiens_assembly38.fasta", "chr1", "GRCh38", "hg38"),
+])
+def test_load_vcf_infers_the_build_of_common_reference_files(
+        tmp_path, reference, chrom, assembly, original):
+    path = tmp_path / "variants.vcf"
+    path.write_text(
+        "##fileformat=VCFv4.2\n"
+        "##reference=%s\n"
+        "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n"
+        "%s\t1000000\t.\tA\tG\t.\tPASS\t.\n" % (reference, chrom))
+    variant, = load_vcf(str(path))
+    assert (variant.contig, variant.reference_name, variant.original_reference_name) == (
+        "1", assembly, original)
+
+
 def test_mm39_variants_from_vcf_api_and_cli_share_one_identity(tmp_path):
     path = tmp_path / "variants.vcf"
     path.write_text(

@@ -325,6 +325,11 @@ def test_roles_builds_and_sample_selection_are_explicit(tmp_path):
         load_vcf_samples(path, assembly="GRCh37")
     path = _vcf(tmp_path, "fasta.vcf", ["S"], [], reference="file:///refs/ucsc.hg19.fasta")
     assert load_vcf_samples(path)[0].assembly == "GRCh37"
+    path = _vcf(tmp_path, "hs37d5.vcf", ["S"], [], reference="file:///refs/hs37d5.fa")
+    assert load_vcf_samples(path)[0].assembly == "GRCh37"
+    path = _vcf(tmp_path, "broad38.vcf", ["S"], [],
+                reference="file:///refs/Homo_sapiens_assembly38.fasta")
+    assert load_vcf_samples(path)[0].assembly == "GRCh38"
     path = _vcf(tmp_path, "duplicate.vcf", ["S", "S"], [])
     with pytest.raises(ValueError, match="unique sample"):
         load_vcf_samples(path)
