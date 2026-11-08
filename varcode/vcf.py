@@ -104,7 +104,11 @@ def load_vcf(
     genome : {pyensembl.Genome, reference name, Ensembl version int}, optional
         Optionally pass in a PyEnsembl Genome object, name of reference, or
         PyEnsembl release version to specify the reference associated with a
-        VCF (otherwise infer reference from VCF using reference_vcf_key)
+        VCF. Otherwise the reference is inferred from the header line named by
+        reference_vcf_key, usually a FASTA path, from an assembly name or
+        alias in its file name, or a common build's file name such as
+        ``hs37d5``, ``human_g1k_v37`` or the Broad's
+        ``Homo_sapiens_assembly38``.
 
     reference_vcf_key : str, optional
         Name of metadata field which contains path to reference FASTA

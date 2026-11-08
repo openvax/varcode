@@ -131,6 +131,24 @@ ensembl_to_ucsc_reference_names = {
     v: k
     for (k, v) in ucsc_to_ensembl_reference_names.items()}
 
+# Widely distributed human FASTA names that don't contain an assembly name,
+# to the name inference returns. Builds named with UCSC contigs (chr1, chrM)
+# return the UCSC name, as hg19 and hg38 FASTAs do. Matched within the file
+# name, like the aliases above.
+reference_file_aliases = {
+    # 1000 Genomes phase 1 b37 (1..22, X, Y, MT: the rCRS).
+    "human_g1k_v37": "GRCh37",
+    # 1000 Genomes hs37d5: that build plus EBV and decoys. bwa.kit's hs37 is
+    # hs37d5 without the decoys.
+    "hs37": "GRCh37",
+    # Broad/GATK b37, also named 1..22, X, Y, MT.
+    "Homo_sapiens_assembly19": "GRCh37",
+    # Broad/GATK hg38, and bwa.kit's hs38, hs38a and hs38DH (built from NCBI's
+    # GRCh38 analysis set with UCSC IDs): chr1..chr22, chrX, chrY, chrM.
+    "Homo_sapiens_assembly38": "hg38",
+    "hs38": "hg38",
+}
+
 
 @memoize
 def is_ucsc_reference_name(name):
@@ -261,6 +279,13 @@ def _collect_candidate_matches(reference_name_or_path):
 
             elif normalized_candidate in normalized_reference_name_or_path:
                 full_path_matches.append(name_to_add)
+
+    for file_alias, name in reference_file_aliases.items():
+        normalized_alias = normalize_reference_name(file_alias)
+        if normalized_alias in normalized_reference_filename:
+            file_name_matches.append(name)
+        elif normalized_alias in normalized_reference_name_or_path:
+            full_path_matches.append(name)
 
     # remove duplicate matches (happens due to overlapping aliases)
     file_name_matches = list(set(file_name_matches))

@@ -1,5 +1,25 @@
 # Change Log
 
+## v11.9.3
+
+- `load_vcf` recognizes the build in common reference FASTA names that contain
+  no assembly name (#712). It failed with "Failed to infer genome assembly
+  name" for them, so `genome=` had to be passed by hand. The same goes for
+  `load_vcf_samples` and `varcode check-samples`, which no longer need
+  `--assembly` for these files. Checked against each source's FASTA index:
+  - `hs37d5` and bwa-kit's `hs37` (1000 Genomes), `human_g1k_v37` (1000
+    Genomes phase 1) and `Homo_sapiens_assembly19` (Broad/GATK b37) are
+    GRCh37, with contigs named `1` and `MT`.
+  - `Homo_sapiens_assembly38` (Broad/GATK) and bwa-kit's `hs38`, `hs38a` and
+    `hs38DH` are GRCh38 with UCSC contig names (`chr1`, `chrM`), so they are
+    read as `hg38`, as a `ucsc.hg38.fa` path is. `Variant("chr1", ...,
+    genome="Homo_sapiens_assembly38.fasta")` converts `chr1` to `1`.
+  - A path that names a build only in a directory (such as the Broad's
+    `.../hg19/v0/Homo_sapiens_assembly19.fasta` or `/refs/GRCh38/hs38DH.fa`)
+    no longer warns, and the file name decides. The assembly is unchanged,
+    but the first is now labelled `GRCh37` instead of `hg19`, because that
+    FASTA's contigs are named `1` and `MT`; the second is now `hg38`, not `GRCh38`.
+
 ## v11.9.2
 
 - Varcode no longer calls its own deprecated names (#693). Library code reads
