@@ -150,9 +150,9 @@ Requirements and limits:
 
 - No transcript annotation or reference sequence download is needed.
 - Local VCF and gzip-compressed VCF files are supported, not BCF or remote URLs.
-- Assemblies must be GRCh37/hg19/b37 or GRCh38/hg38/b38. A recognized
-  `##reference` header is used unless you supply the assembly explicitly;
-  contradictions are errors.
+- Assemblies must be GRCh37/hg19/b37 or GRCh38/hg38/b38, recognized as
+  `load_vcf` recognizes them. A recognized `##reference` header is used unless
+  you supply the assembly explicitly; contradictions are errors.
 - Samples on different builds give inconclusive comparisons. There is no liftover.
 
 <a id="evidence-and-thresholds"></a>
@@ -237,8 +237,12 @@ estimates; omitted and conflicting loci are listed in QC.
       VCF are not assumed to be somatic.
 - QC distinguishes paired-normal contrasts from caller-reported evidence.
 
-**Matching alleles.** Small alleles are minimally trimmed, without repeat
-left-alignment. Precise, sequence-resolved SVs use the
+**Matching alleles.** Contigs are named as `load_vcf` names them: `chr1` and
+`1` are one contig, as are hg38's `chrM` and GRCh38's `MT`. hg19's `chrM` is
+not the rCRS that GRCh37 calls `MT`, and its positions differ, so its alleles
+never match `MT` alleles unless the VCF header gives `chrM` the rCRS length
+(`##contig=<ID=chrM,length=16569>`). Small alleles are minimally trimmed,
+without repeat left-alignment. Precise, sequence-resolved SVs use the
 [SV comparison normalizer](sv_comparison.md), including reciprocal-BND
 deduplication. Imprecise, unknown-insertion, and unsupported SVs are excluded
 with counts, and nearby breakpoints are not treated as identical. As a result,

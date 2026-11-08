@@ -6,23 +6,38 @@ import hashlib
 import heapq
 import math
 from pathlib import Path
-import re
 
+from .contigs import _annotation_contig_name
+from .genotype import parse_gt_string
+from .reference import infer_reference_name, ucsc_to_ensembl_reference_names
 from .sample_identity import SampleFingerprint, SampleSpec
+from .string_helpers import trim_shared_flanking_strings
+from .vcf import _declares_rcrs_chrm
 from .vcf_parsing import VCFHeader
 
 _AUTOSOMES = frozenset(str(i) for i in range(1, 23))
+_BUILDS = ("GRCh37", "GRCh38")
 
 
 def _assembly(value):
+    """The assembly ``value`` names, as :func:`load_vcf` reads it, or None."""
     if not value:
         return None
-    aliases = {"grch37": "GRCh37", "hg19": "GRCh37", "b37": "GRCh37",
-               "grch38": "GRCh38", "hg38": "GRCh38", "b38": "GRCh38"}
-    matches = {aliases[t] for t in re.findall(r"[a-z0-9]+", value.lower()) if t in aliases}
-    if len(matches) > 1:
-        raise ValueError("Ambiguous assembly: %s" % value)
-    return next(iter(matches), None)
+    try:
+        name = infer_reference_name(value)
+    except ValueError:
+        return None
+    return ucsc_to_ensembl_reference_names.get(name, name)
+
+
+def _contig(chrom, build, chrm_is_rcrs):
+    """Name ``chrom`` as load_vcf does: chr1 and 1 are one contig, as are
+    hg38's chrM and MT, but hg19's chrM is not the rCRS that GRCh37 names MT
+    unless the header gives chrM the rCRS length. PLINK writes unplaced
+    variants on contig 0, which no annotation has; it stays 0."""
+    if chrom == "0":
+        return chrom
+    return _annotation_contig_name(chrom, build, chrm_is_rcrs=chrm_is_rcrs)
 
 
 def _number(value):
@@ -39,14 +54,11 @@ def _number(value):
 
 
 def _gt(value, nalleles):
-    if value in (None, "", "."):
-        return None
-    pieces = re.split(r"[/|]", value)
-    if any(p != "." and (not p.isdigit() or int(p) >= nalleles) for p in pieces):
+    """Allele indexes of a fully called GT, or None for a whole or partial no-call."""
+    alleles, _ = parse_gt_string(value)
+    if any(a is not None and not 0 <= a < nalleles for a in alleles):
         raise ValueError("Invalid GT allele index: %s" % value)
-    if any(p == "." for p in pieces):
-        return None
-    return tuple(int(p) for p in pieces)
+    return None if None in alleles else alleles
 
 
 def _evidence(row, nalleles, config):
@@ -140,16 +152,15 @@ def _add_snp(sample, heap, locus, call):
     sample.snps[locus] = call
 
 
-def _allele_key(chrom, pos, ref, alt, info, assembly):
+def _allele_key(contig, chrom, pos, ref, alt, info, assembly):
     if set(ref + alt) <= set("ACGT"):
-        # Minimal representation only: no repeat left-alignment without FASTA.
-        while ref and alt and ref[-1] == alt[-1]:
-            ref, alt = ref[:-1], alt[:-1]
-        while ref and alt and ref[0] == alt[0]:
-            ref, alt, pos = ref[1:], alt[1:], pos + 1
-        return ("small", chrom, pos, ref, alt) if ref or alt else None
-    # Reuse the public adjacency normalizer; do not count reciprocal BND rows
-    # twice or conflate inserted sequences. Imprecise/incomplete SVs are excluded.
+        # Minimal representation, trimming shared bases as Variant does; no
+        # repeat left-alignment without FASTA.
+        ref, alt, prefix, _ = trim_shared_flanking_strings(ref, alt)
+        return ("small", contig, pos + len(prefix), ref, alt) if ref or alt else None
+    # Reuse the public adjacency normalizer, which names the contigs of both
+    # sides itself; do not count reciprocal BND rows twice or conflate
+    # inserted sequences. Imprecise/incomplete SVs are excluded.
     from .sv_comparison import compare_sv_calls
     result = compare_sv_calls([dict(call_id="record", caller="VCF", sample="sample",
                                    build=assembly, chrom=chrom, pos=pos, ref=ref, alt=alt,
@@ -208,12 +219,12 @@ def _select(header, specs, kind):
     return selected
 
 
-def _consume(fields, header, samples, heaps, config):
+def _consume(fields, header, chrm_is_rcrs, samples, heaps, config):
     chrom, pos, _, ref, alt, _, filt, info_text, fmt = fields[:9]
     if int(pos) < 1:
         raise ValueError("VCF POS must be positive")
     pos = int(pos)
-    chrom = chrom[3:] if chrom.startswith("chr") else chrom
+    contig = _contig(chrom, samples[0].assembly, chrm_is_rcrs)
     ref = ref.upper()
     alts = [] if alt == "." else alt.split(",")
     alts = [a.upper() if not any(c in a for c in "[]<>") else a for a in alts]
@@ -235,7 +246,7 @@ def _consume(fields, header, samples, heaps, config):
     info = header.parse_info(info_text)
     # gVCF reference blocks are not hundreds of explicit SNP observations.
     end = _number(info.get("END"))
-    snp_locus = (chrom in _AUTOSOMES and len(ref) == 1 and ref in "ACGT"
+    snp_locus = (contig in _AUTOSOMES and len(ref) == 1 and ref in "ACGT"
            and (end is None or end == pos))
     keys = {}
     for sample, heap in zip(samples, heaps):
@@ -250,7 +261,7 @@ def _consume(fields, header, samples, heaps, config):
         if (snp_locus and gt is not None and len(gt) == 2
                 and all(len(alleles[i]) == 1 and alleles[i] in "ACGT" for i in gt)):
             sample.qc["eligible_snp_records"] += 1
-            _add_snp(sample, heap, (chrom, pos), (ref, tuple(sorted(alleles[i] for i in gt))))
+            _add_snp(sample, heap, (contig, pos), (ref, tuple(sorted(alleles[i] for i in gt))))
         else:
             sample.qc["not_callable_diploid_autosomal_snp"] += 1
         if sample.role != "tumor" or sample.kind == "germline":
@@ -270,7 +281,7 @@ def _consume(fields, header, samples, heaps, config):
                 sample.qc["nonreference_without_somatic_evidence"] += 1
                 continue
             if index not in keys:
-                keys[index] = _allele_key(chrom, pos, ref, allele, info_text, sample.assembly)
+                keys[index] = _allele_key(contig, chrom, pos, ref, allele, info_text, sample.assembly)
             key = keys[index]
             if key is None:
                 sample.qc["unsupported_or_imprecise_somatic_alleles"] += 1
@@ -311,13 +322,15 @@ def read_samples(path, kind, assembly, specs, config):
         header = VCFHeader.from_lines(lines)
         declared = _assembly(header.get_metadata("reference"))
         explicit = _assembly(assembly)
-        if assembly and not explicit:
+        if assembly and explicit not in _BUILDS:
             raise ValueError("Unsupported assembly: %s (use GRCh37 or GRCh38)" % assembly)
         if explicit and declared and explicit != declared:
             raise ValueError("Explicit assembly contradicts VCF reference")
         build = explicit or declared
-        if build is None:
-            raise ValueError("Declare assembly=GRCh37 or GRCh38; VCF reference is unrecognized")
+        if build not in _BUILDS:
+            raise ValueError("Declare assembly=GRCh37 or GRCh38; VCF reference is %s"
+                             % ("unrecognized" if build is None else "unsupported: " + build))
+        chrm_is_rcrs = build == "GRCh37" and _declares_rcrs_chrm(header)
         selected = _select(header, specs, kind)
         samples = [SampleFingerprint(label=s.label or "%s::%s" % (path, s.sample),
                                      sample=s.sample, path=str(path), sha256=digest.hexdigest(),
@@ -332,7 +345,7 @@ def read_samples(path, kind, assembly, specs, config):
                 fields = line.rstrip("\r\n").split("\t")
                 if len(fields) != len(columns):
                     raise ValueError("Record column count differs from header")
-                _consume(fields, header, samples, heaps, config)
+                _consume(fields, header, chrm_is_rcrs, samples, heaps, config)
             except (ValueError, TypeError, IndexError) as error:
                 raise ValueError("%s:%d: %s" % (path, number, error)) from error
     return samples

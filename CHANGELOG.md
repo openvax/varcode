@@ -1,5 +1,21 @@
 # Change Log
 
+## v11.9.1
+
+- `load_vcf_samples` and `varcode check-samples` read VCFs with varcode's own
+  rules instead of a private copy of them (#691):
+  - Contigs are named as `load_vcf` names them. hg38's `chrM` was read as `M`
+    while GRCh38's `MT` stayed `MT`, so the same mitochondrial variant in the
+    two VCFs was not counted as shared between tumors. hg19's `chrM` still
+    never matches `MT`, unless the header gives `chrM` the rCRS length.
+  - The assembly is recognized as `load_vcf` recognizes it, and must be
+    GRCh37 or GRCh38. A header naming another build, such as NCBI36, is now
+    reported as unsupported, and contradicts an explicit assembly. A
+    reference naming both GRCh37 and GRCh38 now warns and uses GRCh38, as
+    `load_vcf` does, instead of failing.
+  - GT strings are parsed with `parse_gt_string`, and alleles are trimmed with
+    `trim_shared_flanking_strings`, as `Variant` trims them.
+
 ## v11.9.0
 
 - New effect `TranslocationToUnannotatedContig`, a subclass of
