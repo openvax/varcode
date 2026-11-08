@@ -168,6 +168,25 @@ def _merge_ensembl_aliases_with_ucsc():
 
 alias_dict_with_ucsc = _merge_ensembl_aliases_with_ucsc()
 
+# Common FASTA names identify an annotation assembly, not identical sequence
+# inventories: hs37d5 adds decoys, and Broad's assembly38 uses UCSC contig names.
+# https://internationalgenome.org/category/reference/
+# https://gatk.broadinstitute.org/hc/en-us/articles/360035890811-Resource-bundle
+reference_file_aliases = {
+    "hs37d5": "GRCh37",
+    "human_g1k_v37": "GRCh37",
+    "Homo_sapiens_assembly19": "GRCh37",
+    "Homo_sapiens_assembly38": "hg38",
+}
+
+
+def _reference_name_candidates():
+    """Known spellings and their resolved Ensembl or UCSC names."""
+    for assembly_name in canonical_reference_names:
+        for candidate in [assembly_name] + alias_dict_with_ucsc.get(assembly_name, []):
+            yield candidate, candidate if is_ucsc_reference_name(candidate) else assembly_name
+    yield from reference_file_aliases.items()
+
 
 def most_recent_assembly_name(assembly_names):
     """
@@ -248,19 +267,13 @@ def _collect_candidate_matches(reference_name_or_path):
 
     file_name_matches = []
     full_path_matches = []
-    for assembly_name in canonical_reference_names:
-        candidate_list = [assembly_name] + alias_dict_with_ucsc.get(assembly_name, [])
-        for candidate in candidate_list:
-            normalized_candidate = normalize_reference_name(candidate)
-            name_to_add = (
-                candidate
-                if is_ucsc_reference_name(candidate)
-                else assembly_name)
-            if normalized_candidate in normalized_reference_filename:
-                file_name_matches.append(name_to_add)
+    for candidate, name_to_add in _reference_name_candidates():
+        normalized_candidate = normalize_reference_name(candidate)
+        if normalized_candidate in normalized_reference_filename:
+            file_name_matches.append(name_to_add)
 
-            elif normalized_candidate in normalized_reference_name_or_path:
-                full_path_matches.append(name_to_add)
+        elif normalized_candidate in normalized_reference_name_or_path:
+            full_path_matches.append(name_to_add)
 
     # remove duplicate matches (happens due to overlapping aliases)
     file_name_matches = list(set(file_name_matches))
@@ -312,12 +325,8 @@ _RELEASE_SUFFIX = re.compile(r"^\s*([^:/\\\s]+?)\s*([:._\-\s])\s*(\d{4}_\d{2}|\d
 
 def _exact_reference_names():
     """Each known assembly name and alias, normalized, to the name inference returns."""
-    names = {}
-    for assembly_name in canonical_reference_names:
-        for candidate in [assembly_name] + alias_dict_with_ucsc.get(assembly_name, []):
-            names[normalize_reference_name(candidate)] = (
-                candidate if is_ucsc_reference_name(candidate) else assembly_name)
-    return names
+    return {normalize_reference_name(candidate): name
+            for candidate, name in _reference_name_candidates()}
 
 
 _exact_names = _exact_reference_names()

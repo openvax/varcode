@@ -1,5 +1,15 @@
 # Change Log
 
+## v11.9.3
+
+- Recognize common reference FASTA names in VCF headers and genome selectors
+  (#712): `hs37d5`, `human_g1k_v37`, and `Homo_sapiens_assembly19` select
+  GRCh37; `Homo_sapiens_assembly38` selects hg38 with UCSC contig conversion.
+  Paths, compressed filenames and explicit annotation releases work through
+  the shared resolver used by `load_vcf`, `load_vcf_samples` and
+  `varcode check-samples`. This identifies annotation coordinates; it does not
+  validate the FASTA sequence or provide annotation for decoy contigs.
+
 ## v11.9.2
 
 - Varcode no longer calls its own deprecated names (#693). Library code reads
