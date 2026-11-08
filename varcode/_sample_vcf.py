@@ -1,7 +1,6 @@
 """Streaming VCF evidence extraction for :mod:`varcode.sample_identity`."""
 
 from dataclasses import replace
-from functools import partial
 import gzip
 import hashlib
 import heapq
@@ -29,6 +28,16 @@ def _assembly(value):
     except ValueError:
         return None
     return ucsc_to_ensembl_reference_names.get(name, name)
+
+
+def _contig(chrom, build, chrm_is_rcrs):
+    """Name ``chrom`` as load_vcf does: chr1 and 1 are one contig, as are
+    hg38's chrM and MT, but hg19's chrM is not the rCRS that GRCh37 names MT
+    unless the header gives chrM the rCRS length. PLINK writes unplaced
+    variants on contig 0, which no annotation has; it stays 0."""
+    if chrom == "0":
+        return chrom
+    return _annotation_contig_name(chrom, build, chrm_is_rcrs=chrm_is_rcrs)
 
 
 def _number(value):
@@ -210,12 +219,12 @@ def _select(header, specs, kind):
     return selected
 
 
-def _consume(fields, header, contig_name, samples, heaps, config):
+def _consume(fields, header, chrm_is_rcrs, samples, heaps, config):
     chrom, pos, _, ref, alt, _, filt, info_text, fmt = fields[:9]
     if int(pos) < 1:
         raise ValueError("VCF POS must be positive")
     pos = int(pos)
-    contig = contig_name(chrom)
+    contig = _contig(chrom, samples[0].assembly, chrm_is_rcrs)
     ref = ref.upper()
     alts = [] if alt == "." else alt.split(",")
     alts = [a.upper() if not any(c in a for c in "[]<>") else a for a in alts]
@@ -321,11 +330,7 @@ def read_samples(path, kind, assembly, specs, config):
         if build not in _BUILDS:
             raise ValueError("Declare assembly=GRCh37 or GRCh38; VCF reference is %s"
                              % ("unrecognized" if build is None else "unsupported: " + build))
-        # Name contigs as load_vcf does: chr1 and 1 are one contig, as are
-        # hg38's chrM and MT, but hg19's chrM is not the rCRS that GRCh37
-        # names MT unless the header gives chrM the rCRS length.
-        contig_name = partial(_annotation_contig_name, reference_name=build,
-                              chrm_is_rcrs=build == "GRCh37" and _declares_rcrs_chrm(header))
+        chrm_is_rcrs = build == "GRCh37" and _declares_rcrs_chrm(header)
         selected = _select(header, specs, kind)
         samples = [SampleFingerprint(label=s.label or "%s::%s" % (path, s.sample),
                                      sample=s.sample, path=str(path), sha256=digest.hexdigest(),
@@ -340,7 +345,7 @@ def read_samples(path, kind, assembly, specs, config):
                 fields = line.rstrip("\r\n").split("\t")
                 if len(fields) != len(columns):
                     raise ValueError("Record column count differs from header")
-                _consume(fields, header, contig_name, samples, heaps, config)
+                _consume(fields, header, chrm_is_rcrs, samples, heaps, config)
             except (ValueError, TypeError, IndexError) as error:
                 raise ValueError("%s:%d: %s" % (path, number, error)) from error
     return samples

@@ -156,6 +156,13 @@ def test_mitochondrial_contig_names_follow_load_vcf(tmp_path, chrom, reference, 
     assert compare_samples(mt, other)["somatic"]["shared_variants"] == shared
 
 
+def test_plink_unplaced_contig_zero_is_read_but_not_autosomal(tmp_path):
+    rows = [_row(1, "0/1:30:60"), _row(2, "0/1:30:60", chrom="0")]
+    sample = load_vcf_samples(_vcf(tmp_path, "plink.vcf", ["S"], rows))[0]
+    assert list(sample.snps) == [("1", 200001)]
+    assert sample.qc["not_callable_diploid_autosomal_snp"] == 1
+
+
 def test_gvcf_blocks_and_unknown_alleles_are_not_imputed(tmp_path):
     rows = [_row(1, "0/1:30:60", alt="C,<NON_REF>"),
             _row(2, "0/2:30:60", alt="C,<NON_REF>"),
