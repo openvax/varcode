@@ -204,6 +204,25 @@ def test_common_reference_file_names_name_their_build(path, reference_name):
         assert infer_reference_name.__wrapped__(path) == reference_name
 
 
+@pytest.mark.parametrize("name,release,assembly,converted", [
+    ("hs37d5", 75, "GRCh37", False),
+    ("human_g1k_v37", 75, "GRCh37", False),
+    ("Homo_sapiens_assembly19", 75, "GRCh37", False),
+    ("Homo_sapiens_assembly38", 93, "GRCh38", True),
+    ("hs38", 93, "GRCh38", True),
+    ("hs38a", 93, "GRCh38", True),
+    ("hs38DH", 93, "GRCh38", True),
+])
+@pytest.mark.parametrize("separator", [":", ".", "_", "-", " "])
+def test_reference_file_aliases_preserve_requested_release(
+        name, release, assembly, converted, separator):
+    genome, was_ucsc = infer_genome("%s%s%s" % (name, separator, release))
+    assert (genome.reference_name, genome.release, was_ucsc) == (assembly, release, converted)
+    conflicting_release = 93 if assembly == "GRCh37" else 75
+    with pytest.raises(ValueError, match="conflicts with selected"):
+        infer_genome("%s%s%s" % (name, separator, conflicting_release))
+
+
 @pytest.mark.parametrize(["reference", "chrom", "assembly", "original"], [
     ("file:///refs/hs37d5.fa", "1", "GRCh37", "GRCh37"),
     ("file:///refs/Homo_sapiens_assembly38.fasta", "chr1", "GRCh38", "hg38"),

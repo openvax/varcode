@@ -141,12 +141,15 @@ reference_file_aliases = {
     # 1000 Genomes hs37d5: that build plus EBV and decoys. bwa.kit's hs37 is
     # hs37d5 without the decoys.
     "hs37": "GRCh37",
+    "hs37d5": "GRCh37",
     # Broad/GATK b37, also named 1..22, X, Y, MT.
     "Homo_sapiens_assembly19": "GRCh37",
     # Broad/GATK hg38, and bwa.kit's hs38, hs38a and hs38DH (built from NCBI's
     # GRCh38 analysis set with UCSC IDs): chr1..chr22, chrX, chrY, chrM.
     "Homo_sapiens_assembly38": "hg38",
     "hs38": "hg38",
+    "hs38a": "hg38",
+    "hs38DH": "hg38",
 }
 
 
@@ -342,6 +345,8 @@ def _exact_reference_names():
         for candidate in [assembly_name] + alias_dict_with_ucsc.get(assembly_name, []):
             names[normalize_reference_name(candidate)] = (
                 candidate if is_ucsc_reference_name(candidate) else assembly_name)
+    names.update((normalize_reference_name(alias), name)
+                 for alias, name in reference_file_aliases.items())
     return names
 
 

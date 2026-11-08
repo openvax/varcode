@@ -19,6 +19,9 @@
     no longer warns, and the file name decides. The assembly is unchanged,
     but the first is now labelled `GRCh37` instead of `hg19`, because that
     FASTA's contigs are named `1` and `MT`; the second is now `hg38`, not `GRCh38`.
+  - Explicit annotation releases on these aliases use the same separators
+    and assembly checks as existing names; incompatible releases are rejected
+    instead of silently ignored (#717).
 
 ## v11.9.2
 
