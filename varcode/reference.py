@@ -92,7 +92,12 @@ ucsc_to_ensembl_reference_names = {
     "felCat9": "Felis_catus_9.0",
     "felCat8": "Felis_catus_8.0",
 
-    # dog
+    # dog. canFam4 to canFam6 are breed assemblies (German Shepherd, Great
+    # Dane, Boxer). chrM converts to MT, which their Ensembl builds don't
+    # contain. Ensembl's default dog, ROS_Cfam_1.0, has no UCSC name.
+    "canFam6": "Dog10K_Boxer_Tasha",
+    "canFam5": "UMICH_Zoey_3.1",
+    "canFam4": "UU_Cfam_GSD_1.0",
     "canFam3": "CanFam3.1",
     "canFam2": "CanFam2.0",
     "canFam1": "CanFam1.0",

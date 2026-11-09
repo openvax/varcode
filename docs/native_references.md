@@ -80,6 +80,13 @@ Chromosome FASTA is a separate installation choice here too. Use matching
 assembly and contig names. Nuclear/mitochondrial translation tables come from
 saved reference metadata, not a universal standard-code assumption.
 
+UCSC dog names select their Ensembl assembly and convert `chr` contig names,
+as `mm10` and `mm39` do for mouse: `canFam3` is CanFam3.1, `canFam4` is
+UU_Cfam_GSD_1.0 (German Shepherd), `canFam5` is UMICH_Zoey_3.1 (Great Dane)
+and `canFam6` is Dog10K_Boxer_Tasha (Boxer). `chrM` becomes `MT`, which
+Ensembl's builds of the last three don't contain. ROS_Cfam_1.0, Ensembl's
+default dog since release 105, has no UCSC name.
+
 ## Public validation and speed
 
 The [native fixture manifest](https://github.com/openvax/varcode/blob/main/tests/data/native_references/README.md)

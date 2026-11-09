@@ -1,5 +1,17 @@
 # Change Log
 
+## v11.9.4
+
+- Recognize `canFam4`, `canFam5` and `canFam6`, UCSC's names for the
+  UU_Cfam_GSD_1.0 (German Shepherd), UMICH_Zoey_3.1 (Great Dane) and
+  Dog10K_Boxer_Tasha (Boxer) dog assemblies, as genome names, in a VCF
+  `##reference` header and in a reference path. They failed with "Failed to
+  infer genome assembly name". Like `canFam3`, they select their Ensembl
+  assembly and convert `chr` contig names; a release that lacks the assembly,
+  such as `canFam4:105`, is an error. The mapping is from UCSC's genome list,
+  and each `chr1` is the length of Ensembl's `1`. `chrM` becomes `MT`, which
+  Ensembl's builds of these three don't contain.
+
 ## v11.9.3
 
 - `load_vcf` recognizes the build in common reference FASTA names that contain
