@@ -1,5 +1,45 @@
 # Change Log
 
+## v11.11.0
+
+- Infer T2T-CHM13v2.0 from the names its files go by and load ORFdata's pinned
+  annotation (#723). `load_vcf` (from `##reference`), `genome=`, `Variant` and
+  `varcode.Genome` accept every name ORFdata lists for it
+  (`orfdata.reference_names()`, from openvax/orfdata#204), so the two packages
+  accept the same names. These include `T2T-CHM13v2.0`, `hs1`,
+  `GCA_009914755.4`, `GCF_009914755.1`, the T2T Consortium's `chm13v2.0`,
+  `_maskedY`, `_noY` and `_maskedY_rCRS` analysis sets, and T2T-CHM13v1.1.
+  Each failed with "Failed to infer genome assembly name".
+  - The longest name in a file name wins, so `chm13v2.0_maskedY_rCRS.fa` is
+    the rCRS set. `hs1` counts only as a whole word. Bare `chm13` selects
+    nothing, and T2T-CHM13v1.0 and older drafts raise, because their
+    coordinates differ.
+  - Each name opens `orfdata.load_genome(...)`, offline. When the genome isn't
+    installed, ORFdata's `NotInstalledError` gives the
+    `orfdata genomes install t2t-chm13` command, and varcode adds which name
+    it found. `T2T-CHM13v2.0:2022_07` selects the pinned annotation; any other
+    release raises.
+  - Contigs convert by ORFdata's table, so `chr1`, `CP068277.2` and
+    `NC_060925.1` are all `1`. `original_reference_name` keeps the file's
+    name, so a written VCF reads back the same way.
+  - When a VCF's `##contig` lengths disagree with T2T-CHM13v2.0's, as a GRCh38
+    VCF's do (chr1 is 248,956,422 bp, not 248,387,328), `load_vcf` raises
+    instead of annotating GRCh38 positions on T2T transcripts.
+- Annotate the rCRS `chrM` of T2T's `_rCRS` analysis set (#722). That chrM is
+  the rCRS (NC_012920.1), GRCh38's MT, not CHM13's own mitochondrion
+  (CP068254.1), whose numbering starts at the rCRS's 577. ORFdata 0.52
+  annotates the rCRS with Ensembl GRCh38's MT genes on contig `NC_012920.1`
+  (openvax/orfdata#206). A `_rCRS` file's `chrM` goes there and gets
+  GRCh38's MT consequences: 8993T>G is MT-ATP6 p.L156R. `chrm_is_rcrs` is set
+  from the file name, or can be passed. Any other T2T file's `chrM` is
+  CHM13's own, `MT`, which Ensembl doesn't annotate. Its variants are kept as
+  failures, and the one missing-contig warning now says why, as it does for
+  hg19's `chrM`.
+- `varcode.Genome(fasta=...)` also uses ORFdata's table for T2T, so NCBI's
+  accession-named FASTAs are read too. A FASTA's `chrM` serves `MT` or
+  `NC_012920.1` only when its file name says which mitochondrion it is.
+- Requires ORFdata 0.52.
+
 ## v11.10.0
 
 - `varcode.Genome(fasta=...)` reads the FASTA by the annotation's contig

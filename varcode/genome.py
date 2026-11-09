@@ -41,6 +41,8 @@ from .genome_sequence import (
     reference_range as _reference_range_lookup,
 )
 from .contigs import ContigResolver, _may_alias_mitochondrion
+from .pinned_references import (
+    find_pinned_name, is_pinned_assembly, names_rcrs, pinned_name, pinned_spellings)
 from .reference import infer_genome
 
 
@@ -447,16 +449,24 @@ def _with_annotation_names(reader: Any, ensembl_genome: Any, contigs: Optional[l
     if not isinstance(reference_name, str) or not reference_name.strip():
         reference_name = None
     resolver = ContigResolver(names, reference_name=reference_name)
+    spellings = _pinned_spellings(reader, reference_name)
+    available = set(names)
     renamed = {}
     shared = 0
     for contig in contigs:
         found = resolver.resolve(contig)
         if found.status == "exact":
             shared += 1
-        elif found.status == "alias" and _may_alias_mitochondrion(
+            continue
+        # A pinned assembly's table names accessions too (CP068277.2 is 1).
+        options = sorted(spellings.get(contig, set()) & available)
+        name = options[0] if len(options) == 1 else None
+        if name is None and found.status == "alias" and _may_alias_mitochondrion(
                 contig, found.resolved_name, reference_name,
                 _fasta_contig_length(reader, found.resolved_name)):
-            renamed[contig] = found.resolved_name
+            name = found.resolved_name
+        if name is not None:
+            renamed[contig] = name
             shared += 1
     if not shared:
         raise ValueError(
@@ -466,6 +476,26 @@ def _with_annotation_names(reader: Any, ensembl_genome: Any, contigs: Optional[l
             "assembly." % (
                 reference_name, _some(names), _some(contigs)))
     return _AnnotationNamedFasta(reader, renamed) if renamed else reader
+
+
+def _pinned_spellings(reader: Any, reference_name: Optional[str]) -> dict:
+    """Each contig's spellings in ORFdata's table, for a genome ORFdata pins.
+
+    Which mitochondrion a T2T FASTA's ``chrM`` is depends on the file: the
+    ``_rCRS`` analysis set's is the rCRS, ``NC_012920.1``, and the others'
+    is CHM13's own, ``MT``. So the mitochondrion is paired only when the
+    reader's file name says which file it is (#722, #723).
+    """
+    if not is_pinned_assembly(reference_name):
+        return {}
+    filename = getattr(reader, "filename", None)
+    name = None
+    if isinstance(filename, (str, bytes, os.PathLike)):
+        name = find_pinned_name(os.fsdecode(filename))
+    row = None if name is None else pinned_name(name)
+    if row is None or row["genome"] is None:
+        return pinned_spellings(reference_name, mitochondrion=False)
+    return pinned_spellings(reference_name, names_rcrs(name))
 
 
 def _some(names, limit=5):
