@@ -154,6 +154,46 @@ def test_ucsc_mouse_names_select_the_same_assembly(name, ucsc_name, assembly):
             variant.contig) == (assembly, ucsc_name, "7")
 
 
+@pytest.mark.parametrize(["name", "ucsc_name", "assembly", "species"], [
+    # UCSC's genome list names each build; chr1 is the same length in both
+    # (123,556,469, 122,894,117 and 122,014,068 bp).
+    ("canFam4", "canFam4", "UU_Cfam_GSD_1.0", "canis_lupus_familiarisgsd"),
+    ("/ref/canFam4.fa.gz", "canFam4", "UU_Cfam_GSD_1.0", "canis_lupus_familiarisgsd"),
+    ("canFam5", "canFam5", "UMICH_Zoey_3.1", "canis_lupus_familiarisgreatdane"),
+    ("canFam6", "canFam6", "Dog10K_Boxer_Tasha", "canis_lupus_familiarisboxer"),
+    ("##reference=file:///ref/canFam6.fa", "canFam6", "Dog10K_Boxer_Tasha",
+     "canis_lupus_familiarisboxer"),
+    ("canFam3", "canFam3", "CanFam3.1", "canis_familiaris"),
+])
+def test_ucsc_dog_names_select_the_same_assembly(name, ucsc_name, assembly, species):
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert infer_reference_name.__wrapped__(name) == ucsc_name
+    genome, converted = infer_genome(name)
+    assert (genome.reference_name, genome.species.latin_name, converted) == (
+        assembly, species, True)
+    variant = Variant("chr12", 100, "A", "T", genome=name)
+    assert (variant.reference_name, variant.original_reference_name,
+            variant.contig) == (assembly, ucsc_name, "12")
+
+
+@pytest.mark.parametrize(["name", "release", "species"], [
+    ("canFam4:110", 110, "canis_lupus_familiarisgsd"),
+    ("canFam5.110", 110, "canis_lupus_familiarisgreatdane"),
+    ("canFam6-110", 110, "canis_lupus_familiarisboxer"),
+])
+def test_ucsc_dog_name_with_release_chooses_that_release(name, release, species):
+    genome, converted = infer_genome(name)
+    assert (genome.release, genome.species.latin_name, converted) == (
+        release, species, True)
+
+
+def test_ucsc_dog_name_rejects_a_release_without_its_assembly():
+    # Ensembl added the German Shepherd assembly in release 107.
+    with pytest.raises(ValueError, match="canis_lupus_familiarisgsd"):
+        infer_genome("canFam4:105")
+
+
 @pytest.mark.parametrize(["name", "assembly"], [
     ("GCA_000001635.1", "NCBIM37"),
     ("GCF_000001635.18", "NCBIM37"),
