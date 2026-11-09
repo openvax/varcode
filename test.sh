@@ -4,6 +4,13 @@
 # so we cap workers at min(cpu_reserve, available_RAM / PER_WORKER_GB).
 # xdist is optional — fall back to serial pytest when it isn't installed.
 #
+# Each run gets its own pytest --basetemp under $TMPDIR, removed when the
+# tests pass and kept (with its path logged) when they fail. pytest's default
+# keeps only the three newest $TMPDIR/pytest-of-$USER/pytest-N directories,
+# so other runs on the same machine could delete a running suite's tmp_path
+# directories (#718). A --basetemp passed as an argument or in
+# PYTEST_ADDOPTS is used instead.
+#
 # Tunables (env vars):
 #   PER_WORKER_GB    per-worker memory budget in GB (default: 1.5)
 #   TEST_SH_MIN      floor on workers (default: 1)
@@ -94,14 +101,35 @@ if (( CPU_CAP < MEM_CAP )); then WORKERS=$CPU_CAP; else WORKERS=$MEM_CAP; fi
 if (( TEST_SH_MAX > 0 && WORKERS > TEST_SH_MAX )); then WORKERS=$TEST_SH_MAX; fi
 if (( WORKERS < TEST_SH_MIN )); then WORKERS=$TEST_SH_MIN; fi
 
+BASETEMP=""
+BASETEMP_FLAGS=()
+case " $* ${PYTEST_ADDOPTS:-} " in
+    *" --basetemp"*) ;;
+    *)
+        tmp_root="${TMPDIR:-/tmp}"
+        BASETEMP=$(mktemp -d "${tmp_root%/}/varcode-pytest.XXXXXX")
+        BASETEMP_FLAGS=(--basetemp "$BASETEMP")
+        ;;
+esac
+
 XDIST_FLAGS=()
 if python -c "import xdist" 2>/dev/null; then
     XDIST_FLAGS=(-n "$WORKERS")
     log "platform=${OS} cpus=${CPUS} cpu_cap=${CPU_CAP} ${mem_note} per_worker=${PER_WORKER_GB}GB"
-    log "workers=${WORKERS} → exec python -m pytest -n ${WORKERS} --cov=varcode/ --cov-report=term-missing tests $*"
+    log "workers=${WORKERS} → python -m pytest -n ${WORKERS} ${BASETEMP_FLAGS[*]} --cov=varcode/ --cov-report=term-missing tests $*"
 else
     log "platform=${OS} cpus=${CPUS} (pytest-xdist not installed; running serial)"
-    log "→ exec python -m pytest --cov=varcode/ --cov-report=term-missing tests $*"
+    log "→ python -m pytest ${BASETEMP_FLAGS[*]} --cov=varcode/ --cov-report=term-missing tests $*"
 fi
 
-exec python -m pytest "${XDIST_FLAGS[@]}" --cov=varcode/ --cov-report=term-missing tests "$@"
+status=0
+python -m pytest "${XDIST_FLAGS[@]}" "${BASETEMP_FLAGS[@]}" \
+    --cov=varcode/ --cov-report=term-missing tests "$@" || status=$?
+if [[ -n "$BASETEMP" ]]; then
+    if (( status == 0 )); then
+        rm -rf -- "$BASETEMP"
+    else
+        log "kept this run's temporary files in $BASETEMP"
+    fi
+fi
+exit "$status"

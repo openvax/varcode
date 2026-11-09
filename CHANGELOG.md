@@ -1,5 +1,17 @@
 # Change Log
 
+## v11.9.5
+
+- `./test.sh` gives each run its own pytest temporary directory,
+  `$TMPDIR/varcode-pytest.XXXXXX`, instead of pytest's shared
+  `$TMPDIR/pytest-of-$USER`. pytest keeps only the three newest runs there, so
+  other test runs on the same machine during a long suite could delete its
+  `tmp_path` directories, and tests failed at setup with `FileNotFoundError`
+  (#718). `deploy.sh` runs `./test.sh`, so releases get the same isolation.
+  The directory is removed when the tests pass and kept, with its path logged,
+  when they fail. A `--basetemp` given as an argument or in `PYTEST_ADDOPTS`
+  is used instead.
+
 ## v11.9.4
 
 - Recognize `canFam4`, `canFam5` and `canFam6`, UCSC's names for the
