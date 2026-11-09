@@ -51,10 +51,16 @@ This native 1KGP call overlaps the newly resolved sequence track. Distinct
 RIMBP3B and RIMBP3C placements must retain their identities even when their
 proteins coincide. Predicted products are not evidence of mutant translation.
 
-**Contig names must match.** Ensembl DNA uses `1`…`22`, `X`, `Y`, matching its
-annotation. The consortium analysis FASTA uses `chr1`… and requires explicit,
-unambiguous name remapping. Renaming does not convert coordinates. Do not combine
-CHM13 variants with GRCh38 transcripts to fill newly resolved regions.
+**Contig names.** Ensembl DNA uses `1`…`22`, `X`, `Y`, matching its annotation.
+The consortium's analysis-set FASTAs (`chm13v2.0*.fa`) and UCSC's `hs1.fa` use
+`chr1`…. Attach one with `varcode.Genome(genome, fasta="chm13v2.0.fa")`, which
+reads each annotation contig by the FASTA's spelling (`22` from `chr22`).
+PyEnsembl's own `genome_fasta_path_or_url`, used at installation above, reads
+names exactly, so give it Ensembl's DNA. `chrM` is never read as `MT` here: in
+the `_rCRS` analysis sets it is the rCRS, not CHM13's own mitochondrion, and the
+two are numbered 576 to 577 bp apart. Renaming does not convert coordinates. Do
+not combine CHM13 variants with GRCh38 transcripts to fill newly resolved
+regions.
 
 For local DNA, pass its path at installation and load time. Python's `cache_root=`
 selects a cache directory. The genome works with splice, structural and supplied-ORF

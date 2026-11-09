@@ -145,7 +145,15 @@ genome.index_genome_fasta()
 Varcode requires PyEnsembl 2.30 or later. For a pre-opened FASTA reader, use
 `varcode.Genome(native, fasta="/data/GRCh38.fa")`.
 An explicit `Genome(native, fasta="/data/other.fa")` overrides native DNA;
-the supplied reference must match the annotation assembly.
+the supplied reference must match the annotation assembly. Its contigs may be
+spelled differently from the annotation's: a FASTA that names `chr22` serves
+the annotation's `22`, and the other way round. An exact name wins, an
+ambiguous one is not read, and a FASTA that shares no contig with the
+annotation raises `ValueError`. A mitochondrion is paired by name only when it
+is the same molecule: under GRCh37 a `chrM` is read as `MT` only at the rCRS
+length (16,569 bp; hg19's is 16,571 bp), and under T2T-CHM13 never, since a
+`_rCRS` analysis set's `chrM` is the rCRS rather than CHM13's own. PyEnsembl's
+native `genome_fasta` reads contigs by exactly the annotation's names.
 
 Lookups behave as follows:
 

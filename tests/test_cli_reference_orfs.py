@@ -8,17 +8,30 @@ from varcode.cli.effects_script import arg_parser, main
 from varcode.cli.variant_args import variant_collection_from_args
 
 
-def test_cli_fasta_is_attached_without_downloading(tmp_path):
+@pytest.mark.parametrize("fasta_contig", ["7", "chr7"])
+def test_cli_fasta_is_attached_without_downloading(tmp_path, fasta_contig):
+    # A FASTA spelling contigs chr7 serves GRCh38's 7 (#721).
     fasta = tmp_path / "reference.fa"
-    fasta.write_text(">99\nACGT\n")
+    fasta.write_text(">%s\nACGT\n" % fasta_contig)
     args = arg_parser.parse_args([
         "--genome", "GRCh38:95", "--genome-fasta", str(fasta),
-        "--variant", "99", "2", "C", "A"])
+        "--variant", "7", "2", "C", "A"])
     variants = variant_collection_from_args(args)
     try:
-        assert variants[0].genome.reference_range("99", 1, 4) == "ACGT"
+        assert variants[0].genome.sequence("7", 1, 4) == "ACGT"
+        assert variants[0].genome.reference_range("7", 1, 4) == "ACGT"
     finally:
         variants[0].genome.close()
+
+
+def test_cli_fasta_sharing_no_contig_fails(tmp_path, capsys):
+    fasta = tmp_path / "reference.fa"
+    fasta.write_text(">99\nACGT\n")
+    with pytest.raises(SystemExit) as error:
+        main(["--genome", "GRCh38:95", "--genome-fasta", str(fasta),
+              "--variant", "7", "2", "C", "A"])
+    assert error.value.code == 1
+    assert "shares no contig" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("options,message", [

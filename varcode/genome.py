@@ -40,6 +40,7 @@ from .genome_sequence import (
     reference_base as _reference_base_lookup,
     reference_range as _reference_range_lookup,
 )
+from .contigs import ContigResolver, _may_alias_mitochondrion
 from .reference import infer_genome
 
 
@@ -84,6 +85,19 @@ class Genome(Serializable):
           a string or an object with ``.seq``.
         * ``None`` — inherit native PyEnsembl DNA (or a rewrapped
           Genome's override). Without DNA, features fall back to cDNA.
+
+        When the reader lists its contigs (``keys()``, as pyfaidx and a
+        ``dict`` do), each annotation contig it spells differently is read
+        by the FASTA's own name: a FASTA with ``chr22`` serves the
+        annotation's ``22``, and ``22`` serves ``chr22``. An exact name
+        always wins, and an ambiguous one is left unread. The
+        mitochondrion is paired only when both names are the same
+        molecule: under GRCh37 a ``chrM`` is the annotation's ``MT`` only
+        at the rCRS length, 16,569 bp (hg19's is 16,571 bp), and under
+        T2T-CHM13 never, since a ``_rCRS`` analysis set's ``chrM`` is the
+        rCRS rather than CHM13's own. A FASTA that shares no contig with
+        the annotation raises ``ValueError``. A reader that lists no
+        contigs is read by exactly the name asked for.
 
         Native and pre-opened readers are borrowed; their owner controls
         their lifetime. :meth:`close` closes only a reader this wrapper
@@ -195,10 +209,13 @@ class Genome(Serializable):
 
     @fasta.setter
     def fasta(self, reader):
-        if reader is self._fasta_override:
+        if reader is self._fasta_override or (
+                isinstance(self._fasta_override, _AnnotationNamedFasta)
+                and reader is self._fasta_override.reader):
             return
+        named = None if reader is None else _with_annotation_names(reader, self._ensembl)
         self.close()
-        self._fasta_override = reader
+        self._fasta_override = named
 
     def close(self):
         """Close only a FASTA opened by this wrapper from an explicit path.
@@ -311,7 +328,8 @@ def _resolve_fasta(arg: Any, ensembl_genome: Any) -> Any:
     Path strings open via pyfaidx; objects are probed against a known
     contig from the genome (``hasattr(arg, '__getitem__')`` alone is
     too permissive — strings, lists, etc. all have it but don't honor
-    the slice protocol).
+    the slice protocol). Either way the reader is then read by the
+    annotation's contig names (:func:`_with_annotation_names`).
     """
     if isinstance(arg, (str, bytes, os.PathLike)):
         try:
@@ -324,7 +342,7 @@ def _resolve_fasta(arg: Any, ensembl_genome: Any) -> Any:
             ) from e
         path_str = os.fspath(arg)
         try:
-            return pyfaidx.Fasta(path_str)
+            reader = pyfaidx.Fasta(path_str)
         except (FileNotFoundError, OSError) as e:
             # Frame the path error as a varcode problem so users see
             # "the FASTA you passed to Genome" rather than a bare
@@ -336,14 +354,27 @@ def _resolve_fasta(arg: Any, ensembl_genome: Any) -> Any:
                 "index alongside it (the index is created automatically "
                 "on first open if writable)."
                 % (path_str, type(e).__name__, e)) from e
+        try:
+            return _with_annotation_names(reader, ensembl_genome)
+        except Exception:
+            reader.close()
+            raise
 
-    probe_contig = _probe_contig_for_validation(ensembl_genome)
-    if probe_contig is None:
+    contigs = _annotation_contigs(ensembl_genome)
+    named = _with_annotation_names(arg, ensembl_genome, contigs)
+    if not contigs:
         # Can't validate (genome reports no contigs). Accept on faith;
         # the first real lookup will fail loudly if the object is malformed.
-        return arg
+        return named
+    probe_contig = contigs[0]
+    names = _fasta_contig_names(arg)
+    if names:
+        # Probe a contig the reader holds, by the annotation's name; one
+        # exists, or _with_annotation_names would have raised.
+        held = set(names) | set(getattr(named, "contig_names", ()))
+        probe_contig = next(contig for contig in contigs if contig in held)
     try:
-        slicer = arg[probe_contig]
+        slicer = named[probe_contig]
         _ = slicer[0:1]
     except Exception as e:
         raise TypeError(
@@ -352,24 +383,130 @@ def _resolve_fasta(arg: Any, ensembl_genome: Any) -> Any:
             "against contig %r failed: %s). Pass a path, a pyfaidx.Fasta, "
             "or an object with the same indexing shape."
             % (type(arg).__name__, probe_contig, e))
-    return arg
+    return named
 
 
-def _probe_contig_for_validation(genome: Any) -> Optional[str]:
-    """Pick a contig name from the genome for probing a candidate FASTA.
-    Returns ``None`` if the genome can't enumerate."""
-    if genome is None:
+class _AnnotationNamedFasta:
+    """A chromosome FASTA reader that answers to the annotation's contig names.
+
+    ``contig_names`` maps each annotation contig the FASTA spells
+    differently to the FASTA's own name (``"22"`` -> ``"chr22"``); any
+    other name is looked up as given. Everything else (``keys``,
+    ``filename``, ``close``, pyfaidx's ``faidx``) is the wrapped reader's,
+    so the wrapper stands in for it wherever ``Genome.fasta`` is read.
+    """
+
+    def __init__(self, reader: Any, contig_names: dict):
+        self.reader = reader
+        self.contig_names = contig_names
+
+    def __getitem__(self, contig):
+        return self.reader[self.contig_names.get(contig, contig)]
+
+    def __contains__(self, contig):
+        return self.contig_names.get(contig, contig) in self.reader
+
+    def __iter__(self):
+        return iter(self.reader)
+
+    def __len__(self):
+        return len(self.reader)
+
+    def __getattr__(self, name):
+        reader = self.__dict__.get("reader")
+        if reader is None or name.startswith("__"):
+            raise AttributeError(name)
+        return getattr(reader, name)
+
+    def __repr__(self):
+        return "%s(%r, %d renamed contigs)" % (
+            type(self).__name__, self.reader, len(self.contig_names))
+
+
+def _with_annotation_names(reader: Any, ensembl_genome: Any, contigs: Optional[list] = None) -> Any:
+    """``reader``, read by the annotation's contig names (#721).
+
+    Resolves each annotation contig against the names the reader lists
+    with :class:`~varcode.contigs.ContigResolver`: an exact name is used
+    as is, otherwise the single alias (``chr22`` for ``22``), subject to
+    the mitochondrion rules of
+    :func:`~varcode.contigs._may_alias_mitochondrion`. Returns ``reader``
+    itself when nothing needs renaming, or when either side lists no
+    contigs. Raises ``ValueError`` when both list contigs and none is
+    shared. ``contigs`` are the annotation's, when already listed.
+    """
+    if isinstance(reader, _AnnotationNamedFasta):
+        reader = reader.reader
+    names = _fasta_contig_names(reader)
+    if contigs is None:
+        contigs = _annotation_contigs(ensembl_genome)
+    if not names or not contigs:
+        return reader
+    reference_name = getattr(ensembl_genome, "assembly", None) or getattr(
+        ensembl_genome, "reference_name", None)
+    if not isinstance(reference_name, str) or not reference_name.strip():
+        reference_name = None
+    resolver = ContigResolver(names, reference_name=reference_name)
+    renamed = {}
+    shared = 0
+    for contig in contigs:
+        found = resolver.resolve(contig)
+        if found.status == "exact":
+            shared += 1
+        elif found.status == "alias" and _may_alias_mitochondrion(
+                contig, found.resolved_name, reference_name,
+                _fasta_contig_length(reader, found.resolved_name)):
+            renamed[contig] = found.resolved_name
+            shared += 1
+    if not shared:
+        raise ValueError(
+            "varcode.Genome: the FASTA shares no contig with the %s "
+            "annotation, even allowing for chr prefixes. FASTA contigs: %s; "
+            "annotation contigs: %s. Attach the FASTA of the annotation's "
+            "assembly." % (
+                reference_name, _some(names), _some(contigs)))
+    return _AnnotationNamedFasta(reader, renamed) if renamed else reader
+
+
+def _some(names, limit=5):
+    names = sorted(names)
+    shown = ", ".join(repr(name) for name in names[:limit])
+    return shown + (" and %d more" % (len(names) - limit) if len(names) > limit else "")
+
+
+def _fasta_contig_names(reader: Any) -> Optional[list]:
+    """The contig names a reader lists (pyfaidx, ``dict``), or None."""
+    keys = getattr(reader, "keys", None)
+    if not callable(keys):
         return None
+    try:
+        names = [name for name in keys() if isinstance(name, str)]
+    except Exception:
+        return None
+    return names or None
+
+
+def _fasta_contig_length(reader: Any, name: str) -> Optional[int]:
+    try:
+        return len(reader[name])
+    except Exception:
+        return None
+
+
+def _annotation_contigs(genome: Any) -> list:
+    """The annotation's contig names, or ``[]`` when it can't list them."""
+    if genome is None:
+        return []
     for accessor in ("contigs", "all_contigs"):
         getter = getattr(genome, accessor, None)
         if callable(getter):
             try:
-                contigs = list(getter())
+                contigs = [str(contig) for contig in getter()]
             except Exception:
                 contigs = []
             if contigs:
-                return contigs[0]
-    return None
+                return contigs
+    return []
 
 
 def _verify_fasta_against_transcripts(ensembl_genome: Any, fasta: Any) -> None:
