@@ -37,35 +37,34 @@
   hg19's `chrM`.
 - `varcode.Genome(fasta=...)` also uses ORFdata's table for T2T, so NCBI's
   accession-named FASTAs are read too. A FASTA's `chrM` serves `MT` or
-  `NC_012920.1` only when its file name says which mitochondrion it is.
+  `NC_012920.1` when its file name says which mitochondrion it is: the
+  `_rCRS` set's serves `NC_012920.1`, and `hs1`'s and the other sets' serve
+  `MT`. A file whose name doesn't say still never pairs its `chrM` (11.10.0).
 - Requires ORFdata 0.52.
 
 ## v11.10.0
 
-- `varcode.Genome(fasta=...)` reads the FASTA by the annotation's contig
-  names when the two spell them differently (#721). A FASTA naming its
-  contigs `chr22`, such as the T2T consortium's `chm13v2.0*.fa`, UCSC's
-  `hs1.fa` or `hg38.fa`, gave an annotation that uses `22` no DNA at all,
-  and no warning: `sequence("22", ...)` returned `""` and the tiered lookups
-  fell back to transcript cDNA as if no FASTA were attached. Each annotation
-  contig is now matched against the names the reader lists (pyfaidx and
-  `dict` readers list them) with `ContigResolver`: an exact name wins,
-  otherwise the single alias. The same applies to a reader assigned to
-  `Genome.fasta`.
-- A FASTA that shares no contig with the annotation now raises `ValueError`
-  naming some of each, instead of attaching and reading nothing.
-- The mitochondrion is paired by name only when it is the same molecule.
-  Under GRCh37 a FASTA's `chrM` is read as `MT` only at the rCRS length,
-  16,569 bp; hg19's chrM is 16,571 bp and offset from it (#707, #710). Under
-  T2T-CHM13 a `chrM` is never read as `MT` or the reverse: it is CHM13's own
-  mitochondrion in `hs1` and `chm13v2.0.fa` but the rCRS in the `_rCRS`
-  analysis sets, both 16,569 bp and numbered 576 to 577 bp apart.
-- A pre-opened reader that lists its contigs is probed by a contig it shares
-  with the annotation. Before, the probe used the annotation's first contig,
-  so a reader without it raised `TypeError`.
-- A reader that lists no contigs is read by exactly the name asked for, as
-  before. PyEnsembl's native `genome_fasta_path_or_url` DNA is unchanged and
-  still needs the annotation's spelling.
+- `varcode.Genome(genome, fasta=...)` reads a FASTA whose contig names are
+  spelled differently from the annotation's, such as UCSC's `chr22` for
+  Ensembl's `22` (#721). It read each contig by the annotation's name. Such a
+  FASTA therefore gave no DNA and no warning: `sequence()` returned `""`, and
+  `reference_base` and `reference_range` fell back to cDNA. This affected
+  `hg38.fa` with Ensembl GRCh38, and the usual T2T setup: the consortium's
+  `chm13v2.0*.fa` or UCSC's `hs1.fa` with Ensembl's annotation. In-memory
+  readers named that way were rejected at construction as not supporting
+  `fa[contig][start:end]`.
+  - A name the FASTA lists is read as is. Otherwise varcode reads the FASTA's
+    one spelling of that contig, as `ContigResolver` matches them, and doesn't
+    guess between ambiguous spellings.
+  - A respelled mitochondrion is read only when it is the annotation's. Under
+    GRCh37, that means a `chrM` of the rCRS length, because hg19's own chrM is
+    offset from the rCRS (#707). Under T2T-CHM13 it is never read, because its
+    FASTAs hold either CHM13's own mitochondrion or the rCRS (#722).
+  - With `verify=True`, the default, a FASTA that lists its names but names
+    none of the annotation's contigs triggers a warning, as the cDNA
+    spot-check does for a FASTA of another build. NCBI's accession-named
+    FASTAs are an example. A FASTA of only unannotated contigs still serves
+    variants on them. The cDNA spot-check now reads respelled FASTAs too.
 
 ## v11.9.5
 

@@ -31,6 +31,15 @@ def _is_grch37(reference_name: str | None) -> bool:
     return reference_name is not None and reference_name.strip().lower() in _GRCH37_NAMES
 
 
+def _is_t2t_chm13(reference_name: str | None) -> bool:
+    """T2T-CHM13, as ORFdata's pinned annotation names it ("T2T-CHM13v2.0").
+
+    Its FASTAs hold either CHM13's own mitochondrion (CP068254.1) or the
+    rCRS, both 16,569 bp, whose positions are 576 to 577 bp apart (#722).
+    """
+    return reference_name is not None and reference_name.strip().upper().startswith("T2T-CHM13")
+
+
 def _is_hg19_mitochondrion(
         contig: str | int, reference_name: str | None, chrm_is_rcrs: bool = False) -> bool:
     """True for ``chrM`` or ``M`` (any case) under GRCh37/hg19, unless the
@@ -47,49 +56,6 @@ def _is_hg19_mitochondrion(
 
 # The rCRS (NC_012920) is 16,569 bp; hg19's chrM (NC_001807) is 16,571 bp.
 _RCRS_LENGTH = 16569
-
-
-_T2T_NAMES = frozenset({"t2t-chm13v2.0", "gca_009914755.4"})
-
-
-def _is_t2t(reference_name: str | None) -> bool:
-    return reference_name is not None and reference_name.strip().lower() in _T2T_NAMES
-
-
-def _may_alias_mitochondrion(
-        annotation_contig: str, sequence_contig: str, reference_name: str | None,
-        sequence_length: int | None) -> bool:
-    """Whether a sequence source's ``sequence_contig`` may be read as the
-    annotation's ``annotation_contig`` when only the mitochondrion's spelling
-    differs (``chrM`` or ``M`` against ``MT``).
-
-    Such a pair can name two different molecules:
-
-    * GRCh37: hg19's ``chrM`` is NC_001807 (16,571 bp), offset from the rCRS
-      that Ensembl names ``MT`` (#707). A source's ``chrM`` is read as ``MT``
-      only at the rCRS length, 16,569 bp, as in GENCODE's GRCh37 (#710).
-    * T2T-CHM13: a FASTA's ``chrM`` is CHM13's own mitochondrion (CP068254.1)
-      in ``hs1`` and ``chm13v2.0.fa``, but the rCRS (NC_012920.1) in the
-      ``_rCRS`` analysis sets. Both are 16,569 bp, numbered 576 to 577 bp
-      apart, so the spellings are never paired (#721).
-
-    Any other pair of spellings, and any other reference, is unaffected.
-    """
-    annotation_family, sequence_family = (_mitochondrion_spelling(annotation_contig),
-                                          _mitochondrion_spelling(sequence_contig))
-    if None in (annotation_family, sequence_family) or annotation_family == sequence_family:
-        return True
-    if _is_t2t(reference_name):
-        return False
-    if _is_grch37(reference_name):
-        return annotation_family == "MT" and sequence_length == _RCRS_LENGTH
-    return True
-
-
-def _mitochondrion_spelling(contig: str) -> str | None:
-    """``"chrM"`` for ``chrM``/``M``, ``"MT"`` for ``MT``/``chrMT``, else None."""
-    name = str(contig).upper()
-    return "chrM" if name in ("CHRM", "M") else "MT" if name in ("MT", "CHRMT") else None
 
 
 # Appended to errors about a GRCh37 chrM, which Ensembl's annotation lacks.
