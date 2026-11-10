@@ -14,7 +14,9 @@ def test_cli_fasta_is_attached_without_downloading(tmp_path):
     args = arg_parser.parse_args([
         "--genome", "GRCh38:95", "--genome-fasta", str(fasta),
         "--variant", "99", "2", "C", "A"])
-    variants = variant_collection_from_args(args)
+    # A FASTA of only an unannotated contig still serves variants on it.
+    with pytest.warns(UserWarning, match="names none of the"):
+        variants = variant_collection_from_args(args)
     try:
         assert variants[0].genome.reference_range("99", 1, 4) == "ACGT"
     finally:
