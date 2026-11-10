@@ -9,13 +9,14 @@ appended, built the way ORFdata builds the installed one.
 """
 
 import json
+import re
 import warnings
 from importlib.resources import files
 
 import orfdata
 import pytest
 
-from varcode import Variant, load_vcf
+from varcode import InvalidContigError, ReferenceMismatchError, Variant, VariantCollection, load_vcf
 from varcode.reference import infer_genome, infer_reference_name
 
 from .native_reference_fixture import DATA
@@ -143,6 +144,8 @@ def test_a_genome_that_is_not_installed_names_the_command(monkeypatch, tmp_path)
     message = str(error.value)
     assert message.startswith("chm13v2.0_noY (from '/refs/not-installed/chm13v2.0_noY.fa') is T2T-CHM13v2.0")
     assert "'orfdata genomes install t2t-chm13'" in message
+    with pytest.raises(orfdata.NotInstalledError, match="^The annotation of T2T-CHM13v2.0 comes from ORFdata"):
+        infer_genome("T2T-CHM13v2.0")
     assert isinstance(error.value, ValueError) and isinstance(error.value, FileNotFoundError)
 
 
@@ -243,6 +246,72 @@ def test_load_vcf_refuses_a_grch38_vcf_read_as_t2t(tmp_path):
 def test_vcf_contig_lengths_are_checked_against_the_table_only_for_t2t(tmp_path):
     # chrEBV isn't in the table, and chrM is the rCRS's 16,569 bp either way.
     assert len(load_vcf(write_vcf(tmp_path, "file:///refs/hs1.fa"))) == 2
+
+
+# Negative controls (#669): another assembly's VCF, alleles and contigs are
+# refused rather than annotated on T2T's transcripts.
+
+@pytest.mark.parametrize("reference", [
+    "GRCh38",
+    "file:///refs/Homo_sapiens_assembly38.fasta",
+    "hg38.fa",
+    "file:///refs/chm13.draft_v1.0.fasta",  # T2T-CHM13v1.0: other coordinates
+])
+@pytest.mark.parametrize("by_name", [False, True])
+def test_load_vcf_refuses_a_header_naming_another_assembly_on_t2t(tmp_path, installed, reference, by_name):
+    path = write_vcf(tmp_path, reference)
+    genome = "T2T-CHM13v2.0" if by_name else installed
+    with pytest.raises(ValueError, match="its ##reference, .* names .*, but genome= is T2T-CHM13v2.0"):
+        load_vcf(path, genome=genome)
+
+
+def test_load_vcf_refuses_a_t2t_header_on_grch38(tmp_path):
+    with pytest.raises(ValueError, match="names hs1, but genome= is GRCh38"):
+        load_vcf(write_vcf(tmp_path, "file:///refs/hs1.fa"), genome=81)
+
+
+@pytest.mark.parametrize("reference", [
+    "file:///refs/hs1.fa",
+    "file:///refs/chm13v2.0_maskedY_rCRS.fa",
+    "T2T-CHM13v1.1",  # v2.0 without chrY: the same coordinates
+    "file:///refs/reference.fa",  # names no assembly, so isn't checked
+])
+def test_load_vcf_accepts_a_header_that_agrees_or_names_nothing(tmp_path, installed, reference):
+    assert len(load_vcf(write_vcf(tmp_path, reference), genome=installed)) == 2
+
+
+def test_reference_vcf_key_none_ignores_a_wrong_header(tmp_path, installed):
+    variants = load_vcf(write_vcf(tmp_path, "GRCh38"), genome=installed, reference_vcf_key=None)
+    assert [v.contig for v in variants] == ["1", "MT"]
+
+
+@pytest.mark.parametrize("contig, position, ref, alt, strand", [
+    ("1", 48121278, "A", "T", "+"),  # SLC5A9; CHM13 has G
+    ("17", 70030393, "C", "A", "-"),  # ABCA10; CHM13 has G
+])
+def test_another_assemblys_allele_is_refused_on_either_strand(installed, contig, position, ref, alt, strand):
+    with pytest.raises(ReferenceMismatchError, match=re.escape("strand %s" % strand)):
+        Variant(contig, position, ref, alt, installed).effects()
+
+
+@pytest.mark.parametrize("contig", ["chrUn_KI270302v1", "KI270302.1", "chrEBV"])
+def test_grch38_only_contigs_are_not_placed_on_t2t(installed, contig):
+    # GRCh38's unplaced scaffolds and EBV decoy have no T2T counterpart.
+    variant = Variant(contig, 100, "A", "T", installed)
+    with pytest.raises(InvalidContigError):
+        variant.effects()
+    with pytest.warns(UserWarning, match="absent from the annotation.*retained as failures"):
+        effects = VariantCollection([variant]).effects()
+    assert [type(effect).__name__ for effect in effects] == ["Failure"]
+
+
+def test_effects_record_the_pinned_annotation(tmp_path, installed):
+    effects = VariantCollection([Variant("1", 48121278, "G", "T", installed)]).effects()
+    path = tmp_path / "effects.csv"
+    effects.to_csv(str(path))
+    header = {line for line in path.read_text().splitlines() if line.startswith("# ")}
+    assert {"# reference_name=T2T-CHM13v2.0", "# annotation_name=ensembl-rapid",
+            "# annotation_version=2022_07", "# assembly_accession=GCA_009914755.4"} <= header
 
 
 def test_pinned_contig_table_has_every_spelling():

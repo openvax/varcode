@@ -118,6 +118,44 @@ For local DNA, pass its path at installation and load time. Python's `cache_root
 selects a cache directory. The genome works with splice, structural and supplied-ORF
 APIs and with `varcode.Genome`. Missing sequence stays unresolved.
 
+### What is converted, and what isn't
+
+Three different things move between GRCh38 and T2T. Varcode itself does none of them:
+
+- **Annotation.** Ensembl made this annotation by projecting GRCh38 gene
+  models onto CHM13. Each GTF record names its GRCh38 parent; SLC5A9's
+  `ENST05220073379` carries `projection_parent_transcript "ENST00000533824.5"`.
+  A projected model can differ from its parent, so a consequence on CHM13 can
+  differ from GRCh38's for the same gene. The annotation names genes but not
+  transcripts, and it has no mitochondrial genes.
+- **ORF placement.** With `extra_orfs`, catalogues made on GRCh38 reach T2T
+  through ORFdata's pinned GRCh38-to-T2T-CHM13v2.0 chain file
+  (`orfdata chains download`). An ORF is lifted only when each of its coding
+  blocks lies inside one ungapped alignment block. Placement then checks
+  the exact coding path and protein again, and leaves out any ORF whose
+  sequence changed.
+- **Variants.** Varcode converts no variant coordinates
+  ([#243](https://github.com/openvax/varcode/issues/243)). Renaming contigs
+  (`chr1` or `CP068277.2` to `1`), choosing `genome=` and attaching a FASTA
+  change names, not positions. Lift GRCh38 calls to T2T before annotating
+  them, and check their REF against T2T.
+
+These are refused, not annotated:
+
+- A VCF whose `##reference` names another assembly, read with `genome=` a
+  T2T genome, such as `GRCh38`, `Homo_sapiens_assembly38.fasta`, `hg38.fa` or
+  T2T-CHM13v1.0. A T2T VCF read with `genome=` GRCh38 is refused too. If the
+  header is wrong, pass `reference_vcf_key=None` to ignore it.
+- A VCF whose `##contig` lengths aren't T2T's.
+- An allele whose REF disagrees with T2T's transcript or DNA raises
+  `ReferenceMismatchError` when it is annotated.
+- GRCh38's unplaced scaffolds and EBV (`chrUn_KI270302v1`, `KI270302.1`,
+  `chrEBV`), which T2T doesn't have. `Variant.effects()` raises
+  `InvalidContigError`, and a collection keeps them as failures, with a warning.
+
+A GRCh38 position whose REF happens to match T2T's base can't be told apart by
+its allele. Only the header can say which assembly the VCF is on.
+
 ## Native mouse and dog
 
 ```sh

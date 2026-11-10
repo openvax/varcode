@@ -1,5 +1,25 @@
 # Change Log
 
+## v11.12.0
+
+- `load_vcf(path, genome=...)` refuses a VCF whose `##reference` names
+  another assembly when either is a genome ORFdata pins (#669). Examples are
+  a GRCh38 VCF (`GRCh38`, `Homo_sapiens_assembly38.fasta`, `hg38.fa`) read
+  as T2T-CHM13v2.0, a T2T-CHM13v1.0 VCF read as v2.0, and a T2T VCF read as
+  GRCh38. Before, the explicit genome won silently, and the variants were
+  recorded as T2T. 11.11.0's `##contig` length check misses VCFs without
+  `##contig` lines. A header naming no recognized assembly isn't checked,
+  and `reference_vcf_key=None` ignores a wrong one.
+- `docs/native_references.md` separates three things varcode doesn't do
+  itself: Ensembl's projection of GRCh38 models onto CHM13, ORFdata's
+  chain-file lift of ORF catalogues, and variant liftover (#243). It also
+  lists what is refused on T2T: the headers above, `##contig` lengths, REF
+  mismatches and GRCh38-only contigs.
+- Tests cover these negative controls: REF mismatches on both strands,
+  GRCh38's unplaced scaffolds and EBV, and the identity a T2T export records.
+- When `T2T-CHM13v2.0` isn't installed, the error no longer says
+  "T2T-CHM13v2.0 is T2T-CHM13v2.0".
+
 ## v11.11.0
 
 - Infer T2T-CHM13v2.0 from the names its files go by and load ORFdata's pinned

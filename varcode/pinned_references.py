@@ -70,6 +70,16 @@ def check_supported(name):
         raise ValueError("%s is not a supported reference: %s" % (name, row["note"]))
 
 
+def pinned_assembly(name):
+    """The assembly of the genome ORFdata pins for ``name``, e.g.
+    ``T2T-CHM13v2.0`` for ``hs1``; None for other names and for other
+    versions such as T2T-CHM13v1.0."""
+    row = pinned_name(name)
+    if row is None or row["genome"] is None:
+        return None
+    return next((reference for reference, pin in _pins().items() if pin.name == row["genome"]), None)
+
+
 def names_rcrs(name):
     """Whether files called ``name`` carry the rCRS as their mitochondrion."""
     row = pinned_name(name)
@@ -110,8 +120,12 @@ def load_pinned_genome(name, release=None, source=None):
         return orfdata.load_genome(row["name"])
     except orfdata.NotInstalledError as error:
         found = "" if source in (None, row["name"]) else " (from %r)" % (source,)
-        raise type(error)("%s%s is %s, whose annotation comes from ORFdata. %s"
-                          % (row["name"], found, pin.reference_name, error)) from error
+        if row["name"] == pin.reference_name:
+            lead = "The annotation of %s%s comes from ORFdata." % (row["name"], found)
+        else:
+            lead = "%s%s is %s, whose annotation comes from ORFdata." % (
+                row["name"], found, pin.reference_name)
+        raise type(error)("%s %s" % (lead, error)) from error
 
 
 @lru_cache(maxsize=None)

@@ -18,13 +18,15 @@ import urllib.request
 import logging
 from collections import OrderedDict
 from typing import Literal
+import warnings
 from warnings import warn
 
 import pandas
 
 from .contigs import _RCRS_LENGTH, _is_grch37
 from .pinned_references import (
-    is_pinned_assembly, names_rcrs, pinned_contig_lengths, pinned_contig_name, pinned_name)
+    find_pinned_name, is_pinned_assembly, names_rcrs, pinned_assembly, pinned_contig_lengths,
+    pinned_contig_name, pinned_name)
 from .reference import _split_release, infer_genome, infer_reference_name
 from .variant import Variant, variant_ascending_position_sort_key
 from .variant_collection import VariantCollection
@@ -111,6 +113,38 @@ def _check_pinned_contig_lengths(path, header, assembly, chrm_is_rcrs):
                assembly))
 
 
+def _check_header_reference(path, reference, assembly):
+    """Raise when the header's reference and ``genome=`` put the VCF on two
+    assemblies, one of them a genome ORFdata pins, such as T2T-CHM13v2.0.
+
+    A GRCh38 VCF passed with ``genome=`` a T2T genome, or a T2T VCF with
+    GRCh38, would annotate one assembly's positions on the other's
+    transcripts, and varcode doesn't convert them (#243). A header whose
+    reference names no recognized assembly isn't checked (#669).
+    """
+    if not isinstance(reference, str):
+        return
+    named = find_pinned_name(reference)
+    if named is not None:
+        header_assembly = pinned_assembly(named)
+    else:
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                named = infer_reference_name(reference)
+        except ValueError:
+            return
+        header_assembly = None
+        if not is_pinned_assembly(assembly):
+            return
+    if header_assembly == assembly:
+        return
+    raise ValueError(
+        "%s: its ##reference, %r, names %s, but genome= is %s. One assembly's positions aren't "
+        "the other's, and varcode doesn't convert them. Pass the genome the VCF was called on, "
+        "or reference_vcf_key=None if the header is wrong." % (path, reference, named, assembly))
+
+
 def load_vcf(
         path: str | os.PathLike[str],
         genome=None,
@@ -151,11 +185,15 @@ def load_vcf(
         reference_vcf_key, usually a FASTA path, from an assembly name or
         alias in its file name, or a common build's file name such as
         ``hs37d5``, ``human_g1k_v37`` or the Broad's
-        ``Homo_sapiens_assembly38``.
+        ``Homo_sapiens_assembly38``. A ``genome`` that disagrees with the
+        header's reference raises ``ValueError`` when one of the two is a
+        genome ORFdata pins, such as T2T-CHM13v2.0: a GRCh38 VCF read as
+        T2T, or the reverse.
 
     reference_vcf_key : str, optional
         Name of metadata field which contains path to reference FASTA
-        file (default = 'reference')
+        file (default = 'reference'). With ``genome`` given, None ignores
+        the header's reference.
 
     only_passing : bool, optional
         If true, any entries whose FILTER field is not one of "." or "PASS" is
@@ -269,6 +307,7 @@ def load_vcf(
         path = parsed_path.path
     header = VCFHeader.from_path(path)
 
+    genome_given = genome is not None
     if genome is None:
         if reference_vcf_key not in header.metadata:
             raise ValueError("Unable to infer reference genome for %s" % (path,))
@@ -282,6 +321,8 @@ def load_vcf(
     chrm_is_rcrs = _is_grch37(assembly) and _declares_rcrs_chrm(header)
     if chrm_is_rcrs:
         logger.info("%s declares chrM at the rCRS length; naming it MT", path)
+    if genome_given:
+        _check_header_reference(path, header.metadata.get(reference_vcf_key), assembly)
     if is_pinned_assembly(assembly):
         # Only the file's name says which mitochondrion a T2T chrM is.
         chrm_is_rcrs = _names_rcrs_file(original_genome, header.metadata.get(reference_vcf_key))
