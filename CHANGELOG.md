@@ -1,5 +1,28 @@
 # Change Log
 
+## v11.10.0
+
+- `varcode.Genome(genome, fasta=...)` reads a FASTA whose contig names are
+  spelled differently from the annotation's, such as UCSC's `chr22` for
+  Ensembl's `22` (#721). It read each contig by the annotation's name. Such a
+  FASTA therefore gave no DNA and no warning: `sequence()` returned `""`, and
+  `reference_base` and `reference_range` fell back to cDNA. This affected
+  `hg38.fa` with Ensembl GRCh38, and the usual T2T setup: the consortium's
+  `chm13v2.0*.fa` or UCSC's `hs1.fa` with Ensembl's annotation. In-memory
+  readers named that way were rejected at construction as not supporting
+  `fa[contig][start:end]`.
+  - A name the FASTA lists is read as is. Otherwise varcode reads the FASTA's
+    one spelling of that contig, as `ContigResolver` matches them, and doesn't
+    guess between ambiguous spellings.
+  - A respelled mitochondrion is read only when it is the annotation's. Under
+    GRCh37, that means a `chrM` of the rCRS length, because hg19's own chrM is
+    offset from the rCRS (#707). Under T2T-CHM13 it is never read, because its
+    FASTAs hold either CHM13's own mitochondrion or the rCRS (#722).
+  - With `verify=True`, the default, a FASTA that lists its names but names
+    none of the annotation's contigs raises `ValueError`. NCBI's
+    accession-named FASTAs are an example. The cDNA spot-check now reads
+    respelled FASTAs too.
+
 ## v11.9.5
 
 - `./test.sh` gives each run its own pytest temporary directory,

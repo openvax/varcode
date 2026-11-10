@@ -18,7 +18,8 @@ position, and falls back between them in this order:
 
 1. **Chromosome FASTA** (when available) — read via ``.fasta`` on either
    native PyEnsembl genomes or :class:`varcode.Genome`. The wrapper
-   inherits native DNA unless an explicit ``fasta=`` overrides it.
+   inherits native DNA unless an explicit ``fasta=`` overrides it, and
+   reads each contig by the FASTA's own spelling (``chr22`` for ``22``).
    Covers every base on every contig the FASTA contains. Missing native
    DNA falls through to cDNA; lookups never download reference DNA.
 2. **Transcript cDNA** — fall back to pyensembl's transcript
@@ -67,7 +68,7 @@ def reference_base(genome: Any, contig: str, position: int) -> str:
     """
     fasta = getattr(genome, "fasta", None)
     if fasta is not None:
-        from_fasta = _fasta_range(fasta, contig, position, position)
+        from_fasta = _fasta_range(fasta, _fasta_contig(genome, contig), position, position)
         if from_fasta:
             return from_fasta
     return _base_from_genome_transcripts(genome, contig, position)
@@ -108,7 +109,7 @@ def reference_range(genome: Any, contig: str, start: int, end: int) -> str:
 
     fasta = getattr(genome, "fasta", None)
     if fasta is not None:
-        from_fasta = _fasta_range(fasta, contig, start, end)
+        from_fasta = _fasta_range(fasta, _fasta_contig(genome, contig), start, end)
         if from_fasta and len(from_fasta) == end - start + 1:
             return from_fasta
 
@@ -183,6 +184,14 @@ def _range_from_exon_slices(transcripts, contig, start, end):
 # --------------------------------------------------------------------
 # Source readers (also consumed by varcode.Genome construction)
 # --------------------------------------------------------------------
+
+
+def _fasta_contig(genome: Any, contig: str) -> str:
+    """``contig`` as ``genome``'s FASTA names it. :class:`varcode.Genome`
+    resolves spellings such as ``chr22`` for ``22`` (#721); a bare PyEnsembl
+    genome's own DNA uses its annotation's names."""
+    spelling = getattr(genome, "_fasta_contig", None)
+    return contig if spelling is None else spelling(contig)
 
 
 def _fasta_range(fasta: Any, contig: str, start: int, end: int) -> str:

@@ -31,6 +31,8 @@ from typing import Any, Optional
 
 from serializable import Serializable
 
+from .contigs import _RCRS_LENGTH, ContigResolver, _is_grch37, _is_t2t_chm13
+
 # Module-level imports of the lookup helpers. Functions in this file
 # call into them on hot paths; per-call imports would add measurable
 # overhead in tight loops (e.g. left-alignment shifts in #369).
@@ -85,6 +87,18 @@ class Genome(Serializable):
         * ``None`` — inherit native PyEnsembl DNA (or a rewrapped
           Genome's override). Without DNA, features fall back to cDNA.
 
+        Its contig names may be spelled differently from the
+        annotation's: a FASTA with UCSC names (``chr22``, ``chrM``)
+        serves an Ensembl annotation (``22``, ``MT``). A name the FASTA
+        lists is read as is; otherwise its one spelling of that contig,
+        matched as :class:`~varcode.ContigResolver` matches them. A
+        differently spelled mitochondrion is read only when it is the
+        annotation's: under GRCh37, a ``chrM`` of the rCRS length
+        (16,569 bp; hg19's own chrM is not the rCRS); under T2T-CHM13,
+        never, since its FASTAs hold one of two mitochondria of that
+        length. Readers that can't list their names are read by the
+        annotation's name.
+
         Native and pre-opened readers are borrowed; their owner controls
         their lifetime. :meth:`close` closes only a reader this wrapper
         opened from an explicit path. Rewrapping borrows that reader, so
@@ -93,6 +107,8 @@ class Genome(Serializable):
         When True (default) and ``fasta`` is provided, spot-check a few
         exonic positions against pyensembl's transcript cDNA to catch
         mislabeled FASTAs (e.g. GRCh37 attached to a GRCh38 release).
+        A FASTA that lists its names but names none of the annotation's
+        contigs, even respelled, raises ``ValueError``.
         Iterates ``self.transcripts()`` which on a fresh process may
         trigger lazy DB construction; pass ``verify=False`` to defer
         that cost. Inherited native DNA is not opened or spot-checked.
@@ -151,7 +167,8 @@ class Genome(Serializable):
         if (verify and fasta_was_provided
                 and self.fasta is not None
                 and self._ensembl is not None):
-            _verify_fasta_against_transcripts(self._ensembl, self.fasta)
+            _check_fasta_names_annotated_contigs(self)
+            _verify_fasta_against_transcripts(self)
 
         # Per-instance warn-once for missing-reference signals from
         # consumers (cryptic_exons, etc.). Bound to this Genome's
@@ -281,7 +298,27 @@ class Genome(Serializable):
         fasta = self.fasta
         if fasta is None:
             return ""
-        return _fasta_range(fasta, contig, start, end)
+        return _fasta_range(fasta, self._fasta_contig(contig), start, end)
+
+    def _fasta_contig(self, contig):
+        """The attached FASTA's own name for annotation ``contig`` (#721).
+
+        Each name is resolved once per reader; see the ``fasta``
+        parameter for the rules. Absent or ambiguous names are read as
+        given, which finds nothing.
+        """
+        fasta = self.fasta
+        spellings = self.__dict__.get("_fasta_spellings")
+        if spellings is None or spellings[0] is not fasta:
+            names = _fasta_names(fasta)
+            resolver = None if names is None else ContigResolver(
+                names, reference_name=_contig_reference_name(self._ensembl))
+            spellings = self._fasta_spellings = (fasta, resolver, {})
+        _, resolver, found = spellings
+        name = found.get(contig)
+        if name is None:
+            name = found[contig] = _fasta_spelling(resolver, fasta, contig)
+        return name
 
     # -- tiered lookup convenience -------------------------------------
 
@@ -337,7 +374,10 @@ def _resolve_fasta(arg: Any, ensembl_genome: Any) -> Any:
                 "on first open if writable)."
                 % (path_str, type(e).__name__, e)) from e
 
-    probe_contig = _probe_contig_for_validation(ensembl_genome)
+    # Probe a name the reader lists, if it lists any: its spelling of the
+    # annotation's names (chr1 for 1) need not match.
+    names = _fasta_names(arg)
+    probe_contig = names[0] if names else _probe_contig_for_validation(ensembl_genome)
     if probe_contig is None:
         # Can't validate (genome reports no contigs). Accept on faith;
         # the first real lookup will fail loudly if the object is malformed.
@@ -372,14 +412,104 @@ def _probe_contig_for_validation(genome: Any) -> Optional[str]:
     return None
 
 
-def _verify_fasta_against_transcripts(ensembl_genome: Any, fasta: Any) -> None:
+def _fasta_names(fasta: Any) -> Optional[list]:
+    """The contig names a FASTA reader lists (``pyfaidx.Fasta`` and
+    mappings do), or None for readers that can't list them."""
+    keys = getattr(fasta, "keys", None)
+    if not callable(keys):
+        return None
+    try:
+        return [name for name in keys() if isinstance(name, str)]
+    except Exception:
+        return None
+
+
+def _contig_reference_name(genome: Any) -> Optional[str]:
+    """The assembly whose contig spelling rules apply, as ``load_vcf`` reads it."""
+    name = getattr(genome, "assembly", None) or getattr(genome, "reference_name", None)
+    return name if isinstance(name, str) and name.strip() else None
+
+
+def _fasta_spelling(resolver: Optional[ContigResolver], fasta: Any, contig: Any) -> Any:
+    """``contig`` as the FASTA spells it, or ``contig`` itself when the
+    FASTA lists it, can't list its names, or has no single match."""
+    if resolver is None:
+        return contig
+    try:
+        resolution = resolver.resolve(contig)
+    except (TypeError, ValueError):
+        return contig
+    if resolution.status != "alias":
+        return contig
+    if resolution.normalized_name == "MT" and not _fasta_mitochondrion_is_annotations(
+            resolver.reference_name, contig, fasta, resolution.resolved_name):
+        return contig
+    return resolution.resolved_name
+
+
+def _fasta_mitochondrion_is_annotations(
+        reference_name: Optional[str], contig: Any, fasta: Any, fasta_name: str) -> bool:
+    """Whether the FASTA's ``fasta_name`` (``chrM``, say) holds the
+    annotation's mitochondrion ``contig`` (``MT``).
+
+    hg19's chrM (NC_001807, 16,571 bp) is not the rCRS that Ensembl's
+    GRCh37 names MT, and its positions are offset from it (#707). Under
+    GRCh37, a FASTA's chrM therefore serves MT only at the rCRS length,
+    as in GENCODE's GRCh37 (#710), and hg19's chrM, which variants keep
+    as ``chrM``, reads no other spelling. T2T-CHM13 FASTAs hold either
+    CHM13's own mitochondrion or the rCRS, both 16,569 bp, with positions
+    576 to 577 bp apart (#722), so a respelling never chooses between
+    them. Elsewhere (hg38, mm10, canFam3) a FASTA's chrM is the
+    annotation's MT, as a VCF's chrM becomes MT.
+    """
+    if _is_t2t_chm13(reference_name):
+        return False
+    if not _is_grch37(reference_name):
+        return True
+    if str(contig).upper() != "MT":
+        return False
+    try:
+        return len(fasta[fasta_name]) == _RCRS_LENGTH
+    except Exception:
+        return False
+
+
+def _check_fasta_names_annotated_contigs(genome: "Genome") -> None:
+    """Raise when an attached FASTA that lists its names names none of
+    the annotation's contigs, even respelled: every DNA lookup would
+    find nothing, silently (#721)."""
+    names = _fasta_names(genome.fasta)
+    try:
+        contigs = list(genome._ensembl.contigs())
+    except Exception:
+        return
+    if not names or not contigs:
+        return
+    listed = set(names)
+    if any(genome._fasta_contig(contig) in listed for contig in contigs):
+        return
+    raise ValueError(
+        "varcode.Genome: the FASTA names none of the %d contigs in the %s "
+        "annotation, even allowing for spellings such as chr22 for 22. "
+        "It has %s; the annotation has %s. Attach DNA of this assembly "
+        "whose contig names are the annotation's or their UCSC spellings."
+        % (len(contigs), _contig_reference_name(genome._ensembl) or "attached",
+           _some(names), _some(contigs)))
+
+
+def _some(names: list, shown: int = 5) -> str:
+    listed = ", ".join(repr(name) for name in names[:shown])
+    return listed + (", …" if len(names) > shown else "")
+
+
+def _verify_fasta_against_transcripts(genome: "Genome") -> None:
     """Spot-check that the attached FASTA matches pyensembl's transcript
     cDNA at a few exonic positions. Warns (does not raise) on mismatch
     so users with intentionally-divergent setups can override with
     ``verify=False``.
     """
     try:
-        transcripts = list(ensembl_genome.transcripts())[:50]
+        transcripts = list(genome._ensembl.transcripts())[:50]
     except Exception:
         return
 
@@ -394,7 +524,8 @@ def _verify_fasta_against_transcripts(ensembl_genome: Any, fasta: Any) -> None:
             exon = t.exons[0]
             position = exon.start + 1
             transcript_base = _read_transcript_base(t, position)
-            fasta_base = _fasta_range(fasta, t.contig, position, position)
+            fasta_base = _fasta_range(
+                genome.fasta, genome._fasta_contig(t.contig), position, position)
         except Exception:
             continue
         if not fasta_base or not transcript_base:
