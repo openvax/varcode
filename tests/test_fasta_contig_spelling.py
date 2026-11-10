@@ -158,13 +158,16 @@ def test_t2t_consortium_fasta_serves_ensembl_annotation(chm13, tmp_path):
     genome.close()
 
 
-def test_a_fasta_naming_none_of_the_contigs_raises(grch38, cftr_base):
+def test_a_fasta_naming_none_of_the_contigs_warns(grch38, cftr_base):
     position, base = cftr_base
     # NCBI's FASTAs name chromosomes by accession (CP068277.2 is T2T's chr1).
     fasta = _Fasta({"CP068277.2": _Record(base, offset=position)})
-    with pytest.raises(ValueError, match="names none of the .* contigs in the GRCh38"):
-        Genome(grch38, fasta=fasta)
-    assert Genome(grch38, fasta=fasta, verify=False).sequence("7", position, position) == ""
+    with pytest.warns(UserWarning, match="names none of the .* contigs in the GRCh38"):
+        genome = Genome(grch38, fasta=fasta)
+    assert genome.sequence("7", position, position) == ""
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        Genome(grch38, fasta=fasta, verify=False)
 
 
 def test_verify_compares_a_respelled_fasta(grch38):

@@ -19,9 +19,10 @@
     offset from the rCRS (#707). Under T2T-CHM13 it is never read, because its
     FASTAs hold either CHM13's own mitochondrion or the rCRS (#722).
   - With `verify=True`, the default, a FASTA that lists its names but names
-    none of the annotation's contigs raises `ValueError`. NCBI's
-    accession-named FASTAs are an example. The cDNA spot-check now reads
-    respelled FASTAs too.
+    none of the annotation's contigs triggers a warning, as the cDNA
+    spot-check does for a FASTA of another build. NCBI's accession-named
+    FASTAs are an example. A FASTA of only unannotated contigs still serves
+    variants on them. The cDNA spot-check now reads respelled FASTAs too.
 
 ## v11.9.5
 

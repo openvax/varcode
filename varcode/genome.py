@@ -107,8 +107,8 @@ class Genome(Serializable):
         When True (default) and ``fasta`` is provided, spot-check a few
         exonic positions against pyensembl's transcript cDNA to catch
         mislabeled FASTAs (e.g. GRCh37 attached to a GRCh38 release).
-        A FASTA that lists its names but names none of the annotation's
-        contigs, even respelled, raises ``ValueError``.
+        Also warns when a FASTA that lists its names names none of the
+        annotation's contigs, even respelled.
         Iterates ``self.transcripts()`` which on a fresh process may
         trigger lazy DB construction; pass ``verify=False`` to defer
         that cost. Inherited native DNA is not opened or spot-checked.
@@ -475,9 +475,11 @@ def _fasta_mitochondrion_is_annotations(
 
 
 def _check_fasta_names_annotated_contigs(genome: "Genome") -> None:
-    """Raise when an attached FASTA that lists its names names none of
-    the annotation's contigs, even respelled: every DNA lookup would
-    find nothing, silently (#721)."""
+    """Warn when an attached FASTA that lists its names names none of
+    the annotation's contigs, even respelled: every lookup on an annotated
+    contig would find nothing, silently (#721). Warns, as the cDNA
+    spot-check does: a FASTA of only unannotated contigs (a transgene,
+    a virus) still serves variants on them."""
     names = _fasta_names(genome.fasta)
     try:
         contigs = list(genome._ensembl.contigs())
@@ -488,13 +490,16 @@ def _check_fasta_names_annotated_contigs(genome: "Genome") -> None:
     listed = set(names)
     if any(genome._fasta_contig(contig) in listed for contig in contigs):
         return
-    raise ValueError(
+    warnings.warn(
         "varcode.Genome: the FASTA names none of the %d contigs in the %s "
-        "annotation, even allowing for spellings such as chr22 for 22. "
-        "It has %s; the annotation has %s. Attach DNA of this assembly "
-        "whose contig names are the annotation's or their UCSC spellings."
+        "annotation, even allowing for spellings such as chr22 for 22, so "
+        "it gives annotated contigs no DNA. It has %s; the annotation has "
+        "%s. Attach DNA of this assembly whose contig names are the "
+        "annotation's or their UCSC spellings, or pass verify=False to "
+        "suppress this check."
         % (len(contigs), _contig_reference_name(genome._ensembl) or "attached",
-           _some(names), _some(contigs)))
+           _some(names), _some(contigs)),
+        stacklevel=3)
 
 
 def _some(names: list, shown: int = 5) -> str:

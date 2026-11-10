@@ -151,7 +151,8 @@ Ensembl GRCh38 (`7`). A name the FASTA lists is read as is; otherwise its one
 spelling of that contig. A respelled mitochondrion is read only when it is the
 annotation's (under GRCh37, a `chrM` of the rCRS length; under T2T-CHM13,
 never). With `verify=True`, the default, a FASTA that names none of the
-annotation's contigs raises `ValueError`.
+annotation's contigs triggers a warning. Such a FASTA still serves variants
+on the contigs it does name.
 
 Lookups behave as follows:
 
