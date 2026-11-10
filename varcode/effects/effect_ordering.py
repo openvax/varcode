@@ -254,12 +254,12 @@ def length_of_associated_transcript(effect):
 
 def name_of_associated_transcript(effect):
     """
-    Name of transcript associated with effect,
-    if there is one (otherwise return "").
+    Name of transcript associated with effect, or "" when there is no
+    transcript or it has no name (#727).
     """
     return apply_to_transcript_if_exists(
         effect=effect,
-        fn=lambda t: None if t.name is None else "",
+        fn=lambda t: t.name or "",
         default="")
 
 

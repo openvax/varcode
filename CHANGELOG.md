@@ -1,5 +1,17 @@
 # Change Log
 
+## v11.11.1
+
+- `top_priority_effect()` and `top_priority_effect_per_variant()` no longer
+  raise `AttributeError` on a transcript without a name (#727). Annotations
+  without `transcript_name` hit this, including the CHM13 test genome. Since
+  2024 (f4df354), the helper behind the transcript-name tie-breakers returned
+  `""` for named transcripts and `None` for unnamed ones. The documented tie-breakers
+  now apply again: when two effects tie on effect class, biotypes,
+  completeness, CDS length, transcript length and exon count, `TP53-201`
+  beats `TP53-206`, then the lower number wins. Before, such ties went to
+  whichever effect came first.
+
 ## v11.11.0
 
 - Infer T2T-CHM13v2.0 from the names its files go by and load ORFdata's pinned
