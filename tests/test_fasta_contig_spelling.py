@@ -9,12 +9,13 @@ import json
 import warnings
 
 import pytest
+from pyensembl import Genome as AnnotationGenome
 from pyensembl import cached_release
 
 from varcode import Genome
 from varcode.genome_sequence import reference_base, reference_range
 
-from .native_reference_fixture import DATA
+from .native_reference_fixture import DATA, ReferenceWindows
 
 # rCRS positions 1-9 (NC_012920.1).
 RCRS_START = "GATCACAGG"
@@ -131,9 +132,10 @@ def test_a_respelled_mitochondrion_is_read_only_when_it_is_the_annotations(
     assert genome.sequence(contig, 1, 3) == expected
 
 
-def test_t2t_mitochondrion_is_never_chosen_by_spelling(chm13):
+def test_t2t_mitochondrion_is_not_chosen_by_spelling_alone(chm13):
     # chm13v2.0.fa's chrM is CHM13's own (CP068254.1); the _rCRS set's is the
     # rCRS. Both are 16,569 bp, with positions 576 to 577 bp apart (#722).
+    # Only a file name says which (test_t2t_reference.py); this reader has none.
     fasta = _Fasta({"chr22": _Record("ACGT"), "chrM": _Record(RCRS_START, length=16569)})
     genome = Genome(chm13, fasta=fasta, verify=False)
     assert genome.sequence("MT", 1, 3) == ""
@@ -179,3 +181,109 @@ def test_verify_compares_a_respelled_fasta(grch38):
     fasta = _Fasta({name: Wrong("", length=10 ** 9) for name in names})
     with pytest.warns(UserWarning, match="disagree"):
         Genome(grch38, fasta=fasta)
+
+
+# Ported from #724, a parallel fix for #721 that #726 superseded.
+
+class _ListedWindows(ReferenceWindows):
+    """CHM13 fixture DNA under ``prefix`` + its contig names, listed by ``keys()``."""
+
+    def __init__(self, windows, contig=None, prefix=""):
+        super().__init__([dict(w, contig=prefix + w["contig"]) for w in windows], contig)
+
+    def keys(self):
+        return sorted({window["contig"] for window in self.windows})
+
+
+def _chm13_windows():
+    windows = json.loads(gzip.decompress((DATA / "dna-windows.json.gz").read_bytes()))
+    return [window for window in windows if window["genome"] == "chm13"]
+
+
+@pytest.mark.parametrize("prefix", ["", "chr"])
+def test_chm13_windows_are_read_whichever_way_they_spell_contigs(chm13, prefix):
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")  # The transcript spot-check agrees.
+        genome = Genome(chm13, fasta=_ListedWindows(_chm13_windows(), prefix=prefix))
+    assert genome.sequence("22", 21796720, 21796729) == "GTCCCTATGC"
+    assert genome.reference_range("22", 21796720, 21796729) == "GTCCCTATGC"
+    assert genome.reference_base("22", 21796720) == "G"
+
+
+def test_reader_that_lists_no_contigs_is_read_by_exact_name(chm13):
+    renamed = [dict(window, contig="chr" + window["contig"]) for window in _chm13_windows()]
+    genome = Genome(chm13, fasta=ReferenceWindows(renamed), verify=False)
+    assert genome.sequence("22", 21796720, 21796729) == ""
+    assert genome.sequence("chr22", 21796720, 21796729) == "GTCCCTATGC"
+
+
+def _annotation(tmp_path, reference_name, contigs):
+    """A one-gene-per-contig annotation, so contigs() lists ``contigs``."""
+    attributes = ('gene_id "g{i}"; gene_name "G{i}"; transcript_id "t{i}"; '
+                  'transcript_name "T{i}"; transcript_biotype "lncRNA";')
+    lines = []
+    for i, contig in enumerate(contigs):
+        for feature, extra in [("gene", ""), ("transcript", ""),
+                               ("exon", ' exon_id "e{i}"; exon_number "1";')]:
+            lines.append("%s\ttest\t%s\t1\t8\t.\t+\t.\t%s\n" % (
+                contig, feature, (attributes + extra).format(i=i)))
+    directory = tmp_path / ("annotation-%s-%s" % (reference_name, "-".join(contigs)))
+    directory.mkdir()
+    gtf = directory / "genes.gtf"
+    gtf.write_text("".join(lines))
+    genome = AnnotationGenome(
+        reference_name=reference_name, annotation_name="fasta_names_test",
+        gtf_path_or_url=str(gtf), cache_directory_path=str(directory / "cache"))
+    genome.index()
+    return genome
+
+
+def _fasta_file(tmp_path, name, contigs):
+    path = tmp_path / name
+    path.write_text("".join(">%s\n%s\n" % item for item in contigs.items()))
+    return path
+
+
+@pytest.mark.parametrize("annotation_contig, fasta_contig", [
+    ("1", "chr1"),  # hg38.fa with Ensembl GRCh38
+    ("chr1", "1"),  # the other way round
+])
+def test_pyfaidx_fasta_spelled_differently(tmp_path, annotation_contig, fasta_contig):
+    annotation = _annotation(tmp_path, "GRCh38", [annotation_contig, "2"])
+    path = _fasta_file(tmp_path, "reference.fa", {fasta_contig: "ACGTTGCA", "chr2": "GGGGCCCC"})
+    genome = Genome(annotation, fasta=path)
+    assert genome.sequence(annotation_contig, 2, 5) == "CGTT"
+    assert genome.sequence("2", 1, 4) == "GGGG"
+    assert genome.reference_base(annotation_contig, 1) == "A"
+    # The reader is pyfaidx's own: its names and path, closed by close().
+    assert sorted(genome.fasta.keys()) == sorted([fasta_contig, "chr2"])
+    assert genome.to_dict()["fasta"] == str(path)
+    reader = genome.fasta
+    genome.close()
+    assert reader.faidx.file.closed
+
+
+def test_a_mapping_reader_is_probed_by_a_name_it_lists(tmp_path):
+    # The probe used to try the annotation's first contig by its own name,
+    # so a pre-opened chr-named reader raised TypeError.
+    annotation = _annotation(tmp_path, "GRCh38", ["1", "2"])
+    genome = Genome(annotation, fasta={"chr2": "TTTTGGGG"}, verify=False)
+    assert genome.sequence("2", 5, 8) == "GGGG"
+    assert genome.sequence("1", 1, 4) == ""
+
+
+def test_assigning_a_reader_resolves_its_names(tmp_path):
+    annotation = _annotation(tmp_path, "GRCh38", ["1"])
+    genome = Genome(annotation)
+    genome.fasta = {"chr1": "ACGTACGT"}
+    assert genome.sequence("1", 1, 4) == "ACGT"
+    genome.fasta = {"1": "TTTTCCCC"}  # A new reader is resolved anew.
+    assert genome.sequence("1", 1, 4) == "TTTT"
+
+
+def test_other_assemblies_read_chrm_as_mt(tmp_path):
+    annotation = _annotation(tmp_path, "GRCm39", ["1", "MT"])
+    mitochondrion = ("GATCACAGGT" * 1630)[:16299]
+    path = _fasta_file(tmp_path, "mm39.fa", {"chr1": "ACGTACGT", "chrM": mitochondrion})
+    genome = Genome(annotation, fasta=path, verify=False)
+    assert genome.sequence("MT", 1, 4) == "GATC"

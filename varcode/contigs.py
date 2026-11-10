@@ -74,9 +74,20 @@ def _annotation_contig_name(
     As :func:`normalize_contig_name`, except that hg19's mitochondrion has no
     Ensembl name, so UCSC conversion leaves it ``chrM`` rather than renaming
     it onto the rCRS ``MT`` (#707), unless ``chrm_is_rcrs`` says this chrM is
-    the rCRS (#710). The public function, and so :class:`ContigResolver`,
+    the rCRS (#710). In a genome ORFdata pins, conversion uses ORFdata's
+    contig table: T2T-CHM13v2.0's ``chr1``, ``CP068277.2`` and
+    ``NC_060925.1`` are ``1``, and its ``chrM`` is ``MT``, CHM13's own
+    mitochondrion, or, with ``chrm_is_rcrs``, ``NC_012920.1``, the rCRS
+    (#723, #722). The public function, and so :class:`ContigResolver`,
     only matches spellings and still pairs them.
     """
+    if convert_ucsc:
+        # A genome ORFdata pins, such as T2T-CHM13v2.0, names each contig's
+        # UCSC, GenBank and RefSeq spellings (#723).
+        from .pinned_references import pinned_contig_name
+        pinned = pinned_contig_name(contig, reference_name, chrm_is_rcrs)
+        if pinned is not None:
+            return pinned
     if convert_ucsc and _is_hg19_mitochondrion(contig, reference_name, chrm_is_rcrs):
         return "chrM"
     return normalize_contig_name(contig, reference_name=reference_name, convert_ucsc=convert_ucsc)

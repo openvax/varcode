@@ -148,11 +148,15 @@ An explicit `Genome(native, fasta="/data/other.fa")` overrides native DNA;
 the supplied reference must match the annotation assembly. Its contig names
 may be the UCSC spellings of the annotation's: `hg38.fa` (`chr7`) serves
 Ensembl GRCh38 (`7`). A name the FASTA lists is read as is; otherwise its one
-spelling of that contig. A respelled mitochondrion is read only when it is the
-annotation's (under GRCh37, a `chrM` of the rCRS length; under T2T-CHM13,
-never). With `verify=True`, the default, a FASTA that names none of the
-annotation's contigs triggers a warning. Such a FASTA still serves variants
-on the contigs it does name.
+spelling of that contig. For a genome ORFdata pins, such as T2T-CHM13v2.0,
+ORFdata's contig table also pairs NCBI's accession names (`CP068277.2` is
+`1`). A respelled mitochondrion is read only when it is the annotation's:
+under GRCh37, a `chrM` of the rCRS length; under T2T-CHM13, only when the
+file name says which mitochondrion it holds (see
+[native references](native_references.md)). With `verify=True`, the default,
+a FASTA that names none of the annotation's contigs triggers a warning. Such
+a FASTA still serves variants on the contigs it does name. PyEnsembl's native
+`genome_fasta` reads contigs by exactly the annotation's names.
 
 Lookups behave as follows:
 

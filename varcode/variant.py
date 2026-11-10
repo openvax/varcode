@@ -31,7 +31,10 @@ from .nucleotides import (
     STANDARD_NUCLEOTIDES,
     is_purine
 )
-from .reference import  infer_genome, ensembl_to_ucsc_reference_names
+from .pinned_references import (
+    is_pinned_assembly, mitochondrion_note, names_rcrs, pinned_contig_name)
+from .reference import (
+    _split_release, ensembl_to_ucsc_reference_names, infer_genome, infer_reference_name)
 from .string_helpers import trim_shared_flanking_strings
 from .errors import InvalidContigError
 from .effects import (
@@ -131,13 +134,22 @@ class Variant(Serializable):
             the 'genome' argument. Under GRCh37, "chrM" and "M" become "chrM",
             not "MT": hg19's chrM is not the rCRS that Ensembl names MT, so
             such a variant can't be annotated, unless ``chrm_is_rcrs`` is set.
+            A name of a genome ORFdata pins (e.g. "hs1" or
+            "chm13v2.0_maskedY_rCRS.fa") converts too, by ORFdata's contig
+            table: T2T-CHM13v2.0's "chr1", "CP068277.2" and "NC_060925.1" are
+            "1".
 
         chrm_is_rcrs : bool, default False
-            Under GRCh37, this input's "chrM" or "M" is the rCRS that Ensembl
-            names MT (as in GENCODE's GRCh37), not hg19's NC_001807, so UCSC
-            conversion names it "MT". :func:`load_vcf` sets it when the header
-            declares chrM at the rCRS length, 16,569 bp. No effect under
-            other builds, whose chrM is the rCRS.
+            This input's "chrM" or "M" is the rCRS. Under GRCh37 it is then
+            the rCRS that Ensembl names MT (as in GENCODE's GRCh37), not
+            hg19's NC_001807, so UCSC conversion names it "MT". :func:`load_vcf`
+            sets it when the header declares chrM at the rCRS length, 16,569
+            bp. Under T2T-CHM13v2.0 it is the rCRS of the
+            ``chm13v2.0_maskedY_rCRS`` analysis set, named "NC_012920.1" and
+            annotated with Ensembl GRCh38's MT genes; without it, "chrM" is
+            CHM13's own mitochondrion, "MT", which has no annotation. It is
+            set when ``genome`` names such a file. No effect under other
+            builds, whose chrM is the rCRS.
 
         original_reference_name, original_genome_was_ucsc, original_genome : optional
             Saved input provenance when reconstructing a pinned genome. These
@@ -179,7 +191,13 @@ class Variant(Serializable):
         self.genome, self.original_genome_was_ucsc = infer_genome(genome)
 
         self.reference_name = self.genome.reference_name
-        if self.original_genome_was_ucsc:
+        # A file of a genome ORFdata pins, e.g. "chm13v2.0_maskedY_rCRS.fa".
+        pinned = (infer_reference_name(_split_release(genome)[0])
+                  if self.original_genome_was_ucsc and isinstance(genome, str)
+                  and is_pinned_assembly(self.reference_name) else None)
+        if pinned is not None:
+            self.original_reference_name = pinned
+        elif self.original_genome_was_ucsc:
             # Historical dated datasets use accessions as reference names.
             self.original_reference_name = ensembl_to_ucsc_reference_names[
                 getattr(self.genome, "assembly", self.reference_name)]
@@ -199,7 +217,8 @@ class Variant(Serializable):
             self.convert_ucsc_contig_names = self.original_genome_was_ucsc
         else:
             self.convert_ucsc_contig_names = convert_ucsc_contig_names
-        self.chrm_is_rcrs = bool(chrm_is_rcrs)
+        # The rCRS analysis set of T2T-CHM13 carries the rCRS as chrM.
+        self.chrm_is_rcrs = bool(chrm_is_rcrs) or (pinned is not None and names_rcrs(pinned))
 
         self.contig = self._normalize_contig_name(contig)
 
@@ -422,10 +441,21 @@ class Variant(Serializable):
         if self.contig not in self.genome.contigs():
             message = "Invalid contig name '%s' for reference '%s'" % (
                 self.contig, self.reference_name)
-            if _is_hg19_mitochondrion(self.contig, getattr(self.genome, "assembly", self.reference_name),
-                                      self.chrm_is_rcrs):
-                message += ": " + _HG19_MITOCHONDRION_NOTE
+            note = self._missing_contig_note()
+            if note:
+                message += ": " + note
             raise InvalidContigError(message)
+
+    def _missing_contig_note(self):
+        """Why this variant's mitochondrion has no annotation, or None.
+
+        hg19's chrM is not the rCRS (#707). T2T-CHM13v2.0's own mitochondrion
+        is unannotated; only the rCRS of its ``_rCRS`` analysis set is (#722).
+        """
+        assembly = getattr(self.genome, "assembly", self.reference_name)
+        if _is_hg19_mitochondrion(self.contig, assembly, self.chrm_is_rcrs):
+            return _HG19_MITOCHONDRION_NOTE
+        return mitochondrion_note(self.contig, assembly)
 
 
 
@@ -730,6 +760,9 @@ class Variant(Serializable):
                 contig, assembly, self.convert_ucsc_contig_names, self.chrm_is_rcrs)
         if not self.convert_ucsc_contig_names:
             return contig
+        pinned = pinned_contig_name(contig, assembly, self.chrm_is_rcrs)
+        if pinned is not None:
+            return pinned
         if _is_hg19_mitochondrion(contig, assembly, self.chrm_is_rcrs):
             return "chrM"
         return self._convert_ucsc_contig_name_to_ensembl(contig)

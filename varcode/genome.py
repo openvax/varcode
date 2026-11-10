@@ -42,6 +42,8 @@ from .genome_sequence import (
     reference_base as _reference_base_lookup,
     reference_range as _reference_range_lookup,
 )
+from .pinned_references import (
+    find_pinned_name, is_pinned_assembly, names_rcrs, pinned_name, pinned_spellings)
 from .reference import infer_genome
 
 
@@ -94,10 +96,14 @@ class Genome(Serializable):
         matched as :class:`~varcode.ContigResolver` matches them. A
         differently spelled mitochondrion is read only when it is the
         annotation's: under GRCh37, a ``chrM`` of the rCRS length
-        (16,569 bp; hg19's own chrM is not the rCRS); under T2T-CHM13,
-        never, since its FASTAs hold one of two mitochondria of that
-        length. Readers that can't list their names are read by the
-        annotation's name.
+        (16,569 bp; hg19's own chrM is not the rCRS). For a genome
+        ORFdata pins, such as T2T-CHM13v2.0, ORFdata's contig table also
+        pairs GenBank and RefSeq names (``CP068277.2`` is ``1``). A T2T
+        FASTA holds one of two mitochondria of the same length, so its
+        ``chrM`` is read only when the reader's file name says which:
+        the ``_rCRS`` analysis set's serves ``NC_012920.1``, and
+        ``hs1``'s and the other sets' serve ``MT``. Readers that can't
+        list their names are read by the annotation's name.
 
         Native and pre-opened readers are borrowed; their owner controls
         their lifetime. :meth:`close` closes only a reader this wrapper
@@ -311,13 +317,16 @@ class Genome(Serializable):
         spellings = self.__dict__.get("_fasta_spellings")
         if spellings is None or spellings[0] is not fasta:
             names = _fasta_names(fasta)
-            resolver = None if names is None else ContigResolver(
-                names, reference_name=_contig_reference_name(self._ensembl))
-            spellings = self._fasta_spellings = (fasta, resolver, {})
-        _, resolver, found = spellings
+            reference_name = _contig_reference_name(self._ensembl)
+            resolver, pinned = None, {}
+            if names is not None:
+                resolver = ContigResolver(names, reference_name=reference_name)
+                pinned = _pinned_spellings(fasta, reference_name, names)
+            spellings = self._fasta_spellings = (fasta, resolver, pinned, {})
+        _, resolver, pinned, found = spellings
         name = found.get(contig)
         if name is None:
-            name = found[contig] = _fasta_spelling(resolver, fasta, contig)
+            name = found[contig] = _fasta_spelling(resolver, pinned, fasta, contig)
         return name
 
     # -- tiered lookup convenience -------------------------------------
@@ -430,21 +439,63 @@ def _contig_reference_name(genome: Any) -> Optional[str]:
     return name if isinstance(name, str) and name.strip() else None
 
 
-def _fasta_spelling(resolver: Optional[ContigResolver], fasta: Any, contig: Any) -> Any:
+def _fasta_spelling(
+        resolver: Optional[ContigResolver], pinned: dict, fasta: Any, contig: Any) -> Any:
     """``contig`` as the FASTA spells it, or ``contig`` itself when the
-    FASTA lists it, can't list its names, or has no single match."""
+    FASTA lists it, can't list its names, or has no single match.
+
+    ``pinned`` holds the spellings ORFdata's contig table gives a pinned
+    genome's contigs (:func:`_pinned_spellings`). They are tried before
+    the resolver's aliases.
+    """
     if resolver is None:
         return contig
     try:
         resolution = resolver.resolve(contig)
     except (TypeError, ValueError):
         return contig
+    if resolution.status == "exact":
+        return contig
+    if contig in pinned:
+        return pinned[contig]
     if resolution.status != "alias":
         return contig
     if resolution.normalized_name == "MT" and not _fasta_mitochondrion_is_annotations(
             resolver.reference_name, contig, fasta, resolution.resolved_name):
         return contig
     return resolution.resolved_name
+
+
+def _pinned_spellings(fasta: Any, reference_name: Optional[str], names: list) -> dict:
+    """Each contig's one spelling in ``fasta`` by ORFdata's contig table,
+    for a genome ORFdata pins, such as T2T-CHM13v2.0 (#723).
+
+    The table names each contig's UCSC, GenBank and RefSeq spellings, so
+    NCBI's FASTAs are read too (``CP068277.2`` is ``1``). Which
+    mitochondrion a T2T FASTA's ``chrM`` is depends on the file: the
+    ``_rCRS`` analysis set's is the rCRS, which the annotation names
+    ``NC_012920.1``, and the others' is CHM13's own, ``MT``. So the
+    mitochondrion is paired only when the reader's file name says which
+    file it is (#722). Empty for any other genome.
+    """
+    if not is_pinned_assembly(reference_name):
+        return {}
+    filename = getattr(fasta, "filename", None)
+    name = None
+    if isinstance(filename, (str, bytes, os.PathLike)):
+        name = find_pinned_name(os.fsdecode(filename))
+    row = None if name is None else pinned_name(name)
+    if row is None or row["genome"] is None:
+        table = pinned_spellings(reference_name, mitochondrion=False)
+    else:
+        table = pinned_spellings(reference_name, names_rcrs(name))
+    listed = set(names)
+    spellings = {}
+    for contig, aliases in table.items():
+        options = aliases & listed
+        if len(options) == 1:
+            spellings[contig] = options.pop()
+    return spellings
 
 
 def _fasta_mitochondrion_is_annotations(
@@ -459,7 +510,7 @@ def _fasta_mitochondrion_is_annotations(
     as ``chrM``, reads no other spelling. T2T-CHM13 FASTAs hold either
     CHM13's own mitochondrion or the rCRS, both 16,569 bp, with positions
     576 to 577 bp apart (#722), so a respelling never chooses between
-    them. Elsewhere (hg38, mm10, canFam3) a FASTA's chrM is the
+    them; only a file name can (:func:`_pinned_spellings`). Elsewhere (hg38, mm10, canFam3) a FASTA's chrM is the
     annotation's MT, as a VCF's chrM becomes MT.
     """
     if _is_t2t_chm13(reference_name):

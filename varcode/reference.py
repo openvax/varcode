@@ -24,6 +24,7 @@ from pyensembl import genome_for_reference_name as get_genome_for_ensembl_refere
 import pyensembl.species
 
 from .common import memoize
+from .pinned_references import check_supported, find_pinned_name, load_pinned_genome, pinned_name
 
 if TYPE_CHECKING:
     from .genome import Genome as VarcodeGenome
@@ -295,6 +296,16 @@ def _collect_candidate_matches(reference_name_or_path):
         elif normalized_alias in normalized_reference_name_or_path:
             full_path_matches.append(name)
 
+    # Names of the genomes ORFdata pins, such as T2T-CHM13v2.0's hs1 and
+    # chm13v2.0_maskedY_rCRS: the longest, as a whole word.
+    pinned = find_pinned_name(os.path.basename(reference_name_or_path))
+    if pinned is not None:
+        file_name_matches.append(pinned)
+    else:
+        pinned = find_pinned_name(reference_name_or_path)
+        if pinned is not None:
+            full_path_matches.append(pinned)
+
     # remove duplicate matches (happens due to overlapping aliases)
     file_name_matches = list(set(file_name_matches))
     full_path_matches = list(set(full_path_matches))
@@ -306,9 +317,33 @@ def infer_reference_name(reference_name_or_path):
     Given a string containing a reference name (such as a path to
     that reference's FASTA file), return its canonical name
     as used by Ensembl.
+
+    A name of a genome ORFdata pins is returned as ORFdata spells it, so
+    ``chm13v2.0_maskedY_rCRS.fa`` gives ``chm13v2.0_maskedY_rCRS``: which
+    T2T file it is says which mitochondrion its ``chrM`` is. The longest such
+    name wins, each only as a whole word (``hs1.fa``, never ``ths1``).
+    T2T-CHM13v1.0 and older drafts raise ``ValueError``, since their
+    coordinates differ from T2T-CHM13v2.0's.
     """
     file_name_matches, full_path_matches = _collect_candidate_matches(
         reference_name_or_path)
+    # A name of a genome ORFdata pins (T2T-CHM13v2.0's hs1, chm13v2.0*, ...)
+    # is a whole file, so it is never one of several candidates.
+    matches = file_name_matches or full_path_matches
+    pinned = [name for name in matches if pinned_name(name) is not None]
+    if pinned:
+        if len(matches) > 1:
+            raise ValueError(
+                "%s names more than one reference (%s); pass the genome explicitly"
+                % (reference_name_or_path, ", ".join(sorted(matches))))
+        # T2T-CHM13v1.0 and older drafts have other coordinates.
+        check_supported(pinned[0])
+        if not file_name_matches:
+            warn((
+                'Reference could not be matched against filename ({}); '
+                'using best match against full path ({}).').format(
+                    reference_name_or_path, pinned[0]))
+        return pinned[0]
     # given set of existing matches, choose one to return
     # (first select based on file_name, then full path. If multiples, use most recent)
     if len(file_name_matches) == 1:
@@ -390,6 +425,13 @@ def infer_genome_for_reference_name(reference_name):
 
     A name may end in a release to choose that Ensembl release, e.g.
     ``"GRCh38:93"``, ``"GRCh38:2026_04"`` or ``"GRCh37:2013_09"``.
+
+    Names of the genomes ORFdata pins open ORFdata's installed annotation:
+    ``T2T-CHM13v2.0``, ``hs1``, ``GCA_009914755.4``, ``GCF_009914755.1``, the
+    T2T Consortium's ``chm13v2.0*`` analysis sets and T2T-CHM13v1.1 all open
+    ``orfdata.load_genome("t2t-chm13")`` (``orfdata.reference_names()`` lists
+    them). Its only release is the pinned one, ``"T2T-CHM13v2.0:2022_07"``.
+    T2T-CHM13v1.0 and older drafts have other coordinates and raise.
     Selection is offline and validates the requested assembly. Otherwise the
     most recent locally installed numbered release is used, or the newest
     numbered release if none is installed.
@@ -411,7 +453,12 @@ def infer_genome_for_reference_name(reference_name):
     """
     converted_ucsc_to_ensembl = False
     reference_name, release = _split_release(reference_name)
+    source = reference_name
     reference_name = infer_reference_name(reference_name)
+    if pinned_name(reference_name) is not None:
+        # A genome ORFdata pins, such as T2T-CHM13v2.0. Its files spell
+        # contigs as UCSC or NCBI do, so they are converted, as for hg19.
+        return load_pinned_genome(reference_name, release, source=source), True
     if is_ucsc_reference_name(reference_name):
         if reference_name not in ucsc_to_ensembl_reference_names:
             raise ValueError(
@@ -437,7 +484,10 @@ def infer_genome(
     If given a string, return the most recent installed EnsemblRelease
     which has an equivalent reference, or the release the string names
     (e.g. "GRCh38:93" or "GRCh38:2026_04"). If the given name is a UCSC genome (e.g. hg19) then
-    convert it to the equivalent Ensembl reference (e.g. GRCh37).
+    convert it to the equivalent Ensembl reference (e.g. GRCh37). A name of a
+    genome ORFdata pins (e.g. "hs1" or "chm13v2.0_maskedY_rCRS.fa" for
+    T2T-CHM13v2.0) returns ORFdata's installed annotation; ORFdata's
+    ``NotInstalledError`` says how to install it.
 
     If given a PyEnsembl or Varcode Genome, return that same object. Do not
     memoize object pass-through: native genomes with different attached DNA
@@ -445,7 +495,8 @@ def infer_genome(
 
     Returns a pair of (Genome, bool) where the bool corresponds to whether
     the input requested a UCSC genome (e.g. "hg19") and an Ensembl (e.g. GRCh37)
-    was returned as a substitute.
+    was returned as a substitute, or named a file of a pinned genome (e.g.
+    "hs1"), whose contig names are converted the same way.
     """
     # Import at call time to avoid the Genome wrapper's import of this module.
     from .genome import Genome as VarcodeGenome

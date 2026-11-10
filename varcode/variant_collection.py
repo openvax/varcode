@@ -571,8 +571,11 @@ class VariantCollection(Collection):
                     raise
         if missing:
             names = sorted({"%s:%s" % (v.reference_name, v.contig) for v in missing})
-            warnings.warn("%d variants on contigs absent from the annotation: %s; %s" % (
-                len(missing), ", ".join(names), outcome), UserWarning, stacklevel=stacklevel)
+            # Say once why a mitochondrion is unannotated (hg19, T2T-CHM13).
+            notes = sorted({note for v in missing for note in [v._missing_contig_note()] if note})
+            warnings.warn("%d variants on contigs absent from the annotation: %s; %s%s" % (
+                len(missing), ", ".join(names), outcome, "".join(". " + n for n in notes)),
+                UserWarning, stacklevel=stacklevel)
         return missing
 
     def to_dataframe(self, raise_on_error=None):

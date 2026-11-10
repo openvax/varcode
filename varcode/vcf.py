@@ -23,7 +23,9 @@ from warnings import warn
 import pandas
 
 from .contigs import _RCRS_LENGTH, _is_grch37
-from .reference import infer_genome
+from .pinned_references import (
+    is_pinned_assembly, names_rcrs, pinned_contig_lengths, pinned_contig_name, pinned_name)
+from .reference import _split_release, infer_genome, infer_reference_name
 from .variant import Variant, variant_ascending_position_sort_key
 from .variant_collection import VariantCollection
 from .vcf_parsing import VCFHeader, _split_struct_fields
@@ -66,6 +68,47 @@ def _declares_rcrs_chrm(header):
             if fields.get("ID", "").upper() in ("CHRM", "M"):
                 lengths.add(fields.get("length", "").strip())
     return lengths == {str(_RCRS_LENGTH)}
+
+
+def _names_rcrs_file(genome, reference):
+    """Whether the VCF's reference is a file whose chrM is the rCRS: the
+    ``genome=`` name if it is a pinned file's, else the header's reference."""
+    for name in (genome, reference):
+        if isinstance(name, str):
+            try:
+                found = infer_reference_name(_split_release(name)[0])
+            except ValueError:
+                continue
+            if pinned_name(found) is not None:
+                return names_rcrs(found)
+    return False
+
+
+def _check_pinned_contig_lengths(path, header, assembly, chrm_is_rcrs):
+    """Raise when ``##contig`` lengths say the VCF isn't on ``assembly``.
+
+    A GRCh38 VCF read as T2T-CHM13v2.0 would put GRCh38 positions on T2T
+    transcripts; chr1 is 248,956,422 bp in GRCh38 and 248,387,328 in T2T.
+    Contigs the pinned table doesn't name, such as decoys, are not checked.
+    """
+    lengths = pinned_contig_lengths(assembly, chrm_is_rcrs)
+    mismatches = []
+    for line in header.metadata.get("contig", ()):
+        line = line.strip()
+        if not (line.startswith("<") and line.endswith(">")):
+            continue
+        fields = _split_struct_fields(line[1:-1])
+        name = pinned_contig_name(fields.get("ID", ""), assembly, chrm_is_rcrs)
+        length = fields.get("length", "").strip()
+        if name in lengths and length.isdigit() and int(length) != lengths[name]:
+            mismatches.append("%s is %s bp here but %s bp in %s" % (
+                fields["ID"], format(int(length), ","), format(lengths[name], ","), assembly))
+    if mismatches:
+        raise ValueError(
+            "%s is not on %s: its ##contig lengths disagree (%s). Annotating it would put another "
+            "assembly's positions on %s transcripts; pass the genome its reference matches."
+            % (path, assembly, "; ".join(mismatches[:3]) + ("; ..." if len(mismatches) > 3 else ""),
+               assembly))
 
 
 def load_vcf(
@@ -158,7 +201,11 @@ def load_vcf(
         so its variants can't be annotated (see :class:`Variant`). Under
         GRCh37, a header that declares chrM at the rCRS length (16,569 bp, as
         in GENCODE's GRCh37) marks it as the rCRS, so it becomes "MT"; each
-        variant then has ``chrm_is_rcrs`` set.
+        variant then has ``chrm_is_rcrs`` set. Under T2T-CHM13v2.0 the
+        reference's file name decides: the ``chm13v2.0_maskedY_rCRS`` set's
+        chrM is the rCRS, "NC_012920.1", and any other file's is CHM13's own
+        "MT", which has no annotation. ``##contig`` lengths that disagree
+        with T2T-CHM13v2.0's, as a GRCh38 VCF's do, raise ``ValueError``.
 
     genome_fasta : str, path-like, or FASTA object, optional
         Optionally attach a chromosome FASTA to the resolved genome
@@ -231,10 +278,14 @@ def load_vcf(
     # so variants retain both their reference identity and contig convention.
     original_genome = genome
     genome, genome_was_ucsc = infer_genome(genome)
-    chrm_is_rcrs = (_is_grch37(getattr(genome, "assembly", genome.reference_name))
-                    and _declares_rcrs_chrm(header))
+    assembly = getattr(genome, "assembly", genome.reference_name)
+    chrm_is_rcrs = _is_grch37(assembly) and _declares_rcrs_chrm(header)
     if chrm_is_rcrs:
         logger.info("%s declares chrM at the rCRS length; naming it MT", path)
+    if is_pinned_assembly(assembly):
+        # Only the file's name says which mitochondrion a T2T chrM is.
+        chrm_is_rcrs = _names_rcrs_file(original_genome, header.metadata.get(reference_vcf_key))
+        _check_pinned_contig_lengths(path, header, assembly, chrm_is_rcrs)
     if genome_was_ucsc:
         genome = original_genome
 

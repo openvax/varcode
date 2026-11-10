@@ -14,7 +14,7 @@ rapid **2022_07** annotation for **T2T-CHM13v2.0, GCA_009914755.4**. PyEnsembl
 ```sh
 python -m venv .venv
 . .venv/bin/activate
-python -m pip install --upgrade varcode 'orfdata>=0.44' 'pyensembl>=2.32.3'
+python -m pip install --upgrade varcode 'orfdata>=0.52' 'pyensembl>=2.32.3'
 orfdata genomes install t2t-chm13 --genome-fasta \
   https://ftp.ensembl.org/pub/rapid-release/species/Homo_sapiens/GCA_009914755.4/ensembl/genome/Homo_sapiens-GCA_009914755.4-unmasked.fa.gz
 ```
@@ -51,15 +51,68 @@ This native 1KGP call overlaps the newly resolved sequence track. Distinct
 RIMBP3B and RIMBP3C placements must retain their identities even when their
 proteins coincide. Predicted products are not evidence of mutant translation.
 
-**Contig names.** Ensembl DNA uses `1`…`22`, `X`, `Y`, matching its annotation.
-`varcode.Genome(genome, fasta=path)` also reads the consortium analysis FASTAs
-and UCSC's `hs1.fa`, which name chromosomes `chr1`…, by their own spelling. It
-never reads their `chrM` as the annotation's `MT`. `chm13v2.0_maskedY_rCRS.fa`
-holds the rCRS rather than CHM13's own mitochondrion, and Ensembl's annotation
-has no mitochondrial genes ([#722](https://github.com/openvax/varcode/issues/722)).
-NCBI's FASTAs name chromosomes by accession (`CP068277.2`), which is not matched.
-Renaming does not convert coordinates. Do not combine CHM13 variants with GRCh38
-transcripts to fill newly resolved regions.
+### Reading T2T VCFs by name
+
+`load_vcf` reads the assembly from a VCF's `##reference` line, and `genome=`,
+`Variant(..., genome=)` and `varcode.Genome(...)` take the same names. Any name
+ORFdata lists for T2T-CHM13v2.0 (`orfdata genomes names`) opens its installed
+`t2t-chm13` annotation, so the two packages accept the same names:
+
+| Name, found in a file name or path | Files | `chrM` is |
+|---|---|---|
+| `T2T-CHM13v2.0`, `GCA_009914755.4` | NCBI GenBank FASTA; Ensembl's DNA | CHM13's own, `MT` |
+| `GCF_009914755.1` | NCBI RefSeq FASTA | none |
+| `hs1` | UCSC | CHM13's own, `MT` |
+| `chm13v2.0`, `chm13v2.0_maskedY`, `chm13v2.0_noY` | T2T Consortium analysis sets | CHM13's own, `MT` |
+| `chm13v2.0_maskedY_rCRS`, `chm13v2.0_maskedY.rCRS` | the analysis set the T2T README recommends for short-read variant calling | the rCRS, `NC_012920.1` |
+| `T2T-CHM13v1.1`, `GCA_009914755.3`, `chm13.draft_v1.1` | v2.0 without chrY | CHM13's own, `MT` |
+
+The longest name in a file name wins, so `chm13v2.0_maskedY_rCRS.fa` is the
+rCRS set, not `chm13v2.0`. `hs1` counts only as a whole word (`hs1.fa`,
+`/refs/hs1/`). Bare `chm13` names every version and selects none.
+T2T-CHM13v1.0 (`chm13.draft_v1.0`, `GCA_009914755.2`) and older drafts raise:
+their coordinates differ. The only release is the pinned one,
+`T2T-CHM13v2.0:2022_07`. If the annotation isn't installed, the error says which
+name it found and gives the `orfdata genomes install t2t-chm13` command.
+
+```python
+from varcode import load_vcf
+variants = load_vcf("sample.vcf.gz")  # ##reference=.../chm13v2.0_maskedY_rCRS.fa
+print(variants.effects())
+```
+
+**Contigs.** Contig names convert by ORFdata's table: `chr1`, `CP068277.2` and
+`NC_060925.1` are all `1`. If the header's `##contig` lengths disagree with
+T2T-CHM13v2.0's, `load_vcf` raises rather than put another assembly's positions
+on T2T transcripts. A GRCh38 VCF is the usual case: chr1 is 248,956,422 bp in
+GRCh38 and 248,387,328 bp in T2T.
+
+**Mitochondrion.** A T2T `chrM` is one of two molecules, both 16,569 bp, and
+only the file name tells which:
+
+- **CHM13's own** (CP068254.1) is in every file but the `_rCRS` set. Its
+  position 1 is what the rCRS numbers 577. Ensembl's annotation has no
+  mitochondrial genes, so its variants, on contig `MT`, are kept as failures,
+  with one warning that says why.
+- **The rCRS** (NC_012920.1) is the `_rCRS` set's `chrM`, and it is GRCh38's
+  `MT`. Its variants go on contig `NC_012920.1`, which ORFdata annotates with
+  Ensembl GRCh38's MT genes and the vertebrate mitochondrial code. They get the
+  same consequences as GRCh38's `MT`: 8993T>G is MT-ATP6 p.L156R.
+  `Variant.chrm_is_rcrs` is set; pass `chrm_is_rcrs=True` yourself when a
+  `chrM` is the rCRS but no file name says so.
+
+The rCRS is the one exception to keeping CHM13 and GRCh38 annotation apart,
+because it is the same sequence in the same coordinates. Don't combine CHM13
+variants with GRCh38 transcripts anywhere else, such as to fill newly resolved
+regions; renaming does not convert coordinates.
+
+**Chromosome DNA.** Ensembl's DNA uses `1`…`22`, `X`, `Y`, matching its
+annotation. PyEnsembl's own `genome_fasta_path_or_url`, used at installation
+above, reads names exactly, so give it Ensembl's DNA. To use another T2T FASTA,
+attach it with `varcode.Genome(genome, fasta="chm13v2.0.fa")`. That reads each
+annotation contig by the FASTA's spelling (`22` from `chr22` or `CP068256.2`).
+A FASTA's `chrM` is paired with `MT` or `NC_012920.1` only when its file name
+says which mitochondrion it is.
 
 For local DNA, pass its path at installation and load time. Python's `cache_root=`
 selects a cache directory. The genome works with splice, structural and supplied-ORF
