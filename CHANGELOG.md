@@ -17,7 +17,7 @@
   Variant JSON with the old `"ensembl"` key still loads, without a warning.
 - The libraries that used these names have moved off them:
   - Vaxrank 3.54.2 (openvax/vaxrank#821);
-  - Topiary TOPIARY_VERSION (openvax/topiary#599);
+  - Topiary 5.113.1 (openvax/topiary#599);
   - osteosarc 0.15.7 (iskandr/osteosarc#122);
   - Isovar (openvax/isovar#691).
 - The test suite makes these warnings errors outside
