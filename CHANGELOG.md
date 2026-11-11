@@ -24,6 +24,9 @@
   `tests/test_deprecated_aliases.py`, so varcode can't start calling a
   deprecated name again unnoticed. `cryptic_exons` no longer falls back to
   `variant.ensembl`.
+- The `test` dependency group requires osteosarc 0.15.7: older versions'
+  `Variants.to_varcode` passes `ensembl=`, which the suite now treats as an
+  error.
 
 ## v11.12.0
 
