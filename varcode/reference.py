@@ -24,7 +24,8 @@ from pyensembl import genome_for_reference_name as get_genome_for_ensembl_refere
 import pyensembl.species
 
 from .common import memoize
-from .pinned_references import check_supported, find_pinned_name, load_pinned_genome, pinned_name
+from .pinned_references import (
+    check_supported, find_pinned_name, load_pinned_genome, pinned_assembly, pinned_name)
 
 if TYPE_CHECKING:
     from .genome import Genome as VarcodeGenome
@@ -372,6 +373,25 @@ def infer_reference_name(reference_name_or_path):
         raise ValueError(
             "Failed to infer genome assembly name for %s" % reference_name_or_path)
     return match
+
+
+def assembly_in_file_name(reference_name_or_path):
+    """
+    The one assembly the file name at the end of ``reference_name_or_path``
+    names, by the rules of :func:`infer_reference_name`, or None.
+
+    Unlike inference, directories don't count, nothing is chosen among
+    several assemblies, and nothing warns. Names are given as assemblies:
+    ``GRCh38`` for ``hg38.fa`` or ``Homo_sapiens_assembly38.fasta``, and
+    ``T2T-CHM13v2.0`` for ``hs1.fa``. Another version of a genome ORFdata pins
+    keeps its own name, e.g. ``chm13.draft_v1.0``.
+    """
+    file_name_matches, _ = _collect_candidate_matches(
+        os.path.basename(reference_name_or_path.rstrip("/")))
+    assemblies = {
+        pinned_assembly(name) or ucsc_to_ensembl_reference_names.get(name, name)
+        for name in file_name_matches}
+    return assemblies.pop() if len(assemblies) == 1 else None
 
 
 # Numbered releases and annotation dates. Paths never match.

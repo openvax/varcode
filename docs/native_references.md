@@ -142,11 +142,18 @@ Three different things move between GRCh38 and T2T. Varcode itself does none of 
 
 These are refused, not annotated:
 
-- A VCF whose `##reference` names another assembly, read with `genome=` a
-  T2T genome, such as `GRCh38`, `Homo_sapiens_assembly38.fasta`, `hg38.fa` or
-  T2T-CHM13v1.0. A T2T VCF read with `genome=` GRCh38 is refused too. If the
-  header is wrong, pass `reference_vcf_key=None` to ignore it.
-- A VCF whose `##contig` lengths aren't T2T's.
+- A VCF whose `##reference` file name names another assembly, read with
+  `genome=` a T2T genome, such as `GRCh38`, `Homo_sapiens_assembly38.fasta`,
+  `hg38.fa` or T2T-CHM13v1.0 (`chm13.draft_v1.0.fasta`, `T2T-CHM13-v1.0.fa`).
+  A T2T VCF read with `genome=` GRCh38 is refused too. Directories don't
+  count, nor does a file name that names two assemblies. If the header is
+  wrong, correct its `##reference` line, or pass `reference_vcf_key=None` to
+  `load_vcf` to ignore it.
+- A VCF whose `##contig` lengths aren't T2T's. These lengths outweigh
+  `##reference`: bcftools `+liftover` writes the target's `##contig` lines but
+  keeps the source's `##reference`, so a GRCh38 VCF it lifted to T2T is read
+  as T2T. (Picard's LiftoverVcf writes the target's `##reference`, and
+  CrossMap drops it.)
 - An allele whose REF disagrees with T2T's transcript or DNA raises
   `ReferenceMismatchError` when it is annotated.
 - GRCh38's unplaced scaffolds and EBV (`chrUn_KI270302v1`, `KI270302.1`,

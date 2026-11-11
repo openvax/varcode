@@ -2,14 +2,28 @@
 
 ## v11.12.0
 
-- `load_vcf(path, genome=...)` refuses a VCF whose `##reference` names
-  another assembly when either is a genome ORFdata pins (#669). Examples are
-  a GRCh38 VCF (`GRCh38`, `Homo_sapiens_assembly38.fasta`, `hg38.fa`) read
-  as T2T-CHM13v2.0, a T2T-CHM13v1.0 VCF read as v2.0, and a T2T VCF read as
-  GRCh38. Before, the explicit genome won silently, and the variants were
-  recorded as T2T. 11.11.0's `##contig` length check misses VCFs without
-  `##contig` lines. A header naming no recognized assembly isn't checked,
-  and `reference_vcf_key=None` ignores a wrong one.
+- `load_vcf(path, genome=...)` refuses a VCF whose `##reference` file name
+  names another assembly when either is a genome ORFdata pins (#669).
+  Examples are a GRCh38 VCF (`GRCh38`, `Homo_sapiens_assembly38.fasta`,
+  `hg38.fa`) read as T2T-CHM13v2.0, a T2T-CHM13v1.0 VCF read as v2.0, and a
+  T2T VCF read as GRCh38. Before, the explicit genome won silently, and the
+  variants were recorded as T2T. 11.11.0's `##contig` length check misses
+  VCFs without `##contig` lines. Only the file name counts, not its
+  directories, and only when it names one assembly; a header naming none
+  isn't checked, and `reference_vcf_key=None` ignores a wrong one. A genome
+  named by a T2T alias, such as a PyEnsembl `Genome` called `hs1`, counts as
+  T2T-CHM13v2.0.
+- `##contig` lengths outweigh `##reference`. bcftools `+liftover` writes the
+  target's `##contig` lines but keeps the source's `##reference`, so a GRCh38
+  VCF lifted to T2T that way is read as T2T, and a T2T VCF lifted to GRCh38
+  as GRCh38.
+- T2T-CHM13v1.0 spelled with a separator before its version
+  (`T2T-CHM13-v1.0.fa`, `T2T-CHM13 v1.0`, `t2t-chm13.v1.0.fa`) is refused as
+  v1.0. In 11.11.0 these matched ORFdata's genome name `t2t-chm13` and were
+  read as v2.0. `T2T-CHM13-v2.0.fa` now names v2.0.
+- On a T2T load, the header's reference is no longer passed through
+  inference just to learn which mitochondrion the file holds. A path like
+  `/home/rob38/genome.fa` used to warn that GRCh38 was the best match.
 - `docs/native_references.md` separates three things varcode doesn't do
   itself: Ensembl's projection of GRCh38 models onto CHM13, ORFdata's
   chain-file lift of ORF catalogues, and variant liftover (#243). It also

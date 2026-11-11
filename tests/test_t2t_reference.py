@@ -16,7 +16,10 @@ from importlib.resources import files
 import orfdata
 import pytest
 
+from pyensembl import Genome
+
 from varcode import InvalidContigError, ReferenceMismatchError, Variant, VariantCollection, load_vcf
+from varcode.pinned_references import load_pinned_genome
 from varcode.reference import infer_genome, infer_reference_name
 
 from .native_reference_fixture import DATA
@@ -84,6 +87,10 @@ def resolve(name):
     ("Homo_sapiens-GCA_009914755.4-unmasked.fa.gz", "GCA_009914755.4"),
     ("chm13.draft_v1.1.fasta.gz", "chm13.draft_v1.1"),
     ("T2T-CHM13v1.1.fa", "T2T-CHM13v1.1"),
+    # A version may be set off by a separator.
+    ("T2T-CHM13-v2.0.fa", "T2T-CHM13v2.0"),
+    ("T2T-CHM13 v2.0", "T2T-CHM13v2.0"),
+    ("chm13.draft.v1.1.fasta", "chm13.draft_v1.1"),
 ])
 def test_t2t_names_are_found_in_names_paths_and_headers(path, name):
     assert resolve(path) == name
@@ -102,7 +109,9 @@ def test_hs1_only_as_a_whole_word_and_bare_chm13_names_nothing(path):
 
 @pytest.mark.parametrize("path", [
     "chm13.draft_v1.0.fasta.gz", "GCA_009914755.2_T2T-CHM13v1.0_genomic.fna", "T2T-CHM13v1.0",
-    "##reference=file:///refs/chm13.draft_v0.9.fasta"])
+    "##reference=file:///refs/chm13.draft_v0.9.fasta",
+    # Separated from the version, these used to match ORFdata's genome name, t2t-chm13.
+    "T2T-CHM13-v1.0.fa", "T2T-CHM13_v1.0.fasta", "T2T-CHM13 v1.0", "t2t-chm13.v1.0.fa"])
 def test_older_t2t_versions_are_refused_because_their_coordinates_differ(path):
     with pytest.raises(ValueError, match="is not a supported reference: .*differ from T2T-CHM13v2.0"):
         infer_reference_name(path)
@@ -144,8 +153,9 @@ def test_a_genome_that_is_not_installed_names_the_command(monkeypatch, tmp_path)
     message = str(error.value)
     assert message.startswith("chm13v2.0_noY (from '/refs/not-installed/chm13v2.0_noY.fa') is T2T-CHM13v2.0")
     assert "'orfdata genomes install t2t-chm13'" in message
+    # Not through infer_genome, which memoizes: other tests open T2T-CHM13v2.0 by name.
     with pytest.raises(orfdata.NotInstalledError, match="^The annotation of T2T-CHM13v2.0 comes from ORFdata"):
-        infer_genome("T2T-CHM13v2.0")
+        load_pinned_genome("T2T-CHM13v2.0", source="T2T-CHM13v2.0")
     assert isinstance(error.value, ValueError) and isinstance(error.value, FileNotFoundError)
 
 
@@ -205,9 +215,14 @@ chrM\t3460\t.\tG\tA\t.\tPASS\t.
 """
 
 
-def write_vcf(tmp_path, reference, chr1=248387328):
+def write_vcf(tmp_path, reference, chr1=248387328, key="reference"):
+    """A VCF with T2T's ##contig lengths, GRCh38's (chr1=248956422) or,
+    with chr1=None, none, as many VCFs have."""
+    text = VCF.format(reference=reference, chr1=chr1).replace("##reference=", "##%s=" % key)
+    if chr1 is None:
+        text = "".join(line for line in text.splitlines(True) if not line.startswith("##contig"))
     path = tmp_path / "t2t.vcf"
-    path.write_text(VCF.format(reference=reference, chr1=chr1))
+    path.write_text(text)
     return path
 
 
@@ -251,38 +266,112 @@ def test_vcf_contig_lengths_are_checked_against_the_table_only_for_t2t(tmp_path)
 # Negative controls (#669): another assembly's VCF, alleles and contigs are
 # refused rather than annotated on T2T's transcripts.
 
-@pytest.mark.parametrize("reference", [
-    "GRCh38",
-    "file:///refs/Homo_sapiens_assembly38.fasta",
-    "hg38.fa",
-    "file:///refs/chm13.draft_v1.0.fasta",  # T2T-CHM13v1.0: other coordinates
+@pytest.mark.parametrize("reference, named", [
+    ("GRCh38", "GRCh38"),
+    ("file:///refs/Homo_sapiens_assembly38.fasta", "GRCh38"),
+    ("hg38.fa", "GRCh38"),
+    ("file:///refs/chm13.draft_v1.0.fasta", "chm13.draft_v1.0"),  # T2T-CHM13v1.0: other coordinates
+    ("file:///refs/T2T-CHM13-v1.0.fa", "T2T-CHM13v1.0"),
+    # The file name decides, not a directory.
+    ("file:///data/t2t-chm13_compare/Homo_sapiens_assembly38.fasta", "GRCh38"),
+    ("file:///refs/hs1/GRCh38.fa", "GRCh38"),
 ])
 @pytest.mark.parametrize("by_name", [False, True])
-def test_load_vcf_refuses_a_header_naming_another_assembly_on_t2t(tmp_path, installed, reference, by_name):
-    path = write_vcf(tmp_path, reference)
+def test_load_vcf_refuses_a_header_naming_another_assembly_on_t2t(
+        tmp_path, installed, reference, named, by_name):
+    path = write_vcf(tmp_path, reference, chr1=None)
     genome = "T2T-CHM13v2.0" if by_name else installed
-    with pytest.raises(ValueError, match="its ##reference, .* names .*, but genome= is T2T-CHM13v2.0"):
+    with pytest.raises(ValueError, match="its ##reference, .*, names %s, but genome= is T2T-CHM13v2.0"
+                                         % re.escape(named)):
         load_vcf(path, genome=genome)
 
 
-def test_load_vcf_refuses_a_t2t_header_on_grch38(tmp_path):
-    with pytest.raises(ValueError, match="names hs1, but genome= is GRCh38"):
-        load_vcf(write_vcf(tmp_path, "file:///refs/hs1.fa"), genome=81)
+@pytest.mark.parametrize("chr1", [None, 248387328])  # no ##contig lengths, or T2T's
+def test_load_vcf_refuses_a_t2t_header_on_grch38(tmp_path, chr1):
+    with pytest.raises(ValueError, match="names T2T-CHM13v2.0, but genome= is GRCh38"):
+        load_vcf(write_vcf(tmp_path, "file:///refs/hs1.fa", chr1=chr1), genome=81)
 
 
 @pytest.mark.parametrize("reference", [
     "file:///refs/hs1.fa",
     "file:///refs/chm13v2.0_maskedY_rCRS.fa",
+    "file:///refs/T2T-CHM13-v2.0.fa",
     "T2T-CHM13v1.1",  # v2.0 without chrY: the same coordinates
     "file:///refs/reference.fa",  # names no assembly, so isn't checked
+    # Directories don't count, nor does an assembly name inside another word.
+    "file:///refs/GRCh38_to_T2T/chm13v2.0.fa",
+    "file:///home/rob38/genome.fa",
+    "file:///work/a1/b38c9f0e/reference.fa",
+    "file:///refs/GRCh38_and_chm13v2.0.fa",  # names two assemblies
 ])
-def test_load_vcf_accepts_a_header_that_agrees_or_names_nothing(tmp_path, installed, reference):
-    assert len(load_vcf(write_vcf(tmp_path, reference), genome=installed)) == 2
+@pytest.mark.parametrize("chr1", [None, 248387328])
+def test_load_vcf_accepts_a_header_that_agrees_or_names_nothing(tmp_path, installed, reference, chr1):
+    assert len(load_vcf(write_vcf(tmp_path, reference, chr1=chr1), genome=installed)) == 2
+
+
+def test_contig_lengths_outweigh_a_stale_reference(tmp_path, installed):
+    # bcftools +liftover writes the target's ##contig lines but keeps the
+    # source's ##reference; Picard writes the target's and CrossMap drops it.
+    lifted = write_vcf(tmp_path, "file:///refs/Homo_sapiens_assembly38.fasta")
+    assert [v.contig for v in load_vcf(lifted, genome=installed)] == ["1", "MT"]
+    lifted = write_vcf(tmp_path, "file:///refs/hs1.fa", chr1=248956422)
+    assert [v.contig for v in load_vcf(lifted, genome=81)] == ["1", "MT"]
 
 
 def test_reference_vcf_key_none_ignores_a_wrong_header(tmp_path, installed):
-    variants = load_vcf(write_vcf(tmp_path, "GRCh38"), genome=installed, reference_vcf_key=None)
+    variants = load_vcf(write_vcf(tmp_path, "GRCh38", chr1=None), genome=installed, reference_vcf_key=None)
     assert [v.contig for v in variants] == ["1", "MT"]
+
+
+def test_another_reference_key_is_checked_too(tmp_path, installed):
+    # Keys other than reference hold a list of values.
+    path = write_vcf(tmp_path, "GRCh38", chr1=None, key="assembly")
+    with pytest.raises(ValueError, match="its ##assembly, 'GRCh38', names GRCh38"):
+        load_vcf(path, genome=installed, reference_vcf_key="assembly")
+
+
+@pytest.fixture(scope="module")
+def custom_genome(tmp_path_factory):
+    """A T2T annotation a user built, named as they chose."""
+    genomes = []
+
+    def build(reference_name):
+        genome = Genome(
+            reference_name=reference_name, annotation_name="custom",
+            gtf_path_or_url=str(DATA / "chm13.gtf.gz"),
+            transcript_fasta_paths_or_urls=[str(DATA / "chm13.cdna.fa.gz")],
+            protein_fasta_paths_or_urls=[str(DATA / "chm13.pep.fa.gz")],
+            cache_directory_path=str(tmp_path_factory.mktemp(reference_name)))
+        genome.index()
+        genomes.append(genome)
+        return genome
+
+    yield build
+    for genome in genomes:
+        genome.close()
+
+
+def test_a_genome_named_by_a_t2t_alias_is_t2t(tmp_path, custom_genome):
+    genome = custom_genome("hs1")
+    for reference in ("file:///refs/chm13v2.0.fa", "file:///refs/hs1.fa"):
+        assert len(load_vcf(write_vcf(tmp_path, reference, chr1=None), genome=genome)) == 2
+    with pytest.raises(ValueError, match="names GRCh38, but genome= is T2T-CHM13v2.0"):
+        load_vcf(write_vcf(tmp_path, "GRCh38", chr1=None), genome=genome)
+
+
+def test_two_assemblies_neither_pinned_are_not_compared(tmp_path, custom_genome):
+    genome = custom_genome("T2T-CHM13v1.0")
+    path = write_vcf(tmp_path, "file:///refs/chm13.draft_v1.0.fasta", chr1=None)
+    assert len(load_vcf(path, genome=genome)) == 2
+
+
+def test_an_explicit_genome_leaves_header_inference_alone(tmp_path):
+    # infer_reference_name memoizes, so a check that ran it with warnings
+    # silenced would silence them for the rest of the process.
+    reference = "file:///data/GRCh38/x/reference_669.fa"
+    load_vcf(write_vcf(tmp_path, reference, chr1=None), genome=81)
+    with pytest.warns(UserWarning, match="could not be matched against filename"):
+        infer_reference_name(reference)
 
 
 @pytest.mark.parametrize("contig, position, ref, alt, strand", [
