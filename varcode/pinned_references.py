@@ -23,7 +23,11 @@ RCRS = "NC_012920.1"
 
 
 def _normalize(name):
-    return name.strip().lower().replace("-", "_").replace(" ", "_")
+    """Lowercase, with dashes and spaces as underscores, and a version joined
+    to the name it follows: ``T2T-CHM13 v1.0`` and ``t2t-chm13.v1.0`` are
+    ``t2t_chm13v1.0``, not ORFdata's genome name ``t2t-chm13`` and a suffix."""
+    name = name.strip().lower().replace("-", "_").replace(" ", "_")
+    return re.sub(r"[_.]+(?=v\d+\.\d)", "", name)
 
 
 @lru_cache(maxsize=1)
@@ -70,6 +74,16 @@ def check_supported(name):
         raise ValueError("%s is not a supported reference: %s" % (name, row["note"]))
 
 
+def pinned_assembly(name):
+    """The assembly of the genome ORFdata pins for ``name``, e.g.
+    ``T2T-CHM13v2.0`` for ``hs1``; None for other names and for other
+    versions such as T2T-CHM13v1.0."""
+    row = pinned_name(name) if isinstance(name, str) else None
+    if row is None or row["genome"] is None:
+        return None
+    return _pin(row["genome"]).reference_name
+
+
 def names_rcrs(name):
     """Whether files called ``name`` carry the rCRS as their mitochondrion."""
     row = pinned_name(name)
@@ -81,6 +95,11 @@ def _pins():
     from orfdata import pinned_genomes
 
     return {genome.reference_name: genome for genome in pinned_genomes()}
+
+
+def _pin(genome):
+    """ORFdata's pinned genome called ``genome``, e.g. ``t2t-chm13``."""
+    return next(pin for pin in _pins().values() if pin.name == genome)
 
 
 def is_pinned_assembly(reference_name):
@@ -101,7 +120,7 @@ def load_pinned_genome(name, release=None, source=None):
 
     check_supported(name)
     row = pinned_name(name)
-    pin = next(g for g in orfdata.pinned_genomes() if g.name == row["genome"])
+    pin = _pin(row["genome"])
     if release is not None and str(release) != str(pin.annotation_version):
         raise ValueError(
             "%s has one pinned annotation, %s %s (ORFdata's %s); release %s isn't available"
@@ -110,8 +129,12 @@ def load_pinned_genome(name, release=None, source=None):
         return orfdata.load_genome(row["name"])
     except orfdata.NotInstalledError as error:
         found = "" if source in (None, row["name"]) else " (from %r)" % (source,)
-        raise type(error)("%s%s is %s, whose annotation comes from ORFdata. %s"
-                          % (row["name"], found, pin.reference_name, error)) from error
+        if row["name"] == pin.reference_name:
+            lead = "The annotation of %s%s comes from ORFdata." % (row["name"], found)
+        else:
+            lead = "%s%s is %s, whose annotation comes from ORFdata." % (
+                row["name"], found, pin.reference_name)
+        raise type(error)("%s %s" % (lead, error)) from error
 
 
 @lru_cache(maxsize=None)

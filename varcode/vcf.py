@@ -24,8 +24,9 @@ import pandas
 
 from .contigs import _RCRS_LENGTH, _is_grch37
 from .pinned_references import (
-    is_pinned_assembly, names_rcrs, pinned_contig_lengths, pinned_contig_name, pinned_name)
-from .reference import _split_release, infer_genome, infer_reference_name
+    find_pinned_name, is_pinned_assembly, names_rcrs, pinned_assembly, pinned_contig_lengths,
+    pinned_contig_name)
+from .reference import _split_release, assembly_in_file_name, infer_genome
 from .variant import Variant, variant_ascending_position_sort_key
 from .variant_collection import VariantCollection
 from .vcf_parsing import VCFHeader, _split_struct_fields
@@ -72,27 +73,32 @@ def _declares_rcrs_chrm(header):
 
 def _names_rcrs_file(genome, reference):
     """Whether the VCF's reference is a file whose chrM is the rCRS: the
-    ``genome=`` name if it is a pinned file's, else the header's reference."""
+    ``genome=`` name if it is a pinned file's, else the header's reference.
+
+    Only ORFdata's names matter here, so this doesn't run inference, which
+    would warn about other assemblies' names. The file name decides before
+    its directories, as in inference.
+    """
     for name in (genome, reference):
         if isinstance(name, str):
             try:
-                found = infer_reference_name(_split_release(name)[0])
+                name = _split_release(name)[0]
             except ValueError:
                 continue
-            if pinned_name(found) is not None:
+            found = find_pinned_name(os.path.basename(name)) or find_pinned_name(name)
+            if found is not None:
                 return names_rcrs(found)
     return False
 
 
-def _check_pinned_contig_lengths(path, header, assembly, chrm_is_rcrs):
-    """Raise when ``##contig`` lengths say the VCF isn't on ``assembly``.
+def _compare_contig_lengths(header, assembly, chrm_is_rcrs):
+    """How many of the header's ``##contig`` lengths match the pinned
+    ``assembly``'s, and a description of each that doesn't.
 
-    A GRCh38 VCF read as T2T-CHM13v2.0 would put GRCh38 positions on T2T
-    transcripts; chr1 is 248,956,422 bp in GRCh38 and 248,387,328 in T2T.
-    Contigs the pinned table doesn't name, such as decoys, are not checked.
+    Contigs the pinned table doesn't name, such as decoys, aren't compared.
     """
     lengths = pinned_contig_lengths(assembly, chrm_is_rcrs)
-    mismatches = []
+    matches, mismatches = 0, []
     for line in header.metadata.get("contig", ()):
         line = line.strip()
         if not (line.startswith("<") and line.endswith(">")):
@@ -100,15 +106,63 @@ def _check_pinned_contig_lengths(path, header, assembly, chrm_is_rcrs):
         fields = _split_struct_fields(line[1:-1])
         name = pinned_contig_name(fields.get("ID", ""), assembly, chrm_is_rcrs)
         length = fields.get("length", "").strip()
-        if name in lengths and length.isdigit() and int(length) != lengths[name]:
+        if name not in lengths or not length.isdigit():
+            continue
+        if int(length) == lengths[name]:
+            matches += 1
+        else:
             mismatches.append("%s is %s bp here but %s bp in %s" % (
                 fields["ID"], format(int(length), ","), format(lengths[name], ","), assembly))
+    return matches, mismatches
+
+
+def _check_pinned_contig_lengths(path, header, assembly, chrm_is_rcrs):
+    """Raise when ``##contig`` lengths say the VCF isn't on ``assembly``.
+
+    A GRCh38 VCF read as T2T-CHM13v2.0 would put GRCh38 positions on T2T
+    transcripts; chr1 is 248,956,422 bp in GRCh38 and 248,387,328 in T2T.
+    """
+    _, mismatches = _compare_contig_lengths(header, assembly, chrm_is_rcrs)
     if mismatches:
         raise ValueError(
             "%s is not on %s: its ##contig lengths disagree (%s). Annotating it would put another "
             "assembly's positions on %s transcripts; pass the genome its reference matches."
             % (path, assembly, "; ".join(mismatches[:3]) + ("; ..." if len(mismatches) > 3 else ""),
                assembly))
+
+
+def _check_header_reference(path, header, key, reference, assembly, chrm_is_rcrs):
+    """Raise when the header's reference and ``genome=`` put the VCF on two
+    assemblies, one of them a genome ORFdata pins, such as T2T-CHM13v2.0.
+
+    A GRCh38 VCF passed with ``genome=`` a T2T genome, or a T2T VCF with
+    GRCh38, would annotate one assembly's positions on the other's
+    transcripts, and varcode doesn't convert them (#243). Only the file name
+    counts, and only when it names one assembly (#669).
+
+    ``##contig`` lengths outweigh it. bcftools +liftover writes the target's
+    ``##contig`` lines but keeps the source's ``##reference``, so a VCF whose
+    lengths are the pinned genome's is on it, and one whose lengths aren't
+    isn't, whatever its ``##reference`` says.
+    """
+    if not isinstance(reference, str):
+        return
+    named = assembly_in_file_name(reference)
+    assembly = pinned_assembly(assembly) or assembly
+    if named is None or named == assembly:
+        return
+    pinned = next((name for name in (assembly, named) if is_pinned_assembly(name)), None)
+    if pinned is None:
+        return
+    matches, mismatches = _compare_contig_lengths(header, pinned, chrm_is_rcrs)
+    on_pinned = matches > 0 and not mismatches
+    if (pinned == assembly and on_pinned) or (pinned == named and mismatches):
+        return
+    raise ValueError(
+        "%s: its ##%s, %r, names %s, but genome= is %s. One assembly's positions aren't the "
+        "other's, and varcode doesn't convert them. Pass the genome the VCF was called on; if "
+        "the header is wrong, correct its ##%s line, or pass reference_vcf_key=None to load_vcf."
+        % (path, key, reference, named, assembly, key))
 
 
 def load_vcf(
@@ -151,11 +205,17 @@ def load_vcf(
         reference_vcf_key, usually a FASTA path, from an assembly name or
         alias in its file name, or a common build's file name such as
         ``hs37d5``, ``human_g1k_v37`` or the Broad's
-        ``Homo_sapiens_assembly38``.
+        ``Homo_sapiens_assembly38``. A ``genome`` that disagrees with the
+        file name in the header's reference raises ``ValueError`` when one
+        of the two is a genome ORFdata pins, such as T2T-CHM13v2.0: a GRCh38
+        VCF read as T2T, or the reverse. ``##contig`` lengths, when the
+        header has them, outweigh the reference: a VCF lifted to T2T by
+        bcftools +liftover keeps its source's ``##reference``.
 
     reference_vcf_key : str, optional
         Name of metadata field which contains path to reference FASTA
-        file (default = 'reference')
+        file (default = 'reference'). With ``genome`` given, None ignores
+        the header's reference.
 
     only_passing : bool, optional
         If true, any entries whose FILTER field is not one of "." or "PASS" is
@@ -269,6 +329,7 @@ def load_vcf(
         path = parsed_path.path
     header = VCFHeader.from_path(path)
 
+    genome_given = genome is not None
     if genome is None:
         if reference_vcf_key not in header.metadata:
             raise ValueError("Unable to infer reference genome for %s" % (path,))
@@ -282,10 +343,16 @@ def load_vcf(
     chrm_is_rcrs = _is_grch37(assembly) and _declares_rcrs_chrm(header)
     if chrm_is_rcrs:
         logger.info("%s declares chrM at the rCRS length; naming it MT", path)
+    try:
+        reference = header.get_metadata(reference_vcf_key)
+    except ValueError:  # several values, none of them the reference
+        reference = None
     if is_pinned_assembly(assembly):
         # Only the file's name says which mitochondrion a T2T chrM is.
-        chrm_is_rcrs = _names_rcrs_file(original_genome, header.metadata.get(reference_vcf_key))
+        chrm_is_rcrs = _names_rcrs_file(original_genome, reference)
         _check_pinned_contig_lengths(path, header, assembly, chrm_is_rcrs)
+    if genome_given:
+        _check_header_reference(path, header, reference_vcf_key, reference, assembly, chrm_is_rcrs)
     if genome_was_ucsc:
         genome = original_genome
 
