@@ -1,5 +1,30 @@
 # Change Log
 
+## v11.13.0
+
+- Every name deprecated for 12.0 now warns with `DeprecationWarning` (#693).
+  New warnings:
+  - `ensembl=` on `Variant`, `StructuralVariant` and `random_variants`;
+  - the `"ensembl"` key of `dataframes_to_variant_collection`'s
+    `variant_kwargs`;
+  - `Variant.ensembl`;
+  - `StopLoss.extended_protein_sequence`.
+
+  Use `genome=`, `Variant.genome` and `aa_alt` instead. `load_vcf_fast` and
+  `detect_loh` already warned. Each name warns once per call, from the
+  caller's line: `StructuralVariant(ensembl=...)` passes `genome=` on to
+  `Variant`, and `variant_kwargs` warns once, not once per row. Saved
+  Variant JSON with the old `"ensembl"` key still loads, without a warning.
+- The libraries that used these names have moved off them:
+  - Vaxrank 3.54.2 (openvax/vaxrank#821);
+  - Topiary TOPIARY_VERSION (openvax/topiary#599);
+  - osteosarc 0.15.7 (iskandr/osteosarc#122);
+  - Isovar (openvax/isovar#691).
+- The test suite makes these warnings errors outside
+  `tests/test_deprecated_aliases.py`, so varcode can't start calling a
+  deprecated name again unnoticed. `cryptic_exons` no longer falls back to
+  `variant.ensembl`.
+
 ## v11.12.0
 
 - `load_vcf(path, genome=...)` refuses a VCF whose `##reference` file name

@@ -57,6 +57,7 @@ downstream integrations without forcing them into the core class:
 """
 
 from typing import Any, Mapping, NamedTuple, Optional, Tuple
+from warnings import warn
 
 from .contigs import _annotation_contig_name, normalize_contig_name
 
@@ -335,6 +336,11 @@ class StructuralVariant(Variant):
         # nucleotide-normalization path doesn't reject <DEL>-style
         # symbolic alleles. Restore the actual record fields below; placeholder
         # normalization must not leak into public alleles or exports (#417).
+        if ensembl is not None:
+            warn("StructuralVariant(ensembl=...) is deprecated and will be removed in varcode 12.0; pass genome= instead",
+                 DeprecationWarning, stacklevel=2)
+            if genome is None:
+                genome = ensembl
         Variant.__init__(
             self,
             contig=contig,
@@ -342,7 +348,6 @@ class StructuralVariant(Variant):
             ref=ref if ref else "N",
             alt="A",
             genome=genome,
-            ensembl=ensembl,
             allow_extended_nucleotides=True,
             normalize_contig_names=normalize_contig_names,
             convert_ucsc_contig_names=convert_ucsc_contig_names,

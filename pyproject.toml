@@ -66,6 +66,9 @@ markers = [
 # checks the warning itself.
 filterwarnings = [
     "ignore:cryptic_exons. no reference sequence:UserWarning",
+    # Names deprecated for 12.0 (#693) may be used only inside pytest.warns,
+    # in tests/test_deprecated_aliases.py: varcode itself mustn't call them.
+    "error:.*will be removed in varcode 12\\.0:DeprecationWarning",
 ]
 
 [tool.ruff.lint]

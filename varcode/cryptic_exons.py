@@ -317,8 +317,7 @@ def enumerate_from_structural_variant(
     Returns the combined, sorted candidate list.
     """
     candidates: List[CrypticExonCandidate] = []
-    genome = getattr(variant, "genome", None) or getattr(
-        variant, "ensembl", None)
+    genome = getattr(variant, "genome", None)
 
     # If the SV carries a long-read-assembled allele, prefer it.
     if getattr(variant, "alt_assembly", None):

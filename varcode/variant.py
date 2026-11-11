@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from warnings import warn
 
 from serializable import Serializable
 
@@ -72,8 +73,10 @@ class Variant(Serializable):
     # any keywords which are renamed or removed should be added to this
     # dictionary to preserve the ability to deserialize old representations
     # of Variant objects
+    # Old JSON names; mapped without a warning, since the caller can't change them.
     _SERIALIZABLE_KEYWORD_ALIASES = {
-        "normalize_contig_name": "normalize_contig_names"
+        "normalize_contig_name": "normalize_contig_names",
+        "ensembl": "genome",
     }
     
     def __init__(
@@ -115,8 +118,8 @@ class Variant(Serializable):
             of GRCh38
 
         ensembl : Genome, EnsemblRelease, or str, or int (DEPRECATED)
-            Previous name used instead of 'genome', the two arguments should
-            be mutually exclusive.
+            Old name for ``genome``. Warns with ``DeprecationWarning`` and will
+            be removed in varcode 12.0. ``genome`` wins when both are given.
 
         allow_extended_nucleotides : bool
             Extended nucleotides include 'Y' for pyrimidies or 'N' for any base
@@ -177,12 +180,13 @@ class Variant(Serializable):
         self.normalize_contig_names = normalize_contig_names
         self.allow_extended_nucleotides = allow_extended_nucleotides
 
-        # if genome not specified, try the old name 'ensembl'
-        # if ensembl is also None, then default to "GRCh38"
-        if genome is None and ensembl is None:
+        if ensembl is not None:
+            warn("Variant(ensembl=...) is deprecated and will be removed in varcode 12.0; pass genome= instead",
+                 DeprecationWarning, stacklevel=2)
+            if genome is None:
+                genome = ensembl
+        if genome is None:
             genome = "GRCh38"
-        elif genome is None:
-            genome = ensembl
 
 
         # user might supply Ensembl release as an integer, reference name,
@@ -284,12 +288,15 @@ class Variant(Serializable):
     @property
     def ensembl(self):
         """
-        Deprecated alias for Variant.genome
+        Deprecated alias for :attr:`genome`. Warns with ``DeprecationWarning``
+        and will be removed in varcode 12.0.
 
         Returns
         -------
         pyensembl.Genome
         """
+        warn("Variant.ensembl is deprecated and will be removed in varcode 12.0; use Variant.genome",
+             DeprecationWarning, stacklevel=2)
         return self.genome
 
     def __str__(self):

@@ -467,7 +467,9 @@ def dataframes_to_variant_collection(
         Callable to parse per-sample info columns.
 
     variant_kwargs : dict, optional
-        Additional keyword parameters to pass to Variant.__init__
+        Additional keyword parameters to pass to Variant.__init__. Its old
+        ``"ensembl"`` key warns with ``DeprecationWarning`` once per call and
+        is read as ``"genome"``; it will be removed in varcode 12.0.
 
     variant_collection_kwargs : dict, optional
         Additional keyword parameters to pass to VariantCollection.__init__.
@@ -480,8 +482,13 @@ def dataframes_to_variant_collection(
             raise ValueError("max_variants must be a nonnegative integer or None") from None
         if max_variants < 0:
             raise ValueError("max_variants must be a nonnegative integer or None")
-    if variant_kwargs is None:
-        variant_kwargs = {}
+    variant_kwargs = dict(variant_kwargs or {})
+    if "ensembl" in variant_kwargs:
+        warn("variant_kwargs['ensembl'] is deprecated and will be removed in varcode 12.0; use 'genome'",
+             DeprecationWarning, stacklevel=2)
+        ensembl = variant_kwargs.pop("ensembl")
+        if variant_kwargs.get("genome") is None:
+            variant_kwargs["genome"] = ensembl
     if variant_collection_kwargs is None:
         variant_collection_kwargs = {}
 
@@ -499,8 +506,6 @@ def dataframes_to_variant_collection(
     variants = []
     metadata = {}
     structural_variant_genome = variant_kwargs.get("genome")
-    if structural_variant_genome is None:
-        structural_variant_genome = variant_kwargs.get("ensembl")
     # Split the skip counters so the user-facing warning can name a fix.
     # ``flag_off``: symbolic ALT seen with ``parse_structural_variants=False``
     #   — the user can opt into SV loading by flipping the flag.
