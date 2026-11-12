@@ -12,6 +12,7 @@
 
 
 from memoized_property import memoized_property
+from warnings import warn
 from typing import TYPE_CHECKING, Any, Literal
 
 from serializable import Serializable
@@ -1603,7 +1604,10 @@ class StopLoss(KnownAminoAcidChange):
 
     @property
     def extended_protein_sequence(self):
-        """Deprecated name for aa_alt"""
+        """Deprecated name for :attr:`aa_alt`. Warns with ``DeprecationWarning``
+        and will be removed in varcode 12.0."""
+        warn("StopLoss.extended_protein_sequence is deprecated and will be removed in varcode 12.0; use aa_alt",
+             DeprecationWarning, stacklevel=2)
         return self.aa_alt
 
     @property

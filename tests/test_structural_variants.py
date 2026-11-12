@@ -739,35 +739,6 @@ def test_vcf_loader_svs_use_requested_genome():
     assert {v.reference_name for v in vc} == {"GRCh37"}
 
 
-def test_dataframe_loader_svs_use_legacy_ensembl_genome_alias():
-    """The deprecated ``ensembl`` alias applies equally to structural
-    and ordinary rows passed directly to ``dataframes_to_variant_collection``.
-    """
-    from varcode.vcf import dataframes_to_variant_collection
-
-    columns = [
-        "CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO"]
-    dataframe = pandas.DataFrame([
-        ("22", 51_179_178, "sv1", "A", "<DEL>", "100", "PASS",
-         "SVTYPE=DEL;END=51179500"),
-        ("22", 51_179_700, "snv1", "C", "T", "100", "PASS", "."),
-    ], columns=columns)
-
-    def parse_info(value):
-        if value == ".":
-            return {}
-        return {"SVTYPE": "DEL", "END": 51_179_500}
-
-    vc = dataframes_to_variant_collection(
-        [dataframe],
-        source_path="legacy-ensembl.vcf",
-        info_parser=parse_info,
-        variant_kwargs={"ensembl": "GRCh37"},
-        parse_structural_variants=True)
-    assert len(vc) == 2
-    assert {v.reference_name for v in vc} == {"GRCh37"}
-
-
 def test_breakend_record_keeps_its_own_position_and_label():
     """A breakend record is one end of an event, so it loads as a BND at
     its own position even when the caller labels the pair SVTYPE=DEL.

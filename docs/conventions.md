@@ -61,16 +61,19 @@ used.
 
 ### Deprecated names
 
-These names still work, and Varcode itself no longer uses them. They will be
-removed in the next major release.
+These names still work, and Varcode itself no longer uses them. Each warns with
+`DeprecationWarning`, and all will be removed in 12.0.
 
-| Deprecated | Use instead | Warns now |
-|---|---|---|
-| `ensembl=` on `Variant`, `StructuralVariant` and `varcode.util.random_variants` | `genome=` | no |
-| `Variant.ensembl` | `Variant.genome` | no |
-| `StopLoss.extended_protein_sequence` | `aa_alt` | no |
-| `load_vcf_fast` | `load_vcf` | yes |
-| `detect_loh` | `detect_germline_overlap` for allele matching; `detect_loh` always returns `None` | yes |
+| Deprecated | Use instead |
+|---|---|
+| `ensembl=` on `Variant`, `StructuralVariant` and `varcode.util.random_variants`, and the `"ensembl"` key of `variant_kwargs` in `varcode.vcf.dataframes_to_variant_collection` | `genome=` |
+| `Variant.ensembl` | `Variant.genome` |
+| `StopLoss.extended_protein_sequence` | `aa_alt` |
+| `load_vcf_fast` | `load_vcf` |
+| `detect_loh` | `detect_germline_overlap` for allele matching; `detect_loh` always returns `None` |
+
+Saved Variant JSON that stores the genome under its old `"ensembl"` key still
+loads, without a warning.
 
 Variant positions and reference lookup helpers use one-based genomic
 coordinates. cDNA/protein offsets used for Python indexing are zero-based;

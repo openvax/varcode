@@ -47,7 +47,7 @@ varcode = "varcode.cli.main:main"
 # For working on Varcode, not for using it, so these are not published as
 # extras (PEP 735). With pip 25.1+: pip install -e '.[rna]' --group test --group lint
 test = [
-    "osteosarc>=0.14.4,<0.16",  # patient-data fixtures
+    "osteosarc>=0.15.7,<0.16",  # patient-data fixtures; 0.15.7 stopped passing ensembl= (#693)
     "biotite>=1.6",  # independent sequence checks
     "pysam>=0.21",  # RNA read phasing tests
     "setuptools>=64",  # tests/test_source_distribution.py builds an sdist in-process
@@ -66,6 +66,9 @@ markers = [
 # checks the warning itself.
 filterwarnings = [
     "ignore:cryptic_exons. no reference sequence:UserWarning",
+    # Names deprecated for 12.0 (#693) may be used only inside pytest.warns,
+    # in tests/test_deprecated_aliases.py: varcode itself mustn't call them.
+    "error:.*will be removed in varcode 12\\.0:DeprecationWarning",
 ]
 
 [tool.ruff.lint]

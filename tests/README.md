@@ -109,7 +109,7 @@ separate from export and tests.
 
 The targeted GPX4 and BRCA1 regressions use Ensembl 81. Offline integration
 checks use the public osteosarc dataset through the published
-osteosarc 0.14.x/0.15.x adapter (`>=0.14.4,<0.16`) from the `test` dependency group
+osteosarc 0.15.x adapter (`>=0.15.7,<0.16`) from the `test` dependency group
 (Python 3.11+):
 
 ```sh
