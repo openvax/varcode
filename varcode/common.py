@@ -12,8 +12,6 @@
 
 from collections import defaultdict
 
-from functools import wraps
-
 
 def apply_groupby(records, fn, skip_none=False):
     """
@@ -52,26 +50,3 @@ def groupby_field(records, field_name, skip_none=True):
         records,
         lambda obj: getattr(obj, field_name),
         skip_none=skip_none)
-
-
-def memoize(fn):
-    """
-    Simple memoization decorator for functions and methods,
-    assumes that all arguments to the function can be hashed and
-    compared.
-    """
-    memoized_values = {}
-
-    @wraps(fn)
-    def wrapped_fn(*args, **kwargs):
-        if kwargs:
-            cache_key = (args, tuple(sorted(kwargs.items())))
-        else:
-            cache_key = (args, ())
-        try:
-            return memoized_values[cache_key]
-        except KeyError:
-            memoized_values[cache_key] = fn(*args, **kwargs)
-            return memoized_values[cache_key]
-
-    return wrapped_fn

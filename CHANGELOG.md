@@ -1,5 +1,19 @@
 # Change Log
 
+## v11.13.1
+
+- `VariantCollection.original_reference_names()` no longer returns another
+  collection's answer (#736). The method was memoized in a global dict keyed
+  by the collection, and collections that compare equal share a key. A
+  collection loaded from an hg19 VCF and an equal one loaded from a GRCh37
+  VCF therefore got each other's `{"hg19"}` / `{"GRCh37"}`. The same dict
+  also kept every collection alive for the life of the process.
+  `reference_names()` is no longer memoized either, and both are now a plain
+  set comprehension over the variants.
+- The three string-keyed lookups in `varcode.reference` use
+  `functools.cache`, and `varcode.common.memoize` is removed. Nothing in
+  Isovar, Vaxrank, Topiary, osteosarc or mhctools imports it.
+
 ## v11.13.0
 
 - Every name deprecated for 12.0 now warns with `DeprecationWarning` (#693).
