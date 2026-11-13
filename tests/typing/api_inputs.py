@@ -44,6 +44,9 @@ def check_inputs(variant: Variant, other: object, path: Path) -> None:
     assert_type(normalize_contig_name("chr1"), str)
     assert_type(resolve_contig_name("chr1", ["1"]), ContigResolution)
     assert_type(ContigResolver(["chrM"]).resolve("MT").resolved_name, str | None)
+    assert_type(
+        ContigResolver(["chrM"], contig_lengths={"chrM": 16569}).resolve("MT").resolved_name,
+        str | None)
 
     # These ignores must remain necessary (warn_unused_ignores is enabled),
     # proving the public exports reject incompatible arguments statically.

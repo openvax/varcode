@@ -1,5 +1,26 @@
 # Change Log
 
+## v11.14.0
+
+- `ContigResolver` no longer pairs hg19's mitochondrion with the rCRS under
+  GRCh37 (#733). `chrM` and `M` are hg19's NC_001807; `MT` and `chrMT` are
+  the rCRS, whose positions are offset from it (#707). The resolver matched
+  them by spelling, so a GRCh37 `MT` variant resolved to an hg19 BAM's
+  `chrM`, and the reverse. Isovar resolves every alignment lookup through
+  it. Other assemblies still pair every mitochondrial spelling, and
+  `normalize_contig_name` still only matches spellings.
+- `ContigResolver` and `resolve_contig_name` take `contig_lengths`. A GRCh37
+  `chrM` or `M` of 16,569 bp is the rCRS, as in GENCODE's GRCh37 (#710), so
+  it matches `MT` and not `chrM`. Pass `dict(zip(bam.references, bam.lengths))`.
+  A name without a length is read by its spelling. Isovar should pass the
+  lengths (openvax/isovar#718): until it does, an `MT` variant no longer
+  finds a GENCODE GRCh37 BAM's rCRS `chrM`.
+- `RNAReadPhasingSource` finds a variant's BAM contig with `ContigResolver`
+  instead of its own candidate list, so a UCSC accession name such as
+  `chr1_KI270706v1_random` (varcode's `KI270706.1`) resolves instead of
+  being reported absent. `Genome`'s FASTA lookup reads a FASTA's mitochondrial
+  lengths into the same resolver, replacing its own copy of the GRCh37 rule.
+
 ## v11.13.1
 
 - `VariantCollection.original_reference_names()` no longer returns another

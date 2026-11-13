@@ -31,7 +31,7 @@ from typing import Any, Optional
 
 from serializable import Serializable
 
-from .contigs import _RCRS_LENGTH, ContigResolver, _is_grch37, _is_t2t_chm13
+from .contigs import ContigResolver, _is_t2t_chm13
 
 # Module-level imports of the lookup helpers. Functions in this file
 # call into them on hot paths; per-call imports would add measurable
@@ -320,7 +320,9 @@ class Genome(Serializable):
             reference_name = _contig_reference_name(self._ensembl)
             resolver, pinned = None, {}
             if names is not None:
-                resolver = ContigResolver(names, reference_name=reference_name)
+                resolver = ContigResolver(
+                    names, reference_name=reference_name,
+                    contig_lengths=_fasta_mitochondrion_lengths(fasta, names))
                 pinned = _pinned_spellings(fasta, reference_name, names)
             spellings = self._fasta_spellings = (fasta, resolver, pinned, {})
         _, resolver, pinned, found = spellings
@@ -460,8 +462,11 @@ def _fasta_spelling(
         return pinned[contig]
     if resolution.status != "alias":
         return contig
-    if resolution.normalized_name == "MT" and not _fasta_mitochondrion_is_annotations(
-            resolver.reference_name, contig, fasta, resolution.resolved_name):
+    # T2T-CHM13 FASTAs hold either CHM13's own mitochondrion or the rCRS,
+    # both 16,569 bp, with positions 576 to 577 bp apart (#722), so a
+    # respelling never chooses between them; only a file name can
+    # (:func:`_pinned_spellings`).
+    if resolution.normalized_name == "MT" and _is_t2t_chm13(resolver.reference_name):
         return contig
     return resolution.resolved_name
 
@@ -498,31 +503,18 @@ def _pinned_spellings(fasta: Any, reference_name: Optional[str], names: list) ->
     return spellings
 
 
-def _fasta_mitochondrion_is_annotations(
-        reference_name: Optional[str], contig: Any, fasta: Any, fasta_name: str) -> bool:
-    """Whether the FASTA's ``fasta_name`` (``chrM``, say) holds the
-    annotation's mitochondrion ``contig`` (``MT``).
-
-    hg19's chrM (NC_001807, 16,571 bp) is not the rCRS that Ensembl's
-    GRCh37 names MT, and its positions are offset from it (#707). Under
-    GRCh37, a FASTA's chrM therefore serves MT only at the rCRS length,
-    as in GENCODE's GRCh37 (#710), and hg19's chrM, which variants keep
-    as ``chrM``, reads no other spelling. T2T-CHM13 FASTAs hold either
-    CHM13's own mitochondrion or the rCRS, both 16,569 bp, with positions
-    576 to 577 bp apart (#722), so a respelling never chooses between
-    them; only a file name can (:func:`_pinned_spellings`). Elsewhere (hg38, mm10, canFam3) a FASTA's chrM is the
-    annotation's MT, as a VCF's chrM becomes MT.
-    """
-    if _is_t2t_chm13(reference_name):
-        return False
-    if not _is_grch37(reference_name):
-        return True
-    if str(contig).upper() != "MT":
-        return False
-    try:
-        return len(fasta[fasta_name]) == _RCRS_LENGTH
-    except Exception:
-        return False
+def _fasta_mitochondrion_lengths(fasta: Any, names: list) -> dict:
+    """Lengths of the FASTA's mitochondrial contigs, which
+    :class:`ContigResolver` reads under GRCh37 to tell hg19's chrM from the
+    rCRS (#707, #710). Other contigs' lengths are never read."""
+    lengths = {}
+    for name in names:
+        if name.upper() in ("M", "CHRM"):
+            try:
+                lengths[name] = len(fasta[name])
+            except Exception:
+                pass
+    return lengths
 
 
 def _check_fasta_names_annotated_contigs(genome: "Genome") -> None:
