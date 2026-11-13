@@ -249,8 +249,12 @@ def test_unknown_extension_fields_survive_and_nonportable_values_fail(effect, tm
     predicted = to_proteome([candidate])
     comparison, = comparisons(predicted)
     assert comparison.to_dict()["payload"]["contexts"][0]["evidence"]["future_field"] == {"z": [1, None, False]}
+    class Unportable:
+        """Defined in a function, so no module can look it up by name. A bare
+        ``object()`` is portable since serializable 1.5.0."""
+
     with pytest.raises((TypeError, ValueError)):
-        to_proteome([EffectCandidate(effect, evidence={"unsupported": object()})])
+        to_proteome([EffectCandidate(effect, evidence={"unsupported": Unportable()})])
 
 
 def test_splice_alternatives_and_added_rna_context_survive(effect):

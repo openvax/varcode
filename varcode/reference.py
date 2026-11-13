@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import os
+from functools import cache
 from warnings import warn
 import re
 from typing import TYPE_CHECKING, cast
@@ -23,7 +24,6 @@ from pyensembl import genome_for_reference_name as get_genome_for_ensembl_refere
 
 import pyensembl.species
 
-from .common import memoize
 from .pinned_references import (
     check_supported, find_pinned_name, load_pinned_genome, pinned_assembly, pinned_name)
 
@@ -160,7 +160,7 @@ reference_file_aliases = {
 }
 
 
-@memoize
+@cache
 def is_ucsc_reference_name(name):
     """
     Is the given genome name one of the known UCSC genomes?
@@ -312,7 +312,7 @@ def _collect_candidate_matches(reference_name_or_path):
     full_path_matches = list(set(full_path_matches))
     return file_name_matches, full_path_matches
 
-@memoize
+@cache
 def infer_reference_name(reference_name_or_path):
     """
     Given a string containing a reference name (such as a path to
@@ -436,7 +436,7 @@ def _split_release(reference_name):
     return name, release if "_" in release else int(release)
 
 
-@memoize
+@cache
 def infer_genome_for_reference_name(reference_name):
     """
     First infer a canonical Ensembl or UCSC reference name
