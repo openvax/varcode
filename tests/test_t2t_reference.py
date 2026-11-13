@@ -359,6 +359,33 @@ def test_a_genome_named_by_a_t2t_alias_is_t2t(tmp_path, custom_genome):
         load_vcf(write_vcf(tmp_path, "GRCh38", chr1=None), genome=genome)
 
 
+@pytest.mark.parametrize("name", ["T2T-CHM13v2.0", "hs1", "chm13v2.0", "HS1"])
+def test_every_name_of_a_t2t_genome_gets_the_assembly_rules(tmp_path, custom_genome, name):
+    # The rules belong to the assembly, not to what the user called the annotation (#730).
+    genome = custom_genome(name)
+    for reference in ("reference.fa", "file:///refs/hs1.fa"):
+        with pytest.raises(ValueError, match="##contig lengths disagree"):
+            load_vcf(write_vcf(tmp_path, reference, chr1=248956422), genome=genome)  # GRCh38's
+    assert [v.contig for v in load_vcf(write_vcf(tmp_path, "reference.fa", chr1=248387328), genome=genome)] == [
+        "1", "MT"]
+    variant = Variant("CP068277.2", 48121278, "G", "T", genome=genome, convert_ucsc_contig_names=True)
+    assert (variant.contig, variant.reference_name) == ("1", name)
+    assert Variant("chrM", 1, "A", "T", genome=genome, convert_ucsc_contig_names=True).contig == "MT"
+    from varcode.pinned_references import mitochondrion_note
+
+    assert mitochondrion_note("MT", name) is not None
+
+
+@pytest.mark.parametrize("name", ["T2T-CHM13v1.0", "chm13v1.0"])
+def test_another_version_of_t2t_stays_unpinned(custom_genome, name):
+    from varcode.pinned_references import is_pinned_assembly, pinned_assembly
+
+    assert not is_pinned_assembly(name) and pinned_assembly(name) is None
+    variant = Variant("CP068277.2", 1000, "G", "T", genome=custom_genome(name),
+                      convert_ucsc_contig_names=True)
+    assert variant.contig == "CP068277.2"
+
+
 def test_two_assemblies_neither_pinned_are_not_compared(tmp_path, custom_genome):
     genome = custom_genome("T2T-CHM13v1.0")
     path = write_vcf(tmp_path, "file:///refs/chm13.draft_v1.0.fasta", chr1=None)
