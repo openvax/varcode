@@ -32,12 +32,15 @@ def _is_grch37(reference_name: str | None) -> bool:
 
 
 def _is_t2t_chm13(reference_name: str | None) -> bool:
-    """T2T-CHM13, as ORFdata's pinned annotation names it ("T2T-CHM13v2.0").
+    """T2T-CHM13, by its pinned name ("T2T-CHM13v2.0") or an alias such as "hs1" (#730).
 
     Its FASTAs hold either CHM13's own mitochondrion (CP068254.1) or the
     rCRS, both 16,569 bp, whose positions are 576 to 577 bp apart (#722).
     """
-    return reference_name is not None and reference_name.strip().upper().startswith("T2T-CHM13")
+    from .pinned_references import pinned_assembly
+
+    assembly = pinned_assembly(reference_name)
+    return assembly is not None and assembly.upper().startswith("T2T-CHM13")
 
 
 def _is_hg19_mitochondrion(

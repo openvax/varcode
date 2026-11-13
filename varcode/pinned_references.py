@@ -76,9 +76,16 @@ def check_supported(name):
 
 def pinned_assembly(name):
     """The assembly of the genome ORFdata pins for ``name``, e.g.
-    ``T2T-CHM13v2.0`` for ``hs1``; None for other names and for other
-    versions such as T2T-CHM13v1.0."""
-    row = pinned_name(name) if isinstance(name, str) else None
+    ``T2T-CHM13v2.0`` for ``hs1`` or ``chm13v2.0``; None for other names and
+    for other versions such as T2T-CHM13v1.0. This is the one reader of a
+    genome's name as an assembly (#730): every rule that belongs to the
+    assembly goes through it."""
+    return _assembly(name) if isinstance(name, str) else None
+
+
+@lru_cache(maxsize=None)
+def _assembly(name):
+    row = pinned_name(name)
     if row is None or row["genome"] is None:
         return None
     return _pin(row["genome"]).reference_name
@@ -103,8 +110,9 @@ def _pin(genome):
 
 
 def is_pinned_assembly(reference_name):
-    """Whether ``reference_name`` is the assembly of a genome ORFdata pins, e.g. ``T2T-CHM13v2.0``."""
-    return isinstance(reference_name, str) and reference_name in _pins()
+    """Whether ``reference_name`` names the assembly of a genome ORFdata pins:
+    ``T2T-CHM13v2.0`` or an alias of it such as ``hs1`` (#730)."""
+    return pinned_assembly(reference_name) is not None
 
 
 def load_pinned_genome(name, release=None, source=None):
@@ -143,7 +151,7 @@ def _contigs(reference_name, chrm_is_rcrs):
     annotation's own) to the annotation's name, and each name's length."""
     from orfdata import contig_aliases
 
-    pin = _pins()[reference_name]
+    pin = _pins()[pinned_assembly(reference_name)]
     frame = contig_aliases(pin.name)
     rows = [row for row in frame.to_dict("records")]
     if chrm_is_rcrs:
@@ -209,6 +217,7 @@ def mitochondrion_note(contig, reference_name):
     """Why a pinned assembly's mitochondrion has no annotation, or None."""
     if not is_pinned_assembly(reference_name) or str(contig) not in ("MT", "chrM", "M", RCRS):
         return None
+    reference_name = pinned_assembly(reference_name)
     pin = _pins()[reference_name]
     if str(contig) == RCRS:
         return ("this %s annotation has no genes on the rCRS; ORFdata's %s annotates them with "
