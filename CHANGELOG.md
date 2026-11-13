@@ -13,6 +13,12 @@
 - The three string-keyed lookups in `varcode.reference` use
   `functools.cache`, and `varcode.common.memoize` is removed. Nothing in
   Isovar, Vaxrank, Topiary, osteosarc or mhctools imports it.
+- A test no longer assumes `object()` has no portable form. serializable 1.5.0
+  (2026-11-13) serializes classes that take no constructor arguments, so
+  `test_unknown_extension_fields_survive_and_nonportable_values_fail` failed
+  on every fresh install, including CI. It now uses an instance of a class
+  defined inside the test, which no module can look up by name, and which
+  1.4.0 and 1.5.0 both refuse.
 
 ## v11.13.0
 
