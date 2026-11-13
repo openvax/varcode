@@ -21,7 +21,7 @@ from collections import defaultdict
 from math import exp, lgamma, log, log1p
 from typing import Optional, Sequence
 
-from .contigs import _RCRS_LENGTH, ContigResolver, _is_grch37
+from .contigs import ContigResolver
 
 _MITOCHONDRION_NAMES = ("M", "CHRM", "MT", "CHRMT")
 
@@ -321,37 +321,21 @@ class RNAReadPhasingSource:
 
     def _bam_contig(self, variant):
         """The BAM's name for the variant's contig, or None if it has none or
-        several (``ContigResolver``'s ``missing`` and ``ambiguous``)."""
+        several (``ContigResolver``'s ``missing`` and ``ambiguous``). Under
+        GRCh37 the resolver keeps hg19's chrM and the rCRS MT apart, reading
+        the BAM header's lengths (#707, #710)."""
         assembly = getattr(getattr(variant, "genome", None), "assembly", None) or getattr(
             variant, "reference_name", None)
-        # The answer depends on the build (below), so it is part of the key.
+        # The answer depends on the build, so it is part of the key.
         key = (assembly, variant.contig)
         if key not in self._contig_cache:
-            resolver = self._contig_resolver(assembly, variant.contig)
-            self._contig_cache[key] = resolver.resolve(variant.contig).resolved_name
+            if assembly not in self._contig_resolvers:
+                self._contig_resolvers[assembly] = ContigResolver(
+                    self._bam.references, reference_name=assembly,
+                    contig_lengths=dict(zip(self._bam.references, self._bam.lengths)))
+            self._contig_cache[key] = self._contig_resolvers[assembly].resolve(
+                variant.contig).resolved_name
         return self._contig_cache[key]
-
-    def _contig_resolver(self, assembly, contig):
-        """A ``ContigResolver`` over the BAM's contig names. Under GRCh37,
-        chrM/M is hg19's mitochondrion and MT/chrMT the rCRS: different
-        sequences, offset from each other (#707). A BAM's chrM or M is the
-        rCRS when the header gives it the rCRS length, as GENCODE's GRCh37
-        does (#710). So a mitochondrial variant is resolved only among the
-        BAM contigs of its own sequence. Other builds' chrM is the rCRS."""
-        rcrs = None
-        if _is_grch37(assembly) and contig.upper() in _MITOCHONDRION_NAMES:
-            rcrs = contig.upper() in ("MT", "CHRMT")
-        key = (assembly, rcrs)
-        if key not in self._contig_resolvers:
-            names = [
-                name for name in self._bam.references
-                if rcrs is None or self._is_rcrs_contig(name) == rcrs]
-            self._contig_resolvers[key] = ContigResolver(names, reference_name=assembly)
-        return self._contig_resolvers[key]
-
-    def _is_rcrs_contig(self, bam_contig):
-        return bam_contig.upper() in ("MT", "CHRMT") or (
-            self._bam.get_reference_length(bam_contig) == _RCRS_LENGTH)
 
     def _passes_read_filters(self, read):
         if read.is_unmapped:
