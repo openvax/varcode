@@ -268,3 +268,49 @@ def test_custom_reference_vocabulary_does_not_poison_unrelated_lookups(tmp_path)
         normalize_contig_name("0")
     with pytest.raises(ValueError, match="cannot be 0"):
         Variant("0", 1, "A", "G", "GRCh38")
+
+
+@pytest.mark.parametrize("assembly", ["GRCh37", "hg19", "b37"])
+@pytest.mark.parametrize("query,names,expected", [
+    # hg19's chrM and the rCRS MT are different sequences, never paired (#733, #707).
+    ("MT", ["chrM"], None), ("chrMT", ["M"], None),
+    ("chrM", ["MT"], None), ("M", ["chrMT"], None),
+    ("MT", ["MT"], "MT"), ("MT", ["chrMT"], "chrMT"), ("chrMT", ["MT"], "MT"),
+    ("chrM", ["chrM"], "chrM"), ("chrM", ["M"], "M"), ("M", ["chrM"], "chrM"),
+    ("mt", ["chrMT"], "chrMT"), ("chrm", ["M"], "M"),
+    # With both present, each query reaches its own, even unspelled the same.
+    ("MT", ["chrM", "MT"], "MT"), ("chrM", ["chrM", "MT"], "chrM"),
+    ("MT", ["M", "chrM", "chrMT"], "chrMT"),
+])
+def test_grch37_mitochondria_are_matched_only_to_the_same_sequence(assembly, query, names, expected):
+    result = resolve_contig_name(query, names, reference_name=assembly)
+    assert result.resolved_name == expected
+    assert result.status == ("missing" if expected is None else result.status)
+
+
+@pytest.mark.parametrize("query,length,expected", [
+    ("MT", 16569, "chrM"),  # GENCODE's GRCh37 names the rCRS chrM (#710)
+    ("chrM", 16569, None),
+    ("MT", 16571, None),  # hg19's NC_001807
+    ("chrM", 16571, "chrM"),
+])
+def test_grch37_mitochondrion_length_says_which_sequence_a_chrM_is(query, length, expected):
+    resolver = ContigResolver(["chr1", "chrM"], reference_name="GRCh37",
+                              contig_lengths={"chr1": 248956422, "chrM": length})
+    assert resolver.resolve(query).resolved_name == expected
+
+
+def test_grch37_mitochondrion_lengths_may_cover_only_some_contigs():
+    resolver = ContigResolver(["chrM", "MT"], reference_name="hg19", contig_lengths={"chrM": 16569})
+    # chrM is the rCRS by length; an exact name still wins, and chrM is not hg19's.
+    assert resolver.resolve("MT").resolved_name == "MT"
+    assert resolver.resolve("chrM").status == "missing"
+    # Two names for the rCRS are ambiguous, never guessed between.
+    both = ContigResolver(["chrM", "chrMT"], reference_name="hg19", contig_lengths={"chrM": 16569})
+    assert both.resolve("MT").status == "ambiguous"
+
+
+@pytest.mark.parametrize("assembly", [None, "GRCh38", "hg38", "mm10", "T2T-CHM13v2.0"])
+def test_other_assemblies_pair_every_mitochondrial_spelling(assembly):
+    assert resolve_contig_name("MT", ["chrM"], reference_name=assembly).resolved_name == "chrM"
+    assert resolve_contig_name("chrM", ["MT"], reference_name=assembly).resolved_name == "MT"

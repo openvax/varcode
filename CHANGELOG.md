@@ -1,5 +1,46 @@
 # Change Log
 
+## v11.14.0
+
+- `ContigResolver` no longer pairs hg19's mitochondrion with the rCRS under
+  GRCh37 (#733). `chrM` and `M` are hg19's NC_001807; `MT` and `chrMT` are
+  the rCRS, whose positions are offset from it (#707). The resolver matched
+  them by spelling, so a GRCh37 `MT` variant resolved to an hg19 BAM's
+  `chrM`, and the reverse. Isovar resolves every alignment lookup through
+  it. Other assemblies still pair every mitochondrial spelling, and
+  `normalize_contig_name` still only matches spellings.
+- `ContigResolver` and `resolve_contig_name` take `contig_lengths`. A GRCh37
+  `chrM` or `M` of 16,569 bp is the rCRS, as in GENCODE's GRCh37 (#710), so
+  it matches `MT` and not `chrM`. Pass `dict(zip(bam.references, bam.lengths))`.
+  A name without a length is read by its spelling. Isovar should pass the
+  lengths (openvax/isovar#718): until it does, an `MT` variant no longer
+  finds a GENCODE GRCh37 BAM's rCRS `chrM`.
+- `RNAReadPhasingSource` finds a variant's BAM contig with `ContigResolver`
+  instead of its own candidate list, so a UCSC accession name such as
+  `chr1_KI270706v1_random` (varcode's `KI270706.1`) resolves instead of
+  being reported absent. `Genome`'s FASTA lookup reads a FASTA's mitochondrial
+  lengths into the same resolver, replacing its own copy of the GRCh37 rule.
+
+## v11.13.1
+
+- `VariantCollection.original_reference_names()` no longer returns another
+  collection's answer (#736). The method was memoized in a global dict keyed
+  by the collection, and collections that compare equal share a key. A
+  collection loaded from an hg19 VCF and an equal one loaded from a GRCh37
+  VCF therefore got each other's `{"hg19"}` / `{"GRCh37"}`. The same dict
+  also kept every collection alive for the life of the process.
+  `reference_names()` is no longer memoized either, and both are now a plain
+  set comprehension over the variants.
+- The three string-keyed lookups in `varcode.reference` use
+  `functools.cache`, and `varcode.common.memoize` is removed. Nothing in
+  Isovar, Vaxrank, Topiary, osteosarc or mhctools imports it.
+- A test no longer assumes `object()` has no portable form. serializable 1.5.0
+  (2026-11-13) serializes classes that take no constructor arguments, so
+  `test_unknown_extension_fields_survive_and_nonportable_values_fail` failed
+  on every fresh install, including CI. It now uses an instance of a class
+  defined inside the test, which no module can look up by name, and which
+  1.4.0 and 1.5.0 both refuse.
+
 ## v11.13.0
 
 - Every name deprecated for 12.0 now warns with `DeprecationWarning` (#693).

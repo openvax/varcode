@@ -53,6 +53,12 @@ assert resolve_contig_name("MT", ["MT", "chrM"]).resolved_name == "MT"
 assert normalize_contig_name("chrUn_gl000216", reference_name="hg19") == "GL000216.1"
 ```
 
+Under GRCh37/hg19, `chrM`/`M` (hg19's NC_001807) and `MT`/`chrMT` (the rCRS)
+are different sequences, so the resolver never pairs one with the other. A BAM
+or FASTA whose `chrM` is the rCRS, as in GENCODE's GRCh37, is told apart by
+length: pass `contig_lengths=dict(zip(bam.references, bam.lengths))`. Without a
+length a name is read by its spelling.
+
 For many queries, build the index once with
 `resolver = ContigResolver(bam.references, reference_name="GRCh38")`, then call
 `resolver.resolve(variant.contig)`. For annotation lookup, supply

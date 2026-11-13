@@ -4,7 +4,7 @@ These functions do not establish sequence/coordinate equivalence, perform
 liftover, or open reference data. Callers supply the reference vocabulary.
 """
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 import re
 from typing import Literal
@@ -61,6 +61,22 @@ def _is_hg19_mitochondrion(
 _RCRS_LENGTH = 16569
 
 
+def _grch37_mitochondrion_key(key: str, name: str, length: int | None) -> str:
+    """Split GRCh37's two mitochondria within a resolution key (#733).
+
+    Under GRCh37, ``chrM``/``M`` is hg19's mitochondrion and ``MT``/``chrMT``
+    the rCRS: different sequences, offset from each other (#707). Spelling
+    alone cannot pair them, so ``key`` (``"MT"`` for every mitochondrial
+    spelling) becomes ``"MT"`` for the rCRS and ``"chrM"`` for hg19's. A
+    name says which it is, except that a BAM or FASTA's own ``chrM`` is the
+    rCRS when it is 16,569 bp long, as in GENCODE's GRCh37 (#710).
+    """
+    if key != "MT":
+        return key
+    rcrs = name.upper() in ("MT", "CHRMT") or length == _RCRS_LENGTH
+    return "MT" if rcrs else "chrM"
+
+
 # Appended to errors about a GRCh37 chrM, which Ensembl's annotation lacks.
 _HG19_MITOCHONDRION_NOTE = (
     "hg19's chrM (NC_001807) is not the rCRS that Ensembl names MT, and its "
@@ -81,8 +97,8 @@ def _annotation_contig_name(
     contig table: T2T-CHM13v2.0's ``chr1``, ``CP068277.2`` and
     ``NC_060925.1`` are ``1``, and its ``chrM`` is ``MT``, CHM13's own
     mitochondrion, or, with ``chrm_is_rcrs``, ``NC_012920.1``, the rCRS
-    (#723, #722). The public function, and so :class:`ContigResolver`,
-    only matches spellings and still pairs them.
+    (#723, #722). The public function only matches spellings and still
+    pairs them; :class:`ContigResolver` keeps GRCh37's two mitochondria apart.
     """
     if convert_ucsc:
         # A genome ORFdata pins, such as T2T-CHM13v2.0, names each contig's
@@ -207,9 +223,23 @@ class ContigResolver:
         reference vocabulary, so lookups are missing rather than unavailable.
     reference_name : str, optional
         Assembly spelling context, as in :func:`normalize_contig_name`.
+    contig_lengths : mapping of str to int, optional
+        Lengths of some or all of ``available_contigs`` (``dict(zip(
+        bam.references, bam.lengths))``). Only the GRCh37 mitochondrion uses
+        them; see Notes.
 
     Notes
     -----
+    Under GRCh37/hg19 the mitochondrion has two sequences: hg19's ``chrM``/``M``
+    (NC_001807) and the rCRS (NC_012920) that Ensembl names ``MT``, with
+    positions offset from each other (#707). The resolver never pairs one
+    with the other: ``MT`` and ``chrMT`` match only the rCRS, and ``M`` and
+    ``chrM`` only hg19's mitochondrion. A listed ``chrM`` or ``M`` with
+    ``contig_lengths`` of 16,569 (the rCRS length, as in GENCODE's GRCh37,
+    #710) is the rCRS, so it matches ``MT`` and not ``chrM``. Without a
+    length, a listed name is read by its spelling. Other assemblies pair every
+    mitochondrial spelling.
+
     An exact supplied spelling wins even when other aliases are present.
     Otherwise exactly one normalized match is required. Ambiguity is returned
     explicitly, never resolved by iteration order. There is no global vocabulary cache,
@@ -220,11 +250,15 @@ class ContigResolver:
     annotation/Variant chromosome normalization rejects it.
     """
 
-    def __init__(self, available_contigs: Iterable[str] | None, *, reference_name: str | None = None):
+    def __init__(
+            self, available_contigs: Iterable[str] | None, *, reference_name: str | None = None,
+            contig_lengths: Mapping[str, int] | None = None):
         _check_reference_name(reference_name)
         if isinstance(available_contigs, (str, bytes)):
             raise TypeError("available_contigs must be an iterable of names, not a string")
         self._reference_name = reference_name
+        self._grch37 = _is_grch37(reference_name)
+        self._contig_lengths: dict[str, int] = dict(contig_lengths or {})
         self._available_contigs: frozenset[str] | None = None
         self._aliases: dict[str, tuple[str, ...]] = {}
         if available_contigs is not None:
@@ -233,7 +267,7 @@ class ContigResolver:
             for name in available_contigs:
                 if not isinstance(name, str):
                     raise TypeError("available_contigs must contain only string names")
-                key = _resolution_key(name, reference_name)
+                key = self._key(name, self._contig_lengths.get(name))
                 names.add(name)
                 aliases.setdefault(key, set()).add(name)
             self._available_contigs = frozenset(names)
@@ -243,18 +277,25 @@ class ContigResolver:
     def reference_name(self) -> str | None:
         return self._reference_name
 
+    def _key(self, name: str | int, length: int | None = None) -> str:
+        key = _resolution_key(name, self.reference_name)
+        if self._grch37:
+            key = _grch37_mitochondrion_key(key, str(name), length)
+        return key
+
     @property
     def available_contigs(self) -> frozenset[str] | None:
         return self._available_contigs
 
     def resolve(self, name: str | int) -> ContigResolution:
         """Resolve a name, preserving both the supplied and target spellings."""
-        key = _resolution_key(name, self.reference_name)
+        key = self._key(name)
         candidates: tuple[str, ...] = ()
         status: ContigResolutionStatus
         if self.available_contigs is None:
             status = "reference_unavailable"
-        elif str(name) in self.available_contigs:
+        elif str(name) in self.available_contigs and self._key(
+                name, self._contig_lengths.get(str(name))) == key:
             status, candidates = "exact", (str(name),)
         else:
             candidates = self._aliases.get(key, ())
@@ -265,6 +306,9 @@ class ContigResolver:
 
 def resolve_contig_name(
         name: str | int, available_contigs: Iterable[str] | None, *,
-        reference_name: str | None = None) -> ContigResolution:
+        reference_name: str | None = None,
+        contig_lengths: Mapping[str, int] | None = None) -> ContigResolution:
     """Resolve one name; reuse :class:`ContigResolver` for repeated lookups."""
-    return ContigResolver(available_contigs, reference_name=reference_name).resolve(name)
+    return ContigResolver(
+        available_contigs, reference_name=reference_name,
+        contig_lengths=contig_lengths).resolve(name)

@@ -209,3 +209,16 @@ def test_default_source_metadata_is_independent():
     first.source_to_metadata_dict["first.vcf"] = {}
     assert second.source_to_metadata_dict == {}
     assert VariantCollection([]).source_to_metadata_dict == {}
+
+
+def test_reference_names_are_not_shared_between_equal_collections():
+    # Variant equality compares the resolved genome, so the hg19 and GRCh37
+    # collections are equal; each must still report its own spelling (#736).
+    def collection(genome):
+        return VariantCollection([Variant("1", 1000, "A", "T", genome=genome)])
+
+    hg19, grch37 = collection("hg19"), collection("GRCh37")
+    assert hg19 == grch37
+    assert hg19.original_reference_names() == {"hg19"}
+    assert grch37.original_reference_names() == {"GRCh37"}
+    assert hg19.reference_names() == grch37.reference_names() == {"GRCh37"}

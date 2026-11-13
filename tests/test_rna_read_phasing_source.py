@@ -700,3 +700,22 @@ def test_bam_contig_cache_is_per_build(tmp_path):
         assert source._bam_contig(Variant("MT", 12995, "A", "G", "GRCh37")) is None
     finally:
         source.close()
+
+
+@pytest.mark.parametrize("bam_contig", ["chr1_KI270706v1_random", "KI270706.1"])
+def test_bam_contig_finds_a_ucsc_accession_contig_under_either_spelling(tmp_path, bam_contig):
+    # Varcode names chr1_KI270706v1_random "KI270706.1" (#733); a BAM may use either.
+    bam_path = tmp_path / "alt.bam"
+    with pysam.AlignmentFile(bam_path, "wb", header={
+            "HD": {"VN": "1.6"}, "SQ": [{"SN": bam_contig, "LN": 175055}]}):
+        pass
+    pysam.index(str(bam_path))
+    source = RNAReadPhasingSource(str(bam_path))
+    try:
+        variant = Variant("chr1_KI270706v1_random", 1000, "A", "G", "GRCh38",
+                          convert_ucsc_contig_names=True)
+        assert variant.contig == "KI270706.1"
+        assert source._bam_contig(variant) == bam_contig
+        assert source._bam_contig(Variant("1", 1000, "A", "G", "GRCh38")) is None
+    finally:
+        source.close()

@@ -21,7 +21,6 @@ import pandas as pd
 from sercol import Collection
 
 from .effects import EffectCollection, Failure
-from .common import memoize
 from .csv_helpers import (
     CONTIG_COLUMN_ALIASES,
     STRUCTURAL_VARIANT_COLUMNS,
@@ -295,7 +294,6 @@ class VariantCollection(Collection):
                 timespec="seconds"),
         )
 
-    @memoize
     def reference_names(self):
         """
         All distinct reference names used by Variants in this
@@ -307,7 +305,6 @@ class VariantCollection(Collection):
         """
         return {variant.reference_name for variant in self}
 
-    @memoize
     def original_reference_names(self):
         """
         Similar to `reference_names` but preserves UCSC references,
