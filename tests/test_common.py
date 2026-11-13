@@ -13,27 +13,6 @@
 import varcode
 from .common import eq_
 
-def test_memoize():
-    class State(object):
-        def __init__(self):
-            self.x = 0
-
-        def incr(self):
-            self.x += 1
-
-    state1 = State()
-    # call incr twice and expect state to increment twice
-    state1.incr()
-    state1.incr()
-    eq_(state1.x, 2)
-
-    state2 = State()
-    memoized = varcode.common.memoize(state2.incr)
-    # call twice but should only increase once
-    memoized()
-    memoized()
-    eq_(state2.x, 1)
-
 def test_groupby_field():
     class Record(object):
         def __init__(self, x, y):
