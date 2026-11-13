@@ -1,5 +1,23 @@
 # Change Log
 
+## v11.14.1
+
+- A genome you build and name by a T2T-CHM13v2.0 alias, such as
+  `reference_name="hs1"` or `"chm13v2.0"`, now gets the same assembly rules as
+  one named `T2T-CHM13v2.0` (#730). Before, only the canonical name did, and
+  `load_vcf(..., genome=hs1_genome)` accepted a VCF whose `##contig` lengths
+  were GRCh38's. The rules that were skipped:
+  - the `##contig` length check;
+  - the choice of mitochondrion from the file name;
+  - the UCSC, GenBank and RefSeq contig spellings (`CP068277.2` is `1`);
+  - pairing a T2T FASTA's contigs with the annotation's;
+  - the mitochondrion note.
+
+  `is_pinned_assembly` and the other pinned lookups read the name through
+  `pinned_assembly`, the one reader of a genome's name as an assembly, instead
+  of comparing it to ORFdata's canonical name. Other versions of T2T, such as
+  `T2T-CHM13v1.0`, stay unpinned.
+
 ## v11.14.0
 
 - `ContigResolver` no longer pairs hg19's mitochondrion with the rCRS under
