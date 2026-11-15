@@ -319,3 +319,40 @@ def test_names_ending_in_digits_are_not_read_as_releases(name, reference_name):
 def test_paths_are_not_read_as_releases():
     genome, _ = infer_genome("##reference=file:///var/lib/cwl/job367935311_index_001zdr/GRCh38.d1.vd1.fa")
     assert genome.reference_name == "GRCh38"
+
+
+def test_every_ucsc_alias_names_an_assembly_pyensembl_has():
+    from pyensembl.species import Species
+
+    from varcode.reference import ucsc_to_ensembl_reference_names
+
+    registered = set(Species._reference_names_to_species)
+    unknown = {
+        ucsc: ensembl
+        for ucsc, ensembl in ucsc_to_ensembl_reference_names.items()
+        if ensembl not in registered}
+    assert unknown == {}
+
+
+@pytest.mark.parametrize("ucsc_name,ensembl_name", [
+    ("galGal6", "GRCg6a"),
+    ("galGal5", "Gallus_gallus-5.0"),
+    ("galGal4", "Galgal4"),
+    ("danRer11", "GRCz11"),
+    ("danRer10", "GRCz10"),
+    ("susScr11", "Sscrofa11.1"),
+    ("susScr3", "Sscrofa10.2"),
+])
+def test_non_human_ucsc_names_resolve_to_pyensembl_assemblies(ucsc_name, ensembl_name):
+    from varcode.reference import alias_dict_with_ucsc, assembly_in_file_name
+
+    assert ucsc_name in alias_dict_with_ucsc[ensembl_name]
+    assert infer_reference_name(ucsc_name) == ucsc_name
+    assert assembly_in_file_name(ucsc_name + ".fa") == ensembl_name
+
+
+@pytest.mark.parametrize("retired", ["canFam1", "canFam2"])
+def test_dog_assemblies_pyensembl_lacks_are_not_aliased(retired):
+    from varcode.reference import ucsc_to_ensembl_reference_names
+
+    assert retired not in ucsc_to_ensembl_reference_names

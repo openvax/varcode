@@ -101,30 +101,27 @@ ucsc_to_ensembl_reference_names = {
     "canFam5": "UMICH_Zoey_3.1",
     "canFam4": "UU_Cfam_GSD_1.0",
     "canFam3": "CanFam3.1",
-    "canFam2": "CanFam2.0",
-    "canFam1": "CanFam1.0",
 
     # rat
     "rn6": "Rnor_6.0",
     "rn5": "Rnor_5.0",
 
-    # chicken
-    "galGal6": "Gallus_gallus_6.0",
-    "galGal5": "Gallus_gallus_5.0",
-    "galGal4": "Gallus_gallus_4.0",
+    # chicken, under the names PyEnsembl registers
+    "galGal6": "GRCg6a",
+    "galGal5": "Gallus_gallus-5.0",
+    "galGal4": "Galgal4",
 
-    # TODO: add Zebrafish to PyEnsembl
-    #   "danRer11": "GRCz11",
-    #   "danRer10": "GRCz10",
+    # zebrafish
+    "danRer11": "GRCz11",
+    "danRer10": "GRCz10",
 
     # TODO: add cow to PyEnsembl
     #    "bosTau9": "ARS-UCD1.2",
     #    "bosTau8": "UMD3.1",
 
-    # TODO: add pig to PyEnsembl
-    #   "susScr11": "Sscrofa11.1",
-    #   "susScr3": "Sscrofa10.2",
-    #   "susScr2": "Sscrofa9.2",
+    # pig
+    "susScr11": "Sscrofa11.1",
+    "susScr3": "Sscrofa10.2",
 }
 
 ucsc_reference_names = set(ucsc_to_ensembl_reference_names.keys())
