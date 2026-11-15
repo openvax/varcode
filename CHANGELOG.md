@@ -1,5 +1,12 @@
 # Change Log
 
+## v11.14.2
+
+- CI no longer runs the starter-template flake8 step or installs the unused
+  `coveralls` package (#734). `./lint.sh` (Ruff and mypy) is the one linter,
+  so CI and local linting now agree. The stale TODO header in the workflow is
+  gone.
+
 ## v11.14.1
 
 - A genome you build and name by a T2T-CHM13v2.0 alias, such as
