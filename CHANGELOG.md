@@ -21,10 +21,37 @@
     PyEnsembl's `complete` or a stop that polyadenylation completes; it
     replaces the bare `transcript.complete` checks.
   - This needs PyEnsembl 2.34.1, which adds
-    `Transcript.stop_codon_completed_by_polyadenylation`. With an earlier
-    PyEnsembl these genes remain `IncompleteTranscript`, as before.
+    `Transcript.stop_codon_completed_by_polyadenylation`; the requirement is
+    now `pyensembl>=2.34.1`. An earlier PyEnsembl installed anyway leaves
+    these genes `IncompleteTranscript`, as before.
   - `tests/test_t2t_reference.py` now expects `p.A52T` for m.3460G>A on the
     rCRS under T2T, where it pinned `IncompleteTranscript`.
+
+## v11.14.3
+
+- UCSC chicken names now reach PyEnsembl's assemblies (#737). `galGal6`,
+  `galGal5` and `galGal4` named `Gallus_gallus_6.0`, `Gallus_gallus_5.0` and
+  `Gallus_gallus_4.0`, which PyEnsembl does not register (it has `GRCg6a`,
+  `Gallus_gallus-5.0` and `Galgal4`), so `load_vcf(path, genome="galGal6")`
+  or a VCF with `##reference=galGal5` raised "Failed to infer genome assembly
+  name".
+- Zebrafish (`danRer11`, `danRer10`) and pig (`susScr11`, `susScr3`) names are
+  enabled, now that PyEnsembl has GRCz11, GRCz10, Sscrofa11.1 and Sscrofa10.2.
+- `canFam1` and `canFam2` are removed from `ucsc_to_ensembl_reference_names`:
+  PyEnsembl's dog assemblies start at CanFam3.1, so they could never reach a
+  genome. `is_ucsc_reference_name("canFam2")` is now False, and a VCF naming
+  them raises "Failed to infer genome assembly name" at inference, not later.
+- A test checks that every alias value is an assembly PyEnsembl registers, so
+  the table cannot drift again.
+- The empty module `varcode/ucsc_reference_names.py` is deleted. The aliases
+  have lived in `varcode/reference.py` since 2019 and nothing imported it.
+
+## v11.14.2
+
+- CI no longer runs the starter-template flake8 step or installs the unused
+  `coveralls` package (#734). `./lint.sh` (Ruff and mypy) is the one linter,
+  so CI and local linting now agree. The stale TODO header in the workflow is
+  gone.
 
 ## v11.14.1
 
