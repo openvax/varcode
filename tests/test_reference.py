@@ -322,11 +322,9 @@ def test_paths_are_not_read_as_releases():
 
 
 def test_every_ucsc_alias_names_an_assembly_pyensembl_has():
-    from pyensembl.species import Species
+    from varcode.reference import canonical_reference_names, ucsc_to_ensembl_reference_names
 
-    from varcode.reference import ucsc_to_ensembl_reference_names
-
-    registered = set(Species._reference_names_to_species)
+    registered = set(canonical_reference_names)
     unknown = {
         ucsc: ensembl
         for ucsc, ensembl in ucsc_to_ensembl_reference_names.items()

@@ -119,7 +119,7 @@ ucsc_to_ensembl_reference_names = {
     #    "bosTau9": "ARS-UCD1.2",
     #    "bosTau8": "UMD3.1",
 
-    # pig
+    # pig. susScr2 (Sscrofa9.2) is left out: PyEnsembl doesn't register it.
     "susScr11": "Sscrofa11.1",
     "susScr3": "Sscrofa10.2",
 }
