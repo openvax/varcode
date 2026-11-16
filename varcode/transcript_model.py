@@ -29,6 +29,7 @@ from .effects.effect_classes import (
     NoncodingTranscript,
     Unresolved,
 )
+from .effects.transcript_helpers import has_complete_coding_sequence
 from .effects.effect_ordering import classification_priority
 from .errors import HypothesisLimitError, ReferenceMismatchError
 from .genome_sequence import _plus_strand_slice, reference_range
@@ -260,7 +261,7 @@ def predict_transcript_model_effect(
         return predict_structural_variant_effect(primary, transcript)
     if not transcript.is_protein_coding:
         return NoncodingTranscript(primary, transcript)
-    if not transcript.complete:
+    if not has_complete_coding_sequence(transcript):
         return IncompleteTranscript(primary, transcript)
     if sequence_provider is None:
         sequence_provider = _provider_for_genome(primary.genome, transcript)

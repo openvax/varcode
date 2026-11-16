@@ -13,6 +13,8 @@
 from ..errors import ReferenceMismatchError
 from .effect_prediction_coding_frameshift import predict_frameshift_coding_effect
 from .effect_prediction_coding_in_frame import predict_in_frame_coding_effect
+from .transcript_helpers import (
+    has_complete_coding_sequence, poly_a_completion, polyadenylation_completes_stop)
 
 
 def predict_variant_coding_effect_on_transcript(
@@ -41,7 +43,7 @@ def predict_variant_coding_effect_on_transcript(
     transcript_offset : int
         Offset into the full transcript sequence of the ref->alt substitution
     """
-    if not transcript.complete:
+    if not has_complete_coding_sequence(transcript):
         raise ValueError(
             ("Can't annotate coding effect for %s"
              " on incomplete transcript %s" % (variant, transcript)))
@@ -68,7 +70,13 @@ def predict_variant_coding_effect_on_transcript(
         )
 
     start_codon_offset = transcript.first_start_codon_spliced_offset
-    stop_codon_offset = transcript.last_stop_codon_spliced_offset
+    completion = poly_a_completion(transcript, str(sequence[start_codon_offset:]))
+    if completion:
+        # Polyadenylation completes the stop codon, which the annotation
+        # lacks: the reading frame ends where the transcript does.
+        stop_codon_offset = len(sequence) - 1 + len(completion)
+    else:
+        stop_codon_offset = transcript.last_stop_codon_spliced_offset
 
     cds_len = stop_codon_offset - start_codon_offset + 1
 
@@ -108,6 +116,10 @@ def predict_variant_coding_effect_on_transcript(
             cds_offset, cds_len, variant, transcript)
 
     sequence_from_start_codon = str(sequence[start_codon_offset:])
+    if polyadenylation_completes_stop(transcript):
+        # Two bases finish any partial last codon, whatever frame a mutation
+        # leaves it in; a codon the tail doesn't use is dropped on translation.
+        sequence_from_start_codon += "AA"
 
     # is this an in-frame mutations?
     if (n_ref - n_alt) % 3 == 0:

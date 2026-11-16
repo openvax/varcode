@@ -29,6 +29,8 @@ from .effects.codon_tables import (
     translate_sequence,
 )
 from .effects.selenocysteine import layout_selenocysteine
+from .effects.transcript_helpers import (
+    poly_a_completion, polyadenylation_completes_stop, three_prime_utr_offset)
 from .effects.effect_classes import (
     AlternateStartCodon,
     FivePrimeUTR,
@@ -209,6 +211,9 @@ def _translate_from_start(transcript, cdna, start, pieces):
     codon_table = codon_table_for_transcript(transcript)
     if start_codon not in codon_table.start_codons:
         return "", False, start_codon
+    # Polyadenylation finishes a partial last codon, as it does in the
+    # reference (MT-ND1's stop codon is TA + A).
+    coding += poly_a_completion(transcript, coding)
     coding = coding[:len(coding) // 3 * 3]
     protein = translate_sequence(
         coding,
@@ -448,9 +453,12 @@ def _unchanged_product_effect(variant, transcript, mutant):
     first_offset = min(offsets)
     last_offset = max(offsets)
     cds_start = min(transcript.start_codon_spliced_offsets)
-    stop_offsets = tuple(transcript.stop_codon_spliced_offsets)
-    cds_end = max(stop_offsets) + 1 if stop_offsets else (
-        cds_start + 3 * len(str(transcript.protein_sequence)))
+    if polyadenylation_completes_stop(transcript):
+        cds_end = three_prime_utr_offset(transcript)
+    else:
+        stop_offsets = tuple(transcript.stop_codon_spliced_offsets)
+        cds_end = max(stop_offsets) + 1 if stop_offsets else (
+            cds_start + 3 * len(str(transcript.protein_sequence)))
     mutant_origins = mutant.evidence.get("genomic_positions", ())
     mapped_offsets = [i for i, position in enumerate(mutant_origins)
                       if position is not None and start <= position <= end]

@@ -63,6 +63,7 @@ from serializable import DataclassSerializable
 
 from .errors import HypothesisLimitError
 from .phasing import query_in_cis
+from .effects.transcript_helpers import has_complete_coding_sequence
 
 if TYPE_CHECKING:
     from .variant_collection import VariantCollection
@@ -1125,7 +1126,7 @@ def predict_germline_aware_effect(
         return GermlineAlleleOverlap(somatic_variant, transcript)
 
     if not (germline_in_window and transcript.is_protein_coding
-            and transcript.complete):
+            and has_complete_coding_sequence(transcript)):
         effect = annotator.annotate_on_transcript(somatic_variant, transcript)
         if effect is NotImplemented:
             return effect

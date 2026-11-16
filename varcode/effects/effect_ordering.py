@@ -54,6 +54,7 @@ from .effect_classes import (
     Unresolved,
 )
 from ..common import apply_groupby
+from .transcript_helpers import has_complete_coding_sequence
 
 transcript_effect_priority_list = [
     Failure,
@@ -237,7 +238,9 @@ def cds_length_of_associated_transcript(effect):
     """
     return apply_to_transcript_if_exists(
         effect=effect,
-        fn=lambda t: len(t.coding_sequence) if (t.complete and t.coding_sequence) else 0,
+        fn=lambda t: (
+            len(t.coding_sequence)
+            if (has_complete_coding_sequence(t) and t.coding_sequence) else 0),
         default=0)
 
 
@@ -284,7 +287,7 @@ def effect_has_complete_transcript(effect):
     """
     return apply_to_transcript_if_exists(
         effect=effect,
-        fn=lambda t: t.complete,
+        fn=has_complete_coding_sequence,
         default=False)
 
 

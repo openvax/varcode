@@ -18,6 +18,7 @@ from pyensembl import genome_for_reference_name
 from .nucleotides import STANDARD_NUCLEOTIDES, reverse_complement
 from .variant import Variant
 from .variant_collection import VariantCollection
+from .effects.transcript_helpers import has_complete_coding_sequence
 
 # cache lists of all transcript IDs for difference Ensembl releases
 _transcript_ids_cache = {}
@@ -74,7 +75,7 @@ def random_variants(
             transcript_id = rng.choice(transcript_ids)
             transcript = genome.transcript_by_id(transcript_id)
 
-            if not transcript.complete:
+            if not has_complete_coding_sequence(transcript):
                 continue
 
             try:

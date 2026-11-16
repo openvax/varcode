@@ -48,3 +48,56 @@ def interval_offset_on_transcript(start, end, transcript):
     return min(
         transcript.spliced_offset(start),
         transcript.spliced_offset(end))
+
+
+def has_complete_coding_sequence(transcript):
+    """
+    Does the transcript have a start codon and a stop codon, so that variants
+    in its coding sequence have a defined protein effect?
+
+    This is PyEnsembl's ``complete`` plus a stop codon that polyadenylation
+    completes. Six human mitochondrial transcripts (MT-ND1, MT-ND2, MT-CO3,
+    MT-ND3, MT-ND4 and MT-CYB) end their reading frame in ``T`` or ``TA``, and
+    the poly(A) tail supplies the rest of a ``TAA`` stop codon (NCBI
+    NC_012920.1). Ensembl annotates no stop codon for them, so ``complete`` is
+    False. See ``Transcript.stop_codon_completed_by_polyadenylation`` in
+    PyEnsembl 2.34.1 and later.
+    """
+    return bool(
+        transcript.complete
+        or getattr(transcript, "stop_codon_completed_by_polyadenylation", False))
+
+
+def polyadenylation_completes_stop(transcript):
+    """Is the transcript's stop codon completed by the poly(A) tail?"""
+    return bool(getattr(transcript, "stop_codon_completed_by_polyadenylation", False))
+
+
+def poly_a_completion(transcript, coding_sequence):
+    """
+    The ``A`` bases that polyadenylation adds to finish the last, partial
+    codon of ``coding_sequence`` when the transcript's stop codon is completed
+    by the poly(A) tail, else ``""``.
+
+    ``coding_sequence`` runs from the start codon to the end of the (possibly
+    mutated) transcript. In MT-ND1 it ends in ``TA``, and one ``A`` makes the
+    stop codon ``TAA``; in MT-ND4 it ends in ``T`` and two ``A`` do. After a
+    mutation the same rule applies to whatever the last partial codon is, so
+    only the bases that finish that codon are added and no longer tail is
+    invented.
+    """
+    if not polyadenylation_completes_stop(transcript):
+        return ""
+    return "A" * (-len(coding_sequence) % 3)
+
+
+def three_prime_utr_offset(transcript):
+    """
+    Spliced offset of the first base after the coding sequence.
+
+    For a transcript whose stop codon is completed by polyadenylation the
+    coding sequence runs to the end of the transcript, so there is no 3' UTR.
+    """
+    if polyadenylation_completes_stop(transcript):
+        return len(transcript.sequence)
+    return max(transcript.stop_codon_spliced_offsets) + 1

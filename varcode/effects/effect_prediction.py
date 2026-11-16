@@ -19,7 +19,8 @@ from pyensembl import Transcript
 from ..common import groupby_field
 from ..errors import ReferenceMismatchError
 
-from .transcript_helpers import interval_offset_on_transcript
+from .transcript_helpers import (
+    has_complete_coding_sequence, interval_offset_on_transcript, three_prime_utr_offset)
 from .effect_helpers import changes_exonic_splice_site
 from .effect_collection import EffectCollection
 from .effect_prediction_coding import predict_variant_coding_effect_on_transcript
@@ -262,7 +263,7 @@ def _predict_variant_effect_on_transcript_raw(variant, transcript):
         if not transcript.is_protein_coding:
             return NoncodingTranscript(variant, transcript)
 
-        if not transcript.complete:
+        if not has_complete_coding_sequence(transcript):
             return IncompleteTranscript(variant, transcript)
 
         # since we're using inclusive base-1 coordinates,
@@ -550,7 +551,7 @@ def exonic_transcript_effect(variant, exon, exon_number, transcript):
             # if variant contained within 5' UTR
             return FivePrimeUTR(variant, transcript)
 
-    utr3_offset = max(transcript.stop_codon_spliced_offsets) + 1
+    utr3_offset = three_prime_utr_offset(transcript)
 
     if transcript_offset >= utr3_offset:
         return ThreePrimeUTR(variant, transcript)

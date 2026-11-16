@@ -56,7 +56,9 @@ is no resolved transcript to select. See [additional ORFs](uorf_annotations.md).
 Selection does not change how a transcript is interpreted. With the built-in
 annotators, ordinary point-variant prediction still reports
 `NoncodingTranscript` outside the `protein_coding` biotype, and
-`IncompleteTranscript` for incomplete coding annotations. Selecting an NMD,
+`IncompleteTranscript` for incomplete coding annotations. A stop codon that
+polyadenylation completes does not make a transcript incomplete: see
+[mitochondrial stop codons](#mitochondrial-stop-codons). Selecting an NMD,
 IG/TR or pseudogene transcript does not by itself request a different coding
 model. Additional supported coding frames are supplied through ORFdata's
 `extra_orfs` API. [Ensembl](https://www.ensembl.org/info/genome/genebuild/biotypes.html)
@@ -88,6 +90,30 @@ To keep only effects that may change the protein, use
 `effects.drop_silent_and_noncoding()`. It removes known silent and noncoding
 predictions but keeps unresolved ones by default; see
 [filtering by protein change](structural_variants.md#filtering-by-protein-change).
+
+<a id="mitochondrial-stop-codons"></a>
+
+### Mitochondrial stop codons
+
+MT-ND1, MT-ND2, MT-CO3, MT-ND3, MT-ND4 and MT-CYB end their reading frame in
+`T` or `TA`, and the poly(A) tail adds the rest of a `TAA` stop codon
+([NC_012920.1](https://www.ncbi.nlm.nih.gov/nuccore/NC_012920.1)). Ensembl
+annotates no stop codon for them. Varcode translates each as a complete
+transcript, with the tail finishing the last partial codon, so m.3460G>A in
+MT-ND1 is `p.A52T` and m.11778G>A in MT-ND4 is `p.R340H`.
+
+A change to the `T` or `TA` that the genome does encode can lose the stop. The
+last partial codon is read with the `A`s that finish it, and the reading frame
+ends there, since the tail past it is not in the genome:
+
+| variant | codon read | effect |
+|---|---|---|
+| MT-ND1 m.4261T>C (`TA`) | `CAA` | `StopLoss`, `p.*319Q` |
+| MT-ND1 m.4262A>G (`TA`) | `TGA`, Trp in the mitochondrial code | `StopLoss`, `p.*319W` |
+| MT-ND4 m.12137T>A (`T`) | `AAA` | `StopLoss`, `p.*460K` |
+
+This needs PyEnsembl 2.34.1 or later. With an earlier PyEnsembl these genes are
+still `IncompleteTranscript`.
 
 ## Filter and group a collection
 
