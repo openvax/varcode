@@ -551,7 +551,14 @@ class NoncodingTranscript(TranscriptMutationEffect):
 
 class IncompleteTranscript(TranscriptMutationEffect):
     """
-    Any mutation to an incompletely annotated transcript with a coding biotype
+    Any mutation to an incompletely annotated transcript with a coding biotype.
+
+    A stop codon that polyadenylation completes is not incomplete. MT-ND1,
+    MT-ND2, MT-CO3, MT-ND3, MT-ND4 and MT-CYB end their reading frame in ``T``
+    or ``TA`` and the poly(A) tail adds the rest of a ``TAA`` stop codon
+    (NCBI NC_012920.1). Varcode translates them as complete, with the tail
+    finishing the last partial codon. This needs PyEnsembl 2.34.1 or later;
+    with an earlier PyEnsembl these genes are still reported as incomplete.
     """
     short_description = "incomplete"
 

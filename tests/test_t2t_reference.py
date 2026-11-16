@@ -175,8 +175,8 @@ RCRS_VARIANTS = [
     (14484, "T", "C", "MT-ND6", "p.M64V", "Substitution"),  # LHON; MT-ND6 is on the minus strand
     (3243, "A", "G", "MT-TL1", "non-coding-transcript", "NoncodingTranscript"),  # MELAS
     # LHON. Polyadenylation completes MT-ND1's stop codon, so Ensembl's GTF
-    # has none and varcode reads the transcript as incomplete, on GRCh38 too.
-    (3460, "G", "A", "MT-ND1", "incomplete", "IncompleteTranscript"),
+    # has none; varcode reads the stop as TAA, completed by the poly(A) tail.
+    (3460, "G", "A", "MT-ND1", "p.A52T", "Substitution"),
 ]
 
 

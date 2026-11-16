@@ -1,5 +1,32 @@
 # Change Log
 
+## v11.15.0
+
+- Variants in six human mitochondrial genes now have a protein effect instead
+  of `IncompleteTranscript` (#731). MT-ND1, MT-ND2, MT-CO3, MT-ND3, MT-ND4 and
+  MT-CYB end their reading frame in `T` or `TA`, and polyadenylation adds the
+  rest of a `TAA` stop codon (NCBI NC_012920.1). Ensembl annotates no stop
+  codon for them, so PyEnsembl's `complete` is False and every variant stopped
+  there. The affected variants included two of the three primary LHON
+  mutations: m.3460G>A in MT-ND1 is now `p.A52T` and m.11778G>A in MT-ND4 is
+  `p.R340H`.
+  - A change to the encoded `T` or `TA` reads the last partial codon with the
+    `A`s that finish it, and that is all: MT-ND1 m.4261T>C is `CAA`, a
+    `StopLoss` `p.*319Q`, and m.4262A>G is `TGA`, Trp in the mitochondrial
+    code, `p.*319W`. No longer tail is invented.
+  - The default `transcript_model` annotator, `fast` and `protein_diff` agree
+    on these variants, as do exon-skipping and structural-variant products on
+    the same transcript.
+  - `varcode.effects.transcript_helpers.has_complete_coding_sequence` is
+    PyEnsembl's `complete` or a stop that polyadenylation completes; it
+    replaces the bare `transcript.complete` checks.
+  - This needs PyEnsembl 2.34.1, which adds
+    `Transcript.stop_codon_completed_by_polyadenylation`; the requirement is
+    now `pyensembl>=2.34.1`. An earlier PyEnsembl installed anyway leaves
+    these genes `IncompleteTranscript`, as before.
+  - `tests/test_t2t_reference.py` now expects `p.A52T` for m.3460G>A on the
+    rCRS under T2T, where it pinned `IncompleteTranscript`.
+
 ## v11.14.3
 
 - UCSC chicken names now reach PyEnsembl's assemblies (#737). `galGal6`,

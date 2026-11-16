@@ -61,6 +61,7 @@ from .circular_origin import origin_partners
 from .effects.classify import classify_from_protein_diff
 from .effects.codon_tables import codon_table_for_transcript, translate_sequence
 from .effects.selenocysteine import edited_selenocysteine
+from .effects.transcript_helpers import has_complete_coding_sequence, poly_a_completion
 from .effects.effect_helpers import exon_length
 from .effects.effect_classes import (
     CrypticAcceptor,
@@ -821,7 +822,7 @@ def _build_intron_retention_mutant_transcript(
     Returns ``None`` if the intron can't be resolved (no adjacent
     exon, provider raised, or transcript is incomplete).
     """
-    if not transcript.complete:
+    if not has_complete_coding_sequence(transcript):
         return None
     coords = _adjacent_intron_coords(transcript, exon, side)
     if coords is None:
@@ -1154,7 +1155,7 @@ def _build_cryptic_site_mutant_transcript(
     Returns ``(mt, score, cryptic_genomic_pos)`` or ``None`` when no
     cryptic site is found or the transcript is incomplete.
     """
-    if not transcript.complete:
+    if not has_complete_coding_sequence(transcript):
         return None
     reverse = transcript.on_backward_strand
     # Determine the scan region around the canonical boundary.
@@ -1382,7 +1383,7 @@ def _build_exon_skip_mutant_transcript(variant, transcript, exon, skipped=None):
     ``skipped`` names consecutive exons skipped together, by default
     ``(exon,)``.
     """
-    if not transcript.complete:
+    if not has_complete_coding_sequence(transcript):
         return None
     skipped = tuple(skipped or (exon,))
     try:
@@ -1424,6 +1425,7 @@ def _build_exon_skip_mutant_transcript(variant, transcript, exon, skipped=None):
     if new_cds_start is not None and new_cds_start < len(post_skip_cdna):
         codon_table = codon_table_for_transcript(transcript)
         coding = post_skip_cdna[new_cds_start:]
+        coding += poly_a_completion(transcript, coding)
         truncated = coding[:(len(coding) // 3) * 3]
         selenocysteine = {pos - new_cds_start
                           for pos in edited_selenocysteine(transcript, (edit,))}

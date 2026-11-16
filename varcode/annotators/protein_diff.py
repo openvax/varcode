@@ -42,6 +42,7 @@ Algorithm
 
 from ..effects.classify import classify_from_protein_diff
 from ..effects.codon_tables import codon_table_for_transcript, initiator_as_met
+from ..effects.transcript_helpers import has_complete_coding_sequence
 from ..effects.effect_classes import (
     AlternateStartCodon,
     ExonicSpliceSite,
@@ -108,7 +109,7 @@ class ProteinDiffEffectAnnotator:
         if not transcript.is_protein_coding:
             return NoncodingTranscript(variant, transcript)
 
-        if not transcript.complete:
+        if not has_complete_coding_sequence(transcript):
             return IncompleteTranscript(variant, transcript)
 
         # Run fast to get the splice classification.

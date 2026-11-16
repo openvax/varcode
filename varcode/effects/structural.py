@@ -48,6 +48,8 @@ from ..circular_origin import (
     transcripts_at_locus,
 )
 from ..structural_variant import junction_span_details
+from .transcript_helpers import (
+    has_complete_coding_sequence, poly_a_completion, three_prime_utr_offset)
 from ..sv_allele_parser import breakend_sides, _breakend_local_side
 
 
@@ -544,7 +546,7 @@ def _translate_fused_cdna(fused_cdna, five_prime_transcript, five_prime_len,
         codon_table_for_transcript,
         translate_sequence,
     )
-    if not five_prime_transcript.complete:
+    if not has_complete_coding_sequence(five_prime_transcript):
         return None
     try:
         cds_start = min(five_prime_transcript.start_codon_spliced_offsets)
@@ -970,7 +972,7 @@ def _classify_structural_transcript(event, transcript, model, affected):
         return ExonLoss(variant, transcript, exons=tuple(transcript.exons)), model
     if model is None or model.cdna_sequence is None:
         return unresolved("No complete spliced sequence is available")
-    if not transcript.complete:
+    if not has_complete_coding_sequence(transcript):
         if event.sv_type in ("DEL", "CN0") and not event.alt_assembly:
             return ExonLoss(variant, transcript, exons=tuple(affected)), model
         return unresolved("Reference transcript has no complete annotated CDS")
@@ -999,6 +1001,7 @@ def _classify_structural_transcript(event, transcript, model, affected):
     if set(coding.upper()) - set("ACGT"):
         return unresolved("The coding sequence contains ambiguous bases")
     table = codon_table_for_transcript(transcript)
+    coding += poly_a_completion(transcript, coding)
     protein = translate_sequence(
         coding[:len(coding) // 3 * 3], codon_table=table, to_stop=True,
         selenocysteine={pos - cds_start for pos in decoded})
@@ -1027,7 +1030,7 @@ def _classify_structural_transcript(event, transcript, model, affected):
     else:
         return unresolved("No mapped coding edit is available")
 
-    stop = max(transcript.stop_codon_spliced_offsets) + 1
+    stop = three_prime_utr_offset(transcript)
     reference_protein = str(transcript.protein_sequence)
     reference_protein = "M" + reference_protein[1:]
     after_stop = all(edit.cdna_start >= stop for edit in edits)

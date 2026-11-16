@@ -20,6 +20,8 @@ flags also treat a partly kept 3' UTR as uncertain; one stored protein
 follows the reference reading.
 """
 
+from .transcript_helpers import three_prime_utr_offset
+
 
 def reference_selenocysteine(transcript):
     """cDNA offsets of the first base of each annotated Sec codon."""
@@ -31,7 +33,7 @@ def reference_selenocysteine(transcript):
 
 
 def _three_prime_utr_start(transcript):
-    return max(transcript.stop_codon_spliced_offsets) + 1
+    return three_prime_utr_offset(transcript)
 
 
 def edit_shift(offset, edits):

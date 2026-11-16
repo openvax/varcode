@@ -27,6 +27,7 @@ from typing import Optional, Tuple
 
 from serializable import DataclassSerializable
 
+from .effects.transcript_helpers import has_complete_coding_sequence, poly_a_completion
 from .nucleotides import reverse_complement
 
 
@@ -413,7 +414,9 @@ def _translate_from_cds(mutant_cdna, transcript, edits=()):
         return None
     codon_table = codon_table_for_transcript(transcript)
     coding = mutant_cdna[cds_start:]
-    truncated = coding[:(len(coding) // 3) * 3]
+    # Polyadenylation finishes a partial last codon (MT-ND1's stop is TA + A).
+    padded = coding + poly_a_completion(transcript, coding)
+    truncated = padded[:(len(padded) // 3) * 3]
     try:
         protein = translate_sequence(
             truncated, codon_table=codon_table, to_stop=True,
@@ -459,7 +462,7 @@ def apply_variant_to_transcript(variant, transcript):
 
     if not isinstance(transcript, Transcript):
         return None
-    if not transcript.is_protein_coding or not transcript.complete:
+    if not transcript.is_protein_coding or not has_complete_coding_sequence(transcript):
         return None
 
     full_sequence = str(transcript.sequence)
@@ -511,7 +514,7 @@ def apply_variants_to_transcript(variants, transcript):
 
     if not isinstance(transcript, Transcript):
         return None
-    if not transcript.is_protein_coding or not transcript.complete:
+    if not transcript.is_protein_coding or not has_complete_coding_sequence(transcript):
         return None
 
     full_sequence = str(transcript.sequence)
