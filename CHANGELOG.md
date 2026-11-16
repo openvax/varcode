@@ -10,12 +10,21 @@
   name".
 - Zebrafish (`danRer11`, `danRer10`) and pig (`susScr11`, `susScr3`) names are
   enabled, now that PyEnsembl has GRCz11, GRCz10, Sscrofa11.1 and Sscrofa10.2.
-- `canFam1` and `canFam2` are removed: PyEnsembl's dog assemblies start at
-  CanFam3.1, so they could never match.
+- `canFam1` and `canFam2` are removed from `ucsc_to_ensembl_reference_names`:
+  PyEnsembl's dog assemblies start at CanFam3.1, so they could never reach a
+  genome. `is_ucsc_reference_name("canFam2")` is now False, and a VCF naming
+  them raises "Failed to infer genome assembly name" at inference, not later.
 - A test checks that every alias value is an assembly PyEnsembl registers, so
   the table cannot drift again.
 - The empty module `varcode/ucsc_reference_names.py` is deleted. The aliases
   have lived in `varcode/reference.py` since 2019 and nothing imported it.
+
+## v11.14.2
+
+- CI no longer runs the starter-template flake8 step or installs the unused
+  `coveralls` package (#734). `./lint.sh` (Ruff and mypy) is the one linter,
+  so CI and local linting now agree. The stale TODO header in the workflow is
+  gone.
 
 ## v11.14.1
 
