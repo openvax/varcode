@@ -143,8 +143,10 @@ def _complete_sequence_changes(model, transcript, initiator):
     """
     supplied = None
     protein = _initiated(model.mutant_protein_sequence)
-    reference_protein = _initiated(transcript.protein_sequence)
     bounds = _orf_bounds(model, initiator)
+    if bounds is None and protein is None:
+        return None, None
+    reference_protein = _initiated(transcript.protein_sequence)
     partial_start = (model.evidence or {}).get(
         "sequence_status") == "observed_model_completeness_unknown" and not (
             bounds is not None and not model.edits and initiator.complete
