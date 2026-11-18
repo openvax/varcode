@@ -11,6 +11,7 @@
 # limitations under the License.
 
 
+from functools import cached_property
 from memoized_property import memoized_property
 from warnings import warn
 from typing import TYPE_CHECKING, Any, Literal
@@ -399,8 +400,18 @@ class TranscriptMutationEffect(Intragenic):
         "observed_mutant_transcripts")
 
     def __init__(self, variant, transcript):
-        Intragenic.__init__(self, variant, gene=transcript.gene)
+        MutationEffect.__init__(self, variant)
         self.transcript = transcript
+
+    @cached_property
+    def gene(self) -> Any | None:
+        """Resolve the full gene only when requested, not when restoring an effect.
+
+        Transcript identity and retained consequences remain usable without an
+        indexed annotation database. Accessing the gene retains the transcript's
+        normal lookup and error behavior.
+        """
+        return self.transcript.gene if self.transcript is not None else None
 
     def to_dict(self):
         state = super().to_dict()
@@ -453,9 +464,7 @@ class Failure(TranscriptMutationEffect):
     need to create a non-empty list of effects for each variant.
     """
     def __init__(self, variant, transcript=None, error=None):
-        MutationEffect.__init__(self, variant)
-        self.transcript = transcript
-        self.gene = transcript.gene if transcript is not None else None
+        TranscriptMutationEffect.__init__(self, variant, transcript)
         self.error = error
 
     def __str__(self):

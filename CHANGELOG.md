@@ -1,5 +1,14 @@
 # Change Log
 
+## v11.15.1
+
+- Restoring ordinary transcript effects and their retained candidate graphs no
+  longer opens the annotation database just to resolve a gene (#744). The full
+  gene object is loaded on first access, with the same lookup errors and writable
+  override behavior as before. This also applies to `Failure` effects and lets
+  downstream consumers replay saved consequences from an unindexed custom
+  reference bundle without rerunning annotation.
+
 ## v11.15.0
 
 - Variants in six human mitochondrial genes now have a protein effect instead
