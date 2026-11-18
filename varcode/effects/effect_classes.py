@@ -82,10 +82,15 @@ class MutationEffect(Serializable):
         return super().from_dict(state_dict)
 
     def __hash__(self):
-        if getattr(self.variant, "is_structural", False) or any(name in self.__dict__ for name in self._effect_graph_fields):
+        if (getattr(self.variant, "is_structural", False)
+                or isinstance(self, MultiOutcomeEffect)
+                or "mutant_transcript" in self.__dict__
+                or "source_evidence" in self.__dict__
+                or any(name in self.__dict__ for name in self._effect_graph_fields)):
             # Evidence contains dictionaries and candidates can point back
             # to this effect. Equal effects have equal identity fields.
-            return hash((type(self), self.variant, self.transcript))
+            variants = getattr(self, "variants", None)
+            return hash((type(self), tuple(variants) if variants else self.variant, self.transcript))
         return super().__hash__()
 
     def __str__(self):
@@ -165,35 +170,41 @@ class MutationEffect(Serializable):
             return self._original_protein_sequence
         if self.baseline_transcript is not None:
             return self.baseline_transcript.mutant_protein_sequence
-        if self.transcript:
+        if self.transcript is not None:
             return self.transcript.protein_sequence
         else:
             return None
 
     @property
     def gene_name(self) -> str | None:
-        if self.gene:
+        if self.gene is not None:
             return self.gene.name
         else:
             return None
 
     @property
     def gene_id(self) -> str | None:
-        if self.gene:
+        if "gene" in self.__dict__:
+            return self.gene.id if self.gene is not None else None
+        transcript = self.reference_transcript
+        if transcript is not None:
+            transcript_gene_id = getattr(transcript, "gene_id", None)
+            if transcript_gene_id is not None:
+                return transcript_gene_id
+        if self.gene is not None:
             return self.gene.id
-        else:
-            return None
+        return None
 
     @property
     def transcript_name(self) -> str | None:
-        if self.reference_transcript:
+        if self.reference_transcript is not None:
             return self.reference_transcript.name
         else:
             return None
 
     @property
     def transcript_id(self) -> str | None:
-        if self.reference_transcript:
+        if self.reference_transcript is not None:
             return self.reference_transcript.id
         else:
             return None
@@ -1217,13 +1228,14 @@ class AlternateStartCodon(Silent):
             variant,
             transcript,
             ref_codon,
-            alt_codon):
+            alt_codon,
+            aa_ref: str | None = None):
         Silent.__init__(
             self,
             variant=variant,
             transcript=transcript,
             aa_pos=0,
-            aa_ref=transcript.protein_sequence[0])
+            aa_ref=transcript.protein_sequence[0] if aa_ref is None else aa_ref)
         self.ref_codon = str(ref_codon)
         self.alt_codon = str(alt_codon)
 
@@ -1324,14 +1336,15 @@ class StartLoss(NonsilentCodingMutation):
             alt_codon=None,
             ref_codon_offset=None,
             alt_codon_offset=None,
-            codon_change_status=None):
+            codon_change_status=None,
+            aa_ref: str | None = None):
         NonsilentCodingMutation.__init__(
             self,
             variant=variant,
             transcript=transcript,
             aa_mutation_start_offset=0,
             aa_mutation_end_offset=1,
-            aa_ref=transcript.protein_sequence[0])
+            aa_ref=transcript.protein_sequence[0] if aa_ref is None else aa_ref)
         if codon_change_status is None:
             from .start_loss import start_loss_details
             details = start_loss_details(variant, transcript, mutant_transcript)
@@ -1369,7 +1382,7 @@ class StartLoss(NonsilentCodingMutation):
 
     @property
     def short_description(self):
-        return "p.%s1? (start-loss)" % (self.transcript.protein_sequence[0],)
+        return "p.%s1? (start-loss)" % (self.aa_ref,)
 
 
 class KnownAminoAcidChange(NonsilentCodingMutation):
@@ -2141,7 +2154,7 @@ class HaplotypeEffect(TranscriptMutationEffect, MultiOutcomeEffect):
     def __str__(self):
         return "HaplotypeEffect(%d variants, transcript=%s, source=%s)" % (
             len(self.variants),
-            self.transcript.name if self.transcript else "?",
+            self.transcript.name if self.transcript is not None else "?",
             self.phase_source or "unknown")
 
     @property
@@ -2292,6 +2305,6 @@ class PhaseCandidateSet(TranscriptMutationEffect, MultiOutcomeEffect):
             "PhaseCandidateSet(variant=%s, transcript=%s, "
             "%d hypotheses, germline=%s)" % (
                 self.variant,
-                self.transcript.name if self.transcript else "?",
+                self.transcript.name if self.transcript is not None else "?",
                 len(self._hypotheses),
                 ",".join(g.short_description for g in self.germline_variants)))

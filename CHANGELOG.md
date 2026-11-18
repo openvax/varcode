@@ -1,5 +1,29 @@
 # Change Log
 
+## v11.15.2
+
+- Complete offline restoration and inspection of saved transcript consequences
+  against unindexed custom reference bundles (#746, following #744; upstream
+  transcript truthiness tracked in openvax/pyensembl#534):
+  - Check `is not None` rather than truthiness on transcript and gene attributes
+    so `transcript_id`, `transcript_name`, `original_protein_sequence`, and
+    `str()` do not invoke `Transcript.__len__()` and open the `exon` SQLite
+    table.
+  - Archive `aa_ref` on `StartLoss` and `AlternateStartCodon` (preserving fallback
+    to `transcript.protein_sequence[0]` for older archives) and render
+    `StartLoss.short_description` from `aa_ref` so neither queries `Genome.db`
+    during `from_json()` or formatting.
+  - Read `gene_id` from `reference_transcript.gene_id` before resolving the full
+    `Gene` object while preserving explicit `effect.gene` overrides, enabling
+    `effect.gene_id`, `groupby_gene_id()`, `top_priority_effect_per_gene_id()`,
+    and `filter_by_gene_expression()` offline.
+  - Skip an unused `transcript.protein_sequence` lookup on fragment SV models
+    with no cDNA or protein sequence during `drop_silent_and_noncoding()`.
+  - Hash `MultiOutcomeEffect` and model-bearing effects (`SpliceOutcomeSet`,
+    `HaplotypeEffect`, `SpliceMechanismEffect`, `StartGain`) by identity fields
+    so `hash()` and `EffectCollection(..., distinct=True)` do not fail on
+    embedded evidence dicts or assembled alleles.
+
 ## v11.15.1
 
 - Restoring ordinary transcript effects and their retained candidate graphs no
