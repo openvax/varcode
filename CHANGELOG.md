@@ -1,5 +1,12 @@
 # Change Log
 
+## v11.15.3
+
+- `test.sh` now defaults to `--dist=worksteal` when `pytest-xdist` is active
+  (unless `--dist` or `-d` is already supplied) and sets `COVERAGE_CORE=sysmon`
+  on Python 3.12+ when unset, avoiding single-worker tail stalls and `CTracer`
+  overhead on whole-cohort somatic benchmarks in CI and `deploy.sh` (#747).
+
 ## v11.15.2
 
 - Complete offline restoration and inspection of saved transcript consequences

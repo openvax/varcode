@@ -11,6 +11,11 @@
 # directories (#718). A --basetemp passed as an argument or in
 # PYTEST_ADDOPTS is used instead.
 #
+# When pytest-xdist is installed, --dist=worksteal is added unless --dist or
+# -d is already supplied, preventing large tail benchmarks from stranding on a
+# single worker (#747). On Python 3.12+, COVERAGE_CORE defaults to sysmon
+# (PEP 669) when unset to avoid CTracer overhead on whole-cohort fixtures.
+#
 # Tunables (env vars):
 #   PER_WORKER_GB    per-worker memory budget in GB (default: 1.5)
 #   TEST_SH_MIN      floor on workers (default: 1)
@@ -112,13 +117,21 @@ case " $* ${PYTEST_ADDOPTS:-} " in
         ;;
 esac
 
+if [[ -z "${COVERAGE_CORE:-}" ]] && python -c "import sys; raise SystemExit(sys.version_info < (3, 12))" 2>/dev/null; then
+    export COVERAGE_CORE=sysmon
+fi
+
 XDIST_FLAGS=()
 if python -c "import xdist" 2>/dev/null; then
     XDIST_FLAGS=(-n "$WORKERS")
+    case " $* ${PYTEST_ADDOPTS:-} " in
+        *" --dist"*|*" -d "*) ;;
+        *) XDIST_FLAGS+=(--dist=worksteal) ;;
+    esac
     log "platform=${OS} cpus=${CPUS} cpu_cap=${CPU_CAP} ${mem_note} per_worker=${PER_WORKER_GB}GB"
-    log "workers=${WORKERS} → python -m pytest -n ${WORKERS} ${BASETEMP_FLAGS[*]} --cov=varcode/ --cov-report=term-missing tests $*"
+    log "workers=${WORKERS} coverage_core=${COVERAGE_CORE:-default} → python -m pytest ${XDIST_FLAGS[*]} ${BASETEMP_FLAGS[*]} --cov=varcode/ --cov-report=term-missing tests $*"
 else
-    log "platform=${OS} cpus=${CPUS} (pytest-xdist not installed; running serial)"
+    log "platform=${OS} cpus=${CPUS} coverage_core=${COVERAGE_CORE:-default} (pytest-xdist not installed; running serial)"
     log "→ python -m pytest ${BASETEMP_FLAGS[*]} --cov=varcode/ --cov-report=term-missing tests $*"
 fi
 
