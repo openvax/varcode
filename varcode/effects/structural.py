@@ -533,7 +533,7 @@ def _build_inversion_mutant_transcript(variant, transcript):
 
 
 def _translate_fused_cdna(fused_cdna, five_prime_transcript, five_prime_len,
-                          selenocysteine=()):
+                          selenocysteine=(), three_prime_transcript=None):
     """Translate ``fused_cdna`` from the 5' partner's CDS start when
     that start codon lies in the retained 5' portion (#336).
 
@@ -544,6 +544,7 @@ def _translate_fused_cdna(fused_cdna, five_prime_transcript, five_prime_len,
     """
     from .codon_tables import (
         codon_table_for_transcript,
+        initiator_as_met,
         translate_sequence,
     )
     if not has_complete_coding_sequence(five_prime_transcript):
@@ -557,13 +558,16 @@ def _translate_fused_cdna(fused_cdna, five_prime_transcript, five_prime_len,
         return None
     codon_table = codon_table_for_transcript(five_prime_transcript)
     coding = fused_cdna[cds_start:]
+    if three_prime_transcript is not None:
+        coding += poly_a_completion(three_prime_transcript, coding)
     truncated = coding[:(len(coding) // 3) * 3]
     try:
-        return translate_sequence(
+        protein = translate_sequence(
             truncated, codon_table=codon_table, to_stop=True,
             selenocysteine={pos - cds_start for pos in selenocysteine})
     except ValueError:
         return None
+    return initiator_as_met(protein, coding[:3], codon_table)
 
 
 def _junction_insertion(inserted_sequence, transcript_positions):
@@ -674,7 +678,8 @@ def _build_fusion_mutant_transcript(
     # that reading is certain.
     decoded, uncertain, _ = segment_selenocysteine(model) or (set(), set(), set())
     return replace(model, mutant_protein_sequence=_translate_fused_cdna(
-        fused_cdna, five_prime_transcript, five_prime_end, decoded | uncertain))
+        fused_cdna, five_prime_transcript, five_prime_end, decoded | uncertain,
+        three_prime_transcript=three_prime_transcript))
 
 
 def _build_translocation_mutant_transcript(variant, transcript):

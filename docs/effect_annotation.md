@@ -115,6 +115,13 @@ ends there, since the tail past it is not in the genome:
 This needs PyEnsembl 2.34.1 or later. With an earlier PyEnsembl these genes are
 still `IncompleteTranscript`.
 
+`MT-CO1` and `MT-ND6` instead carry annotated `AGA` and `AGG` `stop_codon`
+features in Ensembl. Varcode decodes them with NCBI table 2's static stop set
+(`TAA`, `TAG`, `AGA`, `AGG`) rather than modeling the `-1` mitoribosomal
+frameshift onto a preceding `U` reported by Temperley et al. (2010), so
+`MT-CO1` m.7445A>G (`AGA` to `AGG`) and m.7442T>C (`TCT` to `TCC`, `p.S513=`)
+are `Silent`, while m.7444G>A (`AGA` to `AAA`, `p.*514K`) is `StopLoss`.
+
 ## Filter and group a collection
 
 ```python
