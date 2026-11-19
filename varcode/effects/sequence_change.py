@@ -6,6 +6,11 @@ from ..effect_traversal import get_effect_candidates
 
 from .codon_tables import codon_table_for_transcript, translate_sequence
 from .selenocysteine import reference_selenocysteine, segment_selenocysteine
+from .transcript_helpers import (
+    has_complete_coding_sequence,
+    poly_a_completion,
+    polyadenylation_completes_stop,
+)
 
 
 def modification_status(effect, attribute):
@@ -70,10 +75,25 @@ def _orf_bounds(model, initiator):
     evidence = model.evidence or {}
     start, end = evidence.get("cds_start"), evidence.get("cds_end")
     if start is None or end is None:
-        if not initiator.complete or model.edits:
+        if not has_complete_coding_sequence(initiator) or model.edits:
             return None
         start, end = _retained_start(model, initiator), None
     return None if start is None else (start, end)
+
+
+def _terminal_poly_a_completion(model, coding):
+    """Poly(A) bases finishing ``coding`` when ``model`` reaches a poly(A)-stopped 3' end."""
+    segments = model.reference_segments or ()
+    if not segments:
+        return ""
+    last = segments[-1]
+    source_seq = getattr(last.source, "sequence", None)
+    if (last.strand == "+"
+            and source_seq is not None
+            and last.end == len(str(source_seq))
+            and polyadenylation_completes_stop(last.source)):
+        return poly_a_completion(last.source, coding)
+    return ""
 
 
 def _read_orf(sequence, start, end, table, selenocysteine):
@@ -111,10 +131,13 @@ def _proper_reference_suffix(sequence, reference):
 def _orf_changes(model, transcript, reference_protein, table, start, end, selenocysteine,
                  partial_start=False):
     """Compare the ORF read with one Sec decoding against the reference."""
-    coding = _read_orf(model.cdna_sequence, start, end, table, selenocysteine)
+    tail = "" if end is not None else _terminal_poly_a_completion(model, model.cdna_sequence[start:])
+    coding = _read_orf(model.cdna_sequence + tail, start, end, table, selenocysteine)
     if coding is None:
         return None, None
     reference_coding = transcript.coding_sequence
+    if reference_coding is not None:
+        reference_coding = reference_coding + poly_a_completion(transcript, reference_coding)
     coding_status = None if reference_coding is None else coding != reference_coding.upper()
     if partial_start and _proper_reference_suffix(
             coding, reference_coding.upper() if reference_coding is not None else None):
@@ -149,7 +172,7 @@ def _complete_sequence_changes(model, transcript, initiator):
     reference_protein = _initiated(transcript.protein_sequence)
     partial_start = (model.evidence or {}).get(
         "sequence_status") == "observed_model_completeness_unknown" and not (
-            bounds is not None and not model.edits and initiator.complete
+            bounds is not None and not model.edits and has_complete_coding_sequence(initiator)
             and sum(s.length for s in model.reference_segments or ()) == len(model.cdna_sequence)
             and bounds[0] == _retained_start(model, initiator))
     table = codon_table_for_transcript(initiator)
@@ -218,7 +241,7 @@ def _partial_sequence_changes(model, transcript, table):
         return None, None
     sequence = model.cdna_sequence
     segments = model.reference_segments or ()
-    if (sequence is None or model.edits or not transcript.complete
+    if (sequence is None or model.edits or not has_complete_coding_sequence(transcript)
             or not 0 <= start < end <= len(sequence)
             or sum(s.length for s in segments) != len(sequence)):
         # Unmapped edits, or segments that don't render this sequence,
@@ -232,7 +255,10 @@ def _partial_sequence_changes(model, transcript, table):
                 reference_offsets[pos] = segment.start + pos - offset
         offset += segment.length
     reference_start = min(transcript.start_codon_spliced_offsets)
-    reference_coding = transcript.coding_sequence.upper()
+    reference_coding = (
+        transcript.coding_sequence
+        + poly_a_completion(transcript, transcript.coding_sequence)
+    ).upper()
     reference_sec = reference_selenocysteine(transcript)
     decoded, uncertain, _ = segment_selenocysteine(model)
     # The first in-frame codon of this transcript anchors its continuation.

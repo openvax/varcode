@@ -1,5 +1,25 @@
 # Change Log
 
+## v11.16.1
+
+- Fix and expand non-standard genetic code consequence handling (#701):
+  - Initiate fused structural-variant proteins (`_translate_fused_cdna`) with
+    `initiator_as_met` and complete poly(A)-terminated 3' partners so fusions
+    starting at alternative NCBI initiators (such as human `MT-ND2` `ATT`) read
+    codon 1 as `M` and fusions ending in polyadenylated mitochondrial genes
+    complete their terminal stop codon.
+  - Use `has_complete_coding_sequence` and terminal `poly_a_completion` in
+    `structural_sequence_changes` so identity, local rearrangement, and fusion
+    models on polyadenylated mitochondrial transcripts (`MT-ND1`, `MT-ND2`,
+    `MT-CO3`, `MT-ND3`, `MT-ND4`, `MT-CYB`) establish `modifies_coding_sequence`
+    and `modifies_protein_sequence` without treating partial fragments as
+    complete.
+  - Document vertebrate mitochondrial terminal `AGA`/`AGG` (`MT-CO1` and
+    `MT-ND6`) static table-2 decoding in `docs/effect_annotation.md`, and add
+    independent Biotite-backed consequence tests covering all 23 non-standard
+    supported NCBI genetic codes, frameshifts, stop-loss/readthrough, local and
+    fusion mitochondrial SVs, and cis haplotypes.
+
 ## v11.16.0
 
 - Deprecate the legacy `realized` and `uorf` compatibility shims for removal in
