@@ -102,7 +102,7 @@ jobs:
       - name: Run unit tests from the source distribution
         working-directory: ${{ runner.temp }}/varcode-sdist
         run: |
-          ./test.sh --dist=worksteal --cov-report=xml:coverage.xml
+          ./test.sh --cov-report=xml:coverage.xml
       # Experimental annotators may decline inputs. Compare protein_diff on
       # the shared point-edit domain; the full suite above separately checks
       # SV refusal, partial plugins, and explicit dual-annotator regressions.
