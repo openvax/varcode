@@ -253,7 +253,8 @@ products; absent sequence remains unresolved. An explicit `sequence_provider`
 on `annotate_orf_variants` overrides this fallback. Bound transcript exons retain
 the validated ORF reference sequence.
 
-The `orf` and `uorf` extras require ORFdata ≥0.39.0, <1, including its
+ORFdata ≥0.52.0, <1 installs with Varcode (there are no separate `orf` or
+`uorf` extras), including its
 compatibility with PyEnsembl's reference strain and species taxon IDs.
 ORFdata supports binding complete, stopped ORFs with NCBI tables 1, 2 and 3.
 Varcode preserves the declared code through variant and RNA-product translation.
@@ -294,8 +295,9 @@ MS evidence, never mutant translation or MHC presentation evidence. All Sid
 TPST1–CRCP alternatives lack the native KIILSKISV peptide; each keeps its own RNA
 support and unresolved polarity/initiation status.
 
-The compatibility module `varcode.uorf` preserves the original upstream-specific
-call shapes; ORFdata installs with Varcode, so there is no ORF extra. New code should
+The deprecated compatibility module `varcode.uorf` preserves the original
+upstream-specific call shapes (emitting `DeprecationWarning` until removal in
+12.0); ORFdata installs with Varcode, so there is no ORF extra. New code should
 use `varcode.orf` and the bound reference API above. `annotate_orf_product`
 retains its original dictionary return for existing RNA exporters; new Python
 code should use `annotate_orf_rna_product`. `ORFAnnotation.data` remains an

@@ -8,9 +8,11 @@ import orfdata
 import pytest
 from pyensembl import cached_release
 
-from varcode import Variant, ReferenceMismatchError
-from varcode.uorf import (
-    ORFTranscript, annotate_uorf_variants, annotate_uorf_product, load_uorf_catalog,
+from varcode import (
+    ReferenceMismatchError,
+    Variant,
+    annotate_orf_product,
+    annotate_orf_variants,
 )
 from varcode.effect_hypotheses import RealizedTranscriptProduct
 from varcode.nucleotides import reverse_complement
@@ -18,7 +20,7 @@ from varcode.nucleotides import reverse_complement
 
 @pytest.fixture(scope="module")
 def catalog():
-    return load_uorf_catalog()
+    return orfdata.load_uorf_catalog()
 
 
 @pytest.fixture(scope="module")
@@ -31,7 +33,7 @@ def native(catalog):
 def annotation(native, position, ref, alt, **kwargs):
     record, transcript = native
     variant = Variant("7", position, ref, alt, genome=transcript.genome)
-    return annotate_uorf_variants([variant], record, transcript, genome_build="GRCh38", **kwargs)
+    return annotate_orf_variants([variant], record.bind(transcript), **kwargs)
 
 
 def test_tpst1_plus_four_retains_context_and_coding_consequences(native, catalog):
@@ -71,11 +73,11 @@ def test_ref_mismatch_and_assembly_fail(native):
     assert "reference genome has 'C'" in str(caught.value)
     record, transcript = native
     with pytest.raises(ValueError, match="assembly"):
-        ORFTranscript(record, transcript, genome_build="GRCh37")
+        replace(record, genome_build="GRCh37").bind(transcript)
     with pytest.raises(ValueError, match="protein"):
-        ORFTranscript(replace(record, protein_sequence="A" + record.protein_sequence[1:]), transcript, genome_build="GRCh38")
+        replace(record, protein_sequence="A" + record.protein_sequence[1:]).bind(transcript)
     with pytest.raises(ValueError, match="path"):
-        ORFTranscript(replace(record, coding_blocks=((66205482, 66205521), (66240325, 66240404))), transcript, genome_build="GRCh38")
+        replace(record, coding_blocks=((66205482, 66205521), (66240325, 66240404))).bind(transcript)
 
 
 class Transcript:
@@ -140,7 +142,7 @@ def test_orf_ref_mismatch_keeps_original_genomic_alleles_and_interval(reverse):
     transcript = Transcript(reverse=reverse)
     variant = transcript.variant(3, "CCC", "CCA")
     with pytest.raises(ReferenceMismatchError) as caught:
-        annotate_uorf_variants([variant], transcript.record(), transcript, genome_build="GRCh38")
+        annotate_orf_variants([variant], transcript.record().bind(transcript))
     error = caught.value
     assert error.expected_ref == "ATG"
     assert error.observed_ref == "CCC"
@@ -181,17 +183,16 @@ def test_modified_products_keep_reference_scope_across_species(taxon, species, a
         annotate_orf_product(reference, product)
 
 
-def test_legacy_binding_can_declare_custom_reference_context():
+def test_binding_can_declare_custom_reference_context():
     from orfdata import ReferenceContext
-    from varcode.uorf import ORFTranscript
 
     t = Transcript()
     t.genome = SimpleNamespace(reference_name="GRCh38")
     with pytest.raises(ValueError, match="explicit ReferenceContext"):
-        ORFTranscript(t.record(), t, genome_build="GRCh38")
+        t.record().bind(t)
     explicit = ReferenceContext(9606, "human", "GRCh38", "synthetic", "1")
-    view = ORFTranscript(t.record(), t, genome_build="GRCh38", reference_context=explicit)
-    assert view.reference_orf.context == explicit
+    reference = t.record().bind(t, context=explicit)
+    assert reference.context == explicit
 
 
 def test_variant_cannot_cross_taxa_even_with_a_colliding_assembly_label():
@@ -203,7 +204,7 @@ def test_variant_cannot_cross_taxa_even_with_a_colliding_assembly_label():
     record = replace(t.record(), genome_build="GRCm38")
     variant = Variant("1", 108, "A", "G", genome=cached_release(95, species="mouse"))
     with pytest.raises(ValueError, match="taxon mismatch"):
-        annotate_uorf_variants([variant], record, t, genome_build="GRCm38")
+        annotate_orf_variants([variant], record.bind(t))
 
 
 def test_versioned_source_transcript_lookup_and_duplicate_rejection():
@@ -239,9 +240,9 @@ def test_versioned_source_transcript_lookup_and_duplicate_rejection():
 @pytest.mark.parametrize("split", [False, True])
 def test_spliced_and_minus_strand_start_context(reverse, split):
     t = Transcript(reverse, split)
-    view = ORFTranscript(t.record(), t, genome_build="GRCh38")
-    assert view.start_codon_positions == tuple(t.positions[3:6])
-    a = annotate_uorf_variants([t.variant(6, "A", "G")], t.record(), t, genome_build="GRCh38")
+    reference = t.record().bind(t)
+    assert reference.coding_positions[:3] == tuple(t.positions[3:6])
+    a = annotate_orf_variants([t.variant(6, "A", "G")], reference)
     outcomes = a.outcomes
     assert any(x.mutant.protein_sequence == "MEPG" for x in outcomes)
 
@@ -257,7 +258,7 @@ def test_spliced_and_minus_strand_start_context(reverse, split):
 ])
 def test_sequence_consequences(offset, ref, alt, effect, protein):
     t = Transcript()
-    a = annotate_uorf_variants([t.variant(offset, ref, alt)], t.record(), t, genome_build="GRCh38")
+    a = annotate_orf_variants([t.variant(offset, ref, alt)], t.record().bind(t))
     assert type(a.effect).__name__ == effect
     assert len(a.outcomes) == 1
     outcome = a.outcomes[0]
@@ -269,11 +270,12 @@ def test_sequence_consequences(offset, ref, alt, effect, protein):
 
 def test_known_cis_and_unknown_germline_phase_export_all_outcomes():
     t = Transcript()
+    reference = t.record().bind(t)
     v = t.variant(6, "A", "G")
     partner = t.variant(7, "A", "C")
-    a = annotate_uorf_variants([v, partner], t.record(), t, genome_build="GRCh38")
+    a = annotate_orf_variants([v, partner], reference)
     assert a.outcomes[0].mutant.protein_sequence == "MAPG"
-    uncertain = annotate_uorf_variants([v], t.record(), t, genome_build="GRCh38", germline_variants=[partner])
+    uncertain = annotate_orf_variants([v], reference, germline_variants=[partner])
     outcomes = uncertain.outcomes
     assert {o.mutant.protein_sequence for o in outcomes} == {"MAPG", "MEPG"}
     assert {tuple(state for _, state in o.hypothesis.phase) for o in outcomes} == {("cis",), ("trans",)}
@@ -283,7 +285,7 @@ def test_observed_product_missing_start_remains_unresolved(native):
     record, transcript = native
     product = RealizedTranscriptProduct(transcript, "ATGAAATAA", None,
         evidence={"base_origins": [None] * 9, "rna_support": 10})
-    result = annotate_uorf_product(record, transcript, product, genome_build="GRCh38")
+    result = annotate_orf_product(record.bind(transcript), product)
     assert result["status"] == "unresolved"
     assert result["evidence"]["rna_support"] == 10
 
@@ -309,7 +311,7 @@ def test_stop_loss_with_no_downstream_sequence_marks_boundary():
     t.positions = t.positions[:18]
     t.end = t.positions[-1]
     t.exons = (SimpleNamespace(start=t.start, end=t.end),)
-    a = annotate_uorf_variants([t.variant(15, "T", "C")], t.record(), t, genome_build="GRCh38")
+    a = annotate_orf_variants([t.variant(15, "T", "C")], t.record().bind(t))
     assert len(a.outcomes) == 1
     outcome = a.outcomes[0]
     assert outcome.mutant.protein_sequence == "MKPGQ"
@@ -319,10 +321,10 @@ def test_stop_loss_with_no_downstream_sequence_marks_boundary():
 def test_padded_insertion_ref_and_missing_intronic_ref_are_not_ignored():
     t = Transcript()
     with pytest.raises(ReferenceMismatchError):
-        annotate_uorf_variants([t.variant(8, "C", "CA")], t.record(), t, genome_build="GRCh38")
+        annotate_orf_variants([t.variant(8, "C", "CA")], t.record().bind(t))
     spliced = Transcript(split=True)
     v = Variant("1", 150, "A", "G", genome=cached_release(95))
-    a = annotate_uorf_variants([v], spliced.record(), spliced, genome_build="GRCh38")
+    a = annotate_orf_variants([v], spliced.record().bind(spliced))
     assert type(a.effect).__name__ == "Unresolved"
 
 

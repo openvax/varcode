@@ -31,18 +31,18 @@ See [annotation choices](experimental_annotators.md) for alternatives and
 ## Shared transcript model
 
 This is the default annotator; `annotator="fast"` selects the compatibility
-implementation. The former `realized` name and public imports remain aliases.
+implementation.
 See [supported inputs and results](experimental_annotators.md) before using it.
 
 ::: varcode.TranscriptModelEffectAnnotator
 
 ::: varcode.predict_transcript_model_effect
 
-### Compatibility names
+### Deprecated compatibility names
 
-`RealizedEffectAnnotator` and `predict_realized_effect` are retained aliases
-for the transcript-model implementation. Prefer the canonical names above in
-new code; selecting the old `"realized"` registry name still works.
+`RealizedEffectAnnotator`, `predict_realized_effect`, and the `"realized"`
+registry name emit `DeprecationWarning` and will be removed in 12.0; use the
+`transcript_model` names above.
 
 ::: varcode.RealizedEffectAnnotator
     options:

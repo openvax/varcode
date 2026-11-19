@@ -43,12 +43,13 @@ reference context; a protein string alone cannot supply that mapping.
 
 ::: varcode.ORFProductAnnotation
 
-## Upstream-ORF compatibility API
+## Upstream-ORF compatibility API (deprecated)
 
-These names preserve the earlier record-plus-transcript interface. Prefer
-the bound-reference functions above for new integrations. The upstream-only
-catalogue default is retained; the wrappers are not all interchangeable aliases
-for the general catalogue API.
+These names preserve the earlier record-plus-transcript interface, emit
+`DeprecationWarning`, and will be removed in 12.0. Use `record.bind(transcript)`
+and the bound-reference functions above for new integrations (note that
+`orfdata.load_uorf_catalog()` retains the upstream-only catalogue selection,
+whereas `load_orf_catalog()` loads the full catalogue).
 
 `UORFAnnotation` is an alias of ORFAnnotation.
 

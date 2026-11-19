@@ -1,63 +1,106 @@
-"""Compatibility API for upstream ORFs; see :mod:`varcode.orf` for all ORFs."""
+"""Deprecated compatibility API for upstream ORFs; will be removed in varcode 12.0.
 
-from .orf import (  # noqa: F401
-    ORFAnnotation as UORFAnnotation,
+Use :mod:`varcode.orf` and ``record.bind(transcript)`` for new callers.
+"""
+
+from .effects.common import warn_deprecated
+from .orf import (
+    ORFAnnotation,
     _ORFTranscript,
-    _bind,
     _annotate_orf_variants,
+    _bind,
     annotate_orf_product,
     predict_orf_effects,
 )
 
 
+class _UORFAnnotationMeta(type(ORFAnnotation)):
+    def __instancecheck__(cls, instance):
+        return isinstance(instance, ORFAnnotation)
+
+    def __subclasscheck__(cls, subclass):
+        return issubclass(subclass, ORFAnnotation)
+
+
+class UORFAnnotation(ORFAnnotation, metaclass=_UORFAnnotationMeta):
+    """Deprecated alias for :class:`~varcode.ORFAnnotation`; will be removed in varcode 12.0."""
+
+    def __new__(cls, *args, **kwargs):
+        warn_deprecated(
+            "UORFAnnotation is deprecated and will be removed in varcode 12.0; "
+            "use ORFAnnotation")
+        return ORFAnnotation(*args, **kwargs)
+
+
 def load_uorf_catalog(*args, **kwargs):
-    """Load the legacy upstream-ORF catalogue through ORFdata.
+    """Deprecated wrapper for ``orfdata.load_uorf_catalog``; will be removed in varcode 12.0.
 
     Arguments are forwarded to ``orfdata.load_uorf_catalog``. Use
-    :func:`varcode.load_orf_catalog` for the general ORF catalogue; this
-    compatibility function keeps its upstream-only selection.
+    ``orfdata.load_uorf_catalog`` directly for the upstream-only selection or
+    :func:`varcode.load_orf_catalog` for the general ORF catalogue.
     """
+    warn_deprecated(
+        "load_uorf_catalog is deprecated and will be removed in varcode 12.0; "
+        "use orfdata.load_uorf_catalog or varcode.load_orf_catalog")
     from orfdata import load_uorf_catalog as load
     return load(*args, **kwargs)
 
 
 class ORFTranscript(_ORFTranscript):
-    """Legacy engine view; use ``record.bind(transcript)`` for the base object."""
+    """Deprecated engine view; will be removed in varcode 12.0. Use ``record.bind(transcript)``."""
 
     def __init__(self, record, transcript, *, genome_build, reference_context=None):
+        warn_deprecated(
+            "ORFTranscript is deprecated and will be removed in varcode 12.0; "
+            "use record.bind(transcript)")
         super().__init__(_bind(record, transcript, genome_build, reference_context=reference_context))
 
 
 def annotate_uorf_variants(variants, record, transcript, *, genome_build, **kwargs):
-    """Annotate variants on a legacy record bound to a supplied transcript.
+    """Deprecated record-plus-transcript wrapper; will be removed in varcode 12.0.
 
-    Returns an :class:`varcode.ORFAnnotation`. ``genome_build`` identifies the
-    record's placement; additional keywords go to the shared ORF annotation
-    engine. New callers can bind the reference and use
-    :func:`varcode.annotate_orf_variants` directly.
+    Bind the reference with ``record.bind(transcript)`` and use
+    :func:`varcode.annotate_orf_variants`.
     """
+    warn_deprecated(
+        "annotate_uorf_variants is deprecated and will be removed in varcode 12.0; "
+        "bind the record and use annotate_orf_variants")
     return _annotate_orf_variants(variants, record, transcript,
                                  genome_build=genome_build, **kwargs)
 
 
 def annotate_uorf_product(record, transcript, product, *, genome_build, reference_context=None):
-    """Compare an observed product with a legacy record/transcript placement.
+    """Deprecated record-plus-transcript product wrapper; will be removed in varcode 12.0.
 
-    Returns a JSON-compatible dictionary. The record is bound using
-    ``genome_build`` and optional ``reference_context`` before delegating to
-    :func:`varcode.annotate_orf_product`.
+    Bind the reference with ``record.bind(transcript)`` and use
+    :func:`varcode.annotate_orf_rna_product` or :func:`varcode.annotate_orf_product`.
     """
+    warn_deprecated(
+        "annotate_uorf_product is deprecated and will be removed in varcode 12.0; "
+        "bind the record and use annotate_orf_rna_product or annotate_orf_product")
     return annotate_orf_product(_bind(record, transcript, genome_build,
                                      reference_context=reference_context), product)
 
 
 def predict_uorf_effects(variants, *, catalog=None, **kwargs):
-    """Return a tuple of ORFAnnotation objects from the upstream-ORF catalogue.
+    """Deprecated upstream-ORF catalogue wrapper; will be removed in varcode 12.0.
 
-    Omitted ``catalog`` loads :func:`load_uorf_catalog`. Remaining arguments
-    are forwarded to :func:`varcode.predict_orf_effects`; supply a catalogue
-    explicitly to control its source and reference context.
+    Use :func:`varcode.predict_orf_effects` with ``catalog=orfdata.load_uorf_catalog()``.
     """
-    return predict_orf_effects(variants,
-                              catalog=load_uorf_catalog() if catalog is None else catalog,
-                              **kwargs)
+    warn_deprecated(
+        "predict_uorf_effects is deprecated and will be removed in varcode 12.0; "
+        "use predict_orf_effects with catalog=orfdata.load_uorf_catalog()")
+    if catalog is None:
+        from orfdata import load_uorf_catalog as load
+        catalog = load()
+    return predict_orf_effects(variants, catalog=catalog, **kwargs)
+
+
+__all__ = [
+    "ORFTranscript",
+    "UORFAnnotation",
+    "annotate_uorf_product",
+    "annotate_uorf_variants",
+    "load_uorf_catalog",
+    "predict_uorf_effects",
+]
