@@ -65,28 +65,13 @@ def test_default_is_transcript_model_in_fresh_process():
     ], check=True)
 
 
-def test_realized_names_are_compatibility_aliases():
-    from varcode import RealizedEffectAnnotator, predict_realized_effect
-    from varcode.realized_effects import (
-        RealizedEffectAnnotator as LegacyAnnotator,
-        predict_realized_effect as legacy_predict,
-    )
-
-    assert get_annotator("realized") is get_annotator("transcript_model")
-    assert RealizedEffectAnnotator is LegacyAnnotator is TranscriptModelEffectAnnotator
-    assert predict_realized_effect is legacy_predict is predict_transcript_model_effect
-    assert isinstance(pickle.loads(pickle.dumps(LegacyAnnotator())),
-                      TranscriptModelEffectAnnotator)
-
-
-@pytest.mark.parametrize("name", ["transcript_model", "realized"])
-def test_transcript_model_selection_and_provenance(name):
+def test_transcript_model_selection_and_provenance():
     from varcode import EffectCollection
 
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
     variant = Variant("7", 117531100, "T", "A", ensembl_grch38)
     prior_default = get_default_annotator()
-    with use_annotator(name):
+    with use_annotator("transcript_model"):
         assert get_default_annotator().name == "transcript_model"
         effect = variant.effect_on_transcript(transcript)
         effects = variant.effects(raise_on_error=True)
@@ -95,7 +80,7 @@ def test_transcript_model_selection_and_provenance(name):
     assert effect.short_description == "p.L159M"
     assert effects.annotator == "transcript_model"
     assert EffectCollection.from_json(effects.to_json()).annotator == "transcript_model"
-    assert variant.effects(annotator=name).annotator == "transcript_model"
+    assert variant.effects(annotator="transcript_model").annotator == "transcript_model"
 
 
 def test_weak_exonic_variant_keeps_normal_coding_effect_first():

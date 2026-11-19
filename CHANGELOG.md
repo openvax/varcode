@@ -1,5 +1,22 @@
 # Change Log
 
+## v11.16.0
+
+- Deprecate the legacy `realized` and `uorf` compatibility shims for removal in
+  12.0 (#735, alongside #693):
+  - `RealizedEffectAnnotator`, `predict_realized_effect` (`varcode.realized_effects`),
+    and the `"realized"` annotator registry name now emit `DeprecationWarning`
+    pointing to `TranscriptModelEffectAnnotator`, `predict_transcript_model_effect`,
+    and `"transcript_model"`. Saved provenance naming `"realized"` continues to
+    be accepted without warning.
+  - `UORFAnnotation`, `ORFTranscript`, `load_uorf_catalog`, `annotate_uorf_variants`,
+    `annotate_uorf_product`, and `predict_uorf_effects` (`varcode.uorf`) now emit
+    `DeprecationWarning` pointing to `varcode.orf` and `orfdata.load_uorf_catalog`,
+    and `varcode.uorf` defines an explicit `__all__` instead of re-exporting
+    private helpers.
+  - Migrate internal tests to `varcode.orf` and `transcript_model`, and remove
+    the stale `orf`/`uorf` extras reference from `docs/uorf_annotations.md`.
+
 ## v11.15.3
 
 - `test.sh` now defaults to `--dist=worksteal` when `pytest-xdist` is active

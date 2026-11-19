@@ -216,8 +216,9 @@ Unresolved results report `None`, not `False`, for sequence-change flags.
 
 ## Previous names
 
-`realized`, `RealizedEffectAnnotator`, and `predict_realized_effect` are aliases
-for the transcript-model implementation. Use the `transcript_model` names in
+`realized`, `RealizedEffectAnnotator`, and `predict_realized_effect` are
+deprecated aliases for the transcript-model implementation (`DeprecationWarning`,
+removed in 12.0). Use the `transcript_model` names in
 new code. The `RealizedEffectCandidate` wrapper still has a different interface
 from ordinary `EffectCandidate`, as shown above.
 

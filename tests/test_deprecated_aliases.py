@@ -111,3 +111,123 @@ def test_load_vcf_fast_warns_and_forwards_to_load_vcf():
     with pytest.warns(DeprecationWarning, match="renamed to load_vcf"):
         variants = load_vcf_fast(path)
     assert list(variants) == list(load_vcf(path))
+
+
+def test_realized_annotator_and_module_aliases_warn_and_delegate():
+    import pickle
+    from varcode import (
+        RealizedEffectAnnotator,
+        TranscriptModelEffectAnnotator,
+        get_annotator,
+        get_default_annotator,
+        predict_realized_effect,
+        predict_transcript_model_effect,
+        resolve_annotator,
+        set_default_annotator,
+        to_proteome,
+        use_annotator,
+    )
+    from varcode.csv_helpers import warn_on_version_drift
+    from varcode.realized_effects import (
+        RealizedEffectAnnotator as LegacyAnnotator,
+        predict_realized_effect as legacy_predict,
+    )
+
+    assert RealizedEffectAnnotator is LegacyAnnotator
+    assert predict_realized_effect is legacy_predict
+
+    with deprecated(r"RealizedEffectAnnotator is deprecated"):
+        annotator = LegacyAnnotator()
+    assert isinstance(annotator, TranscriptModelEffectAnnotator)
+    assert isinstance(pickle.loads(pickle.dumps(annotator)), TranscriptModelEffectAnnotator)
+
+    transcript = ensembl_grch38.transcript_by_id("ENST00000003084")
+    variant = Variant("7", 117531100, "T", "A", genome=ensembl_grch38)
+    with deprecated(r"predict_realized_effect is deprecated"):
+        legacy_effect = predict_realized_effect([variant], transcript)
+    assert legacy_effect == predict_transcript_model_effect([variant], transcript)
+
+    with deprecated(r"Annotator 'realized' is deprecated"):
+        assert get_annotator("realized") is get_annotator("transcript_model")
+    with deprecated(r"Annotator 'realized' is deprecated"):
+        assert resolve_annotator("realized") is get_annotator("transcript_model")
+
+    prior_default = get_default_annotator().name
+    try:
+        with deprecated(r"Annotator 'realized' is deprecated"):
+            set_default_annotator("realized")
+        assert get_default_annotator().name == "transcript_model"
+    finally:
+        set_default_annotator(prior_default)
+
+    with deprecated(r"Annotator 'realized' is deprecated"):
+        with use_annotator("realized"):
+            assert get_default_annotator().name == "transcript_model"
+            assert variant.effects().annotator == "transcript_model"
+
+    with deprecated(r"Annotator 'realized' is deprecated"):
+        effects = variant.effects(annotator="realized")
+    assert effects.annotator == "transcript_model"
+
+    # Saved provenance naming 'realized' continues to load without warning.
+    effect = variant.effect_on_transcript(transcript)
+    effect.annotator = "realized"
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        proteome = to_proteome([effect])
+        warn_on_version_drift({"annotator": "realized"}, "11.16.0", "legacy.csv")
+    assert proteome.proteins[0].producer.tool == "varcode"
+    assert not caught
+
+
+def test_uorf_compatibility_module_warns_and_delegates():
+    import orfdata
+    from varcode import (
+        ORFAnnotation,
+        ORFTranscript,
+        UORFAnnotation,
+        annotate_orf_product,
+        annotate_orf_variants,
+        annotate_uorf_product,
+        annotate_uorf_variants,
+        load_uorf_catalog,
+        predict_orf_effects,
+        predict_uorf_effects,
+    )
+    from varcode.effect_hypotheses import RealizedTranscriptProduct
+
+    with deprecated(r"load_uorf_catalog is deprecated"):
+        catalog = load_uorf_catalog()
+    record = catalog.get("c7riboseqorf56")
+    transcript = cached_release(95).transcript_by_id(record.transcript_id)
+    reference = record.bind(transcript)
+    variant = Variant("7", 66205486, "C", "G", genome=transcript.genome)
+
+    with deprecated(r"ORFTranscript is deprecated"):
+        view = ORFTranscript(record, transcript, genome_build="GRCh38")
+    assert view.reference_orf == reference
+
+    with deprecated(r"annotate_uorf_variants is deprecated"):
+        legacy = annotate_uorf_variants([variant], record, transcript, genome_build="GRCh38")
+    canonical = annotate_orf_variants([variant], reference)
+    assert legacy.effect == canonical.effect
+    assert isinstance(canonical, UORFAnnotation)
+
+    with deprecated(r"UORFAnnotation is deprecated"):
+        constructed = UORFAnnotation(record=record, effect=canonical.effect, reference=reference)
+    assert type(constructed) is ORFAnnotation
+
+    product = RealizedTranscriptProduct(
+        transcript, transcript.sequence, None,
+        evidence={"base_origins": [None] * len(transcript.sequence)},
+    )
+    with deprecated(r"annotate_uorf_product is deprecated"):
+        legacy_prod = annotate_uorf_product(record, transcript, product, genome_build="GRCh38")
+    assert legacy_prod == annotate_orf_product(reference, product)
+
+    subset = orfdata.ORFCatalog([record], catalog.metadata)
+    with deprecated(r"predict_uorf_effects is deprecated"):
+        legacy_predicted = predict_uorf_effects(variant, catalog=subset)
+    assert [a.orf_id for a in legacy_predicted] == [
+        a.orf_id for a in predict_orf_effects(variant, catalog=subset)
+    ]

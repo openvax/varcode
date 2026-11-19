@@ -118,7 +118,9 @@ def warn_on_version_drift(header_metadata, current_version, source_path):
         # Lazy import to avoid a load-time cycle with varcode.annotators.
         from .annotators.registry import get_default_annotator
         current_annotator = getattr(get_default_annotator(), "name", None)
-        if current_annotator and serialized_annotator != current_annotator:
+        canonical_serialized = (
+            "transcript_model" if serialized_annotator == "realized" else serialized_annotator)
+        if current_annotator and canonical_serialized != current_annotator:
             warnings.warn(
                 "CSV at %s was written by annotator %r but the current "
                 "default annotator is %r. from_csv re-runs annotation on "

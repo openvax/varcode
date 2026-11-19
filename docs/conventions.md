@@ -53,11 +53,7 @@ Use documented root imports for common operations. Topic modules expose
 additional specialized APIs. Names beginning with an underscore are internal;
 their signatures are not extension contracts.
 
-`genome=` is the canonical reference argument. The old `realized` annotator
-names refer to the shared transcript-model implementation. The
-[uORF wrappers](api_orfs.md#upstream-orf-compatibility-api) retain their
-upstream-only defaults, so changing names alone can change which catalogue is
-used.
+`genome=` is the canonical reference argument.
 
 ### Deprecated names
 
@@ -71,6 +67,8 @@ These names still work, and Varcode itself no longer uses them. Each warns with
 | `StopLoss.extended_protein_sequence` | `aa_alt` |
 | `load_vcf_fast` | `load_vcf` |
 | `detect_loh` | `detect_germline_overlap` for allele matching; `detect_loh` always returns `None` |
+| `"realized"`, `RealizedEffectAnnotator`, `predict_realized_effect` (`varcode.realized_effects`) | `"transcript_model"`, `TranscriptModelEffectAnnotator`, `predict_transcript_model_effect` |
+| `varcode.uorf` (`UORFAnnotation`, `ORFTranscript`, `load_uorf_catalog`, `annotate_uorf_variants`, `annotate_uorf_product`, `predict_uorf_effects`) | `varcode.orf` (`ORFAnnotation`, `record.bind(transcript)`, `orfdata.load_uorf_catalog` / `load_orf_catalog`, `annotate_orf_variants`, `annotate_orf_rna_product`, `predict_orf_effects`) |
 
 Saved Variant JSON that stores the genome under its old `"ensembl"` key still
 loads, without a warning.
