@@ -18,6 +18,7 @@ import gzip
 import os
 
 from .circular_origin import in_transcript_order
+from .contigs import normalize_contig_name
 from .rna_evidence import RNAEvidence, make_fusion_outcome
 from .effects.codon_tables import STANDARD
 from .mutant_transcript import ReferenceSegment, _AssembledAllele
@@ -89,6 +90,7 @@ def _sequence(rows):
 
 def _validate_path(bases, genome):
     """Reject multiway/back-spliced paths instead of flattening them to two ends."""
+    reference_name = getattr(genome, "assembly", None) or getattr(genome, "reference_name", None)
     runs = []
     previous_end = None
     for row in bases:
@@ -100,7 +102,9 @@ def _validate_path(bases, genome):
         if tid != row["transcript_id_2"]:
             raise ValueError("A base row must have one transcript annotation")
         transcript = _transcript(genome, tid)
-        if transcript is not None and chrom.removeprefix("chr") != transcript.contig.removeprefix("chr"):
+        if transcript is not None and (
+                normalize_contig_name(chrom, reference_name=reference_name)
+                != normalize_contig_name(transcript.contig, reference_name=reference_name)):
             raise ValueError("Transcript annotation and base-row contig disagree")
         owner = (chrom, strand, transcript.gene_id if transcript is not None else None)
         lo, hi = sorted([int(row["position_1"]), int(row["position_2"])])

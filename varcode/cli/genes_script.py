@@ -11,12 +11,11 @@
 # limitations under the License.
 
 import logging
-import logging.config
-from importlib import resources
 import sys
 
 from .version_info import print_version_info
 from .variant_args import (
+    _configure_logging,
     check_output_directory,
     exit_on_user_error,
     make_variants_parser,
@@ -24,11 +23,6 @@ from .variant_args import (
 )
 
 
-# as_file, rather than str(), so that logging.conf is also readable when varcode
-# is zip-imported (zipapp, pex, shiv, zipped egg), where files() hands back a
-# zipfile.Path that open() can't use.
-with resources.as_file(resources.files(__package__) / "logging.conf") as _logging_conf:
-    logging.config.fileConfig(_logging_conf)
 logger = logging.getLogger(__name__)
 
 arg_parser = make_variants_parser(
@@ -49,6 +43,7 @@ def main(args_list=None):
             --variant chr1 498584 C G \
             --json-variants more_variants.json
     """
+    _configure_logging()
     print_version_info()
     if args_list is None:
         args_list = sys.argv[1:]

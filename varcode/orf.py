@@ -14,7 +14,7 @@ from .effects.codon_tables import codon_table_for_transcript, translate_sequence
 from .effects.effect_classes import MutationEffect, StartLoss, Unresolved
 from .genomic_layout import SequenceUnavailable, UnsupportedLayoutEdit
 from .mutant_transcript import MutantTranscript
-from .nucleotides import reverse_complement
+from .nucleotides import complement, reverse_complement
 from .transcript_model import predict_transcript_model_effect
 
 if TYPE_CHECKING:
@@ -136,7 +136,7 @@ def _reference_provider(view, fallback=None):
     def sequence(contig, start, end):
         if _contig(contig, build) == _contig(view.contig, build) and all(p in offsets for p in range(start, end + 1)):
             genomic = "".join(view.sequence[offsets[p]] for p in range(start, end + 1))
-            return genomic.translate(str.maketrans("ACGT", "TGCA")) if view.on_backward_strand else genomic
+            return complement(genomic) if view.on_backward_strand else genomic
         if fallback is not None:
             return fallback(contig, start, end)
         raise SequenceUnavailable("Intronic/genomic reference sequence unavailable")

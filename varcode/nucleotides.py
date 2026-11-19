@@ -10,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import numpy as np
+import math
 
 # include all pseudonucleotides encoding repeats and uncertain bases
 STANDARD_NUCLEOTIDES = {'A', 'C', 'T', 'G'}
@@ -50,12 +50,20 @@ _COMPLEMENT_TABLE = str.maketrans(
 )
 
 
+def complement(sequence):
+    """Complement a nucleotide string without reversing it.
+
+    Preserves case and complements IUPAC ambiguity codes (#293).
+    """
+    return sequence.translate(_COMPLEMENT_TABLE)
+
+
 def reverse_complement(sequence):
     """Reverse-complement a nucleotide string.
 
     Preserves case and complements IUPAC ambiguity codes (#293).
     """
-    return sequence.translate(_COMPLEMENT_TABLE)[::-1]
+    return complement(sequence)[::-1]
 
 
 def is_purine(nucleotide, allow_extended_nucleotides=False):
@@ -64,10 +72,6 @@ def is_purine(nucleotide, allow_extended_nucleotides=False):
         raise ValueError(
             "{} is a non-standard nucleotide, neither purine or pyrimidine".format(nucleotide))
     return nucleotide in PURINE_NUCLEOTIDES
-
-
-def all_standard_nucleotides(nucleotides):
-    return all(base in STANDARD_NUCLEOTIDES for base in nucleotides)
 
 
 def normalize_nucleotide_string(
@@ -96,7 +100,7 @@ def normalize_nucleotide_string(
     treat_nan_as_empty : bool
         Some MAF files represent deletions/insertions with NaN ref/alt values
     """
-    if treat_nan_as_empty and isinstance(nucleotides, float) and np.isnan(nucleotides):
+    if treat_nan_as_empty and isinstance(nucleotides, float) and math.isnan(nucleotides):
         return ""
     if not isinstance(nucleotides, str):
         raise TypeError("Expected nucleotide string, got %s" % type(nucleotides).__name__)

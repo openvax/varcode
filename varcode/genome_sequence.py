@@ -43,9 +43,9 @@ Tracked in openvax/varcode#372 and #488.
 import logging
 from typing import Any, Optional
 
-logger = logging.getLogger(__name__)
+from .nucleotides import reverse_complement
 
-_COMPLEMENT = str.maketrans("ACGTNacgtn", "TGCANTGCAN")
+logger = logging.getLogger(__name__)
 
 
 # --------------------------------------------------------------------
@@ -299,24 +299,13 @@ def _plus_strand_slice(transcript: Any, start: int, end: int) -> str:
     if len(slice_seq) != end - start + 1:
         return ""
     if transcript.strand == "-":
-        slice_seq = slice_seq.translate(_COMPLEMENT)[::-1]
+        slice_seq = reverse_complement(slice_seq)
     return slice_seq
 
 
 def _read_transcript_base(transcript: Any, position: int) -> str:
     """Single-position specialization of :func:`_plus_strand_slice`."""
     return _plus_strand_slice(transcript, position, position)
-
-
-def _range_from_single_transcript(
-        genome: Any, contig: str, start: int, end: int) -> Optional[str]:
-    """Try to satisfy a range read from one transcript that fully
-    covers ``[start, end]``. Returns the ``+`` strand sequence on
-    success, or ``None`` if no single transcript spans the range
-    (caller falls back to per-position).
-    """
-    return _range_from_transcripts(
-        _transcripts_at(genome, contig, start, end), start, end)
 
 
 def _range_from_transcripts(

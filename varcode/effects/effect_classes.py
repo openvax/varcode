@@ -12,7 +12,6 @@
 
 
 from functools import cached_property
-from memoized_property import memoized_property
 from warnings import warn
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -1421,7 +1420,7 @@ class KnownAminoAcidChange(NonsilentCodingMutation):
                 self.aa_mutation_start_offset + 1,
                 self.aa_alt)
 
-    @memoized_property
+    @cached_property
     def mutant_protein_sequence(self):
         if self.mutant_transcript is not None:
             return self.mutant_transcript.mutant_protein_sequence
@@ -1590,7 +1589,7 @@ class PrematureStop(KnownAminoAcidChange):
             self.aa_mutation_start_offset + 1,
             self.aa_alt)
 
-    @memoized_property
+    @cached_property
     def mutant_protein_sequence(self):
         if self.mutant_transcript is not None:
             return self.mutant_transcript.mutant_protein_sequence
@@ -1680,7 +1679,7 @@ class FrameShift(KnownAminoAcidChange):
     def shifted_sequence(self):
         return self.aa_alt
 
-    @memoized_property
+    @cached_property
     def mutant_protein_sequence(self):
         if self.mutant_transcript is not None:
             return self.mutant_transcript.mutant_protein_sequence
