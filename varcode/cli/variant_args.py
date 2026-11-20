@@ -10,14 +10,40 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from argparse import ArgumentParser
 from contextlib import contextmanager
 import os
+import sys
 
-from ..vcf import load_vcf
-from ..maf import load_maf
-from ..variant_collection import VariantCollection
-from ..variant import Variant
+from ..version import __version__
+from .help import HelpArgumentParser, style_table_header
+
+
+def configure_cli_logging():
+    """Configure CLI loggers lazily (stderr, WARNING default for dependencies)."""
+    from importlib import resources
+    import logging.config
+
+    # as_file, rather than str(), so that logging.conf is also readable when varcode
+    # is zip-imported (zipapp, pex, shiv, zipped egg), where files() hands back a
+    # zipfile.Path that open() can't use.
+    with resources.as_file(resources.files(__package__) / "logging.conf") as logging_conf:
+        logging.config.fileConfig(logging_conf, disable_existing_loggers=False)
+
+
+def write_cli_dataframe(df, *, stream=None, drop_display_columns=()):
+    """Write ``df`` as an aligned table on a TTY or as CSV when piped/redirected."""
+    out = sys.stdout if stream is None else stream
+    if getattr(out, "isatty", lambda: False)():
+        display = df.drop(
+            columns=[c for c in drop_display_columns if c in df.columns]
+        )
+        if len(display) == 0:
+            text = "  ".join(map(str, display.columns)) + "\n"
+        else:
+            text = display.to_string(index=False) + "\n"
+        out.write(style_table_header(text, out))
+    else:
+        df.to_csv(out, index=False)
 
 
 def add_variant_args(arg_parser):
@@ -106,12 +132,17 @@ def make_variants_parser(**kwargs):
     Parameters
     ----------
     **kwargs : dict
-        Passed directly to argparse.ArgumentParser
+        Passed directly to HelpArgumentParser
 
-    Creates argparse.ArgumentParser instance with options needed for loading
+    Creates HelpArgumentParser instance with options needed for loading
     variants from VCF, MAF, or JSON files.
     """
-    parser = ArgumentParser(**kwargs)
+    parser = HelpArgumentParser(**kwargs)
+    parser.add_argument(
+        "--version",
+        action="version",
+        version="varcode %s" % __version__,
+    )
     add_variant_args(parser)
     return parser
 
@@ -174,6 +205,11 @@ def download_and_install_reference_data(variant_collections):
 
 
 def variant_collection_from_args(args, required=True):
+    from ..maf import load_maf
+    from ..variant import Variant
+    from ..variant_collection import VariantCollection
+    from ..vcf import load_vcf
+
     variant_collections = []
     fasta = getattr(args, "genome_fasta", None)
     if fasta is not None and not os.path.isfile(fasta):
@@ -208,7 +244,7 @@ def variant_collection_from_args(args, required=True):
         variant_collections.append(variant_collection)
 
     for json_path in args.json_variants:
-        with open(json_path, 'r') as f:
+        with open(json_path, "r") as f:
             variant_collections.append(
                 VariantCollection.from_json(f.read()))
 

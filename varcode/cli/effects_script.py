@@ -1,3 +1,4 @@
+# PYTHON_ARGCOMPLETE_OK
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -10,55 +11,64 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import logging.config
-from importlib import resources
 import sys
 
-from .version_info import print_version_info
+import argcomplete
+
 from .variant_args import (
+    add_variant_args,
     check_output_directory,
+    configure_cli_logging,
     exit_on_user_error,
     make_variants_parser,
     variant_collection_from_args,
+    write_cli_dataframe,
 )
-from ..effects import Failure
-from ..errors import ReferenceMismatchError
 
 
-# as_file, rather than str(), so that logging.conf is also readable when varcode
-# is zip-imported (zipapp, pex, shiv, zipped egg), where files() hands back a
-# zipfile.Path that open() can't use.
-with resources.as_file(resources.files(__package__) / "logging.conf") as _logging_conf:
-    logging.config.fileConfig(_logging_conf)
-logger = logging.getLogger(__name__)
+def add_effects_args(parser):
+    """Attach ``varcode effects`` options onto ``parser``."""
+    parser.add_argument(
+        "--output-csv", "--output", "-o", dest="output_csv",
+        help="CSV output: variant coordinates, gene/transcript IDs, effect type and description, plus SV fields",
+    )
+    parser.add_argument(
+        "--extra-orfs", action="append", metavar="EVIDENCE",
+        help="Add ORFdata consequences: all, ribosome, ms, proteomics or immunopeptidomics. "
+             "Repeat to include ORFs with any selected evidence. Uses the ORF catalogues "
+             "installed for the genome; `orfdata setup` installs more.",
+    )
+    parser.add_argument(
+        "--one-per-variant",
+        default=False,
+        action="store_true",
+        help=(
+            "Only return highest priority effect overlapping a variant, "
+            "otherwise all overlapping transcripts are returned."
+        ),
+    )
+    parser.add_argument(
+        "--only-coding",
+        default=False,
+        action="store_true",
+        help="Filter silent and non-coding effects",
+    )
+    return parser
+
+
+def attach_effects_parser(parser):
+    """Attach both shared variant options and ``effects`` options onto a subparser."""
+    add_variant_args(parser)
+    return add_effects_args(parser)
+
 
 arg_parser = make_variants_parser(
     prog="varcode effects",
     description="Annotate variants with overlapping gene names and predicted coding effects",
-    epilog="Other subcommands: varcode genes, varcode check-samples (see `varcode --help`)")
+    epilog="Other subcommands: varcode genes, varcode check-samples (see `varcode --help`)",
+)
+add_effects_args(arg_parser)
 
-arg_parser.add_argument(
-    "--output-csv", "--output", "-o", dest="output_csv", help="CSV output: variant coordinates, gene/transcript IDs, effect type and description, plus SV fields")
-
-arg_parser.add_argument(
-    "--extra-orfs", action="append", metavar="EVIDENCE",
-    help="Add ORFdata consequences: all, ribosome, ms, proteomics or immunopeptidomics. "
-         "Repeat to include ORFs with any selected evidence. Uses the ORF catalogues "
-         "installed for the genome; `orfdata setup` installs more.")
-
-arg_parser.add_argument(
-    "--one-per-variant",
-    default=False,
-    action="store_true",
-    help=(
-        "Only return highest priority effect overlapping a variant, "
-        "otherwise all overlapping transcripts are returned."))
-
-arg_parser.add_argument(
-    "--only-coding",
-    default=False,
-    action="store_true",
-    help="Filter silent and non-coding effects")
 
 def main(args_list=None):
     """
@@ -73,11 +83,16 @@ def main(args_list=None):
             --variant chr1 498584 C G \
             --json-variants more_variants.json
     """
-    print_version_info()
     if args_list is None:
+        argcomplete.autocomplete(arg_parser)
         args_list = sys.argv[1:]
 
     args = arg_parser.parse_args(args_list)
+    configure_cli_logging()
+
+    from ..effects import Failure
+    from ..errors import ReferenceMismatchError
+
     with exit_on_user_error(arg_parser, errors=(ValueError, OSError, ImportError)):
         if args.output_csv:
             check_output_directory(args.output_csv)
@@ -113,7 +128,8 @@ def main(args_list=None):
     effects_dataframe = effects.to_dataframe(include_archive=True)
     if args.skip_errors or failures:
         effects_dataframe["annotation_error"] = [getattr(e, "error", None) for e in effects]
-    logger.info('\n%s', effects)
     if args.output_csv:
         with exit_on_user_error(arg_parser, errors=(OSError,)):
             effects_dataframe.to_csv(args.output_csv, index=False)
+    else:
+        write_cli_dataframe(effects_dataframe, drop_display_columns=("effect_json",))

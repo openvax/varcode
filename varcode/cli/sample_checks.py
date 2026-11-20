@@ -1,15 +1,53 @@
+# PYTHON_ARGCOMPLETE_OK
 """CLI for genotype concordance and somatic overlap screening."""
 
-import argparse
 import csv
 import json
 from pathlib import Path
 import sys
 
-from ..sample_identity import SampleCheckConfig, SampleSpec, check_sample_identity, load_vcf_samples
+import argcomplete
+
+from ..version import __version__
+from .help import HelpArgumentParser
+
+
+def add_sample_check_args(parser):
+    """Attach ``varcode check-samples`` options onto ``parser``."""
+    for kind in ("germline", "somatic", "mixed"):
+        parser.add_argument(
+            "--" + kind, action="append", default=[], type=Path, metavar="VCF",
+            help="%s VCF/VCF.gz; repeat for multiple files" % kind.capitalize(),
+        )
+    parser.add_argument("--manifest", type=Path, help="CSV/TSV sample selection, roles and expected identities")
+    parser.add_argument("--assembly", help="GRCh37/GRCh38 when input reference headers are unrecognized")
+    parser.add_argument("--config", type=Path, help="JSON object overriding SampleCheckConfig defaults")
+    parser.add_argument("--json", type=Path, help="Full report path (default: stdout)")
+    parser.add_argument("--tsv", type=Path, help="Optional compact table of every sample pair")
+    parser.add_argument(
+        "--fail-on-mismatch", action="store_true",
+        help="Exit 1 for discordant expected donor pairs; inconclusive remains exit 0",
+    )
+    return parser
+
+
+def build_parser():
+    """Return the argument parser for ``varcode check-samples``."""
+    parser = HelpArgumentParser(prog="varcode check-samples", description=__doc__)
+    parser.add_argument(
+        "--version",
+        action="version",
+        version="varcode %s" % __version__,
+    )
+    return add_sample_check_args(parser)
+
+
+arg_parser = build_parser()
 
 
 def _manifest(path, assembly, config):
+    from ..sample_identity import SampleSpec, load_vcf_samples
+
     path = path.resolve()
     groups = {}
     allowed = {"path", "kind", "assembly", "sample", "role", "label", "donor_id", "tumor_id", "normal_sample"}
@@ -48,18 +86,13 @@ def _write_tsv(path, report):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(prog="varcode check-samples", description=__doc__)
-    for kind in ("germline", "somatic", "mixed"):
-        parser.add_argument("--" + kind, action="append", default=[], type=Path, metavar="VCF",
-                            help="%s VCF/VCF.gz; repeat for multiple files" % kind.capitalize())
-    parser.add_argument("--manifest", type=Path, help="CSV/TSV sample selection, roles and expected identities")
-    parser.add_argument("--assembly", help="GRCh37/GRCh38 when input reference headers are unrecognized")
-    parser.add_argument("--config", type=Path, help="JSON object overriding SampleCheckConfig defaults")
-    parser.add_argument("--json", type=Path, help="Full report path (default: stdout)")
-    parser.add_argument("--tsv", type=Path, help="Optional compact table of every sample pair")
-    parser.add_argument("--fail-on-mismatch", action="store_true",
-                        help="Exit 1 for discordant expected donor pairs; inconclusive remains exit 0")
+    parser = build_parser()
+    if argv is None:
+        argcomplete.autocomplete(parser)
     args = parser.parse_args(argv)
+
+    from ..sample_identity import SampleCheckConfig, check_sample_identity, load_vcf_samples
+
     try:
         options = json.loads(args.config.read_text()) if args.config else {}
         if not isinstance(options, dict):

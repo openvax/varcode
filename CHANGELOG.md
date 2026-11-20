@@ -1,5 +1,31 @@
 # Change Log
 
+## v11.18.0
+
+- Clean up CLI output streams, tables, and CSV columns (#432):
+  - Route CLI logging to `stderr` with `WARNING` defaults for `varcode`,
+    `pyensembl`, and `datacache`, and configure logging lazily after argument
+    parsing.
+  - Stop printing the `Varcode / Version / Path` banner above `--help` and
+    argument errors; expose `--version` on `varcode`, `varcode effects`,
+    `varcode genes` (`varcode-genes`), and `varcode check-samples`.
+  - Write full unindexed aligned tables on a TTY (or CSV when piped) to
+    `stdout` when `--output-csv` is omitted instead of logging truncated
+    Python reprs.
+  - Align `varcode genes` CLI CSV columns with `varcode effects` (`contig`,
+    `start`, `ref`, `alt` with trimmed allele normalization, plus reference
+    provenance columns).
+- Add shell tab completion (`argcomplete>=3`), lazy PEP 562 package imports,
+  and shared single-hue cyan terminal help styling (#697):
+  - Make `varcode/__init__.py` lazy via PEP 562 `__getattr__` (preserving
+    `__all__` and static `TYPE_CHECKING` types for `mypy`) and defer heavy
+    imports inside CLI command handlers so parser construction stays
+    import-light without loading `pandas`, `numpy`, `pyarrow`, `pyensembl`, or
+    `orfdata`.
+  - Add `# PYTHON_ARGCOMPLETE_OK` and `argcomplete.autocomplete()` to the
+    `varcode` and `varcode-genes` CLI entry modules, plus `varcode/cli/help.py`
+    matching the shared OpenVax help formatter and color rules.
+
 ## v11.17.1
 
 - Remove tautological `Protocol` `isinstance()`, subclass-declaration, and

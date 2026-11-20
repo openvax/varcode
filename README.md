@@ -104,6 +104,10 @@ varcode effects --genome GRCh38 --vcf variants.vcf --output-csv effects.csv
 `varcode --help` lists the subcommands. See the [command-line guide](https://openvax.github.io/varcode/getting_started/#command-line)
 and [sample identity checks](https://openvax.github.io/varcode/sample_identity/).
 
+For shell tab completion across every OpenVax command-line tool, run
+`activate-global-python-argcomplete` once, or enable just `varcode` in your
+shell profile with `eval "$(register-python-argcomplete varcode)"`.
+
 <a id="further-reading"></a>
 <a id="learn-more"></a>
 <a id="effect-types"></a>

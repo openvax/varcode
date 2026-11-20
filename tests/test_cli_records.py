@@ -117,9 +117,8 @@ def test_strelka_cli_keeps_unplaced_and_unannotatable_records(main, tmp_path):
         main(["--genome", "GRCh37:75", "--vcf", str(Path(__file__).parent / "data/strelka-example.vcf"),
               "--output-csv", str(output)])
     table = pd.read_csv(output)
-    contig_column = "contig" if main is effects_main else "chr"
-    assert len(table[[contig_column, "start", "ref", "alt"]].drop_duplicates()) == 20
-    assert {"GL000216.1", "GL000226.1"} <= set(table[contig_column])
-    missing = table[table[contig_column] == "GL000226.1"]
+    assert len(table[["contig", "start", "ref", "alt"]].drop_duplicates()) == 20
+    assert {"GL000216.1", "GL000226.1"} <= set(table["contig"])
+    missing = table[table["contig"] == "GL000226.1"]
     assert len(missing) == 1
     assert "Invalid contig" in missing.iloc[0].annotation_error
