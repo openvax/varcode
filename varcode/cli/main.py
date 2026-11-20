@@ -1,3 +1,4 @@
+# PYTHON_ARGCOMPLETE_OK
 """The ``varcode`` command: one entry point with subcommands.
 
 Subcommands:
@@ -11,27 +12,61 @@ the same as ``varcode effects --vcf x.vcf ...``, and the separate
 ``varcode-genes`` script is an alias for ``varcode genes``.
 """
 
+import os
 import sys
 
-from .. import __version__
+import argcomplete
 
-USAGE = """\
-usage: varcode [-h] [--version] {effects,genes,check-samples} ...
-
-Variant annotation in Python.
-
-subcommands:
-  effects         annotate variants with overlapping genes and predicted coding
-                  effects (default when no subcommand is given)
-  genes           annotate variants with overlapping gene names
-                  (alias: the varcode-genes command)
-  check-samples   screen VCFs for sample mix-ups
-
-Run `varcode <subcommand> --help` for the options of each subcommand.
-"""
-
+from ..version import __version__
+from .help import HelpArgumentParser
 
 SUBCOMMANDS = ("effects", "genes", "check-samples")
+
+
+def build_parser(*, attach_subcommands=False):
+    """Build the top-level ``varcode`` argument parser without heavy imports."""
+    parser = HelpArgumentParser(
+        prog="varcode",
+        description="Variant annotation in Python.",
+        epilog="Run `varcode <subcommand> --help` for the options of each subcommand.",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version="varcode %s" % __version__,
+    )
+    subparsers = parser.add_subparsers(
+        title="subcommands",
+        dest="subcommand",
+        metavar="{effects,genes,check-samples}",
+    )
+    effects_parser = subparsers.add_parser(
+        "effects",
+        help="annotate variants with overlapping genes and predicted coding effects (default when no subcommand is given)",
+    )
+    genes_parser = subparsers.add_parser(
+        "genes",
+        help="annotate variants with overlapping gene names (alias: the varcode-genes command)",
+    )
+    check_parser = subparsers.add_parser(
+        "check-samples",
+        help="screen VCFs for sample mix-ups",
+    )
+    if attach_subcommands:
+        from .effects_script import attach_effects_parser
+        from .genes_script import attach_genes_parser
+        from .sample_checks import add_sample_check_args
+
+        for subparser in (effects_parser, genes_parser, check_parser):
+            subparser.add_argument(
+                "--version",
+                action="version",
+                version="varcode %s" % __version__,
+            )
+        attach_effects_parser(effects_parser)
+        attach_genes_parser(genes_parser)
+        add_sample_check_args(check_parser)
+    return parser
 
 
 def run_subcommand(name, args):
@@ -82,11 +117,14 @@ def main(argv=None):
     int or None
         Exit status; ``None`` means success.
     """
+    if argv is None and "_ARGCOMPLETE" in os.environ:
+        parser = build_parser(attach_subcommands=True)
+        argcomplete.autocomplete(parser)
     args = list(sys.argv[1:] if argv is None else argv)
     if args and args[0] in SUBCOMMANDS:
         return run_subcommand(args[0], args[1:])
     if args and args[0] in ("-h", "--help"):
-        sys.stdout.write(USAGE)
+        build_parser().print_help()
         return 0
     if args and args[0] == "--version":
         print("varcode %s" % __version__)

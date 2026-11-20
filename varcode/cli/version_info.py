@@ -13,7 +13,7 @@
 from collections import OrderedDict
 from os.path import dirname
 from .. import __file__ as package_init_file_path
-from .. import __version__
+from ..version import __version__
 
 
 def collect_version_info():
