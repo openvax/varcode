@@ -65,7 +65,7 @@ def test_subcommand_usage_names_the_subcommand(capsys):
     # Bare `varcode <options>` means `varcode effects`, so a usage line
     # without the subcommand would send `genes` options to `effects`.
     from varcode.cli.main import main
-    for name in ("effects", "genes", "check-samples"):
+    for name in ("effects", "genes"):
         with pytest.raises(SystemExit) as exc_info:
             main([name, "--help"])
         assert exc_info.value.code == 0

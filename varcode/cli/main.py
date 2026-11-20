@@ -4,7 +4,6 @@ Subcommands:
 
 ``effects``        annotate variants with predicted coding effects
 ``genes``          annotate variants with overlapping genes
-``check-samples``  screen VCFs for sample mix-ups
 
 For backward compatibility, ``varcode --vcf x.vcf ...`` with no subcommand is
 the same as ``varcode effects --vcf x.vcf ...``, and the separate
@@ -16,7 +15,7 @@ import sys
 from .. import __version__
 
 USAGE = """\
-usage: varcode [-h] [--version] {effects,genes,check-samples} ...
+usage: varcode [-h] [--version] {effects,genes} ...
 
 Variant annotation in Python.
 
@@ -25,13 +24,12 @@ subcommands:
                   effects (default when no subcommand is given)
   genes           annotate variants with overlapping gene names
                   (alias: the varcode-genes command)
-  check-samples   screen VCFs for sample mix-ups
 
 Run `varcode <subcommand> --help` for the options of each subcommand.
 """
 
 
-SUBCOMMANDS = ("effects", "genes", "check-samples")
+SUBCOMMANDS = ("effects", "genes")
 
 
 def run_subcommand(name, args):
@@ -41,7 +39,7 @@ def run_subcommand(name, args):
     Parameters
     ----------
     name : str
-        One of ``effects``, ``genes`` or ``check-samples``.
+        One of ``effects`` or ``genes``.
     args : list of str
         Arguments for the subcommand, excluding its name.
 
@@ -59,8 +57,6 @@ def run_subcommand(name, args):
         from .effects_script import main as subcommand_main
     elif name == "genes":
         from .genes_script import main as subcommand_main
-    elif name == "check-samples":
-        from .sample_checks import main as subcommand_main
     else:
         raise ValueError(
             "Unknown varcode subcommand %r; expected one of %s"

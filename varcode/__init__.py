@@ -81,7 +81,6 @@ from .phasing import (
     apply_phase_resolver_to_effects,
     query_in_cis,
 )
-from .rna_read_phasing import RNAReadPhasingSource
 from .rna_evidence import (
     NullRNAEvidenceResolver,
     RNAEvidence,
@@ -90,8 +89,6 @@ from .rna_evidence import (
     make_fusion_outcome,
     make_rna_outcome,
 )
-from .exacto import load_exacto_fusions
-from .reference_completion import reference_completion_hypotheses
 from .realized_effects import predict_realized_effect
 from .transcript_model import predict_transcript_model_effect
 from .splice_outcomes import (
@@ -131,10 +128,6 @@ from .effects import (
 )
 from .version import __version__
 from .proteome import to_proteome
-from .sample_identity import (
-    SampleCheckConfig, SampleSpec, SampleFingerprint,
-    load_vcf_samples, compare_samples, check_sample_identity,
-)
 
 
 __all__ = [
@@ -143,8 +136,6 @@ __all__ = [
     "predict_orf_effects", "load_orf_catalog",
     "ORFTranscript", "UORFAnnotation", "annotate_uorf_variants",
     "annotate_uorf_product", "predict_uorf_effects", "load_uorf_catalog",
-    "SampleCheckConfig", "SampleSpec", "SampleFingerprint",
-    "load_vcf_samples", "compare_samples", "check_sample_identity",
     "__version__",
     "to_proteome",
     "Candidate", "CandidatePath", "get_effect_candidates",
@@ -207,7 +198,6 @@ __all__ = [
     "MutantTranscriptSource",
     "ReadPhaseResolver",
     "ReadPhasingSource",
-    "RNAReadPhasingSource",
     "VCFPhaseResolver",
     "apply_phase_resolver_to_effects",
     "query_in_cis",
@@ -219,8 +209,6 @@ __all__ = [
     "apply_rna_evidence_to_effects",
     "make_rna_outcome",
     "make_fusion_outcome",
-    "load_exacto_fusions",
-    "reference_completion_hypotheses",
 
     "EffectAnnotator",
     "FastEffectAnnotator",
