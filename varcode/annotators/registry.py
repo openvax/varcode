@@ -92,6 +92,28 @@ def get_default_annotator() -> EffectAnnotator:
     return _REGISTRY[_DEFAULT_NAME]
 
 
+def registered_annotators(*, include_deprecated: bool = False) -> tuple[str, ...]:
+    """Return sorted names of registered annotators in the process-global registry.
+
+    Parameters
+    ----------
+    include_deprecated : bool, default False
+        When ``False`` (default), omit the deprecated ``"realized"`` alias
+        while it points to the canonical ``"transcript_model"`` entry. Set
+        ``True`` to include deprecated compatibility names.
+
+    Returns
+    -------
+    tuple of str
+        Sorted registered annotator names (``("fast", "protein_diff", "transcript_model")``
+        when no third-party annotators are registered).
+    """
+    names = set(_REGISTRY)
+    if not include_deprecated and _REGISTRY.get("realized") is _REGISTRY.get("transcript_model"):
+        names.discard("realized")
+    return tuple(sorted(names))
+
+
 def set_default_annotator(name: str) -> None:
     """Swap the process-wide default annotator. ``name`` must refer
     to a registered annotator.

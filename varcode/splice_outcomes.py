@@ -81,8 +81,8 @@ from .effects.effect_classes import (
 from .mutant_transcript import (
     MutantTranscript,
     TranscriptEdit,
-    _resolve_variant_edit,
-    _translate_from_cds,
+    resolve_variant_edit,
+    translate_from_cds,
 )
 from .effect_candidates import EffectCandidate
 
@@ -876,7 +876,7 @@ def _build_intron_retention_mutant_transcript(
     mutant_cdna, edits = composed
     # Translate from the canonical start codon; premature stop inside
     # the retained intron terminates the ORF.
-    mut_protein = _translate_from_cds(mutant_cdna, transcript, edits)
+    mut_protein = translate_from_cds(mutant_cdna, transcript, edits)
     return MutantTranscript(
         reference_transcript=transcript,
         edits=edits,
@@ -1041,7 +1041,7 @@ def _point_variant_transcript_edit(variant, transcript, full_cdna):
     """
     if getattr(variant, "is_structural", False):
         return None
-    resolved = _resolve_variant_edit(variant, transcript, full_cdna)
+    resolved = resolve_variant_edit(variant, transcript, full_cdna)
     if resolved is not None:
         return resolved[0]
     start = getattr(variant, "trimmed_base1_start", None)
@@ -1289,7 +1289,7 @@ def _build_cryptic_site_mutant_transcript(
     if composed is None:
         return None
     mutant_cdna, edits = composed
-    mut_protein = _translate_from_cds(mutant_cdna, transcript, edits)
+    mut_protein = translate_from_cds(mutant_cdna, transcript, edits)
     mt = MutantTranscript(
         reference_transcript=transcript,
         edits=edits,

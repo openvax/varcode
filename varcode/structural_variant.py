@@ -59,7 +59,7 @@ downstream integrations without forcing them into the core class:
 from typing import Any, Mapping, NamedTuple, Optional, Tuple
 from warnings import warn
 
-from .contigs import _annotation_contig_name, normalize_contig_name
+from .contigs import annotation_contig_name, normalize_contig_name
 
 from .variant import Variant
 
@@ -90,20 +90,41 @@ class Breakend(NamedTuple):
     keeps: Optional[str] = None
 
 
-def _typed_event_details_from_breakends(a, b):
-    """The DEL / DUP / INV span that two paired breakend records
-    describe, or ``None`` when they don't describe one.
+def affected_span(variant) -> tuple[int, int]:
+    """Return inclusive 1-based reference coordinates changed by ``variant``.
 
-    Callers such as esvee and GRIDSS write deletions, duplications and
-    inversions as a pair of breakend records labeled ``SVTYPE=DEL`` and
-    so on. Given both halves, with contig names already normalized,
-    return ``(sv_type, start, end, affected_start, affected_end)``. The
-    first coordinate pair matches an equivalent ``<DEL>`` / ``<DUP>`` /
-    ``<INV>`` record, where ``start`` is the base before the event; the
-    second pair excludes retained anchor bases. Returns ``None`` unless
-    both halves agree on a same-contig DEL, DUP or INV label, point at
-    each other, and keep sides that fit that label.
+    Parameters
+    ----------
+    variant : StructuralVariant or span-like event
+        Structural variant or local event exposing ``start`` and optional
+        ``end`` / ``affected_start`` / ``affected_end``.
 
+    Returns
+    -------
+    tuple of (int, int)
+        Ordered ``(low, high)`` 1-based inclusive reference positions.
+    """
+    start = getattr(variant, "affected_start", variant.start)
+    end = getattr(variant, "affected_end", getattr(variant, "end", variant.start))
+    return min(start, end), max(start, end)
+
+
+def typed_event_details_from_breakends(a, b):
+    """Return the DEL / DUP / INV span that two paired breakends describe.
+
+    Parameters
+    ----------
+    a, b : StructuralVariant
+        Paired breakend records with normalized contig names.
+
+    Returns
+    -------
+    tuple or None
+        ``(sv_type, start, end, affected_start, affected_end)`` where the first
+        coordinate pair matches an equivalent symbolic ``<DEL>`` / ``<DUP>`` /
+        ``<INV>`` record and the second excludes retained anchor bases, or
+        ``None`` unless both halves agree on a same-contig label, point at each
+        other, and keep compatible sides.
     """
     from .sv_allele_parser import breakend_sides
 
@@ -187,7 +208,7 @@ def typed_event_from_breakends(a, b):
     typed. Retained VCF padding bases are excluded separately through the
     resulting :class:`StructuralVariant`'s affected-span coordinates.
     """
-    details = _typed_event_details_from_breakends(a, b)
+    details = typed_event_details_from_breakends(a, b)
     return details[:3] if details is not None else None
 
 
@@ -414,9 +435,9 @@ class StructuralVariant(Variant):
             raise ValueError(
                 "mate_contig=%r contradicts breakend ALT %r"
                 % (self.mate_contig, alt))
-        elif _annotation_contig_name(self.mate_contig, assembly, chrm_is_rcrs=self.chrm_is_rcrs) != (
-                _annotation_contig_name(contig, assembly, chrm_is_rcrs=self.chrm_is_rcrs)):
-            self.mate_contig = _annotation_contig_name(contig, assembly, chrm_is_rcrs=self.chrm_is_rcrs)
+        elif annotation_contig_name(self.mate_contig, assembly, chrm_is_rcrs=self.chrm_is_rcrs) != (
+                annotation_contig_name(contig, assembly, chrm_is_rcrs=self.chrm_is_rcrs)):
+            self.mate_contig = annotation_contig_name(contig, assembly, chrm_is_rcrs=self.chrm_is_rcrs)
         for field, value in (
                 ("mate_start", start), ("mate_orientation", orientation)):
             given = getattr(self, field)

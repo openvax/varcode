@@ -8,7 +8,7 @@ from pyensembl import cached_release
 from varcode import GermlineContext, TranscriptEdit, Variant
 from varcode.effects import EffectCollection, StartLoss
 from varcode.effects.effect_classes import PhaseCandidateSet
-from varcode.mutant_transcript import _translate_from_cds, apply_variants_to_transcript
+from varcode.mutant_transcript import translate_from_cds, apply_variants_to_transcript
 from varcode.nucleotides import reverse_complement
 
 
@@ -93,13 +93,13 @@ def test_initiation_obeys_genetic_code_without_changing_internal_codons(code, st
     transcript = SimpleNamespace(start_codon_spliced_offsets=(3, 4, 5),
                                  translation_table=code, start_codon=declared)
     sequence = "CCC" + start + "CTGTAA"
-    assert _translate_from_cds(sequence, transcript) == protein
+    assert translate_from_cds(sequence, transcript) == protein
     upstream = TranscriptEdit(1, 1, "AA")
-    assert _translate_from_cds(sequence[:1] + "AA" + sequence[1:], transcript, (upstream,)) == protein
+    assert translate_from_cds(sequence[:1] + "AA" + sequence[1:], transcript, (upstream,)) == protein
 
 
 def test_deleted_start_does_not_promote_downstream_alternate_initiator():
     transcript = SimpleNamespace(start_codon_spliced_offsets=(3, 4, 5), translation_table=1)
     deletion = TranscriptEdit(3, 6, "")
     # Removing ATG from CCCATGCTGTAA exposes an internal CTG, not a retained start.
-    assert _translate_from_cds("CCCCTGTAA", transcript, (deletion,)) == "L"
+    assert translate_from_cds("CCCCTGTAA", transcript, (deletion,)) == "L"

@@ -17,7 +17,7 @@ from pyensembl import cached_release
 from varcode import StructuralVariant
 from varcode.effects.codon_tables import translate_sequence
 from varcode.effects import GeneFusion
-from varcode.effects.structural import _build_fusion_mutant_transcript
+from varcode.effects.structural import build_fusion_mutant_transcript
 from varcode.nucleotides import reverse_complement
 from varcode.sv_allele_parser import breakend_inserted_sequence
 
@@ -101,7 +101,7 @@ def _transcript(reverse=False):
 def test_exonic_insert_translation_on_both_strands(reverse, insert, protein):
     five, three = _transcript(reverse), _transcript(reverse)
     five_pos, three_pos = (109, 108) if reverse else (105, 106)
-    model = _build_fusion_mutant_transcript(five, five, five_pos, three, three_pos, insert)
+    model = build_fusion_mutant_transcript(five, five, five_pos, three, three_pos, insert)
     assert model.cdna_sequence == "ATGAAA" + insert + "CCCGGGTAA"
     assert model.mutant_protein_sequence == protein
 
@@ -112,7 +112,7 @@ def test_exonic_insert_translation_on_both_strands(reverse, insert, protein):
     (115, 106, "unresolved_insertion_retention")])
 def test_insertion_retention_requires_splicing_evidence(five_pos, three_pos, status):
     five, three = _transcript(), _transcript()
-    model = _build_fusion_mutant_transcript(five, five, five_pos, three, three_pos, "AC")
+    model = build_fusion_mutant_transcript(five, five, five_pos, three, three_pos, "AC")
     assert model.evidence["junction_inserted_sequence"] == "AC"
     if status.startswith("unresolved"):
         assert model.evidence["sequence_status"] == status
@@ -129,7 +129,7 @@ def test_conflicting_mates_do_not_invent_a_junction_sequence():
     a.source_variants = (a, b)
     assert a.junction_inserted_sequence(a.junctions[0]) is None
     five, three = _transcript(), _transcript()
-    model = _build_fusion_mutant_transcript(five, five, 105, three, 106, None)
+    model = build_fusion_mutant_transcript(five, five, 105, three, 106, None)
     assert model.cdna_sequence is None
     assert model.mutant_protein_sequence is None
     assert model.evidence["sequence_status"] == "unresolved_junction_insertion"

@@ -11,7 +11,7 @@ from varcode.effect_hypotheses import RealizedTranscriptProduct, SplicePlan
 from varcode.effects import Failure, StartLoss, Substitution
 from varcode.germline import GermlineContext
 from varcode.genomic_layout import GenomicLayout
-from varcode.orf import _ORFTranscript, _reference_provider
+from varcode.orf import ORFTranscriptView, _reference_provider
 from varcode.transcript_layout import build_exon_runs, realize_exon_path, realize_splice_plan
 
 from .test_extra_orfs import synthetic
@@ -112,7 +112,7 @@ def test_patient_baseline_and_joint_haplotype_keep_declared_start(start):
 @pytest.mark.parametrize("splice_plan", [False, True])
 def test_both_splice_realization_paths_keep_split_declared_start(start, reverse, splice_plan):
     reference = declared_orf(start, reverse, split=True)
-    view = _ORFTranscript(reference)
+    view = ORFTranscriptView(reference)
     layout = GenomicLayout.from_transcript(view, flank=0, sequence_provider=_reference_provider(view))
     variant = reference.transcript.variant(6, "A", "G")
     mutant_layout = layout.apply_point_variant(variant)

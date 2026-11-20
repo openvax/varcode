@@ -32,11 +32,11 @@ from .effects.effect_classes import (
 from .effects.transcript_helpers import has_complete_coding_sequence
 from .effects.effect_ordering import classification_priority
 from .errors import HypothesisLimitError, ReferenceMismatchError
-from .genome_sequence import _plus_strand_slice, reference_range
+from .genome_sequence import plus_strand_slice, reference_range
 from .circular_origin import TranscriptFrame
 from .genomic_layout import GenomicLayout, NonlocalStructuralEdit
 from .germline import (
-    _check_max_hypotheses, detect_germline_overlap, partition_germline_by_phase)
+    check_max_hypotheses, detect_germline_overlap, partition_germline_by_phase)
 from .nucleotides import reverse_complement
 from .splice_graph import disrupted_splice_sites, enumerate_paired_splice_plans
 from .transcript_layout import (
@@ -47,14 +47,29 @@ from .transcript_layout import (
 from .version import __version__ as _varcode_version
 
 
-def _provider_for_genome(genome, transcript):
-    """Reuse the selected annotation when DNA is absent; keep DNA priority."""
+def provider_for_genome(genome, transcript):
+    """Build a memoized ``(contig, start, end) -> str`` sequence provider.
+
+    Parameters
+    ----------
+    genome : Genome-like
+        Reference genome (prefers attached ``genome.fasta`` when present).
+    transcript : Transcript-like
+        Selected reference transcript for cDNA exon-slice reuse when chromosome
+        FASTA is absent.
+
+    Returns
+    -------
+    callable
+        1-based inclusive sequence lookup raising ``SequenceUnavailable`` when
+        no source covers the requested span.
+    """
     has_dna = getattr(genome, "fasta", None) is not None
 
     @lru_cache(maxsize=1024)
     def provider(contig, start, end):
         sequence = ("" if has_dna or contig != transcript.contig else
-                    _plus_strand_slice(transcript, start, end))
+                    plus_strand_slice(transcript, start, end))
         if not sequence:
             sequence = reference_range(genome, contig, start, end)
         if not sequence:
@@ -119,9 +134,24 @@ def _unique_alleles(variants):
     return tuple(unique)
 
 
-def _refine_transcript_model_effect(effect, observed):
-    """Reconcile RNA products into the existing phase/splice outcomes.
+def refine_transcript_model_effect(effect, observed):
+    """Reconcile RNA products into an existing transcript-model effect's outcomes.
 
+    Parameters
+    ----------
+    effect : MutationEffect
+        Effect carrying ``realized_candidates``.
+    observed : iterable of EffectCandidate
+        RNA-observed outcome candidates.
+
+    Returns
+    -------
+    MutationEffect
+        Updated effect when ``observed`` adds support or unmatched RNA models;
+        otherwise ``effect`` unchanged.
+
+    Notes
+    -----
     Exact full-product matches support every compatible hypothesis, including
     distinct baselines that produce the same RNA. Partial or unmatched models
     remain explicit observed products with an unresolved comparison; their
@@ -227,9 +257,9 @@ def predict_transcript_model_effect(
     baseline to obtain the mutant. Repeated normalized alleles are edited
     once. Other germline alleles retain their phase uncertainty.
     """
-    max_hypotheses = _check_max_hypotheses(max_hypotheses)
+    max_hypotheses = check_max_hypotheses(max_hypotheses)
     max_phase_hypotheses = max_hypotheses if max_phase_hypotheses is None else (
-        _check_max_hypotheses(max_phase_hypotheses, "max_phase_hypotheses"))
+        check_max_hypotheses(max_phase_hypotheses, "max_phase_hypotheses"))
     variants = tuple(variants)
     if not variants:
         raise ValueError("predict_transcript_model_effect requires a somatic variant")
@@ -264,7 +294,7 @@ def predict_transcript_model_effect(
     if not has_complete_coding_sequence(transcript):
         return IncompleteTranscript(primary, transcript)
     if sequence_provider is None:
-        sequence_provider = _provider_for_genome(primary.genome, transcript)
+        sequence_provider = provider_for_genome(primary.genome, transcript)
 
     phase = partition_germline_by_phase(
         primary, germline_variants, phase_resolver,

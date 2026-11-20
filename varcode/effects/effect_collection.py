@@ -52,12 +52,17 @@ def _effect_genome(effect):
     return getattr(effect.variant, "genome", None) or getattr(effect.reference_transcript, "genome", None)
 
 
-def _default_effect_sort_key(effect):
-    """Default sort key for EffectCollection: highest-priority effects
-    first. Negating the priority integer turns Python's ascending sort
-    into descending-by-priority. See openvax/varcode#227.
+def default_effect_sort_key(effect: MutationEffect) -> int:
+    """Default sort key for :class:`EffectCollection`: highest-priority effects first.
+
+    Negating the priority integer turns Python's ascending sort into
+    descending-by-priority (openvax/varcode#227).
     """
     return -effect_priority(effect)
+
+
+# Backwards-compatible alias for legacy serialized EffectCollection archives.
+_default_effect_sort_key = default_effect_sort_key
 
 
 class EffectCollection(Collection):
@@ -109,7 +114,7 @@ class EffectCollection(Collection):
             Populated by :func:`predict_variant_effects`.
         """
         if sort_key is None:
-            sort_key = _default_effect_sort_key
+            sort_key = default_effect_sort_key
         elif sort_key is False:
             sort_key = None
         if sources is None:
@@ -158,6 +163,18 @@ class EffectCollection(Collection):
     def groupby(self, key_fn: Callable[[MutationEffect], _Key]) -> dict[_Key, Self]:
         """Group effects into collections retaining their native metadata."""
         return super().groupby(key_fn)
+
+    @classmethod
+    def from_json(cls, json_string: str | bytes) -> Self:
+        """Decode an archived :class:`EffectCollection` using the finite reviewed class allowlist."""
+        from .structural_serialization import effect_collection_from_json
+
+        result = effect_collection_from_json(json_string)
+        if not isinstance(result, cls):
+            raise ValueError(
+                f"Expected archive root to decode to {cls.__name__}, "
+                f"got {type(result).__name__}")
+        return result
 
     def clone_with_new_elements(self, new_elements: Iterable[MutationEffect]) -> Self:
         # Forward annotator provenance explicitly — sercol's base
@@ -607,15 +624,12 @@ class EffectCollection(Collection):
         df = pd.read_csv(
             path, comment="#", dtype={"chr": str, "contig": str, **dict.fromkeys(REFERENCE_COLUMNS, str)})
         if "effect_json" in df:
-            from .effect_classes import MutationEffect
+            from .structural_serialization import effect_from_json
             if df["effect_json"].isna().any():
                 raise ValueError("Incomplete effect_json archive column; every row must retain its effect")
             effects = []
             for payload in df["effect_json"]:
-                effect = MutationEffect.from_json(payload)
-                if not isinstance(effect, MutationEffect):
-                    raise ValueError("effect_json row does not contain a mutation effect")
-                effects.append(effect)
+                effects.append(effect_from_json(payload))
             result = cls(effects, sort_key=False,
                          annotator=header.get("annotator"), annotator_version=header.get("annotator_version"),
                          annotated_at=header.get("annotated_at"))

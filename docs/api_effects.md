@@ -64,3 +64,27 @@ offline provenance, alternatives and reference composition.
 ::: varcode.classification_priority
 
 ::: varcode.top_priority_effect
+
+## Effect graph serialization
+
+Safe finite-allowlist JSON encoding and decoding for native effect and
+`EffectCollection` archives (ordinary, phased, germline, structural, and ORF
+graphs) without importing arbitrary classes or functions from input files.
+
+::: varcode.effect_serialization_classes
+
+::: varcode.EffectReference
+
+::: varcode.AssembledAllele
+
+::: varcode.effect_to_json
+
+::: varcode.effect_from_json
+
+::: varcode.effect_from_serializable_repr
+
+::: varcode.effect_collection_to_json
+
+::: varcode.effect_collection_from_json
+
+::: varcode.effect_collection_from_serializable_repr

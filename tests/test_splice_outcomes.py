@@ -785,11 +785,11 @@ def test_splice_outcome_set_sorts_as_disrupted_signal_class():
     would."""
     from varcode.effects import effect_priority
     from varcode.effects.effect_prediction import (
-        _predict_variant_effect_on_transcript_raw,
+        predict_variant_effect_on_transcript_raw,
     )
     variant = Variant("7", 117531115, "G", "A", ensembl_grch38)
     transcript = ensembl_grch38.transcript_by_id(CFTR_TRANSCRIPT_ID)
-    raw = _predict_variant_effect_on_transcript_raw(variant, transcript)
+    raw = predict_variant_effect_on_transcript_raw(variant, transcript)
     assert isinstance(raw, SpliceDonor)
     splice_set = variant.effect_on_transcript(transcript)
     assert isinstance(splice_set, SpliceOutcomeSet)

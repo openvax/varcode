@@ -106,7 +106,7 @@ _STRUCT_FIELD_RE = re.compile(
 )
 
 
-def _split_struct_fields(body: str) -> "OrderedDict[str, str]":
+def split_struct_fields(body: str) -> "OrderedDict[str, str]":
     """Parse the body of a structured header line into an ordered dict.
 
     The body is what's between ``<`` and ``>`` of an ``##INFO=<...>`` /
@@ -148,7 +148,7 @@ def _parse_number(s: str) -> Optional[int]:
 
 
 def _parse_field_decl(body: str) -> FieldDef:
-    f = _split_struct_fields(body)
+    f = split_struct_fields(body)
     return FieldDef(
         id=f["ID"],
         number=_parse_number(f["Number"]),

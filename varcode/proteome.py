@@ -19,7 +19,7 @@ from .effect_hypotheses import ClassifiedOutcome, RealizedEffectCandidate
 from .effects import EffectCollection, Failure, HypothesisLimit, MutationEffect, Unresolved
 from .effects.structural_serialization import structural_effect_to_dict
 from .orf import ORFAnnotation, ORFOutcome
-from .orf_serialization import _ReferenceGenome
+from .orf_serialization import ReferenceGenomeSnapshot
 
 if TYPE_CHECKING:
     from orfdata import Proteome
@@ -118,12 +118,12 @@ def _label(effect, annotation=None, kind=None):
 def _variant_identity(variant):
     # to_dict includes original alleles and structural breakend orientation.
     state = dict(variant.to_dict())
-    state["genome"] = _ReferenceGenome.capture(variant.genome).metadata
+    state["genome"] = ReferenceGenomeSnapshot.capture(variant.genome).metadata
     return _json(state)
 
 
 def _transcript_identity(transcript):
-    return dict(id=transcript.id, genome=_ReferenceGenome.capture(transcript.genome).metadata)
+    return dict(id=transcript.id, genome=ReferenceGenomeSnapshot.capture(transcript.genome).metadata)
 
 
 def _transcripts(effect, annotation=None):
@@ -171,7 +171,7 @@ def _mechanism_context(effect):
                    for edit in model.edits],
             segments=None if model.reference_segments is None else [dict(
                 start=segment.start, end=segment.end, strand=segment.strand, label=segment.label,
-                source=dict(feature_identity(segment.source), genome=_ReferenceGenome.capture(
+                source=dict(feature_identity(segment.source), genome=ReferenceGenomeSnapshot.capture(
                     getattr(segment.source, "genome", segment.source)).metadata)) for segment in model.reference_segments])
     return context
 
@@ -310,7 +310,7 @@ def _identity(value, defaults, contexts=()):
         genes=[dict(id=gene.id, contig=getattr(gene, "contig", None),
                     start=getattr(gene, "start", None), end=getattr(gene, "end", None),
                     strand=getattr(gene, "strand", None),
-                    genome=_ReferenceGenome.capture(getattr(gene, "genome", None)).metadata)
+                    genome=ReferenceGenomeSnapshot.capture(getattr(gene, "genome", None)).metadata)
                for gene in _genes(effect) if not transcripts],
         model=None if model is None else dict(
             orf_id=model.orf_id, source=model.source, transcript_id=model.transcript_id,

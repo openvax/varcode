@@ -250,7 +250,7 @@ class GermlineContext:
     max_phase_hypotheses: int = DEFAULT_MAX_PHASE_HYPOTHESES
 
     def __post_init__(self):
-        object.__setattr__(self, "max_phase_hypotheses", _check_max_hypotheses(
+        object.__setattr__(self, "max_phase_hypotheses", check_max_hypotheses(
             self.max_phase_hypotheses, "max_phase_hypotheses"))
 
     # --- Constructors -------------------------------------------------------
@@ -783,9 +783,26 @@ class PhaseHypothesis:
     phase_state: str = "unknown"
 
 
-def _check_max_hypotheses(value, name="max_hypotheses"):
-    """Return ``value`` as an int if it is a positive integer (NumPy
-    integers included, booleans excluded); otherwise raise ValueError."""
+def check_max_hypotheses(value, name="max_hypotheses"):
+    """Validate and coerce ``value`` as a positive integer hypothesis limit.
+
+    Parameters
+    ----------
+    value : int-like
+        Candidate hypothesis bound (NumPy integers included, booleans excluded).
+    name : str, default "max_hypotheses"
+        Parameter name used in error messages.
+
+    Returns
+    -------
+    int
+        Validated positive integer limit.
+
+    Raises
+    ------
+    ValueError
+        If ``value`` is a boolean, not an integer, or ``< 1``.
+    """
     if (isinstance(value, numbers.Integral) and not isinstance(value, bool)
             and value >= 1):
         return int(value)
@@ -847,7 +864,7 @@ class PhasePartition(DataclassSerializable):
         HypothesisLimitError
             When :attr:`hypothesis_count` exceeds ``max_hypotheses``.
         """
-        max_hypotheses = _check_max_hypotheses(max_hypotheses)
+        max_hypotheses = check_max_hypotheses(max_hypotheses)
         blocks = self.blocks
         if not blocks:
             return (self._hypothesis(
@@ -1112,7 +1129,7 @@ def predict_germline_aware_effect(
         PhaseCandidateSet,
     )
 
-    limit = _check_max_hypotheses(
+    limit = check_max_hypotheses(
         germline_ctx.max_phase_hypotheses if max_hypotheses is None
         else max_hypotheses)
     if not isinstance(transcript, Transcript):

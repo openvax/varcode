@@ -336,14 +336,14 @@ def test_alternate_start_codon_atg_to_ctg_agrees(dual_annotator):
 @pytest.mark.parametrize("alt", ["CAG", "CAA", "CAT", "TTT", "A", "AG"])
 def test_insertion_before_retained_start_codon_is_five_prime_utr(
         annotator, transcript_id, alt):
-    from varcode.mutant_transcript import _translate_from_cds, apply_variant_to_transcript
+    from varcode.mutant_transcript import apply_variant_to_transcript, translate_from_cds
 
     t = ensembl_grch38.transcript_by_id(transcript_id)
     anchor = (max(t.start_codon_positions) if t.on_backward_strand
               else min(t.start_codon_positions) - 1)
     variant = Variant(t.contig, anchor, "", alt, ensembl_grch38)
     mt = apply_variant_to_transcript(variant, t)
-    assert _translate_from_cds(mt.cdna_sequence, t, mt.edits) == t.protein_sequence
+    assert translate_from_cds(mt.cdna_sequence, t, mt.edits) == t.protein_sequence
     effect = variant.effect_on_transcript(t, annotator=annotator)
     assert isinstance(effect, FivePrimeUTR)
     assert effect.modifies_coding_sequence is False

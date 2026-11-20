@@ -369,7 +369,7 @@ def apply_phase_resolver_to_effects(effects, phase_resolver):
         if getattr(e, "realized_candidates", None):
             from .effects.effect_classes import Unresolved
             from .rna_evidence import make_rna_outcome
-            from .transcript_model import _refine_transcript_model_effect
+            from .transcript_model import refine_transcript_model_effect
 
             observations = []
             for member in getattr(e, "variants", (variant,)):
@@ -380,7 +380,7 @@ def apply_phase_resolver_to_effects(effects, phase_resolver):
                     observations.append(make_rna_outcome(
                         observed, source=model.annotator_name, extra_evidence=model.evidence))
             if observations:
-                refined = _refine_transcript_model_effect(e, observations)
+                refined = refine_transcript_model_effect(e, observations)
                 changed = changed or refined is not e
                 e = refined
         else:
@@ -389,8 +389,8 @@ def apply_phase_resolver_to_effects(effects, phase_resolver):
                 e.mutant_transcript = model
         replacements.append(e)
     if changed:
-        from .rna_evidence import _replace_effects
-        return _replace_effects(effects, replacements)
+        from .rna_evidence import replace_effects
+        return replace_effects(effects, replacements)
     return effects
 
 

@@ -147,7 +147,7 @@ def load_vcf_samples(path, *, kind="germline", assembly=None, samples=None, conf
     list of SampleFingerprint
         One entry per selected column, including samples with no usable calls.
     """
-    from ._sample_vcf import read_samples
+    from .sample_vcf import read_samples
     return read_samples(path, kind, assembly, samples, config or SampleCheckConfig())
 
 

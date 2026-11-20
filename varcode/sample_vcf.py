@@ -7,12 +7,12 @@ import heapq
 import math
 from pathlib import Path
 
-from .contigs import _annotation_contig_name
+from .contigs import annotation_contig_name
 from .genotype import parse_gt_string
 from .reference import infer_reference_name, ucsc_to_ensembl_reference_names
 from .sample_identity import SampleFingerprint, SampleSpec
 from .string_helpers import trim_shared_flanking_strings
-from .vcf import _declares_rcrs_chrm
+from .vcf import declares_rcrs_chrm
 from .vcf_parsing import VCFHeader
 
 _AUTOSOMES = frozenset(str(i) for i in range(1, 23))
@@ -37,7 +37,7 @@ def _contig(chrom, build, chrm_is_rcrs):
     variants on contig 0, which no annotation has; it stays 0."""
     if chrom == "0":
         return chrom
-    return _annotation_contig_name(chrom, build, chrm_is_rcrs=chrm_is_rcrs)
+    return annotation_contig_name(chrom, build, chrm_is_rcrs=chrm_is_rcrs)
 
 
 def _number(value):
@@ -330,7 +330,7 @@ def read_samples(path, kind, assembly, specs, config):
         if build not in _BUILDS:
             raise ValueError("Declare assembly=GRCh37 or GRCh38; VCF reference is %s"
                              % ("unrecognized" if build is None else "unsupported: " + build))
-        chrm_is_rcrs = build == "GRCh37" and _declares_rcrs_chrm(header)
+        chrm_is_rcrs = build == "GRCh37" and declares_rcrs_chrm(header)
         selected = _select(header, specs, kind)
         samples = [SampleFingerprint(label=s.label or "%s::%s" % (path, s.sample),
                                      sample=s.sample, path=str(path), sha256=digest.hexdigest(),

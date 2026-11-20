@@ -171,14 +171,14 @@ def _build_combined(a, b, a_id, b_id):
     when A doesn't already carry it (which is the common case — A's
     ``mate_contig`` already points at B's contig).
     """
-    from ..structural_variant import _typed_event_details_from_breakends
+    from ..structural_variant import typed_event_details_from_breakends
     mate_contig = a.mate_contig if a.mate_contig is not None else b.contig
     mate_start = a.mate_start if a.mate_start is not None else b.start
     # When both halves carry the same DEL / DUP / INV label from their
     # caller and their kept sides fit it, the pair describes that event
     # and the combined row spans it. Otherwise it stays a breakend at
     # A's position.
-    typed = _typed_event_details_from_breakends(a, b)
+    typed = typed_event_details_from_breakends(a, b)
     if typed:
         sv_type, start, end, affected_start, affected_end = typed
     else:

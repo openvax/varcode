@@ -16,7 +16,7 @@ from .effect_traversal import iter_candidate_paths
 from .effects.codon_tables import codon_table_for_transcript
 from .effects.effect_classes import MutationEffect, StartGain
 from .mutant_transcript import MutantTranscript
-from .orf import _plain
+from .orf import plain_json_value
 from .reference_metadata import reference_metadata
 
 
@@ -173,8 +173,8 @@ def discover_created_orfs_in_products(baseline, mutant, *, variant=None, policy=
         raise TypeError("paired inputs must be RealizedTranscriptProduct objects")
     before, after = baseline.cdna_sequence, mutant.cdna_sequence
     evidence = dict(source_evidence or {})
-    evidence.update(hypothesis=_plain(hypothesis), policy=policy.to_dict(),
-                    baseline_evidence=_plain(baseline.evidence), mutant_evidence=_plain(mutant.evidence),
+    evidence.update(hypothesis=plain_json_value(hypothesis), policy=policy.to_dict(),
+                    baseline_evidence=plain_json_value(baseline.evidence), mutant_evidence=plain_json_value(mutant.evidence),
                     mutant_translation_evidence="not_assessed", downstream_cds_regulation="not_assessed")
 
     def assessment(status, reasons, effects=(), scanned=0):
@@ -296,7 +296,7 @@ def discover_created_orfs(effect, *, policy=None):
         candidate = next((item for item in reversed(path)
                           if isinstance(item, RealizedEffectCandidate) and item.effect is node), None)
         context = dict(source_effect=type(node).__name__, candidate_path=tuple(
-            dict(source=getattr(item, "source", None), evidence=_plain(getattr(item, "evidence", {})),
+            dict(source=getattr(item, "source", None), evidence=plain_json_value(getattr(item, "evidence", {})),
                  ordinal_key=getattr(item, "ordinal_key", None)) for item in path))
         if node is not None and node.reference_transcript is not None:
             context.update(transcript_id=node.transcript_id,

@@ -32,10 +32,20 @@ from .nucleotides import reverse_complement
 
 
 @dataclass
-class _AssembledAllele(DataclassSerializable):
-    """Sequence provider for an externally assembled ReferenceSegment."""
+class AssembledAllele(DataclassSerializable):
+    """Sequence provider for an externally assembled :class:`ReferenceSegment`.
+
+    Parameters
+    ----------
+    sequence : str
+        Oriented 5'-to-3' nucleotide sequence for the assembled segment.
+    """
 
     sequence: str
+
+
+# Backwards-compatible alias for existing serialized/pickled graphs.
+_AssembledAllele = AssembledAllele
 
 
 @dataclass(frozen=True)
@@ -282,7 +292,7 @@ class MutantTranscript(DataclassSerializable):
         return cls(
             reference_transcript=reference_transcript,
             reference_segments=(ReferenceSegment(
-                source=_AssembledAllele(sequence), start=0, end=len(sequence),
+                source=AssembledAllele(sequence), start=0, end=len(sequence),
                 label=label),),
             cdna_sequence=sequence,
             mutant_protein_sequence=mutant_protein_sequence,
@@ -321,16 +331,26 @@ class MutantTranscript(DataclassSerializable):
 # ---------------------------------------------------------------------
 
 
-def _resolve_variant_edit(variant, transcript, full_sequence):
-    """Resolve a single :class:`~varcode.Variant` to a
-    :class:`TranscriptEdit` against ``transcript``'s cDNA.
+def resolve_variant_edit(variant, transcript, full_sequence):
+    """Resolve a single :class:`~varcode.Variant` to a :class:`TranscriptEdit`.
 
-    Returns a tuple ``(edit, cdna_anchor_offset)`` where
-    ``cdna_anchor_offset`` is the pre-edit cDNA offset used by
-    translation logic to decide whether the variant lands after
-    the CDS start. Returns ``None`` when the variant can't be
-    cleanly resolved (non-coding / incomplete / multi-exon span /
-    reference mismatch).
+    Parameters
+    ----------
+    variant : Variant
+        Point variant or indel to map onto ``transcript``.
+    transcript : Transcript-like
+        Target spliced transcript exposing ``exons`` and ``on_backward_strand``.
+    full_sequence : str
+        Full spliced cDNA sequence of ``transcript``.
+
+    Returns
+    -------
+    tuple of (TranscriptEdit, int) or None
+        ``(edit, cdna_anchor_offset)`` where ``cdna_anchor_offset`` is the
+        pre-edit cDNA offset used by translation logic to decide whether the
+        variant lands after the CDS start, or ``None`` when the variant cannot
+        be cleanly resolved (multi-exon span, out-of-range, or reference
+        mismatch).
     """
     from .effects.transcript_helpers import interval_offset_on_transcript
 
@@ -385,23 +405,75 @@ def _resolve_variant_edit(variant, transcript, full_sequence):
     return (edit, cdna_offset)
 
 
-def _mutant_cds_start(transcript, edits=()):
-    """Map the reference CDS start past edits wholly upstream of it."""
+def mutant_cds_start(transcript, edits=()):
+    """Map the reference CDS start past edits wholly upstream of it.
+
+    Parameters
+    ----------
+    transcript : Transcript-like
+        Reference transcript exposing ``start_codon_spliced_offsets``.
+    edits : iterable of TranscriptEdit, default ()
+        Sorted reference-coordinate cDNA edits.
+
+    Returns
+    -------
+    int
+        Zero-based cDNA offset of the start codon in the edited transcript.
+    """
     from .effects.selenocysteine import edit_shift
 
     reference_start = min(transcript.start_codon_spliced_offsets)
     return reference_start + edit_shift(reference_start, edits)
 
 
-def _translate_from_cds(mutant_cdna, transcript, edits=()):
-    """Translate ``mutant_cdna`` from the canonical CDS start to the
-    first stop. ``edits`` (in reference coordinates) locate that start,
-    and the annotated selenocysteine codons they leave intact, in the
-    mutant. Recognized codons at a retained start initiate as Met;
-    internal codons keep their ordinary genetic-code assignments.
-    Returns ``None`` if the CDS start is past the cDNA end or translation
-    errors. A disrupted start still has a literal translation here for
-    classification; StartLoss clears the resulting unknown protein.
+def retained_cds_start(model, transcript):
+    """Map all three annotated start-codon bases across ``model.reference_segments``.
+
+    Parameters
+    ----------
+    model : MutantTranscript
+        Segment-assembled mutant transcript model.
+    transcript : Transcript-like
+        Reference transcript supplying ``start_codon_spliced_offsets``.
+
+    Returns
+    -------
+    int or None
+        Zero-based offset in ``model.cdna_sequence`` where all three bases of
+        ``transcript``'s start codon remain contiguous on the ``+`` segment
+        strand (including across split segment boundaries), or ``None`` if lost.
+    """
+    positions = [set(), set(), set()]
+    start = min(transcript.start_codon_spliced_offsets)
+    offset = 0
+    for segment in model.reference_segments or ():
+        if segment.source == transcript and segment.strand == "+":
+            for i in range(3):
+                if segment.start <= start + i < segment.end:
+                    positions[i].add(offset + start + i - segment.start)
+        offset += segment.length
+    return next((p for p in sorted(positions[0])
+                 if p + 1 in positions[1] and p + 2 in positions[2]), None)
+
+
+def translate_from_cds(mutant_cdna, transcript, edits=()):
+    """Translate ``mutant_cdna`` from the canonical CDS start to the first stop.
+
+    Parameters
+    ----------
+    mutant_cdna : str
+        Edited spliced cDNA sequence.
+    transcript : Transcript-like
+        Reference transcript supplying genetic code, start offsets, and Sec sites.
+    edits : iterable of TranscriptEdit, default ()
+        Reference-coordinate edits applied to obtain ``mutant_cdna``.
+
+    Returns
+    -------
+    str or None
+        Translated protein sequence (with retained recognized initiators decoded
+        as ``M``), or ``None`` if the CDS start lies past ``mutant_cdna`` or
+        translation fails.
     """
     from .effects.codon_tables import (
         codon_table_for_transcript,
@@ -409,7 +481,7 @@ def _translate_from_cds(mutant_cdna, transcript, edits=()):
         translate_sequence,
     )
     from .effects.selenocysteine import edited_selenocysteine
-    cds_start = _mutant_cds_start(transcript, edits)
+    cds_start = mutant_cds_start(transcript, edits)
     if cds_start >= len(mutant_cdna):
         return None
     codon_table = codon_table_for_transcript(transcript)
@@ -466,7 +538,7 @@ def apply_variant_to_transcript(variant, transcript):
         return None
 
     full_sequence = str(transcript.sequence)
-    resolved = _resolve_variant_edit(variant, transcript, full_sequence)
+    resolved = resolve_variant_edit(variant, transcript, full_sequence)
     if resolved is None:
         return None
     edit, cdna_offset = resolved
@@ -478,7 +550,7 @@ def apply_variant_to_transcript(variant, transcript):
     mutant_protein = None
     cds_start = min(transcript.start_codon_spliced_offsets)
     if cdna_offset >= cds_start:
-        mutant_protein = _translate_from_cds(mutant_cdna, transcript, (edit,))
+        mutant_protein = translate_from_cds(mutant_cdna, transcript, (edit,))
     return MutantTranscript(
         reference_transcript=transcript,
         edits=(edit,),
@@ -520,7 +592,7 @@ def apply_variants_to_transcript(variants, transcript):
     full_sequence = str(transcript.sequence)
     resolved = []
     for variant in variants:
-        r = _resolve_variant_edit(variant, transcript, full_sequence)
+        r = resolve_variant_edit(variant, transcript, full_sequence)
         if r is None:
             return None
         resolved.append(r)
@@ -558,7 +630,7 @@ def apply_variants_to_transcript(variants, transcript):
     mutant_protein = None
     cds_start = min(transcript.start_codon_spliced_offsets)
     if any(anchor >= cds_start for _, anchor in resolved):
-        mutant_protein = _translate_from_cds(
+        mutant_protein = translate_from_cds(
             mutant_cdna, transcript, [edit for edit, _ in resolved])
     return MutantTranscript(
         reference_transcript=transcript,

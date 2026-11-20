@@ -14,20 +14,27 @@ from varcode import (
 )
 from varcode.effect_hypotheses import RealizedTranscriptProduct
 from varcode.effects import StartGain
-from varcode.orf_serialization import _Feature, _ReferenceGenome, _ReferenceTranscript
+from varcode.orf_serialization import (
+    ReferenceGenomeSnapshot,
+    ReferenceTranscriptSnapshot,
+    TranscriptFeatureSnapshot,
+)
 from .common import complement, translate_to_stop
 
 
 def host(sequence, reverse=False, table=1):
-    genome = _ReferenceGenome(dict(reference_name="fixture", species="homo_sapiens", taxon_id=9606,
-                                  annotation_name="synthetic", annotation_version="1"))
-    return _ReferenceTranscript(
+    genome = ReferenceGenomeSnapshot(dict(
+        reference_name="fixture", species="homo_sapiens", taxon_id=9606,
+        annotation_name="synthetic", annotation_version="1"))
+    return ReferenceTranscriptSnapshot(
         dict(id="noncoding-host", name="NCRNA", contig="1", strand="-" if reverse else "+",
              start=1, end=len(sequence), sequence=sequence, protein_sequence=None,
              biotype="lncRNA", is_protein_coding=False, complete=False,
              contains_start_codon=False, contains_stop_codon=False,
              on_backward_strand=reverse, on_forward_strand=not reverse, translation_table=table),
-        genome, (_Feature(1, len(sequence)),), _Feature(1, len(sequence), "gene", "GENE"))
+        genome,
+        (TranscriptFeatureSnapshot(1, len(sequence)),),
+        TranscriptFeatureSnapshot(1, len(sequence), "gene", "GENE"))
 
 
 def product(tx, sequence, origins=None, **evidence):

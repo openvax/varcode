@@ -6,7 +6,7 @@ from pyensembl import cached_release
 from varcode import EffectCollection, Variant, predict_transcript_model_effect
 from varcode.effect_hypotheses import RealizedEffectCandidate, ClassifiedOutcome
 from varcode.effects import Substitution
-from varcode.effects.structural_serialization import _EffectReference
+from varcode.effects.structural_serialization import EffectReference
 
 
 def assert_realized_annotation_equal(before, after):
@@ -74,6 +74,6 @@ def test_graph_schema_and_references_are_validated(uncertain_effect):
         cls.from_dict({**state, "effect_graph_schema": 99})
     nodes = list(state["nodes"])
     root_cls, fields, attached = nodes[0]
-    nodes[0] = (root_cls, fields, {**attached, "most_likely_candidate": _EffectReference(-1)})
+    nodes[0] = (root_cls, fields, {**attached, "most_likely_candidate": EffectReference(-1)})
     with pytest.raises(ValueError, match="Invalid.*reference"):
         cls.from_dict({**state, "nodes": nodes})

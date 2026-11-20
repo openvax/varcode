@@ -6,10 +6,10 @@ Use :mod:`varcode.orf` and ``record.bind(transcript)`` for new callers.
 from .effects.common import warn_deprecated
 from .orf import (
     ORFAnnotation,
-    _ORFTranscript,
-    _annotate_orf_variants,
-    _bind,
+    ORFTranscriptView,
+    annotate_bound_orf_variants,
     annotate_orf_product,
+    bind_orf_reference,
     predict_orf_effects,
 )
 
@@ -46,14 +46,14 @@ def load_uorf_catalog(*args, **kwargs):
     return load(*args, **kwargs)
 
 
-class ORFTranscript(_ORFTranscript):
+class ORFTranscript(ORFTranscriptView):
     """Deprecated engine view; will be removed in varcode 12.0. Use ``record.bind(transcript)``."""
 
     def __init__(self, record, transcript, *, genome_build, reference_context=None):
         warn_deprecated(
             "ORFTranscript is deprecated and will be removed in varcode 12.0; "
             "use record.bind(transcript)")
-        super().__init__(_bind(record, transcript, genome_build, reference_context=reference_context))
+        super().__init__(bind_orf_reference(record, transcript, genome_build, reference_context=reference_context))
 
 
 def annotate_uorf_variants(variants, record, transcript, *, genome_build, **kwargs):
@@ -65,8 +65,8 @@ def annotate_uorf_variants(variants, record, transcript, *, genome_build, **kwar
     warn_deprecated(
         "annotate_uorf_variants is deprecated and will be removed in varcode 12.0; "
         "bind the record and use annotate_orf_variants")
-    return _annotate_orf_variants(variants, record, transcript,
-                                 genome_build=genome_build, **kwargs)
+    return annotate_bound_orf_variants(variants, record, transcript,
+                                       genome_build=genome_build, **kwargs)
 
 
 def annotate_uorf_product(record, transcript, product, *, genome_build, reference_context=None):
@@ -78,8 +78,8 @@ def annotate_uorf_product(record, transcript, product, *, genome_build, referenc
     warn_deprecated(
         "annotate_uorf_product is deprecated and will be removed in varcode 12.0; "
         "bind the record and use annotate_orf_rna_product or annotate_orf_product")
-    return annotate_orf_product(_bind(record, transcript, genome_build,
-                                     reference_context=reference_context), product)
+    return annotate_orf_product(bind_orf_reference(record, transcript, genome_build,
+                                                   reference_context=reference_context), product)
 
 
 def predict_uorf_effects(variants, *, catalog=None, **kwargs):

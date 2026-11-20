@@ -11,6 +11,16 @@
 # limitations under the License.
 
 from .effect_collection import EffectCollection
+from .structural_serialization import (
+    EffectReference,
+    effect_collection_from_json,
+    effect_collection_from_serializable_repr,
+    effect_collection_to_json,
+    effect_from_json,
+    effect_from_serializable_repr,
+    effect_serialization_classes,
+    effect_to_json,
+)
 from .effect_ordering import (
     effect_priority,
     classification_priority,
@@ -74,6 +84,14 @@ from .effect_classes import (
 
 __all__ = [
     "EffectCollection",
+    "EffectReference",
+    "effect_collection_from_json",
+    "effect_collection_from_serializable_repr",
+    "effect_collection_to_json",
+    "effect_from_json",
+    "effect_from_serializable_repr",
+    "effect_serialization_classes",
+    "effect_to_json",
     # effect ordering
     "effect_priority",
     "classification_priority",

@@ -218,7 +218,21 @@ def make_rna_outcome(
     )
 
 
-def _replace_effects(effects, replacements):
+def replace_effects(effects, replacements):
+    """Replace elements of an ``EffectCollection`` or mutable sequence in place.
+
+    Parameters
+    ----------
+    effects : EffectCollection or sequence
+        Target collection or sequence of effects.
+    replacements : sequence of MutationEffect
+        Updated effects in matching order.
+
+    Returns
+    -------
+    EffectCollection or sequence
+        Updated ``effects`` container (or a ``tuple`` when ``effects`` is immutable).
+    """
     if hasattr(effects, "elements") and hasattr(effects, "effects"):
         effects.elements = replacements
         effects.effects = replacements
@@ -293,8 +307,8 @@ def apply_rna_evidence_to_effects(effects: Iterable, resolver) -> Iterable:
             replacements.append(effect)
             continue
         if realized:
-            from .transcript_model import _refine_transcript_model_effect
-            replacements.append(_refine_transcript_model_effect(effect, observed_tuple))
+            from .transcript_model import refine_transcript_model_effect
+            replacements.append(refine_transcript_model_effect(effect, observed_tuple))
             changed = True
             continue
         if not isinstance(effect, MultiOutcomeEffect):
@@ -311,5 +325,5 @@ def apply_rna_evidence_to_effects(effects: Iterable, resolver) -> Iterable:
             effect._extra_candidates = tuple(existing) + observed_tuple
             replacements.append(effect)
     if changed:
-        return _replace_effects(effects, replacements)
+        return replace_effects(effects, replacements)
     return effects

@@ -410,14 +410,22 @@ def _exact_reference_names():
 _exact_names = _exact_reference_names()
 
 
-def _split_release(reference_name):
-    """
-    The assembly name and requested Ensembl release in ``reference_name``,
-    or ``(reference_name, None)`` when it names no release.
+def split_release(reference_name):
+    """Split an assembly name from an optional requested Ensembl release.
 
-    A colon always introduces a release ("GRCh38:2026_04"). Other separators
-    do only after an exact assembly name or alias, so names that end in
-    digits, such as "Felis_catus_9.0", keep their meaning.
+    Parameters
+    ----------
+    reference_name : str
+        Assembly name or ``"assembly:release"`` string (e.g. ``"GRCh38:93"``
+        or ``"GRCh38:2026_04"``).
+
+    Returns
+    -------
+    tuple of (str, int or str or None)
+        ``(name, release)`` where ``release`` is ``None`` when no release was
+        specified. A colon always introduces a release; other separators do so
+        only after an exact assembly name or alias, preserving names ending in
+        digits such as ``"Felis_catus_9.0"``.
     """
     if normalize_reference_name(reference_name) in _exact_names:
         return reference_name, None
@@ -469,7 +477,7 @@ def infer_genome_for_reference_name(reference_name):
         provide that assembly.
     """
     converted_ucsc_to_ensembl = False
-    reference_name, release = _split_release(reference_name)
+    reference_name, release = split_release(reference_name)
     source = reference_name
     reference_name = infer_reference_name(reference_name)
     if pinned_name(reference_name) is not None:

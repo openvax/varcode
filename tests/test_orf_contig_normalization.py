@@ -81,8 +81,8 @@ def test_ucsc_accession_aliases_match_orf_variants_and_rna_origins(release, sour
 ])
 def test_orf_contigs_never_pair_hg19_chrm_with_rcrs_mt(contig, reference_name, expected):
     # hg19's chrM is not the rCRS that Ensembl names MT (#707).
-    from varcode.orf import _contig
-    assert _contig(contig, reference_name) == expected
+    from varcode.orf import orf_contig_name
+    assert orf_contig_name(contig, reference_name) == expected
 
 
 def test_extra_orf_spans_compare_contigs_with_their_builds():

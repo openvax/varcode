@@ -24,14 +24,14 @@ from varcode.effects import (
 from varcode.effects.effect_classes import PhaseCandidateSet
 from varcode.germline import PhasePartition
 from varcode.orf import ORFAnnotation, ORFOutcome, ORFProduct, annotate_orf_variants
-from varcode.orf_serialization import _Feature, _ReferenceGenome, _ReferenceTranscript
+from varcode.orf_serialization import TranscriptFeatureSnapshot, ReferenceGenomeSnapshot, ReferenceTranscriptSnapshot
 
 
 @pytest.fixture
 def transcript():
-    genome = _ReferenceGenome(dict(reference_name="fixture", species="homo_sapiens", taxon_id=9606,
+    genome = ReferenceGenomeSnapshot(dict(reference_name="fixture", species="homo_sapiens", taxon_id=9606,
                                   annotation_name="synthetic", annotation_version="1"))
-    return _ReferenceTranscript(
+    return ReferenceTranscriptSnapshot(
         dict(id="tx-1", name="TX1", transcript_id="tx-1", contig="1", strand="+", start=1, end=12,
              sequence="ATGGCTAAATAA", protein_sequence="MAK", protein_id="protein-1",
              biotype="protein_coding", is_protein_coding=True, complete=True,
@@ -41,7 +41,7 @@ def transcript():
              coding_sequence="ATGGCTAAA", coding_sequence_position_ranges=((1, 9),),
              five_prime_utr_sequence="", three_prime_utr_sequence="", on_backward_strand=False,
              on_forward_strand=True, topology="linear"),
-        genome, (_Feature(1, 12, "exon-1"),), _Feature(1, 12, "gene-1", "GENE1"))
+        genome, (TranscriptFeatureSnapshot(1, 12, "exon-1"),), TranscriptFeatureSnapshot(1, 12, "gene-1", "GENE1"))
 
 
 @pytest.fixture
@@ -102,7 +102,7 @@ def test_coding_substitution_and_offline_roundtrip(effect, tmp_path, monkeypatch
     assert {link.relation for link in predicted.links} == {"produces", "has_outcome", "contains"}
     path = tmp_path / "predicted.json.gz"
     predicted.save(path)
-    monkeypatch.setattr(_ReferenceGenome, "transcripts_at_locus", lambda *args: pytest.fail("genome accessed"))
+    monkeypatch.setattr(ReferenceGenomeSnapshot, "transcripts_at_locus", lambda *args: pytest.fail("genome accessed"))
     restored = orfdata.Proteome.load(path)
     assert restored.identity == predicted.identity
     assert graph(restored) == graph(predicted)
@@ -212,8 +212,8 @@ def test_available_partial_unknown_empty_failure_and_limit_are_distinct(effect):
 
 def test_fusion_preserves_two_sources_without_parent_entries(effect):
     first = effect.transcript
-    second = _ReferenceTranscript({**first.data, "id": "tx-2", "transcript_id": "tx-2"},
-                                  first.genome, first.exons, _Feature(1, 12, "gene-2", "GENE2"))
+    second = ReferenceTranscriptSnapshot({**first.data, "id": "tx-2", "transcript_id": "tx-2"},
+                                  first.genome, first.exons, TranscriptFeatureSnapshot(1, 12, "gene-2", "GENE2"))
     rna = MutantTranscript(reference_segments=(ReferenceSegment(first, 0, 6, label="5p"),
                                               ReferenceSegment(second, 6, 12, label="3p")),
                            cdna_sequence="ATGGCTAAATAA", mutant_protein_sequence="MAK",
@@ -411,8 +411,8 @@ def test_native_fusion_roundtrip_preserves_source_identity(tmp_path):
 
 def test_fusion_aliases_preserve_reference_scope_and_roles(effect):
     first = effect.transcript
-    second = _ReferenceTranscript({**first.data, "id": "tx-2", "transcript_id": "tx-2"},
-                                  first.genome, first.exons, _Feature(1, 12, "gene-2", "GENE2"))
+    second = ReferenceTranscriptSnapshot({**first.data, "id": "tx-2", "transcript_id": "tx-2"},
+                                  first.genome, first.exons, TranscriptFeatureSnapshot(1, 12, "gene-2", "GENE2"))
     variant = StructuralVariant("1", 6, "BND", mate_contig="1", mate_start=7, genome=first.genome)
     forward = GeneFusion(variant, first, second)
     reversed_roles = GeneFusion(variant, first, second, five_prime_transcript=second, three_prime_transcript=first)
@@ -423,8 +423,8 @@ def test_fusion_aliases_preserve_reference_scope_and_roles(effect):
     alternatives = [GeneFusion(variant, first, second, mutant_transcript=model) for model in models]
     assert len(to_proteome(alternatives).proteins) == 2
     # Matching transcript IDs must not collapse genuinely different references.
-    other_reference = _ReferenceGenome({**first.genome.metadata, "reference_name": "other-assembly"})
-    alias = _ReferenceTranscript(dict(first.data), other_reference, first.exons, first.gene)
+    other_reference = ReferenceGenomeSnapshot({**first.genome.metadata, "reference_name": "other-assembly"})
+    alias = ReferenceTranscriptSnapshot(dict(first.data), other_reference, first.exons, first.gene)
     with pytest.raises(ValueError, match="reference_name mismatch"):
         to_proteome(GeneFusion(variant, first, alias))
 
@@ -446,7 +446,7 @@ def test_dog_reference_uses_orfdata_taxonomy(effect, coding):
 
 
 def test_strain_reference_uses_orfdata_species_resolution(effect, tmp_path):
-    genome = _ReferenceGenome(dict(reference_name="R64-1-1", annotation_name="synthetic",
+    genome = ReferenceGenomeSnapshot(dict(reference_name="R64-1-1", annotation_name="synthetic",
                                   species="saccharomyces_cerevisiae", taxon_id=559292,
                                   species_taxon_id=4932, strain="S288C", strain_taxon_id=559292))
     effect.transcript.genome = effect.variant.genome = genome
@@ -460,7 +460,7 @@ def test_strain_reference_uses_orfdata_species_resolution(effect, tmp_path):
 
 
 def test_partial_source_context_is_validated_against_later_reference(effect):
-    effect.transcript.genome = _ReferenceGenome(dict(reference_name="different-assembly"))
+    effect.transcript.genome = ReferenceGenomeSnapshot(dict(reference_name="different-assembly"))
     with pytest.raises(ValueError, match="reference_name mismatch"):
         to_proteome(effect)
 
@@ -502,11 +502,11 @@ def test_reference_and_isovar_shaped_composition_and_conflicts(effect, tmp_path)
 
 def test_different_known_source_taxa_and_assemblies_are_rejected(effect):
     # A bad pairing must be caught before assigning the reference's taxon.
-    effect.variant.genome = _ReferenceGenome(dict(reference_name="dog-reference", species="canis_lupus_familiaris",
+    effect.variant.genome = ReferenceGenomeSnapshot(dict(reference_name="dog-reference", species="canis_lupus_familiaris",
                                                 taxon_id=9615, annotation_name="synthetic", annotation_version="1"))
     with pytest.raises(ValueError, match="taxon|species"):
         to_proteome([effect])
-    effect.variant.genome = _ReferenceGenome({**effect.transcript.genome.metadata, "reference_name": "other"})
+    effect.variant.genome = ReferenceGenomeSnapshot({**effect.transcript.genome.metadata, "reference_name": "other"})
     with pytest.raises(ValueError, match="reference_name mismatch"):
         to_proteome([effect])
 
@@ -561,7 +561,7 @@ def test_collection_provenance_is_retained_without_splitting_products(effect):
 
 
 def test_unknown_taxon_is_not_guessed(effect):
-    unknown = _ReferenceGenome(dict(reference_name="fixture", annotation_name="synthetic", annotation_version="1"))
+    unknown = ReferenceGenomeSnapshot(dict(reference_name="fixture", annotation_name="synthetic", annotation_version="1"))
     effect.transcript.genome = unknown
     effect.variant.genome = unknown
     predicted = to_proteome([effect])
@@ -638,8 +638,8 @@ def test_legacy_germline_phase_candidates_export_and_archive(tmp_path):
 
 
 def test_transcript_free_gene_effects_have_distinct_identities(effect, tmp_path):
-    first = Intragenic(effect.variant, _Feature(1, 12, "gene-1", "GENE1", "1", "+"))
-    second = Intragenic(effect.variant, _Feature(1, 12, "gene-2", "GENE2", "1", "+"))
+    first = Intragenic(effect.variant, TranscriptFeatureSnapshot(1, 12, "gene-1", "GENE1", "1", "+"))
+    second = Intragenic(effect.variant, TranscriptFeatureSnapshot(1, 12, "gene-2", "GENE2", "1", "+"))
     predicted = to_proteome([first, second])
     assert len(predicted) == 0 and len(comparisons(predicted)) == 2
     assert len({r.key for r in predicted.records if r.kind == "event"}) == 2

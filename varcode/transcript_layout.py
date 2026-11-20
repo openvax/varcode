@@ -23,7 +23,7 @@ from .cryptic_exons import (
 )
 from .circular_origin import TranscriptFrame
 from .genomic_layout import SequenceUnavailable
-from .effects.classify import _attach_transcript_models, classify_from_protein_diff
+from .effects.classify import attach_transcript_models, classify_from_protein_diff
 from .effects.codon_tables import (
     codon_table_for_transcript,
     translate_sequence,
@@ -506,7 +506,7 @@ def classify_products(variant, transcript, baseline, mutant):
     mutant_model = mutant.to_mutant_transcript()
 
     def finish(effect):
-        return _attach_transcript_models(
+        return attach_transcript_models(
             effect, mutant_model, baseline_model,
             baseline_model.mutant_protein_sequence)
 

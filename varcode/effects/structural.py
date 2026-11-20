@@ -10,22 +10,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Internal structural-effect prediction shared by the default and transcript model.
+"""Structural-variant classification shared by ``fast`` and ``transcript_model``.
 
-The public default calls these helpers directly; this module does not select or
-instantiate annotators. Structural classification, sequence construction and
-candidate enumeration live here.
-
-Mutant transcripts retain the historical ``structural_variant`` builder
-provenance; their containing effect collection records the selected annotator.
+Mutant-transcript construction lives in :mod:`varcode.effects.structural_models`,
+partner discovery in :mod:`varcode.effects.structural_fusions`, and splice/cryptic
+candidate attachment in :mod:`varcode.effects.structural_candidates`.
 """
 
-from dataclasses import dataclass, replace
+from dataclasses import replace
 
+from ..circular_origin import TranscriptFrame
+from ..mutant_transcript import AssembledAllele, TranscriptEdit, retained_cds_start
+from ..structural_variant import affected_span
+from ..sv_allele_parser import breakend_sides
+from .classify import classify_from_protein_diff
+from .codon_tables import codon_table_for_transcript, translate_sequence
 from .effect_classes import (
     ExonLoss,
     FivePrimeUTR,
-    GeneFusion,
     Intergenic,
     Intronic,
     NoncodingTranscript,
@@ -36,944 +38,105 @@ from .effect_classes import (
     TranslocationToUnannotatedContig,
     Unresolved,
 )
-from .effect_helpers import exon_length
+from . import structural_candidates
 from .selenocysteine import segment_selenocysteine
-from ..mutant_transcript import MutantTranscript, ReferenceSegment, TranscriptEdit
-# Existing assembled-SV pickles use this private module path.
-from ..mutant_transcript import _AssembledAllele  # noqa: F401
-from ..circular_origin import (
-    TranscriptFrame,
-    feature_overlaps,
-    transcript_exons,
-    transcripts_at_locus,
+from .sequence_change import structural_sequence_changes
+from .structural_candidates import (
+    breakpoint_splice_window,
+    enumerate_and_attach_cryptics,
+    enumerate_and_attach_splice_outcomes,
 )
-from ..structural_variant import junction_span_details
+from .structural_fusions import (
+    MAX_UPSTREAM_PARTNER_DISTANCE,
+    coding_transcripts_at,
+    fusion_across_junction,
+    fusion_partners,
+    junction_ends,
+    unannotated_partner_contig,
+    upstream_fusions,
+    upstream_partners,
+    warn_on_unknown_breakend_orientation,
+)
+from .structural_models import (
+    LocalEvent,
+    build_alt_assembly_mutant_transcript,
+    build_deletion_mutant_transcript,
+    build_duplication_mutant_transcript,
+    build_fusion_mutant_transcript,
+    build_inversion_mutant_transcript,
+    build_translocation_mutant_transcript,
+    cdna_cut,
+    cdna_ranges_within_sv,
+    contained_image,
+    deleted_cdna_ranges,
+    event_evidence,
+    feature_contains_breakend,
+    local_event,
+    retains_five_prime_end,
+    translate_fused_cdna,
+)
 from .transcript_helpers import (
-    has_complete_coding_sequence, poly_a_completion, three_prime_utr_offset)
-from ..sv_allele_parser import breakend_sides, _breakend_local_side
+    has_complete_coding_sequence,
+    poly_a_completion,
+    three_prime_utr_offset,
+)
+
+# Existing assembled-SV pickles use this legacy module path.
+_AssembledAllele = AssembledAllele
 
 
-# How far past a junction end a sense-oriented coding transcript may
-# start and still be a 3' fusion partner: LINX's limit for fusions other
-# than known pairs and high-impact promiscuous partners (#550).
-MAX_UPSTREAM_PARTNER_DISTANCE = 10_000
-
-# --------------------------------------------------------------------
-# MutantTranscript builders (#335).
-#
-# Map each SV classification to a :class:`MutantTranscript` populated
-# with :class:`ReferenceSegment` entries that describe the
-# rearranged allele. ``cdna_sequence`` is filled in where it's
-# derivable from pyensembl-cached transcript cDNA alone (DEL, and
-# DUP / INV where only whole exons are rearranged); otherwise left
-# None and resolved by downstream helpers (#336, #338).
-# --------------------------------------------------------------------
-
-
-def _exon_cdna_ranges(transcript):
-    """Yield ``(exon, cdna_start, cdna_end)`` for each exon of
-    ``transcript`` in transcript order. ``cdna_start`` / ``cdna_end``
-    are offsets into ``transcript.sequence``.
-    """
-    offset = 0
-    for exon in transcript_exons(transcript):
-        length = exon_length(exon)
-        yield exon, offset, offset + length
-        offset += length
-
-
-def _merge_adjacent_ranges(ranges):
-    """Merge ``[(s, e), ...]`` pairs that abut (``e_i == s_{i+1}``)
-    so the resulting segment list doesn't contain redundant splits.
-    Assumes the input is already sorted by start.
-    """
-    merged = []
-    for s, e in ranges:
-        if s >= e:
-            continue
-        if merged and merged[-1][1] == s:
-            merged[-1] = (merged[-1][0], e)
-        else:
-            merged.append((s, e))
-    return merged
-
-
-def _affected_span(variant):
-    """Inclusive reference bases changed by a structural variant."""
-    start = getattr(variant, "affected_start", variant.start)
-    end = getattr(variant, "affected_end", getattr(
-        variant, "end", variant.start))
-    return min(start, end), max(start, end)
-
-
-@dataclass(frozen=True)
-class _LocalEvent:
-    """The reference span a local DEL/DUP/INV/INS/CNV model changes, and
-    the variant its effects report.
-
-    A span record is its own event. For the transcripts of a gene that
-    contains both ends of a breakend's junction, the event is the DEL, DUP
-    or INV the junction's kept sides describe (#551): what a transcript
-    read across the junction carries, and what a caller-labeled breakend
-    pair is typed as. The local models read only the ``StructuralVariant``
-    attributes this carries, so they take either.
-    """
-    variant: object
-    sv_type: str
-    start: int
-    end: int
-    affected_start: int
-    affected_end: int
-    junctions: tuple
-
-    @classmethod
-    def of(cls, variant):
-        start = variant.start
-        end = getattr(variant, "end", start)
-        return cls(variant, variant.sv_type, start, end,
-                   getattr(variant, "affected_start", start),
-                   getattr(variant, "affected_end", end),
-                   tuple(getattr(variant, "junctions", ())))
-
-    @property
-    def contig(self):
-        return self.variant.contig
-
-    @property
-    def alt_assembly(self):
-        return getattr(self.variant, "alt_assembly", None)
-
-    @property
-    def breakpoints(self):
-        """Distinct ``(contig, position)`` junction ends, as
-        :attr:`StructuralVariant.breakpoints`."""
-        loci = []
-        for junction in self.junctions:
-            for breakend in junction:
-                if (breakend.contig, breakend.position) not in loci:
-                    loci.append((breakend.contig, breakend.position))
-        return tuple(loci) or ((self.contig, self.start),)
-
-    def junction_inserted_sequence(self, junction):
-        return self.variant.junction_inserted_sequence(junction)
-
-
-def _local_event(variant, transcript):
-    """The :class:`_LocalEvent` ``variant`` makes of ``transcript``, or
-    ``None`` for a breakend whose junction doesn't have both ends in the
-    transcript's gene."""
-    if variant.sv_type != "BND":
-        return _LocalEvent.of(variant)
-    gene = transcript.gene
+def deletes_whole_transcript(variant, transcript):
+    """Return whether ``variant`` is an unassembled DEL/CN0 removing all of ``transcript``."""
+    if (variant.sv_type not in ("DEL", "CN0") or variant.alt_assembly
+            or str(variant.contig) != str(transcript.contig)):
+        return False
     frame = TranscriptFrame(transcript)
-    for junction in variant.junctions:
-        if not all(_contains(gene, end) for end in junction):
-            continue
-        # Typed in the transcript's frame, a junction that skips a circular
-        # origin is the deletion it reads as, not a duplication of the rest.
-        details = junction_span_details(tuple(
-            end._replace(position=frame.position(end.position))
-            for end in junction))
-        if details is not None:
-            return _LocalEvent(variant, *details, junctions=(junction,))
-    return None
+    covered = sum(
+        max(0, min(high, frame.end) - max(low, frame.start) + 1)
+        for low, high in frame.images(*affected_span(variant)))
+    return covered >= frame.end - frame.start + 1
 
 
-def _event_evidence(event):
-    """The reported variant's type, plus the local event a breakend
-    junction was read as."""
-    evidence = {"sv_type": event.variant.sv_type}
-    if event.sv_type != event.variant.sv_type:
-        evidence["junction_event"] = event.sv_type
-    return evidence
-
-
-def _deleted_cdna_ranges(variant, transcript):
-    """Half-open cDNA spans removed by a deletion, including an empty span.
-
-    An intron-only deletion removes no reference cDNA but can still insert
-    bases at an exonic junction. Keep its position even when start == end.
-    There is one span per image of the deletion in the transcript's frame:
-    two when it runs through the stretch between the ends of a transcript
-    joined across a circular origin, taking both ends.
-    """
-    frame = TranscriptFrame(transcript)
-    ranges = []
-    for low, high in frame.images(*_affected_span(variant)):
-        first, last = (high, low) if transcript.on_backward_strand else (low, high)
-        start, _ = _frame_bases_before(frame, first)
-        end, exonic = _frame_bases_before(frame, last)
-        ranges.append((start, end + int(exonic)))
-    return tuple(sorted(ranges))
-
-
-def _contained_image(variant, transcript):
-    """The one frame image of ``variant``'s span within the transcript, or None."""
-    frame = TranscriptFrame(transcript)
-    inside = [
-        (low, high) for low, high in frame.images(*_affected_span(variant))
-        if frame.start <= low and high <= frame.end]
-    return inside[0] if len(inside) == 1 else None
-
-
-def _cdna_ranges_within_sv(variant, transcript):
-    """Body ranges for a local DUP/INV model, or [] if not local.
-
-    Clipping a cross-boundary event to this transcript invents a local
-    rearrangement (#405). Every junction end must be in this transcript,
-    not merely in its gene. Fusion and supplied-assembly paths are separate.
-    """
-    if any(not _contains(transcript, end)
-           for junction in variant.junctions for end in junction):
+def overlapping_exons(variant, transcript):
+    """Return exons of ``transcript`` (in transcript order) overlapping ``variant``."""
+    if str(variant.contig) != str(transcript.contig):
         return []
-    # An arc through the stretch between the ends of a transcript joined
-    # across a circular origin leaves the transcript, like an exterior end.
-    image = _contained_image(variant, transcript)
-    if image is None:
-        return []
-    sv_start, sv_end = image
-    inside = []
-    reverse = transcript.on_backward_strand
-    frame_exons = TranscriptFrame(transcript).exon_intervals
-    for (ex_s, ex_e), (_, c_s, c_e) in zip(
-            frame_exons, _exon_cdna_ranges(transcript)):
-        if ex_e < sv_start or ex_s > sv_end:
-            continue
-        # Clip exon to [sv_start, sv_end].
-        clipped_s = max(ex_s, sv_start)
-        clipped_e = min(ex_e, sv_end)
-        if reverse:
-            # cDNA offsets within exon grow as genomic position falls.
-            cdna_lo = c_s + (ex_e - clipped_e)
-            cdna_hi = c_s + (ex_e - clipped_s + 1)
-        else:
-            cdna_lo = c_s + (clipped_s - ex_s)
-            cdna_hi = c_s + (clipped_e - ex_s + 1)
-        inside.append((cdna_lo, cdna_hi))
-    return _merge_adjacent_ranges(sorted(inside))
-
-
-def _breakpoint_splice_window(transcript, breakpoint_pos):
-    """Return ``(splice_cls, nearest_exon, distance)`` if
-    ``breakpoint_pos`` falls within a canonical splice window on
-    ``transcript``; otherwise ``None`` (#341).
-
-    Splice windows (intronic, matching the point-variant classifier):
-
-    * ≤ 2 bp from exon boundary on the donor side (transcript-3' of
-      exon) → :class:`SpliceDonor`
-    * ≤ 2 bp from exon boundary on the acceptor side
-      (transcript-5' of exon) → :class:`SpliceAcceptor`
-    * 3-6 bp on the donor side → :class:`IntronicSpliceSite`
-    * 3 bp on the acceptor side → :class:`IntronicSpliceSite`
-
-    Returns distances in genomic-coord bases so downstream code can
-    construct the synthesized effect with matching ``distance_to_exon``.
-    Exonic-splice-site synthesis is deliberately out of scope here —
-    SV breakpoints rarely land strictly inside exons, and the
-    exonic-splice case has extra alternate-effect machinery that
-    doesn't apply to an SV's already-disruptive primary outcome.
-    """
-    from .effect_classes import (
-        IntronicSpliceSite,
-        SpliceAcceptor,
-        SpliceDonor,
-    )
-    best_exon = None
-    best_distance = None
-    best_before = True
-    for exon in transcript.exons:
-        # Strictly intronic scope only — skip the exon itself.
-        if exon.start <= breakpoint_pos <= exon.end:
-            return None
-        dist_start = exon.start - breakpoint_pos  # >0 if breakpoint before exon
-        dist_end = breakpoint_pos - exon.end      # >0 if breakpoint after exon
-        distance = dist_start if dist_start > 0 else dist_end
-        if best_distance is None or distance < best_distance:
-            best_distance = distance
-            best_exon = exon
-            # "before_exon" in transcript direction:
-            #   forward strand: breakpoint_pos < exon.start
-            #   reverse strand: breakpoint_pos > exon.end
-            if exon.strand == "+":
-                best_before = breakpoint_pos < exon.start
-            else:
-                best_before = breakpoint_pos > exon.end
-    if best_exon is None or best_distance is None:
-        return None
-    if best_distance <= 2:
-        cls = SpliceAcceptor if best_before else SpliceDonor
-        return (cls, best_exon, best_distance)
-    if not best_before and best_distance <= 6:
-        return (IntronicSpliceSite, best_exon, best_distance)
-    if best_before and best_distance <= 3:
-        return (IntronicSpliceSite, best_exon, best_distance)
-    return None
-
-
-def _retains_five_prime_end(transcript, side):
-    """Whether keeping ``side`` of a breakpoint inside ``transcript``
-    keeps the transcript's 5' end: the left side on the forward
-    strand, the right side on the reverse strand."""
-    return (side == "left") == (transcript.strand == "+")
-
-
-def _contains(feature, breakend):
-    """Whether ``feature`` (a transcript, gene or exon) spans ``breakend``,
-    on the circle for one joined across a circular origin."""
-    return feature_overlaps(
-        feature, breakend.contig, breakend.position, breakend.position)
-
-
-def _cached(variant, key, compute):
-    """``compute()``, memoized in the variant's annotation cache under
-    ``key``. Results that depend only on the variant (mate-locus
-    transcripts, cryptic-exon candidates) are then computed once per
-    variant rather than once per transcript it's annotated on."""
-    cache = getattr(variant, "_annotation_cache", None)
-    if cache is None:
-        return compute()
-    if key not in cache:
-        cache[key] = compute()
-    return cache[key]
-
-
-def _exonic_bases_before(transcript, position):
-    """``(offset, position_is_exonic)`` for ``position`` in
-    ``transcript``: how many cDNA bases lie transcript-5' of it, and
-    whether the base at ``position`` is itself exonic.
-
-    "Transcript-5' of" means a lower genomic coordinate on the forward
-    strand and a higher one on the reverse strand.
-    """
     frame = TranscriptFrame(transcript)
-    return _frame_bases_before(frame, frame.position(position))
+    images = frame.images(*affected_span(variant))
+    return [
+        exon for exon, (start, end) in zip(frame.exons, frame.exon_intervals)
+        if any(start <= high and low <= end for low, high in images)
+    ]
 
 
-def _frame_bases_before(frame, position):
-    """:func:`_exonic_bases_before` for a position in ``frame``."""
-    offset = 0
-    for start, end in frame.exon_intervals:
-        length = end - start + 1
-        if frame.backward:
-            if start > position:
-                offset += length
-            elif end >= position:
-                return offset + (end - position), True
-            else:
-                return offset, False
-        else:
-            if end < position:
-                offset += length
-            elif start <= position:
-                return offset + (position - start), True
-            else:
-                return offset, False
-    return offset, False
+def intronic_or_intergenic(event, transcript):
+    """Classify an SV overlapping zero exons as :class:`Intronic` or :class:`Intergenic`."""
+    image = (contained_image(event, transcript)
+             if str(event.contig) == str(transcript.contig) else None)
+    if image is not None:
+        var_start = image[0]
+        frame = TranscriptFrame(transcript)
+        distance, nearest_exon = min(
+            (min(abs(start - var_start), abs(end - var_start)), index)
+            for index, (start, end) in enumerate(frame.exon_intervals))
+        nearest_exon = frame.exons[nearest_exon]
+        return Intronic(
+            variant=event.variant,
+            transcript=transcript,
+            nearest_exon=nearest_exon,
+            distance_to_exon=distance,
+        )
+    return Intergenic(variant=event.variant)
 
 
-def _cdna_cut(transcript, position, keep_five_prime):
-    """The cDNA offset where a junction at ``position`` cuts
-    ``transcript``: the 5' side keeps ``sequence[:cut]`` and the 3' side
-    ``sequence[cut:]``.
-
-    A breakend names the last base its side keeps, so an exonic
-    breakpoint keeps that base on whichever side retains it. An
-    intronic breakpoint snaps to the exon boundary: the 5' side ends
-    with the last exon transcript-5' of the breakpoint, and the 3' side
-    starts with the first exon transcript-3' of it.
-    """
-    offset, exonic = _exonic_bases_before(transcript, position)
-    return offset + 1 if keep_five_prime and exonic else offset
-
-
-def _warn_on_unknown_breakend_orientation(variant):
-    """Warn when a breakend with a mate has no well-formed breakend
-    ALT, so the kept sides are unknown and the annotator falls back
-    to treating the annotated transcript as the 5' fusion partner."""
-    import warnings
-    warnings.warn(
-        "Structural prediction can't read the breakend orientation "
-        "of %s from ALT %r; treating the annotated transcript as the "
-        "5' fusion partner. Use a VCF breakend ALT such as N[17:100[ "
-        "or pass StructuralVariant.alt_assembly." % (
-            variant.short_description, variant.symbolic_alt),
-        stacklevel=3)
-
-
-def _build_alt_assembly_mutant_transcript(variant, transcript):
-    """If ``variant.alt_assembly`` is populated, build a
-    single-:class:`ReferenceSegment` :class:`MutantTranscript` wrapping
-    the assembled allele (#338). Returns ``None`` otherwise.
-
-    The assembly is preferred over breakpoint-reconstructed cDNA
-    because it reflects the molecule actually observed rather than
-    the inference from reference + breakpoints. Downstream consumers
-    read ``mutant_transcript.cdna_sequence`` uniformly.
-    """
-    assembly = getattr(variant, "alt_assembly", None)
-    if not assembly:
-        return None
-    return MutantTranscript.from_sequence(
-        assembly,
-        reference_transcript=transcript,
-        annotator_name="structural_variant",
-        evidence={"source": "alt_assembly"}, label="alt_assembly")
-
-
-def _build_deletion_mutant_transcript(variant, transcript):
-    """Build a :class:`MutantTranscript` for a ``<DEL>`` SV.
-
-    The cDNA of the surviving transcript is the concatenation of
-    cDNA ranges outside the deleted span. cDNA is derivable entirely
-    from pyensembl-cached transcript sequence — no genomic FASTA
-    needed. The consequence classifier maps the surviving CDS start
-    and translates this model before returning it to callers.
-    """
-    ranges = _deleted_cdna_ranges(variant, transcript)
-    insertion, evidence = _local_junction_insertion(variant, transcript)
-    full_len = len(str(transcript.sequence))
-    segments = []
-    kept_from = 0
-    for index, (start, end) in enumerate(ranges):
-        if start > kept_from:
-            segments.append(
-                ReferenceSegment(transcript, kept_from, start, label="del_kept"))
-        # Both ends of a transcript across a circular origin lie in one
-        # junction; its bases follow what remains.
-        if index == len(ranges) - 1:
-            segments.extend(insertion)
-        kept_from = max(kept_from, end)
-    if kept_from < full_len:
-        segments.append(
-            ReferenceSegment(transcript, kept_from, full_len, label="del_kept"))
-    segments = tuple(segments)
-    joined = None if "sequence_status" in evidence else "".join(
-        s.source.sequence[s.start:s.end] for s in segments)
-    return MutantTranscript(
-        reference_transcript=transcript,
-        reference_segments=segments,
-        cdna_sequence=joined,
-        evidence=evidence,
-        annotator_name="structural_variant")
-
-
-def _build_duplication_mutant_transcript(variant, transcript):
-    """Build a :class:`MutantTranscript` for a ``<DUP>`` SV.
-
-    Tandem-duplication interpretation: the duplicated body is
-    inserted once between the surviving pre- and post-duplication
-    transcript segments, yielding a transcript cDNA that carries an
-    additional copy of the exonic ranges inside the SV span.
-    """
-    inside = _cdna_ranges_within_sv(variant, transcript)
-    if not inside:
-        return None
-    full_cdna = str(transcript.sequence)
-    full_len = len(full_cdna)
-    last_inside = inside[-1][1]
-    body_segments = tuple(
-        ReferenceSegment(
-            source=transcript, start=s, end=e,
-            strand="+", label="dup_body_copy")
-        for s, e in inside)
-    insertion, evidence = _local_junction_insertion(variant, transcript)
-    segments = (
-        ReferenceSegment(
-            source=transcript, start=0, end=last_inside,
-            strand="+", label="pre_dup_including_body"),
-    ) + insertion + body_segments + (
-        ReferenceSegment(
-            source=transcript, start=last_inside, end=full_len,
-            strand="+", label="post_dup"),
-    )
-    joined = None if "sequence_status" in evidence else "".join(
-        s.source.sequence[s.start:s.end] for s in segments)
-    return MutantTranscript(
-        reference_transcript=transcript,
-        reference_segments=segments,
-        cdna_sequence=joined,
-        evidence=evidence,
-        annotator_name="structural_variant")
-
-
-def _build_inversion_mutant_transcript(variant, transcript):
-    """Build a :class:`MutantTranscript` for an ``<INV>`` SV.
-
-    The inverted exonic body is represented as one or more
-    ``strand='-'`` :class:`ReferenceSegment` entries; consumers that
-    want the assembled cDNA apply reverse-complement per segment.
-    ``cdna_sequence`` is intentionally left None here — correctly
-    assembling an inversion across exon boundaries requires
-    care and is deferred to a follow-up (the shape lands here so
-    downstream tools can see the inverted segment layout).
-    """
-    inside = _cdna_ranges_within_sv(variant, transcript)
-    if not inside:
-        return None
-    first_inside_start = inside[0][0]
-    last_inside_end = inside[-1][1]
-    full_len = len(str(transcript.sequence))
-    segments = (
-        ReferenceSegment(
-            source=transcript, start=0, end=first_inside_start,
-            strand="+", label="pre_inv"),) + tuple(
-        ReferenceSegment(
-            source=transcript, start=s, end=e,
-            strand="-", label="inv_body")
-        for s, e in inside) + (
-        ReferenceSegment(
-            source=transcript, start=last_inside_end, end=full_len,
-            strand="+", label="post_inv"),)
-    return MutantTranscript(
-        reference_transcript=transcript,
-        reference_segments=segments,
-        cdna_sequence=None,
-        annotator_name="structural_variant")
-
-
-def _translate_fused_cdna(fused_cdna, five_prime_transcript, five_prime_len,
-                          selenocysteine=(), three_prime_transcript=None):
-    """Translate ``fused_cdna`` from the 5' partner's CDS start when
-    that start codon lies in the retained 5' portion (#336).
-
-    Returns the translated protein (stopping at the first stop
-    codon) or ``None`` when the CDS start is past the breakpoint or
-    translation otherwise fails. TGA codons at the fused-cDNA offsets
-    in ``selenocysteine`` are read as Sec.
-    """
-    from .codon_tables import (
-        codon_table_for_transcript,
-        initiator_as_met,
-        translate_sequence,
-    )
-    if not has_complete_coding_sequence(five_prime_transcript):
-        return None
-    try:
-        cds_start = min(five_prime_transcript.start_codon_spliced_offsets)
-    except (AttributeError, ValueError):
-        return None
-    if cds_start >= five_prime_len:
-        # Start codon is past the breakpoint — the fusion loses it.
-        return None
-    codon_table = codon_table_for_transcript(five_prime_transcript)
-    coding = fused_cdna[cds_start:]
-    if three_prime_transcript is not None:
-        coding += poly_a_completion(three_prime_transcript, coding)
-    truncated = coding[:(len(coding) // 3) * 3]
-    try:
-        protein = translate_sequence(
-            truncated, codon_table=codon_table, to_stop=True,
-            selenocysteine={pos - cds_start for pos in selenocysteine})
-    except ValueError:
-        return None
-    return initiator_as_met(protein, coding[:3], codon_table)
-
-
-def _junction_insertion(inserted_sequence, transcript_positions):
-    """Insertion segments and retention evidence for a spliced junction.
-
-    ``inserted_sequence`` must already be oriented from the 5' retained
-    portion to the 3' retained portion. Positions name retained anchors,
-    rather than the affected span's first/last bases.
-    """
-    evidence = {}
-    insertion = ()
-    if inserted_sequence is None:
-        evidence["sequence_status"] = "unresolved_junction_insertion"
-    elif inserted_sequence:
-        exonic = [any(e.start <= pos <= e.end for e in t.exons)
-                  for t, pos in transcript_positions]
-        evidence["junction_inserted_sequence"] = inserted_sequence
-        if all(exonic):
-            insertion = (ReferenceSegment(
-                source=_AssembledAllele(inserted_sequence), start=0,
-                end=len(inserted_sequence), label="junction_insertion"),)
-            evidence["junction_insertion_status"] = "retained"
-        elif any(exonic):
-            evidence["sequence_status"] = "unresolved_insertion_retention"
-        else:
-            evidence["junction_insertion_status"] = "excluded_by_reference_splicing"
-    return insertion, evidence
-
-
-def _local_junction_insertion(variant, transcript):
-    """Orient a local DEL/DUP junction in transcript direction."""
-    junction, = variant.junctions
-    if variant.junction_inserted_sequence(junction) == "":
-        return (), {}
-    if not _retains_five_prime_end(transcript, junction[0].keeps):
-        junction = junction[::-1]
-    inserted = variant.junction_inserted_sequence(junction)
-    if inserted and not all(_contains(transcript, end) for end in junction):
-        # An exterior breakpoint is not an intron of this transcript.
-        return (), {"junction_inserted_sequence": inserted,
-                    "sequence_status": "unresolved_insertion_retention"}
-    return _junction_insertion(
-        inserted, ((transcript, end.position) for end in junction))
-
-
-def _build_fusion_mutant_transcript(
-        reference_transcript,
-        five_prime_transcript, five_prime_position,
-        three_prime_transcript, three_prime_position, inserted_sequence="",
-        three_prime_start=None):
-    """Build a :class:`MutantTranscript` for a :class:`GeneFusion`
-    (#336).
-
-    The fused cDNA is the 5' partner's cDNA up to its breakpoint
-    followed by the 3' partner's from its breakpoint on, each keeping
-    the base at its breakpoint, unless ``three_prime_start`` gives the
-    3' partner's first cDNA offset. When the 5' partner's start codon lies
-    in the retained portion, the protein is translated through the
-    junction. Inserted bases are retained at exonic joins. At two intronic
-    breakpoints they are excluded under the reference-splicing assumption;
-    mixed exonic/intronic retention, or unknown insert sequence, is unresolved.
-
-    ``reference_transcript`` is the transcript being annotated, which
-    may be either partner, so an effect and its mutant transcript
-    describe the same transcript; each partner's contribution is in the
-    segments. The annotator assigns the 5' / 3' roles from breakend
-    orientation and strand before calling this.
-    """
-    five_prime_cdna = five_prime_transcript.sequence
-    three_prime_cdna = three_prime_transcript.sequence
-    if not five_prime_cdna or not three_prime_cdna:
-        # The partner is still a candidate when sequence is unavailable.
-        # In particular, str(None) is not an observed or predicted cDNA.
-        return None
-    five_prime_cdna = str(five_prime_cdna)
-    three_prime_cdna = str(three_prime_cdna)
-    five_prime_end = _cdna_cut(
-        five_prime_transcript, five_prime_position, True)
-    if three_prime_start is None:
-        three_prime_start = _cdna_cut(
-            three_prime_transcript, three_prime_position, False)
-    segments = (
-        ReferenceSegment(
-            source=five_prime_transcript, start=0, end=five_prime_end,
-            strand="+", label="5p_partner"),
-        ReferenceSegment(
-            source=three_prime_transcript,
-            start=three_prime_start, end=len(three_prime_cdna),
-            strand="+", label="3p_partner"),
-    )
-    insertion, evidence = _junction_insertion(
-        inserted_sequence, ((five_prime_transcript, five_prime_position),
-                            (three_prime_transcript, three_prime_position)))
-    segments = segments[:1] + insertion + segments[1:]
-    if "sequence_status" in evidence:
-        return MutantTranscript(
-            reference_transcript=reference_transcript,
-            reference_segments=segments, evidence=evidence,
-            annotator_name="structural_variant")
-    fused_cdna = "".join(s.source.sequence[s.start:s.end] for s in segments)
-    model = MutantTranscript(
-        reference_transcript=reference_transcript,
-        reference_segments=segments,
-        cdna_sequence=fused_cdna,
-        evidence=evidence,
-        annotator_name="structural_variant")
-    # Read Sec where a SECIS may remain; the change flags report whether
-    # that reading is certain.
-    decoded, uncertain, _ = segment_selenocysteine(model) or (set(), set(), set())
-    return replace(model, mutant_protein_sequence=_translate_fused_cdna(
-        fused_cdna, five_prime_transcript, five_prime_end, decoded | uncertain,
-        three_prime_transcript=three_prime_transcript))
-
-
-def _build_translocation_mutant_transcript(variant, transcript):
-    """Describe only the retained local reference fragment of a BND.
-
-    The other side and full mutant cDNA/protein remain unknown. Without
-    local orientation or a breakpoint on this transcript, no fragment can
-    be established. Supplied assemblies are handled by the caller.
-    """
-    side = _breakend_local_side(variant.symbolic_alt)
-    if (side is None or str(variant.contig) != str(transcript.contig)
-            or not TranscriptFrame(transcript).overlaps(
-                variant.start, variant.start)):
-        return None
-    keep_five_prime = _retains_five_prime_end(transcript, side)
-    cut = _cdna_cut(transcript, variant.start, keep_five_prime)
-    full_len = len(str(transcript.sequence))
-    start, end = (0, cut) if keep_five_prime else (cut, full_len)
-    segments = (
-        ReferenceSegment(
-            source=transcript, start=start, end=end, strand="+",
-            label="translocation_5p" if keep_five_prime else "translocation_3p"),)
-    return MutantTranscript(
-        reference_transcript=transcript,
-        reference_segments=segments,
-        cdna_sequence=None,
-        evidence={"sequence_status": "retained_reference_fragment"},
-        annotator_name="structural_variant")
-
-
-def predict_structural_variant_effect(variant, transcript):
-    """Classify ``variant`` on ``transcript``. Returns a single
-    effect (typically a ``MultiOutcomeEffect`` subclass); consume
-    ``effect.candidates`` for the full outcome set.
-    """
-    from pyensembl import Transcript
-    from ..orf import _ORFTranscript
-    if not isinstance(transcript, (Transcript, _ORFTranscript)):
-        raise TypeError(
-            "Expected a reference or ORF transcript, got %s" % type(transcript))
-
-    sv_type = getattr(variant, "sv_type", None)
-    if (not getattr(variant, "is_structural", False)
-            or (sv_type != "BND" and sv_type not in _SPAN_EFFECTS)):
-        return NotImplemented
-
-    if not transcript.is_protein_coding:
-        return NoncodingTranscript(variant, transcript)
-
-    # A caller-resolved allele, when there is one, is preferred over
-    # anything inferred from breakpoints; build it once per call.
-    assembly = _build_alt_assembly_mutant_transcript(variant, transcript)
-
-    # A breakend junction with both ends in this transcript's gene is the
-    # local event its kept sides describe (#551).
-    event = _local_event(variant, transcript)
-    if event is None:
-        effect = _annotate_breakend(variant, transcript, assembly)
-    else:
-        span_effect = _SPAN_EFFECTS[event.sv_type](
-            event, transcript, assembly)
-        # A span with one end in this transcript and a sense-to-sense
-        # partner at the other end is a fusion. What the span does to
-        # this transcript's own exons stays on the fusion as a further
-        # primary candidate. Insertions and CNVs have no junction, so
-        # they never fuse.
-        effect = _fusion_across_junction(
-            variant, transcript, assembly)
-        if effect is None:
-            effect = span_effect
-        elif isinstance(span_effect, StructuralVariantEffect):
-            effect._attach_primary_effects((span_effect,))
-    # A partner starting just past a junction end is a further candidate
-    # after the primary classification, whatever it is (#550).
-    if isinstance(effect, StructuralVariantEffect):
-        effect._attach_primary_effects(
-            _upstream_fusions(variant, transcript, assembly))
-
-    # Attach cryptic-exon candidates enumerated from flanking
-    # sequence / long-read assembly (#337). They show up as
-    # additional EffectCandidate entries with source="varcode_motif".
-    _enumerate_and_attach_cryptics(variant, effect)
-    # Attach splice-outcome candidates when any SV breakpoint
-    # lands in a canonical splice window on the transcript
-    # (#341). They show up as additional EffectCandidate entries with
-    # source="varcode_splice".
-    _enumerate_and_attach_splice_outcomes(
-        event or _LocalEvent.of(variant), transcript, effect)
-    # A resolved local model with no alternatives can expose its actual
-    # consequence directly. Uncertain models retain the candidate protocol.
-    if (type(effect) is StructuralVariantEffect
-            and len(effect.candidates) == 1
-            and not effect.candidate_evidence.get("splice_ambiguous")
-            and not isinstance(effect.most_likely_effect, Unresolved)):
-        return effect.most_likely_effect
-    return effect
-
-
-def _enumerate_and_attach_splice_outcomes(event, transcript, effect):
-    """If any breakpoint of ``event`` lands in a canonical
-    splice window on ``transcript``, synthesize the matching
-    splice-disrupting effect, feed it to
-    :func:`~varcode.splice_outcomes.enumerate_splice_outcomes`,
-    and attach the returned candidates (minus NormalSplicing,
-    which the SV primary classification already covers) to
-    ``effect`` (#341).
-
-    No-op when ``effect`` isn't an
-    :class:`StructuralVariantEffect` (Intronic/Intergenic
-    fall-throughs) or when no breakpoint falls in a splice
-    window.
-    """
-    from .effect_classes import (
-        NormalSplicing, StructuralVariantEffect)
-    from ..effect_candidates import EffectCandidate
-    from ..splice_outcomes import enumerate_splice_outcomes
-    if not isinstance(effect, StructuralVariantEffect):
-        return
-    affected_start, affected_end = _affected_span(event)
-    if (affected_start, affected_end) != (event.start, event.end):
-        # Typed breakend pairs retain their original junction positions
-        # separately from the bases affected between them.
-        bp_positions = {
-            position for _, position in event.breakpoints}
-    else:
-        # Preserve the established symbolic-SV interpretation of POS
-        # and END as the positions whose splice windows are inspected.
-        bp_positions = {event.start, event.end}
-    sv_evidence = _event_evidence(event)
-    attached = []
-    seen_exons = set()
-    genomic = TranscriptFrame(transcript).genomic
-    for bp in bp_positions:
-        window = _breakpoint_splice_window(transcript, genomic(bp))
-        if window is None:
-            continue
-        splice_cls, exon, distance = window
-        # If two endpoints land in the same exon's splice window,
-        # only emit one set of splice candidates — the outcomes
-        # are identical.
-        if exon.exon_id in seen_exons:
-            continue
-        seen_exons.add(exon.exon_id)
-        try:
-            synthetic = splice_cls(
-                variant=event.variant,
-                transcript=transcript,
-                nearest_exon=exon,
-                distance_to_exon=distance)
-            splice_set = enumerate_splice_outcomes(synthetic)
-        except (AttributeError, KeyError, ValueError):
-            continue
-        for candidate in splice_set.candidates:
-            if isinstance(candidate.effect, NormalSplicing):
-                # Primary SV classification already covers the
-                # "splicing proceeds normally" interpretation.
-                continue
-            attached.append(EffectCandidate(
-                effect=candidate.effect,
-                source="varcode_splice",
-                evidence={**dict(candidate.evidence), **sv_evidence}))
-    if attached:
-        effect._attach_splice_outcomes(attached)
-
-
-def _enumerate_and_attach_cryptics(variant, effect):
-    """Enumerate cryptic-exon candidates around the SV and hand
-    them to ``effect._attach_cryptic_candidates`` (#337). The
-    annotator is the only legitimate caller of that method —
-    separating enumeration (here) from storage (on the effect)
-    keeps the motif-scoring dependency out of ``effect_classes``.
-
-    No-op when ``effect`` isn't an
-    :class:`StructuralVariantEffect` (e.g. intronic
-    fall-through) or when the enumerator returns nothing.
-    """
-    from ..cryptic_exons import enumerate_from_structural_variant
-    from .effect_classes import StructuralVariantEffect
-    if not isinstance(effect, StructuralVariantEffect):
-        return
-    def enumerate_candidates():
-        try:
-            return enumerate_from_structural_variant(variant)
-        except (AttributeError, KeyError, ValueError, OSError):
-            # Genome sequence fetch failed (no FASTA cached, unknown
-            # contig, etc.) — skip; consumers still get the primary
-            # SV classification.
-            return []
-
-    # The candidates depend only on the variant, not the transcript.
-    candidates = _cached(
-        variant, "cryptic_candidates", enumerate_candidates)
-    if candidates:
-        effect._attach_cryptic_candidates(candidates)
-
-# -- classification helpers -----------------------------------------
-
-
-def _annotate_deletion(event, transcript, assembly=None):
-    """Classify the surviving spliced transcript after a deletion."""
-    affected = _overlapping_exons(event, transcript)
-    if not affected and not any(
-            event.junction_inserted_sequence(junction) != ""
-            and any(_contains(exon, end) for end in junction for exon in transcript.exons)
-            for junction in event.junctions):
-        return _intronic_or_intergenic(event, transcript)
-    return _local_consequence(
-        event, transcript, affected,
-        assembly or _build_deletion_mutant_transcript(event, transcript))
-
-
-def _annotate_duplication(event, transcript, assembly=None):
-    affected = _overlapping_exons(event, transcript)
-    if not affected:
-        return _intronic_or_intergenic(event, transcript)
-    return _local_consequence(
-        event, transcript, affected,
-        assembly or _build_duplication_mutant_transcript(event, transcript))
-
-
-def _annotate_inversion(event, transcript, assembly=None):
-    affected = _overlapping_exons(event, transcript)
-    if not affected:
-        return _intronic_or_intergenic(event, transcript)
-    return _local_consequence(
-        event, transcript, affected,
-        assembly or _build_inversion_mutant_transcript(event, transcript))
-
-
-def _annotate_insertion(event, transcript, assembly=None):
-    affected = _overlapping_exons(event, transcript)
-    if not affected:
-        return _intronic_or_intergenic(event, transcript)
-    # Neither an unknown insertion nor a copy-number call specifies a
-    # tandem-duplicated sequence. Preserve supplied assemblies without
-    # guessing their ORF or replacing them with a reference exon copy.
-    return _local_consequence(event, transcript, affected, assembly)
-
-
-def _local_consequence(event, transcript, affected, model):
-    """Consequence plus evidence for an existing local transcript model."""
-    # Inversion reconstruction still cannot place inserted junction bases.
-    if (event.sv_type == "INV" and model is not None and not event.alt_assembly
-            and any(event.junction_inserted_sequence(junction) != ""
-                    for junction in event.junctions)):
-        model = replace(
-            model, cdna_sequence=None, mutant_protein_sequence=None,
-            evidence={**dict(model.evidence or {}),
-                      "sequence_status": "unresolved_junction_insertion"})
-    effect, model = _classify_structural_transcript(
-        event, transcript, model, affected)
-    frame = TranscriptFrame(transcript)
-    images = frame.images(*_affected_span(event))
-    ambiguous = any(
-        start < low <= end or start <= high < end
-        for start, end in frame.exon_intervals
-        for low, high in images
-        if start <= high and low <= end)
-    evidence = {
-        **_event_evidence(event),
-        "splice_ambiguous": ambiguous,
-        "assumption": "reference_splicing",
-    }
-    if event.sv_type == "DUP":
-        evidence["structure_assumption"] = "tandem_duplication"
-    if model is not None:
-        model = replace(model, evidence={**dict(model.evidence or {}), **evidence})
-    effect.mutant_transcript = model
-    effect.affected_exons = tuple(affected)
-    result = StructuralVariantEffect(
-        event.variant, transcript, primary_effects=(effect,), mutant_transcript=model)
-    result.affected_exons = tuple(affected)
-    result.candidate_evidence = evidence
-    return result
-
-
-def _classify_structural_transcript(event, transcript, model, affected):
-    """Translate a mapped local DEL/DUP and classify its protein consequence.
-
-    Segment coordinates establish the annotated start; an unmapped assembly
-    or unmaterialized inversion must not acquire a guessed reading frame.
-    """
-    from .classify import classify_from_protein_diff
-    from .codon_tables import codon_table_for_transcript, translate_sequence
-    from .sequence_change import _retained_start, structural_sequence_changes
-
+def classify_structural_transcript(event, transcript, model, affected):
+    """Translate a mapped local DEL/DUP model and classify its protein consequence."""
     variant = event.variant
 
     def unresolved(reason):
         return Unresolved(variant, transcript, "structural_transcript", reason), model
 
-    if _deletes_whole_transcript(event, transcript):
-        # Nothing of the transcript remains, whatever its annotated
-        # completeness, so every exon is lost (#541).
+    if deletes_whole_transcript(event, transcript):
         return ExonLoss(variant, transcript, exons=tuple(transcript.exons)), model
     if model is None or model.cdna_sequence is None:
         return unresolved("No complete spliced sequence is available")
@@ -981,14 +144,11 @@ def _classify_structural_transcript(event, transcript, model, affected):
         if event.sv_type in ("DEL", "CN0") and not event.alt_assembly:
             return ExonLoss(variant, transcript, exons=tuple(affected)), model
         return unresolved("Reference transcript has no complete annotated CDS")
-    if (event.alt_assembly or model.reference_segments is None
-            or model.edits):
+    if event.alt_assembly or model.reference_segments is None or model.edits:
         return unresolved("The assembled sequence has no mapped annotated CDS")
 
-    cds_start = _retained_start(model, transcript)
+    cds_start = retained_cds_start(model, transcript)
     if cds_start is None:
-        # The annotated initiation is lost; alternative initiation is not
-        # modeled, so no mutant protein is asserted.
         return StartLoss(variant, transcript, mutant_transcript=model), model
     reference_start = min(transcript.start_codon_spliced_offsets)
     sequence = model.cdna_sequence
@@ -1011,27 +171,28 @@ def _classify_structural_transcript(event, transcript, model, affected):
         coding[:len(coding) // 3 * 3], codon_table=table, to_stop=True,
         selenocysteine={pos - cds_start for pos in decoded})
     protein = "M" + protein[1:] if protein else protein
-    model = replace(model, mutant_protein_sequence=protein,
-                    evidence={**dict(model.evidence or {}), "cds_start": cds_start})
+    model = replace(
+        model,
+        mutant_protein_sequence=protein,
+        evidence={**dict(model.evidence or {}), "cds_start": cds_start},
+    )
 
-    # A local DEL or tandem DUP is one contiguous cDNA edit even when its
-    # genomic span crosses introns. Give the diff classifier that edit's
-    # provenance, without representing it as a second edit over the segments.
     reference = str(transcript.sequence)
-    inserted = "".join(s.source.sequence[s.start:s.end]
-                       for s in model.reference_segments
-                       if s.label == "junction_insertion")
+    inserted = "".join(
+        s.source.sequence[s.start:s.end]
+        for s in model.reference_segments
+        if s.label == "junction_insertion"
+    )
     if event.sv_type in ("DEL", "CN0"):
-        ranges = _deleted_cdna_ranges(event, transcript)
+        ranges = deleted_cdna_ranges(event, transcript)
         edits = tuple(
-            TranscriptEdit(start, end, inserted if index == len(ranges) - 1 else "",
-                           variant)
+            TranscriptEdit(start, end, inserted if index == len(ranges) - 1 else "", variant)
             for index, (start, end) in enumerate(ranges))
     elif event.sv_type == "DUP":
-        inside = _cdna_ranges_within_sv(event, transcript)
+        inside = cdna_ranges_within_sv(event, transcript)
         start = inside[-1][1]
-        edits = (TranscriptEdit(start, start, inserted + "".join(
-            reference[s:e] for s, e in inside), variant),)
+        edits = (TranscriptEdit(
+            start, start, inserted + "".join(reference[s:e] for s, e in inside), variant),)
     else:
         return unresolved("No mapped coding edit is available")
 
@@ -1049,300 +210,203 @@ def _classify_structural_transcript(event, transcript, model, affected):
             variant, transcript, reference_protein, protein,
             length_delta=sum(
                 edit.length_delta for edit in edits if edit.cdna_start < stop),
-            mutant_transcript=diff_model)
-        # Concrete effects reconstruct their protein from the reference.
-        # Use the same initiated reference passed to the diff classifier
-        # (Ensembl can spell a CTG/TTG initiator as L).
+            mutant_transcript=diff_model,
+        )
         effect._original_protein_sequence = reference_protein
         if after_stop:
             effect._modifies_coding_sequence = False
     return effect, model
 
 
-def _annotate_breakend(variant, transcript, assembly=None):
-    """A breakend whose breakpoint lies on ``transcript`` and whose
-    junction leaves ``transcript``'s gene. If the join links this
-    transcript sense-to-sense with a protein-coding transcript at the
-    mate, report :class:`GeneFusion`; otherwise
-    :class:`TranslocationToUnannotatedContig` when the mate's contig has no
-    annotation, else :class:`TranslocationToIntergenic`.
-    """
+def local_consequence(event, transcript, affected, model):
+    """Wrap a classified local SV transcript model with splice-ambiguity evidence."""
+    if (event.sv_type == "INV" and model is not None and not event.alt_assembly
+            and any(event.junction_inserted_sequence(junction) != ""
+                    for junction in event.junctions)):
+        model = replace(
+            model, cdna_sequence=None, mutant_protein_sequence=None,
+            evidence={**dict(model.evidence or {}),
+                      "sequence_status": "unresolved_junction_insertion"})
+    effect, model = classify_structural_transcript(event, transcript, model, affected)
+    frame = TranscriptFrame(transcript)
+    images = frame.images(*affected_span(event))
+    ambiguous = any(
+        start < low <= end or start <= high < end
+        for start, end in frame.exon_intervals
+        for low, high in images
+        if start <= high and low <= end)
+    evidence = {
+        **event_evidence(event),
+        "splice_ambiguous": ambiguous,
+        "assumption": "reference_splicing",
+    }
+    if event.sv_type == "DUP":
+        evidence["structure_assumption"] = "tandem_duplication"
+    if model is not None:
+        model = replace(model, evidence={**dict(model.evidence or {}), **evidence})
+    effect.mutant_transcript = model
+    effect.affected_exons = tuple(affected)
+    result = StructuralVariantEffect(
+        event.variant, transcript, primary_effects=(effect,), mutant_transcript=model)
+    result.affected_exons = tuple(affected)
+    result.candidate_evidence = evidence
+    return result
+
+
+def annotate_deletion(event, transcript, assembly=None):
+    """Classify the surviving spliced transcript after a ``DEL`` event."""
+    affected = overlapping_exons(event, transcript)
+    if not affected and not any(
+            event.junction_inserted_sequence(junction) != ""
+            and any(feature_contains_breakend(exon, end)
+                    for end in junction for exon in transcript.exons)
+            for junction in event.junctions):
+        return intronic_or_intergenic(event, transcript)
+    return local_consequence(
+        event, transcript, affected,
+        assembly or build_deletion_mutant_transcript(event, transcript))
+
+
+def annotate_duplication(event, transcript, assembly=None):
+    """Classify a local ``DUP`` event on ``transcript``."""
+    affected = overlapping_exons(event, transcript)
+    if not affected:
+        return intronic_or_intergenic(event, transcript)
+    return local_consequence(
+        event, transcript, affected,
+        assembly or build_duplication_mutant_transcript(event, transcript))
+
+
+def annotate_inversion(event, transcript, assembly=None):
+    """Classify a local ``INV`` event on ``transcript``."""
+    affected = overlapping_exons(event, transcript)
+    if not affected:
+        return intronic_or_intergenic(event, transcript)
+    return local_consequence(
+        event, transcript, affected,
+        assembly or build_inversion_mutant_transcript(event, transcript))
+
+
+def annotate_insertion(event, transcript, assembly=None):
+    """Classify a local ``INS`` or ``CNV`` event on ``transcript``."""
+    affected = overlapping_exons(event, transcript)
+    if not affected:
+        return intronic_or_intergenic(event, transcript)
+    return local_consequence(event, transcript, affected, assembly)
+
+
+def annotate_breakend(variant, transcript, assembly=None):
+    """Classify a breakend whose junction leaves ``transcript``'s gene."""
     if variant.junctions:
-        # With a resolved alt_assembly the caller has already
-        # settled orientation, so an unreadable ALT isn't worth a
-        # warning.
-        if (assembly is None
-                and breakend_sides(variant.symbolic_alt) is None):
-            _warn_on_unknown_breakend_orientation(variant)
-        fusion = _fusion_across_junction(
-            variant, transcript, assembly)
+        if assembly is None and breakend_sides(variant.symbolic_alt) is None:
+            warn_on_unknown_breakend_orientation(variant)
+        fusion = fusion_across_junction(variant, transcript, assembly)
         if fusion is not None:
             return fusion
-    model = assembly or _build_translocation_mutant_transcript(variant, transcript)
-    partner_contig = _unannotated_partner_contig(variant, transcript)
+    model = assembly or build_translocation_mutant_transcript(variant, transcript)
+    partner_contig = unannotated_partner_contig(variant, transcript)
     if partner_contig is not None:
         return TranslocationToUnannotatedContig(
-            variant=variant, transcript=transcript,
-            partner_contig=partner_contig, mutant_transcript=model)
+            variant=variant,
+            transcript=transcript,
+            partner_contig=partner_contig,
+            mutant_transcript=model,
+        )
     return TranslocationToIntergenic(
         variant=variant, transcript=transcript, mutant_transcript=model)
 
 
-def _unannotated_partner_contig(variant, transcript):
-    """The first contig, at a junction end leaving ``transcript``'s gene,
-    that the annotation has no genes on, or None. pyensembl finds no
-    transcripts on such a contig, which doesn't make the mate intergenic
-    (#709)."""
-    annotated = variant.genome.contigs()
-    for _, far in _junction_ends(variant, transcript):
-        if str(far.contig) not in annotated:
-            return str(far.contig)
-    return None
-
-# -- utilities ------------------------------------------------------
-
-
-def _deletes_whole_transcript(variant, transcript):
-    """True for a DEL/CN0, without a supplied assembly, whose deleted
-    reference span contains the entire transcript."""
-    if (variant.sv_type not in ("DEL", "CN0") or variant.alt_assembly
-            or str(variant.contig) != str(transcript.contig)):
-        return False
-    frame = TranscriptFrame(transcript)
-    covered = sum(
-        max(0, min(high, frame.end) - max(low, frame.start) + 1)
-        for low, high in frame.images(*_affected_span(variant)))
-    return covered >= frame.end - frame.start + 1
-
-
-def _overlapping_exons(variant, transcript):
-    """Return the exons (in transcript order) that overlap the SV
-    span on this transcript's contig. Contig mismatch => empty."""
-    if str(variant.contig) != str(transcript.contig):
-        return []
-    frame = TranscriptFrame(transcript)
-    images = frame.images(*_affected_span(variant))
-    return [
-        exon for exon, (start, end) in zip(frame.exons, frame.exon_intervals)
-        if any(start <= high and low <= end for low, high in images)]
-
-
-def _intronic_or_intergenic(event, transcript):
-    """Classify an SV that doesn't overlap any exon — either
-    intronic (breakpoints inside the transcript envelope) or
-    intergenic."""
-    image = (_contained_image(event, transcript)
-             if str(event.contig) == str(transcript.contig) else None)
-    if image is not None:
-        # Inside the transcript envelope but outside every exon
-        # => intronic.  Distance-to-exon detail is best-effort:
-        # find the nearest exon start/end for diagnostic use.
-        var_start = image[0]
-        frame = TranscriptFrame(transcript)
-        distance, nearest_exon = min(
-            (min(abs(start - var_start), abs(end - var_start)), index)
-            for index, (start, end) in enumerate(frame.exon_intervals))
-        nearest_exon = frame.exons[nearest_exon]
-        return Intronic(
-            variant=event.variant,
-            transcript=transcript,
-            nearest_exon=nearest_exon,
-            distance_to_exon=distance)
-    return Intergenic(variant=event.variant)
-
-
-def _fusion_across_junction(variant, transcript, assembly):
-    """Fusion candidates across all compatible junctions and partner isoforms.
-
-    Return the first :class:`GeneFusion`, carrying all other fusions in its
-    primary candidates, or ``None``. Annotation order is not a likelihood
-    ranking; no compatible partner is discarded by a candidate-count limit.
-
-    Junction ends are those of :func:`_junction_ends`. The kept side
-    and the strand give the transcript's role — keeping its 5' end makes it
-    the 5' partner — and the partner at the other end has to keep
-    the opposite end, which is what makes the join sense-to-sense.
-    Junctions where this transcript is the 5' partner are tried
-    first. A kept side of ``None`` (unreadable ALT) treats the
-    transcript as the 5' partner and accepts any partner.
-    """
-    def keeps_five_prime(breakend):
-        return breakend.keeps is None or _retains_five_prime_end(
-            transcript, breakend.keeps)
-
-    fusions = []
-    seen = set()
-    for near, far in sorted(
-            _junction_ends(variant, transcript),
-            key=lambda pair: not keeps_five_prime(pair[0])):
-        five_prime = keeps_five_prime(near)
-        for partner in _fusion_partners(
-                variant, transcript, near, far, five_prime):
-            key = (near, far, partner.id)
-            if key in seen:
-                continue
-            seen.add(key)
-            if five_prime:
-                five, five_position = transcript, near.position
-                three, three_position = partner, far.position
-            else:
-                five, five_position = partner, far.position
-                three, three_position = transcript, near.position
-            junction = (near, far) if five_prime else (far, near)
-            inserted = (variant.junction_inserted_sequence(junction)
-                        if hasattr(variant, "junction_inserted_sequence") else None)
-            fusions.append(GeneFusion(
-                variant=variant,
-                transcript=transcript,
-                partner_transcript=partner,
-                five_prime_transcript=five,
-                three_prime_transcript=three,
-                mutant_transcript=assembly or _build_fusion_mutant_transcript(
-                    transcript, five, five_position, three, three_position,
-                    inserted_sequence=inserted)))
-    if not fusions:
-        return None
-    primary = fusions[0]
-    primary._attach_primary_effects(fusions[1:])
-    return primary
-
-
-def _junction_ends(variant, transcript):
-    """``(near, far)`` for each junction end that belongs to
-    ``transcript``: the transcript spans ``near`` and its *gene* doesn't
-    span ``far``. An event with both ends in one gene is intragenic,
-    however short the isoform being annotated."""
-    gene = transcript.gene
-    return [(near, far)
-            for junction in getattr(variant, "junctions", ())
-            for near, far in (junction, junction[::-1])
-            if _contains(transcript, near) and not _contains(gene, far)]
-
-
-def _upstream_fusions(variant, transcript, assembly):
-    """:class:`GeneFusion` candidates with 3' partners that start just
-    past a junction end rather than spanning it (#550).
-
-    When ``transcript`` keeps its 5' end and the junction continues, on
-    a partner's strand, into the stretch at most
-    :data:`MAX_UPSTREAM_PARTNER_DISTANCE` bases before that partner
-    starts, the whole partner is retained. Its first exon has no splice
-    acceptor, so the fusion joins its second exon, as in LINX. Whether
-    RNA splices that way is uncertain, so the annotator adds these after
-    its primary classification rather than in place of it. Each model
-    records the distance in its evidence.
-    """
-    fusions = []
-    for near, far in _junction_ends(variant, transcript):
-        if (near.keeps is None or far.keeps is None
-                or not _retains_five_prime_end(transcript, near.keeps)):
-            continue
-        inserted = (variant.junction_inserted_sequence((near, far))
-                    if hasattr(variant, "junction_inserted_sequence") else None)
-        for partner, distance in _upstream_partners(variant, far):
-            if (partner.gene_id == transcript.gene_id
-                    or _contains(partner.gene, near)):
-                continue
-            model = assembly or _build_fusion_mutant_transcript(
-                transcript, transcript, near.position, partner, far.position,
-                inserted_sequence=inserted,
-                three_prime_start=exon_length(transcript_exons(partner)[0]))
-            if model is not None and not assembly:
-                model = replace(model, evidence={
-                    **dict(model.evidence or {}),
-                    "three_prime_breakend": "upstream",
-                    "three_prime_upstream_distance": distance})
-            fusions.append(GeneFusion(
-                variant=variant,
-                transcript=transcript,
-                partner_transcript=partner,
-                five_prime_transcript=transcript,
-                three_prime_transcript=partner,
-                mutant_transcript=model))
-    return fusions
-
-
-def _upstream_partners(variant, far):
-    """``(transcript, distance)`` for each protein-coding transcript with
-    a second exon that starts on ``far``'s kept side, at most
-    :data:`MAX_UPSTREAM_PARTNER_DISTANCE` bases past it, and is read away
-    from it. Cached like :func:`_coding_transcripts_at`."""
-    def lookup():
-        position = int(far.position)
-        forward = far.keeps == "right"
-        low, high = ((position + 1, position + MAX_UPSTREAM_PARTNER_DISTANCE)
-                     if forward else
-                     (max(1, position - MAX_UPSTREAM_PARTNER_DISTANCE), position - 1))
-        try:
-            transcripts = transcripts_at_locus(
-                variant.genome, str(far.contig), low, high)
-        except ValueError:
-            return []
-        partners = []
-        for transcript in transcripts:
-            # The 5' end, which for a transcript across a circular origin
-            # is not its linear start.
-            first = transcript_exons(transcript)[0]
-            distance = (first.start - position if forward
-                        else position - first.end)
-            if (transcript.is_protein_coding and len(transcript.exons) > 1
-                    and transcript.strand == ("+" if forward else "-")
-                    and 0 < distance <= MAX_UPSTREAM_PARTNER_DISTANCE):
-                partners.append((transcript, distance))
-        return partners
-
-    return _cached(
-        variant, ("upstream_partners", str(far.contig), int(far.position), far.keeps),
-        lookup)
-
-
-def _fusion_partners(
-        variant, transcript, near, far, transcript_is_five_prime):
-    """Yield every protein-coding transcript at ``far`` that fuses with
-    ``transcript``, in annotation order.
-
-    A partner is in another gene, keeps the end opposite to
-    ``transcript``'s, and — like ``transcript`` — belongs to a gene
-    that doesn't span both ends of the junction. An unknown kept
-    side accepts any partner.
-    """
-    for candidate in _coding_transcripts_at(
-            variant, far.contig, far.position):
-        if candidate.gene_id == transcript.gene_id:
-            continue
-        if _contains(candidate.gene, near):
-            continue
-        if far.keeps is None or (
-                _retains_five_prime_end(candidate, far.keeps)
-                != transcript_is_five_prime):
-            yield candidate
-
-
-def _coding_transcripts_at(variant, contig, position):
-    """Protein-coding transcripts overlapping ``contig:position`` in
-    the variant's genome, in pyensembl's order. Cached on the
-    variant, since every transcript at one end of a junction asks
-    the same question about the other end."""
-    def lookup():
-        try:
-            transcripts = transcripts_at_locus(
-                variant.genome, str(contig), int(position), int(position))
-        except ValueError:
-            # A contig the genome doesn't know, e.g. a mate on a decoy or
-            # unplaced contig; _annotate_breakend reports it (#709).
-            return []
-        return [t for t in transcripts if t.is_protein_coding]
-
-    return _cached(
-        variant, ("coding_transcripts", str(contig), int(position)),
-        lookup)
-
-
-# Reference-span events share the same implementation regardless of caller.
-_SPAN_EFFECTS = {
-    "DEL": _annotate_deletion,
-    "DUP": _annotate_duplication,
-    "INV": _annotate_inversion,
-    "CNV": _annotate_insertion,
-    "INS": _annotate_insertion,
+SPAN_EFFECT_BUILDERS = {
+    "DEL": annotate_deletion,
+    "DUP": annotate_duplication,
+    "INV": annotate_inversion,
+    "CNV": annotate_insertion,
+    "INS": annotate_insertion,
 }
+
+
+def predict_structural_variant_effect(variant, transcript):
+    """Classify structural ``variant`` on ``transcript``."""
+    from pyensembl import Transcript
+    from ..orf import ORFTranscriptView
+
+    if not isinstance(transcript, (Transcript, ORFTranscriptView)):
+        raise TypeError(
+            "Expected a reference or ORF transcript, got %s" % type(transcript))
+
+    sv_type = getattr(variant, "sv_type", None)
+    if (not getattr(variant, "is_structural", False)
+            or (sv_type != "BND" and sv_type not in SPAN_EFFECT_BUILDERS)):
+        return NotImplemented
+
+    if not transcript.is_protein_coding:
+        return NoncodingTranscript(variant, transcript)
+
+    assembly = build_alt_assembly_mutant_transcript(variant, transcript)
+    event = local_event(variant, transcript)
+    if event is None:
+        effect = annotate_breakend(variant, transcript, assembly)
+    else:
+        span_effect = SPAN_EFFECT_BUILDERS[event.sv_type](event, transcript, assembly)
+        effect = fusion_across_junction(variant, transcript, assembly)
+        if effect is None:
+            effect = span_effect
+        elif isinstance(span_effect, StructuralVariantEffect):
+            effect._attach_primary_effects((span_effect,))
+    if isinstance(effect, StructuralVariantEffect):
+        effect._attach_primary_effects(
+            upstream_fusions(variant, transcript, assembly))
+
+    structural_candidates.enumerate_and_attach_cryptics(variant, effect)
+    structural_candidates.enumerate_and_attach_splice_outcomes(
+        event or LocalEvent.of(variant), transcript, effect)
+    if (type(effect) is StructuralVariantEffect
+            and len(effect.candidates) == 1
+            and not effect.candidate_evidence.get("splice_ambiguous")
+            and not isinstance(effect.most_likely_effect, Unresolved)):
+        return effect.most_likely_effect
+    return effect
+
+
+__all__ = [
+    "LocalEvent",
+    "MAX_UPSTREAM_PARTNER_DISTANCE",
+    "SPAN_EFFECT_BUILDERS",
+    "annotate_breakend",
+    "annotate_deletion",
+    "annotate_duplication",
+    "annotate_insertion",
+    "annotate_inversion",
+    "breakpoint_splice_window",
+    "build_alt_assembly_mutant_transcript",
+    "build_deletion_mutant_transcript",
+    "build_duplication_mutant_transcript",
+    "build_fusion_mutant_transcript",
+    "build_inversion_mutant_transcript",
+    "build_translocation_mutant_transcript",
+    "cdna_cut",
+    "cdna_ranges_within_sv",
+    "classify_structural_transcript",
+    "coding_transcripts_at",
+    "contained_image",
+    "deleted_cdna_ranges",
+    "deletes_whole_transcript",
+    "enumerate_and_attach_cryptics",
+    "enumerate_and_attach_splice_outcomes",
+    "event_evidence",
+    "feature_contains_breakend",
+    "fusion_across_junction",
+    "fusion_partners",
+    "intronic_or_intergenic",
+    "junction_ends",
+    "local_consequence",
+    "local_event",
+    "overlapping_exons",
+    "predict_structural_variant_effect",
+    "retains_five_prime_end",
+    "translate_fused_cdna",
+    "unannotated_partner_contig",
+    "upstream_fusions",
+    "upstream_partners",
+    "warn_on_unknown_breakend_orientation",
+]

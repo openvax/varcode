@@ -10,7 +10,7 @@ from pyensembl import cached_release
 from varcode import StructuralVariant
 from varcode.effects import (
     ExonLoss, FivePrimeUTR, FrameShift, StartLoss, ThreePrimeUTR, Unresolved)
-from varcode.effects import structural
+from varcode.effects import structural_candidates, structural_fusions
 from varcode.effects.codon_tables import translate_sequence
 from varcode.nucleotides import reverse_complement
 
@@ -19,9 +19,11 @@ from .test_structural_variant_annotator import _pair_direct_breakends
 
 @pytest.fixture(autouse=True)
 def local_model(monkeypatch):
-    monkeypatch.setattr(structural, "_fusion_partners", lambda *args: ())
-    monkeypatch.setattr(structural, "_enumerate_and_attach_cryptics", lambda *args: None)
-    monkeypatch.setattr(structural, "_enumerate_and_attach_splice_outcomes", lambda *args: None)
+    monkeypatch.setattr(structural_fusions, "fusion_partners", lambda *args: ())
+    monkeypatch.setattr(
+        structural_candidates, "enumerate_and_attach_cryptics", lambda *args: None)
+    monkeypatch.setattr(
+        structural_candidates, "enumerate_and_attach_splice_outcomes", lambda *args: None)
 
 
 @pytest.fixture(params=["ENST00000003084", "ENST00000357654"])

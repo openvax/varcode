@@ -27,6 +27,7 @@ from .annotators import (
     get_annotator,
     get_default_annotator,
     register_annotator,
+    registered_annotators,
     resolve_annotator,
     set_default_annotator,
     use_annotator,
@@ -56,6 +57,7 @@ from .germline import (
 )
 from .genotype import Genotype, Zygosity
 from .mutant_transcript import (
+    AssembledAllele,
     MutantTranscript,
     ReferenceSegment,
     TranscriptEdit,
@@ -122,6 +124,14 @@ from .effects import (
     classification_priority,
     top_priority_effect,
     EffectCollection,
+    EffectReference,
+    effect_collection_from_json,
+    effect_collection_from_serializable_repr,
+    effect_collection_to_json,
+    effect_from_json,
+    effect_from_serializable_repr,
+    effect_serialization_classes,
+    effect_to_json,
     MultiOutcomeEffect,
     MutationEffect,
     NonsilentCodingMutation,
@@ -179,6 +189,7 @@ __all__ = [
     "CrypticAcceptor",
 
     # MutantTranscript data model + pluggable annotators (openvax/varcode#271)
+    "AssembledAllele",
     "MutantTranscript",
     "ReferenceSegment",
     "TranscriptEdit",
@@ -230,11 +241,20 @@ __all__ = [
     "get_annotator",
     "get_default_annotator",
     "register_annotator",
+    "registered_annotators",
     "resolve_annotator",
     "set_default_annotator",
     "use_annotator",
 
     # effects
+    "EffectReference",
+    "effect_collection_from_json",
+    "effect_collection_from_serializable_repr",
+    "effect_collection_to_json",
+    "effect_from_json",
+    "effect_from_serializable_repr",
+    "effect_serialization_classes",
+    "effect_to_json",
     "effect_priority",
     "classification_priority",
     "top_priority_effect",

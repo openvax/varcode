@@ -16,7 +16,7 @@ from varcode import (
 from varcode.effects import (
     EffectCollection, GeneFusion, LargeDeletion, StructuralVariantEffect,
 )
-from varcode.effects import structural
+from varcode.effects import structural, structural_candidates, structural_fusions
 
 # Legacy wrapper contract; the default composition path has separate regression tests.
 pytestmark = pytest.mark.usefixtures("legacy_annotator")
@@ -27,9 +27,11 @@ SELENOPROTEINS = ["ENST00000419783", "ENST00000354171", "ENST00000514985", "ENST
 
 @pytest.fixture
 def isolate_span(monkeypatch):
-    monkeypatch.setattr(structural, "_fusion_partners", lambda *args: ())
-    monkeypatch.setattr(structural, "_enumerate_and_attach_cryptics", lambda *args: None)
-    monkeypatch.setattr(structural, "_enumerate_and_attach_splice_outcomes", lambda *args: None)
+    monkeypatch.setattr(structural_fusions, "fusion_partners", lambda *args: ())
+    monkeypatch.setattr(
+        structural_candidates, "enumerate_and_attach_cryptics", lambda *args: None)
+    monkeypatch.setattr(
+        structural_candidates, "enumerate_and_attach_splice_outcomes", lambda *args: None)
 
 
 def _transcript(transcript_id):
@@ -139,7 +141,7 @@ def test_fusion_of_a_selenoprotein_five_prime_partner(breakpoint, coding, protei
                 position = exon.start + offset
                 break
             offset -= exon.end - exon.start + 1
-    model = structural._build_fusion_mutant_transcript(t, t, position, partner, partner.end - 10)
+    model = structural.build_fusion_mutant_transcript(t, t, position, partner, partner.end - 10)
     variant = StructuralVariant(t.contig, position, "BND", genome=t.genome)
     effect = GeneFusion(variant, t, partner, mutant_transcript=model)
     assert effect.modifies_coding_sequence is coding

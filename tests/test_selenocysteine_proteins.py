@@ -22,7 +22,7 @@ from varcode.genomic_layout import GenomicLayout, LayoutSegment
 from varcode.mutant_transcript import apply_variant_to_transcript, apply_variants_to_transcript
 from varcode.splice_outcomes import _build_exon_skip_mutant_transcript
 from varcode.transcript_layout import realize_exon_path
-from varcode.transcript_model import _provider_for_genome
+from varcode.transcript_model import provider_for_genome
 
 # GPX1 (-), GPX4 (+), SEPP1 (-, ten Sec), TXNRD1 (+, Sec is the penultimate residue).
 SELENOPROTEINS = ["ENST00000419783", "ENST00000354171", "ENST00000514985", "ENST00000525566"]
@@ -131,7 +131,7 @@ def test_insertion_disrupting_sec_codon_creates_a_stop():
     t = _transcript("ENST00000354171")
     variant = Variant("19", 1105403, "", "GAC", t.genome)
     layout = GenomicLayout.from_transcript(
-        t, sequence_provider=_provider_for_genome(t.genome, t))
+        t, sequence_provider=provider_for_genome(t.genome, t))
     product = realize_exon_path(t, layout.apply_point_variant(variant))
     # The new TGA retains only the annotated Sec codon's first base.
     assert product.protein_sequence == t.protein_sequence[:72]
@@ -215,7 +215,7 @@ def test_exon_skipping_keeps_selenocysteine(transcript_id, index):
 
 
 def _fusion(five_prime, five_prime_position, three_prime, three_prime_position):
-    model = structural._build_fusion_mutant_transcript(
+    model = structural.build_fusion_mutant_transcript(
         five_prime, five_prime, five_prime_position, three_prime, three_prime_position)
     variant = StructuralVariant(five_prime.contig, five_prime_position, "BND",
                                 genome=five_prime.genome)

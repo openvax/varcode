@@ -6,7 +6,11 @@ from warnings import warn
 
 from .effects.effect_classes import Failure
 from .orf import (
-    ORFAnnotation, _annotate_orf_variants, _bind, _contig, _orf_key,
+    ORFAnnotation,
+    annotate_bound_orf_variants,
+    bind_orf_reference,
+    orf_annotation_key,
+    orf_contig_name,
 )
 from .version import __version__
 
@@ -18,13 +22,13 @@ def _span(record):
         positions.extend(record.initiation_context.genomic_positions)
     if not positions or record.contig is None:
         return None
-    return (_contig(record.contig, getattr(record, "genome_build", None)),
+    return (orf_contig_name(record.contig, getattr(record, "genome_build", None)),
             min(positions) - 6, max(positions) + 6)
 
 
 def _variant_contig(variant):
     # With the build, so hg19's chrM never pairs with an MT ORF (#707).
-    return _contig(variant.contig, getattr(variant.genome, "assembly", variant.reference_name))
+    return orf_contig_name(variant.contig, getattr(variant.genome, "assembly", variant.reference_name))
 
 
 def _overlaps(variant, record):
@@ -125,7 +129,7 @@ class ExtraORFInput:
             self._index = _SpanIndex(entries)
         result, seen = [], set()
         for record, reference, reason in self._index.overlapping(variant):
-            key = (_orf_key(reference) if reference is not None else
+            key = (orf_annotation_key(reference) if reference is not None else
                    (record.source, record.orf_id, record.transcript_id))
             if key in seen:
                 continue
@@ -138,7 +142,7 @@ class ExtraORFInput:
                 if transcript_filter is not None and not transcript_filter(transcript):
                     continue
                 if reference is None:
-                    reference = _bind(record, transcript, variant.reference_name)
+                    reference = bind_orf_reference(record, transcript, variant.reference_name)
                 annotation = _annotate(
                     (variant,), reference, metadata=self.metadata,
                     germline=germline, phase_resolver=phase_resolver,
@@ -366,7 +370,7 @@ def _annotate(variants, reference, *, metadata=None, germline=None,
                     "Observed RNA for extra ORFs requires annotate_orf_rna_product() with base origins")
     germline_variants = () if not germline else germline.variants_in_window(
         transcript.contig, transcript.start, transcript.end)
-    annotation = _annotate_orf_variants(
+    annotation = annotate_bound_orf_variants(
         variants, reference.record, transcript, genome_build=reference.context.genome_build,
         reference=reference, metadata=metadata, germline_variants=germline_variants,
         homozygous_germline=() if not germline else germline.homozygous(germline_variants),
