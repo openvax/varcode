@@ -116,6 +116,4 @@ unpaired BNDs to combine because every combined row's `source_variants`
 is already populated.
 
 
-The proposed `combine_cis_snvs` transform is tracked in
-[#368](https://github.com/openvax/varcode/issues/368); it is not a shipped API.
 User-facing examples belong in the [transforms guide](https://openvax.github.io/varcode/transforms/).

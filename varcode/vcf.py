@@ -22,13 +22,15 @@ from warnings import warn
 
 import pandas
 
-from .contigs import RCRS_LENGTH, is_grch37
+from .contigs import (
+    RCRS_LENGTH, annotation_contig_name, is_grch37, is_hg19_mitochondrion)
+from .genotype import Genotype
 from .pinned_references import (
     find_pinned_name, is_pinned_assembly, names_rcrs, pinned_assembly, pinned_contig_lengths,
     pinned_contig_name)
 from .reference import split_release, assembly_in_file_name, infer_genome
 from .variant import Variant, variant_ascending_position_sort_key
-from .variant_collection import VariantCollection
+from .variant_collection import SpanningDeletionRecord, VariantCollection
 from .vcf_parsing import VCFHeader, split_struct_fields
 
 
@@ -427,6 +429,155 @@ def load_vcf_fast(*args, **kwargs):
     return load_vcf(*args, **kwargs)
 
 
+def _normalize_spanning_contig(chrom, variant_kwargs):
+    """Normalize a spanning-deletion row's CHROM like :class:`Variant`."""
+    raw = str(chrom)
+    genome_arg = variant_kwargs.get("genome")
+    if genome_arg is None:
+        genome_arg = "GRCh38"
+    resolved_genome, was_ucsc = infer_genome(genome_arg)
+    assembly = getattr(resolved_genome, "assembly", resolved_genome.reference_name)
+    normalize_names = variant_kwargs.get("normalize_contig_names", True)
+    convert_ucsc = variant_kwargs.get("convert_ucsc_contig_names")
+    if convert_ucsc is None:
+        convert_ucsc = was_ucsc
+    chrm_is_rcrs = bool(variant_kwargs.get("chrm_is_rcrs", False))
+    if normalize_names:
+        return annotation_contig_name(raw, assembly, convert_ucsc, chrm_is_rcrs)
+    if not convert_ucsc:
+        return raw
+    pinned = pinned_contig_name(raw, assembly, chrm_is_rcrs)
+    if pinned is not None:
+        return pinned
+    if is_hg19_mitochondrion(raw, assembly, chrm_is_rcrs):
+        return "chrM"
+    return annotation_contig_name(raw, assembly, True, chrm_is_rcrs)
+
+
+def _deletion_covers_position(variant: Variant, contig: str, pos: int) -> bool:
+    """Return True when ``variant`` is an upstream deletion spanning ``pos``."""
+    if variant.contig != contig:
+        return False
+    if getattr(variant, "is_structural", False):
+        if getattr(variant, "sv_type", None) != "DEL":
+            return False
+        affected_start = getattr(variant, "affected_start", None)
+        affected_end = getattr(variant, "affected_end", None)
+        if affected_start is not None and affected_end is not None:
+            return affected_start <= pos <= affected_end and variant.start < pos
+        end = getattr(variant, "end", None)
+        return end is not None and variant.start < pos <= end
+    if not variant.is_deletion:
+        return False
+    return variant.original_start < pos and variant.start <= pos <= variant.end
+
+
+def _deletion_matches_star_evidence(
+        deletion: Variant,
+        deletion_meta: dict | None,
+        star_sample_info: dict | None,
+        star_gt_idx: int,
+) -> bool:
+    """Return True when source sample/phase evidence supports linking ``*`` to ``deletion``."""
+    if star_sample_info is None:
+        return True
+    carriers: dict[str, Genotype] = {}
+    for sample_name, fields in star_sample_info.items():
+        if not fields:
+            continue
+        gt = Genotype.from_sample_info(fields)
+        if star_gt_idx in gt.alleles:
+            carriers[sample_name] = gt
+    if not carriers:
+        return False
+    del_sample_info = (deletion_meta or {}).get("sample_info")
+    if not del_sample_info:
+        return False
+    del_alt_index = (deletion_meta or {}).get("alt_allele_index")
+    del_gt_idx = 1 if del_alt_index is None else del_alt_index + 1
+    for sample_name, star_gt in carriers.items():
+        del_fields = del_sample_info.get(sample_name)
+        if not del_fields:
+            return False
+        del_gt = Genotype.from_sample_info(del_fields)
+        if del_gt_idx not in del_gt.alleles:
+            return False
+        if (
+            star_gt.phased
+            and del_gt.phased
+            and star_gt.phase_set is not None
+            and del_gt.phase_set is not None
+            and star_gt.phase_set == del_gt.phase_set
+        ):
+            for slot, allele in enumerate(star_gt.alleles):
+                if allele == star_gt_idx:
+                    if slot >= len(del_gt.alleles) or del_gt.alleles[slot] != del_gt_idx:
+                        return False
+    return True
+
+
+def _resolve_spanning_deletion_records(
+        pending_records: list[dict],
+        variants: list[Variant],
+        metadata: dict[Variant, dict],
+) -> tuple[SpanningDeletionRecord, ...]:
+    """Attach uniquely resolved upstream deletions to ``*`` placeholder records."""
+    if not pending_records:
+        return ()
+    deletions_by_contig: dict[str, list[Variant]] = {}
+    seen_deletions: set[Variant] = set()
+    for variant in variants:
+        if variant in seen_deletions:
+            continue
+        is_del = (
+            getattr(variant, "sv_type", None) == "DEL"
+            if getattr(variant, "is_structural", False)
+            else variant.is_deletion
+        )
+        if is_del:
+            seen_deletions.add(variant)
+            deletions_by_contig.setdefault(variant.contig, []).append(variant)
+
+    resolved: list[SpanningDeletionRecord] = []
+    for entry in pending_records:
+        contig = entry["contig"]
+        pos = entry["start"]
+        star_gt_idx = entry["alt_allele_index"] + 1
+        matches = [
+            deletion
+            for deletion in deletions_by_contig.get(contig, ())
+            if _deletion_covers_position(deletion, contig, pos)
+            and _deletion_matches_star_evidence(
+                deletion, metadata.get(deletion), entry["sample_info"], star_gt_idx)
+        ]
+        if len(matches) == 1:
+            upstream = matches[0]
+            status: Literal["resolved", "unresolved", "ambiguous"] = "resolved"
+        elif len(matches) > 1:
+            upstream = None
+            status = "ambiguous"
+        else:
+            upstream = None
+            status = "unresolved"
+        resolved.append(SpanningDeletionRecord(
+            contig=contig,
+            original_contig=entry["original_contig"],
+            start=pos,
+            ref=entry["ref"],
+            alt_allele_index=entry["alt_allele_index"],
+            vcf_alt_alleles=entry["vcf_alt_alleles"],
+            id=entry["id"],
+            qual=entry["qual"],
+            filter=entry["filter"],
+            info=entry["info"],
+            sample_info=entry["sample_info"],
+            source=entry["source"],
+            upstream_deletion=upstream,
+            upstream_deletion_status=status,
+        ))
+    return tuple(resolved)
+
+
 def dataframes_to_variant_collection(
         dataframes,
         source_path,
@@ -516,6 +667,7 @@ def dataframes_to_variant_collection(
 
     variants = []
     metadata = {}
+    pending_spanning_deletions: list[dict] = []
     structural_variant_genome = variant_kwargs.get("genome")
     # Split the skip counters so the user-facing warning can name a fix.
     # ``flag_off``: symbolic ALT seen with ``parse_structural_variants=False``
@@ -523,8 +675,8 @@ def dataframes_to_variant_collection(
     # ``unparseable``: flag is on but ``parse_symbolic_alt`` couldn't
     #   recognize the ALT shape — typically a malformed or
     #   caller-specific extension; the flag won't help.
-    # The spanning-deletion ``*`` placeholder is silent — every consumer
-    # drops it and warning every time would just be noise.
+    # The spanning-deletion ``*`` placeholder is silent and never becomes an
+    # annotatable Variant, while retaining row-level provenance (#264).
     n_skipped_flag_off = 0
     n_skipped_unparseable = 0
     n_skipped_no_change = 0
@@ -551,11 +703,32 @@ def dataframes_to_variant_collection(
                 id_ = None
             qual = float(qual) if qual != "." else None
             info = sample_info = None
-            for alt_num, alt in enumerate(alts.split(",")):
+            alt_alleles = tuple(alts.split(","))
+            for alt_num, alt in enumerate(alt_alleles):
                 # Missing ALT and spanning-deletion placeholders are not
                 # independently annotatable alleles and do not count toward
                 # the limit. enumerate preserves the original VCF ALT index.
-                if alt in (".", "*"):
+                if alt == ".":
+                    continue
+                if alt == "*":
+                    if info_parser is not None and info is None:
+                        info = info_parser(tpl[8])
+                        if sample_names:
+                            sample_info = sample_info_parser(list(tpl[10:]), tpl[9])
+                    pending_spanning_deletions.append({
+                        "contig": _normalize_spanning_contig(chrom, variant_kwargs),
+                        "original_contig": str(chrom),
+                        "start": int(pos),
+                        "ref": str(ref),
+                        "alt_allele_index": alt_num,
+                        "vcf_alt_alleles": alt_alleles,
+                        "id": id_,
+                        "qual": qual,
+                        "filter": None if flter is None else tuple(flter),
+                        "info": info,
+                        "sample_info": sample_info,
+                        "source": source_path,
+                    })
                     continue
                 symbolic = _is_symbolic_allele(alt)
                 if symbolic and not parse_structural_variants:
@@ -574,7 +747,7 @@ def dataframes_to_variant_collection(
                         start=int(pos),
                         ref=ref,
                         alt=alt,
-                        info=confidence_info_for_alt(info, alt_num, len(alts.split(','))),
+                        info=confidence_info_for_alt(info, alt_num, len(alt_alleles)),
                         genome=structural_variant_genome,
                         normalize_contig_names=variant_kwargs.get(
                             "normalize_contig_names", True),
@@ -601,7 +774,7 @@ def dataframes_to_variant_collection(
                     'info': info,
                     'sample_info': sample_info,
                     'alt_allele_index': alt_num,
-                    'vcf_alt_alleles': tuple(alts.split(',')),
+                    'vcf_alt_alleles': alt_alleles,
                 }
                 if max_variants is not None and len(variants) >= max_variants:
                     limit_reached = True
@@ -610,6 +783,9 @@ def dataframes_to_variant_collection(
                 break
         if limit_reached:
             break
+
+    spanning_deletion_records = _resolve_spanning_deletion_records(
+        pending_spanning_deletions, variants, metadata)
 
     if warn_on_filtered and n_filtered_records:
         warn(
@@ -640,6 +816,7 @@ def dataframes_to_variant_collection(
     return VariantCollection(
         variants=variants,
         source_to_metadata_dict={source_path: metadata},
+        spanning_deletion_records=spanning_deletion_records,
         **variant_collection_kwargs)
 
 

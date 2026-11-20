@@ -1,5 +1,36 @@
 # Change Log
 
+## v11.20.0
+
+- Add provenance-preserving `combine_cis_snvs` collection transform (#368):
+  - Ship `varcode.transforms.combine_cis_snvs(vc, phase_resolver=None, *, sample=None)`
+    (also exported at the package root) to combine 2–3 cis SNVs in the same
+    CDS codon and single exon into a single MNV with `source_variants` and
+    merged metadata provenance (`combined_from_cis_snvs`, `original_starts`,
+    `source_ids`, `source_metadata`).
+  - Require an explicit `phase_resolver` or `sample` scope; evaluate cis/trans
+    through the resolver's allele- and sample-aware `in_cis` result rather than
+    raw `PS` equality alone.
+  - Compute codon membership relative to annotated CDS start
+    (`spliced_offset - transcript.first_start_codon_spliced_offset`) on both
+    strands, decline split codons across exon-exon junctions (never absorbing
+    introns), decline overlapping transcripts with incompatible CDS frames
+    (e.g. `CDKN2A` p16INK4a vs p14ARF) without lex-first tie-breaking, decline
+    multi-sample phase conflicts and mixed hom+het merges that would drop a
+    haplotype, skip same-position multi-allelic alternatives, and validate
+    reference/gap bases via `reference_range`.
+- Retain VCF `*` spanning-deletion placeholder provenance (#264):
+  - Add `SpanningDeletionRecord` (exported at the package root) and attach
+    `VariantCollection.spanning_deletion_records` plus
+    `VariantCollection.spanning_deletions_dataframe()`.
+  - Keep `*` excluded as an independently annotatable `Variant` (no protein
+    consequence and no `max_variants` count), while preserving original VCF
+    row/sample/ALT-index metadata for both placeholder-only and mixed-ALT rows.
+  - Link `upstream_deletion` only when source positional and sample/phase
+    evidence uniquely resolves a loaded deletion (`"resolved"`, `"unresolved"`,
+    or `"ambiguous"`). Preserve records through JSON/pickle serialization,
+    CSV metadata header accounting, set operations, and collection transforms.
+
 ## v11.19.0
 
 - Add bounded multi-candidate DNA cryptic splice-boundary enumeration with

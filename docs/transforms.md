@@ -8,11 +8,12 @@ ordinary `effects()` calls do not require a preprocessing pipeline.
 
 ```python
 from varcode import load_vcf
-from varcode.transforms import left_align_indels, pair_breakends
+from varcode.transforms import combine_cis_snvs, left_align_indels, pair_breakends
 
 variants = load_vcf("tumor.vcf", genome=81, parse_structural_variants=True)
 paired = pair_breakends(variants)
 normalized = left_align_indels(variants)
+merged_mnvs = combine_cis_snvs(variants, sample="tumor")
 ```
 
 Choose the operation you need; these are independent examples. Pairing reduces
@@ -186,6 +187,51 @@ Running `left_align_indels` twice produces the same result on the
 second call — every variant is already at its canonical leftmost
 position after the first call. Composes cleanly with `pair_breakends`
 in either order; SVs and BNDs are not indels and pass through.
+
+## `combine_cis_snvs`
+
+Combines 2 or 3 pure SNVs that lie in the same CDS codon within a single exon
+and are mutually in cis into one combined MNV `Variant`, reducing the number
+of records while preserving full provenance (`source_variants`, `source_ids`,
+`original_starts`, and `source_metadata`).
+
+### Usage
+
+```python
+from varcode import VCFPhaseResolver, load_vcf
+from varcode.transforms import combine_cis_snvs
+
+vc = load_vcf("phased_tumor.vcf", genome=81)
+merged = combine_cis_snvs(vc, sample="tumor")
+
+# Or pass an explicit phase resolver (VCFPhaseResolver or MolecularPhaseResolver)
+resolver = VCFPhaseResolver(vc, "tumor")
+merged = combine_cis_snvs(vc, phase_resolver=resolver)
+```
+
+### Rules and safety guarantees
+
+- **Explicit phase/sample scope**: Pass either `sample=` or `phase_resolver=`
+  (never both, never neither). Phasing uses the resolver's allele- and
+  sample-aware `in_cis` result, never raw `PS` equality alone.
+- **CDS-relative codon frame**: Codon membership is computed from
+  `spliced_offset - transcript.first_start_codon_spliced_offset` on each
+  complete coding transcript, handling both strands and nonzero 5' UTRs.
+- **No cross-intron MNV collapse**: Split codons spanning an exon-exon junction
+  are left as separate SNVs rather than absorbing the intervening intron.
+- **No lex-first transcript tie-breaking**: When overlapping complete coding
+  transcripts disagree on codon membership (for example, dual-reading-frame
+  loci such as `CDKN2A` p16INK4a vs p14ARF), the reduction is declined with a
+  warning and all source SNVs pass through unchanged.
+- **Reference-validated gap bases**: Codon positions 1+3 fill the intervening
+  base via `reference_range` and verify every source SNV's `ref` against the
+  reference. Missing or ambiguous (`N`) bases decline the merge.
+- **Multi-sample and haplotype preservation**: Combinations that would drop an
+  uncombined haplotype (e.g. `1/1` + `1|0`) or conflict with another sample's
+  genotypes/phase in a multi-sample VCF are declined with a warning.
+- **Same-position alternatives & idempotence**: Multi-allelic SNVs at the same
+  position pass through unchanged; running `combine_cis_snvs` twice is
+  idempotent.
 
 <a id="the-contract"></a>
 <a id="roadmap"></a>

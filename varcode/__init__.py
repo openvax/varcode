@@ -201,6 +201,9 @@ if TYPE_CHECKING:
     from .transcript_model import (
         predict_transcript_model_effect as predict_transcript_model_effect,
     )
+    from .transforms import (
+        combine_cis_snvs as combine_cis_snvs,
+    )
     from .uorf import (
         ORFTranscript as ORFTranscript,
         UORFAnnotation as UORFAnnotation,
@@ -210,7 +213,10 @@ if TYPE_CHECKING:
         predict_uorf_effects as predict_uorf_effects,
     )
     from .variant import Variant as Variant
-    from .variant_collection import VariantCollection as VariantCollection
+    from .variant_collection import (
+        SpanningDeletionRecord as SpanningDeletionRecord,
+        VariantCollection as VariantCollection,
+    )
     from .vcf import (
         load_vcf as load_vcf,
         load_vcf_fast as load_vcf_fast,
@@ -319,7 +325,9 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "StructuralVariant": (".structural_variant", "StructuralVariant"),
     "parse_symbolic_alt": (".sv_allele_parser", "parse_symbolic_alt"),
     "Variant": (".variant", "Variant"),
+    "SpanningDeletionRecord": (".variant_collection", "SpanningDeletionRecord"),
     "VariantCollection": (".variant_collection", "VariantCollection"),
+    "combine_cis_snvs": (".transforms", "combine_cis_snvs"),
     # file loading
     "load_maf": (".maf", "load_maf"),
     "load_maf_dataframe": (".maf", "load_maf_dataframe"),
@@ -406,6 +414,7 @@ _LAZY_SUBMODULES: frozenset[str] = frozenset({
     "structural_variant",
     "sv_allele_parser",
     "transcript_model",
+    "transforms",
     "uorf",
     "variant",
     "variant_collection",
@@ -429,7 +438,9 @@ __all__ = [
     # basic classes
     "Variant",
     "EffectCollection",
+    "SpanningDeletionRecord",
     "VariantCollection",
+    "combine_cis_snvs",
 
     # genotype / zygosity
     "Genotype",

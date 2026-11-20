@@ -13,7 +13,8 @@ from varcode import (
     iter_candidate_effects, iter_candidate_paths,
     ContigResolution, ContigResolver, CrypticSplicePolicy, EffectAnnotator, EffectCollection, EffectReference,
     InvalidContigError, MutationEffect, MutantTranscript, ORFAnnotation,
-    Unresolved, Variant, VariantCollection,
+    SpanningDeletionRecord, Unresolved, Variant, VariantCollection,
+    combine_cis_snvs,
     effect_collection_from_json, effect_collection_from_serializable_repr,
     effect_collection_to_json, effect_from_json, effect_from_serializable_repr,
     effect_serialization_classes, effect_to_json,
@@ -89,6 +90,8 @@ def check_annotation_workflow(
     assert_type(variants[:1], Sequence[Variant])
     assert_type(variants.filter(lambda v: v.start > 0), VariantCollection)
     assert_type(variants.groupby(lambda v: v.contig), dict[str, VariantCollection])
+    assert_type(variants.spanning_deletion_records, tuple[SpanningDeletionRecord, ...])
+    assert_type(combine_cis_snvs(variants, sample="tumor"), VariantCollection)
     effects = variant.effects(annotator="fast", raise_on_error=False)
     assert_type(next(iter(effects)), MutationEffect)
     assert_type(effects[0], MutationEffect)
