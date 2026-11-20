@@ -11,7 +11,7 @@ from varcode import (
     AssembledAllele,
     Candidate, CandidatePath, classification_priority, get_effect_candidates,
     iter_candidate_effects, iter_candidate_paths,
-    ContigResolution, ContigResolver, EffectAnnotator, EffectCollection, EffectReference,
+    ContigResolution, ContigResolver, CrypticSplicePolicy, EffectAnnotator, EffectCollection, EffectReference,
     InvalidContigError, MutationEffect, MutantTranscript, ORFAnnotation,
     Unresolved, Variant, VariantCollection,
     effect_collection_from_json, effect_collection_from_serializable_repr,
@@ -145,6 +145,7 @@ def check_annotation_workflow(
     assert_type(effect_collection_to_json(effects), str)
     assert_type(effect_collection_from_json("{}"), EffectCollection)
     assert_type(effect_collection_from_serializable_repr({}), EffectCollection)
+    assert_type(CrypticSplicePolicy(scan_flank=100, max_sites_per_junction=4), CrypticSplicePolicy)
 
     variant.effects(raise_on_error="no")  # type: ignore[arg-type]
     variants.effects(validate_reference="no")  # type: ignore[arg-type]

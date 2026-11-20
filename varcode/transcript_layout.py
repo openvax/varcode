@@ -14,6 +14,8 @@
 
 from dataclasses import dataclass
 
+from serializable import DataclassSerializable
+
 from .effect_hypotheses import RealizedTranscriptProduct
 from .cryptic_exons import (
     ACCEPTOR_WINDOW,
@@ -270,28 +272,134 @@ def realize_exon_path(transcript, layout, kept_run_keys=None):
         {"exon_runs": tuple(run.key for run in selected)})
 
 
-def _best_cryptic_boundary(layout, canonical_offset, side, valid_interval, scan_flank=50):
-    """Return the best non-canonical interbase offset and motif score."""
-    scan_start = max(0, canonical_offset - scan_flank)
-    scan_end = min(layout.length, canonical_offset + scan_flank)
-    sequence = layout.slice(scan_start, scan_end).materialize()
+@dataclass(frozen=True)
+class CrypticSplicePolicy(DataclassSerializable):
+    """Bounded search policy for heuristic DNA cryptic splice-boundary candidates.
+
+    Parameters
+    ----------
+    scan_flank : int, default 50
+        Maximum distance in bases on either side of the canonical splice
+        boundary to search for alternative motif-scored splice boundaries.
+    max_sites_per_junction : int, default 1
+        Maximum number of distinct cryptic splice boundaries retained per
+        disrupted splice site (ranked by descending motif score, then proximity
+        to the canonical boundary, then transcript offset).
+    min_score : float, default 0.0
+        Strict lower bound on the donor/acceptor motif score. Candidate sites
+        must have ``score > min_score`` to be included.
+
+    Notes
+    -----
+    Sites enumerated under this policy are heuristic DNA sequence motifs, never
+    experimentally observed splicing products. Increasing
+    ``max_sites_per_junction`` expands the splice-plan search space subject to
+    ``max_hypotheses``.
+    """
+
+    scan_flank: int = 50
+    max_sites_per_junction: int = 1
+    min_score: float = 0.0
+
+    def __post_init__(self):
+        if isinstance(self.scan_flank, bool) or not isinstance(self.scan_flank, int) or self.scan_flank < 1:
+            raise ValueError(
+                "scan_flank must be a positive integer, got %r" % (self.scan_flank,)
+            )
+        if (isinstance(self.max_sites_per_junction, bool)
+                or not isinstance(self.max_sites_per_junction, int)
+                or self.max_sites_per_junction < 1):
+            raise ValueError(
+                "max_sites_per_junction must be a positive integer, got %r"
+                % (self.max_sites_per_junction,)
+            )
+        if isinstance(self.min_score, bool) or not isinstance(self.min_score, (int, float)):
+            raise ValueError(
+                "min_score must be a number in [0.0, 1.0), got %r" % (self.min_score,)
+            )
+        if not 0.0 <= float(self.min_score) < 1.0:
+            raise ValueError(
+                "min_score must be in [0.0, 1.0), got %r" % (self.min_score,)
+            )
+
+    def as_evidence(self):
+        """Return plain JSON-compatible policy metadata for candidate evidence."""
+        return {
+            "scan_flank": self.scan_flank,
+            "max_sites_per_junction": self.max_sites_per_junction,
+            "min_score": float(self.min_score),
+        }
+
+
+DEFAULT_CRYPTIC_SPLICE_POLICY = CrypticSplicePolicy()
+
+
+def enumerate_cryptic_boundaries(
+        layout, canonical_offset, side, valid_interval,
+        policy=DEFAULT_CRYPTIC_SPLICE_POLICY):
+    """Return bounded, ranked non-canonical interbase boundaries and motif scores.
+
+    Parameters
+    ----------
+    layout : GenomicLayout
+        Realized transcript-order genomic layout containing the edited allele.
+    canonical_offset : int
+        Interbase offset of the disrupted canonical boundary in ``layout``.
+    side : {"donor", "acceptor"}
+        Splice boundary side to scan.
+    valid_interval : tuple of (int, int)
+        Inclusive ``(low, high)`` interbase range of graph-valid boundaries.
+    policy : CrypticSplicePolicy, optional
+        Search flank, candidate cap, and score threshold.
+
+    Returns
+    -------
+    tuple of (int, float)
+        Distinct ``(boundary_offset, motif_score)`` pairs sorted by descending
+        motif score, then proximity to ``canonical_offset``, then offset,
+        truncated to ``policy.max_sites_per_junction``.
+    """
+    if not isinstance(policy, CrypticSplicePolicy):
+        raise TypeError(
+            "Expected a CrypticSplicePolicy, got %s" % type(policy).__name__
+        )
     scorer = score_donor if side == "donor" else score_acceptor
     window = DONOR_WINDOW if side == "donor" else ACCEPTOR_WINDOW
-    canonical_local = canonical_offset - scan_start
-    best = None
+    # Donor window is 3 exonic + 6 intronic; acceptor window is 3 intronic + 1 exonic.
+    # Both place the interbase splice junction at window_start + 3.
+    left_pad = 3
+    right_pad = window - left_pad
+    scan_start = max(0, canonical_offset - policy.scan_flank - left_pad)
+    scan_end = min(layout.length, canonical_offset + policy.scan_flank + right_pad)
+    if scan_end - scan_start < window:
+        return ()
+    sequence = layout.slice(scan_start, scan_end).materialize()
+    candidates = []
     for index in range(len(sequence) - window + 1):
         score = scorer(sequence[index:index + window])
-        if score <= 0:
+        if score <= policy.min_score:
             continue
-        boundary = index + 3
-        if boundary == canonical_local:
+        boundary = scan_start + index + left_pad
+        if boundary == canonical_offset:
             continue
-        candidate = (scan_start + boundary, score)
-        if not valid_interval[0] <= candidate[0] <= valid_interval[1]:
+        if abs(boundary - canonical_offset) > policy.scan_flank:
             continue
-        if best is None or candidate[1] > best[1]:
-            best = candidate
-    return best
+        if not valid_interval[0] <= boundary <= valid_interval[1]:
+            continue
+        candidates.append((boundary, float(score)))
+    candidates.sort(
+        key=lambda item: (-item[1], abs(item[0] - canonical_offset), item[0])
+    )
+    return tuple(candidates[:policy.max_sites_per_junction])
+
+
+def _best_cryptic_boundary(layout, canonical_offset, side, valid_interval, scan_flank=50):
+    """Return the top-scoring non-canonical interbase offset and motif score."""
+    policy = CrypticSplicePolicy(scan_flank=scan_flank, max_sites_per_junction=1)
+    candidates = enumerate_cryptic_boundaries(
+        layout, canonical_offset, side, valid_interval, policy=policy
+    )
+    return candidates[0] if candidates else None
 
 
 def _coalesce_intervals(intervals):
@@ -326,13 +434,18 @@ def _junctions_for_bounds(transcript, layout, selected, bounds):
 
 
 def realize_splice_plan(
-        transcript, layout, plan, statuses, scan_flank=50):
+        transcript, layout, plan, statuses, scan_flank=50, cryptic_policy=None):
     """Realize exon-skip, retention and cryptic choices on one layout.
 
     Returns ``(product, unresolved_mechanisms)``. Sequence-free tier 0 can
     still realize canonical and exon-skip paths; sequence-dependent choices
     remain explicit instead of being guessed.
     """
+    policy = (
+        cryptic_policy
+        if cryptic_policy is not None
+        else CrypticSplicePolicy(scan_flank=scan_flank)
+    )
     runs = build_exon_runs(transcript, layout)
     run_by_key = {run.key: run for run in runs}
     selected = [run_by_key[key] for key in plan.kept_runs if key in run_by_key]
@@ -340,6 +453,7 @@ def realize_splice_plan(
     status_by_key = {status.key: status for status in statuses}
     unresolved = []
     resolved_choices = []
+    has_cryptic_choice = False
 
     for key, option in plan.choices:
         if option.mechanism in ("normal", "exon_skip"):
@@ -359,6 +473,7 @@ def realize_splice_plan(
                 unresolved.append(option.mechanism)
             continue
         if option.mechanism == "cryptic":
+            has_cryptic_choice = True
             if (key.side == "donor" and index + 1 == len(selected)
                     or key.side == "acceptor" and index == 0):
                 unresolved.append(option.mechanism)
@@ -369,11 +484,22 @@ def realize_splice_plan(
                 (bounds[selected[index - 1].key][1] + 1, bounds[run.key][1] - 1))
             canonical = (
                 run.layout_end if key.side == "donor" else run.layout_start)
-            try:
-                cryptic = _best_cryptic_boundary(
-                    layout, canonical, key.side, valid_interval, scan_flank)
-            except (SequenceUnavailable, KeyError, ValueError):
-                cryptic = None
+            pinned_boundary = option.evidence.get("cryptic_boundary_offset")
+            pinned_score = option.evidence.get("cryptic_motif_score")
+            if isinstance(pinned_boundary, int) and isinstance(pinned_score, (int, float)):
+                cryptic = (
+                    (pinned_boundary, float(pinned_score))
+                    if valid_interval[0] <= pinned_boundary <= valid_interval[1]
+                    else None
+                )
+            else:
+                try:
+                    candidates = enumerate_cryptic_boundaries(
+                        layout, canonical, key.side, valid_interval, policy=policy
+                    )
+                    cryptic = candidates[0] if candidates else None
+                except (SequenceUnavailable, KeyError, ValueError):
+                    cryptic = None
             if cryptic is None:
                 unresolved.append(option.mechanism)
                 continue
@@ -395,6 +521,10 @@ def realize_splice_plan(
             (key, option.mechanism) for key, option in plan.choices),
         "resolved_splice_choices": tuple(resolved_choices),
     }
+    if has_cryptic_choice:
+        evidence["cryptic_search_policy"] = policy.as_evidence()
+        if resolved_choices:
+            evidence["discovery_status"] = "heuristic_dna_motif"
 
     def unavailable(mechanisms):
         mechanisms = tuple(mechanisms)

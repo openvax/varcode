@@ -116,6 +116,24 @@ contract. Existing imports and serialized sets remain supported. See the
 [SpliceOutcomeSet reference](effect_types.md#splice-outcome-container) and
 [migration guide](experimental_annotators.md#migrating-from-varcode-10).
 
+## Bounded cryptic-site search
+
+By default, `predict_transcript_model_effect` scans ±50 bp around a disrupted
+canonical boundary and retains the single highest-scoring heuristic motif
+(`CrypticSplicePolicy(scan_flank=50, max_sites_per_junction=1, min_score=0.0)`).
+Experimentally observed cryptic sites outside that window or below a competing
+heuristic score — such as the mouse *Ap2s1* `del17` donor 51 nt upstream of
+exon 2 ([PMID 29479578](https://pmc.ncbi.nlm.nih.gov/articles/PMC5824975/)) —
+are not enumerated under the default bounds.
+
+Pass an explicit `cryptic_policy=CrypticSplicePolicy(scan_flank=..., max_sites_per_junction=...)`
+to enumerate multiple distinct cryptic boundaries per disrupted site while
+keeping the combined search bounded by `max_hypotheses` and preserving
+baseline/mutant coupling on shared disrupted sites. All DNA-enumerated cryptic
+candidates are tagged `discovery_status="heuristic_dna_motif"` and are never
+labeled experimentally observed; RNA-supported products continue to work
+independently of DNA hypothesis coverage.
+
 ## Limitations
 
 Variants outside the windows can still affect splicing. Mid-exon regulatory
