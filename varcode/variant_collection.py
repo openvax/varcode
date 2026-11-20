@@ -13,8 +13,9 @@
 from __future__ import annotations
 
 from collections import OrderedDict
-from collections.abc import Callable, Iterable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
+import os
 from typing import TYPE_CHECKING, Any, Literal, Self, TypeVar, overload
 import warnings
 
@@ -42,6 +43,7 @@ from .version import __version__ as _varcode_version
 
 if TYPE_CHECKING:
     from .annotators import EffectAnnotator
+    from .protocols import GeneLike
 
 _Key = TypeVar("_Key")
 
@@ -422,7 +424,7 @@ class VariantCollection(Collection):
                 timespec="seconds"),
         )
 
-    def reference_names(self):
+    def reference_names(self) -> set[str]:
         """
         All distinct reference names used by Variants in this
         collection.
@@ -433,7 +435,7 @@ class VariantCollection(Collection):
         """
         return {variant.reference_name for variant in self}
 
-    def original_reference_names(self):
+    def original_reference_names(self) -> set[str]:
         """
         Similar to `reference_names` but preserves UCSC references,
         so that a variant collection derived from an hg19 VCF would
@@ -455,7 +457,7 @@ class VariantCollection(Collection):
         missing = self._missing_contigs(raise_on_error=None, outcome="left out", stacklevel=4)
         return lambda variant: () if variant in missing else getattr(variant, attribute)
 
-    def groupby_gene(self):
+    def groupby_gene(self) -> dict[GeneLike, Self]:
         """
         Group variants by the genes they overlap, which may put each variant
         in multiple groups.
@@ -464,7 +466,7 @@ class VariantCollection(Collection):
         """
         return self.multi_groupby(self._overlapping("genes"))
 
-    def groupby_gene_name(self):
+    def groupby_gene_name(self) -> dict[str, Self]:
         """
         Group variants by the gene names they overlap, which may put each
         variant in multiple groups.
@@ -473,7 +475,7 @@ class VariantCollection(Collection):
         """
         return self.multi_groupby(self._overlapping("gene_names"))
 
-    def groupby_gene_id(self):
+    def groupby_gene_id(self) -> dict[str, Self]:
         """
         Group variants by the gene IDs they overlap, which may put each
         variant in multiple groups.
@@ -482,7 +484,7 @@ class VariantCollection(Collection):
         """
         return self.multi_groupby(self._overlapping("gene_ids"))
 
-    def gene_counts(self):
+    def gene_counts(self) -> dict[str, int]:
         """
         Returns number of elements overlapping each gene name. Expects the
         derived class (VariantCollection or EffectCollection) to have
@@ -496,7 +498,7 @@ class VariantCollection(Collection):
             in self.groupby_gene_name().items()
         }
 
-    def detailed_string(self):
+    def detailed_string(self) -> str:
         lines = []
         gene_groups = self.groupby_gene_id()
         for gene_id, variant_group in sorted(gene_groups.items()):
@@ -516,8 +518,8 @@ class VariantCollection(Collection):
 
     def filter_by_transcript_expression(
             self,
-            transcript_expression_dict,
-            min_expression_value=0.0):
+            transcript_expression_dict: Mapping[str, float],
+            min_expression_value: float = 0.0) -> Self:
         """
         Filters variants down to those which have overlap a transcript whose
         expression value in the transcript_expression_dict argument is greater
@@ -542,8 +544,8 @@ class VariantCollection(Collection):
 
     def filter_by_gene_expression(
             self,
-            gene_expression_dict,
-            min_expression_value=0.0):
+            gene_expression_dict: Mapping[str, float],
+            min_expression_value: float = 0.0) -> Self:
         """
         Filters variants down to those which have overlap a gene whose
         expression value in the transcript_expression_dict argument is greater
@@ -648,7 +650,7 @@ class VariantCollection(Collection):
                 kwargs[key] = value
         return cls(**kwargs)
 
-    def union(self, *others, **kwargs):
+    def union(self, *others: VariantCollection, **kwargs) -> Self:
         """
         Returns the union of variants in a several VariantCollection objects.
         """
@@ -657,7 +659,7 @@ class VariantCollection(Collection):
             variant_collections=(self,) + others,
             kwargs=kwargs)
 
-    def intersection(self, *others, **kwargs):
+    def intersection(self, *others: VariantCollection, **kwargs) -> Self:
         """
         Returns the intersection of variants in several VariantCollection objects.
         """
@@ -666,7 +668,7 @@ class VariantCollection(Collection):
             variant_collections=(self,) + others,
             kwargs=kwargs)
 
-    def difference(self, *others, **kwargs):
+    def difference(self, *others: VariantCollection, **kwargs) -> Self:
         """
         Returns variants present in this collection but not in any of the others.
         """
@@ -707,7 +709,7 @@ class VariantCollection(Collection):
                 UserWarning, stacklevel=stacklevel)
         return missing
 
-    def to_dataframe(self, raise_on_error=None):
+    def to_dataframe(self, raise_on_error: bool | None = None) -> pd.DataFrame:
         """Build a DataFrame from this variant collection.
 
         By default, missing contigs are retained with diagnostic columns while
@@ -840,10 +842,10 @@ class VariantCollection(Collection):
     @classmethod
     def from_csv(
             cls,
-            path,
+            path: str | os.PathLike[str],
             genome=None,
-            distinct=True,
-            sort_key=variant_ascending_position_sort_key):
+            distinct: bool = True,
+            sort_key=variant_ascending_position_sort_key) -> Self:
         """Rebuild a VariantCollection from a CSV previously written by
         ``VariantCollection.to_csv()``.
 
@@ -943,7 +945,7 @@ class VariantCollection(Collection):
         return None
 
     @property
-    def samples(self):
+    def samples(self) -> list[str]:
         """Sorted list of sample names present in the collection's
         ``sample_info`` metadata (empty if no VCFs with sample columns
         were loaded)."""
@@ -955,11 +957,11 @@ class VariantCollection(Collection):
                     sample_set.update(sample_info.keys())
         return sorted(sample_set)
 
-    def has_sample_data(self):
+    def has_sample_data(self) -> bool:
         """True if the collection has any per-sample genotype info."""
         return len(self.samples) > 0
 
-    def genotype(self, variant, sample):
+    def genotype(self, variant: Variant, sample: str) -> Genotype | None:
         """Return the ``Genotype`` for ``sample`` at ``variant``.
 
         Parameters
@@ -1007,7 +1009,7 @@ class VariantCollection(Collection):
             return 1
         return idx + 1
 
-    def zygosity(self, variant, sample):
+    def zygosity(self, variant: Variant, sample: str) -> Zygosity:
         """Zygosity of the given sample at the given variant.
 
         Multi-allelic aware: at a site split into multiple Variants,
@@ -1018,7 +1020,7 @@ class VariantCollection(Collection):
             return Zygosity.MISSING
         return gt.zygosity_for_alt(self._alt_index_for(variant))
 
-    def for_sample(self, sample):
+    def for_sample(self, sample: str) -> Self:
         """Return a VariantCollection restricted to variants where
         ``sample`` carries the alt (heterozygous or homozygous). Useful
         for multi-sample VCFs where not every row is called in every
@@ -1029,21 +1031,21 @@ class VariantCollection(Collection):
             keep=lambda z: z in (Zygosity.HETEROZYGOUS, Zygosity.HOMOZYGOUS),
         )
 
-    def heterozygous_in(self, sample):
+    def heterozygous_in(self, sample: str) -> Self:
         """Variants where ``sample`` is heterozygous for this variant's alt."""
         return self._filter_by_zygosity(
             sample,
             keep=lambda z: z is Zygosity.HETEROZYGOUS,
         )
 
-    def homozygous_alt_in(self, sample):
+    def homozygous_alt_in(self, sample: str) -> Self:
         """Variants where ``sample`` is homozygous for this variant's alt."""
         return self._filter_by_zygosity(
             sample,
             keep=lambda z: z is Zygosity.HOMOZYGOUS,
         )
 
-    def _filter_by_zygosity(self, sample, keep):
+    def _filter_by_zygosity(self, sample: str, keep: Callable[[Zygosity], bool]) -> Self:
         # Pre-validate the sample once so a typo fails loudly rather
         # than silently returning an empty collection.
         if self.has_sample_data() and sample not in self.samples:
@@ -1058,6 +1060,6 @@ class VariantCollection(Collection):
     # (end genotype methods)
     # ------------------------------------------------------------------
 
-    def clone_without_ucsc_data(self):
+    def clone_without_ucsc_data(self) -> Self:
         variants = [v.clone_without_ucsc_data() for v in self]
         return self.clone_with_new_elements(variants)

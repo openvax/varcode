@@ -1,9 +1,10 @@
 """Static consumer checks; checked by mypy, never executed as tests."""
 
+from collections import OrderedDict
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from types import NotImplementedType
 from typing import assert_type
-from collections.abc import Mapping, Sequence
 
 from pyensembl import Transcript
 
@@ -12,8 +13,8 @@ from varcode import (
     Candidate, CandidatePath, classification_priority, get_effect_candidates,
     iter_candidate_effects, iter_candidate_paths,
     ContigResolution, ContigResolver, CrypticSplicePolicy, EffectAnnotator, EffectCollection, EffectReference,
-    InvalidContigError, MutationEffect, MutantTranscript, ORFAnnotation,
-    SpanningDeletionRecord, Unresolved, Variant, VariantCollection,
+    GeneLike, Genotype, InvalidContigError, MutationEffect, MutantTranscript, ORFAnnotation,
+    SpanningDeletionRecord, TranscriptLike, Unresolved, Variant, VariantCollection, Zygosity,
     combine_cis_snvs,
     effect_collection_from_json, effect_collection_from_serializable_repr,
     effect_collection_to_json, effect_from_json, effect_from_serializable_repr,
@@ -163,3 +164,112 @@ def check_annotation_workflow(
     effect_from_json(42)  # type: ignore[arg-type]
     effect_collection_to_json(effect)  # type: ignore[arg-type]
     effect_collection_from_json(42)  # type: ignore[arg-type]
+
+
+class _CustomGeneAdapter:
+    id: str = "ENSG_CUSTOM"
+    name: str = "CUSTOM"
+    contig: str = "1"
+    start: int = 100
+    end: int = 500
+    strand: str = "+"
+
+
+class _CustomTranscriptAdapter:
+    id: str = "ENST_CUSTOM"
+    name: str = "CUSTOM-001"
+    contig: str = "1"
+    start: int = 100
+    end: int = 500
+    strand: str = "+"
+    gene_id: str = "ENSG_CUSTOM"
+    protein_sequence: str | None = "MKL"
+    complete: bool = True
+    is_protein_coding: bool = True
+    gene: GeneLike | None = _CustomGeneAdapter()
+
+
+class _CustomVariantCollection(VariantCollection):
+    pass
+
+
+class _CustomEffectCollection(EffectCollection):
+    pass
+
+
+def check_typed_traversal_and_protocols(
+        path: Path,
+        custom_vc: _CustomVariantCollection,
+        custom_ec: _CustomEffectCollection,
+) -> None:
+    loaded = load_vcf(path)
+    assert_type(loaded, VariantCollection)
+    assert_type(loaded.union(loaded), VariantCollection)
+    assert_type(loaded.intersection(loaded), VariantCollection)
+    assert_type(loaded.difference(loaded), VariantCollection)
+    assert_type(loaded.for_sample("tumor"), VariantCollection)
+    assert_type(loaded.heterozygous_in("tumor"), VariantCollection)
+    assert_type(loaded.homozygous_alt_in("tumor"), VariantCollection)
+    assert_type(loaded.samples, list[str])
+    assert_type(loaded.has_sample_data(), bool)
+    assert_type(loaded.reference_names(), set[str])
+    assert_type(loaded.original_reference_names(), set[str])
+    assert_type(loaded.gene_counts(), dict[str, int])
+    assert_type(loaded.groupby_gene_name(), dict[str, VariantCollection])
+    assert_type(loaded.groupby_gene_id(), dict[str, VariantCollection])
+    assert_type(loaded.groupby_gene(), dict[GeneLike, VariantCollection])
+    assert_type(loaded.filter_by_gene_expression({"ENSG1": 2.0}), VariantCollection)
+    assert_type(loaded.filter_by_transcript_expression({"ENST1": 2.0}), VariantCollection)
+    assert_type(loaded.clone_without_ucsc_data(), VariantCollection)
+    assert_type(loaded.genotype(loaded[0], "tumor"), Genotype | None)
+    assert_type(loaded.zygosity(loaded[0], "tumor"), Zygosity)
+
+    # Subclass preservation on VariantCollection and EffectCollection
+    assert_type(custom_vc.union(loaded), _CustomVariantCollection)
+    assert_type(custom_vc.for_sample("tumor"), _CustomVariantCollection)
+    assert_type(custom_vc.groupby_gene_name(), dict[str, _CustomVariantCollection])
+    assert_type(custom_ec.drop_silent_and_noncoding(), _CustomEffectCollection)
+    assert_type(custom_ec.groupby_gene_id(), dict[str | None, _CustomEffectCollection])
+
+    # End-to-end typed load_vcf -> VariantCollection -> effects -> EffectCollection traversal
+    effects = loaded.effects()
+    assert_type(effects.groupby_variant(), dict[Variant, EffectCollection])
+    assert_type(effects.groupby_transcript(), dict[TranscriptLike | None, EffectCollection])
+    assert_type(effects.groupby_transcript_id(), dict[str | None, EffectCollection])
+    assert_type(effects.groupby_transcript_name(), dict[str | None, EffectCollection])
+    assert_type(effects.groupby_gene(), dict[GeneLike | None, EffectCollection])
+    assert_type(effects.groupby_gene_id(), dict[str | None, EffectCollection])
+    assert_type(effects.groupby_gene_name(), dict[str | None, EffectCollection])
+    assert_type(effects.gene_counts(), dict[str | None, int])
+    assert_type(effects.top_priority_effect_per_variant(), OrderedDict[Variant, MutationEffect])
+    assert_type(effects.top_priority_effect_per_transcript_id(), OrderedDict[str | None, MutationEffect])
+    assert_type(effects.top_priority_effect_per_gene_id(), OrderedDict[str | None, MutationEffect])
+    assert_type(effects.effect_expression({"ENST1": 1.5}), OrderedDict[MutationEffect, float])
+    top_expr = effects.top_expression_effect({"ENST1": 1.5})
+    assert_type(top_expr, MutationEffect | None)
+    assert_type(effects.filter_by_gene_expression({"ENSG1": 1.0}), EffectCollection)
+    assert_type(effects.filter_by_transcript_expression({"ENST1": 1.0}), EffectCollection)
+    assert_type(effects.orf_annotations, tuple[ORFAnnotation, ...])
+
+    # Structural TranscriptLike / GeneLike adapters without inheriting pyensembl
+    tx_adapter: TranscriptLike = _CustomTranscriptAdapter()
+    gene_adapter: GeneLike = _CustomGeneAdapter()
+    assert_type(tx_adapter.id, str)
+    assert_type(gene_adapter.name, str)
+    custom_effect = loaded[0].effect_on_transcript(tx_adapter)
+    assert_type(custom_effect, MutationEffect)
+    assert_type(custom_effect.transcript, TranscriptLike | None)
+    assert_type(custom_effect.reference_transcript, TranscriptLike | None)
+    assert_type(custom_effect.gene, GeneLike | None)
+    if custom_effect.transcript is not None:
+        assert_type(custom_effect.transcript.id, str)
+    if custom_effect.gene is not None:
+        assert_type(custom_effect.gene.name, str)
+
+    # Negative checks: unchecked None / wrong types must be rejected statically
+    custom_effect.transcript.id  # type: ignore[union-attr]
+    custom_effect.gene.name  # type: ignore[union-attr]
+    top_expr.short_description  # type: ignore[union-attr]
+    loaded.for_sample(123)  # type: ignore[arg-type]
+    loaded[0].effect_on_transcript("not a transcript")  # type: ignore[arg-type]
+    effects.effect_expression("not a mapping")  # type: ignore[arg-type]

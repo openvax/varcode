@@ -88,8 +88,8 @@ def _build_id_indices(vc):
     can technically share an ID. We keep the multiplicity so pairing
     can detect ambiguity instead of silently picking one.
     """
-    variant_to_id = {}
-    id_to_variants = {}
+    variant_to_id: dict[Variant, str] = {}
+    id_to_variants: dict[str, list[Variant]] = {}
     for by_variant in vc.source_to_metadata_dict.values():
         for variant, metadata in by_variant.items():
             row_id = (metadata or {}).get("id")
@@ -386,7 +386,7 @@ def pair_breakends(vc):
     # How many rows reference each ID as their mate? An ID with
     # in-degree > 1 indicates ambiguity — a clean pair requires the
     # MATEID pointer to be 1:1.
-    mate_in_degree = {}
+    mate_in_degree: dict[str, int] = {}
     for mate_id in bnd_to_mateid.values():
         mate_in_degree[mate_id] = mate_in_degree.get(mate_id, 0) + 1
 
@@ -522,7 +522,9 @@ def pair_breakends(vc):
     # metadata entries by reference; combined variants get a freshly
     # merged entry written to every source path that contained either
     # half.
-    out_metadata = {path: {} for path in vc.source_to_metadata_dict}
+    out_metadata: dict[str, dict[Variant, object]] = {
+        path: {} for path in vc.source_to_metadata_dict
+    }
     for path, by_variant in vc.source_to_metadata_dict.items():
         out_by_variant = out_metadata[path]
         for variant, meta in by_variant.items():
@@ -925,7 +927,7 @@ def _merge_cis_snv_metadata(members, by_variant, merged_gt_by_sample):
             if m and m.get("sample_info"):
                 all_samples.update(m["sample_info"].keys())
         for sample_name in sorted(all_samples):
-            fields = {}
+            fields: dict[str, object] = {}
             for m in member_metas:
                 s_info = (m or {}).get("sample_info") or {}
                 if sample_name in s_info and s_info[sample_name]:
@@ -1149,14 +1151,14 @@ def combine_cis_snvs(
     for (t_id, _codon_idx), bucket in codon_buckets.items():
         if len(bucket) < 2:
             continue
-        t = transcripts_by_id[t_id]
+        transcript = transcripts_by_id[t_id]
         # Evaluate pairwise phase via the resolver (never raw PS alone).
         n = len(bucket)
         pair_cis: dict[tuple[int, int], bool | None] = {}
         adj: list[list[int]] = [[] for _ in range(n)]
         for i in range(n):
             for j in range(i + 1, n):
-                ans = query_in_cis(resolver, bucket[i], bucket[j], transcript=t)
+                ans = query_in_cis(resolver, bucket[i], bucket[j], transcript=transcript)
                 pair_cis[(i, j)] = ans
                 if ans is True:
                     adj[i].append(j)
@@ -1329,7 +1331,9 @@ def combine_cis_snvs(
         emitted_combined.add(id(combined))
         out_variants.append(combined)
 
-    out_metadata = {path: {} for path in vc.source_to_metadata_dict}
+    out_metadata: dict[str, dict[Variant, object]] = {
+        path: {} for path in vc.source_to_metadata_dict
+    }
     for path, by_variant in vc.source_to_metadata_dict.items():
         out_by_variant = out_metadata[path]
         for variant, meta in by_variant.items():

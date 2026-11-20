@@ -84,6 +84,7 @@ ignore = ["E501", "F841", "E731", "E741", "E722", "E721"]
 [tool.mypy]
 python_version = "3.11"
 files = [
+    "varcode/protocols.py",
     "varcode/effect_traversal.py",
     "varcode/effect_candidates.py",
     "varcode/contigs.py",
@@ -93,8 +94,10 @@ files = [
     "varcode/annotators/__init__.py",
     "varcode/annotators/registry.py",
     "varcode/variant_collection.py",
+    "varcode/effects/effect_classes.py",
     "varcode/effects/effect_collection.py",
     "varcode/effects/structural_serialization.py",
+    "varcode/transforms/__init__.py",
     "varcode/vcf.py",
     "varcode/sv_allele_parser.py",
     "varcode/maf.py",

@@ -13,8 +13,9 @@
 from __future__ import annotations
 
 from collections import OrderedDict
-from collections.abc import Callable, Iterable, Iterator, Sequence
-from typing import TYPE_CHECKING, Self, TypeVar, overload
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+import os
+from typing import TYPE_CHECKING, Literal, Self, TypeVar, overload
 
 import pandas as pd
 from sercol import Collection
@@ -42,6 +43,9 @@ from .effect_ordering import (
 )
 
 if TYPE_CHECKING:
+    from ..orf import ORFAnnotation
+    from ..protocols import GeneLike, TranscriptLike
+    from ..variant import Variant
     from .effect_classes import MutationEffect
 
 _Key = TypeVar("_Key")
@@ -191,11 +195,11 @@ class EffectCollection(Collection):
                 "annotated_at": self.annotated_at,
             })
 
-    def groupby_variant(self):
+    def groupby_variant(self) -> dict[Variant, Self]:
         return self.groupby(key_fn=lambda effect: effect.variant)
 
     @property
-    def orf_annotations(self):
+    def orf_annotations(self) -> tuple[ORFAnnotation, ...]:
         """Detailed native annotations for the extra ORF effects in this collection."""
         return tuple(e.orf_annotation for e in self if e.orf_annotation is not None)
 
@@ -209,25 +213,25 @@ class EffectCollection(Collection):
         from ..proteome import to_proteome
         return to_proteome(self, sample_id=sample_id, run_id=run_id)
 
-    def groupby_transcript(self):
+    def groupby_transcript(self) -> dict[TranscriptLike | None, Self]:
         return self.groupby(key_fn=lambda effect: effect.reference_transcript)
 
-    def groupby_transcript_name(self):
+    def groupby_transcript_name(self) -> dict[str | None, Self]:
         return self.groupby(key_fn=lambda effect: effect.transcript_name)
 
-    def groupby_transcript_id(self):
+    def groupby_transcript_id(self) -> dict[str | None, Self]:
         return self.groupby(key_fn=lambda effect: effect.transcript_id)
 
-    def groupby_gene(self):
+    def groupby_gene(self) -> dict[GeneLike | None, Self]:
         return self.groupby(key_fn=lambda effect: effect.gene)
 
-    def groupby_gene_name(self):
+    def groupby_gene_name(self) -> dict[str | None, Self]:
         return self.groupby(key_fn=lambda effect: effect.gene_name)
 
-    def groupby_gene_id(self):
+    def groupby_gene_id(self) -> dict[str | None, Self]:
         return self.groupby(key_fn=lambda effect: effect.gene_id)
 
-    def gene_counts(self):
+    def gene_counts(self) -> dict[str | None, int]:
         """
         Returns number of elements overlapping each gene name. Expects the
         derived class (VariantCollection or EffectCollection) to have
@@ -241,8 +245,8 @@ class EffectCollection(Collection):
 
     def filter_by_transcript_expression(
             self,
-            transcript_expression_dict,
-            min_expression_value=0.0):
+            transcript_expression_dict: Mapping[str, float],
+            min_expression_value: float = 0.0) -> Self:
         """
         Filters effects to those which have an associated transcript whose
         expression value in the transcript_expression_dict argument is greater
@@ -264,8 +268,8 @@ class EffectCollection(Collection):
 
     def filter_by_gene_expression(
             self,
-            gene_expression_dict,
-            min_expression_value=0.0):
+            gene_expression_dict: Mapping[str, float],
+            min_expression_value: float = 0.0) -> Self:
         """
         Filters effects to those which have an associated gene whose
         expression value in the gene_expression_dict argument is greater
@@ -285,7 +289,7 @@ class EffectCollection(Collection):
             value_dict=gene_expression_dict,
             threshold=min_expression_value)
 
-    def filter_by_effect_priority(self, min_priority_class):
+    def filter_by_effect_priority(self, min_priority_class: type[MutationEffect]) -> Self:
         """
         Create a new EffectCollection containing only effects at least as
         severe as ``min_priority_class`` in Varcode's effect priority order.
@@ -294,7 +298,7 @@ class EffectCollection(Collection):
         return self.filter(
             lambda effect: effect_priority(effect) >= min_priority)
 
-    def drop_silent_and_noncoding(self, keep_unresolved: bool = True) -> EffectCollection:
+    def drop_silent_and_noncoding(self, keep_unresolved: bool = True) -> Self:
         """
         Keep effects with a protein-changing candidate or unresolved SV outcome.
 
@@ -319,7 +323,7 @@ class EffectCollection(Collection):
 
         return self.filter(retain)
 
-    def detailed_string(self):
+    def detailed_string(self) -> str:
         """
         Create a long string with all transcript effects for each mutation,
         grouped by gene (if a mutation affects multiple genes).
@@ -372,28 +376,30 @@ class EffectCollection(Collection):
     # TODO: find a way to express these kinds of methods without
     # duplicating every single groupby_* method
 
-    def top_priority_effect_per_variant(self):
+    def top_priority_effect_per_variant(self) -> OrderedDict[Variant, MutationEffect]:
         """Highest priority effect for each unique variant"""
         return OrderedDict(
             (variant, top_priority_effect(variant_effects))
             for (variant, variant_effects)
             in self.groupby_variant().items())
 
-    def top_priority_effect_per_transcript_id(self):
+    def top_priority_effect_per_transcript_id(self) -> OrderedDict[str | None, MutationEffect]:
         """Highest priority effect for each unique transcript ID"""
         return OrderedDict(
             (transcript_id, top_priority_effect(variant_effects))
             for (transcript_id, variant_effects)
             in self.groupby_transcript_id().items())
 
-    def top_priority_effect_per_gene_id(self):
+    def top_priority_effect_per_gene_id(self) -> OrderedDict[str | None, MutationEffect]:
         """Highest priority effect for each unique gene ID"""
         return OrderedDict(
             (gene_id, top_priority_effect(variant_effects))
             for (gene_id, variant_effects)
             in self.groupby_gene_id().items())
 
-    def effect_expression(self, expression_levels):
+    def effect_expression(
+            self, expression_levels: Mapping[str, float],
+    ) -> OrderedDict[MutationEffect, float]:
         """
         Parameters
         ----------
@@ -413,7 +419,9 @@ class EffectCollection(Collection):
             for effect in self
             if effect.transcript is not None)
 
-    def top_expression_effect(self, expression_levels):
+    def top_expression_effect(
+            self, expression_levels: Mapping[str, float],
+    ) -> MutationEffect | None:
         """
         Return effect whose transcript has the highest expression level.
         If none of the effects are expressed or have associated transcripts,
@@ -445,7 +453,12 @@ class EffectCollection(Collection):
         "effect_type", "effect",
     ) + REFERENCE_COLUMNS
 
-    def to_dataframe(self, include_archive=False, *, deletion_notation="sequence"):
+    def to_dataframe(
+            self,
+            include_archive: bool = False,
+            *,
+            deletion_notation: Literal["sequence", "range"] = "sequence",
+    ) -> pd.DataFrame:
         """Build a summary; optionally retain full graphs in ``effect_json``.
 
         ``deletion_notation="range"`` renders protein deletion labels using
@@ -521,7 +534,13 @@ class EffectCollection(Collection):
             frame["effect_json"] = [effect.to_json() for effect in self]
         return frame
 
-    def to_csv(self, path, include_header=True, *, deletion_notation="sequence"):
+    def to_csv(
+            self,
+            path: str | os.PathLike[str],
+            include_header: bool = True,
+            *,
+            deletion_notation: Literal["sequence", "range"] = "sequence",
+    ) -> None:
         """Write this collection to CSV.
 
         Parameters
@@ -574,7 +593,7 @@ class EffectCollection(Collection):
         return None
 
     @classmethod
-    def from_csv(cls, path, genome=None):
+    def from_csv(cls, path: str | os.PathLike[str], genome=None) -> Self:
         """Rebuild an EffectCollection from a CSV previously written by
         ``EffectCollection.to_csv()``.
 

@@ -11,6 +11,9 @@
 # limitations under the License.
 
 
+from __future__ import annotations
+
+from collections.abc import Sequence
 from functools import cached_property
 from memoized_property import memoized_property
 from warnings import warn
@@ -21,8 +24,10 @@ from serializable import Serializable
 from .common import validate_deletion_notation
 
 if TYPE_CHECKING:
+    from ..effect_candidates import EffectCandidate
     from ..mutant_transcript import MutantTranscript
     from ..orf import ORFAnnotation
+    from ..protocols import GeneLike, TranscriptLike
 
 
 def _cryptic_motif_score(candidate):
@@ -42,7 +47,7 @@ class MutationEffect(Serializable):
     _effect_graph_fields = (
         "realized_candidates", "germline_phase_state",
         "germline_variants_in_window", "germline_unknown", "germline_variants",
-        "baseline_transcript")
+        "baseline_transcript", "_modifies_coding_sequence", "_modifies_protein_sequence")
 
     def __init__(self, variant):
         self.variant = variant
@@ -153,13 +158,14 @@ class MutationEffect(Serializable):
     def _format_short_description(self, deletion_notation):
         return self.short_description
 
-    # Ordinary annotation and ORF/import adapters expose different transcript
-    # and gene views. Keep their present values gradual until those protocols
-    # are defined (#653), rather than inferring that these fields are always None.
-    transcript: Any | None = None
-    gene: Any | None = None
-    orf_annotation: "ORFAnnotation | None" = None
+    transcript: TranscriptLike | None = None
+    orf_annotation: ORFAnnotation | None = None
     discovered_orf: Any | None = None
+
+    @property
+    def gene(self) -> GeneLike | None:
+        """Parent gene for this effect, or ``None`` when unavailable."""
+        return self.__dict__.get("gene")
 
     @property
     def orf(self):
@@ -169,7 +175,7 @@ class MutationEffect(Serializable):
         return getattr(self.transcript, "reference_orf", None)
 
     @property
-    def reference_transcript(self):
+    def reference_transcript(self) -> TranscriptLike | None:
         """Original annotated RNA, including when an extra coding frame is used."""
         return self.orf.transcript if self.orf is not None else self.transcript
 
@@ -221,25 +227,55 @@ class MutationEffect(Serializable):
         else:
             return None
 
-    # It's convenient to have a property which tells us:
-    # 1) is this a variant effect overlapping a transcript?
-    # 2) does that transcript have a coding sequence?
-    # 3) does the variant affect the coding sequence?
-    modifies_coding_sequence: bool | None = False
+    # Default tri-state change flags; subclasses override either the class
+    # default or the ``_get_*`` hook while keeping instance-level overrides
+    # (``_modifies_*``) and archive restoration working cleanly.
+    _default_modifies_coding_sequence: bool | None = False
+    _default_modifies_protein_sequence: bool | None = False
 
-    # Additionally:
-    # 4) Does the change to the coding sequence result in a change to the
-    # protein sequence?
-    modifies_protein_sequence: bool | None = False
+    def _get_modifies_coding_sequence(self) -> bool | None:
+        return self._default_modifies_coding_sequence
+
+    @property
+    def modifies_coding_sequence(self) -> bool | None:
+        """Tri-state flag: True if coding sequence changes, False if unchanged, None if unknown."""
+        if "_modifies_coding_sequence" in self.__dict__:
+            return self.__dict__["_modifies_coding_sequence"]
+        if "modifies_coding_sequence" in self.__dict__:
+            return self.__dict__["modifies_coding_sequence"]
+        return self._get_modifies_coding_sequence()
+
+    @modifies_coding_sequence.setter
+    def modifies_coding_sequence(self, value: bool | None) -> None:
+        self.__dict__["_modifies_coding_sequence"] = value
+
+    def _get_modifies_protein_sequence(self) -> bool | None:
+        return self._default_modifies_protein_sequence
+
+    @property
+    def modifies_protein_sequence(self) -> bool | None:
+        """Tri-state flag: True if protein sequence changes, False if unchanged, None if unknown."""
+        if "_modifies_protein_sequence" in self.__dict__:
+            return self.__dict__["_modifies_protein_sequence"]
+        if "modifies_protein_sequence" in self.__dict__:
+            return self.__dict__["modifies_protein_sequence"]
+        return self._get_modifies_protein_sequence()
+
+    @modifies_protein_sequence.setter
+    def modifies_protein_sequence(self, value: bool | None) -> None:
+        self.__dict__["_modifies_protein_sequence"] = value
+
+    def _get_mutant_protein_sequence(self) -> str | None:
+        if self.mutant_transcript is not None:
+            return self.mutant_transcript.mutant_protein_sequence
+        return None
 
     @property
     def mutant_protein_sequence(self) -> str | None:
         """Protein from the assembled transcript, when one is available."""
         if "_mutant_protein_sequence" in self.__dict__:
             return self._mutant_protein_sequence
-        if self.mutant_transcript is not None:
-            return self.mutant_transcript.mutant_protein_sequence
-        return None
+        return self._get_mutant_protein_sequence()
 
     @mutant_protein_sequence.setter
     def mutant_protein_sequence(self, sequence: str | None) -> None:
@@ -247,8 +283,23 @@ class MutationEffect(Serializable):
 
     # which residues in the mutant protein sequence are different from
     # the original?
-    aa_mutation_start_offset: int | None = None
-    aa_mutation_end_offset: int | None = None
+    @property
+    def aa_mutation_start_offset(self) -> int | None:
+        """Zero-based start offset of mutated residues in the protein, or ``None``."""
+        return self.__dict__.get("aa_mutation_start_offset")
+
+    @aa_mutation_start_offset.setter
+    def aa_mutation_start_offset(self, value: int | None) -> None:
+        self.__dict__["aa_mutation_start_offset"] = value
+
+    @property
+    def aa_mutation_end_offset(self) -> int | None:
+        """Zero-based half-open end offset of mutated residues in the protein, or ``None``."""
+        return self.__dict__.get("aa_mutation_end_offset")
+
+    @aa_mutation_end_offset.setter
+    def aa_mutation_end_offset(self, value: int | None) -> None:
+        self.__dict__["aa_mutation_end_offset"] = value
 
     # Optional full :class:`~varcode.MutantTranscript` attached to
     # this effect (#269 / #296 / #335). SV effects and splice
@@ -257,8 +308,16 @@ class MutationEffect(Serializable):
     # default; an Isovar-style :class:`PhaseResolver` can attach an
     # assembled-contig MutantTranscript post-hoc via
     # :func:`varcode.phasing.apply_phase_resolver_to_effects`.
-    mutant_transcript: "MutantTranscript | None" = None
-    baseline_transcript: "MutantTranscript | None" = None
+    @property
+    def mutant_transcript(self) -> MutantTranscript | None:
+        """Assembled mutant transcript model when available, else ``None``."""
+        return self.__dict__.get("mutant_transcript")
+
+    @mutant_transcript.setter
+    def mutant_transcript(self, value: MutantTranscript | None) -> None:
+        self.__dict__["mutant_transcript"] = value
+
+    baseline_transcript: MutantTranscript | None = None
     """The actual pre-somatic transcript used for a composed comparison.
 
     None means no baseline model was retained. A model whose sequence is None
@@ -322,8 +381,23 @@ class MultiOutcomeEffect(MutationEffect):
     which is common but not guaranteed. Pick consciously.
     """
 
+    def _get_candidates(self) -> tuple[EffectCandidate, ...]:
+        raise NotImplementedError(
+            "%s must implement candidates" % type(self).__name__)
+
     @property
-    def effects(self):
+    def candidates(self) -> tuple[EffectCandidate, ...]:
+        """Tuple of :class:`~varcode.effect_candidates.EffectCandidate` outcomes."""
+        if "candidates" in self.__dict__:
+            return self.__dict__["candidates"]
+        return self._get_candidates()
+
+    @candidates.setter
+    def candidates(self, value: Sequence[EffectCandidate]) -> None:
+        self.__dict__["candidates"] = tuple(value)
+
+    @property
+    def effects(self) -> tuple[MutationEffect, ...]:
         """Tuple of inner :class:`MutationEffect` objects, in
         :attr:`candidates` order. Convenience for callers that don't
         need per-candidate provenance — equivalent to
@@ -400,7 +474,10 @@ class MultiOutcomeEffect(MutationEffect):
 
 class Intergenic(MutationEffect):
     """Variant has unknown effect if it occurs between genes"""
-    short_description = "intergenic"
+
+    @property
+    def short_description(self) -> str:
+        return "intergenic"
 
 
 class Intragenic(MutationEffect):
@@ -410,11 +487,14 @@ class Intragenic(MutationEffect):
     apparently does happen sometimes, maybe some genes have two distinct sets
     of exons which are never simultaneously expressed?
     """
-    short_description = "intragenic"
+
+    @property
+    def short_description(self) -> str:
+        return "intragenic"
 
     def __init__(self, variant, gene):
         MutationEffect.__init__(self, variant)
-        self.gene = gene
+        self.__dict__["gene"] = gene
 
 
 class TranscriptMutationEffect(Intragenic):
@@ -427,7 +507,7 @@ class TranscriptMutationEffect(Intragenic):
         self.transcript = transcript
 
     @cached_property
-    def gene(self) -> Any | None:
+    def gene(self) -> GeneLike | None:
         """Resolve the full gene only when requested, not when restoring an effect.
 
         Transcript identity and retained consequences remain usable without an
@@ -475,7 +555,10 @@ class GermlineAlleleOverlap(TranscriptMutationEffect):
     loss of the other allele, expression, or the allele's pathogenicity.
     """
 
-    short_description = "germline-allele-overlap"
+    @property
+    def short_description(self) -> str:
+        return "germline-allele-overlap"
+
     is_germline_overlap = True
     is_loh = None
     loh_status = "not_assessed"
@@ -524,8 +607,8 @@ class Unresolved(TranscriptMutationEffect):
         Reference-only diagnostic and ranking anchor, when available.
     """
 
-    modifies_coding_sequence = None
-    modifies_protein_sequence = None
+    _default_modifies_coding_sequence = None
+    _default_modifies_protein_sequence = None
 
     def __init__(self, variant, transcript, mechanism: str, reason: str | None = None,
                  reference_effect: MutationEffect | None = None) -> None:
@@ -578,7 +661,10 @@ class NoncodingTranscript(TranscriptMutationEffect):
     """
     Any mutation to a transcript with a non-coding biotype
     """
-    short_description = "non-coding-transcript"
+
+    @property
+    def short_description(self) -> str:
+        return "non-coding-transcript"
 
 
 class IncompleteTranscript(TranscriptMutationEffect):
@@ -592,7 +678,10 @@ class IncompleteTranscript(TranscriptMutationEffect):
     finishing the last partial codon. This needs PyEnsembl 2.34.1 or later;
     with an earlier PyEnsembl these genes are still reported as incomplete.
     """
-    short_description = "incomplete"
+
+    @property
+    def short_description(self) -> str:
+        return "incomplete"
 
 
 class FivePrimeUTR(TranscriptMutationEffect):
@@ -600,7 +689,10 @@ class FivePrimeUTR(TranscriptMutationEffect):
     Any mutation to the 5' untranslated region (before the start codon) of
     coding transcript.
     """
-    short_description = "5' UTR"
+
+    @property
+    def short_description(self) -> str:
+        return "5' UTR"
 
 
 class ThreePrimeUTR(TranscriptMutationEffect):
@@ -608,7 +700,10 @@ class ThreePrimeUTR(TranscriptMutationEffect):
     Any mutation to the 3' untranslated region (after the stop codon) of
     coding transcript.
     """
-    short_description = "3' UTR"
+
+    @property
+    def short_description(self) -> str:
+        return "3' UTR"
 
 
 class Intronic(TranscriptMutationEffect):
@@ -620,7 +715,9 @@ class Intronic(TranscriptMutationEffect):
         self.nearest_exon = nearest_exon
         self.distance_to_exon = distance_to_exon
 
-    short_description = "intronic"
+    @property
+    def short_description(self) -> str:
+        return "intronic"
 
 
 class SpliceSite(object):
@@ -660,7 +757,9 @@ class IntronicSpliceSite(Intronic, SpliceSite):
         Intronic.__init__(
             self, variant, transcript, nearest_exon, distance_to_exon)
 
-    short_description = "intronic-splice-site"
+    @property
+    def short_description(self) -> str:
+        return "intronic-splice-site"
 
 
 class SpliceDonor(IntronicSpliceSite):
@@ -671,14 +770,19 @@ class SpliceDonor(IntronicSpliceSite):
         IntronicSpliceSite.__init__(
             self, variant, transcript, nearest_exon, distance_to_exon)
 
-    short_description = "splice-donor"
+    @property
+    def short_description(self) -> str:
+        return "splice-donor"
 
 
 class SpliceAcceptor(IntronicSpliceSite):
     """
     Mutation in the last two intron residues.
     """
-    short_description = "splice-acceptor"
+
+    @property
+    def short_description(self) -> str:
+        return "splice-acceptor"
 
 
 # =====================================================================
@@ -778,12 +882,10 @@ class SpliceMechanismEffect(TranscriptMutationEffect):
             return None
         return self.protein_effect.__class__
 
-    @property
-    def modifies_coding_sequence(self):
+    def _get_modifies_coding_sequence(self) -> bool | None:
         return getattr(self.protein_effect, "modifies_coding_sequence", False)
 
-    @property
-    def modifies_protein_sequence(self):
+    def _get_modifies_protein_sequence(self) -> bool | None:
         return getattr(self.protein_effect, "modifies_protein_sequence", False)
 
 
@@ -832,20 +934,36 @@ class NormalSplicing(SpliceMechanismEffect):
         return getattr(self.coding_effect, "aa_alt", None)
 
     @property
-    def mutant_protein_sequence(self):
+    def mutant_protein_sequence(self) -> str | None:
         return getattr(self.coding_effect, "mutant_protein_sequence", None)
 
+    @mutant_protein_sequence.setter
+    def mutant_protein_sequence(self, value: str | None) -> None:
+        raise AttributeError("NormalSplicing.mutant_protein_sequence is read-only")
+
     @property
-    def aa_mutation_start_offset(self):
+    def aa_mutation_start_offset(self) -> int | None:
         return getattr(self.coding_effect, "aa_mutation_start_offset", None)
 
-    @property
-    def aa_mutation_end_offset(self):
-        return getattr(self.coding_effect, "aa_mutation_end_offset", None)
+    @aa_mutation_start_offset.setter
+    def aa_mutation_start_offset(self, value: int | None) -> None:
+        raise AttributeError("NormalSplicing.aa_mutation_start_offset is read-only")
 
     @property
-    def mutant_transcript(self):
+    def aa_mutation_end_offset(self) -> int | None:
+        return getattr(self.coding_effect, "aa_mutation_end_offset", None)
+
+    @aa_mutation_end_offset.setter
+    def aa_mutation_end_offset(self, value: int | None) -> None:
+        raise AttributeError("NormalSplicing.aa_mutation_end_offset is read-only")
+
+    @property
+    def mutant_transcript(self) -> MutantTranscript | None:
         return getattr(self.coding_effect, "mutant_transcript", None)
+
+    @mutant_transcript.setter
+    def mutant_transcript(self, value: MutantTranscript | None) -> None:
+        raise AttributeError("NormalSplicing.mutant_transcript is read-only")
 
     @property
     def priority_class(self):
@@ -853,12 +971,10 @@ class NormalSplicing(SpliceMechanismEffect):
             return None
         return self.coding_effect.__class__
 
-    @property
-    def modifies_coding_sequence(self):
+    def _get_modifies_coding_sequence(self) -> bool | None:
         return getattr(self.coding_effect, "modifies_coding_sequence", False)
 
-    @property
-    def modifies_protein_sequence(self):
+    def _get_modifies_protein_sequence(self) -> bool | None:
         return getattr(self.coding_effect, "modifies_protein_sequence", False)
 
     @property
@@ -1003,7 +1119,7 @@ class CrypticSpliceSiteEffect(SpliceMechanismEffect):
     cryptic motif's position and score, plus the resulting exon
     length delta."""
 
-    direction = None  # "donor" / "acceptor", set by subclass
+    direction: str | None = None  # "donor" / "acceptor", set by subclass
 
     def __init__(self, variant, transcript, splice_signal, affected_exon,
                  cryptic_genomic_position=None, motif_score=None,
@@ -1072,17 +1188,12 @@ class ExonLoss(Exonic):
             self.transcript,
             "+".join(str(exon) for exon in self.exons))
 
-    short_description = "exon-loss"
-
     @property
-    def modifies_protein_sequence(self):
-        # TODO: distinguish between exon loss in the CDS and UTRs
-        return True
+    def short_description(self) -> str:
+        return "exon-loss"
 
-    @property
-    def modifies_coding_sequence(self):
-        # TODO: distinguish between exon loss in the CDS and UTRs
-        return True
+    _default_modifies_protein_sequence = True
+    _default_modifies_coding_sequence = True
 
 
 class ExonicSpliceSite(Exonic, SpliceSite, MultiOutcomeEffect):
@@ -1116,10 +1227,11 @@ class ExonicSpliceSite(Exonic, SpliceSite, MultiOutcomeEffect):
             self.exon,
             self.alternate_effect)
 
-    short_description = "exonic-splice-site"
-
     @property
-    def mutant_protein_sequence(self):
+    def short_description(self) -> str:
+        return "exonic-splice-site"
+
+    def _get_mutant_protein_sequence(self) -> str | None:
         """
         TODO: determine when exonic splice variants cause exon skipping
         vs. translation of the underlying modified coding sequence.
@@ -1128,16 +1240,13 @@ class ExonicSpliceSite(Exonic, SpliceSite, MultiOutcomeEffect):
         """
         return self.alternate_effect.mutant_protein_sequence
 
-    @property
-    def modifies_protein_sequence(self):
+    def _get_modifies_protein_sequence(self) -> bool | None:
         return self.alternate_effect.modifies_protein_sequence
 
-    @property
-    def modifies_coding_sequence(self):
+    def _get_modifies_coding_sequence(self) -> bool | None:
         return self.alternate_effect.modifies_coding_sequence
 
-    @property
-    def candidates(self):
+    def _get_candidates(self) -> tuple[EffectCandidate, ...]:
         """The two plausible outcomes wrapped as
         :class:`~varcode.effect_candidates.EffectCandidate`:
 
@@ -1183,11 +1292,7 @@ class CodingMutation(Exonic):
         ])
         return "%s(%s)" % (self.__class__.__name__, fields_str)
 
-    @property
-    def modifies_coding_sequence(self):
-        # A structural model can alter translation (e.g. SECIS loss)
-        # while preserving every annotated CDS base.
-        return getattr(self, "_modifies_coding_sequence", True)
+    _default_modifies_coding_sequence = True
 
 
 class Silent(CodingMutation):
@@ -1292,9 +1397,7 @@ class NonsilentCodingMutation(CodingMutation):
         self.aa_mutation_end_offset = aa_mutation_end_offset
         self.aa_ref = str(aa_ref)
 
-    @property
-    def modifies_protein_sequence(self):
-        return True
+    _default_modifies_protein_sequence = True
 
 
 class StartGain(TranscriptMutationEffect):
@@ -1306,8 +1409,8 @@ class StartGain(TranscriptMutationEffect):
     unknown, so the protein-change flag and original protein remain None.
     """
 
-    modifies_coding_sequence = True
-    modifies_protein_sequence = None
+    _default_modifies_coding_sequence = True
+    _default_modifies_protein_sequence = None
 
     def __init__(self, variant, transcript, discovered_orf, baseline_transcript,
                  mutant_transcript, discovery_policy, hypothesis=None, source_evidence=None):
@@ -1323,9 +1426,12 @@ class StartGain(TranscriptMutationEffect):
         self.annotator_version = __version__
 
     @property
-    def short_description(self):
+    def short_description(self) -> str:
+        orf = self.discovered_orf
+        if orf is None:
+            return "start-gain (conditional)"
         return "start-gain %s at RNA offset %d (conditional)" % (
-            self.discovered_orf.start_codon, self.discovered_orf.start)
+            orf.start_codon, orf.start)
 
 
 class StartLoss(NonsilentCodingMutation):
@@ -1388,12 +1494,11 @@ class StartLoss(NonsilentCodingMutation):
             return "*"
         return table.forward_table.get(self.alt_codon)
 
-    @property
-    def mutant_protein_sequence(self):
+    def _get_mutant_protein_sequence(self) -> str | None:
         return None
 
     @property
-    def short_description(self):
+    def short_description(self) -> str:
         return "p.%s1? (start-loss)" % (self.aa_ref,)
 
 
@@ -1406,7 +1511,7 @@ class KnownAminoAcidChange(NonsilentCodingMutation):
             self,
             variant,
             transcript,
-            aa_mutation_start_offset,
+            aa_mutation_start_offset: int,
             aa_ref,
             aa_alt):
         NonsilentCodingMutation.__init__(
@@ -1418,28 +1523,44 @@ class KnownAminoAcidChange(NonsilentCodingMutation):
             aa_ref=aa_ref)
         self.aa_alt = str(aa_alt)
 
+    def _required_start_offset(self) -> int:
+        offset = self.aa_mutation_start_offset
+        if offset is None:
+            raise ValueError(
+                "%s requires a non-None aa_mutation_start_offset" % type(self).__name__)
+        return offset
+
+    def _required_original_protein_sequence(self) -> str:
+        original = self.original_protein_sequence
+        if original is None:
+            raise ValueError(
+                "%s requires a non-None original_protein_sequence" % type(self).__name__)
+        return original
+
     @property
-    def short_description(self):
+    def short_description(self) -> str:
+        start = self._required_start_offset()
         if len(self.aa_ref) == 0:
             return "p.%dins%s" % (
-                self.aa_mutation_start_offset,
+                start,
                 self.aa_alt)
         elif len(self.aa_alt) == 0:
             # Effect offsets stay zero-based; labels name the one-based start.
-            return "p.%s%ddel" % (self.aa_ref, self.aa_mutation_start_offset + 1)
+            return "p.%s%ddel" % (self.aa_ref, start + 1)
         else:
             return "p.%s%d%s" % (
                 self.aa_ref,
-                self.aa_mutation_start_offset + 1,
+                start + 1,
                 self.aa_alt)
 
     @memoized_property
-    def mutant_protein_sequence(self):
+    def mutant_protein_sequence(self) -> str | None:
         if self.mutant_transcript is not None:
             return self.mutant_transcript.mutant_protein_sequence
-        original = self.original_protein_sequence
-        prefix = original[:self.aa_mutation_start_offset]
-        suffix = original[self.aa_mutation_start_offset + len(self.aa_ref):]
+        original = self._required_original_protein_sequence()
+        start = self._required_start_offset()
+        prefix = original[:start]
+        suffix = original[start + len(self.aa_ref):]
         return prefix + self.aa_alt + suffix
 
 
@@ -1537,7 +1658,7 @@ class Deletion(KnownAminoAcidChange):
     def _format_short_description(self, deletion_notation):
         if len(self.aa_ref) <= 1:
             return self.short_description
-        start = self.aa_mutation_start_offset + 1
+        start = self._required_start_offset() + 1
         return "p.%s%d_%s%ddel" % (
             self.aa_ref[0], start,
             self.aa_ref[-1], start + len(self.aa_ref) - 1)
@@ -1580,33 +1701,35 @@ class PrematureStop(KnownAminoAcidChange):
             aa_alt=aa_alt)
         self.stop_codon_offset = aa_mutation_start_offset + len(aa_alt)
 
-        if self.stop_codon_offset >= len(self.original_protein_sequence):
+        original = self._required_original_protein_sequence()
+        if self.stop_codon_offset >= len(original):
             raise ValueError(
                 ("Premature stop codon cannot be at position %d"
                  " since the original protein of %s has length %d") % (
                     self.stop_codon_offset,
                     transcript,
-                    len(self.original_protein_sequence)))
+                    len(original)))
 
     @property
-    def short_description(self):
+    def short_description(self) -> str:
         # When aa_ref is empty, the mutation is an insertion (no residues
         # were replaced) — use HGVS "ins" notation so the description is
         # unambiguous. Otherwise fall through to "{ref}{pos}{alt}*".
+        start = self._required_start_offset()
         if len(self.aa_ref) == 0:
             return "p.%dins%s*" % (
-                self.aa_mutation_start_offset + 1,
+                start + 1,
                 self.aa_alt)
         return "p.%s%d%s*" % (
             self.aa_ref,
-            self.aa_mutation_start_offset + 1,
+            start + 1,
             self.aa_alt)
 
     @memoized_property
-    def mutant_protein_sequence(self):
+    def mutant_protein_sequence(self) -> str | None:
         if self.mutant_transcript is not None:
             return self.mutant_transcript.mutant_protein_sequence
-        prefix = self.original_protein_sequence[:self.aa_mutation_start_offset]
+        prefix = self._required_original_protein_sequence()[:self._required_start_offset()]
         return prefix + self.aa_alt
 
 
@@ -1652,10 +1775,10 @@ class StopLoss(KnownAminoAcidChange):
         return self.aa_alt
 
     @property
-    def short_description(self):
+    def short_description(self) -> str:
         return "p.%s*%d%s (stop-loss)" % (
             self.aa_ref,
-            self.aa_mutation_start_offset + 1,
+            self._required_start_offset() + 1,
             self.aa_alt)
 
 
@@ -1693,18 +1816,18 @@ class FrameShift(KnownAminoAcidChange):
         return self.aa_alt
 
     @memoized_property
-    def mutant_protein_sequence(self):
+    def mutant_protein_sequence(self) -> str | None:
         if self.mutant_transcript is not None:
             return self.mutant_transcript.mutant_protein_sequence
-        original_aa_sequence = self.original_protein_sequence
-        prefix = original_aa_sequence[:self.aa_mutation_start_offset]
+        original_aa_sequence = self._required_original_protein_sequence()
+        prefix = original_aa_sequence[:self._required_start_offset()]
         return prefix + self.shifted_sequence
 
     @property
-    def short_description(self):
+    def short_description(self) -> str:
         return "p.%s%dfs" % (
             self.aa_ref[0],
-            self.aa_mutation_start_offset + 1)
+            self._required_start_offset() + 1)
 
 
 class FrameShiftTruncation(PrematureStop, FrameShift):
@@ -1732,10 +1855,10 @@ class FrameShiftTruncation(PrematureStop, FrameShift):
         return self.aa_alt
 
     @property
-    def short_description(self):
+    def short_description(self) -> str:
         return "p.%s%dfs*" % (
             self.aa_ref,
-            self.aa_mutation_start_offset + 1)
+            self._required_start_offset() + 1)
 
 
 # =====================================================================
@@ -1820,22 +1943,20 @@ class StructuralVariantEffect(TranscriptMutationEffect, MultiOutcomeEffect):
         # :func:`varcode.cryptic_exons.enumerate_from_structural_variant`
         # (#337). Kept separate from primary effects because their
         # entries carry different source / evidence.
-        self._cryptic_candidates = ()
+        self._cryptic_candidates: tuple[Any, ...] = ()
         # Splice-outcome candidates attached by the SV annotator when
         # an SV breakpoint lands in a canonical splice window (#341).
         # Pre-constructed :class:`~varcode.EffectCandidate` tuples; the
         # annotator re-sources them as ``"varcode_splice"`` and
         # enriches evidence with ``sv_type`` before attaching.
-        self._splice_candidates = ()
+        self._splice_candidates: tuple[EffectCandidate, ...] = ()
 
-    @property
-    def mutant_protein_sequence(self):
+    def _get_mutant_protein_sequence(self) -> str | None:
         """Protein carried by the realized structural transcript, if any."""
         return getattr(
             self.mutant_transcript, "mutant_protein_sequence", None)
 
-    @property
-    def modifies_coding_sequence(self):
+    def _get_modifies_coding_sequence(self) -> bool | None:
         """True if any candidate changes CDS, None if unresolved, else False.
 
         Protein equality alone does not establish coding-sequence equality.
@@ -1843,8 +1964,7 @@ class StructuralVariantEffect(TranscriptMutationEffect, MultiOutcomeEffect):
         from .sequence_change import modification_status
         return modification_status(self, "modifies_coding_sequence")
 
-    @property
-    def modifies_protein_sequence(self):
+    def _get_modifies_protein_sequence(self) -> bool | None:
         """True if any candidate changes protein, None if unresolved, else False.
 
         A set with an unchanged primary and a changed alternative returns True.
@@ -1853,8 +1973,7 @@ class StructuralVariantEffect(TranscriptMutationEffect, MultiOutcomeEffect):
         from .sequence_change import modification_status
         return modification_status(self, "modifies_protein_sequence")
 
-    @property
-    def candidates(self):
+    def _get_candidates(self) -> tuple[EffectCandidate, ...]:
         """Unified :class:`~varcode.EffectCandidate` view over primary
         SV classifications, attached cryptic candidates, and any
         splice-outcome candidates (#339, #337, #341, #382).
@@ -1926,7 +2045,9 @@ class LargeDeletion(StructuralVariantEffect):
     itself (callers that want to add RNA evidence or SpliceAI
     scoring construct additional outcomes and wrap the result)."""
 
-    short_description = "sv-deletion"
+    @property
+    def short_description(self) -> str:
+        return "sv-deletion"
 
     def __init__(
             self, variant, transcript, affected_exons,
@@ -1940,7 +2061,7 @@ class LargeDeletion(StructuralVariantEffect):
     def __str__(self):
         return "LargeDeletion(%s, %s, exons=%d)" % (
             self.variant.short_description,
-            self.transcript.id,
+            self.transcript.id if self.transcript is not None else "?",
             len(self.affected_exons))
 
 
@@ -1951,7 +2072,9 @@ class LargeDuplication(StructuralVariantEffect):
     effect. Varcode reports the affected exons and leaves scoring
     to downstream tools."""
 
-    short_description = "sv-duplication"
+    @property
+    def short_description(self) -> str:
+        return "sv-duplication"
 
     def __init__(
             self, variant, transcript, affected_exons,
@@ -1971,7 +2094,9 @@ class Inversion(StructuralVariantEffect):
     outcome here; subclasses / callers can enrich with cryptic-
     splice candidates per PR 11."""
 
-    short_description = "sv-inversion"
+    @property
+    def short_description(self) -> str:
+        return "sv-inversion"
 
 
 class GeneFusion(StructuralVariantEffect):
@@ -2002,7 +2127,9 @@ class GeneFusion(StructuralVariantEffect):
     An RNA-observed gene fusion need not encode a complete protein.
     """
 
-    short_description = "sv-gene-fusion"
+    @property
+    def short_description(self) -> str:
+        return "sv-gene-fusion"
 
     def __init__(
             self, variant, transcript, partner_transcript,
@@ -2032,7 +2159,9 @@ class TranslocationToIntergenic(StructuralVariantEffect):
     mate follow as further candidates, and PR 11's cryptic-exon
     enumerator adds candidate outcomes when applicable."""
 
-    short_description = "sv-translocation-intergenic"
+    @property
+    def short_description(self) -> str:
+        return "sv-translocation-intergenic"
 
 
 class TranslocationToUnannotatedContig(TranslocationToIntergenic):
@@ -2044,7 +2173,9 @@ class TranslocationToUnannotatedContig(TranslocationToIntergenic):
     contig. The local side is annotated as for
     :class:`TranslocationToIntergenic`, which this specializes."""
 
-    short_description = "sv-translocation-unannotated-contig"
+    @property
+    def short_description(self) -> str:
+        return "sv-translocation-unannotated-contig"
 
     def __init__(
             self, variant, transcript, partner_contig,
@@ -2071,9 +2202,12 @@ class CrypticExonCandidate(MutationEffect):
     :class:`EffectCandidate.evidence` dict.
     """
 
-    short_description = "sv-cryptic-exon-candidate"
-    modifies_coding_sequence = None
-    modifies_protein_sequence = None
+    @property
+    def short_description(self) -> str:
+        return "sv-cryptic-exon-candidate"
+
+    _default_modifies_coding_sequence = None
+    _default_modifies_protein_sequence = None
 
     def __init__(
             self, variant, contig, interval_start, interval_end,
@@ -2139,8 +2273,7 @@ class HaplotypeEffect(TranscriptMutationEffect, MultiOutcomeEffect):
         # or RNA-assembly evidence.
         self.phase_source = phase_source
 
-    @property
-    def candidates(self):
+    def _get_candidates(self) -> tuple[EffectCandidate, ...]:
         """Single-outcome wrapping: the haplotype IS the outcome,
         lifted into the uniform :class:`EffectCandidate` shape so
         consumers iterate :attr:`candidates` the same way across all
@@ -2156,8 +2289,7 @@ class HaplotypeEffect(TranscriptMutationEffect, MultiOutcomeEffect):
             effect=self, source="varcode", evidence=evidence),)
         return self._combine_with_extra_candidates(base)
 
-    @property
-    def mutant_protein_sequence(self):
+    def _get_mutant_protein_sequence(self) -> str | None:
         """Joint protein translated from the haplotype's cDNA, or
         ``None`` if the edits don't land after the CDS start."""
         return getattr(
@@ -2239,8 +2371,7 @@ class PhaseCandidateSet(TranscriptMutationEffect, MultiOutcomeEffect):
         self._hypotheses = tuple(hypotheses)
         self.germline_variants = tuple(germline_variants)
 
-    @property
-    def candidates(self):
+    def _get_candidates(self) -> tuple[EffectCandidate, ...]:
         """One :class:`EffectCandidate` per hypothesis, sorted by
         underlying effect priority (most-severe first), carrying the
         phase metadata needed to align with RNA-evidence outcomes
@@ -2295,20 +2426,17 @@ class PhaseCandidateSet(TranscriptMutationEffect, MultiOutcomeEffect):
         highest = self.highest_priority_effect
         return getattr(highest, "priority_class", None) or type(highest)
 
-    @property
-    def mutant_protein_sequence(self):
+    def _get_mutant_protein_sequence(self) -> str | None:
         """Most-likely candidate's mutant protein. Consumers iterating
         over hypotheses pull per-candidate sequences from
         :attr:`candidates`."""
         return getattr(self.most_likely_effect, "mutant_protein_sequence", None)
 
-    @property
-    def modifies_protein_sequence(self):
+    def _get_modifies_protein_sequence(self) -> bool | None:
         return getattr(
             self.most_likely_effect, "modifies_protein_sequence", False)
 
-    @property
-    def modifies_coding_sequence(self):
+    def _get_modifies_coding_sequence(self) -> bool | None:
         return getattr(
             self.most_likely_effect, "modifies_coding_sequence", False)
 

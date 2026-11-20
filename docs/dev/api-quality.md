@@ -8,11 +8,14 @@ reason to change a return shape, coordinate convention, or uncertainty policy.
 
 The common traversal helpers (`get_effect_candidates`, `iter_candidate_effects`, and
 `iter_candidate_paths`) cover both candidate shapes with typed effect access.
-Collection iteration, indexing, filtering, cloning and generic grouping are
-typed; slicing preserves Sercol's underlying-sequence return rather than
-silently creating a new collection. Subclass-preserving clones/groups/filters
-retain the existing metadata behavior. Broader model protocols, specialized
-grouping/set operations, and subclass field annotations remain gradual (#653).
+Collection iteration, indexing, filtering, cloning, specialized grouping, and
+metadata-preserving set operations are typed (`VariantCollection` and
+`EffectCollection`, preserving subclasses via `Self`); slicing preserves
+Sercol's underlying-sequence return rather than silently creating a new
+collection. Structural `GeneLike` and `TranscriptLike` protocols describe
+ordinary PyEnsembl, ORF, and RNA transcript/gene views, and `effect_classes.py`
+is checked under `[tool.mypy]` alongside the collection and transform modules
+(#653).
 
 ## API quality audit: October 2026
 
