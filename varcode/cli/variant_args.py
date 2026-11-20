@@ -12,6 +12,8 @@
 
 from argparse import ArgumentParser
 from contextlib import contextmanager
+from importlib import resources
+import logging.config
 import os
 
 from ..vcf import load_vcf
@@ -114,6 +116,15 @@ def make_variants_parser(**kwargs):
     parser = ArgumentParser(**kwargs)
     add_variant_args(parser)
     return parser
+
+
+def _configure_logging():
+    """Configure CLI logging from the packaged ``logging.conf``."""
+    # as_file, rather than str(), so that logging.conf is also readable when varcode
+    # is zip-imported (zipapp, pex, shiv, zipped egg), where files() hands back a
+    # zipfile.Path that open() can't use.
+    with resources.as_file(resources.files(__package__) / "logging.conf") as logging_conf:
+        logging.config.fileConfig(logging_conf, disable_existing_loggers=False)
 
 
 @contextmanager
