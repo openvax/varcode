@@ -31,7 +31,6 @@ every other pair as unknown; see [RNA phase from Isovar](phasing.md#rna-phase-fr
 Isovar can return a structure that changes the original hypothesis, including a
 previously unmodeled junction. Varcode's job is to represent that structure and
 predict its coding consequences, not force it into the first reference isoform.
-[RNA imports](rna_structures.md) describe the existing entry points.
 
 ## What must survive the handoff
 

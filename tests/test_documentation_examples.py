@@ -142,7 +142,6 @@ def test_documentation_effect_families_keep_all_classes():
 
 @pytest.mark.parametrize("path,anchor,destination", [
     ("structural_variants.md", "alleles-coordinates-and-exports", "sv_reference.md"),
-    ("structural_variants.md", "importing-observed-rna-structures", "rna_structures.md"),
     ("germline.md", "concrete-example-same-codon-three-scenarios", "phasing.md"),
     ("germline.md", "known-deletion-haplotypes-in-rna-alignments", "phasing.md"),
     ("api.md", "varcode.Variant.effects", "api_variants.md"),

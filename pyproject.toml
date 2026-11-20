@@ -34,18 +34,13 @@ include = ["varcode", "varcode.*"]
 "Homepage" = "https://github.com/openvax/varcode"
 "Bug Tracker" = "https://github.com/openvax/varcode/issues"
 
-[project.optional-dependencies]
-# pysam stays optional: it has no Windows build, and only
-# RNAReadPhasingSource (RNA-seq read phasing) uses it.
-rna = ["pysam>=0.21"]
-
 [project.scripts]
 varcode-genes = "varcode.cli.genes_script:main"
 varcode = "varcode.cli.main:main"
 
 [dependency-groups]
 # For working on Varcode, not for using it, so these are not published as
-# extras (PEP 735). With pip 25.1+: pip install -e '.[rna]' --group test --group lint
+# extras (PEP 735). With pip 25.1+: pip install -e . --group test --group lint
 test = [
     "osteosarc>=0.15.7,<0.16",  # patient-data fixtures; 0.15.7 stopped passing ensembl= (#693)
     "biotite>=1.6",  # independent sequence checks

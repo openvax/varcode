@@ -99,10 +99,8 @@ one row per variant and transcript:
 varcode effects --genome GRCh38 --vcf variants.vcf --output-csv effects.csv
 ```
 
-`varcode genes` lists the genes each variant overlaps, and
-`varcode check-samples` screens a cohort of VCFs for possible sample mix-ups.
-`varcode --help` lists the subcommands. See the [command-line guide](https://openvax.github.io/varcode/getting_started/#command-line)
-and [sample identity checks](https://openvax.github.io/varcode/sample_identity/).
+`varcode genes` lists the genes each variant overlaps.
+`varcode --help` lists the subcommands. See the [command-line guide](https://openvax.github.io/varcode/getting_started/#command-line).
 
 For shell tab completion across every OpenVax command-line tool, run
 `activate-global-python-argcomplete` once, or enable just `varcode` in your
@@ -126,9 +124,8 @@ Full documentation: [openvax.github.io/varcode](https://openvax.github.io/varcod
 - [Splice variants](https://openvax.github.io/varcode/splice_variants/) and
   [structural variants](https://openvax.github.io/varcode/structural_variants/),
   including gene-fusion candidates.
-- [Germline](https://openvax.github.io/varcode/germline/),
-  [phasing](https://openvax.github.io/varcode/phasing/), and
-  [observed RNA](https://openvax.github.io/varcode/rna_structures/): optional
+- [Germline](https://openvax.github.io/varcode/germline/) and
+  [phasing](https://openvax.github.io/varcode/phasing/): optional
   patient context that refines predictions.
 - [Effect types](https://openvax.github.io/varcode/effect_types/) and the
   [API reference](https://openvax.github.io/varcode/api/).

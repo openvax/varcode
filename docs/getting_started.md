@@ -193,9 +193,8 @@ When interpreting them:
 ## Command line
 
 The `varcode` command annotates files without writing Python. Its subcommands
-are `effects` (the default when none is given), `genes` (lists the genes each
-variant overlaps; the older `varcode-genes` command is an alias) and
-`check-samples`. `-o`/`--output` is a synonym for `--output-csv`.
+are `effects` (the default when none is given) and `genes` (lists the genes each
+variant overlaps; the older `varcode-genes` command is an alias). `-o`/`--output` is a synonym for `--output-csv`.
 
 ```bash
 varcode effects --genome GRCh38 --vcf variants.vcf --output-csv effects.csv
@@ -227,7 +226,6 @@ The commands differ from `load_vcf` in two ways:
 Records on contigs missing from the annotation remain visible as failures with
 a summary warning. Other annotation errors stop the command. `--skip-errors` continues and records
 each failure in the output; see [continuing past errors](errors.md#continuing-past-errors).
-For sample mix-up screening, see [`varcode check-samples`](sample_identity.md).
 
 ## Coordinate conventions
 
@@ -254,7 +252,6 @@ gtfparse 3 support.
 
 - [Effect annotation](effect_annotation.md): inspect results, sequences, and alternatives.
 - [Sample-aware queries](genotype.md): filter a multi-sample VCF.
-- [Sample identity checks](sample_identity.md): compare donor genotypes and somatic tumor calls.
 - [Structural variants](structural_variants.md): SVs, fusions, and observed RNA.
 - [Germline and phasing](germline.md): use a patient's baseline and linked variants.
 - [Troubleshooting](errors.md): check genome build, alleles, and sample names.

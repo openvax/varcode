@@ -34,7 +34,6 @@ per transcript, and "top priority" means most severe, not most likely.
 
 - [Read effects and protein sequences](effect_annotation.md)
 - [Select variants for a sample or compare tumor and normal](genotype.md)
-- [Check a cohort for sample mix-ups](sample_identity.md)
 - [Save and reload tables](csv.md)
 - [Fix reference, allele, and sample-name errors](errors.md)
 
@@ -42,9 +41,7 @@ per transcript, and "top priority" means most severe, not most likely.
 
 - [Splice variants and their possible outcomes](splice_variants.md)
 - [Structural variants and gene fusions](structural_variants.md)
-- [Compare SV calls across callers and samples](sv_comparison.md)
 - [Include patient germline variants](germline.md) or [phase linked variants](phasing.md)
-- [Attach observed RNA structures or Exacto protein predictions](rna_structures.md)
 - [Pair breakends or left-align indels](transforms.md)
 - [Effects on upstream and other reference ORFs](uorf_annotations.md)
 
