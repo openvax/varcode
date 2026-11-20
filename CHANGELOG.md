@@ -1,5 +1,15 @@
 # Change Log
 
+## v11.17.1
+
+- Remove tautological `Protocol` `isinstance()`, subclass-declaration, and
+  `hasattr` tests and replace the `VCFPhaseResolver` / `ReadPhaseResolver`
+  attribute survey with a behavioral cis/trans parity test (#479).
+- Clean up historical `CHANGELOG.md` sections: separate `v2.3.1–v4.24.1` and
+  `v5.0.0–v5.0.6` from the `v6.0.0` block, fold unpublished `v6.0.2` notes into
+  `v7.0.0`, tighten essay-length `v6.0.0` entries, and remove broken `tree/`
+  links for untagged historical releases (#411).
+
 ## v11.17.0
 
 - Expose a finite reviewed class registry and safe typed JSON codec for native
@@ -2133,7 +2143,7 @@ Behaviour change: hg19 `chrM` variants are no longer annotated as rCRS `MT`.
 - The registry-default test now restores the prior annotator rather than
   leaking `protein_diff` into later tests.
 
-## [v7.3.0](https://github.com/openvax/varcode/tree/v7.3.0) (2026-09-15)
+## v7.3.0 (2026-09-15)
 
 **Added**
 - Added the opt-in `realized` effect annotator and
@@ -2162,7 +2172,7 @@ Behaviour change: hg19 `chrM` variants are no longer annotated as rCRS `MT`.
 - Structural effects now expose the protein on their realized
   `mutant_transcript` through `effect.mutant_protein_sequence`.
 
-## [v7.2.0](https://github.com/openvax/varcode/tree/v7.2.0) (2026-09-15)
+## v7.2.0 (2026-09-15)
 
 **Added**
 - Added the internal coordinate-aware genomic-layout foundation for the
@@ -2174,7 +2184,7 @@ Behaviour change: hg19 `chrM` variants are no longer annotated as rCRS `MT`.
   ordinal unless a calibrated probability is supplied, and candidate merging
   now keys on both the patient baseline and mutant product.
 
-## [v7.1.2](https://github.com/openvax/varcode/tree/v7.1.2) (2026-09-15)
+## v7.1.2 (2026-09-15)
 
 **Fixed**
 - Cryptic splice-site scans now score the mutated allele and use one
@@ -2185,7 +2195,7 @@ Behaviour change: hg19 `chrM` variants are no longer annotated as rCRS `MT`.
   originating exonic or intronic allele on the same mutant transcript instead
   of constructing the splice mechanism from reference sequence alone.
 
-## [v7.1.1](https://github.com/openvax/varcode/tree/v7.1.1) (2026-09-14)
+## v7.1.1 (2026-09-14)
 
 **Fixed**
 - Four regression tests no longer silently skip. Three splice-outcome tests
@@ -2194,7 +2204,7 @@ Behaviour change: hg19 `chrM` variants are no longer annotated as rCRS `MT`.
   its coordinates from the pinned CFTR transcript instead of using a
   position one base before the intended exon.
 
-## [v7.1.0](https://github.com/openvax/varcode/tree/v7.1.0) (2026-09-11)
+## v7.1.0 (2026-09-11)
 
 **Changed**
 - Structural-variant fusion annotation follows breakend orientation. The
@@ -2291,324 +2301,86 @@ Behaviour change: hg19 `chrM` variants are no longer annotated as rCRS `MT`.
   residue(s) must retain the full tail under **both** annotators (CFTR
   `p.L127fs` on the + strand, BRCA1 `p.R71fs` on the − strand).
 
-## [v6.0.2](https://github.com/openvax/varcode/tree/v6.0.2) (2026-07-08)
-
 **Fixed**
-- The default protein-diff annotator (`classify_from_protein_diff`) no
-  longer drops the last 1–2 residues of a frameshift/stop-loss novel
-  C-terminus when that tail coincidentally ends with the same residue(s)
-  as the reference protein's own C-terminus. Reading-frame-changing
-  branches now trim only the shared *prefix* (`trim_shared_prefix`)
-  instead of `trim_shared_flanking_strings`, which also stripped a shared
-  *suffix* — correct for an in-frame indel, but wrong for a novel tail
-  running to a new stop codon. Example: ATM p.F61fs (GRCh38
-  `chr11:g.108227882delT`, `ENST00000675843`) now reports `74 aa … FRKKQNV`
-  from `Variant.effects()`, matching `annotator="fast"` and the true ORF,
-  instead of the truncated `73 aa … FRKKQN`. `annotator="fast"` and
-  `predict_variant_effect_on_transcript()` were never affected
-  ([#396](https://github.com/openvax/varcode/pull/396),
+- `classify_from_protein_diff` no longer truncates a frameshift or stop-loss
+  novel C-terminus when its final residue(s) coincidentally match the reference
+  C-terminus (superseding the unpublished `v6.0.2` commit;
+  [#396](https://github.com/openvax/varcode/pull/396),
   [#397](https://github.com/openvax/varcode/issues/397)).
 
 ## [v6.0.1](https://github.com/openvax/varcode/tree/v6.0.1) (2026-06-18)
 
 **Fixed**
-- In-frame deletions that remove the stop codon of a transcript with no
-  3' UTR sequence (e.g. MAPK3-006 / `ENST00000395199`, whose
-  `three_prime_utr_sequence` is `""`) no longer raise
-  `ValueError: If no amino acids added by StopLoss then it should be Silent`.
-  With no readthrough sequence to translate into, the effect is now
-  classified as a C-terminal `Deletion` instead of an invalid `StopLoss`
-  with an empty `aa_alt`. Both annotators agree on this: the in-frame
-  predictor (`FastEffectAnnotator`) no longer constructs the invalid
-  `StopLoss`, and the default protein-diff classifier
-  (`classify_from_protein_diff`) no longer mislabels the truncated protein
-  as a `PrematureStop` — there is no stop codon in the mutant CDS, so a
-  premature stop is incorrect. The earlier
-  [#246](https://github.com/openvax/varcode/issues/246) fix only covered
-  transcripts with a non-empty 3' UTR
+- In-frame deletions removing the stop codon of a transcript with an empty 3'
+  UTR now classify as a C-terminal `Deletion` across both `fast` and
+  `protein_diff` instead of raising on an invalid empty `StopLoss`
   ([#394](https://github.com/openvax/varcode/issues/394)).
 
 ## [v6.0.0](https://github.com/openvax/varcode/tree/v6.0.0) (2026-05-26)
 
-**Fixed**
-- `apply_variants_to_transcript` now refuses an insertion abutting
-  another edit at the same cDNA offset. The previous overlap check
-  only caught range overlap and the two-insertions-at-the-same-offset
-  case, so an insertion paired with a substitution or deletion
-  starting at the same offset slipped through and produced an
-  order-dependent joint cDNA. User-visible impact: phased haplotype /
-  germline pipelines (`varcode/phasing.py`, `varcode/germline.py`)
-  that previously returned a silently order-dependent joint effect for
-  these inputs now return independent per-variant effects computed
-  against the reference instead.
-- IUPAC ambiguity codes (R, Y, S, W, K, M, D, V, H, B) in a
-  reverse-strand variant's alleles are now reverse-complemented via
-  the full IUPAC translation table. The private helper in
-  `varcode/mutant_transcript.py` only covered A/C/G/T/N and silently
-  passed ambiguity codes through unchanged; `_resolve_variant_edit`
-  now delegates to `varcode.nucleotides.reverse_complement`.
-
-**Added**
-- Added `RNAReadPhasingSource`, a BAM-backed `ReadPhasingSource`
-  implementation for RNA read/fragment co-occurrence. It is consumed
-  through `MolecularPhaseResolver(source)` and lives behind the optional
-  `varcode[rna]` / `pysam` dependency. `ReadPhaseResolver` remains as
-  the varcode 5.0 compatibility name.
-- `SpliceOutcomeSet.effect_if_splicing_unchanged` — the canonical
-  "alternative outcome" accessor: the coding consequence that applies
-  if splicing proceeds normally (the `NormalSplicing` candidate's
-  `coding_effect`). Unlike the legacy `ExonicSpliceSite.alternate_effect`,
-  it works for intronic splice disruptions — returning `None` when
-  the nucleotide change leaves the protein untouched (i.e. there is
-  no coding consequence to attach). Sits alongside `most_likely_effect`
-  and `candidates` as the three-accessor surface on `SpliceOutcomeSet`
-  ([#391](https://github.com/openvax/varcode/issues/391)).
-
 **Breaking**
-- `SpliceOutcomeSet` is now always-on for splice-disrupting variants
-  ([#391](https://github.com/openvax/varcode/issues/391)). Every variant
-  that lands in the canonical splice window — `SpliceDonor`,
-  `SpliceAcceptor`, `ExonicSpliceSite`, `IntronicSpliceSite` — is
-  wrapped in a `SpliceOutcomeSet` carrying the candidate mechanisms.
-  Specifically:
-  - The `splice_outcomes=True` flag on `Variant.effects()` /
-    `VariantCollection.effects()` / `predict_variant_effects()` is
-    **removed**. Callers passing it explicitly get a `TypeError`.
-    Migration: drop the keyword — wrapping is unconditional.
-  - `Variant.effect_on_transcript(transcript)` and the
-    `FastEffectAnnotator` / `ProteinDiffEffectAnnotator` per-transcript
-    paths return a `SpliceOutcomeSet` for splice-disrupting variants
-    instead of the raw `ExonicSpliceSite` / `SpliceDonor` / etc. class.
-    Migration: replace `isinstance(effect, ExonicSpliceSite)` with
-    `isinstance(effect, SpliceOutcomeSet) and effect.disrupted_signal_class is ExonicSpliceSite`.
-    `effect.alternate_effect` still works as a back-compat alias for
-    `effect.effect_if_splicing_unchanged`, so attribute access keeps
-    working through the wrapper.
-  - `SpliceOutcomeSet.modifies_protein_sequence` is hardcoded to
-    `True` (a splice disruption is always *potentially* protein-
-    modifying via a non-`NormalSplicing` candidate). Closes a long-
-    standing filter bug where `drop_silent_and_noncoding()` silently
-    dropped exonic-splice-site variants whose `NormalSplicing.coding_effect`
-    happened to be `Silent`.
-  - Candidate construction is lazy: only the cheap `NormalSplicing`
-    candidate is built eagerly; `ExonSkipping`, `IntronRetention`,
-    `CrypticDonor` / `CrypticAcceptor` materialise on first
-    `.candidates` access. Pipelines that filter on
-    `modifies_protein_sequence` / `effect_priority` and never read
-    `.candidates` pay only the eager cost.
-  - `SpliceOutcomeSet` is now a `TranscriptMutationEffect` subclass
-    (alongside `MultiOutcomeEffect`), so it carries `gene` /
-    `transcript` and matches the standard `isinstance(effect, TranscriptMutationEffect)`
-    filter used by downstream consumers.
-- Unified the multi-outcome machinery: `SpliceCandidate` deleted;
-  `MultiOutcomeEffect.outcomes` accessor + `_with_extra_outcomes`
-  helper + `_extra_outcomes` slot removed
-  ([#382](https://github.com/openvax/varcode/issues/382)).
-  - `SpliceOutcomeSet.candidates` now returns
-    `tuple[EffectCandidate, ...]` — the same shape every other
-    `MultiOutcomeEffect` subclass exposes. Each entry wraps an
-    inner `SpliceMechanismEffect` (`NormalSplicing`,
-    `ExonSkipping`, `IntronRetention`, `CrypticDonor`, or
-    `CrypticAcceptor`). Mechanism identity now lives on
-    `type(candidate.effect)`, and the mechanism object carries
-    fields like `affected_exon`, `side`, `cryptic_genomic_position`,
-    `aa_ref`, `aa_alt`, and `mutant_transcript`. The previous
-    `candidate.outcome` / `candidate.plausibility` /
-    `candidate.coding_effect` / `candidate.predicted_class_name` /
-    `candidate.mutant_transcript` / `candidate.has_protein`
-    fields are gone — read provenance off the `EffectCandidate`
-    (`.source`, `.evidence`) and mechanism/protein state off the
-    inner effect (`candidate.effect`,
-    `candidate.effect.mutant_transcript`).
-    `candidate.plausibility` has no one-for-one semantic replacement:
-    it was the old splice-specific name for a DNA-only ordering
-    heuristic, not evidence. There is no shared
-    `EffectCandidate.probability`; producer-specific support belongs
-    in `candidate.evidence` under explicit names.
-  - `MultiOutcomeEffect.candidates` is the single accessor on every
-    subclass (`SpliceOutcomeSet`, `StructuralVariantEffect`,
-    `PhaseCandidateSet`, `ExonicSpliceSite`, `HaplotypeEffect`).
-    A new `MultiOutcomeEffect.effects` convenience property unwraps
-    to `tuple(c.effect for c in self.candidates)` for callers that
-    don't need provenance.
-  - The post-hoc attachment slot renamed `_extra_outcomes` →
-    `_extra_candidates`; the merge helper renamed
-    `_with_extra_outcomes` → `_combine_with_extra_candidates`.
-    `apply_rna_evidence_to_effects` still uses `_extra_candidates`
-    for non-splice multi-outcome effects; splice mechanism sets now
-    reconcile RNA evidence into a replacement set with
-    `rna_evidence`, `added_candidates`, `excluded_candidates`, and
-    `candidate_rna_evidence` audit fields. External integrations
-    that touched these private names must rename.
-  - `StructuralVariantEffect.__init__` parameter renamed
-    `candidates=` → `primary_effects=` (carries the inner
-    `MutationEffect` tuple; the `candidates` accessor now lifts
-    to `EffectCandidate` automatically). Same on `LargeDeletion`,
-    `LargeDuplication`, `GeneFusion`.
-  - `MultiOutcomeEffect.most_likely` is **removed**. Replaced by
-    four explicit accessors so callers never confuse "wrapped vs
-    unwrapped" or "likeliest vs most-disruptive":
-    - `.most_likely_candidate` → `EffectCandidate` (same as
-      `candidates[0]`)
-    - `.most_likely_effect` → inner `MutationEffect` of the above
-    - `.highest_priority_candidate` → `EffectCandidate` with the
-      highest `effect_priority` among candidates (worst-case
-      classification, independent of producer order)
-    - `.highest_priority_effect` → inner `MutationEffect` of the above
-    Callers doing `effect.most_likely.mutant_protein_sequence` or
-    `effect.most_likely.aa_ref` should switch to
-    `effect.most_likely_effect.mutant_protein_sequence` etc.;
-    callers that want the wrapper (with `.source`, `.evidence`) use
-    `effect.most_likely_candidate`.
-  - Splice mechanisms promoted to first-class `MutationEffect`
-    classes, each carrying its own protein vocab (`aa_ref` /
-    `aa_alt` / `mutant_protein_sequence` / `mutant_transcript`) on
-    the instance — no more wrapping a separate coding effect.
-    New hierarchy:
-    - `SpliceMechanismEffect(TranscriptMutationEffect)` — base,
-      carries `splice_signal` referencing the underlying
-      `SpliceDonor` / `SpliceAcceptor` / `IntronicSpliceSite` /
-      `ExonicSpliceSite` so each mechanism knows *where* the
-      disruption was.
-    - `NormalSplicing` — splice signal hit but splicing proceeds;
-      carries `coding_effect` for the underlying nucleotide-level
-      change (or `None` for purely intronic disruption).
-    - `ExonSkipping` — affected exon excluded; carries
-      `affected_exon` and `in_frame`.
-    - `IntronRetention` — intron retained; carries
-      `retained_intron_start`, `retained_intron_end`, `side`.
-    - `CrypticDonor` / `CrypticAcceptor` — cryptic site replaces
-      canonical; carry `affected_exon`,
-      `cryptic_genomic_position`, `motif_score`,
-      `exon_length_delta`.
-    Unresolved state is "protein fields are `None`" — no parallel
-    placeholder class hierarchy. Class identity = mechanism;
-    consumers dispatch on `isinstance(candidate.effect,
-    ExonSkipping)` instead of evidence-key checks. Resolved
-    mechanisms retain their classified protein consequence as
-    `protein_effect` so severity queries (`effect_priority`,
-    `modifies_protein_sequence`) behave like ordinary coding effects
-    while preserving mechanism identity.
-  - **Deleted**: `SpliceOutcome` enum (replaced by class identity),
-    `PredictedIntronRetention` (subsumed by `IntronRetention`),
-    `PredictedCrypticSpliceSite` (split into `CrypticDonor` +
-    `CrypticAcceptor`), `SpliceOutcomeSet.to_dict` /
-    `.from_dict` overrides (no enum left to stringify),
-    `evidence["splice_outcome"]` / `evidence["placeholder"]` /
-    `evidence["description"]` keys (info now lives on the
-    mechanism Effect — `type(candidate.effect)`,
-    `candidate.effect.resolved`, `candidate.effect.short_description`),
-    `_placeholder_effect_for_outcome` and `_make_splice_candidate`
-    helpers.
-  - **`SpliceOutcomeSet.candidate_proteins`** now keys by mechanism
-    class (e.g. `proteins[ExonSkipping]`) instead of `SpliceOutcome`
-    enum value.
-- `varcode.Outcome` renamed to `varcode.EffectCandidate`. The helper
-  `outcomes_from_candidates` renamed to `candidates_from_effects`.
-  The module `varcode.outcomes` renamed to
-  `varcode.effect_candidates`. The test file `tests/test_outcomes.py`
-  renamed to `tests/test_effect_candidates.py`. The `description`
-  field on the wrapper class is removed — use
-  `candidate.effect.short_description` (it was always a passthrough).
-  Also removed from `make_rna_outcome(description=...)`. No
-  deprecation alias; update imports. The class ships with a module
-  docstring explaining *why* the wrapper exists: the same
-  `MutationEffect` instance can appear in multiple multi-outcome
-  contexts with different per-context provenance (e.g. a splice
-  candidate re-surfaced by the SV annotator with a different
-  `source` tag and `sv_type` in evidence); putting metadata on the
-  wrapper instead of the Effect lets the Effect stay shared while
-  the labels diverge. (Per #382, `.outcomes` has since been removed
-  and `MultiOutcomeEffect.candidates` is the single accessor across
-  every subclass.) Aspirational
-  `"isovar"` / `"exacto"` / `"longread_assembly"` example tags
-  scrubbed from varcode docstrings.
-- Phasing API generalized; Isovar-named identifiers removed from the
-  varcode public surface ([#378](https://github.com/openvax/varcode/issues/378)).
-  Varcode no longer imports or names any upstream tool — implementations
-  of the new generic Protocols live in their respective packages
-  (e.g. `isovar.IsovarReadPhasing`, openvax/isovar#183).
-  - `IsovarAssemblyProvider` (Protocol) **removed**, split into:
-    - `ReadPhasingSource` with `has_evidence(variant) -> bool` and
-      `partners_in_cis(variant) -> Sequence[Variant]`.
-    - `MutantTranscriptSource` with
-      `mutant_transcript(variant, transcript) -> Optional[MutantTranscript]`.
-  - `IsovarPhaseResolver` renamed to `ReadPhaseResolver`. Constructor
-    accepts any `ReadPhasingSource`; routes `mutant_transcript(...)`
-    to the wrapped source when it also satisfies `MutantTranscriptSource`.
-    Returns `None` otherwise instead of raising.
-  - Resolver `source` tag changed from `"isovar"` to `"read_phasing"`
-    on `ReadPhaseResolver`. Consumers filtering effects by phase
-    source need to update their filter values.
-- `varcode.effects.effect_classes.PhaseAmbiguousEffect` renamed to
-  `PhaseCandidateSet`. No deprecation alias — update imports
-  ([#376](https://github.com/openvax/varcode/pull/376)).
-  Per #382, the public surface is `.candidates` (a
-  `tuple[EffectCandidate, ...]` with per-hypothesis evidence keys),
-  `.most_likely_candidate` / `.most_likely_effect` /
-  `.highest_priority_candidate` / `.highest_priority_effect`, and
-  `.short_description`.
+- Made `SpliceOutcomeSet` always-on for splice-disrupting variants, removed the
+  `splice_outcomes=` flag, made `SpliceOutcomeSet` a `TranscriptMutationEffect`
+  with `modifies_protein_sequence = True`, and added
+  `effect_if_splicing_unchanged` ([#391](https://github.com/openvax/varcode/issues/391),
+  [#392](https://github.com/openvax/varcode/pull/392)).
+- Unified multi-outcome effects around `MultiOutcomeEffect.candidates`
+  (`tuple[EffectCandidate, ...]`), `.effects`, `.most_likely_candidate` /
+  `.most_likely_effect`, and `.highest_priority_candidate` /
+  `.highest_priority_effect`; removed `MultiOutcomeEffect.most_likely`,
+  `.outcomes`, `SpliceCandidate`, and `SpliceOutcome`; promoted
+  `SpliceMechanismEffect` subclasses (`NormalSplicing`, `ExonSkipping`,
+  `IntronRetention`, `CrypticDonor`, `CrypticAcceptor`) to first-class
+  `MutationEffect` types; renamed `StructuralVariantEffect(..., candidates=)` to
+  `primary_effects=` ([#382](https://github.com/openvax/varcode/issues/382)).
 
-**Changed**
-- `SpliceOutcomeSet` serialization migrated onto `serializable>=1.1.0`'s
-  standard introspection (the parallel `SpliceCandidate` dataclass that
-  also lived on this path has since been deleted per #382). The
-  `__effect_class__` tagging and hand-rolled class registries
-  (`_CODING_EFFECT_CLASS_REGISTRY`, `_SPLICE_SIGNAL_CLASS_REGISTRY`,
-  `_rehydrate_coding_effect`) are gone; JSON round-trip now flows
-  through `serializable.helpers`' standard `__class__` / `__module__`
-  stamping ([#343](https://github.com/openvax/varcode/issues/343)).
-  `SpliceOutcomeSet.to_dict` / `from_dict` are overridden to stringify
-  the `SpliceOutcome` enum stored under
-  `candidate.evidence["splice_outcome"]` (and rehydrate it on the way
-  back) without mutating `self` mid-call, and to emit a single
-  `candidates` key on the wire (no parallel `_candidates`).
-  The JSON wire format is unchanged, but **the pre-#305 migration
-  shim for the internal `_ExonSkipFrameshiftEffect` class has been
-  removed**. JSON produced by varcode 2.4.x or earlier (which could
-  contain `"__effect_class__": "_ExonSkipFrameshiftEffect"` tags) will
-  no longer rehydrate; re-emit from the current annotator or hand-patch
-  those tags to `FrameShift` before loading. Anyone still reading such
-  payloads can pin `varcode<4.7` or resurrect the shim in user code.
+## v5.0.0–v5.0.6 (2026-05-15 – 2026-05-22)
 
-**Changed**
-- README "Effect Types" section rewritten: 14 missing concrete
-  effect classes added (`Failure`, the splice mechanisms, the
-  structural-variant effects, `CrypticExonCandidate`,
-  `HaplotypeEffect`, `PhaseCandidateSet`), grouped into 7 sub-tables
-  by biological context, with a new intro explaining
-  `MultiOutcomeEffect` and how multi-possibility effects are
-  represented. Each class name links to its source definition via
-  GitHub text-fragment URLs that survive line-number drift.
-- Documented and streamlined the splice-effect model: clarified that
-  `SpliceSite` effects (`SpliceDonor` / `SpliceAcceptor` /
-  `IntronicSpliceSite` / `ExonicSpliceSite`) describe *where* a splice
-  signal was hit and carry no protein consequence on their own, while
-  `SpliceMechanismEffect` subclasses describe *what* the spliceosome
-  does and carry the protein change. `SpliceSite` (previously an
-  undocumented marker base) is now the documented, load-bearing type:
-  `enumerate_splice_outcomes` gates on `isinstance(effect, SpliceSite)`
-  rather than enumerating the four subclasses. Documented the
-  `SpliceOutcomeSet.disrupted_signal_class` (a `SpliceSite` *subclass*,
-  i.e. a type, for priority lookup) vs each candidate's
-  `effect.splice_signal` (a `SpliceSite` *instance*) distinction.
-  No behavior change.
+*Combined summary for the `5.0.x` releases (originally collected under a single
+`[Unreleased]` block before `v6.0.0`).*
 
 **Added**
-- Docs site now has an "Effect types" page that auto-renders every
-  class in `varcode.effects.effect_classes` via mkdocstrings, so the
-  documented catalog stays in sync with the code (previously only the
-  abstract bases were in the API reference, while the full list lived
-  only in the hand-maintained README table).
-- Exported the splice-signal disruption effects at the package root
-  for parity with the already-public splice mechanism effects:
-  `SpliceSite` (the shared base), `SpliceDonor`, `SpliceAcceptor`,
-  `IntronicSpliceSite`, and `ExonicSpliceSite`. `from varcode import
-  SpliceSite` now works, so `isinstance(effect, SpliceSite)` can be
-  used to catch any splice-site disruption without reaching into
-  `varcode.effects.effect_classes`.
+- Added `RNAReadPhasingSource` (optional `varcode[rna]` / `pysam` dependency)
+  and `MolecularPhaseResolver`, retaining `ReadPhaseResolver` as a compatibility
+  name.
+- Exported `SpliceSite`, `SpliceDonor`, `SpliceAcceptor`, `IntronicSpliceSite`,
+  and `ExonicSpliceSite` at the package root, added the generated Effect Types
+  reference page, and refreshed the README Effect Types tables.
 
-## [v2.3.0](https://github.com/openvax/varcode/tree/v2.3.0) (2026-04-13)
+**Fixed**
+- Refused abutting insertions in `apply_variants_to_transcript` to avoid
+  order-dependent joint cDNA, and used the full IUPAC reverse-complement table
+  in `mutant_transcript`.
+
+## v2.3.1–v4.24.1 (2026-04-13 – 2026-05-15)
+
+*Combined summary for the 43 releases between `v2.3.0` and `v5.0.0`, which did
+not have individual changelog sections written at release time.*
+
+**Added & Changed**
+- Renamed the offset-based annotator to `fast`, introduced `protein_diff`,
+  `MutantTranscript` / `ReferenceSegment`, `StructuralVariant` (with opt-in VCF
+  parsing, cryptic-exon enumeration, and SV breakpoint splice candidates), and
+  FASTA-backed exon-skipping / intron-retention / cryptic splice materialization
+  ([#252](https://github.com/openvax/varcode/issues/252),
+  [#269](https://github.com/openvax/varcode/issues/269),
+  [#296](https://github.com/openvax/varcode/issues/296),
+  [#305](https://github.com/openvax/varcode/issues/305),
+  [#329](https://github.com/openvax/varcode/pull/329),
+  [#331](https://github.com/openvax/varcode/pull/331)–[#353](https://github.com/openvax/varcode/pull/353)).
+- Dropped the Biopython dependency, migrated dataclass serialization to
+  `DataclassSerializable` (removing the pre-#305 `_ExonSkipFrameshiftEffect`
+  shim), and deferred PyVCF3 import
+  ([#293](https://github.com/openvax/varcode/issues/293),
+  [#343](https://github.com/openvax/varcode/issues/343),
+  [#346](https://github.com/openvax/varcode/pull/346)).
+- Renamed `Outcome` → `EffectCandidate`, `PhaseAmbiguousEffect` →
+  `PhaseCandidateSet`, and generalized phasing protocols into
+  `ReadPhasingSource` / `MutantTranscriptSource` / `ReadPhaseResolver`
+  ([#376](https://github.com/openvax/varcode/pull/376),
+  [#378](https://github.com/openvax/varcode/issues/378)).
+
+## v2.3.0 (2026-04-13)
 
 **Added**
 - Per-sample genotype / zygosity access ([#267](https://github.com/openvax/varcode/issues/267)).
@@ -2619,7 +2391,7 @@ Behaviour change: hg19 `chrM` variants are no longer annotated as rCRS `MT`.
   reports zygosity relative to its own alt.
 - `varcode.SampleNotFoundError(KeyError)` raised on typoed sample names.
 
-## [v2.2.1](https://github.com/openvax/varcode/tree/v2.2.1) (2026-04-13)
+## v2.2.1 (2026-04-13)
 
 **Fixed**
 - Ref-vs-genome mismatches now raise a dedicated
@@ -2628,7 +2400,7 @@ Behaviour change: hg19 `chrM` variants are no longer annotated as rCRS `MT`.
   `raise_on_error=False` ([#215](https://github.com/openvax/varcode/issues/215),
   [#246](https://github.com/openvax/varcode/issues/246)).
 
-## [v2.2.0](https://github.com/openvax/varcode/tree/v2.2.0) (2026-04-12)
+## v2.2.0 (2026-04-12)
 
 **Added**
 - `from_csv` now accepts either `chr` or `contig` as the contig column
@@ -2643,7 +2415,7 @@ Behaviour change: hg19 `chrM` variants are no longer annotated as rCRS `MT`.
   round-trip or larger collections
   ([#276](https://github.com/openvax/varcode/issues/276)).
 
-## [v2.1.0](https://github.com/openvax/varcode/tree/v2.1.0) (2026-04-12)
+## v2.1.0 (2026-04-12)
 
 **Added**
 - `VariantCollection.from_csv` and `EffectCollection.from_csv` for
@@ -2659,7 +2431,7 @@ Behaviour change: hg19 `chrM` variants are no longer annotated as rCRS `MT`.
   pre-sort / pre-dedup input list
   ([#220](https://github.com/openvax/varcode/issues/220)).
 
-## [v2.0.0](https://github.com/openvax/varcode/tree/v2.0.0) (2026-04-11)
+## v2.0.0 (2026-04-11)
 
 Major release — several backward-incompatible fixes. See
 [#263](https://github.com/openvax/varcode/pull/263) and
@@ -2698,6 +2470,11 @@ Major release — several backward-incompatible fixes. See
   ...) and breakend notation with a visible warning instead of
   crashing ([#88](https://github.com/openvax/varcode/issues/88)).
   Full SV support is tracked in [#264](https://github.com/openvax/varcode/issues/264).
+
+## v0.6.0–v1.3.2 (2017–2025)
+
+*Historical releases between `v0.5.15` and `v2.0.0` did not have changelog
+entries written at release time.*
 
 ## [v0.5.15](https://github.com/hammerlab/varcode/tree/v0.5.15) (2017-04-28)
 [Full Changelog](https://github.com/hammerlab/varcode/compare/v0.5.14...v0.5.15)

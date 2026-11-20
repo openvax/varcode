@@ -186,17 +186,47 @@ def test_vcf_resolver_phase_source_tag():
 
 
 # ------------------------------------------------------------------
-# Interface symmetry with ReadPhaseResolver — same method set
+# Behavioral parity with ReadPhaseResolver
 # ------------------------------------------------------------------
 
 
-def test_vcf_resolver_has_same_phase_api_as_read_resolver():
-    from varcode import VariantCollection
+def test_vcf_and_read_phase_resolvers_agree_on_cis_trans_and_partners(phased_vcf):
     from varcode.phasing import ReadPhaseResolver
-    required = {"in_cis", "phased_partners", "phase_source"}
-    vcf_r = VCFPhaseResolver(VariantCollection([]), sample="x")
-    # Can't instantiate ReadPhaseResolver without a source; check
-    # class attrs instead.
-    for attr in required:
-        assert hasattr(vcf_r, attr)
-        assert hasattr(ReadPhaseResolver, attr)
+
+    vc = load_vcf(phased_vcf, genome="GRCh38")
+    v1 = _lookup(vc, "7", 117531100, "T", "A")  # GT=0|1 PS=100
+    v2 = _lookup(vc, "7", 117531114, "G", "T")  # GT=0|1 PS=100 (cis with v1)
+    v3 = _lookup(vc, "7", 117531120, "G", "A")  # GT=1|0 PS=100 (trans with v1)
+    v_unphased = _lookup(vc, "7", 117531140, "A", "G")  # GT=0/1
+    v_hom = _lookup(vc, "7", 117531150, "A", "T")  # GT=1/1 (deterministically cis)
+
+    class _MatchingReadSource:
+        def has_evidence(self, variant):
+            return variant in (v1, v2, v3, v_hom)
+
+        def partners_in_cis(self, variant):
+            if variant == v1:
+                return (v2, v_hom)
+            if variant == v2:
+                return (v1, v_hom)
+            if variant == v_hom:
+                return (v1, v2, v3)
+            return ()
+
+        def in_cis(self, a, b, transcript=None):
+            pair = {a, b}
+            if pair in ({v1, v2}, {v1, v_hom}, {v2, v_hom}, {v3, v_hom}):
+                return True
+            if pair in ({v1, v3}, {v2, v3}):
+                return False
+            return None
+
+    vcf_resolver = VCFPhaseResolver(vc, sample="tumor")
+    read_resolver = ReadPhaseResolver(_MatchingReadSource())
+
+    for resolver in (vcf_resolver, read_resolver):
+        assert resolver.in_cis(v1, v2) is True
+        assert resolver.in_cis(v1, v3) is False
+        assert resolver.in_cis(v1, v_unphased) is None
+        assert set(resolver.phased_partners(v1)) == {v2, v_hom}
+        assert isinstance(resolver.phase_source, str) and resolver.phase_source

@@ -30,7 +30,6 @@ from pyensembl import cached_release
 
 from varcode import (
     NullRNAEvidenceResolver,
-    RNAEvidenceResolver,
     StructuralVariant,
     apply_rna_evidence_to_effects,
     make_rna_outcome,
@@ -71,21 +70,6 @@ class _StubResolver:
 
     def observed_outcomes(self, variant, transcript):
         return self._outcomes
-
-
-class TestProtocol:
-    def test_null_resolver_satisfies_protocol(self):
-        # runtime_checkable Protocol: duck-type via observed_outcomes.
-        assert isinstance(NullRNAEvidenceResolver(), RNAEvidenceResolver)
-
-    def test_arbitrary_class_with_method_satisfies_protocol(self):
-        assert isinstance(_StubResolver([]), RNAEvidenceResolver)
-
-    def test_object_without_method_does_not_satisfy(self):
-        class NotAResolver:
-            def something_else(self):
-                pass
-        assert not isinstance(NotAResolver(), RNAEvidenceResolver)
 
 
 # --------------------------------------------------------------------
