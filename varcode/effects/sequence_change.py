@@ -3,6 +3,8 @@
 import operator
 
 from ..effect_traversal import get_effect_candidates
+from ..mutant_transcript import retained_cds_start
+from ..structural_variant import affected_span
 
 from .codon_tables import codon_table_for_transcript, translate_sequence
 from .selenocysteine import reference_selenocysteine, segment_selenocysteine
@@ -48,21 +50,6 @@ def modification_status(effect, attribute):
     return None if unknown or not evaluated else False
 
 
-def _retained_start(model, transcript):
-    """Map all three annotated start bases, including split segment boundaries."""
-    positions = [set(), set(), set()]
-    start = min(transcript.start_codon_spliced_offsets)
-    offset = 0
-    for segment in model.reference_segments or ():
-        if segment.source == transcript and segment.strand == "+":
-            for i in range(3):
-                if segment.start <= start + i < segment.end:
-                    positions[i].add(offset + start + i - segment.start)
-        offset += segment.length
-    return next((p for p in sorted(positions[0])
-                 if p + 1 in positions[1] and p + 2 in positions[2]), None)
-
-
 def _orf_bounds(model, initiator):
     """A known ORF, or the retained reference start; never search for one.
 
@@ -77,7 +64,7 @@ def _orf_bounds(model, initiator):
     if start is None or end is None:
         if not has_complete_coding_sequence(initiator) or model.edits:
             return None
-        start, end = _retained_start(model, initiator), None
+        start, end = retained_cds_start(model, initiator), None
     return None if start is None else (start, end)
 
 
@@ -174,7 +161,7 @@ def _complete_sequence_changes(model, transcript, initiator):
         "sequence_status") == "observed_model_completeness_unknown" and not (
             bounds is not None and not model.edits and has_complete_coding_sequence(initiator)
             and sum(s.length for s in model.reference_segments or ()) == len(model.cdna_sequence)
-            and bounds[0] == _retained_start(model, initiator))
+            and bounds[0] == retained_cds_start(model, initiator))
     table = codon_table_for_transcript(initiator)
     if partial_start and _proper_reference_suffix(protein, reference_protein):
         # An observed internal Met-to-stop ORF may only be missing 5' coverage.
@@ -330,8 +317,7 @@ def structural_sequence_changes(effect):
     if (isinstance(effect, LargeDeletion)
             and not getattr(effect.variant, "alt_assembly", None)
             and (model is None or model.annotator_name == "structural_variant")):
-        from .structural import _affected_span
-        start, end = _affected_span(effect.variant)
+        start, end = affected_span(effect.variant)
         try:
             coding_ranges = transcript.coding_sequence_position_ranges
         except ValueError:

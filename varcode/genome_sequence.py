@@ -68,7 +68,7 @@ def reference_base(genome: Any, contig: str, position: int) -> str:
     """
     fasta = getattr(genome, "fasta", None)
     if fasta is not None:
-        from_fasta = _fasta_range(fasta, _fasta_contig(genome, contig), position, position)
+        from_fasta = fasta_range(fasta, _fasta_contig(genome, contig), position, position)
         if from_fasta:
             return from_fasta
     return _base_from_genome_transcripts(genome, contig, position)
@@ -109,7 +109,7 @@ def reference_range(genome: Any, contig: str, start: int, end: int) -> str:
 
     fasta = getattr(genome, "fasta", None)
     if fasta is not None:
-        from_fasta = _fasta_range(fasta, _fasta_contig(genome, contig), start, end)
+        from_fasta = fasta_range(fasta, _fasta_contig(genome, contig), start, end)
         if from_fasta and len(from_fasta) == end - start + 1:
             return from_fasta
 
@@ -163,7 +163,7 @@ def _range_from_exon_slices(transcripts, contig, start, end):
         if not exons or transcript.sequence is None:
             continue
         for lo, hi in exons:
-            span = _plus_strand_slice(transcript, lo, hi)
+            span = plus_strand_slice(transcript, lo, hi)
             if not span:
                 # A short sequence can still supply part of an exon. Let
                 # the original base reader determine exactly which part.
@@ -194,12 +194,24 @@ def _fasta_contig(genome: Any, contig: str) -> str:
     return contig if spelling is None else spelling(contig)
 
 
-def _fasta_range(fasta: Any, contig: str, start: int, end: int) -> str:
-    """Read a range from an attached chromosome FASTA.
+def fasta_range(fasta: Any, contig: str, start: int, end: int) -> str:
+    """Read an uppercase 1-based inclusive sequence range from ``fasta``.
 
-    Returns ``""`` for missing contigs, out-of-range slices, or any
-    pyfaidx/adapter error. Bases come back uppercase (soft-masking
-    dropped — see module docstring)."""
+    Parameters
+    ----------
+    fasta : Any
+        pyfaidx-style ``fasta[contig][start:end]`` reader.
+    contig : str
+        Contig name in ``fasta``'s own vocabulary.
+    start, end : int
+        1-based inclusive coordinates.
+
+    Returns
+    -------
+    str
+        Uppercase sequence, or ``""`` for missing contigs, out-of-range slices,
+        or adapter errors.
+    """
     try:
         slicer = fasta[contig]
     except Exception:
@@ -251,7 +263,7 @@ def _base_from_transcripts(
     """
     answer = ""
     for t in transcripts:
-        base = _read_transcript_base(t, position)
+        base = read_transcript_base(t, position)
         if not base:
             continue
         if answer and base != answer:
@@ -265,22 +277,22 @@ def _base_from_transcripts(
     return answer
 
 
-def _plus_strand_slice(transcript: Any, start: int, end: int) -> str:
-    """Return the ``+`` strand bases over ``[start, end]`` from one
-    transcript's spliced cDNA, or ``""`` if the requested range isn't
-    fully on this transcript's exons. 1-based inclusive.
+def plus_strand_slice(transcript: Any, start: int, end: int) -> str:
+    """Return ``+`` strand bases over 1-based inclusive ``[start, end]`` from ``transcript``.
 
-    Strand handling lives here so callers don't have to reason about
-    it. For ``+`` strand transcripts the slice maps directly. For
-    ``-`` strand transcripts the cDNA is in transcript orientation
-    (the reverse-complement of the ``+`` strand), so the slice is
-    complemented and then reversed to come back in ``+`` strand
-    5'→3' order.
+    Parameters
+    ----------
+    transcript : Transcript-like
+        Transcript exposing ``spliced_offset``, ``sequence``, and ``strand``.
+    start, end : int
+        1-based inclusive genomic positions.
 
-    Returns ``""`` rather than raising for any non-coverage condition
-    (intronic, past the end of the transcript, range that spans an
-    exon boundary, etc.) — callers loop over multiple transcripts and
-    need a uniform "this one didn't work" signal.
+    Returns
+    -------
+    str
+        Uppercase ``+`` strand sequence (reverse-complemented from cDNA on the
+        ``-`` strand), or ``""`` when ``[start, end]`` is not contiguously
+        covered by one exon of ``transcript``.
     """
     try:
         start_offset = transcript.spliced_offset(start)
@@ -303,9 +315,22 @@ def _plus_strand_slice(transcript: Any, start: int, end: int) -> str:
     return slice_seq
 
 
-def _read_transcript_base(transcript: Any, position: int) -> str:
-    """Single-position specialization of :func:`_plus_strand_slice`."""
-    return _plus_strand_slice(transcript, position, position)
+def read_transcript_base(transcript: Any, position: int) -> str:
+    """Return the ``+`` strand base at 1-based ``position`` from ``transcript``.
+
+    Parameters
+    ----------
+    transcript : Transcript-like
+        Transcript exposing ``spliced_offset``, ``sequence``, and ``strand``.
+    position : int
+        1-based genomic position.
+
+    Returns
+    -------
+    str
+        Single uppercase base, or ``""`` if not covered.
+    """
+    return plus_strand_slice(transcript, position, position)
 
 
 def _range_from_single_transcript(
@@ -324,7 +349,7 @@ def _range_from_transcripts(
     """The ``+`` strand sequence over ``[start, end]`` from the first
     of ``transcripts`` that fully covers it, or ``None``."""
     for t in transcripts:
-        span = _plus_strand_slice(t, start, end)
+        span = plus_strand_slice(t, start, end)
         if span:
             return span
     return None

@@ -3,18 +3,22 @@
 from pathlib import Path
 from types import NotImplementedType
 from typing import assert_type
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 from pyensembl import Transcript
 
 from varcode import (
+    AssembledAllele,
     Candidate, CandidatePath, classification_priority, get_effect_candidates,
     iter_candidate_effects, iter_candidate_paths,
-    ContigResolution, ContigResolver, EffectAnnotator, EffectCollection,
+    ContigResolution, ContigResolver, EffectAnnotator, EffectCollection, EffectReference,
     InvalidContigError, MutationEffect, MutantTranscript, ORFAnnotation,
     Unresolved, Variant, VariantCollection,
-    get_annotator, get_default_annotator, register_annotator, resolve_annotator,
-    set_default_annotator, use_annotator,
+    effect_collection_from_json, effect_collection_from_serializable_repr,
+    effect_collection_to_json, effect_from_json, effect_from_serializable_repr,
+    effect_serialization_classes, effect_to_json,
+    get_annotator, get_default_annotator, register_annotator, registered_annotators,
+    resolve_annotator, set_default_annotator, use_annotator,
     load_maf, load_maf_dataframe, load_vcf, normalize_contig_name, resolve_contig_name,
 )
 from varcode.nucleotides import normalize_nucleotide_string
@@ -121,6 +125,8 @@ def check_annotation_workflow(
 
     plugin = DecliningAnnotator()
     assert_type(register_annotator(plugin), DecliningAnnotator)
+    assert_type(registered_annotators(), tuple[str, ...])
+    assert_type(registered_annotators(include_deprecated=True), tuple[str, ...])
     assert_type(get_annotator(plugin.name), EffectAnnotator)
     assert_type(get_default_annotator(), EffectAnnotator)
     assert_type(resolve_annotator(None), EffectAnnotator)
@@ -130,11 +136,26 @@ def check_annotation_workflow(
         assert_type(bound, None)
         assert_type(plugin.annotate_on_transcript(variant, transcript), NotImplementedType)
 
+    assert_type(effect_serialization_classes(), Mapping[tuple[str, str], type])
+    assert_type(EffectReference(0), EffectReference)
+    assert_type(AssembledAllele("ATG"), AssembledAllele)
+    assert_type(effect_to_json(effect), str)
+    assert_type(effect_from_json("{}"), MutationEffect)
+    assert_type(effect_from_serializable_repr({}), MutationEffect)
+    assert_type(effect_collection_to_json(effects), str)
+    assert_type(effect_collection_from_json("{}"), EffectCollection)
+    assert_type(effect_collection_from_serializable_repr({}), EffectCollection)
+
     variant.effects(raise_on_error="no")  # type: ignore[arg-type]
     variants.effects(validate_reference="no")  # type: ignore[arg-type]
     get_annotator(42)  # type: ignore[arg-type]
+    registered_annotators(include_deprecated="yes")  # type: ignore[arg-type]
     use_annotator(None)  # type: ignore[arg-type]
     register_annotator(InvalidAnnotator())  # type: ignore[type-var]
     variant.effects(annotator=InvalidAnnotator())  # type: ignore[arg-type]
     effect.mutant_protein_sequence.upper()  # type: ignore[union-attr]
     effect.format_short_description(deletion_notation="invalid")  # type: ignore[arg-type]
+    effect_to_json("not an effect")  # type: ignore[arg-type]
+    effect_from_json(42)  # type: ignore[arg-type]
+    effect_collection_to_json(effect)  # type: ignore[arg-type]
+    effect_collection_from_json(42)  # type: ignore[arg-type]

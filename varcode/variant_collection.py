@@ -234,12 +234,12 @@ class VariantCollection(Collection):
         from datetime import datetime, timezone
 
         from .annotators.registry import resolve_annotator
-        from .effects.effect_prediction import _validate_transcript_filter
+        from .effects.effect_prediction import validate_transcript_filter
         from .phasing import (
             build_haplotype_effects,
         )
 
-        _validate_transcript_filter(transcript_filter)
+        validate_transcript_filter(transcript_filter)
 
         # Pre-flight: cross-VCF build mismatch surfaces here as one
         # readable error rather than per-variant ReferenceMismatchError

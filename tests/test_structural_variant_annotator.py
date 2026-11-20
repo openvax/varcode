@@ -636,7 +636,7 @@ def test_retained_cdna_partitions_transcript_at_each_base():
     Walks every exon terminal base on CFTR (forward) and BRCA1
     (reverse) and asserts the partition.
     """
-    from varcode.effects.structural import _cdna_cut
+    from varcode.effects.structural import cdna_cut
     for transcript in (
             _cftr(), ensembl_grch38.transcript_by_id(BRCA1_ID)):
         full_length = len(str(transcript.sequence))
@@ -647,8 +647,8 @@ def test_retained_cdna_partitions_transcript_at_each_base():
                 # order, which is one higher on the forward strand and
                 # one lower on the reverse strand.
                 next_position = position + 1 if forward else position - 1
-                five_prime_end = _cdna_cut(transcript, position, True)
-                three_prime_start = _cdna_cut(
+                five_prime_end = cdna_cut(transcript, position, True)
+                three_prime_start = cdna_cut(
                     transcript, next_position, False)
                 assert five_prime_end == three_prime_start, (
                     "%s at %d: 5' keeps %d bases, 3' starts at %d" % (
@@ -724,13 +724,13 @@ def test_fusion_protein_is_none_when_5p_cds_past_breakpoint():
     retained cDNA, :func:`_translate_fused_cdna` returns None so the
     effect carries no fused-protein sequence (documented branch of
     #336)."""
-    from varcode.effects.structural import _translate_fused_cdna
+    from varcode.effects.structural import translate_fused_cdna
     cftr = _cftr()
     cds_start = min(cftr.start_codon_spliced_offsets)
     # Simulate a fused cDNA where the retained 5p portion is shorter
     # than the CDS start.
     fake_fused = "A" * (cds_start * 2)  # plenty of length overall
-    result = _translate_fused_cdna(
+    result = translate_fused_cdna(
         fake_fused, cftr, five_prime_len=cds_start - 1)
     assert result is None
 
@@ -1139,9 +1139,9 @@ def test_sv_breakpoint_in_intronic_splice_window_donor_side():
     # Sanity: the class used for synthesis was IntronicSpliceSite.
     # Inspect via the internal helper directly.
     from varcode.effects.structural import (
-        _breakpoint_splice_window,
+        breakpoint_splice_window,
     )
-    window = _breakpoint_splice_window(transcript, 117_504_367)
+    window = breakpoint_splice_window(transcript, 117_504_367)
     assert window is not None
     cls, _, dist = window
     assert cls is IntronicSpliceSite
@@ -1154,18 +1154,18 @@ def test_sv_breakpoint_in_intronic_splice_window_acceptor_side():
     SpliceAcceptor). Acceptor-side intronic window is tighter (only
     distance 3 is counted)."""
     from varcode.effects.structural import (
-        _breakpoint_splice_window,
+        breakpoint_splice_window,
     )
     from varcode.effects import IntronicSpliceSite
     transcript = _cftr()
     # CFTR exon 2 starts at 117504253. Acceptor -3 = 117504250.
-    window = _breakpoint_splice_window(transcript, 117_504_250)
+    window = breakpoint_splice_window(transcript, 117_504_250)
     assert window is not None
     cls, _, dist = window
     assert cls is IntronicSpliceSite
     assert dist == 3
     # Distance 4 on the acceptor side falls OUTSIDE the window.
-    assert _breakpoint_splice_window(transcript, 117_504_249) is None
+    assert breakpoint_splice_window(transcript, 117_504_249) is None
 
 
 def test_sv_two_breakpoints_in_same_exon_window_are_deduped():
@@ -1209,13 +1209,13 @@ def test_reverse_strand_splice_window_donor_side():
     exon (donor-side intronic window). The reverse-strand branch of
     ``best_before`` must flip the genomic inequality correctly."""
     from varcode.effects.structural import (
-        _breakpoint_splice_window,
+        breakpoint_splice_window,
     )
     from varcode.effects import IntronicSpliceSite
     brca1 = ensembl_grch38.transcript_by_id(BRCA1_ID)
     # BRCA1 exon 2: 43124017-43124115 (reverse strand). Donor +4 on
     # reverse strand = exon.start - 4 = 43124013.
-    window = _breakpoint_splice_window(brca1, 43_124_013)
+    window = breakpoint_splice_window(brca1, 43_124_013)
     assert window is not None, (
         "Expected reverse-strand donor-side intronic match")
     cls, exon, dist = window
@@ -1229,12 +1229,12 @@ def test_reverse_strand_splice_window_acceptor_side():
     genomic exon.end + 1 = transcript-5' adjacent base. Must return
     :class:`SpliceAcceptor` with distance 1."""
     from varcode.effects.structural import (
-        _breakpoint_splice_window,
+        breakpoint_splice_window,
     )
     from varcode.effects import SpliceAcceptor
     brca1 = ensembl_grch38.transcript_by_id(BRCA1_ID)
     # Acceptor -1 on reverse strand = exon.end + 1.
-    window = _breakpoint_splice_window(brca1, 43_124_116)
+    window = breakpoint_splice_window(brca1, 43_124_116)
     assert window is not None
     cls, _, dist = window
     assert cls is SpliceAcceptor

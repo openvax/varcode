@@ -44,9 +44,9 @@ class FastEffectAnnotator:
             return predict_structural_variant_effect(variant, transcript)
         # Lazy import avoids a circular dep at package import time.
         from ..effects.effect_prediction import (
-            _predict_variant_effect_on_transcript_raw,
+            predict_variant_effect_on_transcript_raw,
         )
-        return _predict_variant_effect_on_transcript_raw(variant, transcript)
+        return predict_variant_effect_on_transcript_raw(variant, transcript)
 
     def annotate_with_context(
             self, variant, transcript, germline_ctx, phase_resolver=None):

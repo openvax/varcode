@@ -93,8 +93,20 @@ def breakend_mate(alt):
             m.group("open") + m.group("close"))
 
 
-def _breakend_local_side(alt):
-    """The retained local side, including single breakends with no mate."""
+def breakend_local_side(alt):
+    """Return the retained local side (``"left"`` or ``"right"``) of a breakend ALT.
+
+    Parameters
+    ----------
+    alt : str or None
+        VCF breakend or single-breakend ALT string.
+
+    Returns
+    -------
+    {"left", "right"} or None
+        Local retained side, including single breakends without a mate, or
+        ``None`` when ``alt`` is not a breakend.
+    """
     sides = breakend_sides(alt)
     if sides is not None:
         return sides[0]
@@ -197,11 +209,26 @@ def _confidence_interval(info: Optional[Mapping[str, Any]], key: str) -> Optiona
     return lower, upper
 
 
-def _confidence_info_for_alt(info: Optional[Mapping[str, Any]], index: int, count: int) -> Optional[Mapping[str, Any]]:
-    """Select per-ALT CI pairs, retaining shared legacy pairs.
+def confidence_info_for_alt(
+        info: Optional[Mapping[str, Any]], index: int, count: int,
+) -> Optional[Mapping[str, Any]]:
+    """Select per-ALT ``CIPOS`` / ``CIEND`` pairs while retaining shared pairs.
 
-    The loader keeps the complete original mapping in record metadata. Direct
-    single-ALT parsing receives already selected fields and remains strict.
+    Parameters
+    ----------
+    info : mapping or None
+        Parsed VCF INFO mapping for the record.
+    index : int
+        Zero-based ALT index within the record.
+    count : int
+        Total number of ALT alleles on the record.
+
+    Returns
+    -------
+    mapping or None
+        INFO mapping scoped to ``index`` when multi-allelic ``2 * count`` CI
+        lists are present; the loader keeps the complete original mapping in
+        record metadata while single-ALT parsing remains strict.
     """
     if info is None or count == 1:
         return info

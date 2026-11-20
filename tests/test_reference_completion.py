@@ -8,7 +8,7 @@ import pytest
 
 from varcode import EffectCandidate, ReferenceSegment, reference_completion_hypotheses
 from varcode.effects import GeneFusion
-from varcode.mutant_transcript import _AssembledAllele
+from varcode.mutant_transcript import AssembledAllele
 
 from . import test_exacto_reference_mapping as mapping
 from .test_exacto_reference_mapping import load, rows_for, transcript
@@ -143,7 +143,7 @@ def test_unmapped_terminal_bases_prevent_only_that_end_completion(context, side)
     index = 0 if side == "five_prime" else -1
     old = segments[index]
     sequence = old.source.sequence[old.start:old.end]
-    segments[index] = ReferenceSegment(_AssembledAllele(sequence), 0, len(sequence))
+    segments[index] = ReferenceSegment(AssembledAllele(sequence), 0, len(sequence))
     candidate.effect.mutant_transcript = replace(model, reference_segments=tuple(segments))
     result, = reference_completion_hypotheses(candidate)
     spans = result.evidence["reference_completion"]["assumed_spans"]

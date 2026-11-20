@@ -11,7 +11,15 @@ from serializable import DataclassSerializable, Serializable
 
 
 @dataclass(frozen=True)
-class _ReferenceGenome(DataclassSerializable):
+class ReferenceGenomeSnapshot(DataclassSerializable):
+    """Offline genome identity snapshot stored in extra-ORF effect graphs.
+
+    Parameters
+    ----------
+    metadata : dict
+        Reference assembly, annotation, species, and checksum fields.
+    """
+
     metadata: dict
 
     def __getattr__(self, name):
@@ -39,7 +47,9 @@ class _ReferenceGenome(DataclassSerializable):
 
 
 @dataclass(frozen=True)
-class _Feature(DataclassSerializable):
+class TranscriptFeatureSnapshot(DataclassSerializable):
+    """Offline exon or gene interval snapshot stored in extra-ORF effect graphs."""
+
     start: int
     end: int
     id: object = None
@@ -56,7 +66,9 @@ class _Feature(DataclassSerializable):
         return self.end - self.start + 1
 
 
-class _ReferenceTranscript(Serializable):
+class ReferenceTranscriptSnapshot(Serializable):
+    """Offline spliced transcript snapshot stored in extra-ORF effect graphs."""
+
     def __init__(self, data, genome, exons, gene):
         self.data = data
         self.genome = genome
@@ -109,23 +121,29 @@ class _ReferenceTranscript(Serializable):
         data["transcript_name"] = transcript.name
         data["topology"] = getattr(transcript, "topology", "linear")
         gene = transcript.gene
-        stored_gene = None if gene is None else _Feature(
+        stored_gene = None if gene is None else TranscriptFeatureSnapshot(
             getattr(gene, "start", transcript.start), getattr(gene, "end", transcript.end),
             gene.id, gene.name, transcript.contig, transcript.strand)
         if gene is not None:
             data["gene_id"], data["gene_name"] = gene.id, gene.name
-        exons = tuple(_Feature(
+        exons = tuple(TranscriptFeatureSnapshot(
             exon.start, exon.end, getattr(exon, "id", getattr(exon, "exon_id", None)),
             getattr(exon, "name", None), transcript.contig, transcript.strand)
             for exon in transcript.exons)
-        return cls(data, _ReferenceGenome.capture(transcript.genome), exons, stored_gene)
+        return cls(data, ReferenceGenomeSnapshot.capture(transcript.genome), exons, stored_gene)
+
+
+# Backwards-compatible aliases for legacy serialized archives.
+_ReferenceGenome = ReferenceGenomeSnapshot
+_Feature = TranscriptFeatureSnapshot
+_ReferenceTranscript = ReferenceTranscriptSnapshot
 
 
 def orf_graph_types():
     from orfdata import catalog, evidence_summary, initiation_context, model, reference, rna
     from orfdata import liftover
     from .orf import ORFAnnotation, ORFOutcome, ORFProduct
-    from .mutant_transcript import MutantTranscript, ReferenceSegment, TranscriptEdit, _AssembledAllele
+    from .mutant_transcript import AssembledAllele, MutantTranscript, ReferenceSegment, TranscriptEdit
 
     # Public data records only; never serialize a catalogue, provider or cache.
     names = {
@@ -136,7 +154,7 @@ def orf_graph_types():
         catalog, evidence_summary, initiation_context, model, reference, liftover, rna)
         for name in names if hasattr(module, name)}
     return tuple(records) + (ORFAnnotation, ORFOutcome, ORFProduct,
-                            MutantTranscript, ReferenceSegment, TranscriptEdit, _AssembledAllele)
+                            MutantTranscript, ReferenceSegment, TranscriptEdit, AssembledAllele)
 
 
 def record_fields(value):

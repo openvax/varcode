@@ -13,7 +13,7 @@ from varcode.effects import (
     CrypticExonCandidate, EffectCollection, GeneFusion, LargeDeletion,
     StructuralVariantEffect, TranslocationToIntergenic, Unresolved,
 )
-from varcode.effects import structural
+from varcode.effects import structural, structural_candidates, structural_fusions
 from varcode.effects.codon_tables import codon_table_for_transcript
 
 # Legacy wrapper contract; the default composition path has separate regression tests.
@@ -27,9 +27,11 @@ def cftr():
 
 @pytest.fixture
 def isolate_span(monkeypatch):
-    monkeypatch.setattr(structural, "_fusion_partners", lambda *args: ())
-    monkeypatch.setattr(structural, "_enumerate_and_attach_cryptics", lambda *args: None)
-    monkeypatch.setattr(structural, "_enumerate_and_attach_splice_outcomes", lambda *args: None)
+    monkeypatch.setattr(structural_fusions, "fusion_partners", lambda *args: ())
+    monkeypatch.setattr(
+        structural_candidates, "enumerate_and_attach_cryptics", lambda *args: None)
+    monkeypatch.setattr(
+        structural_candidates, "enumerate_and_attach_splice_outcomes", lambda *args: None)
 
 
 def _effect(transcript, cdna=None, protein=None, segments=None, evidence=None):
@@ -495,7 +497,7 @@ def test_imported_rna_has_explicit_cds_boundaries(cftr, synonymous):
 
 def test_fusion_after_stop_is_unchanged_for_five_prime_partner(cftr):
     partner = cached_release(81).transcript_by_id("ENST00000357654")
-    model = structural._build_fusion_mutant_transcript(
+    model = structural.build_fusion_mutant_transcript(
         cftr, cftr, cftr.end - 10, partner, partner.end - 10)
     assert model.mutant_protein_sequence == cftr.protein_sequence
     variant = StructuralVariant(cftr.contig, cftr.end - 10, "BND", genome=cftr.genome)

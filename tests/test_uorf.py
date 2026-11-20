@@ -397,7 +397,7 @@ def test_native_orf_access_does_not_serialize(monkeypatch):
     variant = t.variant(6, "A", "G")
     monkeypatch.setattr(ORFAnnotation, "to_dict", unexpected_export)
     monkeypatch.setattr(orfdata.ReferenceORF, "to_dict", unexpected_export)
-    monkeypatch.setattr("varcode.orf._plain", unexpected_export)
+    monkeypatch.setattr("varcode.orf.plain_json_value", unexpected_export)
     result = annotate_orf_variants([variant], reference)
     assert result.reference is reference
     assert result.variants == (variant,)
@@ -443,7 +443,7 @@ def test_native_rna_annotation_and_legacy_json_export(retain_start, monkeypatch)
     with monkeypatch.context() as patch:
         def unexpected_export(*args, **kwargs):
             raise AssertionError("RNA annotation must not serialize")
-        patch.setattr("varcode.orf._plain", unexpected_export)
+        patch.setattr("varcode.orf.plain_json_value", unexpected_export)
         result = annotate_orf_rna_product(reference, product)
     assert result.reference is reference
     assert result.cdna_sequence == t.sequence

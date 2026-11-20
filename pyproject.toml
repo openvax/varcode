@@ -94,6 +94,7 @@ files = [
     "varcode/annotators/registry.py",
     "varcode/variant_collection.py",
     "varcode/effects/effect_collection.py",
+    "varcode/effects/structural_serialization.py",
     "varcode/vcf.py",
     "varcode/sv_allele_parser.py",
     "varcode/maf.py",

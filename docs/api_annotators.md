@@ -16,6 +16,8 @@ See [annotation choices](experimental_annotators.md) for alternatives and
 
 ::: varcode.register_annotator
 
+::: varcode.registered_annotators
+
 ::: varcode.get_annotator
 
 ::: varcode.get_default_annotator

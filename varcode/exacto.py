@@ -20,7 +20,7 @@ import os
 from .circular_origin import in_transcript_order
 from .rna_evidence import RNAEvidence, make_fusion_outcome
 from .effects.codon_tables import STANDARD
-from .mutant_transcript import ReferenceSegment, _AssembledAllele
+from .mutant_transcript import AssembledAllele, ReferenceSegment
 
 
 def _rows(path, required):
@@ -134,7 +134,7 @@ def _reference_segments(bases, genome, sequence):
     bases keep their observed sequence, even when the row claims a match.
     Original rows, including unverified annotations, remain in evidence.
     """
-    observed = _AssembledAllele(sequence.upper())
+    observed = AssembledAllele(sequence.upper())
     segments, offset = [], 0
     for row in bases:
         sequence = row["sequence"].upper()

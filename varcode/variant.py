@@ -25,8 +25,8 @@ if TYPE_CHECKING:
 
 from . import circular_origin
 from .contigs import (
-    _HG19_MITOCHONDRION_NOTE, _annotation_contig_name, _convert_ucsc_contig_name,
-    _is_hg19_mitochondrion)
+    HG19_MITOCHONDRION_NOTE, annotation_contig_name, convert_ucsc_contig_name,
+    is_hg19_mitochondrion)
 from .nucleotides import (
     normalize_nucleotide_string,
     STANDARD_NUCLEOTIDES,
@@ -35,7 +35,7 @@ from .nucleotides import (
 from .pinned_references import (
     is_pinned_assembly, mitochondrion_note, names_rcrs, pinned_contig_name)
 from .reference import (
-    _split_release, ensembl_to_ucsc_reference_names, infer_genome, infer_reference_name)
+    split_release, ensembl_to_ucsc_reference_names, infer_genome, infer_reference_name)
 from .string_helpers import trim_shared_flanking_strings
 from .errors import InvalidContigError
 from .effects import (
@@ -196,7 +196,7 @@ class Variant(Serializable):
 
         self.reference_name = self.genome.reference_name
         # A file of a genome ORFdata pins, e.g. "chm13v2.0_maskedY_rCRS.fa".
-        pinned = (infer_reference_name(_split_release(genome)[0])
+        pinned = (infer_reference_name(split_release(genome)[0])
                   if self.original_genome_was_ucsc and isinstance(genome, str)
                   and is_pinned_assembly(self.reference_name) else None)
         if pinned is not None:
@@ -460,8 +460,8 @@ class Variant(Serializable):
         is unannotated; only the rCRS of its ``_rCRS`` analysis set is (#722).
         """
         assembly = getattr(self.genome, "assembly", self.reference_name)
-        if _is_hg19_mitochondrion(self.contig, assembly, self.chrm_is_rcrs):
-            return _HG19_MITOCHONDRION_NOTE
+        if is_hg19_mitochondrion(self.contig, assembly, self.chrm_is_rcrs):
+            return HG19_MITOCHONDRION_NOTE
         return mitochondrion_note(self.contig, assembly)
 
 
@@ -763,14 +763,14 @@ class Variant(Serializable):
         """
         assembly = getattr(self.genome, "assembly", self.reference_name)
         if self.normalize_contig_names:
-            return _annotation_contig_name(
+            return annotation_contig_name(
                 contig, assembly, self.convert_ucsc_contig_names, self.chrm_is_rcrs)
         if not self.convert_ucsc_contig_names:
             return contig
         pinned = pinned_contig_name(contig, assembly, self.chrm_is_rcrs)
         if pinned is not None:
             return pinned
-        if _is_hg19_mitochondrion(contig, assembly, self.chrm_is_rcrs):
+        if is_hg19_mitochondrion(contig, assembly, self.chrm_is_rcrs):
             return "chrM"
         return self._convert_ucsc_contig_name_to_ensembl(contig)
 
@@ -791,7 +791,7 @@ class Variant(Serializable):
         -------
         str
         """
-        return _convert_ucsc_contig_name(
+        return convert_ucsc_contig_name(
             contig, getattr(self.genome, "assembly", self.reference_name))
 
     def clone_without_ucsc_data(self):

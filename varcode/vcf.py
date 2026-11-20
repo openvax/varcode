@@ -22,14 +22,14 @@ from warnings import warn
 
 import pandas
 
-from .contigs import _RCRS_LENGTH, _is_grch37
+from .contigs import RCRS_LENGTH, is_grch37
 from .pinned_references import (
     find_pinned_name, is_pinned_assembly, names_rcrs, pinned_assembly, pinned_contig_lengths,
     pinned_contig_name)
-from .reference import _split_release, assembly_in_file_name, infer_genome
+from .reference import split_release, assembly_in_file_name, infer_genome
 from .variant import Variant, variant_ascending_position_sort_key
 from .variant_collection import VariantCollection
-from .vcf_parsing import VCFHeader, _split_struct_fields
+from .vcf_parsing import VCFHeader, split_struct_fields
 
 
 logger = logging.getLogger(__name__)
@@ -58,17 +58,28 @@ def _is_symbolic_allele(alt):
     return False
 
 
-def _declares_rcrs_chrm(header):
-    """Whether the header's ``##contig`` lines give chrM (or M) only the rCRS
-    length, as GENCODE's GRCh37 does; hg19's chrM is 16,571 bp (#710)."""
+def declares_rcrs_chrm(header):
+    """Return whether ``header`` declares ``chrM`` / ``M`` with the 16,569-bp rCRS length.
+
+    Parameters
+    ----------
+    header : VCFHeader
+        Parsed VCF header metadata.
+
+    Returns
+    -------
+    bool
+        True when ``##contig`` lines assign ``chrM`` (or ``M``) solely length
+        16,569, as GENCODE's GRCh37 does; hg19's chrM is 16,571 bp (#710).
+    """
     lengths = set()
     for line in header.metadata.get("contig", ()):
         line = line.strip()
         if line.startswith("<") and line.endswith(">"):
-            fields = _split_struct_fields(line[1:-1])
+            fields = split_struct_fields(line[1:-1])
             if fields.get("ID", "").upper() in ("CHRM", "M"):
                 lengths.add(fields.get("length", "").strip())
-    return lengths == {str(_RCRS_LENGTH)}
+    return lengths == {str(RCRS_LENGTH)}
 
 
 def _names_rcrs_file(genome, reference):
@@ -82,7 +93,7 @@ def _names_rcrs_file(genome, reference):
     for name in (genome, reference):
         if isinstance(name, str):
             try:
-                name = _split_release(name)[0]
+                name = split_release(name)[0]
             except ValueError:
                 continue
             found = find_pinned_name(os.path.basename(name)) or find_pinned_name(name)
@@ -103,7 +114,7 @@ def _compare_contig_lengths(header, assembly, chrm_is_rcrs):
         line = line.strip()
         if not (line.startswith("<") and line.endswith(">")):
             continue
-        fields = _split_struct_fields(line[1:-1])
+        fields = split_struct_fields(line[1:-1])
         name = pinned_contig_name(fields.get("ID", ""), assembly, chrm_is_rcrs)
         length = fields.get("length", "").strip()
         if name not in lengths or not length.isdigit():
@@ -340,7 +351,7 @@ def load_vcf(
     original_genome = genome
     genome, genome_was_ucsc = infer_genome(genome)
     assembly = getattr(genome, "assembly", genome.reference_name)
-    chrm_is_rcrs = _is_grch37(assembly) and _declares_rcrs_chrm(header)
+    chrm_is_rcrs = is_grch37(assembly) and declares_rcrs_chrm(header)
     if chrm_is_rcrs:
         logger.info("%s declares chrM at the rCRS length; naming it MT", path)
     try:
@@ -557,13 +568,13 @@ def dataframes_to_variant_collection(
 
                 variant: Variant | None
                 if symbolic:
-                    from .sv_allele_parser import _confidence_info_for_alt, parse_symbolic_alt
+                    from .sv_allele_parser import confidence_info_for_alt, parse_symbolic_alt
                     variant = parse_symbolic_alt(
                         contig=chrom,
                         start=int(pos),
                         ref=ref,
                         alt=alt,
-                        info=_confidence_info_for_alt(info, alt_num, len(alts.split(','))),
+                        info=confidence_info_for_alt(info, alt_num, len(alts.split(','))),
                         genome=structural_variant_genome,
                         normalize_contig_names=variant_kwargs.get(
                             "normalize_contig_names", True),

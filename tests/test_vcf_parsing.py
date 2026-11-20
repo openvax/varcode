@@ -25,7 +25,7 @@ from varcode.vcf_parsing import (
     VCFHeader,
     RESERVED_INFO,
     RESERVED_FORMAT,
-    _split_struct_fields,
+    split_struct_fields,
     _parse_field_decl,
 )
 
@@ -35,12 +35,12 @@ DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 
 class TestStructFieldSplit:
     def test_simple_fields(self):
-        d = _split_struct_fields("ID=AF,Number=A,Type=Float")
+        d = split_struct_fields("ID=AF,Number=A,Type=Float")
         assert d == OrderedDict([("ID", "AF"), ("Number", "A"), ("Type", "Float")])
 
     def test_quoted_value_with_commas(self):
         body = 'ID=X,Number=1,Type=Integer,Description="a, b, c"'
-        d = _split_struct_fields(body)
+        d = split_struct_fields(body)
         assert d["Description"] == "a, b, c"
         assert d["ID"] == "X"
 
@@ -48,13 +48,13 @@ class TestStructFieldSplit:
         body = (
             'ID=AF,Number=A,Type=Float,Description="freq",'
             'Source="dbSNP",Version="3"')
-        d = _split_struct_fields(body)
+        d = split_struct_fields(body)
         assert d["Source"] == "dbSNP"
         assert d["Version"] == "3"
 
     def test_empty_description(self):
         body = 'ID=X,Number=1,Type=Integer,Description=""'
-        d = _split_struct_fields(body)
+        d = split_struct_fields(body)
         assert d["Description"] == ""
 
     def test_field_decl_dataclass(self):
@@ -65,25 +65,25 @@ class TestStructFieldSplit:
             description="freq, allele")
 
     def test_empty_body_yields_empty_dict(self):
-        assert _split_struct_fields("") == OrderedDict()
+        assert split_struct_fields("") == OrderedDict()
 
     def test_trailing_comma_is_tolerated(self):
         # Real VCF tools sometimes emit a trailing comma; the regex's
         # finditer just doesn't match past it. No spurious empty key.
-        d = _split_struct_fields("ID=X,Number=1,")
+        d = split_struct_fields("ID=X,Number=1,")
         assert d == OrderedDict([("ID", "X"), ("Number", "1")])
 
     def test_whitespace_around_equals(self):
         # Permissive: PyVCF3's per-line regex doesn't allow this, but we do.
         # No real fixture exercises it; it's a robustness extra.
-        d = _split_struct_fields("ID = X,Number = 1")
+        d = split_struct_fields("ID = X,Number = 1")
         assert d == OrderedDict([("ID", "X"), ("Number", "1")])
 
     def test_plain_value_with_embedded_equals(self):
         # The plain branch is `[^,]*`, so `=` inside an unquoted value is
         # captured as part of the value (the key/value split happens once
         # at the leading `=`).
-        d = _split_struct_fields("ID=X,URL=http://example.com/?a=1&b=2")
+        d = split_struct_fields("ID=X,URL=http://example.com/?a=1&b=2")
         assert d["URL"] == "http://example.com/?a=1&b=2"
 
     def test_mixed_quoted_and_bare_preserves_order(self):
@@ -91,7 +91,7 @@ class TestStructFieldSplit:
             'ID=AF,Number=A,Type=Float,'
             'Description="freq, per ALT",'
             'Source="dbSNP",Version=3')
-        d = _split_struct_fields(body)
+        d = split_struct_fields(body)
         assert list(d) == [
             "ID", "Number", "Type", "Description", "Source", "Version"]
         assert d["Description"] == "freq, per ALT"
@@ -100,11 +100,11 @@ class TestStructFieldSplit:
     def test_quoted_value_preserves_internal_whitespace(self):
         # A quoted value isn't stripped; bare values are. The trio fixture's
         # contig line relies on this for ``species="Homo sapiens"``.
-        d = _split_struct_fields('ID=20,species="Homo sapiens"')
+        d = split_struct_fields('ID=20,species="Homo sapiens"')
         assert d["species"] == "Homo sapiens"
 
     def test_bare_value_is_stripped(self):
-        d = _split_struct_fields("ID=  X  ,Number= 1 ")
+        d = split_struct_fields("ID=  X  ,Number= 1 ")
         assert d == OrderedDict([("ID", "X"), ("Number", "1")])
 
 

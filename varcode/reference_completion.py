@@ -9,8 +9,7 @@ from .effect_candidates import EffectCandidate
 from .effects.codon_tables import codon_table_for_transcript, translate_sequence
 from .effects.effect_classes import GeneFusion, TranslocationToIntergenic, TranslocationToUnannotatedContig
 from .effects.selenocysteine import segment_selenocysteine
-from .effects.sequence_change import _retained_start
-from .mutant_transcript import ReferenceSegment
+from .mutant_transcript import ReferenceSegment, retained_cds_start
 from .nucleotides import reverse_complement
 
 
@@ -114,7 +113,7 @@ def _translate(model, transcript):
         starts = []
     if len(starts) != 3 or starts != list(range(starts[0], starts[0] + 3)):
         return replace(model, evidence=evidence)
-    start = _retained_start(model, transcript)
+    start = retained_cds_start(model, transcript)
     sequence = model.cdna_sequence
     table = codon_table_for_transcript(transcript)
     if start is None or sequence[start:start + 3] not in table.start_codons:

@@ -27,15 +27,37 @@ def _check_reference_name(reference_name: str | None) -> None:
 _GRCH37_NAMES = frozenset({"grch37", "hg19", "b37", "ncbi37"})
 
 
-def _is_grch37(reference_name: str | None) -> bool:
+def is_grch37(reference_name: str | None) -> bool:
+    """Return whether ``reference_name`` names GRCh37/hg19 (including b37/NCBI37).
+
+    Parameters
+    ----------
+    reference_name : str or None
+        Assembly spelling context.
+
+    Returns
+    -------
+    bool
+    """
     return reference_name is not None and reference_name.strip().lower() in _GRCH37_NAMES
 
 
-def _is_t2t_chm13(reference_name: str | None) -> bool:
-    """T2T-CHM13, by its pinned name ("T2T-CHM13v2.0") or an alias such as "hs1" (#730).
+def is_t2t_chm13(reference_name: str | None) -> bool:
+    """Return whether ``reference_name`` names T2T-CHM13v2.0 or an alias such as ``hs1``.
 
-    Its FASTAs hold either CHM13's own mitochondrion (CP068254.1) or the
-    rCRS, both 16,569 bp, whose positions are 576 to 577 bp apart (#722).
+    Parameters
+    ----------
+    reference_name : str or None
+        Assembly spelling context.
+
+    Returns
+    -------
+    bool
+
+    Notes
+    -----
+    T2T-CHM13 FASTAs hold either CHM13's own mitochondrion (CP068254.1) or the
+    rCRS, both 16,569 bp, whose positions are 576 to 577 bp apart (#722, #730).
     """
     from .pinned_references import pinned_assembly
 
@@ -43,22 +65,36 @@ def _is_t2t_chm13(reference_name: str | None) -> bool:
     return assembly is not None and assembly.upper().startswith("T2T-CHM13")
 
 
-def _is_hg19_mitochondrion(
+def is_hg19_mitochondrion(
         contig: str | int, reference_name: str | None, chrm_is_rcrs: bool = False) -> bool:
-    """True for ``chrM`` or ``M`` (any case) under GRCh37/hg19, unless the
-    input declares its chrM to be the rCRS (``chrm_is_rcrs``, #710).
+    """Return whether ``contig`` denotes hg19's non-rCRS ``chrM`` / ``M``.
 
+    Parameters
+    ----------
+    contig : str or int
+        Contig name.
+    reference_name : str or None
+        Assembly spelling context.
+    chrm_is_rcrs : bool, default False
+        True when the input declares ``chrM`` to be the 16,569-bp rCRS (#710).
+
+    Returns
+    -------
+    bool
+
+    Notes
+    -----
     hg19's chrM is NC_001807, not the rCRS (NC_012920) that Ensembl's GRCh37
     names MT, and its positions are offset from it: hg19 chrM:12995 is rCRS
     MT:12994. A variant there must not be renamed onto MT (#707). hg38's chrM
     is the rCRS, and ``chrMT`` is a chr-prefixed rCRS ``MT``.
     """
-    return (not chrm_is_rcrs and _is_grch37(reference_name)
+    return (not chrm_is_rcrs and is_grch37(reference_name)
             and str(contig).upper() in ("CHRM", "M"))
 
 
 # The rCRS (NC_012920) is 16,569 bp; hg19's chrM (NC_001807) is 16,571 bp.
-_RCRS_LENGTH = 16569
+RCRS_LENGTH = 16569
 
 
 def _grch37_mitochondrion_key(key: str, name: str, length: int | None) -> str:
@@ -73,32 +109,39 @@ def _grch37_mitochondrion_key(key: str, name: str, length: int | None) -> str:
     """
     if key != "MT":
         return key
-    rcrs = name.upper() in ("MT", "CHRMT") or length == _RCRS_LENGTH
+    rcrs = name.upper() in ("MT", "CHRMT") or length == RCRS_LENGTH
     return "MT" if rcrs else "chrM"
 
 
 # Appended to errors about a GRCh37 chrM, which Ensembl's annotation lacks.
-_HG19_MITOCHONDRION_NOTE = (
+HG19_MITOCHONDRION_NOTE = (
     "hg19's chrM (NC_001807) is not the rCRS that Ensembl names MT, and its "
     "positions are offset from it; give rCRS positions on contig MT (if this "
     "chrM is already the rCRS, as in GENCODE's GRCh37, pass chrm_is_rcrs=True; "
     "load_vcf does when the VCF header gives chrM the rCRS length, 16569)")
 
 
-def _annotation_contig_name(
+def annotation_contig_name(
         contig: str | int, reference_name: str | None, convert_ucsc: bool = True,
         chrm_is_rcrs: bool = False) -> str:
-    """The name of ``contig`` in Ensembl annotation of ``reference_name``.
+    """Return the Ensembl annotation name of ``contig`` on ``reference_name``.
 
-    As :func:`normalize_contig_name`, except that hg19's mitochondrion has no
-    Ensembl name, so UCSC conversion leaves it ``chrM`` rather than renaming
-    it onto the rCRS ``MT`` (#707), unless ``chrm_is_rcrs`` says this chrM is
-    the rCRS (#710). In a genome ORFdata pins, conversion uses ORFdata's
-    contig table: T2T-CHM13v2.0's ``chr1``, ``CP068277.2`` and
-    ``NC_060925.1`` are ``1``, and its ``chrM`` is ``MT``, CHM13's own
-    mitochondrion, or, with ``chrm_is_rcrs``, ``NC_012920.1``, the rCRS
-    (#723, #722). The public function only matches spellings and still
-    pairs them; :class:`ContigResolver` keeps GRCh37's two mitochondria apart.
+    Parameters
+    ----------
+    contig : str or int
+        Input chromosome/contig name.
+    reference_name : str or None
+        Assembly spelling context.
+    convert_ucsc : bool, default True
+        Whether to convert UCSC and pinned GenBank/RefSeq contig spellings.
+    chrm_is_rcrs : bool, default False
+        Whether a GRCh37/T2T ``chrM`` input is declared to be the rCRS.
+
+    Returns
+    -------
+    str
+        Annotation contig spelling, leaving hg19's non-rCRS ``chrM`` unrenamed
+        (#707, #710, #722, #723).
     """
     if convert_ucsc:
         # A genome ORFdata pins, such as T2T-CHM13v2.0, names each contig's
@@ -107,13 +150,26 @@ def _annotation_contig_name(
         pinned = pinned_contig_name(contig, reference_name, chrm_is_rcrs)
         if pinned is not None:
             return pinned
-    if convert_ucsc and _is_hg19_mitochondrion(contig, reference_name, chrm_is_rcrs):
+    if convert_ucsc and is_hg19_mitochondrion(contig, reference_name, chrm_is_rcrs):
         return "chrM"
     return normalize_contig_name(contig, reference_name=reference_name, convert_ucsc=convert_ucsc)
 
 
-def _convert_ucsc_contig_name(contig: str, reference_name: str | None) -> str:
-    """Convert spelling only; also used by Variant with normalization disabled."""
+def convert_ucsc_contig_name(contig: str, reference_name: str | None) -> str:
+    """Convert UCSC chromosome and accession-bearing scaffold spellings only.
+
+    Parameters
+    ----------
+    contig : str
+        Contig spelling after optional case/integer normalization.
+    reference_name : str or None
+        Assembly spelling context (enables hg19 unversioned GL aliases).
+
+    Returns
+    -------
+    str
+        Converted contig spelling.
+    """
     match = re.fullmatch(
         r"chr(?:Un|[0-9XYM]+)_([A-Za-z]+[0-9]+)v([0-9]+)(?:_(?:random|alt|fix))?",
         contig)
@@ -121,7 +177,7 @@ def _convert_ucsc_contig_name(contig: str, reference_name: str | None) -> str:
         return "%s.%s" % (match[1].upper(), match[2])
     # UCSC hg19.chromAlias.txt assigns these unversioned names to version 1.
     # Never infer that version from a target vocabulary or a newer assembly.
-    if _is_grch37(reference_name):
+    if is_grch37(reference_name):
         match = re.fullmatch(r"chr(?:Un|[0-9XYM]+)_(gl000[0-9]{3})(?:_random)?", contig)
         if match and 191 <= int(match[1][-3:]) <= 249:
             return match[1].upper() + ".1"
@@ -161,7 +217,7 @@ def normalize_contig_name(
         if canonical_chr_match:
             name = "chr" + canonical_chr_match[1].upper()
     contig = normalize_chromosome(name)
-    return _convert_ucsc_contig_name(contig, reference_name) if convert_ucsc else contig
+    return convert_ucsc_contig_name(contig, reference_name) if convert_ucsc else contig
 
 
 def _resolution_key(name: str | int, reference_name: str | None) -> str:
@@ -257,7 +313,7 @@ class ContigResolver:
         if isinstance(available_contigs, (str, bytes)):
             raise TypeError("available_contigs must be an iterable of names, not a string")
         self._reference_name = reference_name
-        self._grch37 = _is_grch37(reference_name)
+        self._grch37 = is_grch37(reference_name)
         self._contig_lengths: dict[str, int] = dict(contig_lengths or {})
         self._available_contigs: frozenset[str] | None = None
         self._aliases: dict[str, tuple[str, ...]] = {}

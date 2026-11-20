@@ -5,7 +5,7 @@ from pyensembl import cached_release
 
 from varcode import StructuralVariant, parse_symbolic_alt
 from varcode.effects import Unresolved
-from varcode.effects import structural
+from varcode.effects import structural, structural_candidates, structural_fusions
 
 
 @pytest.fixture(params=["ENST00000003084", "ENST00000357654"])
@@ -16,9 +16,11 @@ def transcript(request):
 @pytest.fixture(autouse=True)
 def no_optional_candidates(monkeypatch):
     # Isolate the span fallback; fusion preservation also has real esvee tests.
-    monkeypatch.setattr(structural, "_fusion_partners", lambda *args: ())
-    monkeypatch.setattr(structural, "_enumerate_and_attach_cryptics", lambda *args: None)
-    monkeypatch.setattr(structural, "_enumerate_and_attach_splice_outcomes", lambda *args: None)
+    monkeypatch.setattr(structural_fusions, "fusion_partners", lambda *args: ())
+    monkeypatch.setattr(
+        structural_candidates, "enumerate_and_attach_cryptics", lambda *args: None)
+    monkeypatch.setattr(
+        structural_candidates, "enumerate_and_attach_splice_outcomes", lambda *args: None)
 
 
 def make_sv(transcript, kind, outside, symbolic=False, assembly=None):
@@ -77,8 +79,8 @@ def test_gene_containment_does_not_establish_short_isoform_structure(transcript_
     tx = genome.transcript_by_id(transcript_id)
     sv = StructuralVariant("12", 54_259_010, kind, end=54_262_307, genome=genome)
     ends = [end for junction in sv.junctions for end in junction]
-    assert all(structural._contains(tx.gene, end) for end in ends)
-    assert any(not structural._contains(tx, end) for end in ends)
+    assert all(structural.feature_contains_breakend(tx.gene, end) for end in ends)
+    assert any(not structural.feature_contains_breakend(tx, end) for end in ends)
     effect = sv.effect_on_transcript(tx)
     assert isinstance(effect.most_likely_effect, Unresolved)
     assert effect.mutant_transcript is None

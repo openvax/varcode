@@ -1,5 +1,38 @@
 # Change Log
 
+## v11.17.0
+
+- Expose a finite reviewed class registry and safe typed JSON codec for native
+  effect graphs, plus a public annotator listing API (#674):
+  - Add `effect_serialization_classes()`, `EffectReference`, `AssembledAllele`,
+    `effect_to_json()`, `effect_from_json()`, `effect_from_serializable_repr()`,
+    `effect_collection_to_json()`, `effect_collection_from_json()`, and
+    `effect_collection_from_serializable_repr()` at the package root. Archives
+    preserve ordinary, phased, germline, structural, and ORF graph cycles,
+    baselines, and candidate provenance while rejecting unreviewed classes and
+    arbitrary function metadata without dynamic module imports, and continue
+    reading legacy `_EffectReference` / `_AssembledAllele` / `_ORFTranscript` /
+    `_ReferenceGenome` / `_Feature` / `_ReferenceTranscript` /
+    `_default_effect_sort_key` names.
+  - Route `MutationEffect.from_json()`, `EffectCollection.from_json()`, and
+    `EffectCollection.from_csv()` `effect_json` restoration through the safe
+    finite-allowlist decoders, and promote `default_effect_sort_key`.
+  - Add `registered_annotators(*, include_deprecated=False)` to list registered
+    annotator names without reading private registry state.
+- Eliminate all cross-module underscore imports and split
+  `varcode/effects/structural.py` by responsibility (#692):
+  - Promote cross-module helpers to documented public functions and classes in
+    their owning modules (`contigs`, `mutant_transcript`, `orf`,
+    `orf_serialization`, `genome_sequence`, `germline`, `reference`,
+    `rna_evidence`, `structural_variant`, `sv_allele_parser`,
+    `transcript_model`, `vcf`, `vcf_parsing`, `effects/classify`,
+    `effects/effect_prediction`, `sample_vcf`), enforced by an AST lint test.
+  - Split `varcode/effects/structural.py` into `structural_models.py`,
+    `structural_fusions.py`, `structural_candidates.py`, and `structural.py`,
+    and break the two-way private import cycle between `structural` and
+    `sequence_change` via `structural_variant.affected_span` and
+    `mutant_transcript.retained_cds_start`.
+
 ## v11.16.1
 
 - Fix and expand non-standard genetic code consequence handling (#701):

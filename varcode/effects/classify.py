@@ -48,9 +48,26 @@ from .effect_classes import (
 )
 
 
-def _attach_transcript_models(effect, mutant_transcript, baseline_transcript=None,
-                              ref_protein=None):
-    """Keep the products used for classification on the ordinary effect API."""
+def attach_transcript_models(
+        effect, mutant_transcript, baseline_transcript=None, ref_protein=None):
+    """Attach baseline and mutant ``MutantTranscript`` models onto ``effect``.
+
+    Parameters
+    ----------
+    effect : MutationEffect
+        Classified mutation effect.
+    mutant_transcript : MutantTranscript or None
+        Mutant product model, attached if ``effect.mutant_transcript`` is unset.
+    baseline_transcript : MutantTranscript or None, optional
+        Pre-somatic patient baseline model.
+    ref_protein : str or None, optional
+        Initiator-normalized baseline protein sequence.
+
+    Returns
+    -------
+    MutationEffect
+        The mutated ``effect`` instance.
+    """
     effect.baseline_transcript = baseline_transcript
     if mutant_transcript is not None and effect.mutant_transcript is None:
         effect.mutant_transcript = mutant_transcript
@@ -167,7 +184,7 @@ def classify_from_protein_diff(
     MutationEffect subclass instance
     """
     def finish(effect):
-        return _attach_transcript_models(
+        return attach_transcript_models(
             effect, mutant_transcript, baseline_transcript, ref_protein)
 
     if ref_protein == mut_protein:

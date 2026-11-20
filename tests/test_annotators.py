@@ -227,12 +227,12 @@ def test_use_annotator_swaps_default_within_scope():
     # On exit, default is restored to whatever it was before.
     assert get_default_annotator() is prior_default
     # And the scoped-instance registration is cleaned up.
-    from varcode.annotators.registry import _REGISTRY
-    assert "test_scoped" not in _REGISTRY
+    from varcode import registered_annotators
+    assert "test_scoped" not in registered_annotators()
 
 
 def test_use_annotator_with_registered_name_preserves_registration():
-    from varcode import use_annotator, register_annotator
+    from varcode import registered_annotators, register_annotator, use_annotator
     class Persisted:
         name = "test_persisted"
         supports = frozenset({"snv"})
@@ -247,8 +247,7 @@ def test_use_annotator_with_registered_name_preserves_registration():
         assert get_default_annotator() is prior_default
         # Registration persists after the context exit since it
         # wasn't created by the context manager.
-        from varcode.annotators.registry import _REGISTRY
-        assert "test_persisted" in _REGISTRY
+        assert "test_persisted" in registered_annotators()
     finally:
         from varcode.annotators.registry import _REGISTRY
         _REGISTRY.pop("test_persisted", None)

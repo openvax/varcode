@@ -81,6 +81,18 @@ class MutationEffect(Serializable):
             return structural_effect_from_dict(cls, state_dict)
         return super().from_dict(state_dict)
 
+    @classmethod
+    def from_json(cls, json_string):
+        """Decode an archived effect using the finite reviewed class allowlist."""
+        from .structural_serialization import effect_from_json
+
+        result = effect_from_json(json_string)
+        if not isinstance(result, cls):
+            raise ValueError(
+                f"Expected archive root to decode to {cls.__name__}, "
+                f"got {type(result).__name__}")
+        return result
+
     def __hash__(self):
         if (getattr(self.variant, "is_structural", False)
                 or isinstance(self, MultiOutcomeEffect)

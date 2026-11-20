@@ -46,7 +46,7 @@ from pyensembl import cached_release
 
 from varcode import StructuralVariant, FastEffectAnnotator, load_vcf
 from varcode.effects.structural import (
-    _build_fusion_mutant_transcript,
+    build_fusion_mutant_transcript,
 )
 from varcode.effects import GeneFusion, Intronic, StructuralVariantEffect
 from varcode.transforms import pair_breakends
@@ -169,7 +169,7 @@ def test_cpeb2_fam193a_in_frame_fusion():
     assert isinstance(effect, GeneFusion)
     assert effect.partner_transcript.gene_name == "FAM193A"
 
-    mt = _build_fusion_mutant_transcript(
+    mt = build_fusion_mutant_transcript(
         cpeb2, cpeb2, 15_012_987, fam193a, 2_664_478)
     assert mt.reference_segments[0].end == _sum_exon_lengths(
         cpeb2, {1, 2, 3})

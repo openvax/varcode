@@ -27,10 +27,11 @@ def load_orf_catalog(*args, **kwargs):
     return load(*args, **kwargs)
 
 
-def _contig(value, reference_name=None):
+def orf_contig_name(value, reference_name=None):
+    """Return the annotation contig spelling for ``value`` under ``reference_name``."""
     # The annotation name, so an hg19 chrM variant never matches an MT ORF (#707).
-    from .contigs import _annotation_contig_name
-    return _annotation_contig_name(str(value), reference_name)
+    from .contigs import annotation_contig_name
+    return annotation_contig_name(str(value), reference_name)
 
 
 def _positions(transcript):
@@ -46,7 +47,8 @@ def _model_positions(record):
     return positions[::-1] if record.strand == "-" else positions
 
 
-def _orf_key(reference):
+def orf_annotation_key(reference):
+    """Return a deduplication identity tuple for a bound ``ReferenceORF``."""
     transcript = reference.transcript
     return (reference.context.key, transcript.id,
             getattr(transcript, "versioned_id", transcript.id), reference.source,
@@ -56,12 +58,12 @@ def _orf_key(reference):
             reference.cdna_interval)
 
 
-class _ORFTranscript:
-    """Private coding view used only by Varcode's transcript-model engine.
+class ORFTranscriptView:
+    """Transcript-model coding adapter wrapping a bound ``ReferenceORF``.
 
-    Public callers receive a ReferenceORF, whose parent transcript retains its
-    annotation identity and biotype. This adapter isolates the legacy engine's
-    requirement that the selected coding frame look like a coding transcript.
+    Public callers receive a ``ReferenceORF``, whose parent transcript retains
+    its annotation identity and biotype. This adapter presents the selected
+    coding frame to Varcode's transcript-model engine.
     """
 
     def __init__(self, reference):
@@ -89,17 +91,17 @@ class _ORFTranscript:
         self.translation_table = reference.translation_table
         self.start_codon = reference.start_codon
         # Distinct coding models on one RNA must survive candidate deduplication.
-        self.id = "%s:orf:%s" % (transcript.id, sha256(repr(_orf_key(reference)).encode()).hexdigest())
+        self.id = "%s:orf:%s" % (transcript.id, sha256(repr(orf_annotation_key(reference)).encode()).hexdigest())
         self.name = "%s:%s" % (transcript.id, reference.orf_id)
         if transcript.genome is None:
-            from .orf_serialization import _Feature, _ReferenceGenome
+            from .orf_serialization import ReferenceGenomeSnapshot, TranscriptFeatureSnapshot
             context = reference.context
-            self.genome = _ReferenceGenome(dict(
+            self.genome = ReferenceGenomeSnapshot(dict(
                 reference_name=context.genome_build, species=context.species, taxon_id=context.taxon_id,
                 annotation_name=context.annotation_name, annotation_version=context.annotation_version,
                 assembly_accession=context.assembly_accession, strain=context.strain,
                 strain_taxon_id=context.strain_taxon_id))
-            self.exons = tuple(_Feature(a, b) for a, b in transcript.exons)
+            self.exons = tuple(TranscriptFeatureSnapshot(a, b) for a, b in transcript.exons)
             self.start = min(self.positions) if self.positions else 0
             self.end = max(self.positions) if self.positions else 0
             self.on_backward_strand = transcript.strand == "-"
@@ -119,10 +121,15 @@ class _ORFTranscript:
         return hash(self.id)
 
     def __eq__(self, other):
-        return isinstance(other, _ORFTranscript) and self.id == other.id
+        return isinstance(other, ORFTranscriptView) and self.id == other.id
 
 
-def _bind(record, transcript, genome_build, *, reference_context=None):
+# Backwards-compatible alias for legacy serialized archives.
+_ORFTranscript = ORFTranscriptView
+
+
+def bind_orf_reference(record, transcript, genome_build, *, reference_context=None):
+    """Bind an ``ORFRecord`` to ``transcript`` after checking ``genome_build``."""
     if genome_build != record.genome_build:
         raise ValueError("ORF assembly mismatch")
     from orfdata import ReferenceORF
@@ -134,7 +141,7 @@ def _reference_provider(view, fallback=None):
     build = view.reference_orf.genome_build
 
     def sequence(contig, start, end):
-        if _contig(contig, build) == _contig(view.contig, build) and all(p in offsets for p in range(start, end + 1)):
+        if orf_contig_name(contig, build) == orf_contig_name(view.contig, build) and all(p in offsets for p in range(start, end + 1)):
             genomic = "".join(view.sequence[offsets[p]] for p in range(start, end + 1))
             return genomic.translate(str.maketrans("ACGT", "TGCA")) if view.on_backward_strand else genomic
         if fallback is not None:
@@ -143,22 +150,22 @@ def _reference_provider(view, fallback=None):
     return sequence
 
 
-def _plain(value):
-    """Lossless JSON values for hypotheses without effect/transcript cycles."""
+def plain_json_value(value):
+    """Convert annotation evidence and variants into cycle-free JSON primitives."""
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
     if isinstance(value, Mapping):
-        return {str(k): _plain(v) for k, v in value.items()}
+        return {str(k): plain_json_value(v) for k, v in value.items()}
     if isinstance(value, (tuple, list)):
-        return [_plain(v) for v in value]
+        return [plain_json_value(v) for v in value]
     if hasattr(value, "contig") and hasattr(value, "ref") and hasattr(value, "alt"):
-        return {k: _plain(getattr(value, k, None)) for k in
+        return {k: plain_json_value(getattr(value, k, None)) for k in
                 ("contig", "start", "end", "ref", "alt", "reference_name",
                  "original_start", "original_ref", "original_alt", "sv_type",
                  "affected_start", "affected_end", "mate_contig", "mate_start",
                  "mate_orientation", "ci_start", "ci_end", "alt_assembly", "info")}
     if is_dataclass(value):
-        return {f.name: _plain(getattr(value, f.name)) for f in fields(value)}
+        return {f.name: plain_json_value(getattr(value, f.name)) for f in fields(value)}
     raise TypeError("Unsupported annotation evidence value: %s" % type(value).__name__)
 
 
@@ -231,7 +238,7 @@ def _product(view, product):
 
 def _effect(effect):
     return {"type": type(effect).__name__, **{
-        k: _plain(getattr(effect, k)) for k in (
+        k: plain_json_value(getattr(effect, k)) for k in (
             "aa_mutation_start_offset", "aa_mutation_end_offset", "aa_ref", "aa_alt",
             "reason", "mechanism", "max_hypotheses") if hasattr(effect, k)}}
 
@@ -269,8 +276,8 @@ class ORFProduct:
             cdna_sequence=self.cdna_sequence, protein_sequence=self.protein_sequence,
             start_codon_present=self.start_codon_present, termination=self.termination,
             stop_cdna_offset=self.stop_cdna_offset, initiation_context=initiation,
-            junction_signature=_plain(self.junction_signature),
-            evidence=_plain(self.evidence), reference_evidence=_plain(self.reference_evidence))
+            junction_signature=plain_json_value(self.junction_signature),
+            evidence=plain_json_value(self.evidence), reference_evidence=plain_json_value(self.reference_evidence))
 
 
 @dataclass(frozen=True)
@@ -290,7 +297,7 @@ class ORFOutcome:
         result = dict(effect=_effect(self.effect), baseline=self.baseline.to_dict(),
                       mutant=self.mutant.to_dict() if self.mutant is not None else None)
         if self.hypothesis is not None:
-            result.update(hypothesis=_plain(self.hypothesis),
+            result.update(hypothesis=plain_json_value(self.hypothesis),
                           probability=self.probability, phase_mass=self.phase_mass)
         else:
             result["unresolved_reason"] = self.unresolved_reason
@@ -329,7 +336,7 @@ class ORFAnnotation:
     def to_dict(self):
         result = dict(
             schema="varcode.orf_annotation.v1", model=None if self.record is None else self.record.to_dict(),
-            catalogue_metadata=self.catalogue_metadata, variants=_plain(self.variants),
+            catalogue_metadata=self.catalogue_metadata, variants=plain_json_value(self.variants),
             effect=_effect(self.effect) if self.effect is not None else dict(
                 type="Unresolved", mechanism="uorf_model_unavailable", reason=self.unresolved_reason),
             outcomes=[outcome.to_dict() for outcome in self.outcomes],
@@ -344,9 +351,9 @@ class ORFAnnotation:
                     version=getattr(transcript, "version", None),
                     release=getattr(transcript.genome, "release", None),
                     genome_build=self.reference.context.genome_build),
-                variant_locations=_plain(self.variant_locations),
+                variant_locations=plain_json_value(self.variant_locations),
                 downstream_cds_regulation="not_assessed")
-        return _plain(result)
+        return plain_json_value(result)
 
 
 @dataclass(frozen=True)
@@ -370,7 +377,7 @@ class ORFProductAnnotation:
                       reference=self.reference.to_dict(), status=self.status)
         if self.product is None:
             result.update(reason=self.reason, cdna_sequence=self.cdna_sequence,
-                          evidence=_plain(self.evidence))
+                          evidence=plain_json_value(self.evidence))
         else:
             result.update(effect=_effect(self.effect), product=self.product.to_dict())
         return result
@@ -453,7 +460,7 @@ def _unsupported_reference(view):
 
 def _annotate_partial(view, variants, *, germline_variants=(), metadata=None):
     """Calculate local products within known coding bounds, without inventing missing ends."""
-    from .mutant_transcript import _resolve_variant_edit
+    from .mutant_transcript import resolve_variant_edit
 
     reference = view.reference_orf
     if germline_variants:
@@ -466,7 +473,7 @@ def _annotate_partial(view, variants, *, germline_variants=(), metadata=None):
     for variant in variants:
         if getattr(variant, "is_structural", False):
             return _unavailable_annotation(view, variants, "partial_orf_structural_product_unavailable", metadata)
-        resolved = _resolve_variant_edit(variant, view, view.sequence)
+        resolved = resolve_variant_edit(variant, view, view.sequence)
         if resolved is None:
             return _unavailable_annotation(view, variants, "partial_orf_splice_edit_unavailable", metadata)
         edit, _ = resolved
@@ -525,36 +532,67 @@ def _annotate_partial(view, variants, *, germline_variants=(), metadata=None):
         unavailable_operations=_boundary_operations(reference)))
 
 
-def _annotate_orf_variants(variants, record, transcript, *, genome_build,
-                           germline_variants=(), phase_resolver=None,
-                           sequence_provider=None, max_hypotheses=64,
-                           homozygous_germline=(), metadata=None, reference=None,
-                           reference_context=None):
-    """Annotate one known-cis group in a validated upstream frame.
+def annotate_bound_orf_variants(
+        variants, record, transcript, *, genome_build,
+        germline_variants=(), phase_resolver=None,
+        sequence_provider=None, max_hypotheses=64,
+        homozygous_germline=(), metadata=None, reference=None,
+        reference_context=None):
+    """Annotate one known-cis group against a validated reference ORF frame.
 
-    Literal REF mismatches raise. Unavailable intronic sequence and unsupported
-    events remain unresolved. A caller-supplied transcript must have the exact
-    model's spliced path and protein; canonical labels are not replaced.
+    Parameters
+    ----------
+    variants : iterable of Variant
+        Known-cis somatic/query variants.
+    record : ORFRecord or None
+        Optional catalogue record when ``reference`` is not already bound.
+    transcript : Transcript-like
+        Parent reference RNA.
+    genome_build : str
+        Expected reference assembly name.
+    germline_variants : iterable of Variant, default ()
+        Candidate germline variants in the window.
+    phase_resolver : PhaseResolver or None, optional
+        Optional phase-evidence resolver.
+    sequence_provider : callable or None, optional
+        Genomic ``(contig, start, end) -> str`` sequence callback.
+    max_hypotheses : int, default 64
+        Upper bound on enumerated phase/splice hypotheses.
+    homozygous_germline : iterable of Variant, default ()
+        Known homozygous germline variants.
+    metadata : mapping or None, optional
+        Optional catalogue metadata attached to the returned annotation.
+    reference : ReferenceORF or None, optional
+        Pre-bound reference ORF.
+    reference_context : ReferenceContext or None, optional
+        Explicit reference context when binding ``record``.
+
+    Returns
+    -------
+    ORFAnnotation
+        Annotation carrying native ``outcomes``; literal REF mismatches raise,
+        while unavailable intronic sequence and unsupported events remain
+        unresolved.
     """
     variants = tuple(variants)
     if not variants:
         raise ValueError("At least one variant is required")
     if reference is not None and reference_context is not None and reference.context.key != reference_context.key:
         raise ValueError("Bound ORF and explicit reference context disagree")
-    view = _ORFTranscript(_bind(record, transcript, genome_build,
+    view = ORFTranscriptView(bind_orf_reference(record, transcript, genome_build,
                               reference_context=reference_context) if reference is None else reference)
     germline_variants = tuple(germline_variants)
     for variant in (*variants, *germline_variants):
         if variant.reference_name != genome_build:
             raise ValueError("Variant assembly mismatch")
-        if view.contig is not None and _contig(variant.contig, genome_build) != _contig(view.contig, genome_build):
+        if view.contig is not None and orf_contig_name(variant.contig, genome_build) != orf_contig_name(view.contig, genome_build):
             raise ValueError("Variant contig mismatch")
         view.reference_orf.context.validate_genome(variant.genome, include_annotation=False)
     if not view.positions:
         return _unavailable_annotation(view, variants, "orf_genomic_mapping_unavailable", metadata)
     if sequence_provider is None:
-        from .transcript_model import _provider_for_genome
-        sequence_provider = _provider_for_genome(variants[0].genome, transcript)
+        from .transcript_model import provider_for_genome
+        sequence_provider = provider_for_genome(variants[0].genome, transcript)
     provider = _reference_provider(view, sequence_provider)
     try:
         # Validate original genomic REF, including VCF padding anchors. Layout
@@ -696,14 +734,14 @@ def predict_orf_effects(variants, *, catalog=None, transcripts=None, **kwargs):
         context = record.initiation_context
         if context is not None:
             positions += tuple(context.genomic_positions)
-        if not any(_contig(v.contig, build) == _contig(record.contig, build)
+        if not any(orf_contig_name(v.contig, build) == orf_contig_name(record.contig, build)
                    and v.start <= max(positions) + 6 and v.end >= min(positions) - 6
                    for v in variants):
             continue
         try:
             key = record.transcript_id.split(".")[0]
             transcript = genome.transcript_by_id(key) if by_id is None else by_id[key]
-            annotation = _annotate_orf_variants(
+            annotation = annotate_bound_orf_variants(
                 variants, record, transcript, genome_build=build,
                 metadata=catalog.metadata, **kwargs)
         except (KeyError, ValueError) as error:
@@ -733,7 +771,7 @@ def annotate_orf_rna_product(reference, product):
     ``effect`` and ``product`` attributes. Unresolved results have no product
     and carry a ``reason``. Use ``to_dict()`` for JSON export.
     """
-    view = _ORFTranscript(reference)
+    view = ORFTranscriptView(reference)
     record = reference
     product_genome = getattr(product.transcript, "genome", None)
     if product_genome is None:
@@ -750,7 +788,7 @@ def annotate_orf_rna_product(reference, product):
     if reason is not None:
         return ORFProductAnnotation(reference=reference, status="unresolved", reason=reason,
                                     cdna_sequence=sequence, evidence=product.evidence)
-    positions = tuple(o[1] if o is not None and _contig(o[0], reference.genome_build) == _contig(record.contig, reference.genome_build)
+    positions = tuple(o[1] if o is not None and orf_contig_name(o[0], reference.genome_build) == orf_contig_name(record.contig, reference.genome_build)
                       and o[2] == record.strand else None for o in origins)
     starts = [i for i in range(len(positions) - 2)
               if positions[i:i + 3] == tuple(view.start_codon_positions)]
@@ -802,6 +840,6 @@ def annotate_orf_variants(variants, reference, **kwargs):
     modified products. The parent RNA can be annotated protein-coding or
     noncoding. Native peptide detection never establishes mutant translation.
     """
-    return _annotate_orf_variants(variants, reference.record, reference.transcript,
+    return annotate_bound_orf_variants(variants, reference.record, reference.transcript,
                                   genome_build=reference.context.genome_build,
                                   reference=reference, **kwargs)

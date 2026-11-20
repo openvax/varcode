@@ -7,7 +7,7 @@ from pyensembl import cached_release
 
 from varcode import EffectCandidate, StructuralVariant
 from varcode.effects import GeneFusion, StructuralVariantEffect, TranslocationToIntergenic
-from varcode.effects import structural
+from varcode.effects import structural, structural_candidates, structural_fusions
 
 
 @pytest.fixture
@@ -19,8 +19,10 @@ def fusion_case(monkeypatch):
         mate_contig="4", mate_start=2664478, genome=genome)
     # These tests isolate junction/isoform enumeration. Dedicated existing
     # tests cover the splice and cryptic layers added after it.
-    monkeypatch.setattr(structural, "_enumerate_and_attach_cryptics", lambda *args: None)
-    monkeypatch.setattr(structural, "_enumerate_and_attach_splice_outcomes", lambda *args: None)
+    monkeypatch.setattr(
+        structural_candidates, "enumerate_and_attach_cryptics", lambda *args: None)
+    monkeypatch.setattr(
+        structural_candidates, "enumerate_and_attach_splice_outcomes", lambda *args: None)
     return genome, transcript, variant
 
 
@@ -84,7 +86,7 @@ def test_large_isoform_set_is_not_capped_or_merged_by_protein(fusion_case, monke
     genome, transcript, variant = fusion_case
     partner = genome.transcript_by_id("ENST00000637812")
     partners = [_Isoform(partner, "isoform_%03d" % i, partner.sequence) for i in range(257)]
-    monkeypatch.setattr(structural, "_coding_transcripts_at", lambda *args: partners)
+    monkeypatch.setattr(structural_fusions, "coding_transcripts_at", lambda *args: partners)
     candidates = _fusions(variant.effect_on_transcript(transcript))
     assert [c.partner_transcript.id for c in candidates] == [p.id for p in partners]
     assert len({c.mutant_protein_sequence for c in candidates}) == 1
@@ -93,9 +95,10 @@ def test_large_isoform_set_is_not_capped_or_merged_by_protein(fusion_case, monke
 def test_duplicate_junction_and_partner_records_are_not_repeated(fusion_case, monkeypatch):
     genome, transcript, variant = fusion_case
     partner = genome.transcript_by_id("ENST00000637812")
-    monkeypatch.setattr(structural, "_coding_transcripts_at", lambda *args: [partner, partner])
+    monkeypatch.setattr(
+        structural_fusions, "coding_transcripts_at", lambda *args: [partner, partner])
     duplicate = SimpleNamespace(junctions=variant.junctions * 2)
-    effect = structural._fusion_across_junction(duplicate, transcript, None)
+    effect = structural.fusion_across_junction(duplicate, transcript, None)
     assert len(_fusions(effect)) == 1
 
 
@@ -104,7 +107,8 @@ def test_missing_partner_sequence_keeps_an_unresolved_candidate(fusion_case, mon
     genome, transcript, variant = fusion_case
     partner = genome.transcript_by_id("ENST00000637812")
     missing = _Isoform(partner, "missing_sequence", sequence)
-    monkeypatch.setattr(structural, "_coding_transcripts_at", lambda *args: [partner, missing])
+    monkeypatch.setattr(
+        structural_fusions, "coding_transcripts_at", lambda *args: [partner, missing])
     candidates = _fusions(variant.effect_on_transcript(transcript))
     assert len(candidates) == 2
     assert candidates[0].mutant_protein_sequence is not None
@@ -133,7 +137,8 @@ def test_opposite_strand_partner_isoforms_are_all_kept(monkeypatch):
     variant = StructuralVariant(
         "7", 117485000, "BND", alt="N]17:43120000]",
         mate_contig="17", mate_start=43120000, genome=genome)
-    monkeypatch.setattr(structural, "_enumerate_and_attach_cryptics", lambda *args: None)
+    monkeypatch.setattr(
+        structural_candidates, "enumerate_and_attach_cryptics", lambda *args: None)
     effect = variant.effect_on_transcript(transcript)
     expected = {t.id for t in genome.transcripts_at_locus("17", 43120000, 43120000)
                 if t.is_protein_coding and t.strand == "-"}

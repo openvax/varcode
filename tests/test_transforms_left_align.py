@@ -384,8 +384,8 @@ def test_exonic_indel_on_minus_strand_transcript_uses_plus_strand_bases():
             continue
         # Read the + strand sequence of the first exon via the
         # transcript-cDNA helper used by reference_range.
-        from varcode.genome_sequence import _plus_strand_slice
-        plus_seq = _plus_strand_slice(t, exon.start, exon.end)
+        from varcode.genome_sequence import plus_strand_slice
+        plus_seq = plus_strand_slice(t, exon.start, exon.end)
         if not plus_seq:
             continue
         # Scan for a homopolymer run of length >= 3 with a non-matching

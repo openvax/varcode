@@ -3,7 +3,10 @@
 from dataclasses import replace
 
 from ..mutant_transcript import (
-    MutantTranscript, _AssembledAllele, _mutant_cds_start, _resolve_variant_edit,
+    AssembledAllele,
+    MutantTranscript,
+    mutant_cds_start,
+    resolve_variant_edit,
 )
 
 
@@ -29,7 +32,7 @@ def start_loss_details(variant, transcript, model=None):
     if ((model is None or not model.edits) and variant is not None
             and not getattr(variant, "is_structural", False)):
         if reference_sequence is not None:
-            resolved = _resolve_variant_edit(variant, transcript, str(reference_sequence))
+            resolved = resolve_variant_edit(variant, transcript, str(reference_sequence))
             if resolved is not None:
                 edit, _ = resolved
                 edited = (str(reference_sequence)[:edit.cdna_start] + edit.alt_bases
@@ -62,7 +65,7 @@ def start_loss_details(variant, transcript, model=None):
     elif reference_start is None:
         return result
     elif model.reference_segments is not None:
-        if any(isinstance(s.source, _AssembledAllele) for s in model.reference_segments):
+        if any(isinstance(s.source, AssembledAllele) for s in model.reference_segments):
             return result  # External sequence alone does not map the original start.
         starts, offset = [], 0
         for segment in model.reference_segments:
@@ -77,7 +80,7 @@ def start_loss_details(variant, transcript, model=None):
     elif model.edits:
         removed = any(e.cdna_start <= reference_start < e.cdna_end and e.length_delta
                       for e in model.edits)
-        start = None if removed else _mutant_cds_start(transcript, model.edits)
+        start = None if removed else mutant_cds_start(transcript, model.edits)
     else:
         return result  # An unmapped assembly cannot acquire a guessed start.
     if start is None:

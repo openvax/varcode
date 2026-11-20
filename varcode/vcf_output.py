@@ -10,7 +10,7 @@ from numbers import Integral, Real
 from math import comb
 import sys
 
-from .contigs import _RCRS_LENGTH
+from .contigs import RCRS_LENGTH
 from .genotype import parse_gt_string
 from .vcf_parsing import FieldDef, RESERVED_FORMAT, RESERVED_INFO
 
@@ -178,7 +178,7 @@ def variants_to_vcf(variants, variant_to_metadata, out=None, header=None):
         lines.append("##reference=%s" % next(iter(references)))
     for contig in sorted({str(v.original_contig) for v in variants if getattr(v, "chrm_is_rcrs", False)
                           and str(v.original_contig).upper() in ("CHRM", "M")}):
-        lines.append("##contig=<ID=%s,length=%d>" % (contig, _RCRS_LENGTH))
+        lines.append("##contig=<ID=%s,length=%d>" % (contig, RCRS_LENGTH))
     for kind, fields in declarations.items():
         for name, field in fields.items():
             number = {None: ".", -1: "A", -2: "G", -3: "R"}.get(field.number, field.number)

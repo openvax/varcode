@@ -5,7 +5,7 @@ from pyensembl import cached_release
 
 from varcode import StructuralVariant, parse_symbolic_alt
 from varcode.effects import TranslocationToIntergenic
-from varcode.effects.structural import _build_translocation_mutant_transcript
+from varcode.effects.structural import build_translocation_mutant_transcript
 
 
 @pytest.fixture(params=["ENST00000003084", "ENST00000357654"])
@@ -94,7 +94,7 @@ def test_unrelated_transcript_does_not_supply_a_segment(transcript, location):
                 "wrong_contig": transcript.start + 5}[location]
     contig = "1" if location == "wrong_contig" else transcript.contig
     sv = StructuralVariant(contig, position, "BND", alt="N.", genome=transcript.genome)
-    assert _build_translocation_mutant_transcript(sv, transcript) is None
+    assert build_translocation_mutant_transcript(sv, transcript) is None
 
 
 @pytest.mark.parametrize("alt", ["N]22:15500000]", "]22:15500000]N", "N.", ".N", "<BND>"])

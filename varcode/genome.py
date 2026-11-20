@@ -31,14 +31,14 @@ from typing import Any, Optional
 
 from serializable import Serializable
 
-from .contigs import ContigResolver, _is_t2t_chm13
+from .contigs import ContigResolver, is_t2t_chm13
 
 # Module-level imports of the lookup helpers. Functions in this file
 # call into them on hot paths; per-call imports would add measurable
 # overhead in tight loops (e.g. left-alignment shifts in #369).
 from .genome_sequence import (
-    _fasta_range,
-    _read_transcript_base,
+    fasta_range,
+    read_transcript_base,
     reference_base as _reference_base_lookup,
     reference_range as _reference_range_lookup,
 )
@@ -304,7 +304,7 @@ class Genome(Serializable):
         fasta = self.fasta
         if fasta is None:
             return ""
-        return _fasta_range(fasta, self._fasta_contig(contig), start, end)
+        return fasta_range(fasta, self._fasta_contig(contig), start, end)
 
     def _fasta_contig(self, contig):
         """The attached FASTA's own name for annotation ``contig`` (#721).
@@ -466,7 +466,7 @@ def _fasta_spelling(
     # both 16,569 bp, with positions 576 to 577 bp apart (#722), so a
     # respelling never chooses between them; only a file name can
     # (:func:`_pinned_spellings`).
-    if resolution.normalized_name == "MT" and _is_t2t_chm13(resolver.reference_name):
+    if resolution.normalized_name == "MT" and is_t2t_chm13(resolver.reference_name):
         return contig
     return resolution.resolved_name
 
@@ -571,8 +571,8 @@ def _verify_fasta_against_transcripts(genome: "Genome") -> None:
         try:
             exon = t.exons[0]
             position = exon.start + 1
-            transcript_base = _read_transcript_base(t, position)
-            fasta_base = _fasta_range(
+            transcript_base = read_transcript_base(t, position)
+            fasta_base = fasta_range(
                 genome.fasta, genome._fasta_contig(t.contig), position, position)
         except Exception:
             continue

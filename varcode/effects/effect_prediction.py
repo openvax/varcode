@@ -47,7 +47,19 @@ from .effect_classes import (
 logger = logging.getLogger(__name__)
 
 
-def _validate_transcript_filter(transcript_filter):
+def validate_transcript_filter(transcript_filter):
+    """Validate that ``transcript_filter`` is callable or ``None``.
+
+    Parameters
+    ----------
+    transcript_filter : callable or None
+        Optional transcript selection predicate.
+
+    Raises
+    ------
+    TypeError
+        If ``transcript_filter`` is neither ``None`` nor callable.
+    """
     if transcript_filter is not None and not callable(transcript_filter):
         raise TypeError("transcript_filter must be callable or None")
 
@@ -127,7 +139,7 @@ def predict_variant_effects(
         or completeness rules. Rejected overlaps do not become intragenic
         or intergenic effects. Predicate errors follow ``raise_on_error``.
     """
-    _validate_transcript_filter(transcript_filter)
+    validate_transcript_filter(transcript_filter)
     # Lazy import — varcode.annotators depends on varcode.effects at
     # load time, so we defer to break the cycle.
     from ..annotators.registry import resolve_annotator
@@ -246,11 +258,21 @@ def predict_variant_effect_on_transcript(
         return enumerate_splice_outcomes(raw_effect)
 
 
-def _predict_variant_effect_on_transcript_raw(variant, transcript):
-        """The raw classifier — returns the unwrapped splice-signal
-        class (``ExonicSpliceSite`` / ``SpliceDonor`` etc.) for
-        legacy splice prediction. The public entry point wraps the
-        result in a ``SpliceOutcomeSet``.
+def predict_variant_effect_on_transcript_raw(variant, transcript):
+        """Return the unwrapped per-transcript consequence for ``variant``.
+
+        Parameters
+        ----------
+        variant : Variant
+            Point variant or indel.
+        transcript : pyensembl.Transcript
+            Target reference transcript.
+
+        Returns
+        -------
+        MutationEffect
+            Raw consequence (e.g. ``ExonicSpliceSite`` or ``SpliceDonor`` prior
+            to ``SpliceOutcomeSet`` wrapping).
         """
 
         if transcript.__class__ is not Transcript:

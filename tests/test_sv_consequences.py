@@ -8,7 +8,7 @@ from varcode.effects import (
     Deletion, FivePrimeUTR, FrameShift, Insertion, StartLoss,
     StructuralVariantEffect, ThreePrimeUTR, Unresolved, effect_priority,
 )
-from varcode.effects import structural
+from varcode.effects import structural_candidates, structural_fusions
 
 # Legacy wrapper contract; the default composition path has separate regression tests.
 pytestmark = pytest.mark.usefixtures("legacy_annotator")
@@ -21,9 +21,11 @@ def cftr():
 
 @pytest.fixture
 def local_model(monkeypatch):
-    monkeypatch.setattr(structural, "_fusion_partners", lambda *args: ())
-    monkeypatch.setattr(structural, "_enumerate_and_attach_cryptics", lambda *args: None)
-    monkeypatch.setattr(structural, "_enumerate_and_attach_splice_outcomes", lambda *args: None)
+    monkeypatch.setattr(structural_fusions, "fusion_partners", lambda *args: ())
+    monkeypatch.setattr(
+        structural_candidates, "enumerate_and_attach_cryptics", lambda *args: None)
+    monkeypatch.setattr(
+        structural_candidates, "enumerate_and_attach_splice_outcomes", lambda *args: None)
 
 
 def _annotate(tx, kind, start, end, **kwargs):

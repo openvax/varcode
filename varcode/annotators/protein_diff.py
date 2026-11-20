@@ -53,7 +53,7 @@ from ..effects.effect_classes import (
     NoncodingTranscript,
     ThreePrimeUTR,
 )
-from ..mutant_transcript import _mutant_cds_start, apply_variant_to_transcript
+from ..mutant_transcript import apply_variant_to_transcript, mutant_cds_start as map_mutant_cds_start
 from ..version import __version__ as _varcode_version
 from .fast import FastEffectAnnotator
 
@@ -164,9 +164,9 @@ class ProteinDiffEffectAnnotator:
         cds_start = min(transcript.start_codon_spliced_offsets)
         ref_first_codon = str(
             transcript.sequence)[cds_start:cds_start + 3].upper()
-        mutant_cds_start = _mutant_cds_start(transcript, mt.edits)
+        cds_offset = map_mutant_cds_start(transcript, mt.edits)
         mut_first_codon = mt.cdna_sequence[
-            mutant_cds_start:mutant_cds_start + 3].upper()
+            cds_offset:cds_offset + 3].upper()
         ref_protein = initiator_as_met(
             str(transcript.protein_sequence), ref_first_codon, codon_table)
         mut_protein = mt.mutant_protein_sequence

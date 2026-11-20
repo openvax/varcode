@@ -7,8 +7,9 @@ from pyensembl import cached_release
 
 from varcode import StructuralVariant, parse_symbolic_alt, load_vcf
 from varcode.effects.structural import (
-    _build_deletion_mutant_transcript, _build_duplication_mutant_transcript,
-    _build_inversion_mutant_transcript,
+    build_deletion_mutant_transcript,
+    build_duplication_mutant_transcript,
+    build_inversion_mutant_transcript,
 )
 from varcode.nucleotides import reverse_complement
 
@@ -30,9 +31,9 @@ def test_no_nonempty_span_cannot_delete_or_copy_the_anchor(kind, info):
 
 @pytest.mark.parametrize("reverse", [False, True])
 @pytest.mark.parametrize("kind,builder", [
-    ("DEL", _build_deletion_mutant_transcript),
-    ("DUP", _build_duplication_mutant_transcript),
-    ("INV", _build_inversion_mutant_transcript),
+    ("DEL", build_deletion_mutant_transcript),
+    ("DUP", build_duplication_mutant_transcript),
+    ("INV", build_inversion_mutant_transcript),
 ])
 def test_exact_mutant_cdna_on_both_strands(kind, builder, reverse):
     sequence = "ACGTTGCAAGCTTAGGCTAC"
