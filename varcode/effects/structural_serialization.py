@@ -166,7 +166,6 @@ def _registry_bundle() -> tuple[
     from ..rna_evidence import RNAEvidence
     from ..splice_outcomes import SpliceCandidateRNAEvidence, SpliceOutcomeSet  # noqa: F401
     from ..structural_variant import Breakend, StructuralVariant
-    from ..uorf import ORFTranscript, UORFAnnotation
     from ..variant import Variant
     from ..variant_collection import VariantCollection
     from .effect_classes import MutationEffect
@@ -209,8 +208,6 @@ def _registry_bundle() -> tuple[
         ORFProduct,
         ORFProductAnnotation,
         ORFTranscriptView,
-        UORFAnnotation,
-        ORFTranscript,
         ReferenceGenomeSnapshot,
         TranscriptFeatureSnapshot,
         ReferenceTranscriptSnapshot,
@@ -250,6 +247,8 @@ def _registry_bundle() -> tuple[
         ("varcode.mutant_transcript", "_AssembledAllele"): AssembledAllele,
         ("varcode.effects.structural", "_AssembledAllele"): AssembledAllele,
         ("varcode.orf", "_ORFTranscript"): ORFTranscriptView,
+        ("varcode.uorf", "UORFAnnotation"): ORFAnnotation,
+        ("varcode.uorf", "ORFTranscript"): ORFTranscriptView,
         ("varcode.orf_serialization", "_ReferenceGenome"): ReferenceGenomeSnapshot,
         ("varcode.orf_serialization", "_Feature"): TranscriptFeatureSnapshot,
         ("varcode.orf_serialization", "_ReferenceTranscript"): ReferenceTranscriptSnapshot,

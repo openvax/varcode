@@ -69,7 +69,6 @@ error defaults, compatibility names, and current typing coverage.
 - <a id="varcodeenumerate_phase_hypotheses"></a><a id="varcode.enumerate_phase_hypotheses"></a>[enumerate_phase_hypotheses](api_phasing.md#varcode.enumerate_phase_hypotheses)
 - <a id="varcode.detect_germline_overlap"></a>[detect_germline_overlap](api_phasing.md#varcode.detect_germline_overlap)
 - <a id="varcode.GermlineAlleleOverlap"></a>[GermlineAlleleOverlap](api_phasing.md#varcode.GermlineAlleleOverlap)
-- <a id="varcodedetect_loh"></a><a id="varcode.detect_loh"></a>[detect_loh](api_phasing.md#varcode.detect_loh)
 - <a id="varcodedefault_germline_window"></a><a id="varcode.default_germline_window"></a>[default_germline_window](api_phasing.md#varcode.default_germline_window)
 
 ## RNA and transcripts

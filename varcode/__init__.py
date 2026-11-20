@@ -30,7 +30,6 @@ if TYPE_CHECKING:
         EffectAnnotator as EffectAnnotator,
         FastEffectAnnotator as FastEffectAnnotator,
         ProteinDiffEffectAnnotator as ProteinDiffEffectAnnotator,
-        RealizedEffectAnnotator as RealizedEffectAnnotator,
         TranscriptModelEffectAnnotator as TranscriptModelEffectAnnotator,
         get_annotator as get_annotator,
         get_default_annotator as get_default_annotator,
@@ -121,7 +120,6 @@ if TYPE_CHECKING:
         apply_germline_to_transcript as apply_germline_to_transcript,
         default_germline_window as default_germline_window,
         detect_germline_overlap as detect_germline_overlap,
-        detect_loh as detect_loh,
         enumerate_phase_hypotheses as enumerate_phase_hypotheses,
         partition_germline_by_phase as partition_germline_by_phase,
         predict_germline_aware_effect as predict_germline_aware_effect,
@@ -171,7 +169,6 @@ if TYPE_CHECKING:
         GeneLike as GeneLike,
         TranscriptLike as TranscriptLike,
     )
-    from .realized_effects import predict_realized_effect as predict_realized_effect
     from .reference_completion import (
         reference_completion_hypotheses as reference_completion_hypotheses,
     )
@@ -208,14 +205,6 @@ if TYPE_CHECKING:
     from .transforms import (
         combine_cis_snvs as combine_cis_snvs,
     )
-    from .uorf import (
-        ORFTranscript as ORFTranscript,
-        UORFAnnotation as UORFAnnotation,
-        annotate_uorf_product as annotate_uorf_product,
-        annotate_uorf_variants as annotate_uorf_variants,
-        load_uorf_catalog as load_uorf_catalog,
-        predict_uorf_effects as predict_uorf_effects,
-    )
     from .variant import Variant as Variant
     from .variant_collection import (
         SpanningDeletionRecord as SpanningDeletionRecord,
@@ -223,7 +212,6 @@ if TYPE_CHECKING:
     )
     from .vcf import (
         load_vcf as load_vcf,
-        load_vcf_fast as load_vcf_fast,
     )
 
 
@@ -232,7 +220,6 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "EffectAnnotator": (".annotators", "EffectAnnotator"),
     "FastEffectAnnotator": (".annotators", "FastEffectAnnotator"),
     "ProteinDiffEffectAnnotator": (".annotators", "ProteinDiffEffectAnnotator"),
-    "RealizedEffectAnnotator": (".annotators", "RealizedEffectAnnotator"),
     "TranscriptModelEffectAnnotator": (".annotators", "TranscriptModelEffectAnnotator"),
     "get_annotator": (".annotators", "get_annotator"),
     "get_default_annotator": (".annotators", "get_default_annotator"),
@@ -262,7 +249,6 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "PhasePartition": (".germline", "PhasePartition"),
     "apply_germline_to_transcript": (".germline", "apply_germline_to_transcript"),
     "default_germline_window": (".germline", "default_germline_window"),
-    "detect_loh": (".germline", "detect_loh"),
     "detect_germline_overlap": (".germline", "detect_germline_overlap"),
     "enumerate_phase_hypotheses": (".germline", "enumerate_phase_hypotheses"),
     "partition_germline_by_phase": (".germline", "partition_germline_by_phase"),
@@ -307,7 +293,6 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "make_rna_outcome": (".rna_evidence", "make_rna_outcome"),
     "load_exacto_fusions": (".exacto", "load_exacto_fusions"),
     "reference_completion_hypotheses": (".reference_completion", "reference_completion_hypotheses"),
-    "predict_realized_effect": (".realized_effects", "predict_realized_effect"),
     "CrypticSplicePolicy": (".transcript_layout", "CrypticSplicePolicy"),
     "predict_transcript_model_effect": (".transcript_model", "predict_transcript_model_effect"),
     # splice outcomes & splice effect classes
@@ -336,7 +321,6 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "load_maf": (".maf", "load_maf"),
     "load_maf_dataframe": (".maf", "load_maf_dataframe"),
     "load_vcf": (".vcf", "load_vcf"),
-    "load_vcf_fast": (".vcf", "load_vcf_fast"),
     # effects & serialization
     "effect_priority": (".effects", "effect_priority"),
     "classification_priority": (".effects", "classification_priority"),
@@ -366,13 +350,7 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "load_vcf_samples": (".sample_identity", "load_vcf_samples"),
     "compare_samples": (".sample_identity", "compare_samples"),
     "check_sample_identity": (".sample_identity", "check_sample_identity"),
-    # ORF / uORF / discovery
-    "ORFTranscript": (".uorf", "ORFTranscript"),
-    "UORFAnnotation": (".uorf", "UORFAnnotation"),
-    "annotate_uorf_variants": (".uorf", "annotate_uorf_variants"),
-    "annotate_uorf_product": (".uorf", "annotate_uorf_product"),
-    "predict_uorf_effects": (".uorf", "predict_uorf_effects"),
-    "load_uorf_catalog": (".uorf", "load_uorf_catalog"),
+    # ORF & discovery
     "ORFAnnotation": (".orf", "ORFAnnotation"),
     "ORFOutcome": (".orf", "ORFOutcome"),
     "ORFProduct": (".orf", "ORFProduct"),
@@ -411,7 +389,6 @@ _LAZY_SUBMODULES: frozenset[str] = frozenset({
     "phasing",
     "proteome",
     "protocols",
-    "realized_effects",
     "reference",
     "reference_completion",
     "rna_evidence",
@@ -422,7 +399,6 @@ _LAZY_SUBMODULES: frozenset[str] = frozenset({
     "sv_allele_parser",
     "transcript_model",
     "transforms",
-    "uorf",
     "variant",
     "variant_collection",
     "vcf",
@@ -433,8 +409,6 @@ __all__ = [
     "ORFAnnotation", "ORFOutcome", "ORFProduct", "ORFProductAnnotation",
     "annotate_orf_variants", "annotate_orf_rna_product", "annotate_orf_product",
     "predict_orf_effects", "load_orf_catalog",
-    "ORFTranscript", "UORFAnnotation", "annotate_uorf_variants",
-    "annotate_uorf_product", "predict_uorf_effects", "load_uorf_catalog",
     "SampleCheckConfig", "SampleSpec", "SampleFingerprint",
     "load_vcf_samples", "compare_samples", "check_sample_identity",
     "__version__",
@@ -486,7 +460,6 @@ __all__ = [
     "EffectCandidate",
     "candidates_from_effects",
     "CrypticSplicePolicy",
-    "predict_realized_effect",
     "predict_transcript_model_effect",
 
     # Structural variants (openvax/varcode#252 / #264)
@@ -523,7 +496,6 @@ __all__ = [
     "EffectAnnotator",
     "FastEffectAnnotator",
     "ProteinDiffEffectAnnotator",
-    "RealizedEffectAnnotator",
     "TranscriptModelEffectAnnotator",
     "get_annotator",
     "get_default_annotator",
@@ -565,7 +537,6 @@ __all__ = [
     "PhasePartition",
     "apply_germline_to_transcript",
     "default_germline_window",
-    "detect_loh",
     "detect_germline_overlap",
     "GermlineAlleleOverlap",
     "enumerate_phase_hypotheses",
@@ -587,7 +558,6 @@ __all__ = [
     "load_maf",
     "load_maf_dataframe",
     "load_vcf",
-    "load_vcf_fast",
 
     # created-ORF discovery
     "DiscoveredORF",

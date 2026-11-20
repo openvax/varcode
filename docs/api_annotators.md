@@ -39,18 +39,3 @@ See [supported inputs and results](experimental_annotators.md) before using it.
 ::: varcode.TranscriptModelEffectAnnotator
 
 ::: varcode.predict_transcript_model_effect
-
-### Deprecated compatibility names
-
-`RealizedEffectAnnotator`, `predict_realized_effect`, and the `"realized"`
-registry name emit `DeprecationWarning` and will be removed in 12.0; use the
-`transcript_model` names above.
-
-::: varcode.RealizedEffectAnnotator
-    options:
-      members: false
-      skip_local_inventory: true
-
-::: varcode.predict_realized_effect
-    options:
-      skip_local_inventory: true

@@ -13,7 +13,6 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from warnings import warn
 
 from serializable import Serializable
 
@@ -85,7 +84,6 @@ class Variant(Serializable):
             ref,
             alt,
             genome=None,
-            ensembl=None,
             allow_extended_nucleotides=False,
             normalize_contig_names=True,
             convert_ucsc_contig_names=None,
@@ -179,11 +177,6 @@ class Variant(Serializable):
         self.normalize_contig_names = normalize_contig_names
         self.allow_extended_nucleotides = allow_extended_nucleotides
 
-        if ensembl is not None:
-            warn("Variant(ensembl=...) is deprecated and will be removed in varcode 12.0; pass genome= instead",
-                 DeprecationWarning, stacklevel=2)
-            if genome is None:
-                genome = ensembl
         if genome is None:
             genome = "GRCh38"
 
@@ -282,21 +275,6 @@ class Variant(Serializable):
             # an inclusive selection of reference nucleotides
             self.start = self.original_start + len(prefix)
             self.end = self.start + len(trimmed_ref) - 1
-
-
-    @property
-    def ensembl(self):
-        """
-        Deprecated alias for :attr:`genome`. Warns with ``DeprecationWarning``
-        and will be removed in varcode 12.0.
-
-        Returns
-        -------
-        pyensembl.Genome
-        """
-        warn("Variant.ensembl is deprecated and will be removed in varcode 12.0; use Variant.genome",
-             DeprecationWarning, stacklevel=2)
-        return self.genome
 
     def __str__(self):
         return "Variant(contig='%s', start=%d, ref='%s', alt='%s', reference_name='%s')" % (

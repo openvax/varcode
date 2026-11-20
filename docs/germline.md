@@ -182,9 +182,8 @@ Here `effects` is the collection annotated with germline context above.
 The check requires `germline=`; annotation without that context cannot attach
 the flag.
 
-Use `detect_germline_overlap` for an allele-match query. The deprecated
-`detect_loh` now returns `None` (not assessed) and warns, rather than making a
-zygosity claim.
+Use `detect_germline_overlap` for an allele-match query (`detect_loh` was
+removed in 12.0 because allele overlap alone cannot establish LOH).
 
 The default transcript model composes known-cis groups that mix inherited
 and somatic alleles, applying each inherited allele once; see

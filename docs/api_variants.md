@@ -274,8 +274,6 @@ intervals remain accepted. No source mapping is modified in place.
 
 ::: varcode.vcf.load_vcf
 
-::: varcode.load_vcf_fast
-
 ::: varcode.load_maf
 
 ::: varcode.load_maf_dataframe
