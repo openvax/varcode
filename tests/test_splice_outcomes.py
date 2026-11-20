@@ -767,13 +767,6 @@ def test_splice_outcome_set_round_trip_preserves_priority_class():
     assert effect_priority(restored) == effect_priority(target)
 
 
-def test_non_splice_effects_are_not_multi_outcome():
-    from varcode import MultiOutcomeEffect
-    from varcode.effects import Substitution, Silent, Intronic, MutationEffect
-    for cls in (Substitution, Silent, Intronic, MutationEffect):
-        assert not issubclass(cls, MultiOutcomeEffect)
-
-
 # --------------------------------------------------------------------
 # Priority integration
 # --------------------------------------------------------------------

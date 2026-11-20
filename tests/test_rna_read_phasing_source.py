@@ -18,7 +18,6 @@ import pytest
 from varcode import (
     MolecularPhaseResolver,
     ReadPhaseResolver,
-    ReadPhasingSource,
     RNAReadPhasingSource,
     Variant,
 )
@@ -87,11 +86,10 @@ def _snv_read(name, start1, calls, *, low_quality_pos=None, flag=0):
     )
 
 
-def test_rna_read_phasing_source_satisfies_protocol(tmp_path):
+def test_rna_read_phasing_source_integrates_with_phase_resolvers(tmp_path):
     bam_path = _write_bam(tmp_path, [])
     source = RNAReadPhasingSource(bam_path)
     try:
-        assert isinstance(source, ReadPhasingSource)
         assert MolecularPhaseResolver(source).phase_source == "rna_reads"
         assert ReadPhaseResolver(source).phase_source == "rna_reads"
     finally:

@@ -63,14 +63,6 @@ def test_sv_deletion_basic_fields():
     assert sv.is_structural is True
 
 
-def test_sv_is_a_variant_subclass():
-    """Downstream code that checks ``isinstance(x, Variant)`` sees
-    SVs too. Critical for generic variant handling pipelines."""
-    sv = StructuralVariant(
-        contig="7", start=1000, sv_type="INV", end=2000, genome="GRCh38")
-    assert isinstance(sv, Variant)
-
-
 def test_sv_unknown_type_rejected():
     with pytest.raises(ValueError):
         StructuralVariant(

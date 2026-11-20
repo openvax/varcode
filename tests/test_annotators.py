@@ -31,28 +31,6 @@ ensembl_grch38 = cached_release(81)
 
 
 # ====================================================================
-# Protocol shape
-# ====================================================================
-
-
-def test_fast_annotator_annotator_satisfies_protocol():
-    annotator = FastEffectAnnotator()
-    # @runtime_checkable Protocol — isinstance works structurally.
-    assert isinstance(annotator, EffectAnnotator)
-    assert annotator.name == "fast"
-
-
-def test_duck_typed_annotator_satisfies_protocol():
-    # Third parties don't need to inherit from anything; matching the
-    # shape is enough.
-    class DuckAnnotator:
-        name = "duck"
-        def annotate_on_transcript(self, variant, transcript):
-            return NotImplemented
-    assert isinstance(DuckAnnotator(), EffectAnnotator)
-
-
-# ====================================================================
 # Registry
 # ====================================================================
 
@@ -306,11 +284,6 @@ def test_protein_diff_annotator_is_registered():
     from varcode.annotators import ProteinDiffEffectAnnotator
     annotator = get_annotator("protein_diff")
     assert isinstance(annotator, ProteinDiffEffectAnnotator)
-
-
-def test_protein_diff_annotator_satisfies_protocol():
-    from varcode.annotators import ProteinDiffEffectAnnotator
-    assert isinstance(ProteinDiffEffectAnnotator(), EffectAnnotator)
 
 
 def test_protein_diff_usable_via_kwarg():

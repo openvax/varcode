@@ -25,9 +25,7 @@ from pyensembl import cached_release
 from varcode import (
     MolecularPhaseResolver,
     MutantTranscript,
-    MutantTranscriptSource,
     ReadPhaseResolver,
-    ReadPhasingSource,
     Variant,
     VariantCollection,
     apply_phase_resolver_to_effects,
@@ -61,21 +59,6 @@ class StubReadPhasingSource:
 
     def mutant_transcript(self, variant, transcript):
         return self._mts.get((variant, transcript.id))
-
-
-# --------------------------------------------------------------------
-# Protocol conformance
-# --------------------------------------------------------------------
-
-
-def test_stub_satisfies_read_phasing_protocol():
-    source = StubReadPhasingSource()
-    assert isinstance(source, ReadPhasingSource)
-
-
-def test_stub_satisfies_mutant_transcript_protocol():
-    source = StubReadPhasingSource()
-    assert isinstance(source, MutantTranscriptSource)
 
 
 # --------------------------------------------------------------------

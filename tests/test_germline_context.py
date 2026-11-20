@@ -180,7 +180,6 @@ class TestWindowLookup:
         ctx = self._ctx([v])
         # First call builds the index; cache attribute appears.
         ctx.variants_in_window("1", 50, 150)
-        assert hasattr(ctx, "_index_cache")
         cached = ctx._index_cache
         # Second call returns the same index dict (no rebuild).
         ctx.variants_in_window("1", 50, 150)
