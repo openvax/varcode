@@ -66,6 +66,7 @@ arg_parser = make_variants_parser(
     prog="varcode effects",
     description="Annotate variants with overlapping gene names and predicted coding effects",
     epilog="Other subcommands: varcode genes, varcode check-samples (see `varcode --help`)",
+    add_version=True,
 )
 add_effects_args(arg_parser)
 

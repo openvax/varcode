@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import io
 import os
 from pathlib import Path
@@ -13,6 +14,8 @@ import pytest
 
 from varcode.cli import effects_script, genes_script, main as cli_main
 from varcode.cli.help import HelpArgumentParser, color_enabled, style_help, style_table_header
+from varcode.cli.variant_args import make_variants_parser
+from varcode.version import __version__
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HEAVY_MODULES = ("pandas", "numpy", "pyarrow", "pyensembl", "orfdata", "pysam")
@@ -198,3 +201,39 @@ def test_effects_and_genes_stdout_piped_csv_and_unified_columns(tmp_path, capsys
     )
     assert tuple(gene_df.iloc[0][["contig", "start", "ref", "alt"]]) == ("17", 7577548, "", "A")
     assert "TP53" in gene_df.iloc[0]["gene_name"]
+
+
+def test_make_variants_parser_omits_version_by_default_for_downstream_clis(capsys):
+    # Regression for #759: downstream CLIs (isovar/vaxrank) pass parents defining
+    # their own --version or add --version directly on the returned parser.
+    default_parser = make_variants_parser(prog="downstream")
+    assert "--version" not in default_parser._option_string_actions
+    with pytest.raises(SystemExit) as exc:
+        default_parser.parse_args(["--version"])
+    assert exc.value.code == 2
+    capsys.readouterr()
+
+    # Inheriting --version from a parent parser must not raise ArgumentError and
+    # must preserve the downstream CLI's version string.
+    parent = argparse.ArgumentParser(add_help=False)
+    parent.add_argument("--version", action="version", version="isovar 1.2.3")
+    inherited = make_variants_parser(prog="isovar", parents=[parent])
+    with pytest.raises(SystemExit) as exc:
+        inherited.parse_args(["--version"])
+    assert exc.value.code == 0
+    assert capsys.readouterr().out.strip() == "isovar 1.2.3"
+
+    # Adding --version after construction must also succeed cleanly.
+    downstream = make_variants_parser(prog="vaxrank")
+    downstream.add_argument("--version", action="version", version="vaxrank 2.3.4")
+    with pytest.raises(SystemExit) as exc:
+        downstream.parse_args(["--version"])
+    assert exc.value.code == 0
+    assert capsys.readouterr().out.strip() == "vaxrank 2.3.4"
+
+    # Explicit opt-in registers varcode's own --version (used by effects/genes CLIs).
+    varcode_parser = make_variants_parser(prog="varcode effects", add_version=True)
+    with pytest.raises(SystemExit) as exc:
+        varcode_parser.parse_args(["--version"])
+    assert exc.value.code == 0
+    assert capsys.readouterr().out.strip() == f"varcode {__version__}"
