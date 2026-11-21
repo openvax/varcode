@@ -1,5 +1,35 @@
 # Change Log
 
+## v11.21.0
+
+- Complete typed collection traversal, structural transcript/gene protocols, and
+  effect-model typing contracts (#653):
+  - Add structural `GeneLike` and `TranscriptLike` protocols in
+    `varcode.protocols` (exported at the package root and documented in
+    `docs/api_effects.md`) covering PyEnsembl objects, `ORFTranscriptView`,
+    offline archive snapshots, and custom RNA transcript adapters without
+    narrowing to one concrete base class.
+  - Complete subclass-preserving (`Self`) and element-typed annotations across
+    `VariantCollection` (`union`, `intersection`, `difference`, `groupby_gene*`,
+    `gene_counts`, expression filters, genotype/sample filters, `from_csv`,
+    `to_dataframe`) and `EffectCollection` (`groupby_*`, `gene_counts`,
+    expression/priority filters, `top_priority_effect_per_*`,
+    `effect_expression`, `top_expression_effect`, `orf_annotations`,
+    `to_dataframe`, `from_csv`), plus `Variant.transcripts`/`genes`/
+    `effect_on_transcript`.
+  - Reconcile `MutationEffect` and subclass property overrides
+    (`short_description`, `gene`, `transcript`, `reference_transcript`,
+    `modifies_coding_sequence`, `modifies_protein_sequence`,
+    `mutant_protein_sequence`, `aa_mutation_start_offset`,
+    `aa_mutation_end_offset`, `mutant_transcript`, `MultiOutcomeEffect.candidates`)
+    while preserving read-only `NormalSplicing` delegation and JSON archiving of
+    explicitly assigned change flags; add `varcode/protocols.py`,
+    `varcode/effects/effect_classes.py`, and `varcode/transforms/__init__.py`
+    to `[tool.mypy]` (19 checked source files, 0 issues).
+  - Expand `tests/typing/api_inputs.py` with end-to-end typed workflow checks
+    and negative `# type: ignore` assertions, plus runtime behavioral tests in
+    `tests/test_typed_collections_and_protocols.py`.
+
 ## v11.20.0
 
 - Add provenance-preserving `combine_cis_snvs` collection transform (#368):

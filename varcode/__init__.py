@@ -167,6 +167,10 @@ if TYPE_CHECKING:
         query_in_cis as query_in_cis,
     )
     from .proteome import to_proteome as to_proteome
+    from .protocols import (
+        GeneLike as GeneLike,
+        TranscriptLike as TranscriptLike,
+    )
     from .realized_effects import predict_realized_effect as predict_realized_effect
     from .reference_completion import (
         reference_completion_hypotheses as reference_completion_hypotheses,
@@ -352,8 +356,10 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "HypothesisLimit": (".effects", "HypothesisLimit"),
     "Unresolved": (".effects", "Unresolved"),
     "GermlineAlleleOverlap": (".effects", "GermlineAlleleOverlap"),
-    # proteome & sample identity
+    # proteome & sample identity & protocols
     "to_proteome": (".proteome", "to_proteome"),
+    "GeneLike": (".protocols", "GeneLike"),
+    "TranscriptLike": (".protocols", "TranscriptLike"),
     "SampleCheckConfig": (".sample_identity", "SampleCheckConfig"),
     "SampleSpec": (".sample_identity", "SampleSpec"),
     "SampleFingerprint": (".sample_identity", "SampleFingerprint"),
@@ -404,6 +410,7 @@ _LAZY_SUBMODULES: frozenset[str] = frozenset({
     "orf_discovery",
     "phasing",
     "proteome",
+    "protocols",
     "realized_effects",
     "reference",
     "reference_completion",
@@ -438,7 +445,9 @@ __all__ = [
     # basic classes
     "Variant",
     "EffectCollection",
+    "GeneLike",
     "SpanningDeletionRecord",
+    "TranscriptLike",
     "VariantCollection",
     "combine_cis_snvs",
 

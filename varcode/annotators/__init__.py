@@ -21,11 +21,9 @@ capability list.
 from __future__ import annotations
 
 from types import NotImplementedType
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
-    from pyensembl import Transcript
-
     from ..effects.effect_classes import MutationEffect
     from ..variant import Variant
 
@@ -84,7 +82,7 @@ class EffectAnnotator(Protocol):
     name: str
 
     def annotate_on_transcript(
-            self, variant: Variant, transcript: Transcript,
+            self, variant: Variant, transcript: Any,
     ) -> MutationEffect | NotImplementedType:
         """Predict a transcript consequence or explicitly decline the input.
 

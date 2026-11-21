@@ -18,10 +18,9 @@ from warnings import warn
 from serializable import Serializable
 
 if TYPE_CHECKING:
-    from pyensembl import Transcript
-
     from .annotators import EffectAnnotator
     from .effects import EffectCollection, MutationEffect
+    from .protocols import GeneLike, TranscriptLike
 
 from . import circular_origin
 from .contigs import (
@@ -467,7 +466,7 @@ class Variant(Serializable):
 
 
     @property
-    def transcripts(self):
+    def transcripts(self) -> list[TranscriptLike]:
         """
         Return Transcript objects for all transcripts which overlap this
         variant. A transcript joined across a circular origin does not
@@ -480,7 +479,7 @@ class Variant(Serializable):
         return self._transcripts
 
     @property
-    def coding_transcripts(self):
+    def coding_transcripts(self) -> list[TranscriptLike]:
         """
         Protein coding transcripts
         """
@@ -491,15 +490,15 @@ class Variant(Serializable):
         ]
 
     @property
-    def transcript_ids(self):
+    def transcript_ids(self) -> list[str]:
         return [transcript.id for transcript in self.transcripts]
 
     @property
-    def transcript_names(self):
+    def transcript_names(self) -> list[str]:
         return [transcript.name for transcript in self.transcripts]
 
     @property
-    def genes(self):
+    def genes(self) -> list[GeneLike]:
         """
         Return Gene object for all genes which overlap this variant.
         """
@@ -510,7 +509,7 @@ class Variant(Serializable):
         return self._genes
 
     @property
-    def gene_ids(self):
+    def gene_ids(self) -> list[str]:
         """
         Return IDs of all genes which overlap this variant. Calling
         this method is significantly cheaper than calling `Variant.genes()`,
@@ -523,7 +522,7 @@ class Variant(Serializable):
         return self._gene_ids
 
     @property
-    def gene_names(self):
+    def gene_names(self) -> list[str]:
         """
         Return names of all genes which overlap this variant. Calling
         this method is significantly cheaper than calling `Variant.genes()`,
@@ -536,13 +535,13 @@ class Variant(Serializable):
         return self._gene_names
 
     @property
-    def coding_genes(self):
+    def coding_genes(self) -> list[GeneLike]:
         """
-        Protein coding transcripts
+        Protein coding genes
         """
         return [
             gene for gene in self.genes
-            if gene.is_protein_coding
+            if getattr(gene, "is_protein_coding", False)
         ]
 
     def orf_effects(self, *, catalog=None, transcripts=None, **kwargs):
@@ -669,7 +668,7 @@ class Variant(Serializable):
         return effects
 
     def effect_on_transcript(
-            self, transcript: Transcript,
+            self, transcript: TranscriptLike,
             annotator: str | EffectAnnotator | None = None,
             germline=None, phase_resolver=None,
     ) -> MutationEffect:
@@ -677,8 +676,8 @@ class Variant(Serializable):
 
         Parameters
         ----------
-        transcript : pyensembl.Transcript
-            Reference transcript to annotate.
+        transcript : TranscriptLike
+            Reference transcript or structural transcript adapter to annotate.
         annotator : str, EffectAnnotator, or None
             Registered name or instance; None uses the current default.
         germline : GermlineContext or None

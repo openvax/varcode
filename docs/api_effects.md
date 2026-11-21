@@ -21,6 +21,10 @@ See [effect annotation](effect_annotation.md) for result access and the
 
 ::: varcode.EffectCollection
 
+::: varcode.GeneLike
+
+::: varcode.TranscriptLike
+
 ::: varcode.EffectCandidate
 
 ::: varcode.candidates_from_effects
