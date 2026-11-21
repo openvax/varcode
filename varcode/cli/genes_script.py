@@ -44,6 +44,7 @@ def attach_genes_parser(parser):
 arg_parser = make_variants_parser(
     prog="varcode genes",
     description="Annotate variants with overlapping gene names",
+    add_version=True,
 )
 add_genes_args(arg_parser)
 

@@ -127,10 +127,15 @@ def add_variant_args(arg_parser):
     return variant_arg_group
 
 
-def make_variants_parser(**kwargs):
+def make_variants_parser(*, add_version=False, **kwargs):
     """
     Parameters
     ----------
+    add_version : bool, default False
+        When ``True``, add a ``--version`` flag printing ``varcode <version>``.
+        Defaults to ``False`` so downstream CLIs (e.g. ``isovar``, ``vaxrank``)
+        building parsers with ``parents=[...]`` or defining their own
+        ``--version`` option do not conflict with Varcode's.
     **kwargs : dict
         Passed directly to HelpArgumentParser
 
@@ -138,11 +143,12 @@ def make_variants_parser(**kwargs):
     variants from VCF, MAF, or JSON files.
     """
     parser = HelpArgumentParser(**kwargs)
-    parser.add_argument(
-        "--version",
-        action="version",
-        version="varcode %s" % __version__,
-    )
+    if add_version:
+        parser.add_argument(
+            "--version",
+            action="version",
+            version="varcode %s" % __version__,
+        )
     add_variant_args(parser)
     return parser
 

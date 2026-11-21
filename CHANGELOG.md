@@ -1,5 +1,15 @@
 # Change Log
 
+## v12.0.1
+
+### Bug fixes
+
+- Stop `varcode.cli.variant_args.make_variants_parser` from unconditionally
+  registering `--version`, which broke downstream CLIs (`isovar`, `vaxrank`)
+  inheriting from `make_variants_parser(parents=[...])` or defining their own
+  `--version` option (#759). Opt in via `add_version=True` (used by
+  `varcode effects` and `varcode genes`).
+
 ## v12.0.0
 
 ### Breaking changes
