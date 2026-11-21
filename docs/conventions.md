@@ -55,23 +55,23 @@ their signatures are not extension contracts.
 
 `genome=` is the canonical reference argument.
 
-### Deprecated names
+### Removed compatibility names (12.0)
 
-These names still work, and Varcode itself no longer uses them. Each warns with
-`DeprecationWarning`, and all will be removed in 12.0.
+The following legacy names were deprecated in 11.x and removed in 12.0 (#693):
 
-| Deprecated | Use instead |
+| Removed in 12.0 | Use instead |
 |---|---|
 | `ensembl=` on `Variant`, `StructuralVariant` and `varcode.util.random_variants`, and the `"ensembl"` key of `variant_kwargs` in `varcode.vcf.dataframes_to_variant_collection` | `genome=` |
 | `Variant.ensembl` | `Variant.genome` |
 | `StopLoss.extended_protein_sequence` | `aa_alt` |
 | `load_vcf_fast` | `load_vcf` |
-| `detect_loh` | `detect_germline_overlap` for allele matching; `detect_loh` always returns `None` |
+| `detect_loh` | `detect_germline_overlap` for allele matching |
 | `"realized"`, `RealizedEffectAnnotator`, `predict_realized_effect` (`varcode.realized_effects`) | `"transcript_model"`, `TranscriptModelEffectAnnotator`, `predict_transcript_model_effect` |
 | `varcode.uorf` (`UORFAnnotation`, `ORFTranscript`, `load_uorf_catalog`, `annotate_uorf_variants`, `annotate_uorf_product`, `predict_uorf_effects`) | `varcode.orf` (`ORFAnnotation`, `record.bind(transcript)`, `orfdata.load_uorf_catalog` / `load_orf_catalog`, `annotate_orf_variants`, `annotate_orf_rna_product`, `predict_orf_effects`) |
 
-Saved Variant JSON that stores the genome under its old `"ensembl"` key still
-loads, without a warning.
+Saved Variant JSON that stores the genome under its old `"ensembl"` key and
+saved effect/proteome metadata referencing `"realized"` or `varcode.uorf`
+still load cleanly without warning.
 
 Variant positions and reference lookup helpers use one-based genomic
 coordinates. cDNA/protein offsets used for Python indexing are zero-based;

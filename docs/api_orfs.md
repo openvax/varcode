@@ -42,28 +42,3 @@ reference context; a protein string alone cannot supply that mapping.
 ::: varcode.ORFProduct
 
 ::: varcode.ORFProductAnnotation
-
-## Upstream-ORF compatibility API (deprecated)
-
-These names preserve the earlier record-plus-transcript interface, emit
-`DeprecationWarning`, and will be removed in 12.0. Use `record.bind(transcript)`
-and the bound-reference functions above for new integrations (note that
-`orfdata.load_uorf_catalog()` retains the upstream-only catalogue selection,
-whereas `load_orf_catalog()` loads the full catalogue).
-
-`UORFAnnotation` is an alias of ORFAnnotation.
-
-::: varcode.UORFAnnotation
-    options:
-      members: false
-      skip_local_inventory: true
-
-::: varcode.ORFTranscript
-
-::: varcode.load_uorf_catalog
-
-::: varcode.annotate_uorf_variants
-
-::: varcode.annotate_uorf_product
-
-::: varcode.predict_uorf_effects

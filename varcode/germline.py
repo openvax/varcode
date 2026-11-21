@@ -743,21 +743,6 @@ def detect_germline_overlap(somatic_variant, germline_in_window) -> bool:
     return False
 
 
-def detect_loh(somatic_variant, germline_in_window) -> Optional[bool]:
-    """Deprecated: these allele-only inputs cannot establish LOH.
-
-    Returns ``None`` (not assessed), never a positive or negative LOH call.
-    Use :func:`detect_germline_overlap` for the previous overlap query. LOH
-    requires an independently supported tumor/normal allelic-state assessment;
-    this annotation API does not perform that analysis.
-    """
-    warnings.warn(
-        "detect_loh cannot infer LOH from allele overlap; returning None. "
-        "Use detect_germline_overlap for allele matching.",
-        DeprecationWarning, stacklevel=2)
-    return None
-
-
 @dataclass(frozen=True)
 class PhaseHypothesis:
     """One way the somatic variant might be phased relative to the

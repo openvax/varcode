@@ -45,7 +45,6 @@ from varcode import (
     Variant,
     VariantCollection,
     apply_germline_to_transcript,
-    detect_loh,
     detect_germline_overlap,
     effect_priority,
     enumerate_phase_hypotheses,
@@ -331,11 +330,6 @@ class TestGermlineOverlap:
             reference_name="GRCh38")
         e = predict_germline_aware_effect(_somatic(), _cftr(), ctx, ann)
         assert getattr(e, "is_loh", False) is False
-
-    def test_legacy_loh_query_is_explicitly_unassessed(self):
-        for germline in ([], [_somatic()]):
-            with pytest.warns(DeprecationWarning, match="cannot infer LOH"):
-                assert detect_loh(_somatic(), germline) is None
 
 
 # --------------------------------------------------------------------

@@ -16,7 +16,6 @@ from __future__ import annotations
 from collections.abc import Sequence
 from functools import cached_property
 from memoized_property import memoized_property
-from warnings import warn
 from typing import TYPE_CHECKING, Any, Literal
 
 from serializable import Serializable
@@ -1765,14 +1764,6 @@ class StopLoss(KnownAminoAcidChange):
             aa_mutation_start_offset=aa_mutation_start_offset,
             aa_alt=aa_alt,
             aa_ref=aa_ref)
-
-    @property
-    def extended_protein_sequence(self):
-        """Deprecated name for :attr:`aa_alt`. Warns with ``DeprecationWarning``
-        and will be removed in varcode 12.0."""
-        warn("StopLoss.extended_protein_sequence is deprecated and will be removed in varcode 12.0; use aa_alt",
-             DeprecationWarning, stacklevel=2)
-        return self.aa_alt
 
     @property
     def short_description(self) -> str:

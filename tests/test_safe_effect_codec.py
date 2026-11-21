@@ -452,7 +452,6 @@ def test_registered_annotators_public_api():
     assert registered_annotators(include_deprecated=True) == (
         "fast",
         "protein_diff",
-        "realized",
         "transcript_model",
     )
 

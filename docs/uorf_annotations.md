@@ -295,10 +295,10 @@ MS evidence, never mutant translation or MHC presentation evidence. All Sid
 TPST1–CRCP alternatives lack the native KIILSKISV peptide; each keeps its own RNA
 support and unresolved polarity/initiation status.
 
-The deprecated compatibility module `varcode.uorf` preserves the original
-upstream-specific call shapes (emitting `DeprecationWarning` until removal in
-12.0); ORFdata installs with Varcode, so there is no ORF extra. New code should
-use `varcode.orf` and the bound reference API above. `annotate_orf_product`
+The legacy `varcode.uorf` compatibility module was removed in 12.0; ORFdata
+installs with Varcode, so there is no ORF extra. Use `varcode.orf` and the
+bound reference API above (`orfdata.load_uorf_catalog()` still provides the
+upstream-only catalogue). `annotate_orf_product`
 retains its original dictionary return for existing RNA exporters; new Python
 code should use `annotate_orf_rna_product`. `ORFAnnotation.data` remains an
 export alias; construct annotations with native fields rather than a `data`

@@ -1,5 +1,36 @@
 # Change Log
 
+## v12.0.0
+
+### Breaking changes
+
+- Remove legacy compatibility aliases and shims deprecated in 11.x (#693, #735):
+  - Remove `load_vcf_fast` — use `load_vcf`.
+  - Remove `detect_loh` — use `detect_germline_overlap` for allele matching.
+  - Remove the `ensembl=` keyword on `Variant`, `StructuralVariant`,
+    `varcode.util.random_variants`, and `variant_kwargs["ensembl"]` in
+    `dataframes_to_variant_collection`, plus the `Variant.ensembl` property —
+    use `genome=` / `Variant.genome`.
+  - Remove `StopLoss.extended_protein_sequence` — use `StopLoss.aa_alt`.
+  - Remove the `varcode.realized_effects` module (`RealizedEffectAnnotator`,
+    `predict_realized_effect`) and the `"realized"` annotator registry alias —
+    use `"transcript_model"`, `TranscriptModelEffectAnnotator`, and
+    `predict_transcript_model_effect`.
+  - Remove the `varcode.uorf` compatibility module (`UORFAnnotation`,
+    `ORFTranscript`, `load_uorf_catalog`, `annotate_uorf_variants`,
+    `annotate_uorf_product`, `predict_uorf_effects`) — use `varcode.orf`
+    (`ORFAnnotation`, `record.bind(transcript)`, `load_orf_catalog` /
+    `orfdata.load_uorf_catalog`, `annotate_orf_variants`,
+    `annotate_orf_rna_product`, `predict_orf_effects`).
+
+### Preserved archive compatibility
+
+- Saved `Variant` JSON archives storing the reference under the legacy
+  `"ensembl"` key continue to load silently.
+- Saved effect archives referencing legacy `varcode.uorf` class names
+  (`UORFAnnotation`, `ORFTranscript`) and saved CSV/proteome provenance
+  referencing `"realized"` continue to decode cleanly.
+
 ## v11.21.0
 
 - Complete typed collection traversal, structural transcript/gene protocols, and

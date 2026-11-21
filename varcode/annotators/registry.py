@@ -28,22 +28,12 @@ if TYPE_CHECKING:
 
 from .fast import FastEffectAnnotator
 from .protein_diff import ProteinDiffEffectAnnotator
-from ..effects.common import warn_deprecated
 from ..transcript_model import TranscriptModelEffectAnnotator
 
 
 _AnnotatorT = TypeVar("_AnnotatorT", bound="EffectAnnotator")
 _REGISTRY: dict[str, EffectAnnotator] = {}
 _DEFAULT_NAME = "transcript_model"
-
-
-def _normalize_annotator_name(name: str) -> str:
-    if name == "realized" and _REGISTRY.get("realized") is _REGISTRY.get("transcript_model"):
-        warn_deprecated(
-            "Annotator 'realized' is deprecated and will be removed in "
-            "varcode 12.0; use 'transcript_model'")
-        return "transcript_model"
-    return name
 
 
 def register_annotator(annotator: _AnnotatorT) -> _AnnotatorT:
@@ -81,7 +71,7 @@ def get_annotator(name: str) -> EffectAnnotator:
     """
     if name not in _REGISTRY:
         raise KeyError(name)
-    return _REGISTRY[_normalize_annotator_name(name)]
+    return _REGISTRY[name]
 
 
 def get_default_annotator() -> EffectAnnotator:
@@ -98,9 +88,7 @@ def registered_annotators(*, include_deprecated: bool = False) -> tuple[str, ...
     Parameters
     ----------
     include_deprecated : bool, default False
-        When ``False`` (default), omit the deprecated ``"realized"`` alias
-        while it points to the canonical ``"transcript_model"`` entry. Set
-        ``True`` to include deprecated compatibility names.
+        Reserved for compatibility when deprecated annotator aliases exist.
 
     Returns
     -------
@@ -108,10 +96,8 @@ def registered_annotators(*, include_deprecated: bool = False) -> tuple[str, ...
         Sorted registered annotator names (``("fast", "protein_diff", "transcript_model")``
         when no third-party annotators are registered).
     """
-    names = set(_REGISTRY)
-    if not include_deprecated and _REGISTRY.get("realized") is _REGISTRY.get("transcript_model"):
-        names.discard("realized")
-    return tuple(sorted(names))
+    _ = include_deprecated
+    return tuple(sorted(_REGISTRY))
 
 
 def set_default_annotator(name: str) -> None:
@@ -123,7 +109,7 @@ def set_default_annotator(name: str) -> None:
         raise KeyError(
             "No annotator registered under %r — call register_annotator() "
             "first or pick from %r." % (name, sorted(_REGISTRY)))
-    _DEFAULT_NAME = _normalize_annotator_name(name)
+    _DEFAULT_NAME = name
 
 
 def resolve_annotator(
@@ -149,7 +135,7 @@ def resolve_annotator(
                 "Register one with varcode.register_annotator() or pick "
                 "from the list." % (
                     annotator_or_name, sorted(_REGISTRY)))
-        return _REGISTRY[_normalize_annotator_name(annotator_or_name)]
+        return _REGISTRY[annotator_or_name]
     return annotator_or_name
 
 
@@ -193,7 +179,7 @@ def use_annotator(name_or_instance: str | EffectAnnotator) -> Iterator[None]:
             raise KeyError(
                 "No annotator registered under %r — register one first or "
                 "pass an instance." % name_or_instance)
-        _DEFAULT_NAME = _normalize_annotator_name(name_or_instance)
+        _DEFAULT_NAME = name_or_instance
         prior_registration = None
     else:
         # Keep the runtime check for callers without static checking.
@@ -220,5 +206,3 @@ def use_annotator(name_or_instance: str | EffectAnnotator) -> Iterator[None]:
 register_annotator(FastEffectAnnotator())
 register_annotator(ProteinDiffEffectAnnotator())
 register_annotator(TranscriptModelEffectAnnotator())
-# Backward-compatible selection; new results carry the canonical name.
-_REGISTRY["realized"] = _REGISTRY["transcript_model"]

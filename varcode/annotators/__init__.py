@@ -29,7 +29,6 @@ if TYPE_CHECKING:
 
 from .fast import FastEffectAnnotator
 from .protein_diff import ProteinDiffEffectAnnotator
-from ..realized_effects import RealizedEffectAnnotator
 from ..transcript_model import TranscriptModelEffectAnnotator
 from .registry import (
     get_annotator,
@@ -106,7 +105,6 @@ __all__ = [
     "EffectAnnotator",
     "FastEffectAnnotator",
     "ProteinDiffEffectAnnotator",
-    "RealizedEffectAnnotator",
     "TranscriptModelEffectAnnotator",
     "get_annotator",
     "get_default_annotator",

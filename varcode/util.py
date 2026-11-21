@@ -11,7 +11,6 @@
 # limitations under the License.
 
 import random
-from warnings import warn
 
 from pyensembl import genome_for_reference_name
 
@@ -29,7 +28,6 @@ def random_variants(
         deletions=True,
         insertions=True,
         random_seed=None,
-        ensembl=None,
         genome=None):
     """
     Generate a VariantCollection with random variants that overlap
@@ -45,17 +43,7 @@ def random_variants(
         ``cached_release(81)``) when the caller needs deterministic data
         that is actually installed — ``genome_for_reference_name`` can
         resolve to a release that hasn't been downloaded.
-
-    ensembl : pyensembl.Genome, optional
-        Deprecated name for ``genome``. Warns with ``DeprecationWarning`` and
-        will be removed in varcode 12.0. Passing both raises ``ValueError``.
     """
-    if ensembl is not None:
-        if genome is not None:
-            raise ValueError("Pass genome= or its deprecated name ensembl=, not both")
-        warn("random_variants(ensembl=...) is deprecated and will be removed in varcode 12.0; pass genome= instead",
-             DeprecationWarning, stacklevel=2)
-        genome = ensembl
     rng = random.Random(random_seed)
     if genome is None:
         genome = genome_for_reference_name(genome_name)

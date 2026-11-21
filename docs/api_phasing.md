@@ -40,8 +40,6 @@ for input requirements and examples.
 
 ::: varcode.enumerate_phase_hypotheses
 
-::: varcode.detect_loh
-
 ::: varcode.detect_germline_overlap
 
 ::: varcode.GermlineAlleleOverlap

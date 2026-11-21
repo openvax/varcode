@@ -418,17 +418,6 @@ def load_vcf(
         warn_on_filtered=warn_on_filtered)
 
 
-
-def load_vcf_fast(*args, **kwargs):
-    """
-    Deprecated alias for :func:`load_vcf`; warns with ``DeprecationWarning``.
-    """
-    warn(
-        "load_vcf_fast is deprecated and has been renamed to load_vcf",
-        DeprecationWarning, stacklevel=2)
-    return load_vcf(*args, **kwargs)
-
-
 def _normalize_spanning_contig(chrom, variant_kwargs):
     """Normalize a spanning-deletion row's CHROM like :class:`Variant`."""
     raw = str(chrom)
@@ -629,9 +618,7 @@ def dataframes_to_variant_collection(
         Callable to parse per-sample info columns.
 
     variant_kwargs : dict, optional
-        Additional keyword parameters to pass to Variant.__init__. Its old
-        ``"ensembl"`` key warns with ``DeprecationWarning`` once per call and
-        is read as ``"genome"``; it will be removed in varcode 12.0.
+        Additional keyword parameters to pass to Variant.__init__.
 
     variant_collection_kwargs : dict, optional
         Additional keyword parameters to pass to VariantCollection.__init__.
@@ -645,12 +632,6 @@ def dataframes_to_variant_collection(
         if max_variants < 0:
             raise ValueError("max_variants must be a nonnegative integer or None")
     variant_kwargs = dict(variant_kwargs or {})
-    if "ensembl" in variant_kwargs:
-        warn("variant_kwargs['ensembl'] is deprecated and will be removed in varcode 12.0; use 'genome'",
-             DeprecationWarning, stacklevel=2)
-        ensembl = variant_kwargs.pop("ensembl")
-        if variant_kwargs.get("genome") is None:
-            variant_kwargs["genome"] = ensembl
     if variant_collection_kwargs is None:
         variant_collection_kwargs = {}
 
