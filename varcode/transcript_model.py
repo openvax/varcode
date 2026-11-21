@@ -40,6 +40,8 @@ from .germline import (
 from .nucleotides import reverse_complement
 from .splice_graph import disrupted_splice_sites, enumerate_paired_splice_plans
 from .transcript_layout import (
+    DEFAULT_CRYPTIC_SPLICE_POLICY,
+    CrypticSplicePolicy,
     build_exon_runs,
     classify_products,
     realize_splice_plan,
@@ -237,7 +239,7 @@ def refine_transcript_model_effect(effect, observed):
 def predict_transcript_model_effect(
         variants, transcript, germline_variants=(), phase_resolver=None,
         sequence_provider=None, max_hypotheses=64, max_phase_hypotheses=None,
-        homozygous_germline=()):
+        homozygous_germline=(), cryptic_policy=None):
     """Predict one ordinary top effect with alternatives in ``.candidates``.
 
     Canonical and exon-skip paths resolve from transcript annotation alone.
@@ -252,6 +254,11 @@ def predict_transcript_model_effect(
     instead of a partial candidate set. ``homozygous_germline`` lists
     germline variants on both haplotypes, which are always cis.
 
+    ``cryptic_policy`` accepts a :class:`~varcode.CrypticSplicePolicy`
+    controlling the scan flank, score threshold, and per-junction cap for
+    heuristic DNA cryptic splice-boundary candidates (default: 50 bp flank,
+    at most 1 boundary per disrupted site).
+
     ``variants`` is a known-cis group. Members also present in the germline
     anchor the patient baseline; only novel alleles are applied to that
     baseline to obtain the mutant. Repeated normalized alleles are edited
@@ -260,6 +267,13 @@ def predict_transcript_model_effect(
     max_hypotheses = check_max_hypotheses(max_hypotheses)
     max_phase_hypotheses = max_hypotheses if max_phase_hypotheses is None else (
         check_max_hypotheses(max_phase_hypotheses, "max_phase_hypotheses"))
+    if cryptic_policy is None:
+        cryptic_policy = DEFAULT_CRYPTIC_SPLICE_POLICY
+    elif not isinstance(cryptic_policy, CrypticSplicePolicy):
+        raise TypeError(
+            "cryptic_policy must be a CrypticSplicePolicy or None, got %s"
+            % type(cryptic_policy).__name__
+        )
     variants = tuple(variants)
     if not variants:
         raise ValueError("predict_transcript_model_effect requires a somatic variant")
@@ -304,7 +318,8 @@ def predict_transcript_model_effect(
             variants, somatic_variants, transcript,
             phase.hypotheses(max_phase_hypotheses),
             sequence_provider, max_hypotheses,
-            phase_source=getattr(phase_resolver, "phase_source", None))
+            phase_source=getattr(phase_resolver, "phase_source", None),
+            cryptic_policy=cryptic_policy)
     except ReferenceMismatchError as error:
         expected, observed = error.genomic_expected_ref, error.genomic_observed_ref
         if transcript.on_backward_strand:
@@ -335,7 +350,8 @@ def predict_transcript_model_effect(
 
 def _realize_outcomes(
         variants, somatic_variants, transcript, phase_hypotheses,
-        sequence_provider, max_hypotheses, phase_source=None):
+        sequence_provider, max_hypotheses, phase_source=None,
+        cryptic_policy=DEFAULT_CRYPTIC_SPLICE_POLICY):
     """Classify every phase hypothesis × splice plan.
 
     Raises :class:`~varcode.HypothesisLimitError` past ``max_hypotheses``
@@ -347,7 +363,7 @@ def _realize_outcomes(
     # Complete nucleotide alleles may cross a transcript boundary by more
     # than the splice scan flank. Keep their full genomic span before exon
     # projection; extending the layout does not extend the transcript.
-    flank = 50
+    flank = max(50, cryptic_policy.scan_flank + 6)
     frame = TranscriptFrame(transcript)
     for variant in (*somatic_variants, *(v for h in phase_hypotheses for v in h.cis)):
         if not getattr(variant, "is_structural", False):
@@ -370,17 +386,24 @@ def _realize_outcomes(
                 transcript, baseline_statuses.values(), mutant_statuses.values(),
                 tuple(run.key for run in baseline_runs),
                 tuple(run.key for run in mutant_runs), shared_keys,
-                max_plans=max_hypotheses - len(outcomes))
+                max_plans=max_hypotheses - len(outcomes),
+                baseline_layout=baseline_layout,
+                mutant_layout=mutant_layout,
+                baseline_runs=baseline_runs,
+                mutant_runs=mutant_runs,
+                cryptic_policy=cryptic_policy)
         except HypothesisLimitError as error:
             raise HypothesisLimitError(max_hypotheses) from error
 
         for baseline_plan, plan in plans:
             baseline_product, _ = realize_splice_plan(
                 transcript, baseline_layout, baseline_plan,
-                tuple(baseline_statuses.values()))
+                tuple(baseline_statuses.values()),
+                cryptic_policy=cryptic_policy)
             mutant_product, _ = realize_splice_plan(
                 transcript, mutant_layout, plan,
-                tuple(mutant_statuses.values()))
+                tuple(mutant_statuses.values()),
+                cryptic_policy=cryptic_policy)
             hypothesis = EffectHypothesis(
                 phase=_phase_items(phase_hypothesis),
                 splice_plan=plan,

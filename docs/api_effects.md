@@ -44,6 +44,8 @@ not probabilities that a candidate is expressed.
 
 ::: varcode.SpliceCandidateRNAEvidence
 
+::: varcode.CrypticSplicePolicy
+
 ::: varcode.enumerate_cryptic_exon_candidates
 
 ::: varcode.enumerate_from_structural_variant

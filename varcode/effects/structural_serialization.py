@@ -93,8 +93,10 @@ def _model_types() -> tuple[type, ...]:
         TranscriptEdit,
     )
     from ..orf_discovery import DiscoveredORF, ORFDiscoveryPolicy
+    from ..transcript_layout import CrypticSplicePolicy
 
     return (
+        CrypticSplicePolicy,
         DiscoveredORF,
         ORFDiscoveryPolicy,
         MutantTranscript,

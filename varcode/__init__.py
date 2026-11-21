@@ -197,6 +197,7 @@ if TYPE_CHECKING:
         StructuralVariant as StructuralVariant,
     )
     from .sv_allele_parser import parse_symbolic_alt as parse_symbolic_alt
+    from .transcript_layout import CrypticSplicePolicy as CrypticSplicePolicy
     from .transcript_model import (
         predict_transcript_model_effect as predict_transcript_model_effect,
     )
@@ -297,6 +298,7 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "load_exacto_fusions": (".exacto", "load_exacto_fusions"),
     "reference_completion_hypotheses": (".reference_completion", "reference_completion_hypotheses"),
     "predict_realized_effect": (".realized_effects", "predict_realized_effect"),
+    "CrypticSplicePolicy": (".transcript_layout", "CrypticSplicePolicy"),
     "predict_transcript_model_effect": (".transcript_model", "predict_transcript_model_effect"),
     # splice outcomes & splice effect classes
     "SpliceCandidateRNAEvidence": (".splice_outcomes", "SpliceCandidateRNAEvidence"),
@@ -463,6 +465,7 @@ __all__ = [
     # Unified multi-outcome type (openvax/varcode#299)
     "EffectCandidate",
     "candidates_from_effects",
+    "CrypticSplicePolicy",
     "predict_realized_effect",
     "predict_transcript_model_effect",
 

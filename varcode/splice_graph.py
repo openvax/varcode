@@ -24,7 +24,11 @@ from .effect_hypotheses import (
 from .genomic_layout import SequenceUnavailable
 from .errors import HypothesisLimitError
 from .nucleotides import reverse_complement
-from .transcript_layout import build_exon_runs
+from .transcript_layout import (
+    DEFAULT_CRYPTIC_SPLICE_POLICY,
+    build_exon_runs,
+    enumerate_cryptic_boundaries,
+)
 
 
 @dataclass(frozen=True)
@@ -210,28 +214,102 @@ _MECHANISM_ORDER = {
 }
 
 
-def splice_axes(transcript, statuses, run_keys=None):
+def cryptic_candidates_for_status(
+        layout, runs, status, policy=DEFAULT_CRYPTIC_SPLICE_POLICY):
+    """Enumerate distinct graph-valid cryptic boundaries for one disrupted site.
+
+    Returns ``tuple[(boundary_offset, genomic_position, motif_score), ...]`` or
+    ``()`` when flanking genomic sequence is unavailable or no boundary meets
+    ``policy``.
+    """
+    run_by_key = {run.key: run for run in runs}
+    run = run_by_key.get(status.run_key)
+    if run is None:
+        return ()
+    index = runs.index(run)
+    if status.key.side == "donor":
+        if index + 1 >= len(runs):
+            return ()
+        valid_interval = (run.layout_start + 1, runs[index + 1].layout_start - 1)
+        canonical = run.layout_end
+    else:
+        if index == 0:
+            return ()
+        valid_interval = (runs[index - 1].layout_end + 1, run.layout_end - 1)
+        canonical = run.layout_start
+    if valid_interval[0] > valid_interval[1]:
+        return ()
+    try:
+        candidates = enumerate_cryptic_boundaries(
+            layout, canonical, status.key.side, valid_interval, policy=policy
+        )
+    except (SequenceUnavailable, KeyError, ValueError):
+        return ()
+    resolved = []
+    for boundary, score in candidates:
+        contig, position, _ = layout.origin(
+            boundary - 1 if status.key.side == "donor" else boundary
+        )
+        genomic_position = layout.genomic(contig, position)
+        resolved.append((boundary, genomic_position, score))
+    return tuple(resolved)
+
+
+def splice_axes(
+        transcript, statuses, run_keys=None, *,
+        layout=None, runs=None, cryptic_policy=None):
     """Convert disrupted sites into ordinal, uncalibrated graph choices."""
     axes = []
     n_exons = len(transcript.exons)
     run_keys = tuple(run_keys or ())
+    policy = cryptic_policy if cryptic_policy is not None else DEFAULT_CRYPTIC_SPLICE_POLICY
+    if layout is not None and runs is None:
+        runs = build_exon_runs(transcript, layout)
     for status in statuses:
         mechanisms = _MECHANISM_ORDER[(status.key.side, status.strength)]
         # Exons meeting at a circular origin are one exon on the circle and
         # are skipped together.
         skipped_exons = origin_partners(transcript, status.key.exon_number)
         options = []
-        for rank, mechanism in enumerate(mechanisms):
+        option_rank = 0
+        for mechanism in mechanisms:
             if (mechanism == "exon_skip"
                     and (1 in skipped_exons or n_exons in skipped_exons)):
                 continue
+            base_evidence = {
+                "strength": status.strength,
+                "reason": status.reason,
+            }
+            if mechanism == "cryptic" and layout is not None and policy.max_sites_per_junction > 1:
+                cryptic_sites = cryptic_candidates_for_status(
+                    layout, runs, status, policy=policy
+                )
+                if cryptic_sites:
+                    for site_rank, (boundary, genomic_pos, score) in enumerate(cryptic_sites):
+                        options.append(SpliceOption(
+                            mechanism="cryptic",
+                            ordinal_rank=option_rank,
+                            required_runs=(status.run_key,),
+                            evidence={
+                                **base_evidence,
+                                "cryptic_boundary_offset": boundary,
+                                "cryptic_genomic_position": genomic_pos,
+                                "cryptic_motif_score": score,
+                                "cryptic_rank": site_rank,
+                                "discovery_status": "heuristic_dna_motif",
+                                "cryptic_search_policy": policy.as_evidence(),
+                            },
+                        ))
+                        option_rank += 1
+                    continue
             kwargs = {
                 "mechanism": mechanism,
-                "ordinal_rank": rank,
-                "evidence": {
-                    "strength": status.strength,
-                    "reason": status.reason,
-                },
+                "ordinal_rank": option_rank,
+                "evidence": (
+                    {**base_evidence, "cryptic_search_policy": policy.as_evidence()}
+                    if mechanism == "cryptic"
+                    else base_evidence
+                ),
             }
             if mechanism == "exon_skip":
                 occurrence = status.run_key[1]
@@ -249,6 +327,7 @@ def splice_axes(transcript, statuses, run_keys=None):
                         required.append(run_keys[neighbor_index])
                 kwargs["required_runs"] = tuple(required)
             options.append(SpliceOption(**kwargs))
+            option_rank += 1
         axes.append(SpliceAxis(
             key=status.key,
             anchor_runs=(status.run_key,),
@@ -256,33 +335,57 @@ def splice_axes(transcript, statuses, run_keys=None):
     return tuple(axes)
 
 
-def enumerate_layout_splice_plans(transcript, layout, max_plans=64):
+def enumerate_layout_splice_plans(
+        transcript, layout, max_plans=64, *, cryptic_policy=None):
     """Detect disrupted sites and enumerate only graph-valid plans."""
     runs = build_exon_runs(transcript, layout)
     statuses = disrupted_splice_sites(transcript, layout, runs)
     run_keys = tuple(run.key for run in runs)
-    axes = splice_axes(transcript, statuses, run_keys)
+    axes = splice_axes(
+        transcript, statuses, run_keys,
+        layout=layout, runs=runs, cryptic_policy=cryptic_policy,
+    )
     if not axes:
         return enumerate_splice_plans((), run_keys, 1)
     return enumerate_splice_plans(
         axes, run_keys, max_plans=max_plans)
 
 
+def _shared_choice_matches(baseline_option, mutant_option):
+    if baseline_option.mechanism != mutant_option.mechanism:
+        return False
+    if baseline_option.mechanism == "cryptic":
+        return (
+            baseline_option.evidence.get("cryptic_genomic_position")
+            == mutant_option.evidence.get("cryptic_genomic_position")
+        )
+    return True
+
+
 def enumerate_paired_splice_plans(
         transcript, baseline_statuses, mutant_statuses,
-        baseline_run_keys, mutant_run_keys, shared_keys, max_plans=64):
+        baseline_run_keys, mutant_run_keys, shared_keys, max_plans=64, *,
+        baseline_layout=None, mutant_layout=None,
+        baseline_runs=None, mutant_runs=None, cryptic_policy=None):
     """Preserve uncertain baseline choices and couple unchanged active sites.
 
     Each side is graph-valid independently. Shared sites use the same mechanism
-    when present in both plans. If a rewrite removes the site on one side, the
-    other side retains all compatible choices instead of an arbitrary default.
-    The limit applies to complete comparisons, never a truncated candidate set.
+    (and cryptic boundary genomic position when enumerated) when present in
+    both plans. If a rewrite removes the site on one side, the other side
+    retains all compatible choices instead of an arbitrary default. The limit
+    applies to complete comparisons, never a truncated candidate set.
     """
     baseline_plans = enumerate_splice_plans(
-        splice_axes(transcript, baseline_statuses, baseline_run_keys),
+        splice_axes(
+            transcript, baseline_statuses, baseline_run_keys,
+            layout=baseline_layout, runs=baseline_runs, cryptic_policy=cryptic_policy,
+        ),
         baseline_run_keys, max_plans=max_plans)
     mutant_plans = enumerate_splice_plans(
-        splice_axes(transcript, mutant_statuses, mutant_run_keys),
+        splice_axes(
+            transcript, mutant_statuses, mutant_run_keys,
+            layout=mutant_layout, runs=mutant_runs, cryptic_policy=cryptic_policy,
+        ),
         mutant_run_keys, max_plans=max_plans)
     pairs = []
     for mutant in mutant_plans:
@@ -290,7 +393,7 @@ def enumerate_paired_splice_plans(
         for baseline in baseline_plans:
             baseline_choices = dict(baseline.choices)
             active_shared = shared_keys & baseline_choices.keys() & mutant_choices.keys()
-            if any(baseline_choices[key].mechanism != mutant_choices[key].mechanism
+            if any(not _shared_choice_matches(baseline_choices[key], mutant_choices[key])
                    for key in active_shared):
                 continue
             pairs.append((baseline, mutant))

@@ -1,5 +1,25 @@
 # Change Log
 
+## v11.19.0
+
+- Add bounded multi-candidate DNA cryptic splice-boundary enumeration with
+  explicit policy limits and preserved baseline/mutant coupling (#675):
+  - Add `CrypticSplicePolicy(scan_flank=50, max_sites_per_junction=1, min_score=0.0)`
+    at the package root and `enumerate_cryptic_boundaries()` in
+    `varcode.transcript_layout`.
+  - Accept `cryptic_policy=` on `predict_transcript_model_effect()`,
+    `enumerate_layout_splice_plans()`, `enumerate_paired_splice_plans()`, and
+    `realize_splice_plan()`. Distinct cryptic boundaries are represented as
+    graph-valid `SpliceOption` choices bounded by `max_hypotheses`, couple on
+    shared disrupted splice sites by genomic boundary position so baseline and
+    mutant never cross-couple distinct cryptic sites, and carry explicit
+    `cryptic_search_policy` and `discovery_status="heuristic_dna_motif"`
+    evidence (never labeled experimentally observed).
+  - Add mouse `Ap2s1 del17` (`ENSMUST00000086112`, `GRCm39 chr7:16477295 T>C`,
+    PMID 29479578) regressions covering default DNA-discovery limitations,
+    independent observed-RNA retention, and bounded multi-candidate cryptic
+    enumeration discovering the 51 nt / 17 aa (`p.V35_E51del`) deletion.
+
 ## v11.18.0
 
 - Clean up CLI output streams, tables, and CSV columns (#432):
