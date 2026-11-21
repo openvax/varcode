@@ -217,24 +217,19 @@ def _registry_bundle() -> tuple[
     }
 
     try:
-        from importlib import import_module
-
-        import orfdata
-        from orfdata import ReferenceORF
+        from orfdata import PinnedEnsemblGenome, ReferenceORF
         from orfdata.catalog import CatalogStatus
         from orfdata.rna import ProteinProduct, RNAFeature
-        reviewed.update({ReferenceORF, CatalogStatus, ProteinProduct, RNAFeature})
-        # Use public export once openvax/orfdata#210 ships; fall back to
-        # _pinned_genome so T2T-CHM13v2.0 and other pinned genomes round-trip.
-        pinned_cls = getattr(orfdata, "PinnedEnsemblGenome", None)
-        if not isinstance(pinned_cls, type):
-            pinned_cls = getattr(
-                import_module("orfdata._pinned_genome"),
-                "PinnedEnsemblGenome",
-                None,
-            )
-        if isinstance(pinned_cls, type):
-            reviewed.add(pinned_cls)
+        reviewed.update({
+            ReferenceORF,
+            CatalogStatus,
+            ProteinProduct,
+            RNAFeature,
+            # Legacy pinned-genome subclass (orfdata>=0.53.0 returns plain
+            # pyensembl.Genome; retain PinnedEnsemblGenome so pre-0.53 archives
+            # still decode through the finite allowlist).
+            PinnedEnsemblGenome,
+        })
     except ImportError:
         pass
 

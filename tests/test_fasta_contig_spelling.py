@@ -66,11 +66,11 @@ def cftr_base(grch38):
 
 @pytest.fixture(scope="module")
 def chm13(tmp_path_factory):
-    from orfdata._pinned_genome import PinnedEnsemblGenome
+    from pyensembl import Genome as PyEnsemblGenome
 
     metadata = json.loads((DATA / "chm13.json").read_text())
     metadata.pop("sources")
-    genome = PinnedEnsemblGenome(
+    genome = PyEnsemblGenome(
         **metadata,
         gtf_path_or_url=str(DATA / "chm13.gtf.gz"),
         transcript_fasta_paths_or_urls=[str(DATA / "chm13.cdna.fa.gz")],

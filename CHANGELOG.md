@@ -1,5 +1,18 @@
 # Change Log
 
+## v12.0.2
+
+### Maintenance
+
+- Adopt `pyensembl>=2.35.0` (native `species` and `assembly_accession` on base
+  `pyensembl.Genome`, openvax/pyensembl#540) and `orfdata>=0.53.0`
+  (`load_genome` returns plain `pyensembl.Genome` instances and publicly
+  exports legacy `PinnedEnsemblGenome`, openvax/orfdata#210/#213).
+- Remove all private `orfdata._pinned_genome` imports from
+  `varcode/effects/structural_serialization.py` and test fixtures while keeping
+  `PinnedEnsemblGenome` in the finite serialization allowlist so pre-0.53
+  saved archives still decode cleanly.
+
 ## v12.0.1
 
 ### Bug fixes

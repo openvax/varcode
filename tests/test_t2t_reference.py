@@ -30,8 +30,6 @@ RCRS = "NC_012920.1"
 @pytest.fixture(scope="module")
 def chm13_with_rcrs(tmp_path_factory):
     """The CHM13 fixture with ORFdata's packaged rCRS MT annotation appended."""
-    from orfdata._pinned_genome import PinnedEnsemblGenome
-
     t2t, = orfdata.pinned_genomes(species="human")
     assets = t2t.mitochondria[RCRS]["assets"]
     packaged = {role: files("orfdata").joinpath(asset["resource"]) for role, asset in assets.items()}
@@ -41,8 +39,8 @@ def chm13_with_rcrs(tmp_path_factory):
     metadata = json.loads((DATA / "chm13.json").read_text())
     metadata.pop("sources")
     metadata["reference_metadata"]["contig_compartments"] = {RCRS: "mitochondrial"}
-    genome = PinnedEnsemblGenome(
-        **metadata, pinned_name="t2t-chm13",
+    genome = Genome(
+        **metadata,
         gtf_path_or_url=str(gtf),
         transcript_fasta_paths_or_urls=[str(DATA / "chm13.cdna.fa.gz"), str(packaged["transcripts"])],
         protein_fasta_paths_or_urls=[str(DATA / "chm13.pep.fa.gz"), str(packaged["proteins"])],
