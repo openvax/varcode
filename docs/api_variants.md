@@ -237,6 +237,8 @@ it does not establish that the queried region is absent.
 
 ::: varcode.VariantCollection
 
+::: varcode.SpanningDeletionRecord
+
 ::: varcode.StructuralVariant
 
 ::: varcode.parse_symbolic_alt
@@ -265,6 +267,8 @@ intervals remain accepted. No source mapping is modified in place.
 ::: varcode.transforms.pair_breakends
 
 ::: varcode.transforms.left_align_indels
+
+::: varcode.transforms.combine_cis_snvs
 
 ## File loading
 

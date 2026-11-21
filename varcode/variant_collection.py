@@ -14,11 +14,13 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from collections.abc import Callable, Iterable, Iterator, Sequence
-from typing import TYPE_CHECKING, Any, Self, TypeVar, overload
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Literal, Self, TypeVar, overload
 import warnings
 
 import pandas as pd
 from sercol import Collection
+from serializable import DataclassSerializable
 
 from .effects import EffectCollection, Failure
 from .csv_helpers import (
@@ -44,6 +46,121 @@ if TYPE_CHECKING:
 _Key = TypeVar("_Key")
 
 
+@dataclass(frozen=True)
+class SpanningDeletionRecord(DataclassSerializable):
+    """Row-level provenance for a VCF ``*`` spanning-deletion placeholder (#264).
+
+    A VCF ``*`` ALT entry records that the site is spanned by an upstream
+    deletion rather than representing an independent sequence change. Varcode
+    never creates an annotatable :class:`~varcode.Variant` for ``*`` and never
+    counts it toward ``max_variants``. Instead, this record preserves the
+    original VCF coordinates, ALT allele index, record/sample metadata, and —
+    only when source evidence uniquely resolves the association — a link to
+    the consuming upstream deletion.
+
+    Parameters
+    ----------
+    contig : str
+        Normalized contig name matching loaded variants in the collection.
+    original_contig : str
+        Original contig spelling from the VCF ``CHROM`` column.
+    start : int
+        1-based genomic position from the VCF ``POS`` column.
+    ref : str
+        VCF ``REF`` allele string at this row.
+    alt_allele_index : int
+        0-based index of ``*`` within the row's comma-separated ``ALT`` list.
+        The corresponding 1-based VCF ``GT`` allele index is
+        ``alt_allele_index + 1`` (see :attr:`gt_allele_index`).
+    vcf_alt_alleles : tuple[str, ...]
+        Complete tuple of comma-separated ``ALT`` alleles on the source row.
+    id : str or None
+        VCF ``ID`` field, or ``None`` when ``"."``.
+    qual : float or None
+        VCF ``QUAL`` value, or ``None`` when ``"."``.
+    filter : tuple[str, ...] or None
+        Normalized ``FILTER`` labels (``()`` for ``PASS``, ``None`` for ``"."``,
+        or a tuple of filter tokens).
+    info : dict or None
+        Parsed ``INFO`` dictionary when ``include_info=True``, else ``None``.
+    sample_info : dict or None
+        Parsed per-sample ``FORMAT`` dictionaries when present, else ``None``.
+    source : str or None
+        Source path (e.g. VCF filename) from which this row was read.
+    upstream_deletion : Variant or None
+        The loaded upstream deletion variant covering ``start`` when uniquely
+        resolved by source evidence; ``None`` when unresolved or ambiguous.
+    upstream_deletion_status : {"resolved", "unresolved", "ambiguous"}
+        Whether source evidence uniquely linked this placeholder to one loaded
+        upstream deletion (``"resolved"``), found no matching loaded deletion
+        (``"unresolved"``, e.g. filtered out or outside the file), or matched
+        multiple candidate deletions (``"ambiguous"``).
+    """
+
+    contig: str
+    original_contig: str
+    start: int
+    ref: str
+    alt_allele_index: int
+    vcf_alt_alleles: tuple[str, ...]
+    id: str | None = None
+    qual: float | None = None
+    filter: tuple[str, ...] | None = None
+    info: dict[str, Any] | None = None
+    sample_info: dict[str, Any] | None = None
+    source: str | None = None
+    upstream_deletion: Variant | None = None
+    upstream_deletion_status: Literal["resolved", "unresolved", "ambiguous"] = "unresolved"
+
+    @property
+    def gt_allele_index(self) -> int:
+        """1-based VCF ``GT`` allele index corresponding to this ``*`` ALT."""
+        return self.alt_allele_index + 1
+
+    def sample_gt_carriers(self) -> tuple[str, ...]:
+        """Sorted sample names whose ``GT`` calls this ``*`` allele."""
+        if not self.sample_info:
+            return ()
+        gt_idx = self.gt_allele_index
+        carriers = []
+        for sample_name, fields in self.sample_info.items():
+            if not fields:
+                continue
+            gt = Genotype.from_sample_info(fields)
+            if gt_idx in gt.alleles:
+                carriers.append(sample_name)
+        return tuple(sorted(carriers))
+
+
+def _combine_spanning_deletion_records(
+        combine_fn,
+        collections: Sequence[VariantCollection],
+) -> tuple[SpanningDeletionRecord, ...]:
+    """Combine placeholder provenance records across set operations."""
+    if combine_fn is set.union:
+        out: list[SpanningDeletionRecord] = []
+        for vc in collections:
+            for rec in vc.spanning_deletion_records:
+                if rec not in out:
+                    out.append(rec)
+        return tuple(out)
+    if combine_fn is set.intersection:
+        first = collections[0].spanning_deletion_records
+        others = [vc.spanning_deletion_records for vc in collections[1:]]
+        return tuple(
+            rec for rec in first
+            if all(rec in other for other in others)
+        )
+    if combine_fn is set.difference:
+        first = collections[0].spanning_deletion_records
+        others = [vc.spanning_deletion_records for vc in collections[1:]]
+        return tuple(
+            rec for rec in first
+            if not any(rec in other for other in others)
+        )
+    return collections[0].spanning_deletion_records
+
+
 class VariantCollection(Collection):
     def __init__(
             self,
@@ -51,7 +168,8 @@ class VariantCollection(Collection):
             distinct=True,
             sort_key=variant_ascending_position_sort_key,
             sources=None,
-            source_to_metadata_dict=None):
+            source_to_metadata_dict=None,
+            spanning_deletion_records: Sequence[SpanningDeletionRecord] = ()):
         """
         Construct a VariantCollection from a list of Variant records.
 
@@ -72,10 +190,17 @@ class VariantCollection(Collection):
         source_to_metadata_dict : dict
             Dictionary mapping each source name (e.g. VCF path) to a dictionary
             from variants to their metadata dictionaries.
+
+        spanning_deletion_records : sequence of SpanningDeletionRecord, optional
+            Optional provenance records for VCF ``*`` spanning-deletion
+            placeholders observed during loading. These are never treated as
+            annotatable variants.
         """
         if source_to_metadata_dict is None:
             source_to_metadata_dict = {}
         self.source_to_metadata_dict = source_to_metadata_dict
+        self.spanning_deletion_records: tuple[SpanningDeletionRecord, ...] = tuple(
+            spanning_deletion_records or ())
         if sources is None:
             sources = set(source_to_metadata_dict.keys())
         if any(source not in sources for source in source_to_metadata_dict.keys()):
@@ -110,12 +235,15 @@ class VariantCollection(Collection):
         Since Collection.to_dict() returns a state dictionary with an
         'elements' field we have to rename it to 'variants'.
         """
-        return dict(
+        result = dict(
             variants=self.variants,
             distinct=self.distinct,
             sort_key=self.sort_key,
             sources=self.sources,
             source_to_metadata_dict=self.source_to_metadata_dict)
+        if self.spanning_deletion_records:
+            result["spanning_deletion_records"] = self.spanning_deletion_records
+        return result
 
     def __iter__(self) -> Iterator[Variant]:
         return super().__iter__()
@@ -454,6 +582,7 @@ class VariantCollection(Collection):
             self == other and
             self.sources == other.sources and
             self.source_to_metadata_dict == other.source_to_metadata_dict and
+            self.spanning_deletion_records == other.spanning_deletion_records and
             all(getattr(x, "info", None) == getattr(y, "info", None)
                 for x, y in zip(self, other)))
 
@@ -503,6 +632,9 @@ class VariantCollection(Collection):
         kwargs["source_to_metadata_dict"] = cls._merge_metadata_dictionaries(
             [vc.source_to_metadata_dict for vc in variant_collections])
         kwargs["sources"] = set.union(*([vc.sources for vc in variant_collections]))
+        if "spanning_deletion_records" not in kwargs:
+            kwargs["spanning_deletion_records"] = _combine_spanning_deletion_records(
+                combine_fn, variant_collections)
         for key, value in variant_collections[0].to_dict().items():
             # If some optional parameter isn't explicitly specified as an
             # argument to union() or intersection() then use the same value
@@ -644,9 +776,55 @@ class VariantCollection(Collection):
         metadata = OrderedDict()
         metadata["varcode_version"] = _varcode_version
         metadata.update(common_reference_metadata(v.genome for v in self))
+        if self.spanning_deletion_records:
+            metadata["spanning_deletion_records"] = str(len(self.spanning_deletion_records))
         with open(path, "w") as f:
             write_metadata_header(f, metadata)
             df.to_csv(f, index=False)
+
+    _SPANNING_DELETION_COLUMNS = (
+        "contig",
+        "original_contig",
+        "start",
+        "ref",
+        "alt_allele_index",
+        "gt_allele_index",
+        "vcf_alt_alleles",
+        "id",
+        "qual",
+        "filter",
+        "source",
+        "upstream_deletion_status",
+        "upstream_deletion",
+        "samples_carrying_star",
+    )
+
+    def spanning_deletions_dataframe(self) -> pd.DataFrame:
+        """Return a DataFrame summarizing retained VCF ``*`` placeholder records.
+
+        Always returns the expected columns even when no spanning-deletion
+        placeholders were observed.
+        """
+        rows = []
+        for rec in self.spanning_deletion_records:
+            rows.append(OrderedDict([
+                ("contig", rec.contig),
+                ("original_contig", rec.original_contig),
+                ("start", rec.start),
+                ("ref", rec.ref),
+                ("alt_allele_index", rec.alt_allele_index),
+                ("gt_allele_index", rec.gt_allele_index),
+                ("vcf_alt_alleles", ",".join(rec.vcf_alt_alleles)),
+                ("id", rec.id),
+                ("qual", rec.qual),
+                ("filter", None if rec.filter is None else (
+                    "PASS" if len(rec.filter) == 0 else ";".join(rec.filter))),
+                ("source", rec.source),
+                ("upstream_deletion_status", rec.upstream_deletion_status),
+                ("upstream_deletion", None if rec.upstream_deletion is None else rec.upstream_deletion.short_description),
+                ("samples_carrying_star", ";".join(rec.sample_gt_carriers())),
+            ]))
+        return pd.DataFrame.from_records(rows, columns=self._SPANNING_DELETION_COLUMNS)
 
     def _serialized_reference_name(self):
         """Pick a reference-name string to record in the CSV header.
