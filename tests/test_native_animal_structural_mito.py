@@ -16,7 +16,7 @@ STRUCTURAL = json.loads((DATA / "structural-cases.json").read_text())
 
 @pytest.fixture(scope="module")
 def dog_mito(tmp_path_factory):
-    from orfdata._pinned_genome import PinnedEnsemblGenome
+    from pyensembl import Genome as PyEnsemblGenome
 
     path = tmp_path_factory.mktemp("dog-mito")
     rows, cdna, pep = [], [], []
@@ -56,7 +56,7 @@ def dog_mito(tmp_path_factory):
         ("dna.fa", ">MT\n" + MITO["sequence"] + "\n"),
     ]:
         (path / filename).write_text(text)
-    genome = PinnedEnsemblGenome(
+    genome = PyEnsemblGenome(
         **{
             key: MITO[key]
             for key in (

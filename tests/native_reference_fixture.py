@@ -35,7 +35,7 @@ class ReferenceWindows:
 
 @pytest.fixture(scope="module")
 def native_genomes(tmp_path_factory):
-    from orfdata._pinned_genome import PinnedEnsemblGenome
+    from pyensembl import Genome as PyEnsemblGenome
 
     windows = json.loads(gzip.decompress((DATA / "dna-windows.json.gz").read_bytes()))
     result = {}
@@ -43,7 +43,7 @@ def native_genomes(tmp_path_factory):
         metadata = json.loads((DATA / (name + ".json")).read_text())
         metadata.pop("sources")
         directory = tmp_path_factory.mktemp("native-" + name)
-        genome = PinnedEnsemblGenome(
+        genome = PyEnsemblGenome(
             **metadata,
             gtf_path_or_url=str(DATA / (name + ".gtf.gz")),
             transcript_fasta_paths_or_urls=[str(DATA / (name + ".cdna.fa.gz"))],
