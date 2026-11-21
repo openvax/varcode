@@ -286,7 +286,7 @@ class StructuralVariant(Variant):
         doesn't model (HOMLEN, SVMETHOD, MATEID, etc.). Kept as
         a Mapping so callers can pass whatever shape their caller
         produces.
-    genome, ensembl, normalize_contig_names, convert_ucsc_contig_names, chrm_is_rcrs
+    genome, normalize_contig_names, convert_ucsc_contig_names, chrm_is_rcrs
         Same meaning as :class:`Variant`; they name ``mate_contig`` too.
     affected_start, affected_end : int, optional
         Inclusive affected-region coordinates. Defaults to ``start`` and

@@ -114,10 +114,6 @@ class Variant(Serializable):
             derived from pyensembl.Genome. Default to latest available release
             of GRCh38
 
-        ensembl : Genome, EnsemblRelease, or str, or int (DEPRECATED)
-            Old name for ``genome``. Warns with ``DeprecationWarning`` and will
-            be removed in varcode 12.0. ``genome`` wins when both are given.
-
         allow_extended_nucleotides : bool
             Extended nucleotides include 'Y' for pyrimidies or 'N' for any base
 
