@@ -135,6 +135,7 @@ def _registry_bundle() -> tuple[
     from pyensembl.gene import Gene
     from pyensembl.genetic_code import GeneticCodeAssignment
     from pyensembl.genome import Genome as PyEnsemblGenome
+    from pyensembl.pinned_genomes import PinnedGenome
     from pyensembl.protein import Protein
     from pyensembl.species import Species
     from pyensembl.transcript import Transcript
@@ -185,6 +186,7 @@ def _registry_bundle() -> tuple[
         Zygosity,
         Genome,
         PyEnsemblGenome,
+        PinnedGenome,
         EnsemblRelease,
         Transcript,
         Gene,

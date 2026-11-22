@@ -1,229 +1,183 @@
-"""Genomes ORFdata pins, such as T2T-CHM13v2.0, found by the names their files go by.
+"""Pinned rapid-release genomes (such as T2T-CHM13v2.0), delegated to PyEnsembl.
 
-PyEnsembl has no T2T-CHM13 release. ORFdata pins Ensembl's rapid-release
-annotation of T2T-CHM13v2.0 as ``t2t-chm13``, and publishes the names its
-files go by (``orfdata.reference_names()``: ``hs1``, ``chm13v2.0_maskedY_rCRS``,
-``GCA_009914755.4``, ...) and how each file names its contigs
-(``orfdata.contig_aliases()``). Varcode reads both from ORFdata, so the two
-packages accept the same names; nothing here lists them again.
+PyEnsembl 2.36+ natively catalogues checksum-pinned rapid-release assemblies
+(``pyensembl.pinned_assemblies()``, ``pyensembl.PinnedGenome``,
+``pyensembl.contig_aliases()``), including human ``T2T-CHM13v2.0``
+(``GCA_009914755.4`` / ``hs1``) and its UCSC/GenBank/RefSeq contig names and
+mitochondrion disambiguation (``CP068254.1`` native ``MT`` vs ``NC_012920.1``
+rCRS in ``_rCRS`` analysis sets).
 
-A T2T file's ``chrM`` is one of two molecules, both 16,569 bp: CHM13's own
-mitochondrion (CP068254.1), which Ensembl names ``MT``, or, in the
-``_rCRS`` analysis set, the rCRS (NC_012920.1), which begins 576 bases
-earlier in its numbering. Only the file's name tells them apart. ORFdata
-annotates the rCRS as its own contig, ``NC_012920.1``, with Ensembl GRCh38's
-MT genes, and CHM13's own ``MT`` has no annotation.
+This module bridges PyEnsembl's native pinned-assembly API into Varcode's
+reference/contig resolution, while retaining an offline fallback to an existing
+ORFdata genome cache when a user has not yet run
+``pyensembl install --reference-name T2T-CHM13v2.0``.
 """
 
-import re
-from functools import lru_cache
+from pyensembl import (
+    PinnedGenome,
+    RCRS_ACCESSION as RCRS,
+    find_pinned_reference_name,
+    is_rcrs_reference,
+    mitochondrion_note as _pyensembl_mitochondrion_note,
+    normalize_pinned_contig,
+    pinned_contig_lengths as _pyensembl_contig_lengths,
+    pinned_contig_spellings as _pyensembl_contig_spellings,
+    resolve_pinned_assembly,
+)
+from pyensembl.pinned_genomes import lookup_pinned_alias
 
-# The revised Cambridge Reference Sequence: GRCh38's MT.
-RCRS = "NC_012920.1"
 
-
-def _normalize(name):
-    """Lowercase, with dashes and spaces as underscores, and a version joined
-    to the name it follows: ``T2T-CHM13 v1.0`` and ``t2t-chm13.v1.0`` are
-    ``t2t_chm13v1.0``, not ORFdata's genome name ``t2t-chm13`` and a suffix."""
-    name = name.strip().lower().replace("-", "_").replace(" ", "_")
-    return re.sub(r"[_.]+(?=v\d+\.\d)", "", name)
-
-
-@lru_cache(maxsize=1)
-def _names():
-    """ORFdata's names, longest first: (whole-word pattern, name, genome, mitochondrion, note)."""
-    from orfdata import reference_names
-
-    rows = []
-    for row in reference_names().itertuples(index=False):
-        key = _normalize(row.name)
-        pattern = re.compile(r"(?<![a-z0-9])%s(?![a-z0-9])" % re.escape(key))
-        rows.append((pattern, row.name, row.genome, row.mitochondrion, row.note))
-    return tuple(sorted(rows, key=lambda row: -len(row[1])))
+class PinnedGenomeNotInstalledError(FileNotFoundError, ValueError):
+    """A catalogued pinned genome is not installed in PyEnsembl (or ORFdata)."""
 
 
 def find_pinned_name(text):
-    """The longest of ORFdata's reference names in ``text``, or None.
+    """The longest catalogued pinned reference name in ``text``, or None.
 
     Names are matched ignoring case, dashes and spaces, and only as whole
     words: ``hs1`` is found in ``hs1.fa`` and ``/refs/hs1/``, never in
     ``ths1`` or ``hs10``. The longest name wins, so ``chm13v2.0_maskedY_rCRS.fa``
     names the rCRS analysis set rather than ``chm13v2.0``.
     """
-    normalized = _normalize(text)
-    for pattern, name, *_ in _names():
-        if pattern.search(normalized):
-            return name
-    return None
+    return find_pinned_reference_name(text)
 
 
 def pinned_name(name):
-    """ORFdata's row for exactly ``name`` (ignoring case), as a dict, or None."""
-    key = _normalize(name)
-    for pattern, found, genome, mitochondrion, note in _names():
-        if _normalize(found) == key:
-            return dict(name=found, genome=genome, mitochondrion=mitochondrion, note=note)
-    return None
+    """PyEnsembl's alias row for ``name`` (ignoring case/punctuation), as a dict, or None."""
+    row = lookup_pinned_alias(name)
+    if row is None:
+        return None
+    return dict(
+        name=row.name,
+        genome=row.assembly,
+        mitochondrion=row.mitochondrion,
+        note=row.note,
+    )
 
 
 def check_supported(name):
-    """Raise ValueError for a name of another version of a pinned assembly, such as T2T-CHM13v1.0."""
-    row = pinned_name(name)
-    if row is not None and row["genome"] is None:
-        raise ValueError("%s is not a supported reference: %s" % (name, row["note"]))
+    """Raise ValueError for an unsupported version of a pinned assembly, such as T2T-CHM13v1.0."""
+    row = lookup_pinned_alias(name)
+    if row is not None and row.assembly is None:
+        raise ValueError("%s is not a supported reference: %s" % (name, row.note))
 
 
 def pinned_assembly(name):
-    """The assembly of the genome ORFdata pins for ``name``, e.g.
+    """The canonical assembly name of a pinned genome for ``name``, e.g.
     ``T2T-CHM13v2.0`` for ``hs1`` or ``chm13v2.0``; None for other names and
-    for other versions such as T2T-CHM13v1.0. This is the one reader of a
-    genome's name as an assembly (#730): every rule that belongs to the
-    assembly goes through it."""
-    return _assembly(name) if isinstance(name, str) else None
-
-
-@lru_cache(maxsize=None)
-def _assembly(name):
-    row = pinned_name(name)
-    if row is None or row["genome"] is None:
+    for other versions such as T2T-CHM13v1.0 (#730)."""
+    if not isinstance(name, str):
         return None
-    return _pin(row["genome"]).reference_name
+    row = lookup_pinned_alias(name)
+    if row is None or row.assembly is None:
+        return None
+    return row.reference_name
 
 
 def names_rcrs(name):
     """Whether files called ``name`` carry the rCRS as their mitochondrion."""
-    row = pinned_name(name)
-    return row is not None and row["mitochondrion"] == RCRS
-
-
-@lru_cache(maxsize=1)
-def _pins():
-    from orfdata import pinned_genomes
-
-    return {genome.reference_name: genome for genome in pinned_genomes()}
-
-
-def _pin(genome):
-    """ORFdata's pinned genome called ``genome``, e.g. ``t2t-chm13``."""
-    return next(pin for pin in _pins().values() if pin.name == genome)
+    return is_rcrs_reference(name)
 
 
 def is_pinned_assembly(reference_name):
-    """Whether ``reference_name`` names the assembly of a genome ORFdata pins:
-    ``T2T-CHM13v2.0`` or an alias of it such as ``hs1`` (#730)."""
+    """Whether ``reference_name`` names a catalogued pinned assembly or alias (#730)."""
     return pinned_assembly(reference_name) is not None
 
 
+def _not_installed_error_type():
+    try:
+        import orfdata
+    except ImportError:
+        return PinnedGenomeNotInstalledError
+
+    class _CompatNotInstalledError(orfdata.NotInstalledError, PinnedGenomeNotInstalledError):
+        pass
+
+    return _CompatNotInstalledError
+
+
 def load_pinned_genome(name, release=None, source=None):
-    """Open the genome ORFdata pins for ``name``, offline.
+    """Open a catalogued pinned genome offline via PyEnsembl (with ORFdata cache fallback).
 
-    ``release`` must be the pinned annotation's version, e.g. ``2022_07``.
-    A genome that isn't installed raises ORFdata's ``NotInstalledError``
-    (both a ``ValueError`` and a ``FileNotFoundError``), which names the
-    command that installs it; ``source``, the text ``name`` was found in, is
-    added to its message.
+    ``release`` must match the pinned annotation's version, e.g. ``2022_07``.
+    When not yet installed in PyEnsembl, falls back to an existing local
+    ORFdata installation if present. If neither cache has the genome, raises an
+    error (subclassing ``ValueError`` and ``FileNotFoundError``) naming
+    ``pyensembl install --reference-name <reference_name>``.
     """
-    import orfdata
-
     check_supported(name)
-    row = pinned_name(name)
-    pin = _pin(row["genome"])
+    row = lookup_pinned_alias(name)
+    if row is None or row.assembly is None:
+        raise ValueError("Unknown pinned reference: %r" % (name,))
+    pin = resolve_pinned_assembly(row.name)
     if release is not None and str(release) != str(pin.annotation_version):
         raise ValueError(
-            "%s has one pinned annotation, %s %s (ORFdata's %s); release %s isn't available"
-            % (pin.reference_name, pin.annotation_name, pin.annotation_version, pin.name, release))
+            "%s has one pinned annotation, %s %s (%s); release %s isn't available"
+            % (pin.reference_name, pin.annotation_name, pin.annotation_version, pin.name, release)
+        )
+
+    genome = PinnedGenome.cached(pin.name)
+    if genome.installed():
+        return genome
+
+    # Backwards-compatibility fallback: reuse an existing local ORFdata install
+    # when PyEnsembl's cache doesn't have the pinned genome yet.
     try:
-        return orfdata.load_genome(row["name"])
-    except orfdata.NotInstalledError as error:
-        found = "" if source in (None, row["name"]) else " (from %r)" % (source,)
-        if row["name"] == pin.reference_name:
-            lead = "The annotation of %s%s comes from ORFdata." % (row["name"], found)
-        else:
-            lead = "%s%s is %s, whose annotation comes from ORFdata." % (
-                row["name"], found, pin.reference_name)
-        raise type(error)("%s %s" % (lead, error)) from error
+        import orfdata
+    except ImportError:
+        orfdata = None
+    if orfdata is not None:
+        try:
+            return orfdata.load_genome(row.name)
+        except orfdata.NotInstalledError:
+            pass
 
-
-@lru_cache(maxsize=None)
-def _contigs(reference_name, chrm_is_rcrs):
-    """Every spelling of each contig (UCSC, GenBank, RefSeq and the
-    annotation's own) to the annotation's name, and each name's length."""
-    from orfdata import contig_aliases
-
-    pin = _pins()[pinned_assembly(reference_name)]
-    frame = contig_aliases(pin.name)
-    rows = [row for row in frame.to_dict("records")]
-    if chrm_is_rcrs:
-        # This file's chrM is the rCRS, not the assembly's own mitochondrion.
-        own = [row for row in rows if row["ucsc"] in ("chrM", "chrMT")]
-        rows = [row for row in rows if row not in own]
-        contig = (pin.mitochondria.get(RCRS) or {}).get("contig") or dict(
-            name=RCRS, ucsc="chrM", genbank="J01415.2", refseq=RCRS, length=16569)
-        rows.append(contig)
-    names, lengths = {}, {}
-    for row in rows:
-        for alias in (row["name"], row["ucsc"], row["genbank"], row["refseq"]):
-            if alias:
-                names[alias] = row["name"]
-        if row["ucsc"] == "chrM":
-            names["M"] = row["name"]
-        lengths[row["name"]] = int(row["length"])
-    return names, lengths
+    found = "" if source in (None, row.name) else " (from %r)" % (source,)
+    if row.name == pin.reference_name:
+        lead = "The annotation of %s%s is not installed." % (row.name, found)
+    else:
+        lead = "%s%s is %s, whose annotation is not installed." % (
+            row.name, found, pin.reference_name
+        )
+    install_cmd = genome.install_string()
+    err_cls = _not_installed_error_type()
+    raise err_cls(
+        "%s Install it once with '%s'." % (lead, install_cmd)
+    )
 
 
 def pinned_contig_name(contig, reference_name, chrm_is_rcrs=False):
-    """The annotation's name for ``contig`` in a pinned assembly, or None.
-
-    ``chr22``, ``CP068256.2`` and ``NC_060946.1`` are all T2T-CHM13v2.0's
-    ``22``. ``chrM`` is ``MT``, CHM13's own mitochondrion, unless
-    ``chrm_is_rcrs`` says it is the rCRS, which is ``NC_012920.1``. None
-    when ``reference_name`` isn't a pinned assembly or the name is unknown.
-    """
+    """The annotation's name for ``contig`` in a pinned assembly, or None."""
     if not is_pinned_assembly(reference_name):
         return None
-    names = _contigs(reference_name, bool(chrm_is_rcrs))[0]
-    contig = str(contig)
-    if contig in names:
-        return names[contig]
-    # The canonical chr spellings in any case: chrx, CHR1, chrm.
-    match = re.fullmatch(r"chr([0-9]+|[xym]|mt)", contig, flags=re.IGNORECASE)
-    if match:
-        return names.get("chr" + match[1].upper())
-    return names.get(contig.upper())
+    return normalize_pinned_contig(contig, reference_name, chrm_is_rcrs=bool(chrm_is_rcrs))
 
 
 def pinned_spellings(reference_name, chrm_is_rcrs=False, mitochondrion=True):
-    """Each annotation contig of a pinned assembly to all its spellings.
-
-    ``mitochondrion=False`` leaves out the mitochondrion, for a file whose
-    name doesn't say which one its ``chrM`` is.
-    """
-    names, lengths = _contigs(reference_name, bool(chrm_is_rcrs))
-    mitochondria = {names.get("chrM")} if not mitochondrion else set()
-    spellings = {}
-    for alias, name in names.items():
-        if name not in mitochondria:
-            spellings.setdefault(name, set()).add(alias)
-    return spellings
+    """Each annotation contig of a pinned assembly to all its spellings."""
+    return _pyensembl_contig_spellings(
+        reference_name,
+        chrm_is_rcrs=bool(chrm_is_rcrs),
+        include_mitochondrion=bool(mitochondrion),
+    )
 
 
 def pinned_contig_lengths(reference_name, chrm_is_rcrs=False):
-    """The annotation's name for each contig to its length, from ORFdata's table."""
-    return _contigs(reference_name, bool(chrm_is_rcrs))[1]
+    """The annotation's name for each contig to its length."""
+    return _pyensembl_contig_lengths(reference_name, chrm_is_rcrs=bool(chrm_is_rcrs))
 
 
 def mitochondrion_note(contig, reference_name):
     """Why a pinned assembly's mitochondrion has no annotation, or None."""
     if not is_pinned_assembly(reference_name) or str(contig) not in ("MT", "chrM", "M", RCRS):
         return None
-    reference_name = pinned_assembly(reference_name)
-    pin = _pins()[reference_name]
+    canonical = pinned_assembly(reference_name)
     if str(contig) == RCRS:
-        return ("this %s annotation has no genes on the rCRS; ORFdata's %s annotates them with "
-                "Ensembl GRCh38's MT genes" % (reference_name, pin.name))
-    return ("%s's own mitochondrion has no annotation: Ensembl's annotation of %s has no "
-            "mitochondrial genes, and its position 1 is what the rCRS numbers 577, so it can't be "
-            "annotated as the rCRS. Only the chm13v2.0_maskedY_rCRS analysis set's chrM is the rCRS, "
-            "annotated as %s; load_vcf reads that from the file name, and chrm_is_rcrs=True says it "
-            "for a Variant whose chrM is the rCRS" % (reference_name, reference_name, RCRS))
+        return _pyensembl_mitochondrion_note(contig, canonical)
+    return (
+        "%s's own mitochondrion has no annotation: Ensembl's annotation of %s has no "
+        "mitochondrial genes, and its position 1 is what the rCRS numbers 577, so it can't be "
+        "annotated as the rCRS. Only the chm13v2.0_maskedY_rCRS analysis set's chrM is the rCRS, "
+        "annotated as %s; load_vcf reads that from the file name, and chrm_is_rcrs=True says it "
+        "for a Variant whose chrM is the rCRS" % (canonical, canonical, RCRS)
+    )
