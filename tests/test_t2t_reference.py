@@ -145,16 +145,55 @@ def test_a_genome_that_is_not_installed_names_the_command(monkeypatch, tmp_path)
     from orfdata.genomes import load_genome as real
 
     monkeypatch.setattr(orfdata, "load_genome", real)
-    monkeypatch.setenv("ORFDATA_CACHE", str(tmp_path))
+    monkeypatch.setenv("PYENSEMBL_CACHE_DIR", str(tmp_path / "pyensembl"))
+    monkeypatch.setenv("ORFDATA_CACHE", str(tmp_path / "orfdata"))
     with pytest.raises(orfdata.NotInstalledError) as error:
         infer_genome("/refs/not-installed/chm13v2.0_noY.fa")
     message = str(error.value)
     assert message.startswith("chm13v2.0_noY (from '/refs/not-installed/chm13v2.0_noY.fa') is T2T-CHM13v2.0")
-    assert "'orfdata genomes install t2t-chm13'" in message
+    assert "'pyensembl install --reference-name T2T-CHM13v2.0'" in message
     # Not through infer_genome, which memoizes: other tests open T2T-CHM13v2.0 by name.
-    with pytest.raises(orfdata.NotInstalledError, match="^The annotation of T2T-CHM13v2.0 comes from ORFdata"):
+    with pytest.raises(orfdata.NotInstalledError, match="^The annotation of T2T-CHM13v2.0 is not installed"):
         load_pinned_genome("T2T-CHM13v2.0", source="T2T-CHM13v2.0")
     assert isinstance(error.value, ValueError) and isinstance(error.value, FileNotFoundError)
+
+
+def test_load_pinned_genome_prefers_pyensembl_when_installed(monkeypatch):
+    import pyensembl
+    from varcode import pinned_references
+
+    sentinel = object()
+
+    class _FakeInstalled:
+        def installed(self):
+            return True
+
+    fake = _FakeInstalled()
+    monkeypatch.setattr(pinned_references.PinnedGenome, "cached", classmethod(lambda cls, name: fake))
+    monkeypatch.setattr(
+        orfdata,
+        "load_genome",
+        lambda *a, **kw: (_ for _ in ()).throw(AssertionError("should not fall back to orfdata")),
+    )
+    assert load_pinned_genome("hs1") is fake
+    assert sentinel is not fake
+    assert pyensembl.PinnedGenome is pinned_references.PinnedGenome
+
+
+def test_pinned_genome_roundtrips_through_structural_serialization():
+    from pyensembl import PinnedGenome
+    from varcode.effects.structural_serialization import (
+        _registry_bundle,
+        _safe_from_json_any,
+        effect_serialization_classes,
+    )
+
+    assert ("pyensembl.pinned_genomes", "PinnedGenome") in effect_serialization_classes()
+    genome = PinnedGenome("hs1")
+    reloaded = _safe_from_json_any(genome.to_json(), *_registry_bundle())
+    assert isinstance(reloaded, PinnedGenome)
+    assert reloaded.reference_name == "T2T-CHM13v2.0"
+    assert reloaded.assembly_accession == "GCA_009914755.4"
 
 
 @pytest.mark.parametrize("contig", ["chr1", "1", "CP068277.2", "NC_060925.1"])

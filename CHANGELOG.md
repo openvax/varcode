@@ -1,5 +1,16 @@
 # Change Log
 
+## v12.1.0
+
+### Reference genomes
+
+- Delegate `varcode.pinned_references` (T2T-CHM13v2.0 / `hs1` / `GCA_009914755.4`
+  aliases, UCSC/GenBank/RefSeq contig mapping, contig lengths, mitochondrion
+  disambiguation, and pinned genome loading) directly to `pyensembl>=2.36.0`
+  (openvax/pyensembl#541), with an offline backwards-compatibility fallback to
+  existing local `orfdata` genome caches.
+- Allowlist `pyensembl.PinnedGenome` in `varcode.effects.structural_serialization`.
+
 ## v12.0.2
 
 ### Maintenance
