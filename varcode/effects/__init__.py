@@ -113,7 +113,6 @@ __all__ = [
     "IncompleteTranscript",
     "Intergenic",
     "Intragenic",
-    "IncompleteTranscript",
     "NoncodingTranscript",
     "ThreePrimeUTR",
     "FivePrimeUTR",

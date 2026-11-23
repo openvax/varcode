@@ -15,7 +15,6 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from functools import cached_property
-from memoized_property import memoized_property
 from typing import TYPE_CHECKING, Any, Literal
 
 from serializable import Serializable
@@ -1552,7 +1551,7 @@ class KnownAminoAcidChange(NonsilentCodingMutation):
                 start + 1,
                 self.aa_alt)
 
-    @memoized_property
+    @cached_property
     def mutant_protein_sequence(self) -> str | None:
         if self.mutant_transcript is not None:
             return self.mutant_transcript.mutant_protein_sequence
@@ -1724,7 +1723,7 @@ class PrematureStop(KnownAminoAcidChange):
             start + 1,
             self.aa_alt)
 
-    @memoized_property
+    @cached_property
     def mutant_protein_sequence(self) -> str | None:
         if self.mutant_transcript is not None:
             return self.mutant_transcript.mutant_protein_sequence
@@ -1806,7 +1805,7 @@ class FrameShift(KnownAminoAcidChange):
     def shifted_sequence(self):
         return self.aa_alt
 
-    @memoized_property
+    @cached_property
     def mutant_protein_sequence(self) -> str | None:
         if self.mutant_transcript is not None:
             return self.mutant_transcript.mutant_protein_sequence
