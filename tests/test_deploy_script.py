@@ -250,3 +250,30 @@ def test_each_attempt_preserves_earlier_artifacts(release):
         assert result.returncode == 0, result.stderr
     assert len(list((release / "dist").iterdir())) == 2
     assert len(list((release / "dist").glob("*/*"))) == 4
+
+
+def test_repo_gitignore_allows_lint_and_test_tool_caches_during_deploy(release):
+    """Tool caches created by ./lint.sh and ./test.sh must not trip check_release (#766)."""
+    shutil.copy(ROOT / ".gitignore", release / ".gitignore")
+    (release / "lint.sh").write_text(
+        '#!/bin/sh\n'
+        'echo lint >> "$RELEASE_LOG"\n'
+        'mkdir -p .ruff_cache .mypy_cache\n'
+        'touch .ruff_cache/cache .mypy_cache/cache\n'
+    )
+    (release / "lint.sh").chmod(0o755)
+    (release / "test.sh").write_text(
+        '#!/bin/sh\n'
+        'echo test >> "$RELEASE_LOG"\n'
+        'mkdir -p .pytest_cache\n'
+        'touch .pytest_cache/cache .coverage\n'
+    )
+    (release / "test.sh").chmod(0o755)
+    git(release, "add", ".gitignore", "lint.sh", "test.sh")
+    git(release, "commit", "-m", "Use repo .gitignore and emit tool caches")
+    git(release, "push", "origin", "main")
+
+    result = deploy(release, "--dry-run", VERSION)
+    assert result.returncode == 0, result.stderr
+    assert steps(release) == ["lint", "test", "build", "check"]
+    assert not git(release, "status", "--porcelain", "--untracked-files=all")

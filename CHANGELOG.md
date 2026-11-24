@@ -1,5 +1,14 @@
 # Change Log
 
+## v12.2.2
+
+### Maintenance
+
+- Add `.pytest_cache/`, `.mypy_cache/`, and `.ruff_cache/` to `.gitignore`
+  (and include `.gitignore` in the source distribution) so `./deploy.sh`'s
+  post-test cleanliness check passes without external cache-directory overrides
+  (#766).
+
 ## v12.2.1
 
 ### Tests and documentation
