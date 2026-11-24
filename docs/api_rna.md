@@ -1,9 +1,7 @@
 # RNA and transcripts API
 
-Signatures for mutant transcripts, observed RNA import, reference-completion
-hypotheses and RNA evidence.
-See [Transcript models](transcript_models.md) for sequence access and
-[RNA imports](rna_structures.md) for observed structures and Exacto predictions.
+Signatures for mutant transcripts and RNA evidence.
+See [Transcript models](transcript_models.md) for sequence access.
 
 ## Mutant transcripts
 
@@ -17,19 +15,11 @@ See [Transcript models](transcript_models.md) for sequence access and
 
 ::: varcode.apply_variants_to_transcript
 
-## Observed RNA import
-
-::: varcode.load_exacto_fusions
+## RNA evidence
 
 ::: varcode.make_fusion_outcome
 
 ::: varcode.RNAEvidence
-
-## Reference-completion hypotheses
-
-::: varcode.reference_completion_hypotheses
-
-## RNA evidence
 
 ::: varcode.RNAEvidenceResolver
 

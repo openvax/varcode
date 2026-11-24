@@ -67,10 +67,8 @@ while full cDNA and protein remain unknown. Concatenating its segments does
 not reconstruct the missing partner or establish the full allele.
 
 Likewise, a sequence supplied by an RNA assembler may be only a junction
-fragment. Keep its completeness and source information with the sequence.
-The [RNA import guide](rna_structures.md)
-explains how observed structures and sequence-predicted proteins are represented;
-neither alone proves translation.
+fragment. Keep its completeness and source information with the sequence;
+neither observed RNA nor sequence-predicted ORFs alone prove translation.
 
 ## Related objects
 

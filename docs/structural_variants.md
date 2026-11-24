@@ -134,7 +134,7 @@ There is no candidate-count cap. Distinct transcript pairs remain separate even
 when their predicted proteins match. The first candidate follows annotation
 order, not measured likelihood. These are reference-isoform predictions, not
 every possible splice/phase combination or evidence that a fusion is expressed.
-See [fusion rules](sv_reference.md#fusion-partners) and [RNA imports](rna_structures.md).
+See [fusion rules](sv_reference.md#fusion-partners).
 
 ## Which transcripts get annotated
 
@@ -212,7 +212,3 @@ impact.
 - <a id="alleles-coordinates-and-exports"></a>[SV coordinates and exports](sv_reference.md#alleles-coordinates-and-exports).
 - <a id="junctions-which-side-of-each-breakpoint-is-kept"></a><a id="5-and-3-roles"></a>[Junction orientation and fusion partners](sv_reference.md#junction-orientation).
 - <a id="breakends-every-combination"></a><a id="deletions-duplications-and-inversions"></a><a id="where-in-the-gene-a-breakpoint-lands"></a>[Breakend, span, and protein outcomes](sv_reference.md#breakend-outcomes).
-- <a id="importing-observed-rna-structures"></a>[Import observed RNA structures](rna_structures.md).
-- <a id="import-exactos-protein-predictions"></a>[Import Exacto protein predictions](rna_structures.md#import-exactos-protein-predictions).
-
-For exhaustive callset reconciliation, see [Compare SV calls](sv_comparison.md).

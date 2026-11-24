@@ -36,7 +36,6 @@ nav:
   - Everyday tasks:
       - Effect annotation: effect_annotation.md
       - Genotypes & sample queries: genotype.md
-      - Sample identity checks: sample_identity.md
       - Saving & reloading results: csv.md
       - Protein collections & FASTA: proteome.md
       - Troubleshooting: errors.md
@@ -44,8 +43,6 @@ nav:
       - Native mouse, dog & T2T references: native_references.md
       - Splice variants: splice_variants.md
       - Structural variants: structural_variants.md
-      - Comparing SV callers: sv_comparison.md
-      - Observed RNA imports: rna_structures.md
       - Germline-aware annotation: germline.md
       - Phasing: phasing.md
       - VariantCollection transforms: transforms.md
@@ -65,7 +62,6 @@ nav:
           - Phasing & germline: api_phasing.md
           - RNA & transcripts: api_rna.md
           - ORFs: api_orfs.md
-          - Sample identity: api_sample_identity.md
           - Annotators: api_annotators.md
       - Writing an annotator: annotator_contract.md
   - Project:

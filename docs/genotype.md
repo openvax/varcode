@@ -95,9 +95,7 @@ de_novo = (set(vc.for_sample("child"))
 These are genotype comparisons, not somatic or de novo calling. A variant
 counts as absent from the normal whenever the normal doesn't carry it,
 including when the normal has no call at that site (`MISSING`). Check
-`vc.zygosity(variant, "normal")` if that distinction matters. To check whether
-samples are labelled with the right donor, see
-[sample identity checks](sample_identity.md).
+`vc.zygosity(variant, "normal")` if that distinction matters.
 
 ## Multi-allelic sites
 

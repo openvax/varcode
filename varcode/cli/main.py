@@ -5,7 +5,6 @@ Subcommands:
 
 ``effects``        annotate variants with predicted coding effects
 ``genes``          annotate variants with overlapping genes
-``check-samples``  screen VCFs for sample mix-ups
 
 For backward compatibility, ``varcode --vcf x.vcf ...`` with no subcommand is
 the same as ``varcode effects --vcf x.vcf ...``, and the separate
@@ -20,7 +19,7 @@ import argcomplete
 from ..version import __version__
 from .help import HelpArgumentParser
 
-SUBCOMMANDS = ("effects", "genes", "check-samples")
+SUBCOMMANDS = ("effects", "genes")
 
 
 def build_parser(*, attach_subcommands=False):
@@ -38,7 +37,7 @@ def build_parser(*, attach_subcommands=False):
     subparsers = parser.add_subparsers(
         title="subcommands",
         dest="subcommand",
-        metavar="{effects,genes,check-samples}",
+        metavar="{effects,genes}",
     )
     effects_parser = subparsers.add_parser(
         "effects",
@@ -48,16 +47,11 @@ def build_parser(*, attach_subcommands=False):
         "genes",
         help="annotate variants with overlapping gene names (alias: the varcode-genes command)",
     )
-    check_parser = subparsers.add_parser(
-        "check-samples",
-        help="screen VCFs for sample mix-ups",
-    )
     if attach_subcommands:
         from .effects_script import attach_effects_parser
         from .genes_script import attach_genes_parser
-        from .sample_checks import add_sample_check_args
 
-        for subparser in (effects_parser, genes_parser, check_parser):
+        for subparser in (effects_parser, genes_parser):
             subparser.add_argument(
                 "--version",
                 action="version",
@@ -65,7 +59,6 @@ def build_parser(*, attach_subcommands=False):
             )
         attach_effects_parser(effects_parser)
         attach_genes_parser(genes_parser)
-        add_sample_check_args(check_parser)
     return parser
 
 
@@ -76,7 +69,7 @@ def run_subcommand(name, args):
     Parameters
     ----------
     name : str
-        One of ``effects``, ``genes`` or ``check-samples``.
+        One of ``effects`` or ``genes``.
     args : list of str
         Arguments for the subcommand, excluding its name.
 
@@ -94,8 +87,6 @@ def run_subcommand(name, args):
         from .effects_script import main as subcommand_main
     elif name == "genes":
         from .genes_script import main as subcommand_main
-    elif name == "check-samples":
-        from .sample_checks import main as subcommand_main
     else:
         raise ValueError(
             "Unknown varcode subcommand %r; expected one of %s"

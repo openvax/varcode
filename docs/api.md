@@ -12,7 +12,6 @@ error defaults, compatibility names, and current typing coverage.
 |---|---|
 | Resolve chromosome names for another reader | [Chromosome resolver](api_variants.md#resolve-chromosome-names-across-readers) |
 | Annotate additional reference ORFs or mapped RNA products | [ORFs](api_orfs.md) |
-| Compare sample evidence | [Sample identity](api_sample_identity.md) |
 
 ## Variants and files
 
@@ -56,7 +55,6 @@ error defaults, compatibility names, and current typing coverage.
 - <a id="varcode.MutantTranscriptSource"></a><a id="varcode.MutantTranscriptSource.mutant_transcript"></a>[MutantTranscriptSource](api_phasing.md#varcode.MutantTranscriptSource)
 - <a id="varcode.MolecularPhaseResolver"></a><a id="varcode.MolecularPhaseResolver.has_evidence"></a><a id="varcode.MolecularPhaseResolver.mutant_transcript"></a><a id="varcode.MolecularPhaseResolver.in_cis"></a><a id="varcode.MolecularPhaseResolver.phased_partners"></a>[MolecularPhaseResolver](api_phasing.md#varcode.MolecularPhaseResolver)
 - <a id="varcode.ReadPhaseResolver"></a>[ReadPhaseResolver](api_phasing.md#varcode.ReadPhaseResolver)
-- <a id="varcode.RNAReadPhasingSource"></a><a id="varcode.RNAReadPhasingSource.close"></a><a id="varcode.RNAReadPhasingSource.register_variants"></a><a id="varcode.RNAReadPhasingSource.register_haplotype"></a><a id="varcode.RNAReadPhasingSource.supports_variant"></a><a id="varcode.RNAReadPhasingSource.has_evidence"></a><a id="varcode.RNAReadPhasingSource.in_cis"></a><a id="varcode.RNAReadPhasingSource.partners_in_cis"></a>[RNAReadPhasingSource](api_phasing.md#varcode.RNAReadPhasingSource)
 - <a id="varcode.VCFPhaseResolver"></a><a id="varcode.VCFPhaseResolver.in_cis"></a><a id="varcode.VCFPhaseResolver.phased_partners"></a>[VCFPhaseResolver](api_phasing.md#varcode.VCFPhaseResolver)
 - [query_in_cis](api_phasing.md#varcode.query_in_cis)
 - <a id="varcodeapply_phase_resolver_to_effects"></a><a id="varcode.apply_phase_resolver_to_effects"></a>[apply_phase_resolver_to_effects](api_phasing.md#varcode.apply_phase_resolver_to_effects)
@@ -75,7 +73,6 @@ error defaults, compatibility names, and current typing coverage.
 
 <a id="mutant-transcripts"></a><a id="observed-rna-import"></a><a id="varcodemutanttranscript"></a><a id="rna-evidence"></a><a id="varcodernaevidenceresolver"></a><a id="varcodenullrnaevidenceresolver"></a>[RNA and transcripts reference](api_rna.md)
 
-- <a id="varcode.load_exacto_fusions"></a>[load_exacto_fusions](api_rna.md#varcode.load_exacto_fusions)
 - <a id="varcode.make_fusion_outcome"></a>[make_fusion_outcome](api_rna.md#varcode.make_fusion_outcome)
 - <a id="varcode.RNAEvidence"></a>[RNAEvidence](api_rna.md#varcode.RNAEvidence)
 - <a id="varcode.MutantTranscript"></a><a id="varcode.MutantTranscript.reference_transcript"></a><a id="varcode.MutantTranscript.edits"></a><a id="varcode.MutantTranscript.reference_segments"></a><a id="varcode.MutantTranscript.cdna_sequence"></a><a id="varcode.MutantTranscript.mutant_protein_sequence"></a><a id="varcode.MutantTranscript.annotator_name"></a><a id="varcode.MutantTranscript.evidence"></a><a id="varcode.MutantTranscript.is_identical_to_reference"></a><a id="varcode.MutantTranscript.is_structural"></a><a id="varcode.MutantTranscript.total_length_delta"></a><a id="varcode.MutantTranscript.from_sequence"></a>[MutantTranscript](api_rna.md#varcode.MutantTranscript)

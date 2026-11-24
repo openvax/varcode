@@ -38,7 +38,6 @@ def _clean_env(**extra):
         "varcode.cli.main",
         "varcode.cli.effects_script",
         "varcode.cli.genes_script",
-        "varcode.cli.sample_checks",
     ],
 )
 def test_cli_and_package_import_avoid_heavy_dependencies(module_name):
@@ -62,10 +61,9 @@ def test_cli_and_package_import_avoid_heavy_dependencies(module_name):
 @pytest.mark.parametrize(
     "entry_module,comp_line,expected_items",
     [
-        ("varcode.cli.main", "varcode ", {"effects", "genes", "check-samples"}),
+        ("varcode.cli.main", "varcode ", {"effects", "genes"}),
         ("varcode.cli.main", "varcode effects --out", {"--output-csv", "--output"}),
         ("varcode.cli.main", "varcode genes --v", {"--vcf", "--variant", "--version"}),
-        ("varcode.cli.main", "varcode check-samples --m", {"--manifest", "--mixed"}),
         ("varcode.cli.genes_script", "varcode-genes --out", {"--output-csv", "--output"}),
     ],
 )
@@ -104,7 +102,6 @@ def test_entry_modules_have_argcomplete_marker_within_first_1024_bytes():
         "varcode/cli/main.py",
         "varcode/cli/effects_script.py",
         "varcode/cli/genes_script.py",
-        "varcode/cli/sample_checks.py",
     ):
         head = (REPO_ROOT / rel).read_bytes()[:1024]
         assert b"PYTHON_ARGCOMPLETE_OK" in head, f"Missing marker in {rel}"
@@ -165,7 +162,7 @@ def test_help_and_version_do_not_print_legacy_banner(capsys):
 
     assert cli_main.main(["--help"]) == 0
     out = capsys.readouterr().out
-    assert "effects" in out and "genes" in out and "check-samples" in out
+    assert "effects" in out and "genes" in out
     assert "Path:" not in out
 
 

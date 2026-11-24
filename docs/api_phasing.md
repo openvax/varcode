@@ -14,8 +14,6 @@ for input requirements and examples.
 
 ::: varcode.ReadPhaseResolver
 
-::: varcode.RNAReadPhasingSource
-
 ::: varcode.VCFPhaseResolver
 
 ::: varcode.apply_phase_resolver_to_effects

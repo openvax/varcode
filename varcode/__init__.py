@@ -101,7 +101,6 @@ if TYPE_CHECKING:
         ReferenceMismatchError as ReferenceMismatchError,
         SampleNotFoundError as SampleNotFoundError,
     )
-    from .exacto import load_exacto_fusions as load_exacto_fusions
     from .genome import Genome as Genome
     from .genome_sequence import (
         reference_base as reference_base,
@@ -169,9 +168,6 @@ if TYPE_CHECKING:
         GeneLike as GeneLike,
         TranscriptLike as TranscriptLike,
     )
-    from .reference_completion import (
-        reference_completion_hypotheses as reference_completion_hypotheses,
-    )
     from .rna_evidence import (
         NullRNAEvidenceResolver as NullRNAEvidenceResolver,
         RNAEvidence as RNAEvidence,
@@ -179,15 +175,6 @@ if TYPE_CHECKING:
         apply_rna_evidence_to_effects as apply_rna_evidence_to_effects,
         make_fusion_outcome as make_fusion_outcome,
         make_rna_outcome as make_rna_outcome,
-    )
-    from .rna_read_phasing import RNAReadPhasingSource as RNAReadPhasingSource
-    from .sample_identity import (
-        SampleCheckConfig as SampleCheckConfig,
-        SampleFingerprint as SampleFingerprint,
-        SampleSpec as SampleSpec,
-        check_sample_identity as check_sample_identity,
-        compare_samples as compare_samples,
-        load_vcf_samples as load_vcf_samples,
     )
     from .splice_outcomes import (
         SpliceCandidateRNAEvidence as SpliceCandidateRNAEvidence,
@@ -284,15 +271,12 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "VCFPhaseResolver": (".phasing", "VCFPhaseResolver"),
     "apply_phase_resolver_to_effects": (".phasing", "apply_phase_resolver_to_effects"),
     "query_in_cis": (".phasing", "query_in_cis"),
-    "RNAReadPhasingSource": (".rna_read_phasing", "RNAReadPhasingSource"),
     "NullRNAEvidenceResolver": (".rna_evidence", "NullRNAEvidenceResolver"),
     "RNAEvidence": (".rna_evidence", "RNAEvidence"),
     "RNAEvidenceResolver": (".rna_evidence", "RNAEvidenceResolver"),
     "apply_rna_evidence_to_effects": (".rna_evidence", "apply_rna_evidence_to_effects"),
     "make_fusion_outcome": (".rna_evidence", "make_fusion_outcome"),
     "make_rna_outcome": (".rna_evidence", "make_rna_outcome"),
-    "load_exacto_fusions": (".exacto", "load_exacto_fusions"),
-    "reference_completion_hypotheses": (".reference_completion", "reference_completion_hypotheses"),
     "CrypticSplicePolicy": (".transcript_layout", "CrypticSplicePolicy"),
     "predict_transcript_model_effect": (".transcript_model", "predict_transcript_model_effect"),
     # splice outcomes & splice effect classes
@@ -340,16 +324,10 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "HypothesisLimit": (".effects", "HypothesisLimit"),
     "Unresolved": (".effects", "Unresolved"),
     "GermlineAlleleOverlap": (".effects", "GermlineAlleleOverlap"),
-    # proteome & sample identity & protocols
+    # proteome & protocols
     "to_proteome": (".proteome", "to_proteome"),
     "GeneLike": (".protocols", "GeneLike"),
     "TranscriptLike": (".protocols", "TranscriptLike"),
-    "SampleCheckConfig": (".sample_identity", "SampleCheckConfig"),
-    "SampleSpec": (".sample_identity", "SampleSpec"),
-    "SampleFingerprint": (".sample_identity", "SampleFingerprint"),
-    "load_vcf_samples": (".sample_identity", "load_vcf_samples"),
-    "compare_samples": (".sample_identity", "compare_samples"),
-    "check_sample_identity": (".sample_identity", "check_sample_identity"),
     # ORF & discovery
     "ORFAnnotation": (".orf", "ORFAnnotation"),
     "ORFOutcome": (".orf", "ORFOutcome"),
@@ -376,7 +354,6 @@ _LAZY_SUBMODULES: frozenset[str] = frozenset({
     "effect_traversal",
     "effects",
     "errors",
-    "exacto",
     "extra_orfs",
     "genome",
     "genome_sequence",
@@ -390,10 +367,7 @@ _LAZY_SUBMODULES: frozenset[str] = frozenset({
     "proteome",
     "protocols",
     "reference",
-    "reference_completion",
     "rna_evidence",
-    "rna_read_phasing",
-    "sample_identity",
     "splice_outcomes",
     "structural_variant",
     "sv_allele_parser",
@@ -409,8 +383,6 @@ __all__ = [
     "ORFAnnotation", "ORFOutcome", "ORFProduct", "ORFProductAnnotation",
     "annotate_orf_variants", "annotate_orf_rna_product", "annotate_orf_product",
     "predict_orf_effects", "load_orf_catalog",
-    "SampleCheckConfig", "SampleSpec", "SampleFingerprint",
-    "load_vcf_samples", "compare_samples", "check_sample_identity",
     "__version__",
     "to_proteome",
     "Candidate", "CandidatePath", "get_effect_candidates",
@@ -478,7 +450,6 @@ __all__ = [
     "MutantTranscriptSource",
     "ReadPhaseResolver",
     "ReadPhasingSource",
-    "RNAReadPhasingSource",
     "VCFPhaseResolver",
     "apply_phase_resolver_to_effects",
     "query_in_cis",
@@ -490,8 +461,6 @@ __all__ = [
     "apply_rna_evidence_to_effects",
     "make_rna_outcome",
     "make_fusion_outcome",
-    "load_exacto_fusions",
-    "reference_completion_hypotheses",
 
     "EffectAnnotator",
     "FastEffectAnnotator",

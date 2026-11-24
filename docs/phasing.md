@@ -41,43 +41,8 @@ phase_resolver=phaser)` on the somatic variants you want to classify.
 
 ## RNA evidence
 
-For direct read/fragment co-occurrence in an RNA-seq BAM (requires pysam:
-`pip install 'varcode[rna]'`; pysam does not support Windows):
-
-```python
-from varcode import MolecularPhaseResolver, RNAReadPhasingSource
-
-source = RNAReadPhasingSource("tumor.rna.bam")
-phaser = MolecularPhaseResolver(source)
-effects = variants.effects(phase_resolver=phaser)
-```
-
-Here `variants` is the loaded collection to annotate. Short- and long-read
-data can both leave phase unknown; coverage and linked alleles determine whether
-a pair is resolved.
-
-`RNAReadPhasingSource` sorts the fragments covering both loci into four
-combinations: both alt alleles, either variant's alt allele alone, or neither.
-A combination counts when it has at least `min_alt_reads` fragments and more
-than reads showing the wrong allele would leak into it. The second condition is
-a one-sided binomial test at `max_p_value_for_phasing` (default 0.05), with
-error rate `phasing_error_rate` (default 1%). Then:
-
-- Cis: both alts are seen together, and not each alone.
-- Trans: each alt is seen alone, and not together.
-- Unknown: anything else, including alts seen both together and each alone.
-
-A variant that arose later on the other's copy, or next to a germline variant,
-is always seen with it, while the earlier one also appears alone; that is cis,
-not trans. The rule, from `varcode.rna_read_phasing.four_gamete_phase`, matches
-Isovar 1.39.7.
-
-A source that only reports co-observed partners establishes cis and leaves
-every other pair unknown. Sources that see reference alleles too, such as
-`RNAReadPhasingSource`, report trans through their own `in_cis`.
-
-Raw BAM phasing does not provide an assembled `MutantTranscript`.
-Assembly-backed sources can provide one; see the
+RNA-seq read and assembly phasing lives in [Isovar](https://github.com/openvax/isovar)
+and integrates with Varcode through `MolecularPhaseResolver` and the
 [source protocols](api_phasing.md#phasing). `ReadPhaseResolver` remains a
 compatibility name for `MolecularPhaseResolver`.
 
@@ -102,9 +67,9 @@ effects = somatic_variants.effects(germline=germline_ctx, phase_resolver=phaser)
 ```
 
 With Isovar 1.36 or later, `IsovarReadPhasing.in_cis` answers from fragments
-that cover both variants. Since Isovar 1.39.7 it uses the same four-combination
-rule as `RNAReadPhasingSource` above, with `min_shared_fragments_for_phasing`
-fragments, `phasing_error_rate` and `max_p_value_for_phasing`. Earlier versions
+that cover both variants. Since Isovar 1.39.7 it uses a four-combination
+binomial test with `min_shared_fragments_for_phasing` fragments,
+`phasing_error_rate` and `max_p_value_for_phasing`. Earlier versions
 called cis or trans by majority, which could call a nested subclone's pair
 trans or a read-error pattern cis.
 
@@ -232,34 +197,9 @@ tagged with the same haplotype aligns with the matching germline-aware outcome.
 
 Splice-aware aligners can encode a known deletion's RNA sequence with `N`
 rather than `D`, or split the gap among mismatches and smaller deletions.
-Opt in to a local **sequence hypothesis** instead of interpreting the gap as
-proof of a DNA deletion:
-
-```python
-from varcode import MolecularPhaseResolver, RNAReadPhasingSource
-
-source = RNAReadPhasingSource("tumor.rna.bam", min_alt_reads=1)
-source.register_haplotype([known_deletion, adjacent_snv_1, adjacent_snv_2])
-resolver = MolecularPhaseResolver(source)
-effects = variants.effects(phase_resolver=resolver)
-```
-
-The variants must share one genome dataset and contig. The genome must provide
-reference sequence across the interval, through a FASTA or annotated transcript.
-Every retained base between five-base reference flanks must match one alignment
-and pass the configured quality/read-edge filters. No mates or separate partial
-haplotypes are stitched together. Registration invalidates cached counts.
-
-Registration does not assert cis phase: it supplies a candidate to test. For
-registered variants, only full-context matches count as alternate support;
-nonmatches remain unknown, not trans evidence. The current local mode supports
-nonoverlapping substitutions and deletions. Register competing combinations
-separately. Unregistered variants keep the ordinary CIGAR-based behavior.
-
-For example, in GRCh38 MAP2 the combination of `209694769 C>A`,
-`209694770 T>G`, and the 28-base deletion at `209694773` gives the same local
-sequence under `28D`, `28N`, and `22D2M6D` alignments. An unrelated 19,449-base
-exon skip lacks the required local anchors and is not supporting evidence.
+RNA-level haplotype assembly and deletion-aware phasing are handled by
+[Isovar](https://github.com/openvax/isovar) and passed into Varcode through
+`MolecularPhaseResolver`.
 
 ## Implementation limits
 
