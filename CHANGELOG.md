@@ -1,5 +1,25 @@
 # Change Log
 
+## v12.2.1
+
+### Tests and documentation
+
+- Complete shared checksum-pinned osteosarc RNA test-asset adoption (#464) in
+  `tests/test_osteosarc_rna_effects.py`, scoped to Varcode's library role
+  (`ReadPhasingSource` / `MolecularPhaseResolver`, without BAM parsing in
+  Varcode or any runtime dependency on `osteosarc` or `vaxrank`):
+  - Verify `openvax-v2` RNA phasing member completeness, RNA source URL
+    provenance, offline cache reuse (`OfflineError` on empty cache), and
+    tamper rejection (`IntegrityError` on an isolated copy of the bundle).
+  - Re-enable independent NCBI RefSeq protein/cDNA verification against
+    `tests/data/sid_rna_effect_references.json` for NTF3 (cis/trans/unknown),
+    EXOC4 (unresolved phase), and MAP2 (cis/unknown complex allele and
+    non-conflation of competing DNA alleles), confirming all unphased DNA
+    predictions remain preserved.
+- Clean up stale references to the removed `varcode[rna]` extra and
+  `RNAReadPhasingSource` in `README.md`, `CONTRIBUTING.md`, `tests/README.md`,
+  and `pyproject.toml`.
+
 ## v12.1.0
 
 ### Reference genomes

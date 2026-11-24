@@ -36,9 +36,9 @@ annotation that matches your input's genome build; see
 
 Varcode installs [ORFdata](https://github.com/openvax/orfdata), which supplies
 the ORFs for [noncanonical ORF consequences](https://openvax.github.io/varcode/uorf_annotations/).
-The optional `varcode[rna]` extra adds pysam for
-[phasing variants from RNA-seq reads](https://openvax.github.io/varcode/phasing/#rna-evidence)
-(pysam does not support Windows).
+RNA-seq read and assembly phasing lives in [Isovar](https://github.com/openvax/isovar)
+and integrates with Varcode via `MolecularPhaseResolver`; see
+[RNA evidence](https://openvax.github.io/varcode/phasing/#rna-evidence).
 
 <a id="example"></a>
 
