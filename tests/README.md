@@ -5,8 +5,8 @@ helper under `tests/`. Document the expected behavior and why the inputs
 exercise it. For captured public data, check in the acquisition/subsetting
 recipe, source identifiers, reference release, and integrity hashes with the
 fixture. Do not make an untracked local cache or sibling checkout a test
-requirement. RNA fixture harmonization is tracked in
-[#464](https://github.com/openvax/varcode/issues/464).
+requirement. Shared RNA-backed osteosarc test fixtures follow the neutral
+`openvax-v2` bundle convention documented below (#464).
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for environment and reference setup.
 During pytest, bare GRCh38 references (including aliases) use the suite's
@@ -31,7 +31,7 @@ It needs `setuptools>=64`, as installed by the contributor setup. The build
 uses the installed backend without downloading build dependencies.
 
 CI builds and unpacks the source distribution outside the checkout, installs
-that source with the `rna` extra and the `test` and `lint` dependency groups,
+that source with the `test` and `lint` dependency groups,
 and runs the full suite and parity checks from the unpacked directory on
 Python 3.11–3.14, all with pandas 3 and gtfparse 3.0.2+.
 To reproduce this
@@ -43,7 +43,7 @@ python -m build --sdist --outdir /tmp/varcode-dist
 mkdir /tmp/varcode-sdist
 tar -xzf /tmp/varcode-dist/varcode-X.Y.Z.tar.gz --strip-components=1 -C /tmp/varcode-sdist
 cd /tmp/varcode-sdist
-python -m pip install '.[rna]' --group test
+python -m pip install . --group test
 ./test.sh
 ```
 
@@ -156,8 +156,8 @@ identity, exercise mitochondrial annotation and the corrected MAP2 allele,
 reopen the shared cache offline, and reject missing or tampered objects using
 a private copy. Package updates do not change the pinned snapshot identity.
 They do not treat upstream peptide annotations or vaccine membership as a
-protein oracle, or change the existing RNA-read fixtures. Broader RNA fixture
-adoption is tracked in [#464](https://github.com/openvax/varcode/issues/464).
+protein oracle, or change the existing RNA-read fixtures. Shared RNA-backed
+effect checks are described in [Real Sid RNA protein effects](#real-sid-rna-protein-effects).
 
 Dataset: [osteosarc.com](https://osteosarc.com/data/), snapshot acquired
 2026-09-18, collected 2026-09-21; public data listed as CC0-1.0 by the
@@ -223,14 +223,24 @@ The first run downloads and verifies the bundle (28 MB) and exports its
 members into the osteosarc cache (`OSTEOSARC_CACHE`, else the shared OpenVax
 cache); later runs reuse them offline.
 
-## Real Sid RNA phasing
+## Real Sid RNA phasing and shared bundle checks
 
-`tests/test_osteosarc_rna_phasing.py` completes the real-read phasing coverage
-in [#528](https://github.com/openvax/varcode/issues/528). It uses the published
+BAM-level read phasing and RNA assembly live in
+[Isovar](https://github.com/openvax/isovar) (see
+[library roles](../docs/library_roles.md)). Varcode's
+`tests/test_osteosarc_rna_effects.py` verifies the shared `openvax-v2` RNA
+bundle contract and tests Varcode's RNA-backed phasing and effect predictions
+through its public `ReadPhasingSource` / `MolecularPhaseResolver` interface
+([#464](https://github.com/openvax/varcode/issues/464),
+[#528](https://github.com/openvax/varcode/issues/528)). It uses the published
 `openvax-v2` bundle, with manifest SHA256
-`b42dbce529cb5724153f035fca3783a41e673b31610a30851b2ef96d4ba43734`.
-The phasing checks export three named members into a pytest temporary directory,
-preserving their original alignment records and indexed BAM format:
+`b42dbce529cb5724153f035fca3783a41e673b31610a30851b2ef96d4ba43734`, and also
+verifies offline cache reuse, `OfflineError` on an empty cache, and
+`IntegrityError` on a tampered private copy of the bundle manifest.
+
+The bundle-integrity checks export the named RNA phasing members into a pytest
+temporary directory, preserving their original alignment records, RNA source
+URL provenance, and indexed BAM format:
 
 | Source label | Target/member suffix | Records | Templates | Supplementary records |
 |---|---|---:|---:|---:|
@@ -243,11 +253,9 @@ recipe and manifest retain the original source URL, assembly and record
 identities. The tests compare exported record identities and multiplicities
 with both the member manifest and **every record of its selected RG/QNAME
 templates in the bundle's source BAM**. The short-read member includes both
-mates of all six templates. The EXOC4 member keeps both supplementary records;
-the default evidence filter excludes them, while explicitly enabling them
-recognizes their reference alleles without adding alternate support. This
-checks completeness within the published bundle, without reacquiring or
-making claims about records absent from the original bundle.
+mates of all six templates, and the EXOC4 member retains both supplementary
+records. This checks completeness within the published bundle, without
+reacquiring or making claims about records absent from the original bundle.
 
 All coordinates below are one-based GRCh38, using Ensembl 81. NTF3's
 `AG>GT` compound target is split into its two nonoverlapping SNVs. Two
@@ -257,41 +265,31 @@ additional companion alleles were observed in these reads: NTF3
 bases were checked against Ensembl 81 transcripts; germline or somatic status
 is not assumed.
 
-The frozen fragment counts were independently audited from the original
-aligned bases: apply the SAM flag and quality filters, locate each SNV with
-aligned reference/query positions, and merge calls by RG/QNAME. A fragment
-contributes only when both loci have unambiguous ref/alt observations; missing
-coverage and conflicting or other alleles do not count as reference. These
-counts are expectations for the evidence API, rather than another phasing
-implementation used as an oracle.
+The audited fragment counts below (MAPQ/base quality 20, five-base read-edge
+exclusion, proper pairing for paired reads, at least two supporting fragments,
+excluding duplicates/secondary/supplementary alignments) are the RNA phasing
+observations handed into Varcode's `MolecularPhaseResolver`:
 
-| Member/case | First allele | Second allele | Both alt | First alt only | Second alt only | Both ref | Expected phase |
+| Member/case | First allele | Second allele | Both alt | First alt only | Second alt only | Both ref | Audited phase |
 |---|---|---|---:|---:|---:|---:|---|
 | Short-read NTF3 | `12:5494381 A>G` | `12:5494382 G>T` | 3 | 0 | 0 | 3 | Cis |
 | ONT NTF3 | `12:5494381 A>G` | `12:5494382 G>T` | 9 | 0 | 0 | 5 | Cis |
 | ONT NTF3 companion | `12:5494381 A>G` | `12:5494466 G>A` | 0 | 9 | 3 | 2 | Trans |
 | ONT EXOC4 companion | `7:133274996 G>T` | `7:133895694 G>A` | 1 | 0 | 1 | 0 | Unknown |
 
-The defaults require MAPQ/base quality 20, a five-base read-edge exclusion,
-proper pairing for paired reads, and at least two supporting fragments;
-duplicates, secondary and supplementary alignments are filtered as evidence.
-The ONT cases allow a 5% allele error rate; the short-read case uses the default
-1%. EXOC4 has 19 and 3 alternate-supporting templates at the individual loci,
+EXOC4 has 19 and 3 alternate-supporting templates at the individual loci,
 but only one carries both alternate alleles, so expression alone does not
-establish phase. Raising the NTF3 fragment minimum to 10 also changes its cis
-call to unknown, with nine supporting fragments. Tests exercise both
-`RNAReadPhasingSource` and `MolecularPhaseResolver` in either query order.
+establish phase.
 
 These are reproducible RNA observations under the configured evidence model,
 not independently validated tumor haplotypes or estimates of population allele
-fractions: the bundle uses bounded, allele-balanced selection. The existing
-synthetic tests separately cover the germline/subclone rule fixed in #527.
+fractions: the bundle uses bounded, allele-balanced selection.
 
 To reproduce, install the reference data as described in `CONTRIBUTING.md`, then:
 
 ```sh
-python -m pip install -e '.[rna]' --group test
-python -m pytest -q tests/test_osteosarc_rna_phasing.py
+python -m pip install -e . --group test
+python -m pytest -q tests/test_osteosarc_rna_effects.py
 ```
 
 The first run can download the verified 28 MB shared bundle; later runs reuse
@@ -299,23 +297,17 @@ it offline. No sibling checkout or BAM copies in `tests/data` are required.
 
 ## Real Sid RNA protein effects
 
-The same module passes `MolecularPhaseResolver(RNAReadPhasingSource(...))` to
-`VariantCollection.effects()` for NTF3 and complex MAP2 cases, following
-[#464](https://github.com/openvax/varcode/issues/464). It checks every individual
-DNA prediction against the collection without RNA phasing, including other
-transcripts, and verifies the selected transcript's complete protein against
-independent expectations. NTF3 runs with `fast`, `protein_diff` and the opt-in
-`transcript_model`; MAP2 runs with the two established point-edit annotators.
-Joint legacy effects expose their edited cDNA, and the transcript model's
-realized candidates expose theirs; the tests check their CDS, affected codon
-and stop codon. Joint membership, protein and phase provenance survive JSON.
-The experimental model currently loses its realized candidates/hypotheses
-and their cDNA on JSON round-trip; this reproduced limitation is tracked in
-[#574](https://github.com/openvax/varcode/issues/574). Its full CDS/codon checks
-use the in-memory products, and its round-trip checks cover the preserved
-protein, membership and phase source. The audit also reproduced a support-cache
-key defect ([#575](https://github.com/openvax/varcode/issues/575)); returned
-counts are correct here, but repeated calls rescan the BAM.
+`tests/test_osteosarc_rna_effects.py` passes `MolecularPhaseResolver` backed by
+the audited RNA phasing observations to `VariantCollection.effects()` for NTF3,
+EXOC4, and complex MAP2 cases ([#464](https://github.com/openvax/varcode/issues/464)).
+It checks every individual DNA prediction against the collection without RNA
+phasing, including other transcripts, and verifies the selected transcript's
+complete protein against independent expectations. NTF3 and EXOC4 run with
+`fast`, `protein_diff`, and `transcript_model`; MAP2 runs with `fast` and
+`protein_diff`. Joint legacy effects expose their edited cDNA, and the
+transcript model's realized candidates expose theirs; the tests check their
+CDS, affected codon, stop codon, and JSON round-trip preservation of joint
+membership, protein, cDNA, and phase provenance.
 
 `tests/data/sid_rna_effect_references.json` is a separate offline reference
 asset (SHA256 `d9e21cc96450d4a14e7b41d0900df48792c9f64b103b9ce01ab5cc841508d29e`).
@@ -370,16 +362,14 @@ records. Source products are RNA products, checked by their manifest URLs.
 
 The corrected GRCh38 MAP2 allele is explicitly decomposed into
 `2:209694769 C>A`, `2:209694770 T>G` and deletion of
-`2:209694773–209694800 GCTACTGTGTGTTCAATAAGTACACAGT`. The existing
-`register_haplotype()` API tests this hypothesis's original sequence between
-five-base genomic flanks: `AAGACAGGGCCCAT`. Independent aligned-position,
-query-sequence and quality inspection found four T1 bulk, two T2 bulk and one
-T2 ONT supporting RG/QNAME templates. The bulk witnesses encode a `28N` gap;
-the ONT witness encodes `22D2M6D`. Exact context allows the same RNA sequence
-to support the hypothesis without assigning a genomic deletion mechanism.
-Default MAPQ/Q20, pairing, flag, five-base edge and two-fragment filters remain
-in force; ONT uses the existing 5% error allowance. Missing or different context
-stays unknown and supplies no reference/trans evidence.
+`2:209694773–209694800 GCTACTGTGTGTTCAATAAGTACACAGT`, giving the local
+sequence `AAGACAGGGCCCAT` between five-base genomic flanks. Independent
+aligned-position, query-sequence and quality inspection of those members found
+four T1 bulk, two T2 bulk and one T2 ONT supporting RG/QNAME templates (the
+bulk witnesses encode a `28N` gap; the ONT witness encodes `22D2M6D`).
+BAM-level read matching lives in Isovar; Varcode tests the resulting cis and
+unknown phase outcomes through `MolecularPhaseResolver`, ensuring missing or
+insufficient evidence stays unknown and supplies no reference/trans claim.
 
 The bulk evidence yields a joint 904-aa protein: reference residues 1–866
 followed by `RAHCHHLFKTVRIYQGRVVPFTKALMIKFEEIWPQTFH`, then `TGA`. The single
