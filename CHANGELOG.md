@@ -1,5 +1,30 @@
 # Change Log
 
+## v12.3.1
+
+### Unified DNA annotator Phase-2 hardening & speedups
+
+- Fix `build_dna_search_anchor` crashing with `ValueError` on mitochondrial and
+  poly-A-completed stop-codon transcripts (such as `MT-ND1`,
+  `ENST00000361390`) that lack an annotated `stop_codon` GTF feature.
+- Fix `Silent.mutant_protein_sequence` under `UnifiedDNAEffectAnnotator`'s
+  fast-path so it matches `transcript_model` (`transcript.protein_sequence`)
+  byte-for-byte across all 179 clinical osteosarc variants (0 diffs).
+- Extend `UnifiedDNAEffectAnnotator`'s guarded interior-exon fast-path with a
+  weak-key per-transcript safety cache, O(1) `NoncodingTranscript` /
+  `IncompleteTranscript` short-circuits, and local translation +
+  `classify_from_protein_diff` for interior coding MNVs and small indels
+  (`<20` bp) — delivering `2.6×` speedup over `transcript_model` on real
+  clinical osteosarc variants and `3.8×–5.3×` speedup on interior coding
+  SNVs, MNVs, in-frame indels, and frameshifts while keeping 100% parity.
+- Interoperate `DNAHypothesis` natively with `effect_priority()` /
+  `EffectCollection.filter_by_effect_priority()`, `to_proteome()` (recognizing
+  `"unified"` / `"varcode.unified"` as built-in Varcode provenance), and
+  `discover_created_orfs()`.
+- Add full 179-variant osteosarc parity, `+`/`-` strand MNV/indel fast-path
+  parity, and `effect_priority` / `to_proteome` / `discover_created_orfs` /
+  `MT-ND1` poly-A regression tests to `tests/test_unified_annotator.py`.
+
 ## v12.3.0
 
 ### Unified DNA annotator & deterministic structural search anchors

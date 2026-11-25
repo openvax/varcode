@@ -20,6 +20,7 @@ from .effects import EffectCollection, Failure, HypothesisLimit, MutationEffect,
 from .effects.structural_serialization import structural_effect_to_dict
 from .orf import ORFAnnotation, ORFOutcome
 from .orf_serialization import ReferenceGenomeSnapshot
+from .unified import DNAHypothesis
 
 if TYPE_CHECKING:
     from orfdata import Proteome
@@ -33,7 +34,7 @@ _COORDINATES = {
     "reference_segments": "0-based half-open in each segment source's coordinate system",
     "variants": "native Varcode coordinates; small variants are 1-based, inclusive",
 }
-_BUILTIN_ANNOTATORS = {"fast", "protein_diff", "realized", "transcript_model", "created_orf"}
+_BUILTIN_ANNOTATORS = {"fast", "protein_diff", "realized", "transcript_model", "unified", "created_orf"}
 
 
 def _json(value):
@@ -232,11 +233,13 @@ def _source(effect, defaults, contexts, annotation=None):
     source = next((source for source in reversed(sources) if source != "varcode"),
                   sources[-1] if sources else None)
     # A source string such as "rna" describes an import path, not its generating tool.
-    native_source = source in (None, "varcode", "varcode_splice", "varcode_motif", "varcode_germline")
+    native_source = source in (
+        None, "varcode", "varcode.unified", "varcode_splice", "varcode_motif", "varcode_germline",
+    )
     tool = "varcode" if native_source and (annotator in _BUILTIN_ANNOTATORS or source is not None) else "unknown"
     model = _model(effect, annotation)
     provider = source if not native_source else getattr(model, "source", None) or None
-    return dict(method=(annotator if source in (None, "varcode") else source) or "unknown",
+    return dict(method=(annotator if source in (None, "varcode", "varcode.unified") else source) or "unknown",
                 tool=tool, tool_version=version if native_source else None, provider=provider)
 
 
@@ -326,6 +329,13 @@ def _identity(value, defaults, contexts=()):
                         baseline=_product(value.baseline))
     if isinstance(value, RealizedEffectCandidate):
         identity["outcomes"] = sorted((_identity(o, defaults, contexts) for o in value.outcomes), key=_digest)
+    if isinstance(value, DNAHypothesis):
+        paired = getattr(value, "_paired_outcomes", None)
+        if paired:
+            identity["outcomes"] = sorted((_identity(o, defaults, contexts) for o in paired), key=_digest)
+        else:
+            identity["hypothesis_axes"] = list(value.uncertainty)
+            identity["splice_mechanisms"] = list(value.splice_mechanisms)
     return _identifier(_label(effect, annotation, type(value).__name__), identity)
 
 
@@ -431,6 +441,21 @@ class _Export:
                            phase_mass=value.phase_mass, first_enumeration_index=value.first_enumeration_index)
             return [status for outcome in value.outcomes for status in self.walk(
                 outcome, event_id, contexts=(*contexts, context), annotation=annotation, ancestors=ancestors)]
+        if isinstance(value, DNAHypothesis):
+            context = dict(
+                source=value.source,
+                uncertainty=list(value.uncertainty),
+                splice_mechanisms=list(value.splice_mechanisms),
+                ordinal_key=list(value.ordinal_rank),
+                probability=value.probability,
+                evidence=_json(dict(value.evidence)),
+            )
+            paired = getattr(value, "_paired_outcomes", None)
+            if paired:
+                return [status for outcome in paired for status in self.walk(
+                    outcome, event_id, contexts=(*contexts, context), annotation=annotation, ancestors=ancestors)]
+            return self.walk(
+                value.effect, event_id, contexts=(*contexts, context), annotation=annotation, ancestors=ancestors)
         if isinstance(value, (ClassifiedOutcome, ORFOutcome)):
             return [self.comparison(value.effect, event_id, baseline=value.baseline,
                                     mutant=value.mutant, outcome=value, annotation=annotation,
@@ -475,7 +500,7 @@ class _Export:
         if isinstance(value, MutationEffect) and value.orf_annotation is not None:
             value = value.orf_annotation
         if not isinstance(value, (MutationEffect, ORFAnnotation, RealizedEffectCandidate,
-                                  ClassifiedOutcome, ORFOutcome)):
+                                  DNAHypothesis, ClassifiedOutcome, ORFOutcome)):
             raise TypeError("to_proteome expects native effects, candidates, or ORFAnnotations")
         self.scope(_effect(value), value if isinstance(value, ORFAnnotation) else None)
         native_id = _identity(value, self.defaults, contexts)

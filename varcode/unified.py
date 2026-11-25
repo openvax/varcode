@@ -37,20 +37,26 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping, Optional, Tuple
+from weakref import WeakKeyDictionary
 
 from serializable import DataclassSerializable
 
-from .circular_origin import TranscriptFrame
 from .effect_candidates import EffectCandidate
 from .effect_hypotheses import RealizedEffectCandidate
+from .effects.classify import classify_from_protein_diff
 from .effects.codon_tables import STANDARD, codon_table_for_transcript
+from .effects.effect_classes import (
+    IncompleteTranscript,
+    NoncodingTranscript,
+    Silent,
+)
 from .effects.effect_ordering import classification_priority
 from .effects.fast_path import try_fast_path_snv
 from .effects.selenocysteine import reference_selenocysteine
 from .effects.transcript_helpers import has_complete_coding_sequence
 from .errors import ReferenceMismatchError
 from .mutant_transcript import MutantTranscript
-from .nucleotides import complement, reverse_complement
+from .nucleotides import reverse_complement
 from .structural_variant import affected_span
 from .sv_allele_parser import breakend_sides
 from .transcript_model import TranscriptModelEffectAnnotator
@@ -246,36 +252,52 @@ def _exon_donor_and_acceptor(exon: Any, strand: str) -> Tuple[int, int]:
     return exon.end, exon.start
 
 
-def _cds_prefix_up_to(transcript: Any, genomic_pos: int) -> Optional[str]:
-    """Return 5' CDS nucleotides up to and including ``genomic_pos``, or ``None``."""
+def _cds_bounds(transcript: Any) -> Optional[Tuple[int, int]]:
+    """Return inclusive spliced ``(cds_start, cds_end)``, tolerating poly-A stops."""
     if not getattr(transcript, "is_protein_coding", False):
         return None
     if not has_complete_coding_sequence(transcript):
         return None
     try:
+        cds_start = min(transcript.start_codon_spliced_offsets)
+    except (AttributeError, ValueError):
+        return None
+    try:
+        cds_end = max(transcript.stop_codon_spliced_offsets)
+    except (AttributeError, ValueError):
+        cds_seq = getattr(transcript, "coding_sequence", None)
+        if not cds_seq:
+            return None
+        cds_end = cds_start + len(cds_seq) - 1
+    return cds_start, cds_end
+
+
+def _cds_prefix_up_to(transcript: Any, genomic_pos: int) -> Optional[str]:
+    """Return 5' CDS nucleotides up to and including ``genomic_pos``, or ``None``."""
+    bounds = _cds_bounds(transcript)
+    if bounds is None:
+        return None
+    cds_start, cds_end = bounds
+    try:
         offset = transcript.spliced_offset(genomic_pos)
     except (KeyError, ValueError):
         return None
-    cds_start = min(transcript.start_codon_spliced_offsets)
     if offset < cds_start:
         return None
-    cds_end = max(transcript.stop_codon_spliced_offsets)
     stop_limit = min(offset + 1, cds_end + 1)
     return str(transcript.sequence[cds_start:stop_limit])
 
 
 def _cds_entry_frame_at(transcript: Any, genomic_pos: int) -> Optional[int]:
     """Return CDS offset mod 3 entering ``genomic_pos``, or ``None`` outside CDS."""
-    if not getattr(transcript, "is_protein_coding", False):
+    bounds = _cds_bounds(transcript)
+    if bounds is None:
         return None
-    if not has_complete_coding_sequence(transcript):
-        return None
+    cds_start, cds_end = bounds
     try:
         offset = transcript.spliced_offset(genomic_pos)
     except (KeyError, ValueError):
         return None
-    cds_start = min(transcript.start_codon_spliced_offsets)
-    cds_end = max(transcript.stop_codon_spliced_offsets)
     if offset < cds_start or offset > cds_end:
         return None
     return (offset - cds_start) % 3
@@ -641,26 +663,28 @@ def _flatten_to_dna_hypotheses(effect: Any, transcript: Any) -> Tuple[DNAHypothe
                         junctions.append(j)
             first = cand.outcomes[0]
             mt = first.mutant.to_mutant_transcript() if first.mutant is not None else None
-            hypotheses.append(
-                DNAHypothesis(
-                    effect=cand.effect,
-                    uncertainty=axes,
-                    splice_mechanisms=tuple(mechs) if mechs else ("normal",),
-                    phase=tuple(phase_items),
-                    novel_junctions=tuple(junctions),
-                    baseline_protein=first.baseline.protein_sequence,
-                    mutant_protein=first.mutant.protein_sequence,
-                    baseline_cdna=first.baseline.cdna_sequence,
-                    mutant_cdna=first.mutant.cdna_sequence,
-                    mutant_transcript=mt,
-                    ordinal_rank=cand.ordinal_key,
-                    probability=cand.probability,
-                    evidence={
-                        "n_merged_outcomes": len(cand.outcomes),
-                        "phase_mass": cand.phase_mass,
-                    },
-                )
+            hyp_record = DNAHypothesis(
+                effect=cand.effect,
+                uncertainty=axes,
+                splice_mechanisms=tuple(mechs) if mechs else ("normal",),
+                phase=tuple(phase_items),
+                novel_junctions=tuple(junctions),
+                baseline_protein=first.baseline.protein_sequence,
+                mutant_protein=first.mutant.protein_sequence,
+                baseline_cdna=first.baseline.cdna_sequence,
+                mutant_cdna=first.mutant.cdna_sequence,
+                mutant_transcript=mt,
+                ordinal_rank=cand.ordinal_key,
+                probability=cand.probability,
+                evidence={
+                    "n_merged_outcomes": len(cand.outcomes),
+                    "phase_mass": cand.phase_mass,
+                },
             )
+            # Non-field cache for in-memory proteome/ORF-discovery interop;
+            # excluded from dataclass equality, repr, and JSON serialization.
+            object.__setattr__(hyp_record, "_paired_outcomes", cand.outcomes)
+            hypotheses.append(hyp_record)
         return tuple(hypotheses)
 
     legacy_cands = getattr(effect, "candidates", ()) or ()
@@ -700,101 +724,79 @@ def _flatten_to_dna_hypotheses(effect: Any, transcript: Any) -> Tuple[DNAHypothe
     )
 
 
-def _try_unified_fast_path(variant: Any, transcript: Any) -> Any:
-    """O(1) safe coding SNV path when no splice/phase/special-biology edge case applies.
+_TRANSCRIPT_FAST_PATH_CACHE: WeakKeyDictionary[Any, Any] = WeakKeyDictionary()
+_STANDARD_FORWARD = STANDARD.forward_table
+_STANDARD_STOPS = STANDARD.stop_codons
+_ACGT = frozenset("ACGT")
+_FAST_PATH_MAX_ALLELE_BP = 20
 
-    Returns ``None`` whenever any guard does not hold, falling through to the
-    full transcript model.
+
+def _transcript_fast_path_info(
+    transcript: Any,
+) -> Optional[Tuple[str, Tuple[Tuple[int, int], ...], int, str, str]]:
+    """Cached per-transcript safety check for the interior coding fast-path.
+
+    Returns ``(strand, exon_bounds, cds_start, sequence, protein_sequence)``
+    when ``transcript`` uses the standard genetic code, starts with ``ATG``,
+    has no circular origin wrap, no selenocysteine, and no ambiguous ``X``
+    residues; otherwise returns ``None``.
     """
-    if getattr(variant, "is_structural", False):
-        return None
-    ref = getattr(variant, "trimmed_ref", "")
-    alt = getattr(variant, "trimmed_alt", "")
-    if len(ref) != 1 or len(alt) != 1:
-        return None
-    if not getattr(transcript, "is_protein_coding", False):
-        return None
-    if not has_complete_coding_sequence(transcript):
-        return None
+    try:
+        cached = _TRANSCRIPT_FAST_PATH_CACHE.get(transcript, _MISSING)
+    except TypeError:
+        cached = _MISSING
+    if cached is not _MISSING:
+        return cached
 
-    frame = TranscriptFrame(transcript)
-    if frame.exon_number_before_origin is not None:
-        return None
-    if reference_selenocysteine(transcript):
-        return None
-    if codon_table_for_transcript(transcript) is not STANDARD:
-        return None
-    if transcript.coding_sequence[:3].upper() != "ATG":
-        return None
-
-    pos = variant.trimmed_base1_start
+    result: Optional[Tuple[str, Tuple[Tuple[int, int], ...], int, str, str]] = None
     strand = "-" if transcript.on_backward_strand else "+"
     exons = transcript.exons
-    last_idx = len(exons) - 1
-
-    # Require the SNV to sit strictly inside one exon and strictly outside
-    # all canonical splice windows (last 3 bases at donor, first base at acceptor).
-    hit_exon = False
-    for idx, ex in enumerate(exons):
-        if ex.start <= pos <= ex.end:
-            if strand == "+":
-                if idx > 0 and pos <= ex.start:
-                    return None
-                if idx < last_idx and pos >= ex.end - 2:
-                    return None
-            else:
-                if idx > 0 and pos >= ex.end:
-                    return None
-                if idx < last_idx and pos <= ex.start + 2:
-                    return None
-            hit_exon = True
-            break
-    if not hit_exon:
-        return None
+    wraps_origin = any(ex.start > ex.end for ex in exons)
+    if not wraps_origin and len(exons) > 1:
+        if strand == "+":
+            wraps_origin = any(
+                exons[i + 1].start < exons[i].start for i in range(len(exons) - 1)
+            )
+        else:
+            wraps_origin = any(
+                exons[i + 1].end > exons[i].end for i in range(len(exons) - 1)
+            )
+    if (
+        not wraps_origin
+        and not reference_selenocysteine(transcript)
+        and codon_table_for_transcript(transcript) is STANDARD
+    ):
+        cds_start = min(transcript.start_codon_spliced_offsets)
+        seq = str(transcript.sequence)
+        if seq[cds_start : cds_start + 3].upper() == "ATG":
+            ref_protein = str(transcript.protein_sequence)
+            if "X" not in ref_protein:
+                exon_bounds = tuple((int(ex.start), int(ex.end)) for ex in exons)
+                result = (strand, exon_bounds, cds_start, seq, ref_protein)
 
     try:
-        cdna_offset = transcript.spliced_offset(pos)
-    except (KeyError, ValueError):
-        return None
+        _TRANSCRIPT_FAST_PATH_CACHE[transcript] = result
+    except TypeError:
+        pass
+    return result
 
-    cdna_ref = complement(ref) if strand == "-" else ref
-    cdna_alt = complement(alt) if strand == "-" else alt
-    seq = transcript.sequence
-    observed_base = seq[cdna_offset].upper()
-    if observed_base != cdna_ref.upper():
-        raise ReferenceMismatchError(
-            variant,
-            transcript,
-            expected_ref=observed_base,
-            observed_ref=cdna_ref,
-            transcript_offset=cdna_offset,
-            genome_start=pos,
-            genome_end=pos,
-        )
 
-    cds_start = min(transcript.start_codon_spliced_offsets)
-    cds_offset = cdna_offset - cds_start
-    if cds_offset < 3:
-        return None
+_MISSING = object()
 
-    effect = try_fast_path_snv(
-        variant=variant,
-        transcript=transcript,
-        trimmed_cdna_ref=cdna_ref,
-        trimmed_cdna_alt=cdna_alt,
-        sequence_from_start_codon=seq[cds_start:],
-        cds_offset=cds_offset,
-    )
-    if effect is None:
-        return None
 
+def _wrap_unified_simple_effect(
+    effect: Any,
+    variant: Any,
+    baseline_protein: Optional[str],
+    mutant_protein: Optional[str],
+) -> Any:
     effect.variants = (variant,)
     hypothesis = DNAHypothesis(
         effect=effect,
         uncertainty=(),
         splice_mechanisms=("normal",),
-        baseline_protein=transcript.protein_sequence,
-        mutant_protein=effect.mutant_protein_sequence,
+        baseline_protein=baseline_protein,
+        mutant_protein=mutant_protein,
         ordinal_rank=(),
         probability=1.0,
     )
@@ -804,6 +806,221 @@ def _try_unified_fast_path(variant: Any, transcript: Any) -> Any:
     effect.probability = 1.0
     effect.mechanism_rank = ()
     return effect
+
+
+def _translate_standard_until_stop(dna: str) -> Optional[Tuple[str, bool]]:
+    """Translate ``dna`` in-frame under the standard genetic code until a stop.
+
+    Returns ``(protein, found_stop)`` or ``None`` if any codon is ambiguous.
+    """
+    aas: list[str] = []
+    limit = len(dna) - (len(dna) % 3)
+    for i in range(0, limit, 3):
+        codon = dna[i : i + 3].upper()
+        if codon in _STANDARD_STOPS:
+            return "".join(aas), True
+        aa = _STANDARD_FORWARD.get(codon)
+        if aa is None:
+            return None
+        aas.append(aa)
+    return "".join(aas), False
+
+
+def _try_unified_fast_path(variant: Any, transcript: Any) -> Any:
+    """Safe fast-path for noncoding, incomplete, and interior coding small variants.
+
+    Handles:
+    * ``NoncodingTranscript`` and ``IncompleteTranscript`` (matching
+      ``transcript_model`` directly),
+    * Interior-exon SNVs via single-codon lookup,
+    * Interior-exon MNVs and small indels (<20 bp) strictly outside splice
+      windows and start/stop codons via local translation +
+      :func:`classify_from_protein_diff`.
+
+    Returns ``None`` whenever any guard does not hold, falling through to the
+    full transcript model.
+    """
+    if getattr(variant, "is_structural", False) or getattr(variant, "alt_assembly", None):
+        return None
+    if not getattr(transcript, "is_protein_coding", False):
+        return _wrap_unified_simple_effect(
+            NoncodingTranscript(variant, transcript), variant, None, None
+        )
+    if not has_complete_coding_sequence(transcript):
+        return _wrap_unified_simple_effect(
+            IncompleteTranscript(variant, transcript), variant, None, None
+        )
+
+    ref = getattr(variant, "trimmed_ref", "")
+    alt = getattr(variant, "trimmed_alt", "")
+    if len(ref) >= _FAST_PATH_MAX_ALLELE_BP or len(alt) >= _FAST_PATH_MAX_ALLELE_BP:
+        return None
+    if alt and not (_ACGT.issuperset(alt.upper())):
+        return None
+
+    info = _transcript_fast_path_info(transcript)
+    if info is None:
+        return None
+    strand, exon_bounds, cds_start, seq, ref_protein = info
+
+    v_start = variant.trimmed_base1_start
+    v_end = variant.trimmed_base1_end
+    orig_start = variant.start
+    orig_end = variant.end
+    g_start = min(v_start, orig_start)
+    g_end = max(v_end, orig_end)
+    last_idx = len(exon_bounds) - 1
+
+    # Require the entire edit (including VCF padding anchor) to sit strictly
+    # inside one exon and strictly outside canonical splice windows.
+    hit_exon = False
+    for idx, (ex_start, ex_end) in enumerate(exon_bounds):
+        if ex_start <= g_start and g_end <= ex_end:
+            if strand == "+":
+                if idx > 0 and g_start <= ex_start + (1 if not ref else 0):
+                    return None
+                if idx < last_idx and g_end >= ex_end - (3 if not ref else 2):
+                    return None
+            else:
+                if idx > 0 and g_end >= ex_end - (1 if not ref else 0):
+                    return None
+                if idx < last_idx and g_start <= ex_start + (3 if not ref else 2):
+                    return None
+            hit_exon = True
+            break
+    if not hit_exon:
+        return None
+
+    # Verify reference bases against the transcript (including anchor bases on
+    # pure insertions/deletions) so ReferenceMismatchError is always raised.
+    orig_ref = getattr(variant, "ref", "")
+    if orig_ref:
+        try:
+            orig_cdna_start = transcript.spliced_offset(
+                orig_end if strand == "-" else orig_start
+            )
+        except (KeyError, ValueError):
+            return None
+        orig_cdna_ref = (
+            reverse_complement(orig_ref).upper() if strand == "-" else orig_ref.upper()
+        )
+        observed = seq[orig_cdna_start : orig_cdna_start + len(orig_cdna_ref)].upper()
+        if observed != orig_cdna_ref:
+            raise ReferenceMismatchError(
+                variant,
+                transcript,
+                expected_ref=observed,
+                observed_ref=orig_cdna_ref,
+                transcript_offset=orig_cdna_start,
+                genome_start=orig_start,
+                genome_end=orig_end,
+            )
+
+    # Map the trimmed edit to 0-based half-open [cdna_start, cdna_end) in transcript cDNA.
+    try:
+        if not ref:
+            anchor_off = transcript.spliced_offset(v_start)
+            cdna_start = anchor_off + 1 if strand == "+" else anchor_off
+            cdna_end = cdna_start
+        else:
+            cdna_start = transcript.spliced_offset(v_end if strand == "-" else v_start)
+            cdna_end = cdna_start + len(ref)
+    except (KeyError, ValueError):
+        return None
+
+    cds_edit_start = cdna_start - cds_start
+    cds_edit_end = cdna_end - cds_start
+    cds_len = len(ref_protein) * 3
+    if cds_edit_start < 3 or cds_edit_end >= cds_len:
+        return None
+
+    cdna_ref = (reverse_complement(ref) if strand == "-" else ref).upper()
+    cdna_alt = (reverse_complement(alt) if strand == "-" else alt).upper()
+
+    # Case 1: O(1) single-codon SNV path.
+    if len(cdna_ref) == 1 and len(cdna_alt) == 1:
+        effect = try_fast_path_snv(
+            variant=variant,
+            transcript=transcript,
+            trimmed_cdna_ref=cdna_ref,
+            trimmed_cdna_alt=cdna_alt,
+            sequence_from_start_codon=seq[cds_start:],
+            cds_offset=cds_edit_start,
+        )
+        if effect is None:
+            return None
+        if isinstance(effect, Silent):
+            effect.mutant_protein_sequence = ref_protein
+        return _wrap_unified_simple_effect(
+            effect, variant, ref_protein, effect.mutant_protein_sequence
+        )
+
+    # Case 2: Interior-exon MNV or small indel (<20 bp), translated locally
+    # and classified through the exact same classify_from_protein_diff used by
+    # transcript_model.
+    first_codon = cds_edit_start // 3
+    window_cds_start = first_codon * 3
+    length_delta = len(cdna_alt) - len(cdna_ref)
+
+    if length_delta % 3 == 0:
+        window_cds_end = ((cds_edit_end + 2) // 3) * 3
+        window_dna = (
+            seq[cds_start + window_cds_start : cdna_start]
+            + cdna_alt
+            + seq[cdna_end : cds_start + window_cds_end]
+        )
+        translated = _translate_standard_until_stop(window_dna)
+        if translated is None:
+            return None
+        window_aa, hit_stop = translated
+        if hit_stop:
+            # Pure codon-aligned insertions creating an immediate stop use edit
+            # provenance in classify_from_protein_diff to keep aa_ref=""; defer
+            # this rare case to _full for exact parity.
+            if not cdna_ref:
+                return None
+            mut_protein = ref_protein[:first_codon] + window_aa
+        else:
+            mut_protein = (
+                ref_protein[:first_codon] + window_aa + ref_protein[window_cds_end // 3 :]
+            )
+        if mut_protein == ref_protein:
+            # Defer rare synonymous MNVs/indels so _unchanged_product_effect
+            # computes exact aa_pos/aa_ref.
+            return None
+        effect = classify_from_protein_diff(
+            variant=variant,
+            transcript=transcript,
+            ref_protein=ref_protein,
+            mut_protein=mut_protein,
+            length_delta=0,
+            frame_change_aa_offset=first_codon,
+            stop_observed=True,
+        )
+    else:
+        tail_dna = (
+            seq[cds_start + window_cds_start : cdna_start] + cdna_alt + seq[cdna_end:]
+        )
+        translated = _translate_standard_until_stop(tail_dna)
+        if translated is None:
+            return None
+        tail_aa, found_stop = translated
+        mut_protein = ref_protein[:first_codon] + tail_aa
+        if mut_protein == ref_protein:
+            return None
+        effect = classify_from_protein_diff(
+            variant=variant,
+            transcript=transcript,
+            ref_protein=ref_protein,
+            mut_protein=mut_protein,
+            length_delta=length_delta,
+            frame_change_aa_offset=first_codon,
+            stop_observed=found_stop,
+        )
+
+    return _wrap_unified_simple_effect(
+        effect, variant, ref_protein, effect.mutant_protein_sequence
+    )
 
 
 class UnifiedDNAEffectAnnotator:
