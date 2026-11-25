@@ -168,8 +168,18 @@ def effect_priority(effect):
     candidate. Selecting an effect never drops its other hypotheses.
     """
     from ..effect_traversal import iter_candidate_effects
+    from ..unified import DNAHypothesis
 
-    if getattr(effect, "realized_candidates", None):
+    # Inspect already-attached candidates in __dict__ so we never trigger lazy
+    # SpliceOutcomeSet.candidates materialization during priority ranking.
+    attached_candidates = (
+        effect.__dict__.get("candidates")
+        or effect.__dict__.get("_candidates")
+        or ()
+    )
+    if getattr(effect, "realized_candidates", None) or any(
+        isinstance(c, DNAHypothesis) for c in attached_candidates
+    ):
         return max(
             (classification_priority(candidate) for candidate in iter_candidate_effects(effect)
              if candidate is not None), default=classification_priority(effect))

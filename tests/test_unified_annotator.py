@@ -442,3 +442,138 @@ def test_unified_coding_snv_batch_parity_and_speedup_over_transcript_model():
         assert u_eff.mutant_protein_sequence == tm_eff.mutant_protein_sequence
 
     assert t_u < t_tm, f"Expected unified ({t_u:.4f}s) faster than transcript_model ({t_tm:.4f}s)"
+
+
+def test_unified_osteosarc_full_cohort_parity_with_transcript_model():
+    """All 179 real clinical osteosarc variants match transcript_model byte-for-byte."""
+    from .osteosarc_variants import load_variants
+
+    variants = list(load_variants(genome=GENOME))
+    assert len(variants) == 179
+    for variant in variants:
+        tm_effects = list(variant.effects(annotator="transcript_model", raise_on_error=True))
+        u_effects = list(variant.effects(annotator="unified", raise_on_error=True))
+        assert len(u_effects) == len(tm_effects), f"Effect count mismatch on {variant}"
+        for u_eff, tm_eff in zip(u_effects, tm_effects):
+            assert getattr(u_eff.transcript, "id", None) == getattr(tm_eff.transcript, "id", None)
+            assert type(u_eff) is type(tm_eff), f"Class mismatch on {variant}"
+            assert u_eff.short_description == tm_eff.short_description, (
+                f"short_description mismatch on {variant}: {u_eff} vs {tm_eff}"
+            )
+            assert u_eff.mutant_protein_sequence == tm_eff.mutant_protein_sequence, (
+                f"mutant_protein_sequence mismatch on {variant} ({type(u_eff).__name__})"
+            )
+            assert u_eff.modifies_protein_sequence == tm_eff.modifies_protein_sequence
+
+
+def test_unified_interior_mnv_and_indel_fast_path_parity_both_strands():
+    """Interior coding MNVs, in-frame indels, frameshifts, and Silent match transcript_model."""
+    met = GENOME.transcript_by_id("ENST00000397752")  # + strand
+    brca1 = GENOME.transcript_by_id("ENST00000357654")  # - strand
+    comp = str.maketrans("ACGT", "TGCA")
+
+    test_cases = []
+    for tx, ex in ((met, met.exons[1]), (brca1, brca1.exons[9])):
+        cds_start = min(tx.start_codon_spliced_offsets)
+        cds_end = max(tx.stop_codon_spliced_offsets)
+        step = max(40, (ex.end - ex.start) // 12)
+        for pos in range(ex.start + 30, ex.end - 30, step):
+            off = tx.spliced_offset(pos)
+            if not (cds_start + 12 <= off <= cds_end - 20):
+                continue
+            if tx.strand == "+":
+                ref4 = tx.sequence[off : off + 4]
+            else:
+                off_end = tx.spliced_offset(pos + 3)
+                ref4 = tx.sequence[off_end : off + 1][::-1].translate(comp)
+            if len(ref4) != 4 or any(b not in "ACGT" for b in ref4):
+                continue
+            b0 = ref4[0]
+            alt0 = "A" if b0 != "A" else "G"
+            alt1 = "C" if ref4[1] != "C" else "T"
+            # SNV, MNV, in-frame del, in-frame ins, pure-ins stop, frameshift del, frameshift ins
+            test_cases.extend([
+                (tx, Variant(tx.contig, pos, b0, alt0, genome=GENOME)),
+                (tx, Variant(tx.contig, pos, ref4[:2], alt0 + alt1, genome=GENOME)),
+                (tx, Variant(tx.contig, pos, ref4, b0, genome=GENOME)),
+                (tx, Variant(tx.contig, pos, b0, b0 + "GCA", genome=GENOME)),
+                (tx, Variant(tx.contig, pos, b0, b0 + "TAA", genome=GENOME)),
+                (tx, Variant(tx.contig, pos, ref4[:2], b0, genome=GENOME)),
+                (tx, Variant(tx.contig, pos, b0, b0 + "G", genome=GENOME)),
+            ])
+    assert len(test_cases) >= 70
+
+    for tx, variant in test_cases:
+        tm_eff = variant.effect_on_transcript(tx, annotator="transcript_model")
+        u_eff = variant.effect_on_transcript(tx, annotator="unified")
+        assert type(u_eff) is type(tm_eff), f"Class mismatch on {variant} ({tx.id})"
+        assert u_eff.short_description == tm_eff.short_description, (
+            f"short_description mismatch on {variant} ({tx.id}): {u_eff} vs {tm_eff}"
+        )
+        assert u_eff.mutant_protein_sequence == tm_eff.mutant_protein_sequence
+        assert u_eff.modifies_protein_sequence == tm_eff.modifies_protein_sequence
+
+    # Reference mismatch on a coding deletion must still raise ReferenceMismatchError.
+    ex2 = met.exons[1]
+    pos = ex2.start + 60
+    real_seq = met.sequence[met.spliced_offset(pos) : met.spliced_offset(pos) + 4]
+    wrong4 = "AAAA" if real_seq != "AAAA" else "CCCC"
+    bad_del = Variant("7", pos, wrong4, wrong4[0], genome=GENOME)
+    with pytest.raises(ReferenceMismatchError):
+        bad_del.effect_on_transcript(met, annotator="unified")
+
+
+def test_unified_interoperates_with_priority_proteome_orf_discovery_and_mt_polya():
+    """Unified effects work with effect_priority, to_proteome, discover_created_orfs, and MT poly-A."""
+    import json
+    from pathlib import Path
+
+    from varcode import (
+        StructuralVariant,
+        classification_priority,
+        discover_created_orfs,
+        effect_priority,
+        to_proteome,
+    )
+
+    # 1. effect_priority & filter_by_effect_priority see coding alternatives on unified splice effects.
+    cftr = GENOME.transcript_by_id("ENST00000003084")
+    weak_donor = Variant("7", 117531117, "A", "C", genome=GENOME)
+    u_splice = weak_donor.effect_on_transcript(cftr, annotator="unified")
+    del_alt = next(c.effect for c in u_splice.candidates if isinstance(c.effect, Deletion))
+    assert effect_priority(u_splice) >= classification_priority(del_alt)
+    assert list(EffectCollection([u_splice]).filter_by_effect_priority(Deletion)) == [u_splice]
+
+    # 2. to_proteome exports unified coding + splice + germline effects with tool='varcode'.
+    braf = GENOME.transcript_by_id("ENST00000288602")
+    u_v600e = Variant("7", 140753336, "A", "T", genome=GENOME).effect_on_transcript(
+        braf, annotator="unified"
+    )
+    germline_ctx = GermlineContext.from_variants([Variant("7", 140753335, "C", "T", genome=GENOME)])
+    u_phased = Variant("7", 140753336, "A", "T", genome=GENOME).effect_on_transcript(
+        braf, germline=germline_ctx, annotator="unified"
+    )
+    proteome = to_proteome([u_v600e, u_splice, u_phased])
+    assert proteome.proteins
+    assert all(p.producer.tool == "varcode" for p in proteome.proteins)
+
+    # 3. discover_created_orfs works on unified 5'UTR start-gain + unphased germline.
+    fixture = json.loads((Path(__file__).parent / "data/created_orfs/CDKN2A.json").read_text())
+    native = fixture["native"]
+    g95 = cached_release(native["annotation_version"])
+    cdkn2a_tx = g95.transcript_by_id(native["transcript_id"])
+    allele = fixture["genomic"]
+    v_start = Variant(allele["contig"], allele["start"], allele["ref"], allele["alt"], genome=g95)
+    u_utr = v_start.effect_on_transcript(cdkn2a_tx, annotator="unified")
+    report = discover_created_orfs(u_utr)
+    assert report.complete
+    assert len(report.effects) == 1
+    assert report.effects[0].mutant_protein_sequence == fixture["refseq"]["expected_protein"]
+
+    # 4. Mitochondrial transcript with poly-A stop codon (MT-ND1) builds DNASearchAnchor cleanly.
+    nd1 = GENOME.transcript_by_id("ENST00000361390")
+    mt_dup = StructuralVariant("MT", 3500, "DUP", end=3560, genome=GENOME)
+    u_mt = mt_dup.effect_on_transcript(nd1, annotator="unified")
+    assert isinstance(u_mt.dna_search_anchor, DNASearchAnchor)
+    assert u_mt.dna_search_anchor.five_prime_cds_prefix is not None
+    assert u_mt.dna_search_anchor.exit_frame in (0, 1, 2)
