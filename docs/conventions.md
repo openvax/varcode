@@ -73,6 +73,16 @@ Saved Variant JSON that stores the genome under its old `"ensembl"` key and
 saved effect/proteome metadata referencing `"realized"` or `varcode.uorf`
 still load cleanly without warning.
 
+### Removed out-of-scope modules (12.2)
+
+Version 12.2.0 pruned five out-of-scope modules with no ecosystem callers (#754):
+
+| Removed in 12.2 | Replacement / status |
+|---|---|
+| `varcode.rna_read_phasing` (`RNAReadPhasingSource`) and the `varcode[rna]` extra | [Isovar](https://github.com/openvax/isovar) (`IsovarReadPhasing` → `MolecularPhaseResolver`); see [RNA evidence](phasing.md#rna-evidence) |
+| `varcode.sample_identity`, `varcode.sample_vcf`, `varcode check-samples` | Out of scope for Varcode |
+| `varcode.sv_comparison`, `varcode.exacto`, `varcode.reference_completion` | Out of scope for Varcode |
+
 Variant positions and reference lookup helpers use one-based genomic
 coordinates. cDNA/protein offsets used for Python indexing are zero-based;
 formatted protein descriptions use one-based residue numbers. Each API's
@@ -106,13 +116,14 @@ refusal into Unresolved. See the [annotator contract](annotator_contract.md).
 ## Type checking
 
 Varcode ships a `py.typed` marker and adopts annotations gradually. File-loading
-inputs, chromosome resolution, core annotation return paths, base effect
-sequence/change fields, and the
-annotator protocol/registry are checked with static consumer examples.
+inputs, chromosome resolution, core annotation return paths, collection
+iteration/indexing/filtering/cloning/grouping (`VariantCollection`,
+`EffectCollection`), `effect_classes.py`, candidate traversal, and the
+annotator protocol/registry are checked with static consumer examples (#653).
 `register_annotator()` preserves the concrete type of the registered object.
 
-Coverage is not yet complete. Inherited collection iteration/indexing, many
-effect subclass properties and optional integration arguments can still expose Any.
+Coverage is not yet complete. Some specialized effect subclass properties and
+optional integration arguments remain gradual.
 An accepted type-check is not proof that every step in a pipeline was checked.
 Runtime-checkable protocols check attribute presence, not complete signatures
 or biological validity.

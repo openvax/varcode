@@ -14,6 +14,7 @@ EffectCollection containing additional ORF consequences.
 | Annotate overlapping catalogue records | `predict_orf_effects(variants, ...)` | Tuple of ORFAnnotation objects |
 | Compare a mapped observed RNA product | `annotate_orf_rna_product(reference, product)` | ORFProductAnnotation |
 | Export the observed-product comparison directly | `annotate_orf_product(reference, product)` | Dictionary for JSON export |
+| Discover variant-created ORF starts in paired RNA | `discover_created_orfs(effect, ...)` | ORFDiscovery |
 
 The tuple from `predict_orf_effects` is not an EffectCollection. Empty results
 mean no catalogue model was selected; they do not establish that no ORF can be
@@ -42,3 +43,20 @@ reference context; a protein string alone cannot supply that mapping.
 ::: varcode.ORFProduct
 
 ::: varcode.ORFProductAnnotation
+
+## Created-ORF discovery
+
+For worked examples, search limits, and biological caveats, see
+[Discovering created ORFs](created_orfs.md).
+
+::: varcode.discover_created_orfs
+
+::: varcode.discover_created_orfs_in_products
+
+::: varcode.ORFDiscoveryPolicy
+
+::: varcode.ORFDiscovery
+
+::: varcode.ORFDiscoveryAssessment
+
+::: varcode.DiscoveredORF

@@ -47,7 +47,9 @@ property getters; they are a snapshot, not a coverage target.
   Previously, type checkers inferred None-only sequence and bool-only change
   fields from base-class defaults, overlooking valid subclass results.
 - Reference entries for previously omitted root APIs, with separate ORF and
-  sample-identity pages and explanations of compatibility return shapes.
+  sample-identity pages (the `sample_identity` module and page were later
+  removed as out-of-scope in 12.2.0, #754) and explanations of compatibility
+  return shapes.
 - Docstrings for legacy uORF wrappers, corrected empty-collection ranking
   behavior, and an explicit process-global override contract.
 - Current reference-mismatch diagnostics and ORF extra dependency requirements.
