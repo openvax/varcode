@@ -34,17 +34,69 @@ See [effect annotation](effect_annotation.md) for result access and the
 See [traversing candidates](experimental_annotators.md#traversing-candidates)
 for terminal comparisons, provenance paths and unresolved states.
 
+::: varcode.CandidatePath
+
 ::: varcode.get_effect_candidates
 
 ::: varcode.iter_candidate_paths
 
 ::: varcode.iter_candidate_effects
 
-## Splice candidates
+<a id="splice-candidates"></a>
+
+## Splice effects and candidates
 
 See [splice variants](splice_variants.md) for the distinction between signal
 disruption and candidate consequences. The scores below are sequence heuristics,
 not probabilities that a candidate is expressed.
+
+::: varcode.SpliceSite
+    options:
+      skip_local_inventory: true
+
+::: varcode.SpliceDonor
+    options:
+      skip_local_inventory: true
+
+::: varcode.SpliceAcceptor
+    options:
+      skip_local_inventory: true
+
+::: varcode.IntronicSpliceSite
+    options:
+      skip_local_inventory: true
+
+::: varcode.ExonicSpliceSite
+    options:
+      skip_local_inventory: true
+
+::: varcode.SpliceOutcomeSet
+    options:
+      skip_local_inventory: true
+
+::: varcode.SpliceMechanismEffect
+    options:
+      skip_local_inventory: true
+
+::: varcode.NormalSplicing
+    options:
+      skip_local_inventory: true
+
+::: varcode.ExonSkipping
+    options:
+      skip_local_inventory: true
+
+::: varcode.IntronRetention
+    options:
+      skip_local_inventory: true
+
+::: varcode.CrypticDonor
+    options:
+      skip_local_inventory: true
+
+::: varcode.CrypticAcceptor
+    options:
+      skip_local_inventory: true
 
 ::: varcode.SpliceCandidateRNAEvidence
 

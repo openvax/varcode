@@ -1,5 +1,20 @@
 # Change Log
 
+## v12.2.3
+
+### Documentation
+
+- Backfill missing `v12.1.1` (#752) and `v12.2.0` (#754) release notes in
+  `CHANGELOG.md`.
+- Add the remaining 19 public root exports from `varcode.__all__` to the
+  generated API reference: created-ORF discovery symbols in `docs/api_orfs.md`,
+  `CandidatePath` and splice-effect classes in `docs/api_effects.md`, and
+  index links in `docs/api.md`.
+- Remove stale anchors for removed `Variant.ensembl` and `RNAReadPhasingSource`
+  in `docs/api.md`, document the `12.2.0` module removals and updated `#653`
+  typing coverage in `docs/conventions.md`, and note the `12.2.0` removal of
+  `sample_identity` in `docs/dev/api-quality.md`.
+
 ## v12.2.2
 
 ### Maintenance
@@ -28,6 +43,33 @@
 - Clean up stale references to the removed `varcode[rna]` extra and
   `RNAReadPhasingSource` in `README.md`, `CONTRIBUTING.md`, `tests/README.md`,
   and `pyproject.toml`.
+
+## v12.2.0
+
+### Breaking / scope cleanup
+
+- Prune five out-of-scope modules with zero callers across the OpenVax and
+  PIRL-UNC ecosystems (#754):
+  - Removed `varcode.rna_read_phasing` (`RNAReadPhasingSource`) and the
+    `varcode[rna]` optional extra; RNA-seq BAM phasing lives in Isovar
+    (`IsovarReadPhasing` → `MolecularPhaseResolver`, see `docs/library_roles.md`).
+  - Removed donor mix-up QC (`varcode.sample_identity`, `varcode.sample_vcf`,
+    `varcode.cli.sample_checks`, and the `varcode check-samples` subcommand).
+  - Removed `varcode.sv_comparison`, `varcode.exacto`, and
+    `varcode.reference_completion`, along with their root exports, docs pages,
+    and dedicated test suites.
+
+## v12.1.1
+
+### Maintenance
+
+- Drop unused `gtfparse` and `memoized_property` runtime dependencies from
+  `requirements.txt` and replace `@memoized_property` with stdlib
+  `functools.cached_property` (#752).
+- Replace `np.isnan` in `varcode.nucleotides` with `math.isnan`, remove a
+  duplicate `IncompleteTranscript` entry in `varcode.effects.__all__`, remove
+  unused helpers, deduplicate `complement`/`reverse_complement`, and defer CLI
+  logging configuration from import time into `main()`.
 
 ## v12.1.0
 
