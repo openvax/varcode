@@ -12,10 +12,12 @@ from varcode import (
     AssembledAllele,
     Candidate, CandidatePath, classification_priority, get_effect_candidates,
     iter_candidate_effects, iter_candidate_paths,
-    ContigResolution, ContigResolver, CrypticSplicePolicy, EffectAnnotator, EffectCollection, EffectReference,
-    GeneLike, Genotype, InvalidContigError, MutationEffect, MutantTranscript, ORFAnnotation,
-    SpanningDeletionRecord, TranscriptLike, Unresolved, Variant, VariantCollection, Zygosity,
-    combine_cis_snvs,
+    ContigResolution, ContigResolver, CrypticSplicePolicy,
+    DNAHypothesis, DNASearchAnchor, EffectAnnotator, EffectCollection, EffectReference,
+    GenomicSpliceJunction, GeneLike, Genotype, InvalidContigError, MutationEffect, MutantTranscript,
+    ORFAnnotation, SpanningDeletionRecord, TranscriptLike, UnifiedDNAEffectAnnotator,
+    Unresolved, Variant, VariantCollection, Zygosity,
+    build_dna_search_anchor, combine_cis_snvs,
     effect_collection_from_json, effect_collection_from_serializable_repr,
     effect_collection_to_json, effect_from_json, effect_from_serializable_repr,
     effect_serialization_classes, effect_to_json,
@@ -150,6 +152,15 @@ def check_annotation_workflow(
     assert_type(effect_collection_from_json("{}"), EffectCollection)
     assert_type(effect_collection_from_serializable_repr({}), EffectCollection)
     assert_type(CrypticSplicePolicy(scan_flank=100, max_sites_per_junction=4), CrypticSplicePolicy)
+    unified = UnifiedDNAEffectAnnotator()
+    assert_type(register_annotator(unified), UnifiedDNAEffectAnnotator)
+    junction = GenomicSpliceJunction("17", 101, 200, "-", 201, 100)
+    assert_type(junction.intron_start, int)
+    hyp = DNAHypothesis(effect=effect, novel_junctions=(junction,))
+    assert_type(hyp.short_description, str)
+    anchor = build_dna_search_anchor(variant, transcript)
+    assert_type(anchor, DNASearchAnchor)
+    assert_type(anchor.exit_frame, int | None)
 
     variant.effects(raise_on_error="no")  # type: ignore[arg-type]
     variants.effects(validate_reference="no")  # type: ignore[arg-type]

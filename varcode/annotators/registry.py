@@ -29,6 +29,7 @@ if TYPE_CHECKING:
 from .fast import FastEffectAnnotator
 from .protein_diff import ProteinDiffEffectAnnotator
 from ..transcript_model import TranscriptModelEffectAnnotator
+from ..unified import UnifiedDNAEffectAnnotator
 
 
 _AnnotatorT = TypeVar("_AnnotatorT", bound="EffectAnnotator")
@@ -93,8 +94,9 @@ def registered_annotators(*, include_deprecated: bool = False) -> tuple[str, ...
     Returns
     -------
     tuple of str
-        Sorted registered annotator names (``("fast", "protein_diff", "transcript_model")``
-        when no third-party annotators are registered).
+        Sorted registered annotator names (``("fast", "protein_diff",
+        "transcript_model", "unified")`` when no third-party annotators are
+        registered).
     """
     _ = include_deprecated
     return tuple(sorted(_REGISTRY))
@@ -206,3 +208,4 @@ def use_annotator(name_or_instance: str | EffectAnnotator) -> Iterator[None]:
 register_annotator(FastEffectAnnotator())
 register_annotator(ProteinDiffEffectAnnotator())
 register_annotator(TranscriptModelEffectAnnotator())
+register_annotator(UnifiedDNAEffectAnnotator())

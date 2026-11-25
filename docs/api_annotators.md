@@ -39,3 +39,19 @@ See [supported inputs and results](experimental_annotators.md) before using it.
 ::: varcode.TranscriptModelEffectAnnotator
 
 ::: varcode.predict_transcript_model_effect
+
+## Unified DNA annotator (opt-in)
+
+`annotator="unified"` combines a safe interior-exon SNV fast-path with flat
+`DNAHypothesis` candidates and deterministic `DNASearchAnchor` search geometry
+for large insertions and structural rearrangements.
+
+::: varcode.UnifiedDNAEffectAnnotator
+
+::: varcode.DNAHypothesis
+
+::: varcode.GenomicSpliceJunction
+
+::: varcode.DNASearchAnchor
+
+::: varcode.build_dna_search_anchor

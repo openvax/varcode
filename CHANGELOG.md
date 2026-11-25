@@ -1,5 +1,36 @@
 # Change Log
 
+## v12.3.0
+
+### Unified DNA annotator & deterministic structural search anchors
+
+- Add opt-in `UnifiedDNAEffectAnnotator` (registered as `annotator="unified"`,
+  keeping `transcript_model` as the default and `fast` intact as a speed and
+  parity oracle):
+  - Exposes a single flat `DNAHypothesis` candidate record across point,
+    splice, germline/phase, and structural consequences with explicit
+    `uncertainty` axes, `splice_mechanisms`, `phase`, `novel_junctions`, and
+    canonical `MutantTranscript`.
+  - Uses explicit 1-based ascending genomic intron coordinates
+    (`GenomicSpliceJunction`, `intron_start <= intron_end` on both `+` and `-`
+    strands) for direct downstream BAM CIGAR `N` junction matching in Isovar.
+  - Adds a safe interior-exon SNV fast-path inside `UnifiedDNAEffectAnnotator`
+    (strictly guarded against splice windows, start/stop codons, germline/phase
+    context, selenocysteine, non-standard genetic codes, circular origins, and
+    reference mismatches).
+- Add `DNASearchAnchor` and `build_dna_search_anchor(variant, transcript)`
+  (automatically attached as `effect.dna_search_anchor` on structural variants
+  and large insertions under `annotator="unified"`), exposing the deterministic
+  5' anchor exon, skip-fallback exon, exit reading frame, 3' re-entry exon or
+  oriented mate search region, wild-type competing junctions, and
+  `materialize_template(sequence_provider)` mutant pre-mRNA builder for
+  downstream RNA reconciliation without guessing deep splicing from DNA alone.
+- Allowlist `DNAHypothesis`, `GenomicSpliceJunction`, `DNASearchAnchor`, and
+  `dna_search_anchor` in the finite safe JSON effect codec.
+- Add `EGFR` exon 20 intra-exonic ITD (`p.770insSVD`) and multi-exon
+  `EGFR`-KDD (exons 18–25 kinase-domain tandem duplication, verifying its
+  diagnostic exon 25 → exon 18 back-junction) to `tests/test_cancer_hard_cases.py`.
+
 ## v12.2.4
 
 ### Bug fixes and tests

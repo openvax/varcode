@@ -448,11 +448,17 @@ def test_root_type_validation_and_invalid_inputs():
 
 
 def test_registered_annotators_public_api():
-    assert registered_annotators() == ("fast", "protein_diff", "transcript_model")
+    assert registered_annotators() == (
+        "fast",
+        "protein_diff",
+        "transcript_model",
+        "unified",
+    )
     assert registered_annotators(include_deprecated=True) == (
         "fast",
         "protein_diff",
         "transcript_model",
+        "unified",
     )
 
     class CustomAnnotator:
