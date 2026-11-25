@@ -72,7 +72,6 @@ class _ExonFragment:
     reference_end: int
     first_genomic_position: int
     last_genomic_position: int
-    copy_group: str
 
 
 def _gap_is_inserted(layout, start, end):
@@ -86,9 +85,10 @@ def _gap_is_inserted(layout, start, end):
 def build_exon_runs(transcript, layout):
     """Project sense-strand exon occurrences onto a genomic layout.
 
-    Point edits and internal deletions remain part of one exon run.  A
-    duplicated exon is a distinct occurrence, while inverted (antisense)
-    sequence is intentionally excluded.
+    Point edits, internal deletions, and contiguous intra-exonic tandem
+    duplications (with no intervening intron) remain part of one exon run.
+    Duplicated exons separated by an intron are distinct occurrences, while
+    inverted (antisense) sequence is intentionally excluded.
     """
     # Exons in the transcript's frame, as from_transcript lays it out.
     exons = TranscriptFrame(transcript).exon_intervals
@@ -114,9 +114,6 @@ def build_exon_runs(transcript, layout):
                     within_end = segment.end - overlap_start + 1
                     first_position = overlap_end
                     last_position = overlap_start
-                copy_group = (
-                    "duplicated"
-                    if segment.origin_kind == "duplicated" else "original")
                 fragments.append(_ExonFragment(
                     exon_number=exon_number,
                     layout_start=layout_offset + within_start,
@@ -124,8 +121,7 @@ def build_exon_runs(transcript, layout):
                     reference_start=exon_start,
                     reference_end=exon_end,
                     first_genomic_position=first_position,
-                    last_genomic_position=last_position,
-                    copy_group=copy_group))
+                    last_genomic_position=last_position))
         layout_offset += segment.length
 
     fragments.sort(key=lambda fragment: fragment.layout_start)
@@ -134,7 +130,6 @@ def build_exon_runs(transcript, layout):
         if merged:
             previous = merged[-1]
             if (previous.exon_number == fragment.exon_number
-                    and previous.copy_group == fragment.copy_group
                     and _gap_is_inserted(
                         layout, previous.layout_end, fragment.layout_start)):
                 merged[-1] = _ExonFragment(
@@ -144,8 +139,7 @@ def build_exon_runs(transcript, layout):
                     reference_start=previous.reference_start,
                     reference_end=previous.reference_end,
                     first_genomic_position=previous.first_genomic_position,
-                    last_genomic_position=fragment.last_genomic_position,
-                    copy_group=previous.copy_group)
+                    last_genomic_position=fragment.last_genomic_position)
                 continue
         merged.append(fragment)
 

@@ -1,5 +1,23 @@
 # Change Log
 
+## v12.2.4
+
+### Bug fixes and tests
+
+- Fix intra-exonic tandem duplications (such as `FLT3`-ITD) tripping
+  `HypothesisLimit` under the default `transcript_model` annotator (#769):
+  `build_exon_runs` in `varcode/transcript_layout.py` now merges contiguous
+  fragments of the same exon when there is no intervening intron, rather than
+  splitting original and duplicated segments into bogus internal splice sites.
+- Add Phase-0 canonical cancer driver, fusion oncogene, and adversarial
+  hard-case regression suite in `tests/test_cancer_hard_cases.py` covering
+  `EML4--ALK` inversion, `KIAA1549--BRAF` tandem duplication, `TMPRSS2--ERG`
+  5′UTR deletion fusion, `BCR--ABL1` p190 (intronic vs. exonic breakpoint
+  insertions), `MET` exon 14 skipping, `TP53` minus-strand splice site, `BRAF`
+  V600K MNV vs. cis/trans SNVs, `EGFR` exon 19 deletion, `NPM1` type A
+  frameshift, `FLT3`-ITD (`DUP` vs. insertion), compound frameshift rescue,
+  exonic splice-boundary guards, and distinct patient-baseline preservation.
+
 ## v12.2.3
 
 ### Documentation
