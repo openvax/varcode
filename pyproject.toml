@@ -82,6 +82,7 @@ files = [
     "varcode/contigs.py",
     "varcode/nucleotides.py",
     "varcode/reference.py",
+    "varcode/unified.py",
     "varcode/variant.py",
     "varcode/annotators/__init__.py",
     "varcode/annotators/registry.py",

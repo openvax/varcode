@@ -509,6 +509,64 @@ def test_flt3_itd_intra_exonic_dup_matches_explicit_insertion(annotator):
     assert _fusion_protein(restored[0]) == expected_protein
 
 
+@pytest.mark.parametrize("annotator", ["transcript_model", "fast", "unified"])
+def test_egfr_exon20_itd_and_kinase_domain_duplication_kdd(annotator):
+    """EGFR exon 20 intra-exonic ITD (p.770insSVD) and EGFR-KDD (exons 18-25 tandem DUP)."""
+    egfr = GENOME.transcript_by_id("ENST00000275493")  # + strand, 28 exons, 1210 aa
+    cds_start = min(egfr.start_codon_spliced_offsets)
+
+    # 1. EGFR exon 20 intra-exonic 9-bp ITD (S768_D770dup -> p.770insSVD, 1,213 aa)
+    ex20 = egfr.exons[19]
+    s_off = cds_start + 767 * 3  # S768-V769-D770 (0-based 767..769)
+    pos_map = {egfr.spliced_offset(p): p for p in range(ex20.start, ex20.end + 1)}
+    dup_start, dup_end = pos_map[s_off], pos_map[s_off + 8]
+    dup_seq = egfr.sequence[s_off:s_off + 9]
+    expected_ex20_protein = _translate_independent(
+        (egfr.sequence[:s_off] + dup_seq + egfr.sequence[s_off:])[cds_start:]
+    )
+    assert len(expected_ex20_protein) == len(egfr.protein_sequence) + 3 == 1213
+
+    eff_ins = Variant("7", dup_end, "", dup_seq, genome=GENOME).effect_on_transcript(
+        egfr, annotator=annotator
+    )
+    eff_dup = StructuralVariant(
+        "7", dup_start, "DUP", end=dup_end, genome=GENOME
+    ).effect_on_transcript(egfr, annotator=annotator)
+    assert eff_ins.mutant_protein_sequence == expected_ex20_protein
+    assert _fusion_protein(eff_dup) == expected_ex20_protein
+
+    # 2. EGFR-KDD: multi-exon tandem duplication of exons 18..25 (intron 17 -> intron 25)
+    ex18, ex25 = egfr.exons[17], egfr.exons[24]
+    ex18_cds = egfr.spliced_offset(ex18.start) - cds_start
+    ex25_cds = egfr.spliced_offset(ex25.end) - cds_start + 1
+    kdd_cds = (
+        egfr.coding_sequence[:ex25_cds]
+        + egfr.coding_sequence[ex18_cds:ex25_cds]
+        + egfr.coding_sequence[ex25_cds:]
+    )
+    expected_kdd_protein = _translate_independent(kdd_cds)
+    assert len(expected_kdd_protein) == len(egfr.protein_sequence) + 351 == 1561
+
+    # Intron 25 is 379 bp wide (ex25.end=55201355, ex26.start=55201735); +150 sits inside intron 25.
+    sv_kdd = StructuralVariant(
+        "7", ex18.start - 500, "DUP", end=ex25.end + 150, genome=GENOME
+    )
+    eff_kdd = sv_kdd.effect_on_transcript(egfr, annotator=annotator)
+    assert _fusion_protein(eff_kdd) == expected_kdd_protein
+    if annotator == "unified":
+        assert isinstance(eff_kdd, Insertion)
+        assert len(eff_kdd.candidates) == 1
+        # The single novel junction is the diagnostic EGFR-KDD back-junction exon 25 -> exon 18!
+        (kdd_junction,) = eff_kdd.candidates[0].novel_junctions
+        assert kdd_junction.donor_base == ex25.end
+        assert kdd_junction.acceptor_base == ex18.start
+        assert kdd_junction.is_back_junction is True
+        assert kdd_junction.intron_start <= kdd_junction.intron_end
+
+    restored = EffectCollection.from_json(EffectCollection([eff_kdd]).to_json())
+    assert _fusion_protein(restored[0]) == expected_kdd_protein
+
+
 @pytest.mark.parametrize("annotator", ["transcript_model", "fast"])
 def test_compound_frameshift_rescue_restores_reading_frame(annotator):
     """Two cis frameshifting indels (-1 bp + +1 bp) restore frame as ComplexSubstitution."""
