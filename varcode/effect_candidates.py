@@ -66,35 +66,40 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class EffectCandidate(DataclassSerializable):
-    """One plausible effect for a variant, paired with provenance.
+    """One plausible effect for a variant, paired with provenance and uncertainty.
 
     Parameters
     ----------
     effect : MutationEffect
         The effect this candidate represents. Guaranteed to be a
-        :class:`~varcode.effects.MutationEffect` instance. For
-        outcomes whose protein math isn't yet resolved (e.g. a
-        splice-mechanism Effect built without a ``genomic_sequence``
-        provider), the inner Effect still satisfies the interface —
-        ``aa_ref`` / ``aa_alt`` / ``mutant_protein_sequence`` are
-        simply ``None``, and consumers can read
-        ``candidate.effect.short_description`` uniformly across SV,
-        splice, and point-variant candidates.
+        :class:`~varcode.effects.MutationEffect` instance. Sequences live on
+        ``effect`` (``mutant_protein_sequence``, ``original_protein_sequence``)
+        and its optional ``mutant_transcript`` / ``baseline_transcript``.
     source : str
         Name of the tool or annotator that produced this candidate.
-        Defaults to ``"varcode"`` for built-in classifications.
-        External integrations set their own opaque string. Varcode
-        does not interpret this field beyond exact-string equality.
+        Defaults to ``"varcode"`` for built-in classifications (``"varcode.dna"``
+        from the default DNA annotator). External integrations set their own
+        opaque string.
     evidence : Mapping[str, Any]
-        Open-ended provenance dict. Shape is source-specific; the
-        convention is that keys match the source's native field names.
-        Consumers that need a particular shape should type-check at
-        the call site rather than rely on a rigid schema here.
+        Open-ended provenance dict.
+    mechanisms : tuple of str, optional
+        Splice mechanisms active for this candidate (e.g. ``("normal",)``,
+        ``("exon_skip",)``, ``("intron_retention",)``, ``("cryptic",)``).
+    phase : tuple of (Variant, str), optional
+        Inherited germline phase assignments for this candidate, e.g.
+        ``((germline_variant, "cis"),)``.
+    uncertainty : tuple of str, optional
+        Sorted axes of unresolved DNA uncertainty across sibling candidates
+        (e.g. ``()``, ``("splicing",)``, ``("phasing",)``,
+        ``("phasing", "splicing")``, ``("structural",)``).
     """
 
     effect: "MutationEffect"
     source: str = "varcode"
     evidence: Mapping[str, Any] = field(default_factory=dict)
+    mechanisms: Tuple[str, ...] = ()
+    phase: Tuple[Tuple[Any, str], ...] = ()
+    uncertainty: Tuple[str, ...] = ()
 
     @property
     def short_description(self) -> str:

@@ -167,8 +167,8 @@ def effect_priority(effect):
     Shared transcript comparisons rank by their most severe retained
     candidate. Selecting an effect never drops its other hypotheses.
     """
+    from ..effect_candidates import EffectCandidate
     from ..effect_traversal import iter_candidate_effects
-    from ..unified import DNAHypothesis
 
     # Inspect already-attached candidates in __dict__ so we never trigger lazy
     # SpliceOutcomeSet.candidates materialization during priority ranking.
@@ -178,7 +178,9 @@ def effect_priority(effect):
         or ()
     )
     if getattr(effect, "realized_candidates", None) or any(
-        isinstance(c, DNAHypothesis) for c in attached_candidates
+        isinstance(c, EffectCandidate)
+        and (c.source == "varcode.dna" or c.uncertainty or getattr(c, "_paired_outcomes", None))
+        for c in attached_candidates
     ):
         return max(
             (classification_priority(candidate) for candidate in iter_candidate_effects(effect)

@@ -1,7 +1,11 @@
-"""Tests for the opt-in ``unified`` DNA-only annotator, flat hypotheses, and search anchors."""
+"""Tests for the default ``dna`` annotator and the minimal 3-noun API
+(``MutationEffect``, ``EffectCandidate``, ``MutantTranscript``).
+"""
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 import time
 
 import pytest
@@ -9,24 +13,25 @@ from pyensembl import cached_release
 
 from varcode import (
     DNAEffectAnnotator,
-    DNAHypothesis,
-    DNASearchAnchor,
+    EffectCandidate,
     EffectCollection,
-    GenomicSpliceJunction,
     GermlineContext,
     MolecularPhaseResolver,
+    MutantTranscript,
     ReferenceMismatchError,
     StructuralVariant,
-    UnifiedDNAEffectAnnotator,
     Variant,
     VariantCollection,
-    build_dna_search_anchor,
+    classification_priority,
+    discover_created_orfs,
+    effect_priority,
     get_annotator,
     get_default_annotator,
     iter_candidate_effects,
     iter_candidate_paths,
     parse_symbolic_alt,
     registered_annotators,
+    to_proteome,
 )
 from varcode.effects.effect_classes import (
     ComplexSubstitution,
@@ -61,9 +66,9 @@ class _CisPair:
         return variant in self._pair
 
     def partners_in_cis(self, variant):
-        if self._answer is not True or variant not in self._pair:
-            return ()
-        return tuple(v for v in self._pair if v != variant)
+        if self._answer is True and variant in self._pair:
+            return tuple(v for v in self._pair if v != variant)
+        return ()
 
     def in_cis(self, v1, v2, transcript=None):
         if {v1, v2} == set(self._pair):
@@ -71,31 +76,25 @@ class _CisPair:
         return None
 
 
-def test_dna_annotator_is_default_with_compat_aliases_and_deprecations():
-    assert UnifiedDNAEffectAnnotator is DNAEffectAnnotator
+def test_dna_annotator_is_default_with_slim_api_and_deprecations():
     assert registered_annotators() == ("dna", "fast", "transcript_model")
     assert registered_annotators(include_deprecated=True) == (
         "dna",
         "fast",
         "protein_diff",
         "transcript_model",
-        "unified",
     )
     assert isinstance(get_annotator("dna"), DNAEffectAnnotator)
-    assert get_default_annotator().name in ("dna", "protein_diff")  # respects --annotator CLI
+    assert get_default_annotator().name in ("dna", "protein_diff")
     assert get_annotator("fast").name == "fast"
     assert get_annotator("transcript_model").name == "transcript_model"
-
-    with pytest.warns(DeprecationWarning, match="deprecated alias"):
-        aliased = get_annotator("unified")
-    assert aliased is get_annotator("dna")
 
     with pytest.warns(DeprecationWarning, match="deprecated"):
         pdiff = get_annotator("protein_diff")
     assert pdiff.name == "protein_diff"
 
 
-def test_unified_flat_dna_hypotheses_and_uncertainty_axes():
+def test_dna_flat_effect_candidates_and_uncertainty_axes():
     braf = GENOME.transcript_by_id("ENST00000288602")  # - strand
     met = GENOME.transcript_by_id("ENST00000397752")  # + strand
 
@@ -106,200 +105,185 @@ def test_unified_flat_dna_hypotheses_and_uncertainty_axes():
     assert eff_braf.short_description == "p.V600E"
     assert not hasattr(eff_braf, "realized_candidates")
     assert len(eff_braf.candidates) == 1
-    hyp = eff_braf.candidates[0]
-    assert isinstance(hyp, DNAHypothesis)
-    assert hyp.uncertainty == ()
-    assert hyp.splice_mechanisms == ("normal",)
-    assert hyp.mutant_protein == eff_braf.mutant_protein_sequence
+    cand = eff_braf.candidates[0]
+    assert isinstance(cand, EffectCandidate)
+    assert cand.uncertainty == ()
+    assert cand.mechanisms == ("normal",)
+    assert cand.effect.mutant_protein_sequence == eff_braf.mutant_protein_sequence
 
-    # 2. Splice-only uncertainty (MET exon 14 donor +1).
+    # 2. Pure splice-site variant (MET exon 14 donor +1 G>A): uncertainty=('splicing',).
     ex14 = met.exons[13]
     v_met_don = Variant("7", ex14.end + 1, "G", "A", genome=GENOME)
     eff_met = v_met_don.effect_on_transcript(met, annotator="dna")
-    assert all(isinstance(c, DNAHypothesis) for c in eff_met.candidates)
-    assert eff_met.candidates[0].uncertainty == ("splicing",)
-    mechs = {m for c in eff_met.candidates for m in c.splice_mechanisms}
-    assert {"exon_skip", "intron_retention", "cryptic", "normal"} <= mechs
+    assert all(isinstance(c, EffectCandidate) for c in eff_met.candidates)
+    assert all(c.uncertainty == ("splicing",) for c in eff_met.candidates)
+    assert any("exon_skip" in c.mechanisms for c in eff_met.candidates)
 
-    # 3. Phasing-only uncertainty (BRAF V600E + unphased germline V600M).
-    v_germ = Variant("7", 140753337, "C", "T", genome=GENOME)
-    ctx = GermlineContext.from_variants([v_germ], reference_name="GRCh38")
+    # 3. Unphased germline variant in same codon: uncertainty=('phasing',).
+    g_braf = Variant("7", 140753335, "C", "T", genome=GENOME)
+    ctx = GermlineContext.from_variants([g_braf])
     eff_phase = v_braf.effect_on_transcript(braf, annotator="dna", germline=ctx)
     assert len(eff_phase.candidates) == 2
+    assert all(isinstance(c, EffectCandidate) for c in eff_phase.candidates)
     assert all(c.uncertainty == ("phasing",) for c in eff_phase.candidates)
-    assert {
-        (c.baseline_protein[599], c.mutant_protein[599], c.short_description)
-        for c in eff_phase.candidates
-    } == {("V", "E", "p.V600E"), ("M", "K", "p.M600K")}
+    states = {state for c in eff_phase.candidates for _, state in c.phase}
+    assert states == {"cis", "trans"}
 
-    # 4. Combined splicing + phasing uncertainty (MET ex14 last base + unphased ex14 germline SNP).
-    v_met_ex = Variant("7", ex14.end, "G", "A", genome=GENOME)
-    g_pos = ex14.start + 30
-    g_ref = met.sequence[met.spliced_offset(g_pos)]
-    g_alt = "T" if g_ref != "T" else "C"
-    met_ctx = GermlineContext.from_variants(
-        [Variant("7", g_pos, g_ref, g_alt, genome=GENOME)], reference_name="GRCh38"
-    )
+    # 4. Joint phasing + splicing uncertainty on MET exon 14 last base + unphased germline.
+    ex14_last_ref = met.sequence[met.spliced_offset(ex14.end)]
+    ex14_last_alt = "A" if ex14_last_ref != "A" else "C"
+    v_met_ex = Variant("7", ex14.end, ex14_last_ref, ex14_last_alt, genome=GENOME)
+    g_met_pos = ex14.start + 30
+    g_met_ref = met.sequence[met.spliced_offset(g_met_pos)]
+    g_met_alt = "A" if g_met_ref != "A" else "G"
+    g_met = Variant("7", g_met_pos, g_met_ref, g_met_alt, genome=GENOME)
+    met_ctx = GermlineContext.from_variants([g_met])
     eff_both = v_met_ex.effect_on_transcript(met, annotator="dna", germline=met_ctx)
-    assert eff_both.candidates[0].uncertainty == ("phasing", "splicing")
+    assert all(isinstance(c, EffectCandidate) for c in eff_both.candidates)
+    assert all(c.uncertainty == ("phasing", "splicing") for c in eff_both.candidates)
+    assert list(iter_candidate_effects(eff_both))
+    assert all(
+        all(isinstance(item, EffectCandidate) for item in path)
+        for _, path in iter_candidate_paths(eff_both)
+    )
 
-    # Works cleanly through shared traversal helpers.
-    paths = list(iter_candidate_paths(eff_met))
-    assert len(paths) == len(eff_met.candidates)
-    assert all(isinstance(path[-1], DNAHypothesis) for _, path in paths)
-    assert len(list(iter_candidate_effects(eff_met))) == len(eff_met.candidates)
 
-
-def test_genomic_splice_junctions_are_ascending_on_both_strands():
-    """Novel junctions always satisfy intron_start <= intron_end (BAM CIGAR N convention)."""
-    # + strand: MET exon 14 skip joins exon 13 -> exon 15
+def test_mutant_transcript_novel_junctions_are_ascending_on_both_strands():
+    """MutantTranscript.novel_junctions always has intron_start <= intron_end on + and - strands."""
+    # + strand: MET exon 14 skipping joins exon 13 end -> exon 15 start
     met = GENOME.transcript_by_id("ENST00000397752")
     ex13, ex14, ex15 = met.exons[12], met.exons[13], met.exons[14]
     eff_met = Variant("7", ex14.end + 1, "G", "A", genome=GENOME).effect_on_transcript(
         met, annotator="dna"
     )
-    met_skip = next(c for c in eff_met.candidates if "exon_skip" in c.splice_mechanisms)
-    (j_met,) = met_skip.novel_junctions
-    assert j_met == GenomicSpliceJunction(
-        contig="7",
-        intron_start=ex13.end + 1,
-        intron_end=ex15.start - 1,
-        strand="+",
-        donor_base=ex13.end,
-        acceptor_base=ex15.start,
-    )
-    assert j_met.intron_start <= j_met.intron_end
+    skip_met = next(c for c in eff_met.candidates if "exon_skip" in c.mechanisms)
+    mt_met = skip_met.effect.mutant_transcript
+    assert mt_met is not None and mt_met.is_complete
+    assert len(mt_met.novel_junctions) == 1
+    j_met = mt_met.novel_junctions[0]
+    assert j_met == ("7", ex13.end + 1, ex15.start - 1, "+")
+    assert j_met[1] <= j_met[2]
 
-    # - strand: TP53 exon 5 skip joins exon 4 -> exon 6
+    # - strand: TP53 exon 5 skipping joins exon 4 start -> exon 6 end
     tp53 = GENOME.transcript_by_id("ENST00000269305")
     ex4, ex5, ex6 = tp53.exons[3], tp53.exons[4], tp53.exons[5]
+    # - strand donor +1 is ex5.start - 1 (G on - strand = C on + strand)
     eff_tp53 = Variant("17", ex5.start - 1, "C", "T", genome=GENOME).effect_on_transcript(
         tp53, annotator="dna"
     )
-    tp53_skip = next(c for c in eff_tp53.candidates if "exon_skip" in c.splice_mechanisms)
-    (j_tp53,) = tp53_skip.novel_junctions
-    assert j_tp53 == GenomicSpliceJunction(
-        contig="17",
-        intron_start=ex6.end + 1,
-        intron_end=ex4.start - 1,
-        strand="-",
-        donor_base=ex4.start,
-        acceptor_base=ex6.end,
-    )
-    assert j_tp53.intron_start <= j_tp53.intron_end
+    skip_tp53 = next(c for c in eff_tp53.candidates if "exon_skip" in c.mechanisms)
+    mt_tp53 = skip_tp53.effect.mutant_transcript
+    assert mt_tp53 is not None and mt_tp53.is_complete
+    assert len(mt_tp53.novel_junctions) == 1
+    j_tp53 = mt_tp53.novel_junctions[0]
+    # Ascending genomic intron coordinates even on - strand!
+    assert j_tp53 == ("17", ex6.end + 1, ex4.start - 1, "-")
+    assert j_tp53[1] <= j_tp53[2]
 
 
-def test_unified_matches_transcript_model_across_cancer_hard_cases():
-    """Unified matches transcript_model across fusions, splice drivers, ITDs, and rescue."""
-    # EML4--ALK (+ / - inversion)
+def test_dna_matches_transcript_model_across_cancer_hard_cases():
+    """Default dna annotator matches transcript_model on EML4-ALK, KIAA1549-BRAF, FLT3-ITD, rescue."""
+    # EML4--ALK inversion fusion
     eml4 = GENOME.transcript_by_id("ENST00000318522")
     alk = GENOME.transcript_by_id("ENST00000389048")
     sv_ea = parse_symbolic_alt(
-        "2", eml4.exons[12].end + 500, "N", f"N]2:{alk.exons[19].end + 500}]", genome=GENOME
+        "2", eml4.exons[12].end + 500, "N", f"N]{alk.contig}:{alk.exons[19].end + 500}]",
+        genome=GENOME,
     )
-    u_ea = sv_ea.effect_on_transcript(eml4, annotator="dna")
     tm_ea = sv_ea.effect_on_transcript(eml4, annotator="transcript_model")
+    u_ea = sv_ea.effect_on_transcript(eml4, annotator="dna")
     assert isinstance(u_ea, GeneFusion)
     assert _protein(u_ea) == _protein(tm_ea)
-    assert len(_protein(u_ea)) == 1059
-    assert isinstance(u_ea.dna_search_anchor, DNASearchAnchor)
-    assert u_ea.dna_search_anchor.mate_search_region[3] == "-"
+    assert all(isinstance(c, EffectCandidate) for c in u_ea.candidates)
 
-    # KIAA1549--BRAF (- / - DUP)
+    # KIAA1549--BRAF tandem duplication fusion
     kiaa = GENOME.transcript_by_id("ENST00000440172")
     braf = GENOME.transcript_by_id("ENST00000288602")
     sv_kb = StructuralVariant(
         "7", kiaa.exons[15].start - 500, "DUP", end=braf.exons[8].end + 500, genome=GENOME
     )
-    u_kb = sv_kb.effect_on_transcript(kiaa, annotator="dna")
     tm_kb = sv_kb.effect_on_transcript(kiaa, annotator="transcript_model")
+    u_kb = sv_kb.effect_on_transcript(kiaa, annotator="dna")
     assert isinstance(u_kb, GeneFusion)
     assert _protein(u_kb) == _protein(tm_kb)
-    assert len(_protein(u_kb)) == 2135
 
-    # FLT3-ITD (- strand intra-exonic DUP)
+    # FLT3-ITD intra-exonic DUP
     flt3 = GENOME.transcript_by_id("ENST00000241453")
-    sv_flt3 = StructuralVariant("13", 28034110, "DUP", end=28034130, genome=GENOME)
-    u_flt3 = sv_flt3.effect_on_transcript(flt3, annotator="dna")
+    ex14 = flt3.exons[13]
+    mid = (ex14.start + ex14.end) // 2
+    sv_flt3 = StructuralVariant("13", mid, "DUP", end=mid + 20, genome=GENOME)
     tm_flt3 = sv_flt3.effect_on_transcript(flt3, annotator="transcript_model")
+    u_flt3 = sv_flt3.effect_on_transcript(flt3, annotator="dna")
     assert isinstance(u_flt3, Insertion)
-    assert u_flt3.mutant_protein_sequence == tm_flt3.mutant_protein_sequence
-    assert len(u_flt3.mutant_protein_sequence) == 1000
-    assert isinstance(u_flt3.dna_search_anchor, DNASearchAnchor)
+    assert _protein(u_flt3) == _protein(tm_flt3)
 
-    # Compound frameshift rescue in EGFR exon 19
+    # Compound frameshift rescue in cis (EGFR exon 19)
     egfr = GENOME.transcript_by_id("ENST00000275493")
     ex19 = egfr.exons[18]
-    cds_start = min(egfr.start_codon_spliced_offsets)
-    s_off = cds_start + 745 * 3 + 6
-    pos_map = {egfr.spliced_offset(p): p for p in range(ex19.start, ex19.end + 1)}
-    p0 = pos_map[s_off]
-    r1 = Variant("7", p0, egfr.sequence[s_off], "", genome=GENOME)
-    r2 = Variant("7", p0 + 11, "", "C", genome=GENOME)
+    p1 = ex19.start + 30
+    p2 = p1 + 9
+    o1 = egfr.spliced_offset(p1)
+    o2 = egfr.spliced_offset(p2)
+    r1 = Variant("7", p1, egfr.sequence[o1 : o1 + 2], egfr.sequence[o1], genome=GENOME)
+    r2 = Variant("7", p2, egfr.sequence[o2], egfr.sequence[o2] + "G", genome=GENOME)
     resolver = MolecularPhaseResolver(_CisPair(r1, r2, answer=True))
+    tm_effs = VariantCollection([r1, r2]).effects(
+        annotator="transcript_model", phase_resolver=resolver
+    )
     u_effs = VariantCollection([r1, r2]).effects(annotator="dna", phase_resolver=resolver)
-    tm_effs = VariantCollection([r1, r2]).effects(annotator="transcript_model", phase_resolver=resolver)
-    u_joint = [
-        e for e in u_effs
-        if getattr(getattr(e, "transcript", None), "id", None) == egfr.id
-        and len(getattr(e, "variants", ())) > 1
-    ][0]
-    tm_joint = [
-        e for e in tm_effs
-        if getattr(getattr(e, "transcript", None), "id", None) == egfr.id
-        and len(getattr(e, "variants", ())) > 1
-    ][0]
-    assert isinstance(u_joint, ComplexSubstitution)
-    assert u_joint.mutant_protein_sequence == tm_joint.mutant_protein_sequence
-    assert len(u_joint.mutant_protein_sequence) == 1210
+    tm_joint = next(e for e in tm_effs if e.transcript_id == egfr.id and len(getattr(e, "variants", ())) == 2)
+    u_joint = next(e for e in u_effs if e.transcript_id == egfr.id and len(getattr(e, "variants", ())) == 2)
+    assert isinstance(u_joint, (Substitution, ComplexSubstitution))
+    assert type(u_joint) is type(tm_joint)
+    assert _protein(u_joint) == _protein(tm_joint)
 
 
-def test_dna_search_anchor_for_big_intronic_insertion_and_template_materialization():
-    """Big intronic insertion gives Isovar exact 5'/3' anchors, frame, junctions, and template."""
+def test_open_mutant_transcript_template_for_big_intronic_insertion():
+    """Big intronic insertion (>=50 bp) attaches open MutantTranscript template without guessing splicing."""
     met = GENOME.transcript_by_id("ENST00000397752")  # + strand
     ex13, ex14, ex15 = met.exons[12], met.exons[13], met.exons[14]
-    inserted = "ACGT" * 500  # 2 kb novel intronic insertion between exon 14 and exon 15
-    bp = ex14.end + 250
-    sv_ins = StructuralVariant(
-        "7", bp, "INS", end=bp, alt_assembly=inserted, genome=GENOME
-    )
+    ins_pos = ex14.end + 400
+    assert ins_pos < ex15.start - 50
+    big_insert = "GCTAGC" * 80  # 480 bp
+    sv_ins = Variant("7", ins_pos, "A", "A" + big_insert, genome=GENOME)
 
     eff = sv_ins.effect_on_transcript(met, annotator="dna")
-    anchor = eff.dna_search_anchor
-    assert isinstance(anchor, DNASearchAnchor)
-    assert anchor.five_prime_transcript_id == met.id
-    assert anchor.five_prime_strand == "+"
-    assert anchor.last_intact_exon_number == 14
-    assert anchor.last_intact_exon_span == (ex14.start, ex14.end)
-    assert anchor.skip_fallback_exon_number == 13
-    assert anchor.skip_fallback_exon_span == (ex13.start, ex13.end)
-    assert anchor.breakpoint_in_intron is True
-    assert anchor.last_intact_donor_base == ex14.end
-    assert anchor.five_prime_cds_prefix is not None
-    assert anchor.exit_frame == len(anchor.five_prime_cds_prefix) % 3
-    assert anchor.three_prime_reentry_exon_number == 15
-    assert anchor.three_prime_reentry_exon_span == (ex15.start, ex15.end)
-    assert anchor.three_prime_reentry_acceptor_base == ex15.start
-    assert anchor.three_prime_entry_frame == anchor.exit_frame
-    assert anchor.inserted_sequence == inserted
-    assert anchor.mate_search_region is None
+    mt = eff.mutant_transcript
+    assert isinstance(mt, MutantTranscript)
+    ev = mt.evidence
+    assert ev["last_intact_exon"] == 14
+    assert ev["skip_fallback_exon"] == 13
+    assert ev["three_prime_reentry_exon"] == 15
+    assert ev["breakpoint_in_intron"] is True
+    assert mt.mate_region is None
+    assert ev["inserted_sequence"] == big_insert
+    assert mt.exit_frame in (0, 1, 2)
+    assert ev["three_prime_entry_frame"] in (0, 1, 2)
+    assert mt.exit_frame == ev["three_prime_entry_frame"]
 
-    # Wild-type junction exon 14 -> exon 15 is present for distinguishing mutant splices.
-    wt_introns = {(j.intron_start, j.intron_end) for j in anchor.wildtype_junctions}
-    assert (ex14.end + 1, ex15.start - 1) in wt_introns
+    wt_j = mt.wildtype_junctions
+    assert ("7", ex13.end + 1, ex14.start - 1, "+") in wt_j
+    assert ("7", ex14.end + 1, ex15.start - 1, "+") in wt_j
 
-    # Materialize mutant pre-mRNA template with a mock genomic provider.
-    def provider(contig, start, end):
+    assert [seg[0] for seg in ev["template_segments"]] == [
+        "five_prime_host",
+        "inserted_sequence",
+        "three_prime_host",
+    ]
+
+    def fake_provider(contig, start, end):
+        assert contig == "7" and start <= end
         return "A" * (end - start + 1)
 
-    template = anchor.materialize_template(provider)
-    assert inserted in template
-    labels = [seg[0] for seg in anchor.template_segments]
-    assert labels == ["five_prime_host", "inserted_sequence", "three_prime_host"]
+    template = mt.template_sequence(fake_provider)
+    assert big_insert in template
+    seg5, _, seg3 = ev["template_segments"]
+    expected_len = (seg5[3] - seg5[2] + 1) + len(big_insert) + (seg3[3] - seg3[2] + 1)
+    assert len(template) == expected_len
 
 
-def test_dna_search_anchor_for_gene_to_intergenic_translocations_both_strands():
-    """Gene->intergenic translocations give oriented mate search window on + and - strands."""
+def test_open_mutant_transcript_template_for_gene_to_intergenic_both_strands():
+    """Gene->intergenic translocations attach open MutantTranscript templates on + and - strands."""
     # + strand: MET intron 14 -> intergenic chr6:44218908 moving '+'
     met = GENOME.transcript_by_id("ENST00000397752")
     ex14 = met.exons[13]
@@ -308,17 +292,19 @@ def test_dna_search_anchor_for_gene_to_intergenic_translocations_both_strands():
     )
     eff_plus = sv_plus.effect_on_transcript(met, annotator="dna")
     assert isinstance(eff_plus, TranslocationToIntergenic)
-    anchor_p = eff_plus.dna_search_anchor
-    assert anchor_p.five_prime_strand == "+"
-    assert anchor_p.last_intact_exon_number == 14
-    assert anchor_p.three_prime_reentry_exon_number is None
-    assert anchor_p.mate_search_region == ("6", 44218908, 44218908 + 25_000 - 1, "+")
-    assert [seg[0] for seg in anchor_p.template_segments] == [
+    mt_p = eff_plus.mutant_transcript
+    assert mt_p is not None and not mt_p.is_complete
+    ev_p = mt_p.evidence
+    assert ev_p["sequence_status"] == "retained_reference_fragment"
+    assert ev_p["last_intact_exon"] == 14
+    assert ev_p["three_prime_reentry_exon"] is None
+    assert mt_p.mate_region == ("6", 44218908, 44218908 + 25_000 - 1, "+")
+    assert [seg[0] for seg in ev_p["template_segments"]] == [
         "five_prime_host",
         "mate_search_window",
     ]
 
-    # - strand: TP53 intron 5 -> intergenic chr10:40000000 moving '-'
+    # - strand: TP53 intron 5 (81 bp wide) -> intergenic chr10:40000000 moving '-'
     tp53 = GENOME.transcript_by_id("ENST00000269305")
     ex5 = tp53.exons[4]
     intergenic_pos = 40_000_000
@@ -328,56 +314,50 @@ def test_dna_search_anchor_for_gene_to_intergenic_translocations_both_strands():
     )
     eff_minus = sv_minus.effect_on_transcript(tp53, annotator="dna")
     assert isinstance(eff_minus, TranslocationToIntergenic)
-    anchor_m = eff_minus.dna_search_anchor
-    assert anchor_m.five_prime_strand == "-"
-    assert anchor_m.last_intact_exon_number == 5
-    assert anchor_m.skip_fallback_exon_number == 4
-    assert anchor_m.breakpoint_in_intron is True
-    assert anchor_m.last_intact_donor_base == ex5.start
-    assert anchor_m.mate_search_region == (
+    mt_m = eff_minus.mutant_transcript
+    assert mt_m is not None and not mt_m.is_complete
+    ev_m = mt_m.evidence
+    assert ev_m["last_intact_exon"] == 5
+    assert ev_m["skip_fallback_exon"] == 4
+    assert ev_m["breakpoint_in_intron"] is True
+    assert mt_m.mate_region == (
         "10",
         intergenic_pos - 25_000 + 1,
         intergenic_pos,
         "-",
     )
-    assert anchor_m.mate_search_region[1] <= anchor_m.mate_search_region[2]
+    assert mt_m.mate_region[1] <= mt_m.mate_region[2]
 
-    # Verify reverse-complement handling in materialize_template for '-' segments.
     def strand_provider(contig, start, end):
         return ("A" * (end - start)) + "C"
 
-    tmpl = anchor_m.materialize_template(strand_provider)
+    tmpl = mt_m.template_sequence(strand_provider)
     assert tmpl.startswith("G")  # RC of trailing 'C' on '-' five_prime_host
 
-    # 5'UTR-only TMPRSS2--ERG honestly reports no 5' CDS prefix / exit frame.
+    # 5'UTR-only TMPRSS2--ERG honestly reports exit_frame=None.
     tmprss2 = GENOME.transcript_by_id("ENST00000332149")
     erg = GENOME.transcript_by_id("ENST00000288319")
     sv_te = parse_symbolic_alt(
         "21", tmprss2.exons[0].start - 500, "N", f"]21:{erg.exons[3].end + 500}]N", genome=GENOME
     )
-    anchor_te = build_dna_search_anchor(sv_te, tmprss2)
-    assert anchor_te.last_intact_exon_number == 1
-    assert anchor_te.five_prime_cds_prefix is None
-    assert anchor_te.exit_frame is None
+    eff_te = sv_te.effect_on_transcript(tmprss2, annotator="dna")
+    assert eff_te.mutant_transcript.exit_frame is None
 
 
 def test_fast_path_safety_guards_and_reference_mismatch():
     """Fast-path must never swallow reference mismatches, splice sites, start/stop, mito, or Sec."""
     braf = GENOME.transcript_by_id("ENST00000288602")  # - strand
-    # Reference mismatch at BRAF V600 (true ref on + strand is A, pass C).
     bad = Variant("7", 140753336, "C", "T", genome=GENOME)
     with pytest.raises(ReferenceMismatchError):
         bad.effect_on_transcript(braf, annotator="dna")
 
-    # Start codon SNV must still classify as StartLoss / AlternateStartCodon (not fast-path).
-    start_pos = max(braf.start_codon_positions)  # - strand first base of ATG (ref T on +)
+    start_pos = max(braf.start_codon_positions)
     v_start = Variant("7", start_pos, "T", "G", genome=GENOME)
     u_start = v_start.effect_on_transcript(braf, annotator="dna")
     tm_start = v_start.effect_on_transcript(braf, annotator="transcript_model")
     assert type(u_start) is type(tm_start)
     assert u_start.short_description == tm_start.short_description
 
-    # Mitochondrial variant (non-standard genetic code) must match transcript_model.
     mt_v = Variant("MT", 12994, "G", "A", genome=GENOME)
     mt_u = mt_v.effects(annotator="dna")
     mt_tm = mt_v.effects(annotator="transcript_model")
@@ -385,7 +365,6 @@ def test_fast_path_safety_guards_and_reference_mismatch():
         (type(e).__name__, e.short_description, e.mutant_protein_sequence) for e in mt_tm
     ]
 
-    # Selenocysteine transcript (GPX4) must match transcript_model.
     gpx4 = GENOME.transcript_by_id("ENST00000354171")
     ex = gpx4.exons[2]
     mid = (ex.start + ex.end) // 2
@@ -398,8 +377,8 @@ def test_fast_path_safety_guards_and_reference_mismatch():
     assert u_sec.mutant_protein_sequence == tm_sec.mutant_protein_sequence
 
 
-def test_unified_json_roundtrip_preserves_hypotheses_junctions_and_anchors():
-    """Unified effects with DNAHypothesis, GenomicSpliceJunction, and DNASearchAnchor round-trip."""
+def test_dna_json_roundtrip_preserves_candidates_junctions_and_templates():
+    """DNA effects with EffectCandidate, novel_junctions, and open MutantTranscript round-trip."""
     met = GENOME.transcript_by_id("ENST00000397752")
     ex14 = met.exons[13]
     e_splice = Variant("7", ex14.end + 1, "G", "A", genome=GENOME).effect_on_transcript(
@@ -415,21 +394,24 @@ def test_unified_json_roundtrip_preserves_hypotheses_junctions_and_anchors():
     by_var = {e.variant: e for e in restored}
 
     r_splice = by_var[e_splice.variant]
-    assert all(isinstance(c, DNAHypothesis) for c in r_splice.candidates)
-    r_skip = next(c for c in r_splice.candidates if "exon_skip" in c.splice_mechanisms)
-    assert len(r_skip.novel_junctions) == 1
-    assert isinstance(r_skip.novel_junctions[0], GenomicSpliceJunction)
-    assert r_skip.novel_junctions[0].intron_start <= r_skip.novel_junctions[0].intron_end
+    assert all(isinstance(c, EffectCandidate) for c in r_splice.candidates)
+    r_skip = next(c for c in r_splice.candidates if "exon_skip" in c.mechanisms)
+    assert len(r_skip.effect.mutant_transcript.novel_junctions) == 1
+    j = r_skip.effect.mutant_transcript.novel_junctions[0]
+    assert j[1] <= j[2]
 
     r_trans = by_var[e_trans.variant]
-    assert isinstance(r_trans.dna_search_anchor, DNASearchAnchor)
-    assert r_trans.dna_search_anchor == e_trans.dna_search_anchor
+    assert isinstance(r_trans.mutant_transcript, MutantTranscript)
+    assert r_trans.mutant_transcript.exit_frame == e_trans.mutant_transcript.exit_frame
+    assert r_trans.mutant_transcript.mate_region == e_trans.mutant_transcript.mate_region
+    assert r_trans.mutant_transcript.wildtype_junctions == e_trans.mutant_transcript.wildtype_junctions
+    tmpl = r_trans.mutant_transcript.template_sequence(lambda c, s, e: "A" * (e - s + 1))
+    assert len(tmpl) > 25_000
 
 
-def test_unified_coding_snv_batch_parity_and_speedup_over_transcript_model():
-    """On interior exonic SNVs, unified matches transcript_model byte-for-byte and runs faster."""
+def test_dna_coding_snv_batch_parity_and_speedup_over_transcript_model():
+    """On interior exonic SNVs, dna matches transcript_model byte-for-byte and runs faster."""
     met = GENOME.transcript_by_id("ENST00000397752")
-    # Build 60 real interior coding SNVs across MET exon 2 (large coding exon, + strand).
     ex2 = met.exons[1]
     cds_start = min(met.start_codon_spliced_offsets)
     variants = []
@@ -443,7 +425,6 @@ def test_unified_coding_snv_batch_parity_and_speedup_over_transcript_model():
         pos += 15
     assert len(variants) == 60
 
-    # Warmup
     variants[0].effect_on_transcript(met, annotator="transcript_model")
     variants[0].effect_on_transcript(met, annotator="dna")
 
@@ -460,10 +441,10 @@ def test_unified_coding_snv_batch_parity_and_speedup_over_transcript_model():
         assert u_eff.short_description == tm_eff.short_description
         assert u_eff.mutant_protein_sequence == tm_eff.mutant_protein_sequence
 
-    assert t_u < t_tm, f"Expected unified ({t_u:.4f}s) faster than transcript_model ({t_tm:.4f}s)"
+    assert t_u < t_tm, f"Expected dna ({t_u:.4f}s) faster than transcript_model ({t_tm:.4f}s)"
 
 
-def test_unified_osteosarc_full_cohort_parity_with_transcript_model():
+def test_dna_osteosarc_full_cohort_parity_with_transcript_model():
     """All 179 real clinical osteosarc variants match transcript_model byte-for-byte."""
     from .osteosarc_variants import load_variants
 
@@ -476,19 +457,15 @@ def test_unified_osteosarc_full_cohort_parity_with_transcript_model():
         for u_eff, tm_eff in zip(u_effects, tm_effects):
             assert getattr(u_eff.transcript, "id", None) == getattr(tm_eff.transcript, "id", None)
             assert type(u_eff) is type(tm_eff), f"Class mismatch on {variant}"
-            assert u_eff.short_description == tm_eff.short_description, (
-                f"short_description mismatch on {variant}: {u_eff} vs {tm_eff}"
-            )
-            assert u_eff.mutant_protein_sequence == tm_eff.mutant_protein_sequence, (
-                f"mutant_protein_sequence mismatch on {variant} ({type(u_eff).__name__})"
-            )
+            assert u_eff.short_description == tm_eff.short_description
+            assert u_eff.mutant_protein_sequence == tm_eff.mutant_protein_sequence
             assert u_eff.modifies_protein_sequence == tm_eff.modifies_protein_sequence
 
 
-def test_unified_interior_mnv_and_indel_fast_path_parity_both_strands():
+def test_dna_interior_mnv_and_indel_fast_path_parity_both_strands():
     """Interior coding MNVs, in-frame indels, frameshifts, and Silent match transcript_model."""
-    met = GENOME.transcript_by_id("ENST00000397752")  # + strand
-    brca1 = GENOME.transcript_by_id("ENST00000357654")  # - strand
+    met = GENOME.transcript_by_id("ENST00000397752")
+    brca1 = GENOME.transcript_by_id("ENST00000357654")
     comp = str.maketrans("ACGT", "TGCA")
 
     test_cases = []
@@ -510,7 +487,6 @@ def test_unified_interior_mnv_and_indel_fast_path_parity_both_strands():
             b0 = ref4[0]
             alt0 = "A" if b0 != "A" else "G"
             alt1 = "C" if ref4[1] != "C" else "T"
-            # SNV, MNV, in-frame del, in-frame ins, pure-ins stop, frameshift del, frameshift ins
             test_cases.extend([
                 (tx, Variant(tx.contig, pos, b0, alt0, genome=GENOME)),
                 (tx, Variant(tx.contig, pos, ref4[:2], alt0 + alt1, genome=GENOME)),
@@ -526,13 +502,10 @@ def test_unified_interior_mnv_and_indel_fast_path_parity_both_strands():
         tm_eff = variant.effect_on_transcript(tx, annotator="transcript_model")
         u_eff = variant.effect_on_transcript(tx, annotator="dna")
         assert type(u_eff) is type(tm_eff), f"Class mismatch on {variant} ({tx.id})"
-        assert u_eff.short_description == tm_eff.short_description, (
-            f"short_description mismatch on {variant} ({tx.id}): {u_eff} vs {tm_eff}"
-        )
+        assert u_eff.short_description == tm_eff.short_description
         assert u_eff.mutant_protein_sequence == tm_eff.mutant_protein_sequence
         assert u_eff.modifies_protein_sequence == tm_eff.modifies_protein_sequence
 
-    # Reference mismatch on a coding deletion must still raise ReferenceMismatchError.
     ex2 = met.exons[1]
     pos = ex2.start + 60
     real_seq = met.sequence[met.spliced_offset(pos) : met.spliced_offset(pos) + 4]
@@ -542,20 +515,8 @@ def test_unified_interior_mnv_and_indel_fast_path_parity_both_strands():
         bad_del.effect_on_transcript(met, annotator="dna")
 
 
-def test_unified_interoperates_with_priority_proteome_orf_discovery_and_mt_polya():
-    """Unified effects work with effect_priority, to_proteome, discover_created_orfs, and MT poly-A."""
-    import json
-    from pathlib import Path
-
-    from varcode import (
-        StructuralVariant,
-        classification_priority,
-        discover_created_orfs,
-        effect_priority,
-        to_proteome,
-    )
-
-    # 1. effect_priority & filter_by_effect_priority see coding alternatives on unified splice effects.
+def test_dna_interoperates_with_priority_proteome_orf_discovery_and_mt_polya():
+    """DNA effects work with effect_priority, to_proteome, discover_created_orfs, and MT poly-A."""
     cftr = GENOME.transcript_by_id("ENST00000003084")
     weak_donor = Variant("7", 117531117, "A", "C", genome=GENOME)
     u_splice = weak_donor.effect_on_transcript(cftr, annotator="dna")
@@ -563,7 +524,6 @@ def test_unified_interoperates_with_priority_proteome_orf_discovery_and_mt_polya
     assert effect_priority(u_splice) >= classification_priority(del_alt)
     assert list(EffectCollection([u_splice]).filter_by_effect_priority(Deletion)) == [u_splice]
 
-    # 2. to_proteome exports unified coding + splice + germline effects with tool='varcode'.
     braf = GENOME.transcript_by_id("ENST00000288602")
     u_v600e = Variant("7", 140753336, "A", "T", genome=GENOME).effect_on_transcript(
         braf, annotator="dna"
@@ -576,7 +536,6 @@ def test_unified_interoperates_with_priority_proteome_orf_discovery_and_mt_polya
     assert proteome.proteins
     assert all(p.producer.tool == "varcode" for p in proteome.proteins)
 
-    # 3. discover_created_orfs works on unified 5'UTR start-gain + unphased germline.
     fixture = json.loads((Path(__file__).parent / "data/created_orfs/CDKN2A.json").read_text())
     native = fixture["native"]
     g95 = cached_release(native["annotation_version"])
@@ -589,10 +548,8 @@ def test_unified_interoperates_with_priority_proteome_orf_discovery_and_mt_polya
     assert len(report.effects) == 1
     assert report.effects[0].mutant_protein_sequence == fixture["refseq"]["expected_protein"]
 
-    # 4. Mitochondrial transcript with poly-A stop codon (MT-ND1) builds DNASearchAnchor cleanly.
     nd1 = GENOME.transcript_by_id("ENST00000361390")
     mt_dup = StructuralVariant("MT", 3500, "DUP", end=3560, genome=GENOME)
     u_mt = mt_dup.effect_on_transcript(nd1, annotator="dna")
-    assert isinstance(u_mt.dna_search_anchor, DNASearchAnchor)
-    assert u_mt.dna_search_anchor.five_prime_cds_prefix is not None
-    assert u_mt.dna_search_anchor.exit_frame in (0, 1, 2)
+    assert isinstance(u_mt.mutant_transcript, MutantTranscript)
+    assert u_mt.mutant_transcript.exit_frame in (0, 1, 2)

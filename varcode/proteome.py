@@ -20,7 +20,6 @@ from .effects import EffectCollection, Failure, HypothesisLimit, MutationEffect,
 from .effects.structural_serialization import structural_effect_to_dict
 from .orf import ORFAnnotation, ORFOutcome
 from .orf_serialization import ReferenceGenomeSnapshot
-from .unified import DNAHypothesis
 
 if TYPE_CHECKING:
     from orfdata import Proteome
@@ -337,13 +336,10 @@ def _identity(value, defaults, contexts=()):
                         baseline=_product(value.baseline))
     if isinstance(value, RealizedEffectCandidate):
         identity["outcomes"] = sorted((_identity(o, defaults, contexts) for o in value.outcomes), key=_digest)
-    if isinstance(value, DNAHypothesis):
+    if isinstance(value, EffectCandidate):
         paired = getattr(value, "_paired_outcomes", None)
         if paired:
             identity["outcomes"] = sorted((_identity(o, defaults, contexts) for o in paired), key=_digest)
-        else:
-            identity["hypothesis_axes"] = list(value.uncertainty)
-            identity["splice_mechanisms"] = list(value.splice_mechanisms)
     return _identifier(_label(effect, annotation, type(value).__name__), identity)
 
 
@@ -442,6 +438,14 @@ class _Export:
     def walk(self, value, event_id, *, contexts=(), annotation=None, ancestors=()):
         if isinstance(value, EffectCandidate):
             context = dict(source=value.source, evidence=_json(dict(value.evidence)))
+            if value.uncertainty:
+                context["uncertainty"] = list(value.uncertainty)
+            if value.mechanisms:
+                context["mechanisms"] = list(value.mechanisms)
+            paired = getattr(value, "_paired_outcomes", None)
+            if paired:
+                return [status for outcome in paired for status in self.walk(
+                    outcome, event_id, contexts=(*contexts, context), annotation=annotation, ancestors=ancestors)]
             return self.walk(value.effect, event_id, contexts=(*contexts, context),
                              annotation=annotation, ancestors=ancestors)
         if isinstance(value, RealizedEffectCandidate):
@@ -449,21 +453,6 @@ class _Export:
                            phase_mass=value.phase_mass, first_enumeration_index=value.first_enumeration_index)
             return [status for outcome in value.outcomes for status in self.walk(
                 outcome, event_id, contexts=(*contexts, context), annotation=annotation, ancestors=ancestors)]
-        if isinstance(value, DNAHypothesis):
-            context = dict(
-                source=value.source,
-                uncertainty=list(value.uncertainty),
-                splice_mechanisms=list(value.splice_mechanisms),
-                ordinal_key=list(value.ordinal_rank),
-                probability=value.probability,
-                evidence=_json(dict(value.evidence)),
-            )
-            paired = getattr(value, "_paired_outcomes", None)
-            if paired:
-                return [status for outcome in paired for status in self.walk(
-                    outcome, event_id, contexts=(*contexts, context), annotation=annotation, ancestors=ancestors)]
-            return self.walk(
-                value.effect, event_id, contexts=(*contexts, context), annotation=annotation, ancestors=ancestors)
         if isinstance(value, (ClassifiedOutcome, ORFOutcome)):
             return [self.comparison(value.effect, event_id, baseline=value.baseline,
                                     mutant=value.mutant, outcome=value, annotation=annotation,
@@ -503,12 +492,18 @@ class _Export:
     def add(self, value):
         contexts: tuple = ()
         if isinstance(value, EffectCandidate):
-            contexts = (dict(source=value.source, evidence=_json(dict(value.evidence))),)
-            value = value.effect
+            context = dict(source=value.source, evidence=_json(dict(value.evidence)))
+            if value.uncertainty:
+                context["uncertainty"] = list(value.uncertainty)
+            if value.mechanisms:
+                context["mechanisms"] = list(value.mechanisms)
+            contexts = (context,)
+            if not getattr(value, "_paired_outcomes", None):
+                value = value.effect
         if isinstance(value, MutationEffect) and value.orf_annotation is not None:
             value = value.orf_annotation
         if not isinstance(value, (MutationEffect, ORFAnnotation, RealizedEffectCandidate,
-                                  DNAHypothesis, ClassifiedOutcome, ORFOutcome)):
+                                  EffectCandidate, ClassifiedOutcome, ORFOutcome)):
             raise TypeError("to_proteome expects native effects, candidates, or ORFAnnotations")
         self.scope(_effect(value), value if isinstance(value, ORFAnnotation) else None)
         native_id = _identity(value, self.defaults, contexts)

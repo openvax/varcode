@@ -556,12 +556,10 @@ def test_egfr_exon20_itd_and_kinase_domain_duplication_kdd(annotator):
     if annotator == "dna":
         assert isinstance(eff_kdd, Insertion)
         assert len(eff_kdd.candidates) == 1
-        # The single novel junction is the diagnostic EGFR-KDD back-junction exon 25 -> exon 18!
-        (kdd_junction,) = eff_kdd.candidates[0].novel_junctions
-        assert kdd_junction.donor_base == ex25.end
-        assert kdd_junction.acceptor_base == ex18.start
-        assert kdd_junction.is_back_junction is True
-        assert kdd_junction.intron_start <= kdd_junction.intron_end
+        # The single diagnostic non-reference join is the EGFR-KDD back-junction exon 25 -> exon 18!
+        assert eff_kdd.mutant_transcript.novel_junctions == ()
+        (kdd_back,) = eff_kdd.mutant_transcript.back_junctions
+        assert kdd_back == ("7", ex18.start + 1, ex25.end - 1, "+")
 
     restored = EffectCollection.from_json(EffectCollection([eff_kdd]).to_json())
     assert _fusion_protein(restored[0]) == expected_kdd_protein

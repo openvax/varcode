@@ -325,6 +325,106 @@ class MutantTranscript(DataclassSerializable):
         lengths, not a delta against a single reference."""
         return sum(e.length_delta for e in self.edits)
 
+    @property
+    def is_complete(self) -> bool:
+        """True when a full spliced ``cdna_sequence`` has been resolved."""
+        return self.cdna_sequence is not None
+
+    @property
+    def novel_junctions(self) -> Tuple[Tuple[str, int, int, str], ...]:
+        """Novel forward splice junctions as 1-based ascending genomic intron tuples.
+
+        Each tuple is ``(contig, intron_start, intron_end, strand)`` with
+        ``intron_start <= intron_end`` on both ``"+"`` and ``"-"`` strands,
+        directly matching BAM CIGAR ``N`` intervals.
+        """
+        raw = (self.evidence or {}).get("novel_junctions") or ()
+        return tuple((str(c), int(s), int(e), str(st)) for c, s, e, st in raw)
+
+    @property
+    def back_junctions(self) -> Tuple[Tuple[str, int, int, str], ...]:
+        """Tandem-duplication back-junctions as 1-based ascending genomic spans.
+
+        Each tuple is ``(contig, span_start, span_end, strand)`` with
+        ``span_start <= span_end`` (e.g. exon 25 -> exon 18 in ``EGFR``-KDD,
+        which appears in RNA alignments as chimeric/supplementary reads rather
+        than a forward CIGAR ``N`` splice).
+        """
+        raw = (self.evidence or {}).get("back_junctions") or ()
+        return tuple((str(c), int(s), int(e), str(st)) for c, s, e, st in raw)
+
+    @property
+    def wildtype_junctions(self) -> Tuple[Tuple[str, int, int, str], ...]:
+        """Canonical wild-type introns competing near an open rearrangement breakpoint.
+
+        Each tuple uses the same 1-based ascending ``(contig, start, end, strand)``
+        convention as :attr:`novel_junctions`.
+        """
+        raw = (self.evidence or {}).get("wildtype_junctions") or ()
+        return tuple((str(c), int(s), int(e), str(st)) for c, s, e, st in raw)
+
+    @property
+    def mate_region(self) -> Optional[Tuple[str, int, int, str]]:
+        """Oriented 1-based ascending ``(contig, start, end, strand)`` mate search window.
+
+        Populated for intergenic/breakend translocations so downstream RNA
+        tools know where to look for cryptic partner exons; ``None`` otherwise.
+        """
+        raw = (self.evidence or {}).get("mate_search_region")
+        if raw is None:
+            return None
+        c, s, e, st = raw
+        return (str(c), int(s), int(e), str(st))
+
+    @property
+    def exit_frame(self) -> Optional[int]:
+        """CDS reading frame (``0``, ``1``, or ``2``) exiting the 5' intact anchor, or ``None``."""
+        val = (self.evidence or {}).get("exit_frame")
+        return None if val is None else int(val)
+
+    def template_sequence(self, sequence_provider) -> str:
+        """Materialize the oriented 5'-to-3' mutant pre-mRNA template for RNA alignment.
+
+        For open rearrangements (large insertions and gene-to-intergenic
+        translocations), concatenates the ordered genomic and literal segments
+        in ``evidence["template_segments"]`` in transcript 5'-to-3' orientation
+        (applying reverse-complement to ``"-"`` strand segments).
+
+        Parameters
+        ----------
+        sequence_provider : callable
+            Callable ``(contig: str, start_1based: int, end_1based: int) -> str``
+            returning forward-strand reference genomic nucleotides (inclusive).
+
+        Returns
+        -------
+        str
+            Oriented 5'-to-3' mutant pre-mRNA template sequence.
+
+        Raises
+        ------
+        ValueError
+            If this ``MutantTranscript`` carries no template segments.
+        """
+        ev = self.evidence or {}
+        segments = ev.get("template_segments")
+        if not segments:
+            raise ValueError(
+                "MutantTranscript has no template_segments for template materialization"
+            )
+        inserted = ev.get("inserted_sequence")
+        pieces = []
+        for label, contig, start, end, strand in segments:
+            if label == "inserted_sequence":
+                if not inserted:
+                    continue
+                seq = str(inserted)
+                pieces.append(reverse_complement(seq) if strand == "-" else seq)
+            else:
+                genomic = str(sequence_provider(str(contig), int(start), int(end)))
+                pieces.append(reverse_complement(genomic) if strand == "-" else genomic)
+        return "".join(pieces)
+
 
 # ---------------------------------------------------------------------
 # Construction

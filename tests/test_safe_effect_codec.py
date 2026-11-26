@@ -458,7 +458,6 @@ def test_registered_annotators_public_api():
         "fast",
         "protein_diff",
         "transcript_model",
-        "unified",
     )
 
     class CustomAnnotator:

@@ -524,7 +524,11 @@ def test_vcf_loader_sv_yields_structural_variant_effect():
         os.unlink(path)
     effect, = [effect for effect in effects if effect.transcript_id == cftr.id]
     assert isinstance(effect.variant, StructuralVariant)
-    cdna_sequences = [candidate.mutant_cdna for candidate in effect.candidates]
+    cdna_sequences = [
+        candidate.effect.mutant_transcript.cdna_sequence
+        for candidate in effect.candidates
+        if candidate.effect.mutant_transcript is not None
+    ]
     assert any(seq is not None for seq in cdna_sequences)
     assert all(len(seq) < len(cftr.sequence) for seq in cdna_sequences if seq is not None)
 
@@ -547,7 +551,11 @@ def test_sv_effect_on_transcript_uses_default_structural_prediction():
     collection_effect, = [e for e in sv.effects() if e.transcript_id == cftr.id]
     assert type(effect) is type(collection_effect)
     assert effect.mutant_transcript.cdna_sequence == collection_effect.mutant_transcript.cdna_sequence
-    sequences = [candidate.mutant_cdna for candidate in effect.candidates]
+    sequences = [
+        candidate.effect.mutant_transcript.cdna_sequence
+        for candidate in effect.candidates
+        if candidate.effect.mutant_transcript is not None
+    ]
     assert any(sequence is not None for sequence in sequences)
     assert all(len(sequence) < len(cftr.sequence)
                for sequence in sequences if sequence is not None)

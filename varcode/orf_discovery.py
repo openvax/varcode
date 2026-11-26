@@ -291,23 +291,23 @@ def discover_created_orfs(effect, *, policy=None):
     policy = ORFDiscoveryPolicy() if policy is None else policy
     if not isinstance(policy, ORFDiscoveryPolicy):
         raise TypeError("policy must be ORFDiscoveryPolicy")
-    from .unified import DNAHypothesis
+    from .effect_candidates import EffectCandidate
 
     assessments = []
     for node, path in iter_candidate_paths(effect):
         candidate = next((item for item in reversed(path)
-                          if isinstance(item, (RealizedEffectCandidate, DNAHypothesis))
+                          if isinstance(item, (RealizedEffectCandidate, EffectCandidate))
                           and item.effect is node), None)
         context = dict(source_effect=type(node).__name__, candidate_path=tuple(
             dict(source=getattr(item, "source", None), evidence=plain_json_value(getattr(item, "evidence", {})),
-                 ordinal_key=getattr(item, "ordinal_key", getattr(item, "ordinal_rank", None))) for item in path))
+                 ordinal_key=getattr(item, "ordinal_key", None)) for item in path))
         if node is not None and node.reference_transcript is not None:
             context.update(transcript_id=node.transcript_id,
                            reference=reference_metadata(node.reference_transcript.genome))
         if isinstance(candidate, RealizedEffectCandidate):
             outcomes = candidate.outcomes
             phase_mass = candidate.phase_mass
-        elif isinstance(candidate, DNAHypothesis):
+        elif isinstance(candidate, EffectCandidate):
             outcomes = getattr(candidate, "_paired_outcomes", None) or (None,)
             phase_mass = candidate.evidence.get("phase_mass")
         else:
@@ -325,5 +325,9 @@ def discover_created_orfs(effect, *, policy=None):
                 assessments.append(discover_created_orfs_in_products(
                     outcome.baseline, outcome.mutant, variant=node.variant, policy=policy,
                     hypothesis=outcome.hypothesis,
-                    source_evidence=dict(context, probability=candidate.probability, phase_mass=phase_mass)))
+                    source_evidence=dict(
+                        context,
+                        probability=getattr(candidate, "probability", None),
+                        phase_mass=phase_mass,
+                    )))
     return ORFDiscovery(policy, tuple(assessments))

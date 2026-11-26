@@ -13,11 +13,11 @@ from varcode import (
     Candidate, CandidatePath, classification_priority, get_effect_candidates,
     iter_candidate_effects, iter_candidate_paths,
     ContigResolution, ContigResolver, CrypticSplicePolicy,
-    DNAEffectAnnotator, DNAHypothesis, DNASearchAnchor, EffectAnnotator, EffectCollection, EffectReference,
-    GenomicSpliceJunction, GeneLike, Genotype, InvalidContigError, MutationEffect, MutantTranscript,
-    ORFAnnotation, SpanningDeletionRecord, TranscriptLike, UnifiedDNAEffectAnnotator,
+    DNAEffectAnnotator, EffectAnnotator, EffectCandidate, EffectCollection, EffectReference,
+    GeneLike, Genotype, InvalidContigError, MutationEffect, MutantTranscript,
+    ORFAnnotation, SpanningDeletionRecord, TranscriptLike,
     Unresolved, Variant, VariantCollection, Zygosity,
-    build_dna_search_anchor, combine_cis_snvs,
+    combine_cis_snvs,
     effect_collection_from_json, effect_collection_from_serializable_repr,
     effect_collection_to_json, effect_from_json, effect_from_serializable_repr,
     effect_serialization_classes, effect_to_json,
@@ -154,15 +154,22 @@ def check_annotation_workflow(
     assert_type(CrypticSplicePolicy(scan_flank=100, max_sites_per_junction=4), CrypticSplicePolicy)
     dna_ann = DNAEffectAnnotator()
     assert_type(register_annotator(dna_ann), DNAEffectAnnotator)
-    unified = UnifiedDNAEffectAnnotator()
-    assert_type(register_annotator(unified), DNAEffectAnnotator)
-    junction = GenomicSpliceJunction("17", 101, 200, "-", 201, 100)
-    assert_type(junction.intron_start, int)
-    hyp = DNAHypothesis(effect=effect, novel_junctions=(junction,))
-    assert_type(hyp.short_description, str)
-    anchor = build_dna_search_anchor(variant, transcript)
-    assert_type(anchor, DNASearchAnchor)
-    assert_type(anchor.exit_frame, int | None)
+    cand = EffectCandidate(
+        effect=effect,
+        source="varcode.dna",
+        mechanisms=("exon_skip",),
+        uncertainty=("splicing",),
+    )
+    assert_type(cand.short_description, str)
+    assert_type(cand.mechanisms, tuple[str, ...])
+    assert_type(cand.uncertainty, tuple[str, ...])
+    if effect.mutant_transcript is not None:
+        assert_type(effect.mutant_transcript.is_complete, bool)
+        assert_type(effect.mutant_transcript.novel_junctions, tuple[tuple[str, int, int, str], ...])
+        assert_type(effect.mutant_transcript.back_junctions, tuple[tuple[str, int, int, str], ...])
+        assert_type(effect.mutant_transcript.wildtype_junctions, tuple[tuple[str, int, int, str], ...])
+        assert_type(effect.mutant_transcript.mate_region, tuple[str, int, int, str] | None)
+        assert_type(effect.mutant_transcript.exit_frame, int | None)
 
     variant.effects(raise_on_error="no")  # type: ignore[arg-type]
     variants.effects(validate_reference="no")  # type: ignore[arg-type]

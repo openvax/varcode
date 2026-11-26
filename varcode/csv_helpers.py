@@ -118,7 +118,7 @@ def warn_on_version_drift(header_metadata, current_version, source_path):
         # Lazy import to avoid a load-time cycle with varcode.annotators.
         from .annotators.registry import get_default_annotator
         current_annotator = getattr(get_default_annotator(), "name", None)
-        dna_lineage = {"realized", "transcript_model", "unified", "dna"}
+        dna_lineage = {"realized", "transcript_model", "dna"}
         compatible_lineage = (
             current_annotator in dna_lineage and serialized_annotator in dna_lineage
         )

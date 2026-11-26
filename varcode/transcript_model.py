@@ -160,8 +160,9 @@ def refine_transcript_model_effect(effect, observed):
     missing reference/phase mapping is never supplied by a DNA prediction.
     RNA support changes ordering, not probabilities or translation evidence.
     """
+    from .dna_annotator import finalize_dna_effect
+    from .effect_candidates import EffectCandidate
     from .mutant_transcript import MutantTranscript
-    from .unified import DNAHypothesis, finalize_dna_effect
 
     observed = tuple(observed)
     if not observed:
@@ -169,7 +170,7 @@ def refine_transcript_model_effect(effect, observed):
     realized = getattr(effect, "realized_candidates", None)
     dna_cands = tuple(
         c for c in (effect.__dict__.get("candidates") or ())
-        if isinstance(c, DNAHypothesis)
+        if isinstance(c, EffectCandidate) and getattr(c, "_paired_outcomes", None)
     )
     if realized:
         outcomes = [outcome for candidate in realized for outcome in candidate.outcomes]

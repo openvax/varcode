@@ -7,12 +7,11 @@ from typing import TYPE_CHECKING, TypeAlias
 
 from .effect_candidates import EffectCandidate
 from .effect_hypotheses import RealizedEffectCandidate
-from .unified import DNAHypothesis
 
 if TYPE_CHECKING:
     from .effects.effect_classes import MutationEffect
 
-Candidate: TypeAlias = EffectCandidate | RealizedEffectCandidate | DNAHypothesis
+Candidate: TypeAlias = EffectCandidate | RealizedEffectCandidate
 CandidatePath: TypeAlias = tuple[Candidate, ...]
 
 

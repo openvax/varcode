@@ -60,7 +60,7 @@ _ATTACHED_FIELDS = (
     "highest_priority_candidate", "hypotheses", "mechanism_rank",
     "probability", "splice_signal", "germline_unknown",
     "germline_phase_state", "germline_variants_in_window",
-    "orf_annotation", "dna_search_anchor",
+    "orf_annotation",
 )
 
 # A comparison describes one outcome, independently of candidate containers
@@ -94,7 +94,6 @@ def _model_types() -> tuple[type, ...]:
     )
     from ..orf_discovery import DiscoveredORF, ORFDiscoveryPolicy
     from ..transcript_layout import CrypticSplicePolicy
-    from ..unified import DNAHypothesis, DNASearchAnchor, GenomicSpliceJunction
 
     return (
         CrypticSplicePolicy,
@@ -111,9 +110,6 @@ def _model_types() -> tuple[type, ...]:
         SpliceOption,
         SplicePlan,
         SpliceSiteKey,
-        DNAHypothesis,
-        DNASearchAnchor,
-        GenomicSpliceJunction,
     )
 
 

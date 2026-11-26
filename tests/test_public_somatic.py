@@ -167,8 +167,12 @@ def test_published_canine_consequences():
             original = "M" + original[1:]
         if row["Variant_Classification"] == "Splice_Site":
             assert row["Consequence"] == "splice_acceptor_variant"
-            assert any("exon_skip" in candidate.splice_mechanisms for candidate in splice_effect.candidates)
-            assert any(candidate.novel_junctions for candidate in splice_effect.candidates)
+            assert any("exon_skip" in candidate.mechanisms for candidate in splice_effect.candidates)
+            assert any(
+                candidate.effect.mutant_transcript is not None
+                and candidate.effect.mutant_transcript.novel_junctions
+                for candidate in splice_effect.candidates
+            )
             materialize_effects([splice_effect])
             counts["splice"] += 1
         elif hgvs == "p.M1?":

@@ -35,8 +35,9 @@ exon skipping can produce a `Deletion` or a frameshift, for example.
 
 ```python
 for candidate in effect.candidates:
-    print(candidate.splice_mechanisms, candidate.novel_junctions)
-    print(candidate.baseline_cdna, candidate.mutant_cdna)
+    mt = candidate.effect.mutant_transcript
+    print(candidate.mechanisms, mt.novel_junctions if mt else ())
+    print(candidate.effect.mutant_protein_sequence)
 ```
 
 Canonical and exon-skip paths can use transcript annotation. Retention and
@@ -56,7 +57,7 @@ plans may still give different comparisons.
 normal_effects = [
     candidate.effect
     for candidate in effect.candidates
-    if candidate.splice_mechanisms == ("normal",)
+    if candidate.mechanisms == ("normal",)
 ]
 ```
 
