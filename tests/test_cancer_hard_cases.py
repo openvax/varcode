@@ -509,7 +509,7 @@ def test_flt3_itd_intra_exonic_dup_matches_explicit_insertion(annotator):
     assert _fusion_protein(restored[0]) == expected_protein
 
 
-@pytest.mark.parametrize("annotator", ["transcript_model", "fast", "unified"])
+@pytest.mark.parametrize("annotator", ["dna", "transcript_model", "fast"])
 def test_egfr_exon20_itd_and_kinase_domain_duplication_kdd(annotator):
     """EGFR exon 20 intra-exonic ITD (p.770insSVD) and EGFR-KDD (exons 18-25 tandem DUP)."""
     egfr = GENOME.transcript_by_id("ENST00000275493")  # + strand, 28 exons, 1210 aa
@@ -553,7 +553,7 @@ def test_egfr_exon20_itd_and_kinase_domain_duplication_kdd(annotator):
     )
     eff_kdd = sv_kdd.effect_on_transcript(egfr, annotator=annotator)
     assert _fusion_protein(eff_kdd) == expected_kdd_protein
-    if annotator == "unified":
+    if annotator == "dna":
         assert isinstance(eff_kdd, Insertion)
         assert len(eff_kdd.candidates) == 1
         # The single novel junction is the diagnostic EGFR-KDD back-junction exon 25 -> exon 18!

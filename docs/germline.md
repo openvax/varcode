@@ -135,11 +135,13 @@ ctx = dataclasses.replace(ctx, max_phase_hypotheses=16)
 
 ## When a patient comparison cannot be built
 
-Each candidate retains its baseline and mutant products. Missing intronic
-sequence, conflicting edits and unsupported rearrangements remain explicit
-unresolved results rather than reference-relative substitutes. Unknown phase
-and splice choices stay in the same `candidate.outcomes` records; inspect
-`outcome.hypothesis.phase`, `baseline_splice_plan`, and `splice_plan`.
+Each `DNAHypothesis` candidate retains its baseline and mutant products, phase
+assignments, and splice mechanisms. Missing intronic sequence, conflicting
+edits and unsupported rearrangements remain explicit unresolved results rather
+than reference-relative substitutes; inspect `candidate.phase`,
+`candidate.splice_mechanisms`, `candidate.baseline_cdna`, and
+`candidate.mutant_cdna` (or `annotator="transcript_model"` for nested
+`candidate.outcomes` with explicit `baseline_splice_plan` objects).
 
 A germline-disrupted site retains all compatible baseline mechanisms. An
 unchanged active site uses the same mechanism on both sides of the comparison;

@@ -10,10 +10,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Unified DNA-only annotator, flat DNA hypotheses, and structural search anchors.
+"""Default DNA-only annotator, flat DNA hypotheses, and structural search anchors.
 
-This module provides an opt-in registered annotator (``annotator="unified"``)
-designed alongside ``fast`` and ``transcript_model``:
+This module implements :class:`DNAEffectAnnotator` (registered as ``"dna"``,
+the default annotator; also aliased as ``"unified"`` for 12.3.x compatibility):
 
 * **One flat candidate shape** (:class:`DNAHypothesis`) across splicing,
   phasing, germline, and structural hypotheses — no branching between
@@ -27,10 +27,10 @@ designed alongside ``fast`` and ``transcript_model``:
   the exact 5' anchor exon, exit reading frame, 3' re-entry exon or oriented
   mate search window, wild-type competing junctions, and mutant pre-mRNA
   template recipe without guessing deep/open-ended splicing from DNA alone.
-* **Safe interior-exon SNV fast-path** inside the unified annotator so simple
-  coding SNVs avoid full genomic-layout construction while every splice-window,
-  germline, phase, indel, non-canonical, and structural case runs the full
-  transcript model.
+* **Safe interior-exon coding fast-path** so simple SNVs, MNVs, small indels,
+  non-coding, and incomplete transcripts avoid full genomic-layout construction
+  while every splice-window, germline, phase, non-canonical, and structural case
+  runs the full transcript model.
 """
 
 from __future__ import annotations
@@ -154,7 +154,7 @@ class DNAHypothesis(DataclassSerializable):
     """
 
     effect: Any
-    source: str = "varcode.unified"
+    source: str = "varcode.dna"
     uncertainty: Tuple[str, ...] = ()
     splice_mechanisms: Tuple[str, ...] = ()
     phase: Tuple[Tuple[Any, str], ...] = ()
@@ -698,7 +698,7 @@ def _flatten_to_dna_hypotheses(effect: Any, transcript: Any) -> Tuple[DNAHypothe
             out.append(
                 DNAHypothesis(
                     effect=inner,
-                    source=cand.source if isinstance(cand, EffectCandidate) else "varcode.unified",
+                    source=cand.source if isinstance(cand, EffectCandidate) else "varcode.dna",
                     uncertainty=axes,
                     mutant_protein=getattr(inner, "mutant_protein_sequence", None)
                     or (legacy_mt.mutant_protein_sequence if legacy_mt is not None else None),
@@ -1023,38 +1023,44 @@ def _try_unified_fast_path(variant: Any, transcript: Any) -> Any:
     )
 
 
-class UnifiedDNAEffectAnnotator:
-    """Unified DNA-only annotator combining a safe coding fast-path with flat hypotheses.
+def finalize_dna_effect(effect: Any, variant: Any, transcript: Any) -> Any:
+    """Attach flat :class:`DNAHypothesis` candidates and optional search anchor."""
+    from .effects.effect_classes import MultiOutcomeEffect
 
-    Registered as ``"unified"``. Keeps ``fast`` and ``transcript_model`` intact
-    so callers can benchmark and verify parity before any default switch.
+    if effect is NotImplemented:
+        return effect
+    hypotheses = _flatten_to_dna_hypotheses(effect, transcript)
+    effect.candidates = hypotheses
+    if not isinstance(effect, MultiOutcomeEffect):
+        effect.most_likely_candidate = hypotheses[0]
+        effect.highest_priority_candidate = max(
+            hypotheses, key=lambda h: classification_priority(h.effect)
+        )
+    # Drop nested realized_candidates so iter_candidate_paths and
+    # get_effect_candidates yield the flat DNAHypothesis tuple uniformly.
+    if "realized_candidates" in effect.__dict__:
+        del effect.__dict__["realized_candidates"]
+    if variant is not None and _needs_search_anchor(variant):
+        effect.dna_search_anchor = build_dna_search_anchor(variant, transcript)
+    return effect
+
+
+class DNAEffectAnnotator:
+    """Default DNA-only annotator combining a safe coding fast-path with flat hypotheses.
+
+    Registered as ``"dna"`` (also aliased as ``"unified"`` for 12.3.x
+    compatibility). Keeps ``fast`` and ``transcript_model`` intact as explicit
+    opt-in annotators.
     """
 
-    name = "unified"
+    name = "dna"
     version = _varcode_version
 
     def __init__(self) -> None:
         self._full = TranscriptModelEffectAnnotator()
 
     def _finalize(self, effect: Any, variant: Any, transcript: Any) -> Any:
-        from .effects.effect_classes import MultiOutcomeEffect
-
-        if effect is NotImplemented:
-            return effect
-        hypotheses = _flatten_to_dna_hypotheses(effect, transcript)
-        effect.candidates = hypotheses
-        if not isinstance(effect, MultiOutcomeEffect):
-            effect.most_likely_candidate = hypotheses[0]
-            effect.highest_priority_candidate = max(
-                hypotheses, key=lambda h: classification_priority(h.effect)
-            )
-        # Drop nested realized_candidates so iter_candidate_paths and
-        # get_effect_candidates yield the flat DNAHypothesis tuple uniformly.
-        if "realized_candidates" in effect.__dict__:
-            del effect.__dict__["realized_candidates"]
-        if variant is not None and _needs_search_anchor(variant):
-            effect.dna_search_anchor = build_dna_search_anchor(variant, transcript)
-        return effect
+        return finalize_dna_effect(effect, variant, transcript)
 
     def annotate_on_transcript(self, variant: Any, transcript: Any) -> Any:
         fast_result = _try_unified_fast_path(variant, transcript)
@@ -1087,3 +1093,7 @@ class UnifiedDNAEffectAnnotator:
         )
         primary = variants[0] if variants else None
         return self._finalize(result, primary, transcript)
+
+
+# Backwards-compatible alias for varcode 12.3.x callers.
+UnifiedDNAEffectAnnotator = DNAEffectAnnotator

@@ -167,12 +167,8 @@ def test_published_canine_consequences():
             original = "M" + original[1:]
         if row["Variant_Classification"] == "Splice_Site":
             assert row["Consequence"] == "splice_acceptor_variant"
-            choices = [(key, option) for candidate in splice_effect.realized_candidates
-                       for outcome in candidate.outcomes
-                       for key, option in outcome.hypothesis.splice_plan.choices]
-            assert any(key.side == "acceptor" and option.evidence["strength"] == "lost"
-                       for key, option in choices)
-            assert any(option.mechanism == "exon_skip" for _, option in choices)
+            assert any("exon_skip" in candidate.splice_mechanisms for candidate in splice_effect.candidates)
+            assert any(candidate.novel_junctions for candidate in splice_effect.candidates)
             materialize_effects([splice_effect])
             counts["splice"] += 1
         elif hgvs == "p.M1?":

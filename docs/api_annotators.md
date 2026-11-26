@@ -32,7 +32,8 @@ See [annotation choices](experimental_annotators.md) for alternatives and
 
 ## Shared transcript model
 
-This is the default annotator; `annotator="fast"` selects the compatibility
+Select `annotator="transcript_model"` for nested `RealizedEffectCandidate`
+outcome graphs, or `annotator="fast"` for the Varcode 10 compatibility
 implementation.
 See [supported inputs and results](experimental_annotators.md) before using it.
 
@@ -40,11 +41,16 @@ See [supported inputs and results](experimental_annotators.md) before using it.
 
 ::: varcode.predict_transcript_model_effect
 
-## Unified DNA annotator (opt-in)
+## Default DNA annotator
 
-`annotator="unified"` combines a safe interior-exon SNV fast-path with flat
-`DNAHypothesis` candidates and deterministic `DNASearchAnchor` search geometry
-for large insertions and structural rearrangements.
+`annotator="dna"` (the default) combines a safe interior-exon coding fast-path
+with the full transcript/splice/phase model, flat `DNAHypothesis` candidates,
+ascending genomic intron coordinates (`GenomicSpliceJunction`), and
+deterministic `DNASearchAnchor` search geometry for large insertions and
+structural rearrangements. `UnifiedDNAEffectAnnotator` and `annotator="unified"`
+remain as deprecated aliases for 12.3.x callers.
+
+::: varcode.DNAEffectAnnotator
 
 ::: varcode.UnifiedDNAEffectAnnotator
 

@@ -47,21 +47,21 @@ ensembl_grch38 = cached_release(81)
 CFTR_TRANSCRIPT_ID = "ENST00000003084"
 
 
-def test_transcript_model_annotator_is_default(request):
+def test_transcript_model_annotator_is_registered_and_dna_is_default(request):
     annotator = get_annotator("transcript_model")
 
     assert annotator.name == "transcript_model"
     assert isinstance(annotator, TranscriptModelEffectAnnotator)
-    configured = request.config.getoption("--annotator") or "transcript_model"
+    configured = request.config.getoption("--annotator") or "dna"
     assert get_default_annotator() is get_annotator(configured)
 
 
-def test_default_is_transcript_model_in_fresh_process():
+def test_default_is_dna_in_fresh_process():
     subprocess.run([
         sys.executable, "-c",
         "import varcode.transcript_model; "
         "from varcode import get_default_annotator; "
-        "assert get_default_annotator().name == 'transcript_model'",
+        "assert get_default_annotator().name == 'dna'",
     ], check=True)
 
 

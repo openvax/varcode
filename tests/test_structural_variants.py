@@ -524,11 +524,9 @@ def test_vcf_loader_sv_yields_structural_variant_effect():
         os.unlink(path)
     effect, = [effect for effect in effects if effect.transcript_id == cftr.id]
     assert isinstance(effect.variant, StructuralVariant)
-    products = [outcome.mutant for candidate in effect.realized_candidates
-                for outcome in candidate.outcomes]
-    assert any(product.cdna_sequence is not None for product in products)
-    assert all(len(product.cdna_sequence) < len(cftr.sequence)
-               for product in products if product.cdna_sequence is not None)
+    cdna_sequences = [candidate.mutant_cdna for candidate in effect.candidates]
+    assert any(seq is not None for seq in cdna_sequences)
+    assert all(len(seq) < len(cftr.sequence) for seq in cdna_sequences if seq is not None)
 
 
 def test_sv_effect_on_transcript_uses_default_structural_prediction():
@@ -545,12 +543,11 @@ def test_sv_effect_on_transcript_uses_default_structural_prediction():
         genome=ensembl_grch38,
     )
     effect = sv.effect_on_transcript(cftr)
-    assert effect.realized_candidates
+    assert effect.candidates
     collection_effect, = [e for e in sv.effects() if e.transcript_id == cftr.id]
     assert type(effect) is type(collection_effect)
     assert effect.mutant_transcript.cdna_sequence == collection_effect.mutant_transcript.cdna_sequence
-    sequences = [candidate.effect.mutant_transcript.cdna_sequence
-                 for candidate in effect.realized_candidates]
+    sequences = [candidate.mutant_cdna for candidate in effect.candidates]
     assert any(sequence is not None for sequence in sequences)
     assert all(len(sequence) < len(cftr.sequence)
                for sequence in sequences if sequence is not None)

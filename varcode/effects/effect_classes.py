@@ -385,9 +385,10 @@ class MultiOutcomeEffect(MutationEffect):
 
     @property
     def candidates(self) -> tuple[EffectCandidate, ...]:
-        """Tuple of :class:`~varcode.effect_candidates.EffectCandidate` outcomes."""
+        """Tuple of candidate outcomes (including externally attached observations)."""
         if "candidates" in self.__dict__:
-            return self.__dict__["candidates"]
+            extra = getattr(self, "_extra_candidates", None) or ()
+            return self.__dict__["candidates"] + tuple(extra)
         return self._get_candidates()
 
     @candidates.setter

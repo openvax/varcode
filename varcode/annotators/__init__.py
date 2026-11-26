@@ -10,12 +10,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""One built-in default annotator and optional partial implementations.
+"""One built-in default DNA annotator and explicit opt-in alternatives.
 
-``transcript_model`` is the shared default. ``fast`` retains the compatibility
-implementation, and ``protein_diff`` is an alternative for point edits. Third
-parties register any object satisfying :class:`EffectAnnotator`; they need no
-capability list.
+``dna`` (:class:`DNAEffectAnnotator`) is the default. ``transcript_model``
+retains the nested ``RealizedEffectCandidate`` graph, ``fast`` retains the
+Varcode 10 compatibility implementation, and ``protein_diff`` is deprecated.
+Third parties register any object satisfying :class:`EffectAnnotator`; they
+need no capability list.
 """
 
 from __future__ import annotations
@@ -30,6 +31,7 @@ if TYPE_CHECKING:
 from .fast import FastEffectAnnotator
 from .protein_diff import ProteinDiffEffectAnnotator
 from ..transcript_model import TranscriptModelEffectAnnotator
+from ..unified import DNAEffectAnnotator, UnifiedDNAEffectAnnotator
 from .registry import (
     get_annotator,
     get_default_annotator,
@@ -102,10 +104,12 @@ class EffectAnnotator(Protocol):
 
 
 __all__ = [
+    "DNAEffectAnnotator",
     "EffectAnnotator",
     "FastEffectAnnotator",
     "ProteinDiffEffectAnnotator",
     "TranscriptModelEffectAnnotator",
+    "UnifiedDNAEffectAnnotator",
     "get_annotator",
     "get_default_annotator",
     "register_annotator",

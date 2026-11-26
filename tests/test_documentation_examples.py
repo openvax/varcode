@@ -218,15 +218,14 @@ def test_documentation_experimental_result_access(kind):
     advanced_blocks = _blocks("docs/experimental_annotators.md")
     assert "comparison =" in advanced_blocks[0]
     assert "rna_resolver=" in advanced_blocks[1]
-    assert "candidate.outcomes" in advanced_blocks[2]
+    assert "DNAHypothesis" in advanced_blocks[2]
     _run(advanced_blocks[:3], namespace)
     _run(_blocks("docs/transcript_models.md"), namespace)
     candidates = getattr(namespace["effect"], "candidates", ())
     if kind == "point":
-        assert candidates and all(isinstance(c, RealizedEffectCandidate)
-                                  for c in candidates)
+        assert candidates and all(isinstance(c, varcode.DNAHypothesis) for c in candidates)
         assert namespace["protein"][158] == "M"
     elif kind == "BND":
-        assert candidates and all(isinstance(c, EffectCandidate) for c in candidates)
+        assert candidates and all(isinstance(c, varcode.DNAHypothesis) for c in candidates)
     else:
         assert namespace["effect"].modifies_protein_sequence is None

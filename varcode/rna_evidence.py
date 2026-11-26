@@ -287,10 +287,17 @@ def apply_rna_evidence_to_effects(effects: Iterable, resolver) -> Iterable:
 
     replacements = []
     changed = False
+    from .unified import DNAHypothesis
+
     for effect in effects:
         is_structural = getattr(getattr(effect, "variant", None), "is_structural", False)
         realized = getattr(effect, "realized_candidates", None)
-        if not isinstance(effect, MultiOutcomeEffect) and not is_structural and not realized:
+        dna_paired = any(
+            isinstance(c, DNAHypothesis) and getattr(c, "_paired_outcomes", None)
+            for c in (effect.__dict__.get("candidates") or ())
+        )
+        has_paired = bool(realized or dna_paired)
+        if not isinstance(effect, MultiOutcomeEffect) and not is_structural and not has_paired:
             replacements.append(effect)
             continue
         variant = getattr(effect, "variant", None)
@@ -300,13 +307,13 @@ def apply_rna_evidence_to_effects(effects: Iterable, resolver) -> Iterable:
             continue
         # Coerce to tuple eagerly so we don't keep a generator that
         # would silently exhaust on a second candidates() read.
-        members = getattr(effect, "variants", (variant,)) if realized else (variant,)
+        members = getattr(effect, "variants", (variant,)) if has_paired else (variant,)
         observed_tuple = tuple(observation for member in members
                                for observation in resolver.observed_outcomes(member, transcript))
         if not observed_tuple:
             replacements.append(effect)
             continue
-        if realized:
+        if has_paired:
             from .transcript_model import refine_transcript_model_effect
             replacements.append(refine_transcript_model_effect(effect, observed_tuple))
             changed = True

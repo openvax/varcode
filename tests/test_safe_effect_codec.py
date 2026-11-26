@@ -449,12 +449,12 @@ def test_root_type_validation_and_invalid_inputs():
 
 def test_registered_annotators_public_api():
     assert registered_annotators() == (
+        "dna",
         "fast",
-        "protein_diff",
         "transcript_model",
-        "unified",
     )
     assert registered_annotators(include_deprecated=True) == (
+        "dna",
         "fast",
         "protein_diff",
         "transcript_model",

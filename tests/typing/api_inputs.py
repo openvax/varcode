@@ -13,7 +13,7 @@ from varcode import (
     Candidate, CandidatePath, classification_priority, get_effect_candidates,
     iter_candidate_effects, iter_candidate_paths,
     ContigResolution, ContigResolver, CrypticSplicePolicy,
-    DNAHypothesis, DNASearchAnchor, EffectAnnotator, EffectCollection, EffectReference,
+    DNAEffectAnnotator, DNAHypothesis, DNASearchAnchor, EffectAnnotator, EffectCollection, EffectReference,
     GenomicSpliceJunction, GeneLike, Genotype, InvalidContigError, MutationEffect, MutantTranscript,
     ORFAnnotation, SpanningDeletionRecord, TranscriptLike, UnifiedDNAEffectAnnotator,
     Unresolved, Variant, VariantCollection, Zygosity,
@@ -152,8 +152,10 @@ def check_annotation_workflow(
     assert_type(effect_collection_from_json("{}"), EffectCollection)
     assert_type(effect_collection_from_serializable_repr({}), EffectCollection)
     assert_type(CrypticSplicePolicy(scan_flank=100, max_sites_per_junction=4), CrypticSplicePolicy)
+    dna_ann = DNAEffectAnnotator()
+    assert_type(register_annotator(dna_ann), DNAEffectAnnotator)
     unified = UnifiedDNAEffectAnnotator()
-    assert_type(register_annotator(unified), UnifiedDNAEffectAnnotator)
+    assert_type(register_annotator(unified), DNAEffectAnnotator)
     junction = GenomicSpliceJunction("17", 101, 200, "-", 201, 100)
     assert_type(junction.intron_start, int)
     hyp = DNAHypothesis(effect=effect, novel_junctions=(junction,))

@@ -1,18 +1,21 @@
 # Annotation pipeline and compatibility
 
-Since Varcode 11, the default `transcript_model` annotator uses one path for
-reference edits, patient germline baselines, known-cis groups and splice
-alternatives: realize the baseline and mutant transcripts, then classify their
-sequence difference. Read collection, alignment and RNA assembly remain in
-upstream tools such as Isovar. Varcode consumes their supplied models.
+The default `dna` annotator (`DNAEffectAnnotator`) combines a guarded
+interior-exon coding fast-path with the full transcript/splice/phase model,
+returning flat `DNAHypothesis` candidates, 1-based ascending
+`GenomicSpliceJunction` intron coordinates, and deterministic `DNASearchAnchor`
+search geometry on structural rearrangements and large insertions. Read
+collection, alignment and RNA assembly remain in upstream tools such as Isovar.
+Varcode consumes their supplied models.
 
 ## Supported inputs
 
 | Selection | Method | Inputs |
 |---|---|---|
-| Default, or `annotator="transcript_model"` | Composes phase/splice hypotheses and compares each product with its patient baseline | Small variants and local DEL/DUP; sequence insertions need `alt_assembly`. Reuses existing structural builders for junctions, inversions and supplied assemblies. |
+| Default, or `annotator="dna"` | Guarded interior-exon fast-path + full transcript/splice/phase model returning flat `DNAHypothesis` candidates and `DNASearchAnchor` search geometry | Small variants, local DEL/DUP, BNDs, inversions, supplied `alt_assembly`, germline/phase composition. |
+| `annotator="transcript_model"` | Full transcript-model engine retaining nested `RealizedEffectCandidate` outcome graphs | Same inputs as `dna`, for callers inspecting `.realized_candidates` / `.outcomes`. |
 | `annotator="fast"` | Compatibility implementation from Varcode 10 | Small variants and SVs; local germline lookup; limited joint composition. |
-| `annotator="protein_diff"` | Alternative protein-difference implementation | Small variants; shares legacy splice, location and germline helpers; no SV support. |
+| `annotator="protein_diff"` *(deprecated)* | Legacy protein-difference prototype | Small variants only; superseded by `dna` / `transcript_model`; no SV support. |
 
 Typed junctions, BNDs, inversions, nonlocal rearrangements and supplied
 transcript assemblies reuse the existing structural builders. Combining these
@@ -88,23 +91,25 @@ The shared pipeline and legacy candidate wrappers expose different details:
 
 | Candidate type | Shared access | Additional information |
 |---|---|---|
-| `EffectCandidate` (legacy splice/SV sets and imported RNA) | `candidate.effect` | `source`, `evidence`; sequences are on the effect or its optional `mutant_transcript` |
-| `RealizedEffectCandidate` (transcript-model hypothesis pipeline) | `candidate.effect` | `outcomes`, `hypotheses`, `probability`, `ordinal_key`; each outcome has `baseline` and `mutant` products with `cdna_sequence`, `protein_sequence` and `evidence` |
+| `DNAHypothesis` (default `dna` annotator) | `candidate.effect` | Flat record with `uncertainty`, `splice_mechanisms`, `phase`, `novel_junctions`, `baseline_protein`, `mutant_protein`, `baseline_cdna`, `mutant_cdna`, `mutant_transcript`, `ordinal_rank`, `probability`, `evidence` |
+| `EffectCandidate` (legacy `fast` splice/SV sets and imported RNA) | `candidate.effect` | `source`, `evidence`; sequences are on the effect or its optional `mutant_transcript` |
+| `RealizedEffectCandidate` (opt-in `transcript_model` pipeline) | `candidate.effect` | `outcomes`, `hypotheses`, `probability`, `ordinal_key`; each outcome has `baseline` and `mutant` products with `cdna_sequence`, `protein_sequence` and `evidence` |
 
-The default returns an ordinary top effect with candidates attached, not
-necessarily a `MultiOutcomeEffect`. Its structural builders use ordinary candidates;
-early noncoding, incomplete or unresolved results may have no candidates at all.
-Inspect the returned shape rather than assuming it from the annotator name:
+The default returns an ordinary top effect with flat `DNAHypothesis` candidates
+attached, not necessarily a `MultiOutcomeEffect`. Inspect `effect.candidates`
+directly — or branch when consuming opt-in `transcript_model` / `fast` results:
 
 ```python
-from varcode import EffectCandidate
+from varcode import DNAHypothesis, EffectCandidate
 from varcode.effect_hypotheses import RealizedEffectCandidate
 
 print(effect.short_description)
 for candidate in getattr(effect, "candidates", ()):
     print(candidate.effect.short_description)
-    if isinstance(candidate, RealizedEffectCandidate):
-        # A merged candidate can retain several hypotheses and their products.
+    if isinstance(candidate, DNAHypothesis):
+        print(candidate.splice_mechanisms, candidate.uncertainty)
+        print(candidate.baseline_protein, candidate.mutant_protein)
+    elif isinstance(candidate, RealizedEffectCandidate):
         for outcome in candidate.outcomes:
             print(outcome.baseline.protein_sequence, outcome.mutant.protein_sequence)
             print(outcome.mutant.cdna_sequence, outcome.hypothesis.evidence)

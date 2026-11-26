@@ -161,12 +161,30 @@ def refine_transcript_model_effect(effect, observed):
     RNA support changes ordering, not probabilities or translation evidence.
     """
     from .mutant_transcript import MutantTranscript
+    from .unified import DNAHypothesis, finalize_dna_effect
 
     observed = tuple(observed)
     if not observed:
         return effect
-    outcomes = [outcome for candidate in effect.realized_candidates
-                for outcome in candidate.outcomes]
+    realized = getattr(effect, "realized_candidates", None)
+    dna_cands = tuple(
+        c for c in (effect.__dict__.get("candidates") or ())
+        if isinstance(c, DNAHypothesis)
+    )
+    if realized:
+        outcomes = [outcome for candidate in realized for outcome in candidate.outcomes]
+        was_dna = False
+    elif dna_cands:
+        outcomes = [
+            outcome
+            for candidate in dna_cands
+            for outcome in (getattr(candidate, "_paired_outcomes", None) or ())
+        ]
+        was_dna = True
+    else:
+        return effect
+    if not outcomes:
+        return effect
     changed = False
     for observation in observed:
         model = observation.effect.mutant_transcript
@@ -233,6 +251,8 @@ def refine_transcript_model_effect(effect, observed):
     for name in ("germline_unknown", "phase_source", "annotator", "annotator_version"):
         if name in effect.__dict__:
             setattr(result, name, getattr(effect, name))
+    if was_dna:
+        result = finalize_dna_effect(result, effect.variant, effect.transcript)
     return result
 
 
