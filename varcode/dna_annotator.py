@@ -519,6 +519,8 @@ def _flatten_to_candidates(effect: Any, transcript: Any) -> Tuple[EffectCandidat
             back_list: list[JunctionTuple] = []
             seen_novel: set[JunctionTuple] = set()
             seen_back: set[JunctionTuple] = set()
+            rna_observations: list[Any] = []
+            rna_support: list[Any] = []
 
             for outcome in cand.outcomes:
                 hyp = outcome.hypothesis
@@ -531,6 +533,12 @@ def _flatten_to_candidates(effect: Any, transcript: Any) -> Tuple[EffectCandidat
                     if pk not in seen_phase:
                         seen_phase.add(pk)
                         phase_items.append((v, state))
+                rna_obs = hyp.evidence.get("rna_observation")
+                if rna_obs is not None and rna_obs not in rna_observations:
+                    rna_observations.append(rna_obs)
+                for sup in outcome.mutant.evidence.get("rna_support") or ():
+                    if sup not in rna_support:
+                        rna_support.append(sup)
                 novel_j, back_j = _extract_novel_and_back_junctions(
                     outcome.mutant.junction_signature, strand, ref_joins
                 )
@@ -545,13 +553,23 @@ def _flatten_to_candidates(effect: Any, transcript: Any) -> Tuple[EffectCandidat
 
             _attach_junctions_to_effect(cand.effect, tuple(novel_list), tuple(back_list))
 
+            evidence_dict: dict[str, Any] = {
+                "n_merged_outcomes": len(cand.outcomes),
+                "phase_mass": cand.phase_mass,
+            }
+            if rna_observations:
+                evidence_dict["rna_observation"] = (
+                    rna_observations[0]
+                    if len(rna_observations) == 1
+                    else tuple(rna_observations)
+                )
+            if rna_support:
+                evidence_dict["rna_support"] = tuple(rna_support)
+
             ec = EffectCandidate(
                 effect=cand.effect,
                 source="varcode.dna",
-                evidence={
-                    "n_merged_outcomes": len(cand.outcomes),
-                    "phase_mass": cand.phase_mass,
-                },
+                evidence=evidence_dict,
                 mechanisms=tuple(mechs) if mechs else ("normal",),
                 phase=tuple(phase_items),
                 uncertainty=axes,

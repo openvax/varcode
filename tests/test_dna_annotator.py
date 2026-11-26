@@ -553,3 +553,67 @@ def test_dna_interoperates_with_priority_proteome_orf_discovery_and_mt_polya():
     u_mt = mt_dup.effect_on_transcript(nd1, annotator="dna")
     assert isinstance(u_mt.mutant_transcript, MutantTranscript)
     assert u_mt.mutant_transcript.exit_frame in (0, 1, 2)
+
+
+def test_dna_fast_path_and_rna_refinement_preserve_observations_and_support():
+    """#776: fast-path dna effects refine cleanly and preserve rna_observation / rna_support."""
+    from types import SimpleNamespace
+    from varcode import (
+        RNAEvidence,
+        apply_phase_resolver_to_effects,
+        apply_rna_evidence_to_effects,
+        make_rna_outcome,
+    )
+    from varcode.effects import Unresolved
+
+    braf = GENOME.transcript_by_id("ENST00000288602")
+    v_v600e = Variant("7", 140753336, "A", "T", genome=GENOME)
+    fast_effect = v_v600e.effect_on_transcript(braf, annotator="dna")
+    assert isinstance(fast_effect, Substitution)
+    # Fast-path SNV does not carry _paired_outcomes initially.
+    assert getattr(fast_effect.candidates[0], "_paired_outcomes", None) is None
+
+    # 1. Partial RNA window supplied via phase_resolver must NOT overwrite Substitution.mutant_transcript;
+    #    it must append an explicit Unresolved candidate with original_protein_sequence=None and rna_observation.
+    partial_window = MutantTranscript.from_sequence(
+        "ATGGCTTAA",
+        reference_transcript=braf,
+        mutant_protein_sequence="MA",
+        annotator_name="isovar",
+        evidence={"sequence_status": "junction_fragment", "read_count": 5},
+    )
+    resolver = SimpleNamespace(
+        mutant_transcript=lambda variant, transcript: (
+            partial_window if variant == v_v600e and transcript.id == braf.id else None
+        )
+    )
+    refined_phase = apply_phase_resolver_to_effects(EffectCollection([fast_effect]), resolver)[0]
+    assert isinstance(refined_phase, Substitution)
+    assert refined_phase.mutant_protein_sequence == fast_effect.mutant_protein_sequence
+    obs_cands = [
+        c for c in refined_phase.candidates
+        if isinstance(c.effect, Unresolved)
+        and getattr(c.effect.mutant_transcript, "cdna_sequence", None) == "ATGGCTTAA"
+    ]
+    assert len(obs_cands) == 1
+    assert obs_cands[0].effect.original_protein_sequence is None
+    assert obs_cands[0].effect.modifies_protein_sequence is None
+    assert obs_cands[0].evidence["rna_observation"]["read_count"] == 5
+
+    # 2. Full predicted cDNA matched via apply_rna_evidence_to_effects preserves rna_support on EffectCandidate.
+    full_cdna = refined_phase.mutant_transcript.cdna_sequence
+    assert full_cdna is not None
+    full_obs = Unresolved(v_v600e, braf, "observed_rna")
+    full_obs.mutant_transcript = MutantTranscript.from_sequence(
+        full_cdna,
+        reference_transcript=braf,
+        mutant_protein_sequence=refined_phase.mutant_protein_sequence,
+        annotator_name="reads",
+    )
+    rna_evidence = RNAEvidence(
+        [make_rna_outcome(full_obs, source="reads", transcript_model_id="full", read_count=12)]
+    )
+    refined_rna = apply_rna_evidence_to_effects(EffectCollection([fast_effect]), rna_evidence)[0]
+    sub_cand = next(c for c in refined_rna.candidates if isinstance(c.effect, Substitution))
+    assert sub_cand.evidence["rna_support"][0]["read_count"] == 12
+    assert sub_cand.evidence["rna_support"][0]["transcript_model_id"] == "full"
