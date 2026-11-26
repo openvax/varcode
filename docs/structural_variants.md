@@ -95,8 +95,15 @@ silent comparison does not hide a protein-changing alternative.
 These flags describe existing predictions; they do not establish expression.
 Partial BND fragments and assemblies without a mapped ORF stay unresolved.
 So do partial observations (`protein_completeness` other than `start_to_stop`)
-unless a mapped, in-frame observed codon differs from the reference.
-The filter does not construct missing proteins or change the effect class.
+unless an in-frame reference anchor establishes a difference across the observed
+codons (including across a junction, indel, frameshift, or inversion), or—on a
+fusion's 3′ partner—an in-frame anchor on the 5′ partner establishes an
+N-terminal fusion extension or an out-of-frame translation that cannot match
+the 3′ reference. On the same transcript, codons upstream of the annotated
+start (`k < 0`, such as an in-frame 5′ UTR ATG in a `partial_end` fragment)
+stay unresolved because a partial observation does not establish upstream
+initiation. The filter does not construct missing proteins or change the effect
+class.
 
 ??? note "Selenocysteine and non-ATG start codons"
     Selenocysteine (`U` in the Ensembl reference protein) is encoded by UGA,

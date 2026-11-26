@@ -116,7 +116,7 @@ def _proper_reference_suffix(sequence, reference):
 
 
 def _orf_changes(model, transcript, reference_protein, table, start, end, selenocysteine,
-                 partial_start=False):
+                 partial_start=False, initiator=None):
     """Compare the ORF read with one Sec decoding against the reference."""
     tail = "" if end is not None else _terminal_poly_a_completion(model, model.cdna_sequence[start:])
     coding = _read_orf(model.cdna_sequence + tail, start, end, table, selenocysteine)
@@ -136,7 +136,7 @@ def _orf_changes(model, transcript, reference_protein, table, start, end, seleno
     # Initiator methionine also applies to alternative start codons.
     protein = "M" + residues[1:-1]
     if partial_start and _proper_reference_suffix(protein, reference_protein):
-        return _partial_sequence_changes(model, transcript, table)
+        return _partial_sequence_changes(model, transcript, table, initiator=initiator)
     return coding_status, protein != reference_protein
 
 
@@ -166,7 +166,7 @@ def _complete_sequence_changes(model, transcript, initiator):
     if partial_start and _proper_reference_suffix(protein, reference_protein):
         # An observed internal Met-to-stop ORF may only be missing 5' coverage.
         # Keep its ORF boundaries; use mapped codons to establish any change.
-        return _partial_sequence_changes(model, transcript, table)
+        return _partial_sequence_changes(model, transcript, table, initiator=initiator)
     if (protein is not None and reference_protein is not None
             and "X" not in protein and "X" not in reference_protein
             # Ending exactly at a Sec residue is a decoding choice, not a change.
@@ -190,9 +190,10 @@ def _complete_sequence_changes(model, transcript, initiator):
                                          if aa == "U")
                          if sequence[pos:pos + 3].upper() == "TGA"}
     coding_status, _ = _orf_changes(model, transcript, reference_protein, table, start, end,
-                                    decoded | uncertain | terminating, partial_start)
+                                    decoded | uncertain | terminating, partial_start,
+                                    initiator=initiator)
     proteins = {_orf_changes(model, transcript, reference_protein, table, start, end,
-                             selenocysteine, partial_start)[1]
+                             selenocysteine, partial_start, initiator=initiator)[1]
                 for selenocysteine in {frozenset(decoded), frozenset(decoded | uncertain)}}
     protein_status = proteins.pop() if len(proteins) == 1 else None
     if uncertain:
@@ -208,16 +209,128 @@ def _residue(codon, table, initiator):
     return table.forward_table.get(codon, "*")
 
 
-def _partial_sequence_changes(model, transcript, table):
+def _in_frame_anchor(segments, target, start, end, translated_positions):
+    """Return ``ref - pos`` for the first mapped in-frame CDS codon of ``target``."""
+    if target is None or not has_complete_coding_sequence(target):
+        return None
+    reference_offsets = {}
+    offset = 0
+    for segment in segments:
+        if segment.source == target and segment.strand == "+":
+            for pos in range(max(start, offset), min(end, offset + segment.length)):
+                reference_offsets[pos] = segment.start + pos - offset
+        offset += segment.length
+    if not reference_offsets:
+        return None
+    reference_start = min(target.start_codon_spliced_offsets)
+    reference_coding_len = (
+        len(target.coding_sequence)
+        + len(poly_a_completion(target, target.coding_sequence))
+    )
+    for pos in translated_positions:
+        ref = reference_offsets.get(pos)
+        if (ref is not None and (ref - reference_start) % 3 == 0
+                and reference_start <= ref < reference_start + reference_coding_len
+                and reference_offsets.get(pos + 1) == ref + 1
+                and reference_offsets.get(pos + 2) == ref + 2):
+            return ref - pos
+    return None
+
+
+def _unanchored_fusion_changes(
+    sequence,
+    start,
+    translated_positions,
+    reference_coding,
+    reference_start,
+    reference_sec,
+    table,
+    transcript_table,
+    decoded,
+    uncertain,
+):
+    """Compare a 5'-partner-anchored partial fusion ORF against a 3' partner.
+
+    Used when the reading frame is anchored on the 5' partner ``initiator``
+    and the 3' partner ``transcript`` has no in-frame mapped codon (for
+    example, an out-of-frame 3'-partner fusion or a 5'-partner-only read).
+    Stops before the first ambiguous codon because it could hide a stop codon.
+    """
+    unambiguous = []
+    obs_codons = []
+    for pos in translated_positions:
+        codon = sequence[pos:pos + 3].upper()
+        if set(codon) - set("ACGT"):
+            break
+        unambiguous.append(pos)
+        obs_codons.append(codon)
+    n_obs = len(obs_codons)
+    if n_obs == 0:
+        return None, None
+    n_ref = len(reference_coding) // 3
+    ref_codons = [reference_coding[3 * j:3 * j + 3] for j in range(n_ref)]
+    coding_matches = n_obs <= n_ref and any(
+        all(
+            bool(set(ref_codons[j + i]) - set("ACGT")) or obs_codons[i] == ref_codons[j + i]
+            for i in range(n_obs)
+        )
+        for j in range(n_ref - n_obs + 1)
+    )
+    coding_status = None if coding_matches else True
+
+    obs_residues = []
+    for pos, codon in zip(unambiguous, obs_codons):
+        if pos in uncertain:
+            obs_residues.append({"U", "*"})
+        elif pos in decoded:
+            obs_residues.append({"U"})
+        elif pos == start and codon in table.start_codons:
+            obs_residues.append({"M", _residue(codon, table, False)})
+        else:
+            obs_residues.append({_residue(codon, table, False)})
+    ref_residues = [
+        None if set(ref_codons[j]) - set("ACGT")
+        else ("U" if reference_start + 3 * j in reference_sec
+              else _residue(ref_codons[j], transcript_table, j == 0))
+        for j in range(n_ref)
+    ]
+    protein_matches = n_obs <= n_ref and any(
+        all(
+            ref_residues[j + i] is None or ref_residues[j + i] in obs_residues[i]
+            for i in range(n_obs)
+        )
+        for j in range(n_ref - n_obs + 1)
+    )
+    protein_status = None if protein_matches else True
+    return coding_status, protein_status
+
+
+def _partial_sequence_changes(model, transcript, table, initiator=None):
     """Compare observed codons using mapped, in-frame reference anchors.
 
     ``cds_start`` / ``cds_end`` place the producer's reading frame in the
     observed cDNA; transcript segments give each base's reference offset.
     A mapped codon anchors comparison across an observed junction or indel:
     subsequent/preceding codons can be compared with the reference in that
-    frame, even when their bases come from another source. Only covered CDS
-    codons are compared. Equal codons cannot show that unobserved sequence is
-    unchanged, so this never returns False or infers loss from missing ends.
+    frame, even when their bases come from another source.
+
+    Policy for upstream (``k < 0``) codons and 3'-partner fusions:
+
+    - On the same transcript (``initiator`` is ``None`` or ``transcript``),
+      codons upstream of the annotated start (``k < 0``) are ignored: an
+      upstream start codon in a partial observation (e.g. ``partial_end``)
+      does not by itself establish translation initiation there rather than at
+      the annotated start.
+    - On a fusion's 3' partner (``initiator != transcript``), an in-frame
+      mapped CDS codon on ``initiator`` anchors the fusion's reading frame:
+      unambiguous upstream codons reading continuously into ``transcript``'s
+      CDS establish an N-terminal fusion change, and when ``transcript`` has
+      no in-frame codon (e.g. an out-of-frame 3'-partner fusion), the
+      observed codons and peptide are checked against all codon-aligned
+      windows of ``transcript``'s reference CDS/protein.
+
+    Equal codons cannot show that unobserved sequence is unchanged, so this
+    never returns False or infers loss from missing ends.
     """
     evidence = model.evidence or {}
     try:
@@ -234,13 +347,6 @@ def _partial_sequence_changes(model, transcript, table):
         # Unmapped edits, or segments that don't render this sequence,
         # leave observed bases without reference coordinates.
         return None, None
-    reference_offsets = {}
-    offset = 0
-    for segment in segments:
-        if segment.source == transcript and segment.strand == "+":
-            for pos in range(max(start, offset), min(end, offset + segment.length)):
-                reference_offsets[pos] = segment.start + pos - offset
-        offset += segment.length
     reference_start = min(transcript.start_codon_spliced_offsets)
     reference_coding = (
         transcript.coding_sequence
@@ -248,26 +354,40 @@ def _partial_sequence_changes(model, transcript, table):
     ).upper()
     reference_sec = reference_selenocysteine(transcript)
     decoded, uncertain, _ = segment_selenocysteine(model)
-    # The first in-frame codon of this transcript anchors its continuation.
-    # Later offsets may jump across a deletion/duplication; those jumps are
-    # precisely why comparing each mapped codon only with itself is insufficient.
-    anchor = None
     translated_positions = []
     for pos in range(start, end - 2, 3):
         codon = sequence[pos:pos + 3].upper()
         translated_positions.append(pos)
-        ref = reference_offsets.get(pos)
-        if (ref is not None and (ref - reference_start) % 3 == 0
-                and reference_start <= ref < reference_start + len(reference_coding)
-                and reference_offsets.get(pos + 1) == ref + 1
-                and reference_offsets.get(pos + 2) == ref + 2):
-            if anchor is None:
-                anchor = ref - pos
         if codon in table.stop_codons and pos not in decoded:
             break
+    # The first in-frame codon of this transcript anchors its continuation.
+    # Later offsets may jump across a deletion/duplication; those jumps are
+    # precisely why comparing each mapped codon only with itself is insufficient.
+    anchor = _in_frame_anchor(segments, transcript, start, end, translated_positions)
+    initiator_anchor = (
+        _in_frame_anchor(segments, initiator, start, end, translated_positions)
+        if initiator is not None and initiator != transcript
+        else None
+    )
+    transcript_table = codon_table_for_transcript(transcript)
     if anchor is None:
-        return None, None
+        if initiator_anchor is None:
+            return None, None
+        return _unanchored_fusion_changes(
+            sequence,
+            start,
+            translated_positions,
+            reference_coding,
+            reference_start,
+            reference_sec,
+            table,
+            transcript_table,
+            decoded,
+            uncertain,
+        )
     coding_status = None
+    upstream_extension = False
+    ambiguous_upstream = False
     for pos in translated_positions:
         codon = sequence[pos:pos + 3].upper()
         # A junction or frameshift can depart from the reference without
@@ -275,7 +395,13 @@ def _partial_sequence_changes(model, transcript, table):
         # still establishes a coordinate for its observed continuation.
         ref = pos + anchor
         k = ref - reference_start
-        if 0 <= k < len(reference_coding):
+        if k < 0:
+            if initiator_anchor is not None:
+                if set(codon) - set("ACGT"):
+                    ambiguous_upstream = True
+                else:
+                    upstream_extension = True
+        elif 0 <= k < len(reference_coding):
             reference_codon = reference_coding[k:k + 3]
             if codon != reference_codon and not set(codon + reference_codon) - set("ACGT"):
                 coding_status = True
@@ -284,9 +410,11 @@ def _partial_sequence_changes(model, transcript, table):
                             {"U"} if pos in decoded else
                             {_residue(codon, table, k == 0 and pos == start)})
                 reference = ("U" if ref in reference_sec
-                             else _residue(reference_codon, table, k == 0))
+                             else _residue(reference_codon, transcript_table, k == 0))
                 if reference not in observed:
                     return True, True
+    if upstream_extension and not ambiguous_upstream:
+        return True, True
     return coding_status, None
 
 
@@ -307,7 +435,8 @@ def structural_sequence_changes(effect):
             "protein_completeness", "start_to_stop") != "start_to_stop":
         # A fragment is not a full-length protein; a shorter one isn't truncated.
         coding_status, protein_status = _partial_sequence_changes(
-            model, transcript, codon_table_for_transcript(initiator))
+            model, transcript, codon_table_for_transcript(initiator),
+            initiator=initiator)
     elif model is not None:
         coding_status, protein_status = _complete_sequence_changes(
             model, transcript, initiator)

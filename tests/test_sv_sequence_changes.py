@@ -6,8 +6,8 @@ import pytest
 from pyensembl import cached_release
 
 from varcode import (
-    EffectCandidate, MutantTranscript, ReferenceSegment, StructuralVariant,
-    make_fusion_outcome,
+    AssembledAllele, EffectCandidate, MutantTranscript, ReferenceSegment,
+    StructuralVariant, make_fusion_outcome,
 )
 from varcode.effects import (
     CrypticExonCandidate, EffectCollection, GeneFusion, LargeDeletion,
@@ -15,6 +15,7 @@ from varcode.effects import (
 )
 from varcode.effects import structural, structural_candidates, structural_fusions
 from varcode.effects.codon_tables import codon_table_for_transcript
+from varcode.nucleotides import reverse_complement
 
 # Legacy wrapper contract; the default composition path has separate regression tests.
 pytestmark = pytest.mark.usefixtures("legacy_annotator")
@@ -594,3 +595,269 @@ def test_empty_and_cyclic_candidate_sets_are_unknown(cftr):
     first._primary_effects = (second,)
     second._primary_effects = (first,)
     assert first.modifies_protein_sequence is None
+
+
+def _render_segments(segments):
+    pieces = []
+    for seg in segments:
+        seq = seg.source.sequence[seg.start:seg.end]
+        pieces.append(reverse_complement(seq) if seg.strand == "-" else seq)
+    return "".join(pieces)
+
+
+@pytest.mark.parametrize("pair", [
+    ("ENST00000003084", "ENST00000357654"),
+    ("ENST00000357654", "ENST00000003084"),
+])
+@pytest.mark.parametrize("tail_kind", ["partner", "unmapped", "split_partner"])
+def test_partial_junction_into_other_sequence_establishes_change(pair, tail_kind):
+    genome = cached_release(81)
+    first = genome.transcript_by_id(pair[0])
+    second = genome.transcript_by_id(pair[1])
+    start1 = min(first.start_codon_spliced_offsets)
+    start2 = min(second.start_codon_spliced_offsets)
+    prefix = (
+        (ReferenceSegment(first, start1, start1 + 4),
+         ReferenceSegment(first, start1 + 4, start1 + 90))
+        if tail_kind == "split_partner"
+        else (ReferenceSegment(first, start1, start1 + 90),)
+    )
+    if tail_kind == "unmapped":
+        novel = AssembledAllele("TGG" * 10)
+        segments = prefix + (ReferenceSegment(novel, 0, len(novel.sequence)),)
+    else:
+        segments = prefix + (ReferenceSegment(second, start2 + 30, start2 + 90),)
+    cdna = _render_segments(segments)
+    effect = _effect(first, cdna=cdna, segments=segments, evidence={
+        "protein_completeness": "partial_end", "cds_start": 0, "cds_end": len(cdna),
+    })
+    assert effect.modifies_coding_sequence is True
+    assert effect.modifies_protein_sequence is True
+    assert len(EffectCollection([effect]).drop_silent_and_noncoding(False)) == 1
+
+
+def test_partial_junction_with_identical_observed_codons_stays_unresolved(cftr):
+    start = min(cftr.start_codon_spliced_offsets)
+    same_tail = AssembledAllele(cftr.sequence[start + 30:start + 60])
+    segments = (
+        ReferenceSegment(cftr, start, start + 30),
+        ReferenceSegment(same_tail, 0, len(same_tail.sequence)),
+    )
+    cdna = _render_segments(segments)
+    effect = _effect(cftr, cdna=cdna, segments=segments, evidence={
+        "protein_completeness": "partial_end", "cds_start": 0, "cds_end": len(cdna),
+    })
+    assert effect.modifies_coding_sequence is None
+    assert effect.modifies_protein_sequence is None
+
+
+@pytest.mark.parametrize("transcript_id", ["ENST00000003084", "ENST00000357654"])
+@pytest.mark.parametrize("kind", [
+    "ins1", "del1", "inframe_del", "pre_anchor_frameshift", "inverted_tail", "stop_del",
+])
+def test_partial_indels_frameshifts_and_inversions_on_both_strands(transcript_id, kind):
+    transcript = cached_release(81).transcript_by_id(transcript_id)
+    start = min(transcript.start_codon_spliced_offsets)
+    stop = max(transcript.stop_codon_spliced_offsets) + 1
+    completeness = "partial_both"
+    if kind == "ins1":
+        ins = AssembledAllele("A")
+        segments = (
+            ReferenceSegment(transcript, start + 30, start + 60),
+            ReferenceSegment(ins, 0, 1),
+            ReferenceSegment(transcript, start + 60, start + 120),
+        )
+    elif kind == "del1":
+        segments = (
+            ReferenceSegment(transcript, start + 30, start + 60),
+            ReferenceSegment(transcript, start + 61, start + 120),
+        )
+    elif kind == "inframe_del":
+        segments = (
+            ReferenceSegment(transcript, start + 30, start + 60),
+            ReferenceSegment(transcript, start + 69, start + 120),
+        )
+    elif kind == "pre_anchor_frameshift":
+        ins = AssembledAllele("A")
+        segments = (
+            ReferenceSegment(transcript, start + 31, start + 60),
+            ReferenceSegment(ins, 0, 1),
+            ReferenceSegment(transcript, start + 60, start + 90),
+        )
+    elif kind == "inverted_tail":
+        segments = (
+            ReferenceSegment(transcript, start + 30, start + 60),
+            ReferenceSegment(transcript, start + 60, start + 120, strand="-"),
+        )
+    else:
+        completeness = "partial_start"
+        # Delete the reference stop codon so translation reads into non-stop 3' sequence.
+        tail = AssembledAllele("TGG" * 5)
+        segments = (
+            ReferenceSegment(transcript, stop - 33, stop - 3),
+            ReferenceSegment(tail, 0, len(tail.sequence)),
+        )
+    cdna = _render_segments(segments)
+    effect = _effect(transcript, cdna=cdna, segments=segments, evidence={
+        "protein_completeness": completeness, "cds_start": 0, "cds_end": len(cdna),
+    })
+    assert effect.modifies_coding_sequence is True
+    assert effect.modifies_protein_sequence is True
+
+
+def test_partial_bases_after_observed_stop_cannot_anchor_frame(cftr):
+    start = min(cftr.start_codon_spliced_offsets)
+    stop_prefix = AssembledAllele("CCCTAA")
+    segments = (
+        ReferenceSegment(stop_prefix, 0, len(stop_prefix.sequence)),
+        ReferenceSegment(cftr, start + 30, start + 90),
+    )
+    cdna = _render_segments(segments)
+    effect = _effect(cftr, cdna=cdna, segments=segments, evidence={
+        "protein_completeness": "partial_both", "cds_start": 0, "cds_end": len(cdna),
+    })
+    assert effect.modifies_coding_sequence is None
+    assert effect.modifies_protein_sequence is None
+
+
+@pytest.mark.parametrize("transcript_id", ["ENST00000003084", "ENST00000357654"])
+def test_partial_upstream_5utr_atg_does_not_establish_initiation(transcript_id):
+    # An observed upstream ATG in the 5' UTR (k < 0) in a partial_end fragment
+    # does not establish initiation on the same transcript (#466).
+    transcript = cached_release(81).transcript_by_id(transcript_id)
+    start = min(transcript.start_codon_spliced_offsets)
+    upstream_atg = AssembledAllele("ATGGGGCCC")
+    segments = (
+        ReferenceSegment(upstream_atg, 0, len(upstream_atg.sequence)),
+        ReferenceSegment(transcript, start, start + 90),
+    )
+    cdna = _render_segments(segments)
+    effect = _effect(transcript, cdna=cdna, segments=segments, evidence={
+        "protein_completeness": "partial_end", "cds_start": 0, "cds_end": len(cdna),
+    })
+    assert effect.modifies_coding_sequence is None
+    assert effect.modifies_protein_sequence is None
+    # A real coding change inside the downstream CDS (k >= 0) is still detected.
+    mutated = cdna[:12] + "TGG" + cdna[15:]
+    effect.mutant_transcript = replace(effect.mutant_transcript, cdna_sequence=mutated)
+    assert effect.modifies_coding_sequence is True
+    assert effect.modifies_protein_sequence is True
+
+
+@pytest.mark.parametrize("pair", [
+    ("ENST00000003084", "ENST00000357654"),
+    ("ENST00000357654", "ENST00000003084"),
+])
+@pytest.mark.parametrize("junction_kind", [
+    "inframe_internal", "inframe_at_start", "out_of_frame", "out_of_frame_split",
+])
+def test_partial_fusion_three_prime_partner_cases(pair, junction_kind):
+    genome = cached_release(81)
+    five = genome.transcript_by_id(pair[0])
+    three = genome.transcript_by_id(pair[1])
+    start5 = min(five.start_codon_spliced_offsets)
+    start3 = min(three.start_codon_spliced_offsets)
+    if junction_kind == "inframe_internal":
+        segments = (
+            ReferenceSegment(five, start5, start5 + 30),
+            ReferenceSegment(three, start3 + 30, start3 + 90),
+        )
+    elif junction_kind == "inframe_at_start":
+        # 5' partner CDS drives translation directly into unmutated 3' start (k < 0 -> k = 0).
+        segments = (
+            ReferenceSegment(five, start5, start5 + 30),
+            ReferenceSegment(three, start3, start3 + 90),
+        )
+    elif junction_kind == "out_of_frame":
+        # 5' partner contributes 31 bases, putting all 3' partner codons out of frame.
+        segments = (
+            ReferenceSegment(five, start5, start5 + 31),
+            ReferenceSegment(three, start3 + 30, start3 + 90),
+        )
+    else:
+        segments = (
+            ReferenceSegment(five, start5, start5 + 4),
+            ReferenceSegment(five, start5 + 4, start5 + 31),
+            ReferenceSegment(three, start3 + 30, start3 + 90),
+        )
+    cdna = _render_segments(segments)
+    variant = StructuralVariant(
+        five.contig, five.start, "BND", mate_contig=three.contig, mate_start=three.start,
+        genome=genome)
+    model = MutantTranscript(
+        reference_transcript=five, reference_segments=segments, cdna_sequence=cdna,
+        evidence={"protein_completeness": "partial_end", "cds_start": 0, "cds_end": len(cdna)})
+    effect_5p = GeneFusion(variant, five, three, mutant_transcript=model,
+                           five_prime_transcript=five, three_prime_transcript=three)
+    effect_3p = GeneFusion(variant, three, five, mutant_transcript=model,
+                           five_prime_transcript=five, three_prime_transcript=three)
+    for effect in (effect_5p, effect_3p):
+        assert effect.modifies_coding_sequence is True
+        assert effect.modifies_protein_sequence is True
+        assert len(EffectCollection([effect]).drop_silent_and_noncoding(False)) == 1
+
+
+def test_partial_fusion_three_prime_partner_stays_conservative_when_unanchored_or_ambiguous(cftr):
+    genome = cached_release(81)
+    brca1 = genome.transcript_by_id("ENST00000357654")
+    start5 = min(brca1.start_codon_spliced_offsets)
+    start3 = min(cftr.start_codon_spliced_offsets)
+    variant = StructuralVariant(
+        brca1.contig, brca1.start, "BND", mate_contig=cftr.contig, mate_start=cftr.start,
+        genome=genome)
+
+    # Shifted frame out of frame on BOTH partners (brca1 at 0 mod 3, cftr at 1 mod 3 -> cds_start=2).
+    segments = (
+        ReferenceSegment(brca1, start5, start5 + 31),
+        ReferenceSegment(cftr, start3 + 30, start3 + 90),
+    )
+    cdna = _render_segments(segments)
+    unanchored = MutantTranscript(
+        reference_transcript=brca1, reference_segments=segments, cdna_sequence=cdna,
+        evidence={"protein_completeness": "partial_both", "cds_start": 2, "cds_end": len(cdna)})
+    eff_unanchored = GeneFusion(variant, cftr, brca1, mutant_transcript=unanchored,
+                                five_prime_transcript=brca1, three_prime_transcript=cftr)
+    assert eff_unanchored.modifies_coding_sequence is None
+    assert eff_unanchored.modifies_protein_sequence is None
+
+    # Ambiguous N-containing codon upstream of k=0 cannot establish N-terminal extension.
+    amb_seg = (
+        ReferenceSegment(brca1, start5, start5 + 27),
+        ReferenceSegment(AssembledAllele("NNN"), 0, 3),
+        ReferenceSegment(cftr, start3, start3 + 90),
+    )
+    amb_cdna = _render_segments(amb_seg)
+    amb_model = MutantTranscript(
+        reference_transcript=brca1, reference_segments=amb_seg, cdna_sequence=amb_cdna,
+        evidence={"protein_completeness": "partial_end", "cds_start": 0, "cds_end": len(amb_cdna)})
+    eff_amb = GeneFusion(variant, cftr, brca1, mutant_transcript=amb_model,
+                         five_prime_transcript=brca1, three_prime_transcript=cftr)
+    assert eff_amb.modifies_coding_sequence is None
+    assert eff_amb.modifies_protein_sequence is None
+
+    # Out-of-frame fusion starting with an ambiguous codon stays unresolved.
+    amb_oof_seg = (
+        ReferenceSegment(AssembledAllele("NNN"), 0, 3),
+        ReferenceSegment(brca1, start5 + 3, start5 + 31),
+        ReferenceSegment(cftr, start3 + 30, start3 + 90),
+    )
+    amb_oof_cdna = _render_segments(amb_oof_seg)
+    amb_oof_model = MutantTranscript(
+        reference_transcript=brca1, reference_segments=amb_oof_seg, cdna_sequence=amb_oof_cdna,
+        evidence={"protein_completeness": "partial_both", "cds_start": 0,
+                  "cds_end": len(amb_oof_cdna)})
+    eff_amb_oof = GeneFusion(variant, cftr, brca1, mutant_transcript=amb_oof_model,
+                             five_prime_transcript=brca1, three_prime_transcript=cftr)
+    assert eff_amb_oof.modifies_coding_sequence is None
+    assert eff_amb_oof.modifies_protein_sequence is None
+
+    # Short 5'-anchored fragment matching a codon inside the 3' partner stays unresolved.
+    short_seg = (ReferenceSegment(brca1, start5, start5 + 3),)  # ATG, also in CFTR
+    short_cdna = _render_segments(short_seg)
+    short_model = MutantTranscript(
+        reference_transcript=brca1, reference_segments=short_seg, cdna_sequence=short_cdna,
+        evidence={"protein_completeness": "partial_end", "cds_start": 0, "cds_end": 3})
+    eff_short = GeneFusion(variant, cftr, brca1, mutant_transcript=short_model,
+                           five_prime_transcript=brca1, three_prime_transcript=cftr)
+    assert eff_short.modifies_coding_sequence is None
+    assert eff_short.modifies_protein_sequence is None

@@ -1,5 +1,30 @@
 # Change Log
 
+## v13.0.1
+
+### Complete mapped partial SV sequence-change interpretation (#466)
+
+- Extend `_partial_sequence_changes` in `varcode/effects/sequence_change.py` so
+  mapped partial observations of a fusion's 3′ partner establish coding/protein
+  changes when the reading frame is anchored in-frame on the 5′ partner
+  (`initiator != transcript`):
+  - In-frame N-terminal fusion extensions into the 3′ partner's start codon or
+    5′ UTR (`k < 0` reading continuously into `k >= 0` with unambiguous ACGT
+    codons) now report `(True, True)`.
+  - Out-of-frame 3′-partner fusions (where no 3′-partner codon is in frame) now
+    compare the unambiguous translated codons and peptide against all
+    codon-aligned windows of the 3′ reference CDS/protein instead of returning
+    `(None, None)`.
+- Document and test the scientific policy for same-transcript upstream 5′ UTR
+  ATGs (`k < 0` with `initiator == transcript`): an observed upstream ATG in a
+  partial fragment (`partial_end`) does not establish translation initiation, so
+  `k < 0` stays unresolved unless a downstream CDS change is observed.
+- Restore and expand regression coverage in `tests/test_sv_sequence_changes.py`
+  on both strands (`+` and `-`), including junctions into partner/unmapped
+  sequence, split segments, frameshift/in-frame indels, pre-anchor frameshifts,
+  inverted tails, stop-codon deletions, bases after observed stops, upstream
+  5′ UTR ATGs, and 3′-partner fusion cases.
+
 ## v13.0.0
 
 ### Minimal 3-noun DNA API (`MutationEffect`, `EffectCandidate`, `MutantTranscript`)
