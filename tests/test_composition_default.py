@@ -14,7 +14,16 @@ def transcript():
 
 
 def outcomes(effect):
-    return [outcome for candidate in effect.candidates for outcome in candidate.outcomes]
+    # Default 'dna' annotator yields flat DNAHypothesis records (retaining
+    # paired outcomes internally for deep splice-plan inspection when needed).
+    result = []
+    for candidate in effect.candidates:
+        paired = getattr(candidate, "_paired_outcomes", None)
+        if paired is not None:
+            result.extend(paired)
+        else:
+            result.extend(candidate.outcomes)
+    return result
 
 
 def canonical_baseline(outcome):
@@ -53,8 +62,13 @@ def test_default_splice_and_deletion_keep_patient_baselines(transcript, kind):
     assert {o.baseline.cdna_sequence for o in skipped} == {transcript.sequence, inherited}
     assert len({o.effect.original_protein_sequence for o in skipped}) == 2
     restored = EffectCollection.from_json(EffectCollection([result]).to_json())[0]
-    assert [o.hypothesis.baseline_splice_plan for o in outcomes(restored)] == [
-        o.hypothesis.baseline_splice_plan for o in outcomes(result)]
+    assert [(c.splice_mechanisms, c.baseline_cdna, c.mutant_cdna) for c in restored.candidates] == [
+        (c.splice_mechanisms, c.baseline_cdna, c.mutant_cdna) for c in result.candidates]
+    # Opt-in transcript_model retains nested baseline_splice_plan objects through JSON.
+    tm_result = somatic.effect_on_transcript(transcript, germline=context, annotator="transcript_model")
+    tm_restored = EffectCollection.from_json(EffectCollection([tm_result]).to_json())[0]
+    assert [o.hypothesis.baseline_splice_plan for o in outcomes(tm_restored)] == [
+        o.hypothesis.baseline_splice_plan for o in outcomes(tm_result)]
 
 
 @pytest.mark.parametrize("kind", ["donor", "deletion"])

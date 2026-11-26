@@ -1,5 +1,39 @@
 # Change Log
 
+## v12.4.0
+
+### Default `dna` annotator & `protein_diff` deprecation
+
+- Rename `UnifiedDNAEffectAnnotator` (`"unified"`) to `DNAEffectAnnotator`
+  (`"dna"`) and promote `"dna"` to Varcode's default annotator:
+  - Ordinary `variant.effects()` and `variant.effect_on_transcript()` calls
+    now use `"dna"` by default, combining the guarded interior-exon coding
+    fast-path with flat `DNAHypothesis` candidates, 1-based ascending
+    `GenomicSpliceJunction` intron coordinates, and deterministic
+    `DNASearchAnchor` search geometry on structural rearrangements and large
+    insertions.
+  - `UnifiedDNAEffectAnnotator` and `annotator="unified"` remain as deprecated
+    aliases for 12.3.x callers (`DeprecationWarning` on string lookup; listed
+    under `registered_annotators(include_deprecated=True)`).
+  - `annotator="transcript_model"` (nested `RealizedEffectCandidate` graphs)
+    and `annotator="fast"` (Varcode 10 compatibility/speed oracle) remain
+    registered as explicit opt-in annotators.
+  - Deprecate `annotator="protein_diff"` (`ProteinDiffEffectAnnotator`,
+    superseded by `"dna"` / `"transcript_model"`; still registered and
+    accessible under `include_deprecated=True`).
+- Wire `MultiOutcomeEffect.candidates` to retain `_extra_candidates` alongside
+  attached `DNAHypothesis` tuples, and support `DNAHypothesis` paired outcomes
+  in `apply_rna_evidence_to_effects` / `refine_transcript_model_effect` /
+  `phasing.py` so `rna_resolver=` works seamlessly under the default `"dna"`
+  annotator.
+- Treat `{"dna", "unified", "transcript_model", "realized"}` as a compatible
+  DNA consequence lineage in CSV `warn_on_version_drift`, and recognize
+  `"dna"` / `"varcode.dna"` as built-in Varcode provenance in `to_proteome()`.
+- Update user guides (`docs/splice_variants.md`, `docs/phasing.md`,
+  `docs/germline.md`, `docs/experimental_annotators.md`,
+  `docs/api_annotators.md`, `docs/api.md`) to showcase flat `DNAHypothesis`
+  access by default.
+
 ## v12.3.1
 
 ### Unified DNA annotator Phase-2 hardening & speedups

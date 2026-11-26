@@ -34,7 +34,9 @@ _COORDINATES = {
     "reference_segments": "0-based half-open in each segment source's coordinate system",
     "variants": "native Varcode coordinates; small variants are 1-based, inclusive",
 }
-_BUILTIN_ANNOTATORS = {"fast", "protein_diff", "realized", "transcript_model", "unified", "created_orf"}
+_BUILTIN_ANNOTATORS = {
+    "dna", "fast", "protein_diff", "realized", "transcript_model", "unified", "created_orf",
+}
 
 
 def _json(value):
@@ -234,12 +236,18 @@ def _source(effect, defaults, contexts, annotation=None):
                   sources[-1] if sources else None)
     # A source string such as "rna" describes an import path, not its generating tool.
     native_source = source in (
-        None, "varcode", "varcode.unified", "varcode_splice", "varcode_motif", "varcode_germline",
+        None,
+        "varcode",
+        "varcode.dna",
+        "varcode.unified",
+        "varcode_splice",
+        "varcode_motif",
+        "varcode_germline",
     )
     tool = "varcode" if native_source and (annotator in _BUILTIN_ANNOTATORS or source is not None) else "unknown"
     model = _model(effect, annotation)
     provider = source if not native_source else getattr(model, "source", None) or None
-    return dict(method=(annotator if source in (None, "varcode", "varcode.unified") else source) or "unknown",
+    return dict(method=(annotator if source in (None, "varcode", "varcode.dna", "varcode.unified") else source) or "unknown",
                 tool=tool, tool_version=version if native_source else None, provider=provider)
 
 

@@ -14,7 +14,7 @@
 """Predict variant consequences with explicit transcript and evidence context.
 
 Start with :class:`Variant`, :func:`load_vcf`, and :meth:`Variant.effects`.
-The default annotator is ``transcript_model``; ``fast`` is an explicit compatibility option.
+The default annotator is ``dna`` (:class:`DNAEffectAnnotator`); ``transcript_model`` and ``fast`` remain explicit opt-in options.
 Public imports below include compatibility names retained for existing callers.
 """
 
@@ -196,6 +196,7 @@ if TYPE_CHECKING:
         DNAHypothesis as DNAHypothesis,
         DNASearchAnchor as DNASearchAnchor,
         GenomicSpliceJunction as GenomicSpliceJunction,
+        DNAEffectAnnotator as DNAEffectAnnotator,
         UnifiedDNAEffectAnnotator as UnifiedDNAEffectAnnotator,
         build_dna_search_anchor as build_dna_search_anchor,
     )
@@ -215,6 +216,7 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "FastEffectAnnotator": (".annotators", "FastEffectAnnotator"),
     "ProteinDiffEffectAnnotator": (".annotators", "ProteinDiffEffectAnnotator"),
     "TranscriptModelEffectAnnotator": (".annotators", "TranscriptModelEffectAnnotator"),
+    "DNAEffectAnnotator": (".unified", "DNAEffectAnnotator"),
     "UnifiedDNAEffectAnnotator": (".unified", "UnifiedDNAEffectAnnotator"),
     "DNAHypothesis": (".unified", "DNAHypothesis"),
     "DNASearchAnchor": (".unified", "DNASearchAnchor"),
@@ -549,6 +551,7 @@ __all__ = [
     "discover_created_orfs_in_products",
 
     # unified DNA annotator & search anchors
+    "DNAEffectAnnotator",
     "UnifiedDNAEffectAnnotator",
     "DNAHypothesis",
     "DNASearchAnchor",

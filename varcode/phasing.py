@@ -366,7 +366,13 @@ def apply_phase_resolver_to_effects(effects, phase_resolver):
         if variant is None or transcript is None:
             replacements.append(e)
             continue
-        if getattr(e, "realized_candidates", None):
+        from .unified import DNAHypothesis
+
+        has_paired = bool(getattr(e, "realized_candidates", None)) or any(
+            isinstance(c, DNAHypothesis) and getattr(c, "_paired_outcomes", None)
+            for c in (e.__dict__.get("candidates") or ())
+        )
+        if has_paired:
             from .effects.effect_classes import Unresolved
             from .rna_evidence import make_rna_outcome
             from .transcript_model import refine_transcript_model_effect

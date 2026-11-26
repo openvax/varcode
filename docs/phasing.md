@@ -125,9 +125,8 @@ print(type(eff).__name__, eff.short_description)
 # Substitution p.L159M; other comparisons remain in candidates
 
 for candidate in eff.candidates:
-    for hypothesis in candidate.hypotheses:
-        cis = [v.short_description for v, state in hypothesis.phase if state == "cis"]
-        print(cis, candidate.effect.short_description)
+    cis = [v.short_description for v, state in candidate.phase if state == "cis"]
+    print(cis, candidate.effect.short_description)
 # []                         p.L159M
 # ['chr7 g.117531101T>C']      p.S159T
 ```

@@ -12,9 +12,11 @@
 
 """Annotator registry with one shared default and explicit compatibility choices.
 
-``transcript_model`` composes transcript consequences. Other annotators
-can decline individual inputs by returning ``NotImplemented``; no static
-capability declaration or implicit fallback is used.
+``dna`` is the default DNA-only annotator combining a safe interior-exon coding
+fast-path with the full transcript/splice/phase model, flat ``DNAHypothesis``
+candidates, and deterministic ``DNASearchAnchor`` search geometry. ``fast`` and
+``transcript_model`` remain registered as explicit opt-in alternatives;
+``protein_diff`` and the 12.3.x ``unified`` alias are deprecated.
 """
 
 from __future__ import annotations
@@ -22,6 +24,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, TypeVar, cast
+import warnings
 
 if TYPE_CHECKING:
     from . import EffectAnnotator
@@ -29,12 +32,36 @@ if TYPE_CHECKING:
 from .fast import FastEffectAnnotator
 from .protein_diff import ProteinDiffEffectAnnotator
 from ..transcript_model import TranscriptModelEffectAnnotator
-from ..unified import UnifiedDNAEffectAnnotator
+from ..unified import DNAEffectAnnotator
 
 
 _AnnotatorT = TypeVar("_AnnotatorT", bound="EffectAnnotator")
 _REGISTRY: dict[str, EffectAnnotator] = {}
-_DEFAULT_NAME = "transcript_model"
+_DEFAULT_NAME = "dna"
+_DEPRECATED_NAMES: frozenset[str] = frozenset({"protein_diff"})
+_DEPRECATED_ALIASES: dict[str, str] = {"unified": "dna"}
+
+
+def _resolve_registered_name(name: str) -> str:
+    """Map deprecated aliases to canonical names and warn on deprecated choices."""
+    if name in _DEPRECATED_ALIASES:
+        target = _DEPRECATED_ALIASES[name]
+        warnings.warn(
+            "Annotator name %r is a deprecated alias for %r; use %r instead."
+            % (name, target, target),
+            DeprecationWarning,
+            stacklevel=3,
+        )
+        return target
+    if name in _DEPRECATED_NAMES and name in _REGISTRY:
+        warnings.warn(
+            "Annotator %r is deprecated and will be removed in a future release; "
+            "use the default 'dna' annotator (or 'transcript_model' / 'fast') instead."
+            % name,
+            DeprecationWarning,
+            stacklevel=3,
+        )
+    return name
 
 
 def register_annotator(annotator: _AnnotatorT) -> _AnnotatorT:
@@ -70,14 +97,15 @@ def get_annotator(name: str) -> EffectAnnotator:
     """Look up a registered annotator by name. Raises ``KeyError``
     if no annotator is registered under that name.
     """
-    if name not in _REGISTRY:
+    canonical = _resolve_registered_name(name)
+    if canonical not in _REGISTRY:
         raise KeyError(name)
-    return _REGISTRY[name]
+    return _REGISTRY[canonical]
 
 
 def get_default_annotator() -> EffectAnnotator:
     """Return the annotator currently configured as the default
-    (``"transcript_model"`` unless changed via :func:`set_default_annotator` or
+    (``"dna"`` unless changed via :func:`set_default_annotator` or
     :func:`use_annotator`).
     """
     return _REGISTRY[_DEFAULT_NAME]
@@ -89,17 +117,26 @@ def registered_annotators(*, include_deprecated: bool = False) -> tuple[str, ...
     Parameters
     ----------
     include_deprecated : bool, default False
-        Reserved for compatibility when deprecated annotator aliases exist.
+        When True, also include deprecated annotator names and aliases
+        (such as ``"protein_diff"`` and ``"unified"``).
 
     Returns
     -------
     tuple of str
-        Sorted registered annotator names (``("fast", "protein_diff",
-        "transcript_model", "unified")`` when no third-party annotators are
+        Sorted registered annotator names (``("dna", "fast",
+        "transcript_model")`` by default when no third-party annotators are
         registered).
     """
-    _ = include_deprecated
-    return tuple(sorted(_REGISTRY))
+    names = set(_REGISTRY)
+    if include_deprecated:
+        names.update(
+            alias
+            for alias, target in _DEPRECATED_ALIASES.items()
+            if target in _REGISTRY
+        )
+    else:
+        names -= _DEPRECATED_NAMES
+    return tuple(sorted(names))
 
 
 def set_default_annotator(name: str) -> None:
@@ -107,11 +144,12 @@ def set_default_annotator(name: str) -> None:
     to a registered annotator.
     """
     global _DEFAULT_NAME
-    if name not in _REGISTRY:
+    canonical = _resolve_registered_name(name)
+    if canonical not in _REGISTRY:
         raise KeyError(
             "No annotator registered under %r — call register_annotator() "
             "first or pick from %r." % (name, sorted(_REGISTRY)))
-    _DEFAULT_NAME = name
+    _DEFAULT_NAME = canonical
 
 
 def resolve_annotator(
@@ -131,13 +169,14 @@ def resolve_annotator(
     if annotator_or_name is None:
         return get_default_annotator()
     if isinstance(annotator_or_name, str):
-        if annotator_or_name not in _REGISTRY:
+        canonical = _resolve_registered_name(annotator_or_name)
+        if canonical not in _REGISTRY:
             raise KeyError(
                 "No annotator registered under %r — known annotators: %r. "
                 "Register one with varcode.register_annotator() or pick "
                 "from the list." % (
                     annotator_or_name, sorted(_REGISTRY)))
-        return _REGISTRY[annotator_or_name]
+        return _REGISTRY[canonical]
     return annotator_or_name
 
 
@@ -177,11 +216,12 @@ def use_annotator(name_or_instance: str | EffectAnnotator) -> Iterator[None]:
     prior_default = _DEFAULT_NAME
 
     if isinstance(name_or_instance, str):
-        if name_or_instance not in _REGISTRY:
+        canonical = _resolve_registered_name(name_or_instance)
+        if canonical not in _REGISTRY:
             raise KeyError(
                 "No annotator registered under %r — register one first or "
                 "pass an instance." % name_or_instance)
-        _DEFAULT_NAME = name_or_instance
+        _DEFAULT_NAME = canonical
         prior_registration = None
     else:
         # Keep the runtime check for callers without static checking.
@@ -204,8 +244,8 @@ def use_annotator(name_or_instance: str | EffectAnnotator) -> Iterator[None]:
                 _REGISTRY[name] = prior_registration
 
 
-# Register the default and opt-in experiments. No input-dependent routing.
+# Register the default and explicit opt-in annotators. No input-dependent routing.
+register_annotator(DNAEffectAnnotator())
 register_annotator(FastEffectAnnotator())
 register_annotator(ProteinDiffEffectAnnotator())
 register_annotator(TranscriptModelEffectAnnotator())
-register_annotator(UnifiedDNAEffectAnnotator())

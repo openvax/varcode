@@ -35,10 +35,8 @@ exon skipping can produce a `Deletion` or a frameshift, for example.
 
 ```python
 for candidate in effect.candidates:
-    for outcome in candidate.outcomes:
-        print(outcome.hypothesis.baseline_splice_plan)
-        print(outcome.hypothesis.splice_plan)
-        print(outcome.baseline.cdna_sequence, outcome.mutant.cdna_sequence)
+    print(candidate.splice_mechanisms, candidate.novel_junctions)
+    print(candidate.baseline_cdna, candidate.mutant_cdna)
 ```
 
 Canonical and exon-skip paths can use transcript annotation. Retention and
@@ -50,17 +48,15 @@ as retaining an intron while skipping an exon it requires.
 ## Coding effects when splicing is unchanged
 
 An exonic variant can alter both a codon and a splice signal. To inspect the
-conditional coding consequence, select outcomes whose mutant plan uses only
-`normal` mechanisms. With germline splice uncertainty, several patient baseline
+conditional coding consequence, select candidates whose mutant plan uses only
+`normal` splicing. With germline splice uncertainty, several patient baseline
 plans may still give different comparisons.
 
 ```python
 normal_effects = [
-    outcome.effect
+    candidate.effect
     for candidate in effect.candidates
-    for outcome in candidate.outcomes
-    if all(option.mechanism == "normal"
-           for _, option in outcome.hypothesis.splice_plan.choices)
+    if candidate.splice_mechanisms == ("normal",)
 ]
 ```
 
