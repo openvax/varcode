@@ -291,7 +291,10 @@ def apply_rna_evidence_to_effects(effects: Iterable, resolver) -> Iterable:
         is_structural = getattr(getattr(effect, "variant", None), "is_structural", False)
         realized = getattr(effect, "realized_candidates", None)
         dna_paired = any(
-            isinstance(c, EffectCandidate) and getattr(c, "_paired_outcomes", None)
+            isinstance(c, EffectCandidate) and (
+                getattr(c, "_paired_outcomes", None)
+                or (not is_structural and c.source == "varcode.dna")
+            )
             for c in (effect.__dict__.get("candidates") or ())
         )
         has_paired = bool(realized or dna_paired)

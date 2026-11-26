@@ -182,6 +182,26 @@ def refine_transcript_model_effect(effect, observed):
             for outcome in (getattr(candidate, "_paired_outcomes", None) or ())
         ]
         was_dna = True
+    elif any(
+        isinstance(c, EffectCandidate) and c.source == "varcode.dna"
+        for c in (effect.__dict__.get("candidates") or ())
+    ):
+        variant = getattr(effect, "variant", None)
+        transcript = getattr(effect, "transcript", None)
+        if variant is None or transcript is None or getattr(variant, "is_structural", False):
+            return effect
+        base_effect = predict_transcript_model_effect(
+            getattr(effect, "variants", (variant,)), transcript
+        )
+        base_realized = getattr(base_effect, "realized_candidates", None)
+        if not base_realized:
+            return effect
+        outcomes = [
+            outcome
+            for candidate in base_realized
+            for outcome in candidate.outcomes
+        ]
+        was_dna = True
     else:
         return effect
     if not outcomes:

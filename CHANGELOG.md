@@ -1,5 +1,18 @@
 # Change Log
 
+## v13.0.2
+
+### Preserve RNA observation evidence & fast-path RNA refinement on `"dna"` annotator (#776)
+
+- Preserve `rna_observation` and `rna_support` in `EffectCandidate.evidence`
+  when `DNAEffectAnnotator` flattens `RealizedEffectCandidate` outcomes into
+  `EffectCandidate` wrappers.
+- Route fast-path `"dna"` coding effects (`source="varcode.dna"`, non-SV)
+  through `refine_transcript_model_effect` in `apply_phase_resolver_to_effects`
+  and `apply_rna_evidence_to_effects`, so supplied partial RNA windows append
+  an explicit `Unresolved` observed-RNA candidate (`original_protein_sequence=None`)
+  instead of overwriting the DNA effect's `mutant_transcript`.
+
 ## v13.0.1
 
 ### Complete mapped partial SV sequence-change interpretation (#466)
