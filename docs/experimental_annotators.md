@@ -192,9 +192,11 @@ appended, and no phase or CDS mapping is inferred. Such observations follow the
 DNA candidates in ordering. The same behavior applies to RNA models supplied
 by a phase resolver for a known-cis group; no separate observation list is
 needed on this path. Legacy delegated BND/assembly results keep their existing
-contracts. Read-based transcript reconstruction belongs upstream; broader mapped
-rearrangement consequence support is tracked in
-[#466](https://github.com/openvax/varcode/issues/466).
+contracts. Read-based transcript reconstruction belongs upstream; mapped partial
+structural observations establish local coding/protein changes from in-frame
+reference anchors (including 5′-partner-anchored 3′-partner fusions), while
+broader sequence-backed complex SV hypotheses are tracked in
+[#257](https://github.com/openvax/varcode/issues/257).
 Models containing assumed reference completion do not count as full observed
 RNA support, even when their completed cDNA matches a prediction.
 
