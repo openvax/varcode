@@ -43,21 +43,9 @@ See [supported inputs and results](experimental_annotators.md) before using it.
 
 ## Default DNA annotator
 
-`annotator="dna"` (the default) combines a safe interior-exon coding fast-path
-with the full transcript/splice/phase model, flat `DNAHypothesis` candidates,
-ascending genomic intron coordinates (`GenomicSpliceJunction`), and
-deterministic `DNASearchAnchor` search geometry for large insertions and
-structural rearrangements. `UnifiedDNAEffectAnnotator` and `annotator="unified"`
-remain as deprecated aliases for 12.3.x callers.
+`annotator="dna"` (the default) combines a guarded interior-exon coding
+fast-path with the full transcript/splice/phase model, returning standard
+`MutationEffect`, `EffectCandidate`, and `MutantTranscript` objects across
+point, splice, germline/phase, and structural variants.
 
 ::: varcode.DNAEffectAnnotator
-
-::: varcode.UnifiedDNAEffectAnnotator
-
-::: varcode.DNAHypothesis
-
-::: varcode.GenomicSpliceJunction
-
-::: varcode.DNASearchAnchor
-
-::: varcode.build_dna_search_anchor

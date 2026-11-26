@@ -1,5 +1,31 @@
 # Change Log
 
+## v13.0.0
+
+### Minimal 3-noun DNA API (`MutationEffect`, `EffectCandidate`, `MutantTranscript`)
+
+- Collapse the 5 temporary proper nouns introduced in `12.3.x`/`12.4.0`
+  (`DNAHypothesis`, `DNASearchAnchor`, `GenomicSpliceJunction`,
+  `build_dna_search_anchor`, `UnifiedDNAEffectAnnotator`, and the `"unified"`
+  annotator alias) directly onto Varcode's 3 existing core types (shrinking
+  `varcode.__all__` from 133 to 128 exports):
+  - **`EffectCandidate`** is now the single flat candidate wrapper returned by
+    the default `"dna"` annotator across point, splice, germline/phase, and
+    structural variants — gaining 3 optional fields with empty defaults
+    (`mechanisms`, `phase`, `uncertainty`) while keeping all sequence access
+    on `candidate.effect` and `candidate.effect.mutant_transcript`.
+  - **`MutantTranscript`** now unifies closed predictions and open rearrangement
+    search templates, adding `is_complete`, `novel_junctions` (1-based ascending
+    `(contig, intron_start, intron_end, strand)` tuples for direct BAM CIGAR `N`
+    matching on `+` and `-` strands), `back_junctions` (tandem-duplication
+    back-junction spans such as `EGFR`-KDD exon 25 → exon 18),
+    `wildtype_junctions`, `mate_region`, `exit_frame`, and
+    `template_sequence(sequence_provider)` (materializing oriented 5′→3′
+    mutant pre-mRNA templates for large insertions and oriented
+    gene-to-intergenic translocations).
+- Rename internal module `varcode/unified.py` → `varcode/dna_annotator.py`
+  (`DNAEffectAnnotator`, registered as default `"dna"`).
+
 ## v12.4.0
 
 ### Default `dna` annotator & `protein_diff` deprecation

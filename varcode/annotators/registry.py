@@ -13,10 +13,10 @@
 """Annotator registry with one shared default and explicit compatibility choices.
 
 ``dna`` is the default DNA-only annotator combining a safe interior-exon coding
-fast-path with the full transcript/splice/phase model, flat ``DNAHypothesis``
-candidates, and deterministic ``DNASearchAnchor`` search geometry. ``fast`` and
-``transcript_model`` remain registered as explicit opt-in alternatives;
-``protein_diff`` and the 12.3.x ``unified`` alias are deprecated.
+fast-path with the full transcript/splice/phase model, returning standard
+``MutationEffect``, ``EffectCandidate``, and ``MutantTranscript`` objects.
+``fast`` and ``transcript_model`` remain registered as explicit opt-in
+alternatives; ``protein_diff`` is deprecated.
 """
 
 from __future__ import annotations
@@ -31,15 +31,15 @@ if TYPE_CHECKING:
 
 from .fast import FastEffectAnnotator
 from .protein_diff import ProteinDiffEffectAnnotator
+from ..dna_annotator import DNAEffectAnnotator
 from ..transcript_model import TranscriptModelEffectAnnotator
-from ..unified import DNAEffectAnnotator
 
 
 _AnnotatorT = TypeVar("_AnnotatorT", bound="EffectAnnotator")
 _REGISTRY: dict[str, EffectAnnotator] = {}
 _DEFAULT_NAME = "dna"
 _DEPRECATED_NAMES: frozenset[str] = frozenset({"protein_diff"})
-_DEPRECATED_ALIASES: dict[str, str] = {"unified": "dna"}
+_DEPRECATED_ALIASES: dict[str, str] = {}
 
 
 def _resolve_registered_name(name: str) -> str:

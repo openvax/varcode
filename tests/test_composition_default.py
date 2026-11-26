@@ -62,8 +62,21 @@ def test_default_splice_and_deletion_keep_patient_baselines(transcript, kind):
     assert {o.baseline.cdna_sequence for o in skipped} == {transcript.sequence, inherited}
     assert len({o.effect.original_protein_sequence for o in skipped}) == 2
     restored = EffectCollection.from_json(EffectCollection([result]).to_json())[0]
-    assert [(c.splice_mechanisms, c.baseline_cdna, c.mutant_cdna) for c in restored.candidates] == [
-        (c.splice_mechanisms, c.baseline_cdna, c.mutant_cdna) for c in result.candidates]
+    assert [
+        (
+            c.mechanisms,
+            c.effect.baseline_transcript.cdna_sequence if c.effect.baseline_transcript else None,
+            c.effect.mutant_transcript.cdna_sequence if c.effect.mutant_transcript else None,
+        )
+        for c in restored.candidates
+    ] == [
+        (
+            c.mechanisms,
+            c.effect.baseline_transcript.cdna_sequence if c.effect.baseline_transcript else None,
+            c.effect.mutant_transcript.cdna_sequence if c.effect.mutant_transcript else None,
+        )
+        for c in result.candidates
+    ]
     # Opt-in transcript_model retains nested baseline_splice_plan objects through JSON.
     tm_result = somatic.effect_on_transcript(transcript, germline=context, annotator="transcript_model")
     tm_restored = EffectCollection.from_json(EffectCollection([tm_result]).to_json())[0]

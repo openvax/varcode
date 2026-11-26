@@ -192,14 +192,7 @@ if TYPE_CHECKING:
     from .transforms import (
         combine_cis_snvs as combine_cis_snvs,
     )
-    from .unified import (
-        DNAHypothesis as DNAHypothesis,
-        DNASearchAnchor as DNASearchAnchor,
-        GenomicSpliceJunction as GenomicSpliceJunction,
-        DNAEffectAnnotator as DNAEffectAnnotator,
-        UnifiedDNAEffectAnnotator as UnifiedDNAEffectAnnotator,
-        build_dna_search_anchor as build_dna_search_anchor,
-    )
+    from .dna_annotator import DNAEffectAnnotator as DNAEffectAnnotator
     from .variant import Variant as Variant
     from .variant_collection import (
         SpanningDeletionRecord as SpanningDeletionRecord,
@@ -216,12 +209,7 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "FastEffectAnnotator": (".annotators", "FastEffectAnnotator"),
     "ProteinDiffEffectAnnotator": (".annotators", "ProteinDiffEffectAnnotator"),
     "TranscriptModelEffectAnnotator": (".annotators", "TranscriptModelEffectAnnotator"),
-    "DNAEffectAnnotator": (".unified", "DNAEffectAnnotator"),
-    "UnifiedDNAEffectAnnotator": (".unified", "UnifiedDNAEffectAnnotator"),
-    "DNAHypothesis": (".unified", "DNAHypothesis"),
-    "DNASearchAnchor": (".unified", "DNASearchAnchor"),
-    "GenomicSpliceJunction": (".unified", "GenomicSpliceJunction"),
-    "build_dna_search_anchor": (".unified", "build_dna_search_anchor"),
+    "DNAEffectAnnotator": (".dna_annotator", "DNAEffectAnnotator"),
     "get_annotator": (".annotators", "get_annotator"),
     "get_default_annotator": (".annotators", "get_default_annotator"),
     "register_annotator": (".annotators", "register_annotator"),
@@ -550,13 +538,8 @@ __all__ = [
     "discover_created_orfs",
     "discover_created_orfs_in_products",
 
-    # unified DNA annotator & search anchors
+    # default DNA annotator
     "DNAEffectAnnotator",
-    "UnifiedDNAEffectAnnotator",
-    "DNAHypothesis",
-    "DNASearchAnchor",
-    "GenomicSpliceJunction",
-    "build_dna_search_anchor",
 ]
 
 

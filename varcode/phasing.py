@@ -366,10 +366,10 @@ def apply_phase_resolver_to_effects(effects, phase_resolver):
         if variant is None or transcript is None:
             replacements.append(e)
             continue
-        from .unified import DNAHypothesis
+        from .effect_candidates import EffectCandidate
 
         has_paired = bool(getattr(e, "realized_candidates", None)) or any(
-            isinstance(c, DNAHypothesis) and getattr(c, "_paired_outcomes", None)
+            isinstance(c, EffectCandidate) and getattr(c, "_paired_outcomes", None)
             for c in (e.__dict__.get("candidates") or ())
         )
         if has_paired:

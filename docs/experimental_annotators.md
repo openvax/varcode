@@ -2,17 +2,17 @@
 
 The default `dna` annotator (`DNAEffectAnnotator`) combines a guarded
 interior-exon coding fast-path with the full transcript/splice/phase model,
-returning flat `DNAHypothesis` candidates, 1-based ascending
-`GenomicSpliceJunction` intron coordinates, and deterministic `DNASearchAnchor`
-search geometry on structural rearrangements and large insertions. Read
-collection, alignment and RNA assembly remain in upstream tools such as Isovar.
-Varcode consumes their supplied models.
+returning standard `MutationEffect`, `EffectCandidate`, and `MutantTranscript`
+objects — including 1-based ascending `novel_junctions` / `back_junctions` and
+open rearrangement `template_sequence()` / `exit_frame` on `MutantTranscript`.
+Read collection, alignment and RNA assembly remain in upstream tools such as
+Isovar. Varcode consumes their supplied models.
 
 ## Supported inputs
 
 | Selection | Method | Inputs |
 |---|---|---|
-| Default, or `annotator="dna"` | Guarded interior-exon fast-path + full transcript/splice/phase model returning flat `DNAHypothesis` candidates and `DNASearchAnchor` search geometry | Small variants, local DEL/DUP, BNDs, inversions, supplied `alt_assembly`, germline/phase composition. |
+| Default, or `annotator="dna"` | Guarded interior-exon fast-path + full transcript/splice/phase model returning `EffectCandidate` and `MutantTranscript` | Small variants, local DEL/DUP, BNDs, inversions, supplied `alt_assembly`, germline/phase composition. |
 | `annotator="transcript_model"` | Full transcript-model engine retaining nested `RealizedEffectCandidate` outcome graphs | Same inputs as `dna`, for callers inspecting `.realized_candidates` / `.outcomes`. |
 | `annotator="fast"` | Compatibility implementation from Varcode 10 | Small variants and SVs; local germline lookup; limited joint composition. |
 | `annotator="protein_diff"` *(deprecated)* | Legacy protein-difference prototype | Small variants only; superseded by `dna` / `transcript_model`; no SV support. |
@@ -91,31 +91,26 @@ The shared pipeline and legacy candidate wrappers expose different details:
 
 | Candidate type | Shared access | Additional information |
 |---|---|---|
-| `DNAHypothesis` (default `dna` annotator) | `candidate.effect` | Flat record with `uncertainty`, `splice_mechanisms`, `phase`, `novel_junctions`, `baseline_protein`, `mutant_protein`, `baseline_cdna`, `mutant_cdna`, `mutant_transcript`, `ordinal_rank`, `probability`, `evidence` |
-| `EffectCandidate` (legacy `fast` splice/SV sets and imported RNA) | `candidate.effect` | `source`, `evidence`; sequences are on the effect or its optional `mutant_transcript` |
+| `EffectCandidate` (default `dna` annotator, legacy `fast` sets, and imported RNA) | `candidate.effect` | `source`, `mechanisms`, `phase`, `uncertainty`, `evidence`; sequences, `novel_junctions`, and open `template_sequence()` live on `candidate.effect` and `candidate.effect.mutant_transcript` |
 | `RealizedEffectCandidate` (opt-in `transcript_model` pipeline) | `candidate.effect` | `outcomes`, `hypotheses`, `probability`, `ordinal_key`; each outcome has `baseline` and `mutant` products with `cdna_sequence`, `protein_sequence` and `evidence` |
 
-The default returns an ordinary top effect with flat `DNAHypothesis` candidates
-attached, not necessarily a `MultiOutcomeEffect`. Inspect `effect.candidates`
-directly — or branch when consuming opt-in `transcript_model` / `fast` results:
+The default returns an ordinary top effect with flat `EffectCandidate` tuples
+attached, not necessarily a `MultiOutcomeEffect`:
 
 ```python
-from varcode import DNAHypothesis, EffectCandidate
+from varcode import EffectCandidate
 from varcode.effect_hypotheses import RealizedEffectCandidate
 
 print(effect.short_description)
 for candidate in getattr(effect, "candidates", ()):
     print(candidate.effect.short_description)
-    if isinstance(candidate, DNAHypothesis):
-        print(candidate.splice_mechanisms, candidate.uncertainty)
-        print(candidate.baseline_protein, candidate.mutant_protein)
+    if isinstance(candidate, EffectCandidate):
+        print(candidate.source, candidate.mechanisms, candidate.uncertainty)
+        print(candidate.effect.mutant_protein_sequence)
     elif isinstance(candidate, RealizedEffectCandidate):
         for outcome in candidate.outcomes:
             print(outcome.baseline.protein_sequence, outcome.mutant.protein_sequence)
             print(outcome.mutant.cdna_sequence, outcome.hypothesis.evidence)
-    elif isinstance(candidate, EffectCandidate):
-        print(candidate.source, candidate.evidence)
-        print(candidate.effect.mutant_protein_sequence)
 ```
 
 ### Traversing candidates
