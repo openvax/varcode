@@ -27,8 +27,8 @@ and remains unresolved. CNVs retain dosage uncertainty. See [limitations](#known
 Given a `variant` and one of its `transcript` objects, selection is explicit:
 
 ```python
-effect = variant.effect_on_transcript(transcript)  # ordinary use
-comparison = variant.effect_on_transcript(transcript, annotator="protein_diff")
+effect = variant.effect_on_transcript(transcript)  # ordinary use ("dna")
+comparison = variant.effect_on_transcript(transcript, annotator="transcript_model")
 legacy = variant.effect_on_transcript(transcript, annotator="fast")
 ```
 
@@ -91,26 +91,24 @@ The shared pipeline and legacy candidate wrappers expose different details:
 
 | Candidate type | Shared access | Additional information |
 |---|---|---|
-| `EffectCandidate` (default `dna` annotator, legacy `fast` sets, and imported RNA) | `candidate.effect` | `source`, `mechanisms`, `phase`, `uncertainty`, `evidence`; sequences, `novel_junctions`, and open `template_sequence()` live on `candidate.effect` and `candidate.effect.mutant_transcript` |
-| `RealizedEffectCandidate` (opt-in `transcript_model` pipeline) | `candidate.effect` | `outcomes`, `hypotheses`, `probability`, `ordinal_key`; each outcome has `baseline` and `mutant` products with `cdna_sequence`, `protein_sequence` and `evidence` |
+| `EffectCandidate` (default `dna` annotator, legacy `fast` sets, and imported RNA) | `candidate.effect`, `candidate.outcomes` | `source`, `mechanisms`, `phase`, `uncertainty`, `evidence`; sequences, `novel_junctions`, and open `template_sequence()` live on `candidate.effect` and `candidate.effect.mutant_transcript`; paired baseline/mutant comparisons live in `candidate.outcomes` |
+| `RealizedEffectCandidate` (opt-in `transcript_model` pipeline) | `candidate.effect`, `candidate.outcomes` | `hypotheses`, `probability`, `ordinal_key`; each outcome has `baseline` and `mutant` products with `cdna_sequence`, `protein_sequence` and `evidence` |
 
-The default returns an ordinary top effect with flat `EffectCandidate` tuples
-attached, not necessarily a `MultiOutcomeEffect`:
+Every `MutationEffect` exposes `.candidates` directly (empty tuple for bare
+`fast` effects) and `.add_candidates(...)` for appending external observations:
 
 ```python
 from varcode import EffectCandidate
-from varcode.effect_hypotheses import RealizedEffectCandidate
 
 print(effect.short_description)
-for candidate in getattr(effect, "candidates", ()):
+for candidate in effect.candidates:
     print(candidate.effect.short_description)
     if isinstance(candidate, EffectCandidate):
         print(candidate.source, candidate.mechanisms, candidate.uncertainty)
         print(candidate.effect.mutant_protein_sequence)
-    elif isinstance(candidate, RealizedEffectCandidate):
-        for outcome in candidate.outcomes:
-            print(outcome.baseline.protein_sequence, outcome.mutant.protein_sequence)
-            print(outcome.mutant.cdna_sequence, outcome.hypothesis.evidence)
+    for outcome in candidate.outcomes:
+        print(outcome.baseline.protein_sequence, outcome.mutant.protein_sequence)
+        print(outcome.mutant.cdna_sequence, outcome.hypothesis.evidence)
 ```
 
 ### Traversing candidates
@@ -220,8 +218,8 @@ Unresolved results report `None`, not `False`, for sequence-change flags.
 
 The legacy `realized`, `RealizedEffectAnnotator`, and `predict_realized_effect`
 aliases were removed in 12.0; use the `transcript_model` names above (saved
-archives and CSV provenance referencing `"realized"` continue to load). The
-`RealizedEffectCandidate` wrapper still has a different interface from ordinary
-`EffectCandidate`, as shown above.
+archives and CSV provenance referencing `"realized"` continue to load). Both
+`EffectCandidate` (default `"dna"`) and `RealizedEffectCandidate` (opt-in
+`"transcript_model"`) share `.effect` and `.outcomes`.
 
 To implement your own, see [Writing an annotator](annotator_contract.md).

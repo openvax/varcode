@@ -635,7 +635,7 @@ def annotate_bound_orf_variants(
         baseline = RealizedTranscriptProduct(
             view, view.sequence, view.protein_sequence, start_codon_present=True,
             evidence={"genomic_positions": view.positions})
-        for candidate in getattr(effect, "candidates", ()):
+        for candidate in effect.candidates:
             alternative = candidate.effect
             mt = getattr(alternative, "mutant_transcript", None)
             if mt is None or mt.cdna_sequence is None:

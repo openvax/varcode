@@ -1,5 +1,32 @@
 # Change Log
 
+## v13.2.0
+
+### Modular effect class layout, slop reduction, and 13.x documentation alignment
+
+- **Split the 2,333-line `varcode/effects/effect_classes.py` monolith by domain**
+  into four focused, mypy-checked modules with a flat dependency graph on `base.py`:
+  - `varcode/effects/base.py` — base hierarchy (`MutationEffect`,
+    `MultiOutcomeEffect`, `TranscriptMutationEffect`, `Exonic`, `Intronic`,
+    `Unresolved`, `HypothesisLimit`, UTR/noncoding/incomplete/failure effects)
+  - `varcode/effects/splice_effects.py` — splice-signal and splice-mechanism effects
+  - `varcode/effects/coding_effects.py` — coding-sequence and amino-acid effects
+  - `varcode/effects/structural_effects.py` — structural, haplotype, and phase effects
+  - `varcode/effects/effect_classes.py` remains a public barrel re-exporting all
+    43 classes with explicit `__all__`, and `structural_serialization.py` retains
+    legacy `("varcode.effects.effect_classes", Name)` archive keys so pre-13.2
+    JSON and pickle archives load losslessly.
+- **Slop & stale-pattern cleanup**: replace `getattr(effect, "candidates", ())`
+  patterns across code and docs with direct `effect.candidates`, refresh stale
+  `MutantTranscript` docstrings, and switch documentation examples off
+  deprecated `annotator="protein_diff"`.
+- **Documentation accuracy**: fix stale pre-13 claims in `docs/conventions.md`
+  (default annotator is `"dna"`), `docs/transcript_models.md` (extra-ORF JSON is
+  natively supported; document `MutantTranscript` splice junctions and open
+  rearrangement `template_sequence()`), `docs/effect_annotation.md`,
+  `docs/experimental_annotators.md`, `docs/structural_variants.md`, `docs/api.md`,
+  and `docs/dev/api-quality.md`.
+
 ## v13.1.0
 
 ### Clean unified candidate API on `MutationEffect` and `EffectCandidate.outcomes`

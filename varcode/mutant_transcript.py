@@ -164,58 +164,33 @@ class ReferenceSegment(DataclassSerializable):
 
 @dataclass(frozen=True)
 class MutantTranscript(DataclassSerializable):
-    """A reference transcript (or assembled set of reference segments)
-    with zero or more variant-derived edits applied, optionally
-    carrying the mutated cDNA and protein sequences.
-
-    Producers (the protein-diff annotator, RNA-evidence importers,
-    the splice-outcomes rewrite, germline-aware annotation,
-    structural-variant annotators) construct this once per
-    (transcript-or-segments, variant-set, context) and hand it to
-    downstream consumers. Each consumer reads the fields it cares
-    about — ``edits`` for provenance, ``cdna_sequence`` /
-    ``mutant_protein_sequence`` for protein-level analysis.
+    """A reference transcript (or assembled set of reference segments) with
+    variant-derived edits applied, optional materialized cDNA/protein
+    sequences, splice-junction coordinates, and open rearrangement templates.
 
     **Two shapes:**
 
     * **Point-variant shape** (``reference_transcript`` is set,
-      ``reference_segments`` is ``None``) — the mutant is derived
-      from a single reference transcript by applying zero or more
-      :class:`TranscriptEdit` objects. This is the shape used by
-      the protein-diff annotator for SNVs, MNVs, and simple indels.
-
+      ``reference_segments`` is ``None``) — derived from a single reference
+      transcript by applying zero or more :class:`TranscriptEdit` objects.
     * **Structural-variant shape** (``reference_segments`` is set,
-      ``reference_transcript`` may be ``None`` or the primary /
-      5'-partner transcript) — the mutant is assembled by
-      concatenating :class:`ReferenceSegment` slices in order. A
-      gene fusion is two segments from two transcripts; a
-      translocation to intergenic is one transcript segment plus a
-      genomic-interval segment; an inversion is three forward/
-      reverse/forward segments. ``edits`` may still be populated
-      for point-variant edits layered on top of the assembled
-      segments, but typically an SV carries no extra edits.
+      ``reference_transcript`` may be ``None`` or the primary / 5'-partner
+      transcript) — assembled by concatenating :class:`ReferenceSegment` slices
+      in order (fusions, intergenic translocations, inversions, deletions,
+      duplications, or supplied ``alt_assembly`` contigs).
 
-    Sequence fields are ``Optional[str]`` because not every producer
-    computes them eagerly. Callers that require the protein check or
-    compute it themselves; the protein-diff annotator guarantees it
-    for point variants.
+    **DNA-to-RNA junction & template properties:**
 
-    **Forward-looking hooks** (not implemented here; documented so
-    new integrations know where to plug in):
-
-    * Personalized / full-genome reference — pass a
-      :class:`ReferenceSegment` whose ``source`` is a patient-specific
-      contig object. varcode's translation logic reads
-      ``source.sequence``; it doesn't care whether that's GRCh38 or
-      a custom assembly.
-    * Long-read resolution — when an SV has an :attr:`alt_assembly`
-      on the :class:`StructuralVariant`, the SV annotator can wrap
-      that sequence as a single synthetic segment.
-    * SV outcomes ambiguity — a translocation producing many candidate
-      ORFs that only RNA can resolve should return
-      ``List[MutantTranscript]`` or wrap it in a
-      :class:`MultiOutcomeEffect` per #299, each with its own
-      ``evidence`` dict capturing the disambiguator.
+    * :attr:`is_complete` — ``True`` when a full spliced ``cdna_sequence`` is
+      resolved; ``False`` for open rearrangements without a supplied assembly.
+    * :attr:`novel_junctions` / :attr:`back_junctions` / :attr:`wildtype_junctions` —
+      1-based ascending genomic intron tuples ``(contig, start, end, strand)``
+      directly matching BAM CIGAR ``N`` intervals (or tandem-duplication
+      chimeric back-junction spans).
+    * :attr:`mate_region` / :attr:`exit_frame` / :meth:`template_sequence` —
+      oriented mate search window, 5' anchor reading frame, and on-demand
+      pre-mRNA template materializer for open rearrangements (large insertions
+      and gene-to-intergenic translocations).
     """
 
     reference_transcript: Optional[object] = None
@@ -249,11 +224,9 @@ class MutantTranscript(DataclassSerializable):
     producer hasn't materialized it yet."""
 
     mutant_protein_sequence: Optional[str] = None
-    """The translated mutant protein, stopping at the first stop
-    codon. ``None`` if not yet translated, or if the edit set
-    doesn't produce a coherent ORF (e.g. start-codon loss). Callers
-    that need a guaranteed-present protein should use the
-    protein-diff annotator once it lands."""
+    """The translated mutant protein, stopping at the first stop codon.
+    ``None`` when unavailable or when the edit set does not produce a
+    coherent ORF (e.g. start-codon loss or an unresolved open rearrangement)."""
 
     annotator_name: str = "unknown"
     """Name of the :class:`EffectAnnotator` (or other producer) that

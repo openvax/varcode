@@ -13,9 +13,10 @@ metadata-preserving set operations are typed (`VariantCollection` and
 `EffectCollection`, preserving subclasses via `Self`); slicing preserves
 Sercol's underlying-sequence return rather than silently creating a new
 collection. Structural `GeneLike` and `TranscriptLike` protocols describe
-ordinary PyEnsembl, ORF, and RNA transcript/gene views, and `effect_classes.py`
-is checked under `[tool.mypy]` alongside the collection and transform modules
-(#653).
+ordinary PyEnsembl, ORF, and RNA transcript/gene views, and the modular effect
+class files (`base.py`, `splice_effects.py`, `coding_effects.py`,
+`structural_effects.py`, and barrel `effect_classes.py`) are checked under
+`[tool.mypy]` alongside the collection and transform modules (#653).
 
 ## API quality audit: October 2026
 
