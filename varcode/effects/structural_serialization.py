@@ -291,8 +291,10 @@ def _registry_bundle() -> tuple[
         exported_cls = getattr(effect_classes, export_name)
         if isinstance(exported_cls, type) and exported_cls in reviewed:
             by_key.setdefault(("varcode.effects.effect_classes", exported_cls.__qualname__), exported_cls)
-    # Explicit legacy aliases for archives written under earlier 11.x names.
+    # Explicit legacy aliases for archives written under earlier 11.x-13.2 names.
     by_key.update({
+        ("varcode.germline", "PhaseHypothesis"): PhaseHypothesis,
+        ("varcode.germline", "PhasePartition"): PhasePartition,
         ("varcode.effects.structural_serialization", "_EffectReference"): EffectReference,
         ("varcode.mutant_transcript", "_AssembledAllele"): AssembledAllele,
         ("varcode.effects.structural", "_AssembledAllele"): AssembledAllele,

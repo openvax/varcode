@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=64"]
+requires = ["setuptools>=77.0.3"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,12 +7,13 @@ name = "varcode"
 requires-python = ">=3.11"
 authors = [{name = "Alex Rubinsteyn", email = "alex.rubinsteyn@unc.edu"}]
 description = "Variant annotation in Python"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console",
     "Operating System :: OS Independent",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
 ]
@@ -45,7 +46,7 @@ test = [
     "osteosarc>=0.15.7,<0.16",  # patient-data fixtures; 0.15.7 stopped passing ensembl= (#693)
     "biotite>=1.6",  # independent sequence checks
     "pysam>=0.21",  # BAM contig-resolution and shared-bundle read tests
-    "setuptools>=64",  # tests/test_source_distribution.py builds an sdist in-process
+    "setuptools>=77.0.3",  # tests/test_source_distribution.py builds an sdist in-process
     "pytest",
     "pytest-cov",
     "pytest-xdist",
@@ -94,7 +95,14 @@ files = [
     "varcode/effects/splice_effects.py",
     "varcode/effects/structural_effects.py",
     "varcode/effects/structural_serialization.py",
+    "varcode/mutant_transcript.py",
+    "varcode/phasing.py",
+    "varcode/rna_evidence.py",
+    "varcode/structural_variant.py",
     "varcode/transforms/__init__.py",
+    "varcode/transforms/breakends.py",
+    "varcode/transforms/cis_snvs.py",
+    "varcode/transforms/indels.py",
     "varcode/vcf.py",
     "varcode/sv_allele_parser.py",
     "varcode/maf.py",

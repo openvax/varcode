@@ -27,7 +27,7 @@ test stubs).
 """
 
 import logging
-from typing import Optional, Protocol, Sequence, runtime_checkable
+from typing import Any, Optional, Protocol, Sequence, runtime_checkable
 
 logger = logging.getLogger(__name__)
 
@@ -426,7 +426,7 @@ def build_haplotype_effects(
     # Group variants by transcript via existing per-variant effects —
     # each effect already knows its transcript, which avoids
     # re-running variant.transcripts for every variant.
-    by_transcript = {}
+    by_transcript: dict[Any, tuple[Any, list[Any]]] = {}
     for e in effects:
         t = getattr(e, "transcript", None)
         v = getattr(e, "variant", None)
@@ -467,13 +467,13 @@ def build_haplotype_effects(
                 if query_in_cis(
                         phase_resolver, unique[i], unique[j], transcript):
                     union(i, j)
-        groups = {}
+        groups: dict[int, list[Any]] = {}
         for i in range(len(unique)):
             groups.setdefault(find(i), []).append(unique[i])
-        for members in groups.values():
-            if len(members) < 2:
+        for group_members in groups.values():
+            if len(group_members) < 2:
                 continue
-            members = tuple(members)
+            members = tuple(group_members)
             try:
                 result = NotImplemented if annotate is None else annotate(
                     members, transcript, germline_ctx=germline,
@@ -495,9 +495,10 @@ def build_haplotype_effects(
                 raise TypeError(
                     "Annotators must return a MutationEffect or NotImplemented, got %r"
                     % (result,))
-            result.variants = members
-            result.phase_source = getattr(phase_resolver, "phase_source", None)
-            result.annotator = getattr(annotator, "name", None)
-            result.annotator_version = getattr(annotator, "version", None)
+            attached: Any = result
+            attached.variants = members
+            attached.phase_source = getattr(phase_resolver, "phase_source", None)
+            attached.annotator = getattr(annotator, "name", None)
+            attached.annotator_version = getattr(annotator, "version", None)
             haplotype_effects.append(result)
     return haplotype_effects

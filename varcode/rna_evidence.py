@@ -161,6 +161,7 @@ def make_fusion_outcome(
     model = MutantTranscript.from_sequence(
         sequence, reference_transcript=transcript,
         mutant_protein_sequence=protein, annotator_name=source, evidence=evidence)
+    effect: Any
     if partner_transcript is None:
         effect = TranslocationToIntergenic(variant, transcript, mutant_transcript=model)
     else:

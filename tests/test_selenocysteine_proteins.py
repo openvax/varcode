@@ -20,7 +20,7 @@ from varcode.effects.selenocysteine import (
 from varcode.effects.sequence_change import structural_sequence_changes
 from varcode.genomic_layout import GenomicLayout, LayoutSegment
 from varcode.mutant_transcript import apply_variant_to_transcript, apply_variants_to_transcript
-from varcode.splice_outcomes import _build_exon_skip_mutant_transcript
+from varcode.splice_exon_builders import build_exon_skip_mutant_transcript
 from varcode.transcript_layout import realize_exon_path
 from varcode.transcript_model import provider_for_genome
 
@@ -208,7 +208,7 @@ def test_exon_skipping_keeps_selenocysteine(transcript_id, index):
     t = _transcript(transcript_id)
     exon = t.exons[index]
     variant = StructuralVariant(t.contig, exon.start, "DEL", end=exon.end, genome=t.genome)
-    mt = _build_exon_skip_mutant_transcript(variant, t, exon)
+    mt = build_exon_skip_mutant_transcript(variant, t, exon)
     skipped = (exon.end - exon.start + 1) // 3
     assert mt.mutant_protein_sequence.count("U") == t.protein_sequence.count("U")
     assert len(mt.mutant_protein_sequence) == len(t.protein_sequence) - skipped

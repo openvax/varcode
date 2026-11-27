@@ -1,5 +1,34 @@
 # Change Log
 
+## v13.3.0
+
+### Modularize transforms, splice builders, and germline phasing; expand mypy & SPDX packaging
+
+- **Split `varcode/transforms/__init__.py`** (1,356 lines) into focused domain
+  submodules (`breakends.py`, `indels.py`, `cis_snvs.py`) with
+  `varcode/transforms/__init__.py` as a clean public barrel.
+- **Split `varcode/splice_outcomes.py`** (1,611 lines) into
+  `splice_outcomes.py` (`SpliceOutcomeSet`, `enumerate_splice_outcomes`),
+  `splice_exon_builders.py` (mechanism ordering, normal splicing, exon skipping),
+  and `splice_intron_builders.py` (intron retention and cryptic splice builders)
+  with clean public cross-module helpers (zero private cross-module imports).
+- **Split `varcode/germline.py`** (1,169 lines) into `germline.py`
+  (`GermlineContext`, `Completeness`, windowing/overlap) and
+  `germline_phasing.py` (`PhaseHypothesis`, `PhasePartition`,
+  `partition_germline_by_phase`, `enumerate_phase_hypotheses`,
+  `classify_against_patient_baseline`, `predict_germline_aware_effect`),
+  preserving all `varcode.germline` re-exports and legacy archive keys in
+  `structural_serialization.py`.
+- **Expanded static type checking (24 → 31 mypy files)**: added
+  `mutant_transcript.py`, `phasing.py`, `rna_evidence.py`,
+  `structural_variant.py`, and all `varcode/transforms/*.py` modules to
+  `[tool.mypy]` in `pyproject.toml`, fixing real typing gaps in
+  `structural_variant.py` and `phasing.py`.
+- **PEP 639 SPDX license metadata**: replaced the deprecated license classifier
+  in `pyproject.toml` with `license = "Apache-2.0"` and `license-files = ["LICENSE"]`
+  (requiring `setuptools>=77.0.3`), eliminating setuptools deprecation warnings
+  on build.
+
 ## v13.2.0
 
 ### Modular effect class layout, slop reduction, and 13.x documentation alignment

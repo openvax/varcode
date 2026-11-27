@@ -404,8 +404,8 @@ class StructuralVariant(Variant):
         # the SV annotator derives from the variant alone (mate-locus
         # transcripts, cryptic-exon candidates), which would otherwise be
         # recomputed for every transcript the variant is annotated on.
-        self._junctions = None
-        self._annotation_cache = {}
+        self._junctions: Optional[Tuple[Tuple[Breakend, Breakend], ...]] = None
+        self._annotation_cache: dict[str, Any] = {}
 
     def _take_mate_from_alt(self, alt):
         """Fill the mate fields a breakend ALT names and the caller left
@@ -486,8 +486,11 @@ class StructuralVariant(Variant):
                 # but ``mate_orientation``'s bracket still gives the
                 # mate's: ``[`` keeps the right side, ``]`` the left.
                 this_side = None
-                mate_side = {"[[": "right", "]]": "left"}.get(
-                    self.mate_orientation)
+                mate_side = (
+                    {"[[": "right", "]]": "left"}.get(self.mate_orientation)
+                    if self.mate_orientation is not None
+                    else None
+                )
             return ((
                 Breakend(contig, start, this_side),
                 Breakend(self.mate_contig, self.mate_start, mate_side)),)

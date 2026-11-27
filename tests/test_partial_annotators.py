@@ -164,7 +164,7 @@ def test_default_declines_unimplemented_sv_germline_composition(point_variant, t
 
 def test_germline_internal_prediction_does_not_use_scoped_experiment(
         point_variant, transcript, monkeypatch):
-    from varcode.germline import PhaseHypothesis, _classify_against_patient_baseline
+    from varcode.germline import PhaseHypothesis, classify_against_patient_baseline
 
     # Force the established default's joint-build fallback. It must remain
     # an internal default prediction even if an experiment is globally selected.
@@ -179,7 +179,7 @@ def test_germline_internal_prediction_does_not_use_scoped_experiment(
             return NotImplemented
 
     with use_annotator(Declining()):
-        actual = _classify_against_patient_baseline(
+        actual = classify_against_patient_baseline(
             point_variant, transcript, hypothesis)
     assert type(actual) is type(expected)
     assert actual.short_description == expected.short_description
