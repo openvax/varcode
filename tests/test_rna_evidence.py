@@ -12,7 +12,7 @@ The protocol + apply hook should:
 * Attach RNA-observed candidates to ``MultiOutcomeEffect.candidates``.
   Splice mechanism sets reconcile evidence into a replacement set;
   other multi-outcome effects append evidence through
-  ``_extra_candidates``.
+  :meth:`~varcode.MutationEffect.add_candidates`.
 * Leave non-multi-outcome effects untouched even when the resolver
   has evidence — the contract is "refinement of a possibility set",
   not "replacement of a deterministic call".
@@ -253,7 +253,8 @@ class TestNonMultiOutcomeNotMutated:
         apply_rna_evidence_to_effects(effects, _StubResolver([observed]))
         for e in effects:
             if not isinstance(e, MultiOutcomeEffect):
-                assert not hasattr(e, "_extra_candidates") or not e._extra_candidates
+                assert "extra_candidates" not in e.__dict__
+                assert not hasattr(e, "_extra_candidates")
 
 
 # --------------------------------------------------------------------

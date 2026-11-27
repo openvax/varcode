@@ -14,16 +14,7 @@ def transcript():
 
 
 def outcomes(effect):
-    # Default 'dna' annotator yields flat DNAHypothesis records (retaining
-    # paired outcomes internally for deep splice-plan inspection when needed).
-    result = []
-    for candidate in effect.candidates:
-        paired = getattr(candidate, "_paired_outcomes", None)
-        if paired is not None:
-            result.extend(paired)
-        else:
-            result.extend(candidate.outcomes)
-    return result
+    return [outcome for candidate in effect.candidates for outcome in candidate.outcomes]
 
 
 def canonical_baseline(outcome):

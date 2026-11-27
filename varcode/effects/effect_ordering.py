@@ -179,7 +179,7 @@ def effect_priority(effect):
     )
     if getattr(effect, "realized_candidates", None) or any(
         isinstance(c, EffectCandidate)
-        and (c.source == "varcode.dna" or c.uncertainty or getattr(c, "_paired_outcomes", None))
+        and (c.source == "varcode.dna" or c.uncertainty or c.outcomes)
         for c in attached_candidates
     ):
         return max(

@@ -371,7 +371,7 @@ def apply_phase_resolver_to_effects(effects, phase_resolver):
         is_structural = getattr(variant, "is_structural", False)
         has_paired = bool(getattr(e, "realized_candidates", None)) or any(
             isinstance(c, EffectCandidate) and (
-                getattr(c, "_paired_outcomes", None)
+                bool(c.outcomes)
                 or (not is_structural and c.source == "varcode.dna")
             )
             for c in (e.__dict__.get("candidates") or ())

@@ -337,9 +337,8 @@ def _identity(value, defaults, contexts=()):
     if isinstance(value, RealizedEffectCandidate):
         identity["outcomes"] = sorted((_identity(o, defaults, contexts) for o in value.outcomes), key=_digest)
     if isinstance(value, EffectCandidate):
-        paired = getattr(value, "_paired_outcomes", None)
-        if paired:
-            identity["outcomes"] = sorted((_identity(o, defaults, contexts) for o in paired), key=_digest)
+        if value.outcomes:
+            identity["outcomes"] = sorted((_identity(o, defaults, contexts) for o in value.outcomes), key=_digest)
     return _identifier(_label(effect, annotation, type(value).__name__), identity)
 
 
@@ -442,9 +441,8 @@ class _Export:
                 context["uncertainty"] = list(value.uncertainty)
             if value.mechanisms:
                 context["mechanisms"] = list(value.mechanisms)
-            paired = getattr(value, "_paired_outcomes", None)
-            if paired:
-                return [status for outcome in paired for status in self.walk(
+            if value.outcomes:
+                return [status for outcome in value.outcomes for status in self.walk(
                     outcome, event_id, contexts=(*contexts, context), annotation=annotation, ancestors=ancestors)]
             return self.walk(value.effect, event_id, contexts=(*contexts, context),
                              annotation=annotation, ancestors=ancestors)
@@ -498,7 +496,7 @@ class _Export:
             if value.mechanisms:
                 context["mechanisms"] = list(value.mechanisms)
             contexts = (context,)
-            if not getattr(value, "_paired_outcomes", None):
+            if not value.outcomes:
                 value = value.effect
         if isinstance(value, MutationEffect) and value.orf_annotation is not None:
             value = value.orf_annotation

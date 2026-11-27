@@ -212,9 +212,9 @@ def classify_structural_transcript(event, transcript, model, affected):
                 edit.length_delta for edit in edits if edit.cdna_start < stop),
             mutant_transcript=diff_model,
         )
-        effect._original_protein_sequence = reference_protein
+        effect.original_protein_sequence = reference_protein
         if after_stop:
-            effect._modifies_coding_sequence = False
+            effect.modifies_coding_sequence = False
     return effect, model
 
 
@@ -352,9 +352,9 @@ def predict_structural_variant_effect(variant, transcript):
         if effect is None:
             effect = span_effect
         elif isinstance(span_effect, StructuralVariantEffect):
-            effect._attach_primary_effects((span_effect,))
+            effect.add_primary_effects((span_effect,))
     if isinstance(effect, StructuralVariantEffect):
-        effect._attach_primary_effects(
+        effect.add_primary_effects(
             upstream_fusions(variant, transcript, assembly))
 
     structural_candidates.enumerate_and_attach_cryptics(variant, effect)

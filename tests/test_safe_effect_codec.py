@@ -226,14 +226,19 @@ def test_structural_and_extra_orf_effect_graphs_round_trip():
         mate_contig="17",
         mate_start=partner.exons[4].start,
     )
+    from varcode.effects.structural_candidates import cryptic_exon_candidate
+
     fusion = GeneFusion(sv_bnd, transcript, partner)
     intergenic = TranslocationToIntergenic(sv_bnd, transcript)
-    fusion._attach_primary_effects((intergenic,))
-    fusion._attach_cryptic_candidates(
-        (CrypticExonCandidate(sv_bnd, "7", 123, 145, donor_score=0.8, acceptor_score=0.9),)
-    )
-    fusion._attach_splice_outcomes((EffectCandidate(intergenic, "varcode_splice", {"reads": 2}),))
-    fusion._extra_candidates = (EffectCandidate(fusion, "RNA", {"witnesses": ["r1"]}),)
+    fusion.add_primary_effects((intergenic,))
+    fusion.add_candidates((
+        cryptic_exon_candidate(
+            CrypticExonCandidate(sv_bnd, "7", 123, 145, donor_score=0.8, acceptor_score=0.9),
+            base_evidence={"sv_type": "BND"},
+        ),
+        EffectCandidate(intergenic, "varcode_splice", {"reads": 2}),
+        EffectCandidate(fusion, "RNA", {"witnesses": ["r1"]}),
+    ))
     restored_fusion = effect_from_json(effect_to_json(fusion))
     assert isinstance(restored_fusion, GeneFusion)
     assert restored_fusion.candidates[0].effect is restored_fusion

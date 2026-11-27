@@ -570,8 +570,8 @@ def test_dna_fast_path_and_rna_refinement_preserve_observations_and_support():
     v_v600e = Variant("7", 140753336, "A", "T", genome=GENOME)
     fast_effect = v_v600e.effect_on_transcript(braf, annotator="dna")
     assert isinstance(fast_effect, Substitution)
-    # Fast-path SNV does not carry _paired_outcomes initially.
-    assert getattr(fast_effect.candidates[0], "_paired_outcomes", None) is None
+    # Fast-path SNV does not carry paired transcript-model outcomes initially.
+    assert fast_effect.candidates[0].outcomes == ()
 
     # 1. Partial RNA window supplied via phase_resolver must NOT overwrite Substitution.mutant_transcript;
     #    it must append an explicit Unresolved candidate with original_protein_sequence=None and rna_observation.
@@ -638,10 +638,13 @@ def test_dna_effect_to_dict_and_json_roundtrip_preserves_candidates_and_phase():
     assert len(get_effect_candidates(restored_dict)) == 1
     assert restored_dict.candidates[0].source == "varcode.dna"
     assert restored_dict.candidates[0].effect is restored_dict
-    assert restored_dict.most_likely_candidate == restored_dict.candidates[0]
-    assert restored_dict.most_likely_candidate.effect is restored_dict
-    assert restored_dict.highest_priority_candidate == restored_dict.candidates[0]
-    assert restored_dict.highest_priority_candidate.effect is restored_dict
+    assert restored_dict.most_likely_candidate is restored_dict.candidates[0]
+    assert restored_dict.most_likely_effect is restored_dict
+    assert restored_dict.highest_priority_candidate is restored_dict.candidates[0]
+    assert restored_dict.highest_priority_effect is restored_dict
+    assert restored_dict.effects == (restored_dict,)
+    assert "most_likely_candidate" not in restored_dict.__dict__
+    assert "highest_priority_candidate" not in restored_dict.__dict__
     assert len(list(iter_candidate_paths(restored_dict))) == 1
     assert hash(restored_dict) == hash(eff)
     assert restored_dict.to_dict() == eff.to_dict()
@@ -681,3 +684,71 @@ def test_dna_effect_to_dict_and_json_roundtrip_preserves_candidates_and_phase():
     restored_splice = type(splice_eff).from_json(splice_eff.to_json())
     assert len(restored_splice.candidates) == len(splice_eff.candidates)
     assert restored_splice.to_dict() == splice_eff.to_dict()
+
+
+def test_uniform_mutation_effect_candidate_api_and_outcomes_roundtrip():
+    """Uniform public candidate API on MutationEffect and lossless EffectCandidate.outcomes."""
+    from varcode import (
+        EffectCandidate,
+        MultiOutcomeEffect,
+        MutationEffect,
+        RNAEvidence,
+        apply_rna_evidence_to_effects,
+        make_rna_outcome,
+    )
+    from varcode.effects import StructuralVariantEffect, Unresolved
+
+    # Weird private-member plumbing is gone.
+    assert not hasattr(MutationEffect, "_attached")
+    assert not hasattr(MultiOutcomeEffect, "_combine_with_extra_candidates")
+    assert not hasattr(StructuralVariantEffect, "_attach_primary_effects")
+    assert not hasattr(StructuralVariantEffect, "_attach_cryptic_candidates")
+    assert not hasattr(StructuralVariantEffect, "_attach_splice_outcomes")
+
+    braf = GENOME.transcript_by_id("ENST00000288602")
+    v_v600e = Variant("7", 140753336, "A", "T", genome=GENOME)
+
+    # Bare fast-annotator effects expose the same uniform candidate interface.
+    bare = v_v600e.effect_on_transcript(braf, annotator="fast")
+    assert bare.candidates == ()
+    assert bare.effects == ()
+    assert bare.most_likely_candidate is None
+    assert bare.most_likely_effect is None
+    assert bare.highest_priority_candidate is None
+    assert bare.highest_priority_effect is None
+    extra = EffectCandidate(bare, source="custom", evidence={"note": "manual"})
+    bare.add_candidates((extra,))
+    assert bare.candidates == (extra,)
+    assert bare.most_likely_candidate is extra
+    assert bare.most_likely_effect is bare
+    assert bare.highest_priority_candidate is extra
+    assert bare.highest_priority_effect is bare
+
+    # Phased dna effects carry public EffectCandidate.outcomes (no _paired_outcomes)
+    # and preserve them across JSON round-trip so downstream RNA refinement works.
+    germline_v = Variant("7", 140753335, "C", "T", genome=GENOME)
+    phased = v_v600e.effect_on_transcript(
+        braf, germline=GermlineContext.from_variants([germline_v])
+    )
+    assert any(c.outcomes for c in phased.candidates)
+    assert all("_paired_outcomes" not in c.__dict__ for c in phased.candidates)
+
+    restored = type(phased).from_json(phased.to_json())
+    assert [len(c.outcomes) for c in restored.candidates] == [
+        len(c.outcomes) for c in phased.candidates
+    ]
+    assert restored.most_likely_candidate is restored.candidates[0]
+
+    # RNA refinement works on the deserialized effect because .outcomes survived JSON.
+    observed = Unresolved(v_v600e, braf, "rna_transcript_comparison")
+    observed.mutant_transcript = MutantTranscript.from_sequence(
+        "ATGGCTTAA",
+        reference_transcript=braf,
+        mutant_protein_sequence="MA",
+        annotator_name="isovar",
+    )
+    refined_coll = apply_rna_evidence_to_effects(
+        EffectCollection([restored]),
+        RNAEvidence([make_rna_outcome(observed, source="isovar", read_count=4)]),
+    )
+    assert any(c.evidence.get("rna_observation") for c in refined_coll[0].candidates)

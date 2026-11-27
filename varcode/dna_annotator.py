@@ -45,7 +45,6 @@ from .effects.effect_classes import (
     NoncodingTranscript,
     Silent,
 )
-from .effects.effect_ordering import classification_priority
 from .effects.fast_path import try_fast_path_snv
 from .effects.selenocysteine import reference_selenocysteine
 from .effects.transcript_helpers import has_complete_coding_sequence
@@ -573,10 +572,8 @@ def _flatten_to_candidates(effect: Any, transcript: Any) -> Tuple[EffectCandidat
                 mechanisms=tuple(mechs) if mechs else ("normal",),
                 phase=tuple(phase_items),
                 uncertainty=axes,
+                outcomes=cand.outcomes,
             )
-            # Non-field cache for in-memory proteome / ORF-discovery / RNA-refinement
-            # interop; excluded from dataclass equality, repr, and JSON serialization.
-            object.__setattr__(ec, "_paired_outcomes", cand.outcomes)
             candidates.append(ec)
         return tuple(candidates)
 
@@ -675,8 +672,6 @@ def _wrap_simple_dna_effect(effect: Any, variant: Any) -> Any:
         uncertainty=(),
     )
     effect.candidates = (candidate,)
-    effect.most_likely_candidate = candidate
-    effect.highest_priority_candidate = candidate
     effect.probability = 1.0
     effect.mechanism_rank = ()
     return effect
@@ -869,18 +864,10 @@ def _try_dna_fast_path(variant: Any, transcript: Any) -> Any:
 
 def finalize_dna_effect(effect: Any, variant: Any, transcript: Any) -> Any:
     """Attach flat :class:`~varcode.EffectCandidate` tuples and open template metadata."""
-    from .effects.effect_classes import MultiOutcomeEffect
-
     if effect is NotImplemented:
         return effect
     _attach_open_template(effect, variant, transcript)
-    candidates = _flatten_to_candidates(effect, transcript)
-    effect.candidates = candidates
-    if not isinstance(effect, MultiOutcomeEffect):
-        effect.most_likely_candidate = candidates[0]
-        effect.highest_priority_candidate = max(
-            candidates, key=lambda c: classification_priority(c.effect)
-        )
+    effect.candidates = _flatten_to_candidates(effect, transcript)
     if "realized_candidates" in effect.__dict__:
         del effect.__dict__["realized_candidates"]
     return effect

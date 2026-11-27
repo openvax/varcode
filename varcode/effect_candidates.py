@@ -61,6 +61,7 @@ from typing import TYPE_CHECKING, Any, Mapping, Tuple
 from serializable import DataclassSerializable
 
 if TYPE_CHECKING:
+    from .effect_hypotheses import ClassifiedOutcome
     from .effects.effect_classes import MutationEffect
 
 
@@ -92,6 +93,11 @@ class EffectCandidate(DataclassSerializable):
         Sorted axes of unresolved DNA uncertainty across sibling candidates
         (e.g. ``()``, ``("splicing",)``, ``("phasing",)``,
         ``("phasing", "splicing")``, ``("structural",)``).
+    outcomes : tuple of ClassifiedOutcome, optional
+        Paired baseline-vs-mutant transcript-model comparisons that collapsed
+        into this candidate, when produced by the transcript-model / DNA
+        composition pipeline. Preserved through serialization and excluded
+        from ``repr()`` for readability. Empty tuple when unavailable.
     """
 
     effect: "MutationEffect"
@@ -100,6 +106,7 @@ class EffectCandidate(DataclassSerializable):
     mechanisms: Tuple[str, ...] = ()
     phase: Tuple[Tuple[Any, str], ...] = ()
     uncertainty: Tuple[str, ...] = ()
+    outcomes: Tuple["ClassifiedOutcome", ...] = field(default=(), repr=False)
 
     @property
     def short_description(self) -> str:

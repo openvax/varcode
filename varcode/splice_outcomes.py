@@ -263,17 +263,15 @@ class SpliceOutcomeSet(MultiOutcomeEffect, TranscriptMutationEffect):
             self._lazy_state = None
         return self._candidates_cache
 
-    @property
-    def candidates(self):
-        return self._combine_with_extra_candidates(self._candidates)
+    def _get_candidates(self):
+        return self._candidates
 
     @property
     def dna_candidates(self):
         # When not explicitly set, defaults to the DNA-derived candidate
-        # set — same as ``_candidates`` here (RNA-attached outcomes live
-        # only on the public ``candidates`` property via
-        # ``_extra_candidates``). Reading this triggers full
-        # materialization if the set was constructed lazily.
+        # set — same as ``_candidates`` here (additional outcomes appended via
+        # ``add_candidates`` live on the public ``candidates`` property).
+        # Reading this triggers full materialization if constructed lazily.
         if self._explicit_dna_candidates is not None:
             return self._explicit_dna_candidates
         return self._candidates

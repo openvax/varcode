@@ -72,7 +72,7 @@ def attach_transcript_models(
     if mutant_transcript is not None and effect.mutant_transcript is None:
         effect.mutant_transcript = mutant_transcript
     if ref_protein is not None:
-        effect._original_protein_sequence = ref_protein
+        effect.original_protein_sequence = ref_protein
     return effect
 
 
