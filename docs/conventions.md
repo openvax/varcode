@@ -3,8 +3,9 @@
 Use `Variant.effects()` for all overlapping transcripts,
 `Variant.effect_on_transcript()` for one selected transcript, and
 `VariantCollection.effects()` for a batch. They share annotator selection
-rules. The default is `transcript_model`; alternative implementations do not silently
-fall back to it for unsupported inputs.
+rules. The default is `dna` (`DNAEffectAnnotator`); alternative
+implementations (`transcript_model`, `fast`) do not silently fall back to it
+for unsupported inputs.
 
 ## Return shapes
 
@@ -118,7 +119,8 @@ refusal into Unresolved. See the [annotator contract](annotator_contract.md).
 Varcode ships a `py.typed` marker and adopts annotations gradually. File-loading
 inputs, chromosome resolution, core annotation return paths, collection
 iteration/indexing/filtering/cloning/grouping (`VariantCollection`,
-`EffectCollection`), `effect_classes.py`, candidate traversal, and the
+`EffectCollection`), the effect class modules (`base.py`, `splice_effects.py`,
+`coding_effects.py`, `structural_effects.py`), candidate traversal, and the
 annotator protocol/registry are checked with static consumer examples (#653).
 `register_annotator()` preserves the concrete type of the registered object.
 

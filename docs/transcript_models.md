@@ -70,27 +70,46 @@ Likewise, a sequence supplied by an RNA assembler may be only a junction
 fragment. Keep its completeness and source information with the sequence;
 neither observed RNA nor sequence-predicted ORFs alone prove translation.
 
+## Splice junctions and open rearrangement templates
+
+For downstream RNA verification (such as Isovar), `MutantTranscript` exposes
+junction coordinates and open rearrangement templates directly:
+
+- `model.is_complete`: `True` when a full spliced `cdna_sequence` is resolved;
+  `False` for open rearrangements (large insertions `>= 50` bp or translocations
+  without a supplied `alt_assembly`).
+- `model.novel_junctions`, `model.back_junctions`, `model.wildtype_junctions`:
+  1-based inclusive ascending genomic tuples `(contig, start, end, strand)` with
+  `start <= end` on both `+` and `-` strands, directly matching BAM CIGAR `N`
+  intron spans (or chimeric tandem-duplication back-junctions).
+- `model.mate_region` and `model.exit_frame`: oriented 1-based mate search
+  window `(contig, start, end, strand)` and exiting 5′ CDS reading frame
+  (`0`, `1`, `2`, or `None`) for open rearrangements.
+- `model.template_sequence(sequence_provider)`: materializes the oriented
+  5′-to-3′ mutant pre-mRNA template sequence on demand from a genomic sequence
+  callable `(contig, start_1based, end_1based) -> str`.
+
 ## Related objects
 
-Effects produced by `annotator="transcript_model"` retain their typed
-candidates, hypotheses, baseline and mutant products, evidence and ranking
-through `EffectCollection.to_json()` / `from_json()` and individual effect
-serialization. The versioned graph preserves candidate links to the owning
-effect and retains unknown probabilities as `None`. Older effect JSON remains
-readable. Transcript references still use the existing PyEnsembl serialization
-contract; the archive is not a replacement for reference annotation data.
-Extra-ORF effect JSON remains a separate unsupported operation; use its native
-`orf_annotation.to_dict()` export.
+Effects produced by `annotator="dna"` (the default) and
+`annotator="transcript_model"` retain their candidates, paired `outcomes`,
+baseline and mutant products, evidence, and ranking through
+`EffectCollection.to_json()` / `from_json()` and individual effect
+serialization (`effect_to_json()` / `effect_from_json()`). Extra-ORF effects
+also round-trip natively through the versioned `orf_effect_schema` graph. Older
+effect JSON archives remain readable. Transcript references still use the
+existing PyEnsembl serialization contract; the archive is not a replacement for
+reference annotation data.
 
 | Object | Contents |
 |---|---|
-| `MutationEffect` | A predicted consequence or an unresolved result |
-| `MutantTranscript` | Edits or transcript structure, provenance, and optional sequences |
-| `MultiOutcomeEffect` | Several candidate effects, each with its own consequence and evidence |
+| `MutationEffect` | A predicted consequence or unresolved result, exposing `.candidates`, `.most_likely_candidate`, `.highest_priority_candidate`, and `.add_candidates()` |
+| `EffectCandidate` | One candidate outcome with `effect`, `source`, `evidence`, `mechanisms`, `phase`, `uncertainty`, and paired `outcomes` |
+| `MutantTranscript` | Edits or transcript structure, provenance, optional sequences, splice junctions, and open rearrangement templates |
 
-The [API reference](api_rna.md#mutant-transcripts) lists model fields and construction
-helpers. The default transcript-model annotator uses baseline
-and mutant product wrappers; see [its result format](experimental_annotators.md#transcript-model-results).
+The [API reference](api_rna.md#mutant-transcripts) lists model fields and
+construction helpers; see [result access](experimental_annotators.md#transcript-model-results)
+for comparing `dna` and `transcript_model` outputs.
 
 
 Ambiguous reference codons retain their uniquely determined amino acid, or `X`

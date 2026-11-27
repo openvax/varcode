@@ -35,9 +35,9 @@ Usage::
     # Or apply post-hoc to an existing collection:
     apply_rna_evidence_to_effects(effects, resolver)
 
-    # Ordinary and transcript-model candidates expose their sequences here:
+    # Every effect exposes its candidates uniformly:
     for effect in effects:
-        for candidate in getattr(effect, "candidates", ()):
+        for candidate in effect.candidates:
             model = candidate.effect.mutant_transcript
             if model is not None:
                 print(model.cdna_sequence, model.evidence)

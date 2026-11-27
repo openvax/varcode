@@ -131,8 +131,19 @@ def test_documentation_fusion_protein_candidates(capsys):
 
 
 def test_documentation_effect_families_keep_all_classes():
-    source = ast.parse((ROOT / "varcode/effects/effect_classes.py").read_text())
-    classes = {node.name for node in source.body if isinstance(node, ast.ClassDef)}
+    from varcode.effects import effect_classes
+
+    domain_files = (
+        "varcode/effects/base.py",
+        "varcode/effects/splice_effects.py",
+        "varcode/effects/coding_effects.py",
+        "varcode/effects/structural_effects.py",
+    )
+    classes: set[str] = set()
+    for rel in domain_files:
+        source = ast.parse((ROOT / rel).read_text())
+        classes.update(node.name for node in source.body if isinstance(node, ast.ClassDef))
+    assert set(effect_classes.__all__) == classes
     guide = (ROOT / "docs/effect_types.md").read_text()
     documented = re.findall(r"^::: varcode.effects.effect_classes\.(\w+)$", guide, re.M)
     assert set(documented) == classes

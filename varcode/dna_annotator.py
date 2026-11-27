@@ -474,8 +474,7 @@ def _infer_uncertainty_axes(effect: Any) -> Tuple[str, ...]:
         if has_phase:
             axes.add("phasing")
     else:
-        cands = getattr(effect, "candidates", ()) or ()
-        if len(cands) > 1:
+        if len(effect.candidates) > 1:
             if getattr(effect.variant, "is_structural", False):
                 axes.add("structural")
             else:
@@ -577,7 +576,7 @@ def _flatten_to_candidates(effect: Any, transcript: Any) -> Tuple[EffectCandidat
             candidates.append(ec)
         return tuple(candidates)
 
-    legacy_cands = getattr(effect, "candidates", ()) or ()
+    legacy_cands = effect.candidates
     if legacy_cands:
         out: list[EffectCandidate] = []
         for cand in legacy_cands:

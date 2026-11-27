@@ -67,8 +67,8 @@ Also note:
   comparison's modeled cDNA, translated protein, and evidence.
 - A DNA rearrangement does not by itself establish a complete expressed fusion
   protein. Sequence may be unknown or partial; `None` is not an unchanged protein.
-- Some results have no alternatives: use `getattr(effect, "candidates", ())`
-  rather than requiring a wrapper class.
+- Every `MutationEffect` exposes `.candidates` directly (empty tuple when bare)
+  without requiring a wrapper class.
 
 ## Filtering by protein change
 

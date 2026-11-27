@@ -144,29 +144,31 @@ least as severe as `cls` in Varcode's
 
 ## Alternative outcomes
 
-The default pipeline attaches alternatives to an ordinary classified effect.
-Iterate `candidates` without requiring a wrapper class:
+Every `MutationEffect` exposes the same candidate interface — `.candidates`,
+`.effects`, `.most_likely_candidate`, `.most_likely_effect`,
+`.highest_priority_candidate`, `.highest_priority_effect`, and
+`.add_candidates(...)`. Bare `"fast"` effects return `()` / `None`:
 
 ```python
-for candidate in getattr(effect, "candidates", ()):
+for candidate in effect.candidates:
     comparison = candidate.effect
     print(comparison.short_description)
     print(comparison.original_protein_sequence)
     print(comparison.mutant_protein_sequence)
 ```
 
-For shared transcript results, `most_likely_candidate.effect` is the preferred
-comparison and `highest_priority_candidate.effect` is the most severe one.
-Preference can reflect a splice rule or supplied RNA support; it is not a
-calibrated probability. Each candidate retains its `outcomes`, including the
-baseline/mutant products and phase/splice hypotheses. See
-[the result contract](experimental_annotators.md#transcript-model-results).
+`effect.most_likely_effect` is the preferred comparison and
+`effect.highest_priority_effect` is the most severe one. Preference can
+reflect a splice rule or supplied RNA support; it is not a calibrated
+probability. Each `EffectCandidate` carries `source`, `mechanisms`, `phase`,
+`uncertainty`, `evidence`, and (when produced by the transcript-model
+composition path) paired baseline/mutant `outcomes` that survive JSON
+round-trip. See [the result contract](experimental_annotators.md#transcript-model-results).
 
-Existing structural builders and explicit `annotator="fast"` can return
-`MultiOutcomeEffect` wrappers. Those expose `most_likely_effect`,
-`highest_priority_effect`, and candidates with `source` and `evidence` fields.
-Keep this provenance when reporting a candidate's sequence. Collections filter
-and rank across all candidates while retaining the complete result.
+Collections filter and rank across all candidates while retaining the complete
+result. Use `effect.add_candidates(...)` to attach external observations (for
+example from RNA or custom splice scorers) without wrapping or mutating private
+attributes.
 
 <a id="choose-a-deeper-topic"></a>
 

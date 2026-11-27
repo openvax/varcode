@@ -283,6 +283,14 @@ def _registry_bundle() -> tuple[
     by_key: dict[tuple[str, str], type] = {
         (cls.__module__, cls.__qualname__): cls for cls in reviewed
     }
+    # Retain legacy ("varcode.effects.effect_classes", Name) keys for pre-13.2
+    # archives written before effect_classes was split into domain modules.
+    from . import effect_classes
+
+    for export_name in effect_classes.__all__:
+        exported_cls = getattr(effect_classes, export_name)
+        if isinstance(exported_cls, type) and exported_cls in reviewed:
+            by_key.setdefault(("varcode.effects.effect_classes", exported_cls.__qualname__), exported_cls)
     # Explicit legacy aliases for archives written under earlier 11.x names.
     by_key.update({
         ("varcode.effects.structural_serialization", "_EffectReference"): EffectReference,

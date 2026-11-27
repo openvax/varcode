@@ -103,3 +103,21 @@ def test_structural_modules_are_split_by_responsibility():
         obj = getattr(structural, name)
         if callable(obj):
             assert inspect.getdoc(obj), f"structural.{name} is missing a docstring"
+
+
+def test_effect_class_modules_are_split_by_domain():
+    from varcode.effects import (
+        base,
+        coding_effects,
+        effect_classes,
+        splice_effects,
+        structural_effects,
+    )
+
+    for mod in (base, splice_effects, coding_effects, structural_effects):
+        source_lines = inspect.getsource(mod).splitlines()
+        assert len(source_lines) < 750, f"{mod.__name__} grew back to {len(source_lines)} lines"
+        assert inspect.getdoc(mod), f"{mod.__name__} is missing a module docstring"
+    barrel_tree = ast.parse(inspect.getsource(effect_classes))
+    barrel_classes = [n.name for n in barrel_tree.body if isinstance(n, ast.ClassDef)]
+    assert barrel_classes == [], f"effect_classes.py should remain a barrel, found {barrel_classes}"

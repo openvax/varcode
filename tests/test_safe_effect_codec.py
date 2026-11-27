@@ -118,6 +118,16 @@ def test_ordinary_and_splice_effect_round_trip():
 
     restored_tm = effect_from_json(effect_to_json(tm_sub))
     assert restored_tm.candidates[0].effect is restored_tm
+
+    # Pre-13.2 archives stored effect classes under varcode.effects.effect_classes;
+    # ensure they still decode cleanly after splitting into domain modules.
+    legacy_json = effect_to_json(fast_sub).replace(
+        '"varcode.effects.coding_effects"', '"varcode.effects.effect_classes"'
+    )
+    assert '"varcode.effects.effect_classes"' in legacy_json
+    restored_legacy = effect_from_json(legacy_json)
+    assert type(restored_legacy) is Substitution
+    assert restored_legacy.short_description == fast_sub.short_description
     assert restored_tm.most_likely_candidate is restored_tm.candidates[0]
 
     restored_splice = effect_from_json(effect_to_json(splice_effect))
@@ -411,9 +421,10 @@ def test_rejects_unreviewed_classes_functions_and_prevents_arbitrary_imports(
     csv_text = csv_path.read_text(encoding="utf-8")
     assert "effect_json" in csv_text
     csv_text = csv_text.replace(
-        '""__module__"": ""varcode.effects.effect_classes""',
+        f'""__module__"": ""{type(start_loss).__module__}""',
         '""__module__"": ""untrusted_never_imported.csv""',
     )
+    assert "untrusted_never_imported.csv" in csv_text
     csv_path.write_text(csv_text, encoding="utf-8")
     with pytest.raises(ValueError, match="Unsupported class or function metadata"):
         EffectCollection.from_csv(str(csv_path))
