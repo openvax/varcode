@@ -16,8 +16,8 @@ from varcode import (
     CrypticSplicePolicy,
     EffectCollection,
     GermlineContext,
-    HypothesisLimit,
     MutantTranscript,
+    Unresolved,
     Variant,
     apply_rna_evidence_to_effects,
     effect_from_json,
@@ -234,7 +234,7 @@ def test_ap2s1_del17_bounded_multi_candidate_dna_discovery_and_rna_matching():
 
 
 def test_bounded_cryptic_enumeration_respects_max_hypotheses():
-    """Exceeding max_hypotheses with multi-candidate cryptic plans returns HypothesisLimit."""
+    """Exceeding max_hypotheses with multi-candidate cryptic plans returns Unresolved."""
     transcript, variant, provider = _ap2s1_fixture()
     policy = CrypticSplicePolicy(scan_flank=100, max_sites_per_junction=6)
     limited = predict_transcript_model_effect(
@@ -244,7 +244,9 @@ def test_bounded_cryptic_enumeration_respects_max_hypotheses():
         max_hypotheses=4,
         cryptic_policy=policy,
     )
-    assert isinstance(limited, HypothesisLimit)
+    assert type(limited) is Unresolved
+    assert limited.mechanism == "hypothesis_limit"
+    assert limited.details["max_hypotheses"] == 4
 
 
 def test_shared_germline_cryptic_site_preserves_baseline_mutant_coupling():

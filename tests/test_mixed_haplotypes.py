@@ -4,8 +4,8 @@ import pytest
 from pyensembl import cached_release
 
 from varcode import (
-    EffectCollection, GermlineAlleleOverlap, GermlineContext, HypothesisLimit,
-    TranscriptModelEffectAnnotator, Variant, VariantCollection,
+    EffectCollection, GermlineAlleleOverlap, GermlineContext,
+    TranscriptModelEffectAnnotator, Unresolved, Variant, VariantCollection,
     predict_transcript_model_effect,
 )
 
@@ -187,10 +187,11 @@ def test_mixed_haplotype_retains_phase_limit(transcript):
     effect = predict_transcript_model_effect(
         (inherited, novel, inherited), transcript,
         germline_variants=(inherited, other), max_phase_hypotheses=1)
-    assert isinstance(effect, HypothesisLimit)
+    assert type(effect) is Unresolved
+    assert effect.mechanism == "hypothesis_limit"
     assert effect.variant == novel
-    assert effect.phase.cis == (inherited,)
-    assert effect.phase.unphased == (other,)
+    assert effect.details["phase"].cis == (inherited,)
+    assert effect.details["phase"].unphased == (other,)
     assert effect.reference_effect is not None
 
 

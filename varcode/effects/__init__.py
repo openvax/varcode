@@ -38,7 +38,6 @@ from .effect_classes import (
     NonsilentCodingMutation,
     Failure,
     GermlineAlleleOverlap,
-    HypothesisLimit,
     Unresolved,
     IncompleteTranscript,
     Intergenic,
@@ -108,7 +107,6 @@ __all__ = [
     "TranscriptMutationEffect",
     "Failure",
     "GermlineAlleleOverlap",
-    "HypothesisLimit",
     "Unresolved",
     "IncompleteTranscript",
     "Intergenic",
@@ -154,3 +152,9 @@ __all__ = [
     "CrypticDonor",
     "CrypticAcceptor",
 ]
+
+
+def __getattr__(name: str):
+    if name == "HypothesisLimit":
+        return Unresolved
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

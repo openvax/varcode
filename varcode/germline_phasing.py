@@ -333,6 +333,29 @@ def classify_against_patient_baseline(
         baseline_transcript=baseline)
 
 
+def unresolved_hypothesis_limit(
+    variant,
+    transcript,
+    max_hypotheses: int,
+    phase: PhasePartition,
+    reference_effect=None,
+):
+    """Build an ``Unresolved`` effect when outcomes exceed ``max_hypotheses``."""
+    from .effects.effect_classes import Unresolved
+
+    reason = "More than %d alternative outcomes" % max_hypotheses
+    if phase.unphased:
+        reason += " (%d unphased germline variants)" % len(phase.unphased)
+    return Unresolved(
+        variant,
+        transcript,
+        mechanism="hypothesis_limit",
+        reason=reason,
+        reference_effect=reference_effect,
+        details={"max_hypotheses": max_hypotheses, "phase": phase},
+    )
+
+
 def predict_germline_aware_effect(
         somatic_variant,
         transcript,
@@ -367,8 +390,9 @@ def predict_germline_aware_effect(
       :class:`~varcode.effects.effect_classes.PhaseCandidateSet`.
     * **Cis composition unavailable** — keep an ``Unresolved`` result for
       that hypothesis, with its reference-only annotation in ``reference_effect``.
-    * **Too many hypotheses** — a :class:`~varcode.HypothesisLimit`
-      recording the phase partition and the reference-relative effect.
+    * **Too many hypotheses** — an :class:`~varcode.Unresolved` effect with
+      ``mechanism="hypothesis_limit"`` recording the phase partition and cap in
+      ``details`` plus the reference-relative effect in ``reference_effect``.
 
     ``max_hypotheses`` overrides ``germline_ctx.max_phase_hypotheses``.
     ``window_fn`` is the pluggable window selector — defaults to
@@ -379,7 +403,6 @@ def predict_germline_aware_effect(
     from pyensembl import Transcript
     from .effects.effect_classes import (
         GermlineAlleleOverlap,
-        HypothesisLimit,
         PhaseCandidateSet,
     )
 
@@ -413,7 +436,7 @@ def predict_germline_aware_effect(
         hypotheses = phase.hypotheses(limit)
     except HypothesisLimitError:
         from .effects import predict_variant_effect_on_transcript
-        return HypothesisLimit(
+        return unresolved_hypothesis_limit(
             somatic_variant, transcript, limit, phase,
             predict_variant_effect_on_transcript(
                 somatic_variant, transcript, annotator=annotator))

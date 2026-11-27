@@ -38,7 +38,6 @@ from varcode import (
     EffectCollection,
     GenomeBuildMismatchError,
     GermlineContext,
-    HypothesisLimit,
     HypothesisLimitError,
     PhasePartition,
     Unresolved,
@@ -636,20 +635,21 @@ class TestHypothesisLimit:
 
     def test_exceeded_cap_records_phase_and_reference(self):
         e = self._predict(self._ctx(max_phase_hypotheses=1))
-        assert isinstance(e, HypothesisLimit)
-        assert isinstance(e, Unresolved)
+        assert type(e) is Unresolved
+        assert e.mechanism == "hypothesis_limit"
         assert e.short_description == "unresolved-hypothesis-limit"
         assert e.modifies_protein_sequence is None
         assert e.mutant_protein_sequence is None
-        assert e.max_hypotheses == 1
-        assert e.phase == PhasePartition(germline=(_same_codon_germline(),))
+        assert e.details["max_hypotheses"] == 1
+        assert e.details["phase"] == PhasePartition(germline=(_same_codon_germline(),))
         assert e.reference_effect.short_description == "p.L159M"
 
     def test_effects_uses_the_context_cap(self):
         variant = _somatic()
         (e,) = [e for e in variant.effects(germline=self._ctx(1))
                 if e.transcript.id == CFTR_ID]
-        assert isinstance(e, HypothesisLimit)
+        assert type(e) is Unresolved
+        assert e.mechanism == "hypothesis_limit"
 
     def test_explicit_cap_overrides_the_context(self):
         e = self._predict(self._ctx(max_phase_hypotheses=1), max_hypotheses=2)
@@ -678,8 +678,9 @@ class TestHypothesisLimit:
             return transcript.contig, transcript.start, transcript.end
 
         e = self._predict(ctx, window_fn=whole_transcript)
-        assert isinstance(e, HypothesisLimit)
-        assert e.phase.unphased == tuple(germline)
+        assert type(e) is Unresolved
+        assert e.mechanism == "hypothesis_limit"
+        assert e.details["phase"].unphased == tuple(germline)
 
     def test_ranks_like_the_reference_effect(self):
         e = self._predict(self._ctx(max_phase_hypotheses=1))
@@ -705,7 +706,8 @@ class TestHypothesisLimit:
             max_phase_hypotheses=1)
         e = predict_germline_aware_effect(
             splice_variant, _cftr(), ctx, get_annotator("fast"))
-        assert isinstance(e, HypothesisLimit)
+        assert type(e) is Unresolved
+        assert e.mechanism == "hypothesis_limit"
         assert isinstance(e.reference_effect, SpliceOutcomeSet)
         assert effect_priority(e) == effect_priority(
             select_between_exonic_splice_site_and_alternate_effect(
@@ -730,7 +732,8 @@ class TestHypothesisLimit:
             EffectCollection([e]).to_json())[0]
         assert restored == e
         assert hash(restored) == hash(e)
-        assert restored.phase == e.phase
+        assert restored.details["phase"] == e.details["phase"]
+        assert restored.details["max_hypotheses"] == e.details["max_hypotheses"]
         assert restored.reason == e.reason
         assert restored.reference_effect == e.reference_effect
 

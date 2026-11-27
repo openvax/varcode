@@ -24,7 +24,6 @@ from .effect_hypotheses import (
 )
 from .effects.effect_classes import (
     GermlineAlleleOverlap,
-    HypothesisLimit,
     IncompleteTranscript,
     NoncodingTranscript,
     Unresolved,
@@ -37,6 +36,7 @@ from .circular_origin import TranscriptFrame
 from .genomic_layout import GenomicLayout, NonlocalStructuralEdit
 from .germline import (
     check_max_hypotheses, detect_germline_overlap, partition_germline_by_phase)
+from .germline_phasing import unresolved_hypothesis_limit
 from .nucleotides import reverse_complement
 from .splice_graph import disrupted_splice_sites, enumerate_paired_splice_plans
 from .transcript_layout import (
@@ -288,8 +288,9 @@ def predict_transcript_model_effect(
 
     More than ``max_phase_hypotheses`` phase hypotheses (default
     ``max_hypotheses``), or more than ``max_hypotheses`` combined
-    phase/splice outcomes, gives a :class:`~varcode.HypothesisLimit`
-    instead of a partial candidate set. ``homozygous_germline`` lists
+    phase/splice outcomes, gives an :class:`~varcode.Unresolved` effect
+    with ``mechanism="hypothesis_limit"`` instead of a partial candidate
+    set. ``homozygous_germline`` lists
     germline variants on both haplotypes, which are always cis.
 
     ``cryptic_policy`` accepts a :class:`~varcode.CrypticSplicePolicy`
@@ -375,7 +376,7 @@ def predict_transcript_model_effect(
             primary, transcript, mechanism="nonlocal_structural_variant",
             reason=str(error))
     except HypothesisLimitError as error:
-        result = HypothesisLimit(
+        result = unresolved_hypothesis_limit(
             primary, transcript, error.max_hypotheses, phase,
             _reference_effect(variants, transcript, germline_variants,
                               sequence_provider, max_hypotheses))
@@ -485,7 +486,7 @@ def _reference_effect(
     reference = predict_transcript_model_effect(
         variants, transcript, sequence_provider=sequence_provider,
         max_hypotheses=max_hypotheses)
-    if isinstance(reference, HypothesisLimit):
+    if isinstance(reference, Unresolved) and reference.mechanism == "hypothesis_limit":
         return None
     return enumerate_splice_outcomes(reference)
 

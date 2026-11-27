@@ -14,7 +14,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -543,22 +543,51 @@ class Unresolved(TranscriptMutationEffect):
     transcript : transcript-like
         The reference transcript used for annotation.
     mechanism : str
-        Machine-readable source of uncertainty.
+        Machine-readable source of uncertainty (for example
+        ``"hypothesis_limit"``, ``"germline_composition"``, or
+        ``"nonlocal_structural_variant"``).
     reason : str, optional
         Human-readable explanation of the missing comparison.
     reference_effect : MutationEffect, optional
         Reference-only diagnostic and ranking anchor, when available.
+    details : Mapping[str, Any], optional
+        Structured mechanism-specific context (for example
+        ``{"max_hypotheses": ..., "phase": ...}`` when
+        ``mechanism == "hypothesis_limit"``).
     """
 
     _default_modifies_coding_sequence = None
     _default_modifies_protein_sequence = None
 
-    def __init__(self, variant, transcript, mechanism: str, reason: str | None = None,
-                 reference_effect: MutationEffect | None = None) -> None:
+    def __init__(
+        self,
+        variant,
+        transcript,
+        mechanism: str,
+        reason: str | None = None,
+        reference_effect: MutationEffect | None = None,
+        details: Mapping[str, Any] | None = None,
+    ) -> None:
         TranscriptMutationEffect.__init__(self, variant, transcript)
         self.mechanism = mechanism
         self.reason = reason
         self.reference_effect = reference_effect
+        self.details: dict[str, Any] = dict(details) if details else {}
+
+    def __hash__(self) -> int:
+        return hash((type(self), self.variant, self.transcript, self.mechanism, self.reason))
+
+    @classmethod
+    def from_dict(cls, state_dict):
+        if (
+            "orf_effect_schema" not in state_dict
+            and "effect_graph_schema" not in state_dict
+            and "structural_effect_schema" not in state_dict
+            and "mechanism" not in state_dict
+            and ("max_hypotheses" in state_dict or "phase" in state_dict)
+        ):
+            state_dict = normalize_legacy_hypothesis_limit_state(state_dict)
+        return super().from_dict(state_dict)
 
     @property
     def priority_class(self) -> type[MutationEffect]:
@@ -576,28 +605,27 @@ class Unresolved(TranscriptMutationEffect):
         return "unresolved-%s" % self.mechanism.replace("_", "-")
 
 
-class HypothesisLimit(Unresolved):
-    """More alternative outcomes than ``max_hypotheses``, left unenumerated.
-
-    Choosing some of the outcomes would present a guess as a prediction, so
-    this effect records what is known instead. ``phase`` is the
-    :class:`~varcode.PhasePartition` of nearby germline variants (known cis,
-    known trans, unphased), and ``reference_effect`` is the variant's effect
-    without germline context. It ranks like ``reference_effect``, so germline
-    context that cannot be resolved does not change which transcript's
-    effect is selected.
-    """
-
-    def __init__(self, variant, transcript, max_hypotheses, phase,
-                 reference_effect=None):
+def normalize_legacy_hypothesis_limit_state(
+    state: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Convert pre-13.4 ``HypothesisLimit`` archive fields into ``Unresolved`` kwargs."""
+    normalized = dict(state)
+    max_hypotheses = normalized.pop("max_hypotheses", None)
+    phase = normalized.pop("phase", None)
+    details = dict(normalized.get("details") or {})
+    if max_hypotheses is not None:
+        details.setdefault("max_hypotheses", max_hypotheses)
+    if phase is not None:
+        details.setdefault("phase", phase)
+    if "reason" not in normalized and max_hypotheses is not None:
         reason = "More than %d alternative outcomes" % max_hypotheses
-        if phase.unphased:
-            reason += " (%d unphased germline variants)" % len(phase.unphased)
-        Unresolved.__init__(
-            self, variant, transcript, mechanism="hypothesis_limit",
-            reason=reason, reference_effect=reference_effect)
-        self.max_hypotheses = max_hypotheses
-        self.phase = phase
+        unphased = getattr(phase, "unphased", None)
+        if unphased:
+            reason += " (%d unphased germline variants)" % len(unphased)
+        normalized["reason"] = reason
+    normalized.setdefault("mechanism", "hypothesis_limit")
+    normalized["details"] = details
+    return normalized
 
 
 class NoncodingTranscript(TranscriptMutationEffect):
@@ -681,7 +709,6 @@ __all__ = [
     "GermlineAlleleOverlap",
     "Failure",
     "Unresolved",
-    "HypothesisLimit",
     "NoncodingTranscript",
     "IncompleteTranscript",
     "FivePrimeUTR",

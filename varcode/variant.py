@@ -568,7 +568,7 @@ class Variant(Serializable):
 
         germline : GermlineContext or None
             Supplied patient alleles across the transcript span. Unknown phase
-            produces candidate comparisons or HypothesisLimit; known cis alleles
+            produces candidate comparisons or ``Unresolved(mechanism="hypothesis_limit")``; known cis alleles
             modify both baseline and mutant. An identical inherited allele
             returns GermlineAlleleOverlap, with LOH unassessed. Omission uses the
             annotation reference and cannot recover missing patient information.

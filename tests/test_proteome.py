@@ -18,7 +18,7 @@ from varcode.effect_hypotheses import (
     merge_classified_outcomes,
 )
 from varcode.effects import (
-    CrypticAcceptor, CrypticDonor, Deletion, Failure, GeneFusion, HypothesisLimit, Intergenic, Intragenic, IntronRetention,
+    CrypticAcceptor, CrypticDonor, Deletion, Failure, GeneFusion, Intergenic, Intragenic, IntronRetention,
     SpliceAcceptor, SpliceDonor, Substitution, Unresolved,
 )
 from varcode.effects.effect_classes import PhaseCandidateSet
@@ -201,7 +201,10 @@ def test_available_partial_unknown_empty_failure_and_limit_are_distinct(effect):
     values = [replace(value, hypothesis=EffectHypothesis(enumeration_index=i)) for i, value in enumerate(values)]
     values += [Failure(effect.variant, effect.transcript, error=ValueError("fixture failure")),
                Unresolved(effect.variant, effect.transcript, "missing_dna", "no introns"),
-               HypothesisLimit(effect.variant, effect.transcript, 2, PhasePartition((), (), ()))]
+               Unresolved(
+                   effect.variant, effect.transcript, mechanism="hypothesis_limit",
+                   reason="More than 2 alternative outcomes",
+                   details={"max_hypotheses": 2, "phase": PhasePartition((), (), ())})]
     predicted = to_proteome(values)
     assert {r.status for r in comparisons(predicted)} == {
         "partial_product", "unchanged", "no_product", "sequence_unavailable",
@@ -653,7 +656,9 @@ def test_transcript_free_gene_effects_have_distinct_identities(effect, tmp_path)
 def test_bound_orf_hypothesis_limit_preserves_status_and_cap(reference_orf, effect):
     partner = Variant("1", 5, "C", "G", genome=effect.variant.genome)
     annotation = annotate_orf_variants([effect.variant], reference_orf, germline_variants=[partner], max_hypotheses=1)
-    assert isinstance(annotation.effect, HypothesisLimit) and annotation.outcomes == ()
+    assert type(annotation.effect) is Unresolved
+    assert annotation.effect.mechanism == "hypothesis_limit"
+    assert annotation.outcomes == ()
     predicted = to_proteome(orf_annotations=[annotation])
     assert not predicted.proteins
     for record in predicted.records:

@@ -14,7 +14,6 @@ from varcode import (
     Completeness,
     EffectCollection,
     GermlineContext,
-    HypothesisLimit,
     PhasePartition,
     StructuralVariant,
     TranscriptModelEffectAnnotator,
@@ -231,9 +230,10 @@ def test_combined_phase_and_splice_hypotheses_obey_global_cap():
         (somatic,), transcript, germline_variants=(germline,),
         sequence_provider=provider(), max_hypotheses=7)
 
-    assert isinstance(result, HypothesisLimit)
-    assert result.max_hypotheses == 7
-    assert result.phase == PhasePartition(germline=(germline,))
+    assert type(result) is Unresolved
+    assert result.mechanism == "hypothesis_limit"
+    assert result.details["max_hypotheses"] == 7
+    assert result.details["phase"] == PhasePartition(germline=(germline,))
     assert result.reference_effect == predict_transcript_model_effect(
         (somatic,), transcript, sequence_provider=provider(), max_hypotheses=7)
 
@@ -247,8 +247,9 @@ def test_phase_cap_gives_hypothesis_limit_ranked_like_reference():
         (somatic,), transcript, germline_variants=(germline,),
         max_phase_hypotheses=1)
 
-    assert isinstance(result, HypothesisLimit)
-    assert result.max_hypotheses == 1
+    assert type(result) is Unresolved
+    assert result.mechanism == "hypothesis_limit"
+    assert result.details["max_hypotheses"] == 1
     assert result.reference_effect.short_description == "p.L159M"
     assert effect_priority(result) == effect_priority(result.reference_effect)
 
@@ -265,7 +266,8 @@ def test_transcript_model_uses_context_phase_cap():
     result = TranscriptModelEffectAnnotator().annotate_with_context(
         somatic, transcript, ctx)
 
-    assert isinstance(result, HypothesisLimit)
+    assert type(result) is Unresolved
+    assert result.mechanism == "hypothesis_limit"
 
 
 def test_direct_phase_cap_defaults_to_max_hypotheses():
@@ -278,8 +280,9 @@ def test_direct_phase_cap_defaults_to_max_hypotheses():
     enumerated = predict_transcript_model_effect(
         (somatic,), transcript, germline_variants=(germline,))
 
-    assert isinstance(capped, HypothesisLimit)
-    assert not isinstance(enumerated, HypothesisLimit)
+    assert type(capped) is Unresolved
+    assert capped.mechanism == "hypothesis_limit"
+    assert not isinstance(enumerated, Unresolved)
 
 
 def test_splice_limit_without_germline_leaves_no_reference():
@@ -291,7 +294,8 @@ def test_splice_limit_without_germline_leaves_no_reference():
         (somatic,), transcript, germline_variants=(germline,),
         sequence_provider=provider(), max_hypotheses=1)
 
-    assert isinstance(result, HypothesisLimit)
+    assert type(result) is Unresolved
+    assert result.mechanism == "hypothesis_limit"
     assert result.reference_effect is None
 
 
@@ -304,7 +308,7 @@ def test_numpy_cap_result_exports_to_json():
         (somatic,), transcript, germline_variants=(germline,),
         max_hypotheses=np.int64(1))
 
-    assert type(result.max_hypotheses) is int
+    assert type(result.details["max_hypotheses"]) is int
     restored = EffectCollection.from_json(EffectCollection([result]).to_json())
     assert restored[0] == result
 
