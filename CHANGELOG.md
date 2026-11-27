@@ -1,5 +1,17 @@
 # Change Log
 
+## v13.0.3
+
+### Preserve `"dna"` annotator candidate metadata across `to_dict()` / JSON round-trips (#778)
+
+- Include `"candidates"`, `"most_likely_candidate"`, `"highest_priority_candidate"`,
+  `"probability"`, and `"mechanism_rank"` in `MutationEffect._effect_graph_fields`
+  so plain coding SNVs and other fast-path `"dna"` annotator effects serialize via
+  `effect_graph_schema` and preserve `EffectCandidate` provenance across
+  `to_dict()` / `from_dict()`, `to_json()` / `from_json()`, and
+  `EffectCollection` round-trips (while `"fast"` annotator effects remain on the
+  compact legacy schema).
+
 ## v13.0.2
 
 ### Preserve RNA observation evidence & fast-path RNA refinement on `"dna"` annotator (#776)

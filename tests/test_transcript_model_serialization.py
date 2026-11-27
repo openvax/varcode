@@ -67,6 +67,48 @@ def test_single_variant_and_legacy_effect_json_remain_readable():
     assert restored.candidates[0].outcomes[0].effect is restored
 
 
+def test_default_dna_annotator_plain_snv_roundtrips_candidates_and_metadata():
+    """Regression for #778: plain coding SNVs from the default dna annotator must
+    preserve EffectCandidate metadata across to_dict/from_dict and JSON round-trips.
+    """
+    from varcode import EffectCandidate, get_effect_candidates
+
+    variant = Variant("7", 117531100, "T", "A", genome=81)
+    transcript = variant.genome.transcript_by_id("ENST00000003084")
+    effect = variant.effect_on_transcript(transcript, annotator="dna")
+    candidates = get_effect_candidates(effect)
+    assert len(candidates) == 1
+    assert isinstance(candidates[0], EffectCandidate)
+    assert candidates[0].source == "varcode.dna"
+    assert candidates[0].effect is effect
+    assert effect.probability == 1.0
+    assert effect.mechanism_rank == ()
+
+    state = effect.to_dict()
+    assert "effect_graph_schema" in state
+
+    for restored in (
+        type(effect).from_dict(state),
+        Substitution.from_json(effect.to_json()),
+        EffectCollection.from_json(EffectCollection([effect]).to_json())[0],
+    ):
+        restored_candidates = get_effect_candidates(restored)
+        assert len(restored_candidates) == 1
+        assert isinstance(restored_candidates[0], EffectCandidate)
+        assert restored_candidates[0].source == "varcode.dna"
+        assert restored_candidates[0].mechanisms == ("normal",)
+        assert restored_candidates[0].effect is restored
+        assert restored.most_likely_candidate == restored_candidates[0]
+        assert restored.most_likely_candidate.effect is restored
+        assert restored.highest_priority_candidate == restored_candidates[0]
+        assert restored.highest_priority_candidate.effect is restored
+        assert restored.probability == 1.0
+        assert restored.mechanism_rank == ()
+        assert restored.short_description == effect.short_description
+        assert hash(restored) == hash(effect)
+        assert restored.to_dict() == state
+
+
 def test_graph_schema_and_references_are_validated(uncertain_effect):
     state = uncertain_effect.to_dict()
     cls = type(uncertain_effect)

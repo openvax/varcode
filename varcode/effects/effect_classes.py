@@ -43,9 +43,11 @@ class MutationEffect(Serializable):
     """
 
     _effect_graph_fields = (
-        "realized_candidates", "germline_phase_state",
-        "germline_variants_in_window", "germline_unknown", "germline_variants",
-        "baseline_transcript", "_modifies_coding_sequence", "_modifies_protein_sequence")
+        "candidates", "realized_candidates", "most_likely_candidate",
+        "highest_priority_candidate", "probability", "mechanism_rank",
+        "germline_phase_state", "germline_variants_in_window",
+        "germline_unknown", "germline_variants", "baseline_transcript",
+        "_modifies_coding_sequence", "_modifies_protein_sequence")
 
     def __init__(self, variant):
         self.variant = variant
