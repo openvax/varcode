@@ -76,6 +76,43 @@ _PRIMITIVE_TYPES = (type(None), bool, int, float, str)
 _COLLECTIONS_BUILT_FROM_VALUE = (set, frozenset, tuple)
 
 
+_INIT_PARAM_CACHE: dict[type[Any], frozenset[str]] = {}
+
+
+def _init_param_names(cls: type[Any]) -> frozenset[str]:
+    cached = _INIT_PARAM_CACHE.get(cls)
+    if cached is not None:
+        return cached
+    names = frozenset(
+        name
+        for name, parameter in signature(getattr(cls, "__init__")).parameters.items()
+        if name != "self"
+        and parameter.kind not in (Parameter.VAR_POSITIONAL, Parameter.VAR_KEYWORD)
+    )
+    _INIT_PARAM_CACHE[cls] = names
+    return names
+
+
+def needs_effect_graph_serialization(effect: Any) -> bool:
+    """True when ``effect`` carries graph state beyond its constructor fields.
+
+    Uses :data:`_ATTACHED_FIELDS` as the single source of truth so post-hoc
+    attachments (``candidates``, ``realized_candidates``, ``mutant_transcript``,
+    ``germline_*``, etc.) are never silently dropped by ``to_dict()``.
+    """
+    from .effect_classes import PhaseCandidateSet
+
+    if isinstance(effect, PhaseCandidateSet):
+        return True
+    init_names = _init_param_names(type(effect))
+    return any(
+        name in effect.__dict__
+        and name not in init_names
+        and name.lstrip("_") not in init_names
+        for name in _ATTACHED_FIELDS
+    )
+
+
 def _model_types() -> tuple[type, ...]:
     from ..effect_hypotheses import (
         ClassifiedOutcome,
@@ -375,7 +412,12 @@ def structural_effect_to_dict(
                 nodes[indices[key]] = (type(value), encode(state), encode(attached))
             return EffectReference(indices[key])
         if isinstance(value, EffectCandidate):
-            return replace(value, effect=encode(value.effect), evidence=encode(value.evidence))
+            return replace(
+                value,
+                effect=encode(value.effect),
+                evidence=encode(value.evidence),
+                phase=encode(value.phase),
+            )
         if isinstance(value, dict):
             return {key: encode(item) for key, item in value.items()}
         if isinstance(value, (tuple, list)):
@@ -440,7 +482,12 @@ def structural_effect_from_dict(
                     setattr(objects[index], name, item)
             return objects[index]
         if isinstance(value, EffectCandidate):
-            return replace(value, effect=decode(value.effect), evidence=decode(value.evidence))
+            return replace(
+                value,
+                effect=decode(value.effect),
+                evidence=decode(value.evidence),
+                phase=decode(value.phase),
+            )
         if isinstance(value, dict):
             return {key: decode(item) for key, item in value.items()}
         if isinstance(value, (tuple, list)):
@@ -765,6 +812,7 @@ __all__ = [
     "effect_from_serializable_repr",
     "effect_serialization_classes",
     "effect_to_json",
+    "needs_effect_graph_serialization",
     "structural_effect_from_dict",
     "structural_effect_to_dict",
 ]
