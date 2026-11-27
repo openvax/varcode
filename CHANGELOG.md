@@ -1,5 +1,23 @@
 # Change Log
 
+## v13.0.3
+
+### Fix effect-graph serialization for default `"dna"` SNVs and remove `_effect_graph_fields` (#778)
+
+- Remove the duplicate `MutationEffect._effect_graph_fields` field whitelist in
+  `varcode/effects/effect_classes.py` and replace it with
+  `needs_effect_graph_serialization(effect)` in
+  `varcode/effects/structural_serialization.py`, derived directly from the
+  single authoritative `_ATTACHED_FIELDS` registry (minus each effect class's
+  constructor fields).
+- Plain coding SNVs produced by the default `"dna"` annotator (e.g. BRAF V600E
+  `Substitution` carrying `candidates`) now round-trip losslessly through
+  `to_dict()` / `from_dict()` and `to_json()` / `from_json()` while bare
+  `annotator="fast"` effects keep their flat dict schema.
+- Encode and decode `EffectCandidate.phase` (germline `(Variant, state)` tuples)
+  through the effect-graph reference table in `structural_effect_to_dict` /
+  `structural_effect_from_dict`.
+
 ## v13.0.2
 
 ### Preserve RNA observation evidence & fast-path RNA refinement on `"dna"` annotator (#776)

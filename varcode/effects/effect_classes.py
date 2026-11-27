@@ -42,23 +42,20 @@ class MutationEffect(Serializable):
     Base class for mutation effects.
     """
 
-    _effect_graph_fields = (
-        "realized_candidates", "germline_phase_state",
-        "germline_variants_in_window", "germline_unknown", "germline_variants",
-        "baseline_transcript", "_modifies_coding_sequence", "_modifies_protein_sequence")
-
     def __init__(self, variant):
         self.variant = variant
 
     def to_dict(self):
+        from .structural_serialization import (
+            needs_effect_graph_serialization,
+            structural_effect_to_dict,
+        )
+
         if self.orf is not None or self.orf_annotation is not None:
-            from .structural_serialization import structural_effect_to_dict
             return structural_effect_to_dict(self, schema="orf_effect_schema")
-        if any(name in self.__dict__ for name in self._effect_graph_fields):
-            from .structural_serialization import structural_effect_to_dict
+        if needs_effect_graph_serialization(self):
             return structural_effect_to_dict(self, schema="effect_graph_schema")
         if getattr(self.variant, "is_structural", False):
-            from .structural_serialization import structural_effect_to_dict
             return structural_effect_to_dict(self)
         return super().to_dict()
 
@@ -97,11 +94,12 @@ class MutationEffect(Serializable):
         return result
 
     def __hash__(self):
+        from .structural_serialization import needs_effect_graph_serialization
+
         if (getattr(self.variant, "is_structural", False)
                 or isinstance(self, MultiOutcomeEffect)
-                or "mutant_transcript" in self.__dict__
                 or "source_evidence" in self.__dict__
-                or any(name in self.__dict__ for name in self._effect_graph_fields)):
+                or needs_effect_graph_serialization(self)):
             # Evidence contains dictionaries and candidates can point back
             # to this effect. Equal effects have equal identity fields.
             variants = getattr(self, "variants", None)

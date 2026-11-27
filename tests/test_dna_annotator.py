@@ -617,3 +617,67 @@ def test_dna_fast_path_and_rna_refinement_preserve_observations_and_support():
     sub_cand = next(c for c in refined_rna.candidates if isinstance(c.effect, Substitution))
     assert sub_cand.evidence["rna_support"][0]["read_count"] == 12
     assert sub_cand.evidence["rna_support"][0]["transcript_model_id"] == "full"
+
+
+def test_dna_effect_to_dict_and_json_roundtrip_preserves_candidates_and_phase():
+    """#778: plain dna SNVs and phased/splice dna effects round-trip candidates losslessly."""
+    from varcode import MutationEffect, get_effect_candidates, iter_candidate_paths
+
+    assert not hasattr(MutationEffect, "_effect_graph_fields")
+
+    braf = GENOME.transcript_by_id("ENST00000288602")
+    v_v600e = Variant("7", 140753336, "A", "T", genome=GENOME)
+
+    # Plain fast-path dna SNV (BRAF V600E) must preserve candidates on to_dict/from_dict & JSON.
+    eff = v_v600e.effect_on_transcript(braf)
+    assert isinstance(eff, Substitution)
+    assert len(get_effect_candidates(eff)) == 1
+    assert eff.candidates[0].source == "varcode.dna"
+
+    restored_dict = type(eff).from_dict(eff.to_dict())
+    assert len(get_effect_candidates(restored_dict)) == 1
+    assert restored_dict.candidates[0].source == "varcode.dna"
+    assert restored_dict.candidates[0].effect is restored_dict
+    assert restored_dict.most_likely_candidate == restored_dict.candidates[0]
+    assert restored_dict.most_likely_candidate.effect is restored_dict
+    assert restored_dict.highest_priority_candidate == restored_dict.candidates[0]
+    assert restored_dict.highest_priority_candidate.effect is restored_dict
+    assert len(list(iter_candidate_paths(restored_dict))) == 1
+    assert hash(restored_dict) == hash(eff)
+    assert restored_dict.to_dict() == eff.to_dict()
+
+    restored_json = type(eff).from_json(eff.to_json())
+    assert len(get_effect_candidates(restored_json)) == 1
+    assert restored_json.to_dict() == eff.to_dict()
+
+    restored_coll = EffectCollection.from_json(EffectCollection([eff]).to_json())
+    assert len(get_effect_candidates(restored_coll[0])) == 1
+    assert restored_coll[0].to_dict() == eff.to_dict()
+
+    # Legacy fast annotator plain SNV retains flat dict without effect_graph_schema.
+    legacy = v_v600e.effect_on_transcript(braf, annotator="fast")
+    assert "effect_graph_schema" not in legacy.to_dict()
+
+    # Phased germline dna effect round-trips EffectCandidate.phase Variant references cleanly.
+    germline_v = Variant("7", 140753335, "C", "T", genome=GENOME)
+    phased = v_v600e.effect_on_transcript(
+        braf, germline=GermlineContext.from_variants([germline_v])
+    )
+    restored_phased = type(phased).from_json(phased.to_json())
+    assert {
+        (v.contig, v.start, v.ref, v.alt, state)
+        for c in restored_phased.candidates
+        for v, state in c.phase
+    } == {
+        (v.contig, v.start, v.ref, v.alt, state)
+        for c in phased.candidates
+        for v, state in c.phase
+    }
+    assert restored_phased.to_dict() == phased.to_dict()
+
+    # Splice-site dna effect preserves multi-candidate graph and novel_junctions.
+    cftr = GENOME.transcript_by_id("ENST00000003084")
+    splice_eff = Variant("7", 117531117, "A", "C", genome=GENOME).effect_on_transcript(cftr)
+    restored_splice = type(splice_eff).from_json(splice_eff.to_json())
+    assert len(restored_splice.candidates) == len(splice_eff.candidates)
+    assert restored_splice.to_dict() == splice_eff.to_dict()
