@@ -128,7 +128,7 @@ def fusion_across_junction(variant, transcript, assembly):
     if not fusions:
         return None
     primary = fusions[0]
-    primary._attach_primary_effects(fusions[1:])
+    primary.add_primary_effects(fusions[1:])
     return primary
 
 

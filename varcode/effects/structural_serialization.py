@@ -50,26 +50,34 @@ _EffectReference = EffectReference
 # Explicit post-construction annotation state. Do not archive caches, logger
 # handles, or arbitrary implementation attributes from __dict__.
 _ATTACHED_FIELDS = (
-    "mutant_transcript", "baseline_transcript", "affected_exons", "candidate_evidence", "_cryptic_candidates",
-    "_splice_candidates", "_extra_candidates", "_original_protein_sequence",
+    "mutant_transcript", "baseline_transcript", "affected_exons",
+    "candidate_evidence", "extra_candidates", "_original_protein_sequence",
     "_mutant_protein_sequence", "_modifies_coding_sequence",
     "_modifies_protein_sequence", "modifies_coding_sequence",
     "modifies_protein_sequence", "variants", "phase_source", "annotator",
     "annotator_version", "observed_mutant_transcripts",
-    "candidates", "realized_candidates", "most_likely_candidate",
-    "highest_priority_candidate", "hypotheses", "mechanism_rank",
+    "candidates", "realized_candidates", "hypotheses", "mechanism_rank",
     "probability", "splice_signal", "germline_unknown",
     "germline_phase_state", "germline_variants_in_window",
     "orf_annotation",
 )
 
+# Legacy attachment keys written by pre-13.1 archives; still accepted on decode
+# so older serialized archives remain readable without retaining private slots.
+_LEGACY_ATTACHED_FIELDS = frozenset({
+    "_cryptic_candidates",
+    "_splice_candidates",
+    "_extra_candidates",
+    "most_likely_candidate",
+    "highest_priority_candidate",
+})
+
 # A comparison describes one outcome, independently of candidate containers
 # and back-references to an enclosing annotation. Its inert projection retains
 # the mechanism, transcript model and evidence but does not archive siblings.
 _ALTERNATIVE_FIELDS = {
-    "primary_effects", "candidates", "hypotheses", "realized_candidates",
-    "_cryptic_candidates", "_splice_candidates", "_extra_candidates",
-    "most_likely_candidate", "highest_priority_candidate", "orf_annotation",
+    "primary_effects", "candidates", "extra_candidates", "hypotheses",
+    "realized_candidates", "orf_annotation",
 }
 
 _PRIMITIVE_TYPES = (type(None), bool, int, float, str)
@@ -324,7 +332,7 @@ def structural_effect_to_dict(
     """Archive a native graph, or project one inert ``orf_comparison_schema`` outcome."""
     from ..structural_variant import StructuralVariant
     from ..variant import Variant
-    from .effect_classes import MutationEffect, PhaseCandidateSet, StructuralVariantEffect
+    from .effect_classes import MutationEffect, PhaseCandidateSet
 
     indices: dict[int, int] = {}
     nodes: list[Any] = []
@@ -392,10 +400,8 @@ def structural_effect_to_dict(
                         continue
                     if comparison and name in _ALTERNATIVE_FIELDS:
                         continue
-                    if name == "primary_effects" and isinstance(value, StructuralVariantEffect):
-                        state[name] = value._primary_effects
-                    elif isinstance(value, PhaseCandidateSet) and name in ("candidates", "hypotheses"):
-                        state[name] = (value._candidates_raw if name == "candidates" else value._hypotheses)
+                    if isinstance(value, PhaseCandidateSet) and name == "candidates":
+                        state[name] = value.candidate_effects
                     elif name == "candidates" and hasattr(value, "_candidates"):
                         state[name] = value._candidates
                     elif hasattr(value, name):
@@ -417,6 +423,7 @@ def structural_effect_to_dict(
                 effect=encode(value.effect),
                 evidence=encode(value.evidence),
                 phase=encode(value.phase),
+                outcomes=encode(value.outcomes),
             )
         if isinstance(value, dict):
             return {key: encode(item) for key, item in value.items()}
@@ -476,10 +483,29 @@ def structural_effect_from_dict(
                         object.__setattr__(objects[index], name, item)
                 else:
                     cls.__init__(objects[index], **values)
-                for name, item in decode(attached).items():
+                decoded_attached = decode(attached)
+                for name, item in decoded_attached.items():
+                    if name in _LEGACY_ATTACHED_FIELDS:
+                        continue
                     if name not in _ATTACHED_FIELDS:
                         raise ValueError("Unknown effect attachment: %s" % name)
-                    setattr(objects[index], name, item)
+                    if name == "extra_candidates":
+                        objects[index].add_candidates(item)
+                    else:
+                        setattr(objects[index], name, item)
+                for name, item in decoded_attached.items():
+                    if name in ("_extra_candidates", "_splice_candidates"):
+                        objects[index].add_candidates(item)
+                    elif name == "_cryptic_candidates":
+                        from .structural_candidates import cryptic_exon_candidate
+
+                        base_ev = dict(getattr(objects[index], "candidate_evidence", None) or {})
+                        sv_type = getattr(getattr(objects[index], "variant", None), "sv_type", None)
+                        if sv_type is not None:
+                            base_ev["sv_type"] = sv_type
+                        objects[index].add_candidates(
+                            cryptic_exon_candidate(c, base_evidence=base_ev) for c in item
+                        )
             return objects[index]
         if isinstance(value, EffectCandidate):
             return replace(
@@ -487,6 +513,7 @@ def structural_effect_from_dict(
                 effect=decode(value.effect),
                 evidence=decode(value.evidence),
                 phase=decode(value.phase),
+                outcomes=decode(value.outcomes),
             )
         if isinstance(value, dict):
             return {key: decode(item) for key, item in value.items()}

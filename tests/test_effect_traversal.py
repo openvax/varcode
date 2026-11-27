@@ -70,8 +70,8 @@ def test_realized_children_and_extra_rna_candidates_are_not_double_counted():
     primary = realized(effect, "MREF", "unknown")
     extra = EffectCandidate(other, source="rna")
     effect.realized_candidates = (primary,)
-    effect.candidates = (primary, extra)
-    effect._extra_candidates = (extra,)
+    effect.candidates = (primary,)
+    effect.add_candidates((extra,))
     assert get_effect_candidates(effect) == (primary, extra)
     assert list(iter_candidate_paths(effect)) == [(effect, (primary,)), (other, (extra,))]
 

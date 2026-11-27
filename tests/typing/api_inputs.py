@@ -25,6 +25,7 @@ from varcode import (
     resolve_annotator, set_default_annotator, use_annotator,
     load_maf, load_maf_dataframe, load_vcf, normalize_contig_name, resolve_contig_name,
 )
+from varcode.effect_hypotheses import ClassifiedOutcome
 from varcode.nucleotides import normalize_nucleotide_string
 from varcode.vcf import read_vcf_into_dataframe
 
@@ -120,6 +121,13 @@ def check_annotation_workflow(
     assert_type(effect.transcript_id, str | None)
     assert_type(effect.short_description, str)
     assert_type(effect.format_short_description(deletion_notation="range"), str)
+    assert_type(effect.candidates, tuple[Candidate, ...])
+    assert_type(effect.effects, tuple[MutationEffect, ...])
+    assert_type(effect.most_likely_candidate, Candidate | None)
+    assert_type(effect.most_likely_effect, MutationEffect | None)
+    assert_type(effect.highest_priority_candidate, Candidate | None)
+    assert_type(effect.highest_priority_effect, MutationEffect | None)
+    effect.add_candidates((EffectCandidate(effect=effect),))
     if effect.mutant_protein_sequence is not None:
         assert_type(effect.mutant_protein_sequence, str)
     assert_type(InvalidContigError("missing"), InvalidContigError)
@@ -163,6 +171,7 @@ def check_annotation_workflow(
     assert_type(cand.short_description, str)
     assert_type(cand.mechanisms, tuple[str, ...])
     assert_type(cand.uncertainty, tuple[str, ...])
+    assert_type(cand.outcomes, tuple[ClassifiedOutcome, ...])
     if effect.mutant_transcript is not None:
         assert_type(effect.mutant_transcript.is_complete, bool)
         assert_type(effect.mutant_transcript.novel_junctions, tuple[tuple[str, int, int, str], ...])

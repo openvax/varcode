@@ -265,7 +265,7 @@ def test_splice_alternatives_and_added_rna_context_survive(effect):
         EffectCandidate(other, source="varcode_splice", evidence={"rank": 1}),
         EffectCandidate(unresolved, source="varcode_splice", evidence={"rank": 2})),
         disrupted_signal_class=SpliceDonor)
-    splice._extra_candidates = (EffectCandidate(other, source="RNA", evidence={"reads": ["read1"]}),)
+    splice.add_candidates((EffectCandidate(other, source="RNA", evidence={"reads": ["read1"]}),))
     predicted = to_proteome([splice])
     assert len(comparisons(predicted)) == 4
     assert {entry.sequence for entry in predicted} == {"MTK", "MK"}
@@ -315,7 +315,7 @@ def test_equal_fusion_sequences_retain_transcript_model_associations(effect, tmp
     for model in ("model-1", "model-2"):
         assert sum(model in json.dumps(r.to_dict()["payload"]["native"]) for r in comparisons(predicted)) == 1
     # Reordering sibling candidates cannot change outcome IDs.
-    fusion._primary_effects = (second, first)
+    fusion.primary_effects = (second, first)
     assert {r.key for r in comparisons(to_proteome(fusion))} == {r.key for r in comparisons(predicted)}
     path = tmp_path / "fusion-models.json.gz"
     predicted.save(path)
@@ -630,7 +630,7 @@ def test_legacy_germline_phase_candidates_export_and_archive(tmp_path):
     assert {r.payload["effect_description"] for r in comparisons(predicted)} == {"p.L159M", "p.S159T"}
     state = structural_effect_to_dict(effect, schema="orf_effect_schema")
     restored = structural_effect_from_dict(PhaseCandidateSet, state, schema="orf_effect_schema")
-    assert [c.short_description for c in restored._candidates_raw] == [c.short_description for c in effect._candidates_raw]
+    assert [c.short_description for c in restored.candidate_effects] == [c.short_description for c in effect.candidate_effects]
     assert [c.evidence for c in restored.candidates] == [c.evidence for c in effect.candidates]
     path = tmp_path / "phase.json.gz"
     predicted.save(path)

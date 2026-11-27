@@ -308,7 +308,7 @@ def discover_created_orfs(effect, *, policy=None):
             outcomes = candidate.outcomes
             phase_mass = candidate.phase_mass
         elif isinstance(candidate, EffectCandidate):
-            outcomes = getattr(candidate, "_paired_outcomes", None) or (None,)
+            outcomes = candidate.outcomes or (None,)
             phase_mass = candidate.evidence.get("phase_mass")
         else:
             outcomes = (None,)

@@ -18,14 +18,20 @@ CandidatePath: TypeAlias = tuple[Candidate, ...]
 def get_effect_candidates(effect: MutationEffect | None) -> tuple[Candidate, ...]:
     """Return immediate candidates in producer order, retaining original wrappers.
 
-    Realized candidates are authoritative on transcript-model results; their
-    externally attached candidates follow them. Legacy outcome sets include
-    those extras in their own ``candidates`` property. A bare effect has none.
-    This does not change probabilities, merge outcomes or infer missing products.
+    Every :class:`~varcode.MutationEffect` exposes its candidates uniformly via
+    :attr:`~varcode.MutationEffect.candidates` (empty tuple for bare effects).
+    This helper accepts ``None`` and preserves compatibility for callers and
+    duck-typed objects.
     """
+    if effect is None:
+        return ()
+    from .effects.effect_classes import MutationEffect
+
+    if isinstance(effect, MutationEffect):
+        return effect.candidates
     realized = getattr(effect, "realized_candidates", None)
     if realized is not None:
-        return tuple(realized) + tuple(getattr(effect, "_extra_candidates", ()))
+        return tuple(realized)
     return tuple(getattr(effect, "candidates", ()) or ())
 
 

@@ -118,9 +118,6 @@ def _attach_candidate_set(ordered):
     top_effect = top.effect
     top_effect.candidates = ordered
     top_effect.realized_candidates = ordered
-    top_effect.most_likely_candidate = top
-    top_effect.highest_priority_candidate = max(
-        ordered, key=lambda candidate: classification_priority(candidate.effect))
     top_effect.probability = top.probability
     top_effect.mechanism_rank = top.ordinal_key
     top_effect.hypotheses = top.hypotheses
@@ -170,7 +167,7 @@ def refine_transcript_model_effect(effect, observed):
     realized = getattr(effect, "realized_candidates", None)
     dna_cands = tuple(
         c for c in (effect.__dict__.get("candidates") or ())
-        if isinstance(c, EffectCandidate) and getattr(c, "_paired_outcomes", None)
+        if isinstance(c, EffectCandidate) and c.outcomes
     )
     if realized:
         outcomes = [outcome for candidate in realized for outcome in candidate.outcomes]
@@ -179,7 +176,7 @@ def refine_transcript_model_effect(effect, observed):
         outcomes = [
             outcome
             for candidate in dna_cands
-            for outcome in (getattr(candidate, "_paired_outcomes", None) or ())
+            for outcome in candidate.outcomes
         ]
         was_dna = True
     elif any(

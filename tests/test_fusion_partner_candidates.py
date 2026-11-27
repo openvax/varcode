@@ -126,7 +126,7 @@ def test_supplied_assembly_and_external_candidates_are_preserved(fusion_case):
     assert all(c.mutant_transcript.cdna_sequence == variant.alt_assembly for c in candidates)
     assert all(c.mutant_transcript.evidence == {"source": "alt_assembly"} for c in candidates)
     observed = EffectCandidate(candidates[-1], source="rna", evidence={"read_count": 4})
-    effect._extra_candidates = (observed,)
+    effect.add_candidates((observed,))
     assert effect.candidates[-1] is observed
     assert len(effect.candidates) == 8
 

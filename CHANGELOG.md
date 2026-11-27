@@ -1,5 +1,37 @@
 # Change Log
 
+## v13.1.0
+
+### Clean unified candidate API on `MutationEffect` and `EffectCandidate.outcomes`
+
+- **Lift candidate accessors onto `MutationEffect`**: every effect now exposes
+  `.candidates`, `.effects`, `.most_likely_candidate`, `.most_likely_effect`,
+  `.highest_priority_candidate`, `.highest_priority_effect`, and public
+  `.add_candidates(...)` directly (returning `()` / `None` for bare `"fast"`
+  effects), eliminating post-hoc monkey-patching in `DNAEffectAnnotator` and
+  `TranscriptModelEffectAnnotator` and duplicate serialized candidate copies.
+  `effect.most_likely_candidate is effect.candidates[0]` now holds before and
+  after JSON round-trip.
+- **Promote `EffectCandidate.outcomes` to a public serialized field**: remove
+  the `object.__setattr__(ec, "_paired_outcomes", ...)` hack on frozen
+  `EffectCandidate` instances and encode/decode `outcomes` in
+  `structural_effect_to_dict` / `structural_effect_from_dict`, so
+  `to_proteome()`, `discover_created_orfs()`, and
+  `apply_rna_evidence_to_effects()` work identically before and after JSON
+  round-trip.
+- **Remove private candidate plumbing on effect classes**: delete
+  `_extra_candidates`, `_combine_with_extra_candidates`, `_attached`,
+  `MutationEffect.__reduce__`, `_cryptic_candidates`, `_splice_candidates`,
+  `_attach_primary_effects`, `_attach_cryptic_candidates`,
+  `_attach_splice_outcomes`, `_candidates_raw`, and `_hypotheses`. Expose
+  public `StructuralVariantEffect.primary_effects` / `.add_primary_effects()`,
+  `PhaseCandidateSet.candidate_effects` / `.hypotheses`, and a setter on
+  `MutationEffect.original_protein_sequence`.
+- **Full archive backwards-compatibility**: `structural_effect_from_dict`
+  continues to decode pre-13.1 archives carrying legacy `_extra_candidates`,
+  `_splice_candidates`, `_cryptic_candidates`, `most_likely_candidate`, and
+  `highest_priority_candidate` attachment keys.
+
 ## v13.0.3
 
 ### Fix effect-graph serialization for default `"dna"` SNVs and remove `_effect_graph_fields` (#778)

@@ -72,7 +72,7 @@ def test_self_candidate_does_not_recurse_when_ranking(cftr, local_model):
 
     exon = cftr.exons[4]
     effect = _annotate(cftr, "DEL", exon.start + 10, exon.start + 13)
-    effect._extra_candidates = (EffectCandidate(effect, "RNA", {}),)
+    effect.add_candidates((EffectCandidate(effect, "RNA", {}),))
     assert effect_priority(effect) == effect_priority(effect.candidates[0].effect)
     assert isinstance(effect.highest_priority_effect, FrameShift)
 

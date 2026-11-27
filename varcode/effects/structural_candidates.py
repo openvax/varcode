@@ -57,6 +57,27 @@ def breakpoint_splice_window(transcript, breakpoint_pos):
     return None
 
 
+def cryptic_exon_candidate(cryptic, *, base_evidence=None):
+    """Wrap a :class:`~varcode.effects.CrypticExonCandidate` as a ``varcode_motif`` candidate."""
+    from ..effect_candidates import EffectCandidate
+
+    donor = cryptic.donor_score or 0.0
+    acceptor = cryptic.acceptor_score or 0.0
+    evidence = {
+        **(dict(base_evidence) if base_evidence else {}),
+        "donor_score": cryptic.donor_score,
+        "acceptor_score": cryptic.acceptor_score,
+        "motif_score": (donor + acceptor) / 2.0,
+        "interval_start": cryptic.interval_start,
+        "interval_end": cryptic.interval_end,
+    }
+    return EffectCandidate(
+        effect=cryptic,
+        source="varcode_motif",
+        evidence=evidence,
+    )
+
+
 def enumerate_and_attach_splice_outcomes(event, transcript, effect):
     """Synthesize and attach ``varcode_splice`` candidates when SV breakpoints hit splice windows (#341)."""
     from ..effect_candidates import EffectCandidate
@@ -101,7 +122,7 @@ def enumerate_and_attach_splice_outcomes(event, transcript, effect):
                 evidence={**dict(candidate.evidence), **sv_evidence},
             ))
     if attached:
-        effect._attach_splice_outcomes(attached)
+        effect.add_candidates(attached)
 
 
 def enumerate_and_attach_cryptics(variant, effect):
@@ -121,4 +142,11 @@ def enumerate_and_attach_cryptics(variant, effect):
     candidates = cached_variant_lookup(
         variant, "cryptic_candidates", enumerate_candidates)
     if candidates:
-        effect._attach_cryptic_candidates(candidates)
+        base_evidence = dict(effect.candidate_evidence or {})
+        sv_type = getattr(variant, "sv_type", None)
+        if sv_type is not None:
+            base_evidence["sv_type"] = sv_type
+        effect.add_candidates(
+            cryptic_exon_candidate(c, base_evidence=base_evidence)
+            for c in candidates
+        )

@@ -419,12 +419,12 @@ def test_complete_protein_and_partial_alternative_remain_unknown(cftr):
     primary = _effect(cftr, protein=cftr.protein_sequence,
                       evidence={"protein_completeness": "start_to_stop"})
     partial, _ = _mapped_partial(cftr, "partial_both", "none")
-    primary._extra_candidates = (EffectCandidate(partial, source="rna"),)
+    primary.add_candidates((EffectCandidate(partial, source="rna"),))
     assert primary.modifies_protein_sequence is None
     assert len(EffectCollection([primary]).drop_silent_and_noncoding()) == 1
     assert len(EffectCollection([primary]).drop_silent_and_noncoding(False)) == 0
     changed, _ = _mapped_partial(cftr, "partial_both", "missense")
-    primary._extra_candidates += (EffectCandidate(changed, source="rna"),)
+    primary.add_candidates((EffectCandidate(changed, source="rna"),))
     assert primary.modifies_protein_sequence is True
     assert len(EffectCollection([primary]).drop_silent_and_noncoding(False)) == 1
 
@@ -433,7 +433,7 @@ def test_complete_protein_and_partial_alternative_remain_unknown(cftr):
 def test_later_changed_candidate_controls_flags_and_filter(cftr, primary_status):
     primary = _effect(cftr, protein=cftr.protein_sequence if primary_status is False else None)
     changed = _effect(cftr, protein=cftr.protein_sequence + "A")
-    primary._extra_candidates = (EffectCandidate(changed, source="rna", evidence={"reads": 3}),)
+    primary.add_candidates((EffectCandidate(changed, source="rna", evidence={"reads": 3}),))
     before = primary.candidates
     assert primary.modifies_coding_sequence is True
     assert primary.modifies_protein_sequence is True
@@ -441,14 +441,14 @@ def test_later_changed_candidate_controls_flags_and_filter(cftr, primary_status)
     assert primary.candidates == before
     assert primary.candidates[1].evidence == {"reads": 3}
     # Self references and back edges must not recurse indefinitely.
-    changed._attach_primary_effects([primary])
+    changed.add_primary_effects([primary])
     assert primary.modifies_protein_sequence is True
 
 
 def test_unchanged_plus_unknown_is_unknown(cftr):
     unchanged = _effect(cftr, protein=cftr.protein_sequence)
     unknown = _effect(cftr)
-    unchanged._attach_primary_effects([unknown])
+    unchanged.add_primary_effects([unknown])
     assert unchanged.modifies_protein_sequence is None
     assert len(EffectCollection([unchanged]).drop_silent_and_noncoding()) == 1
     assert len(EffectCollection([unchanged]).drop_silent_and_noncoding(False)) == 0
@@ -475,7 +475,7 @@ def test_local_duplication_is_changed(cftr, isolate_span):
 def test_replacement_primary_effects_do_not_include_local_unknown(cftr):
     wrapper = _effect(cftr)
     unchanged = _effect(cftr, protein=cftr.protein_sequence)
-    wrapper._primary_effects = (unchanged,)
+    wrapper.primary_effects = (unchanged,)
     assert wrapper.modifies_protein_sequence is False
     assert len(EffectCollection([wrapper]).drop_silent_and_noncoding()) == 0
 
@@ -554,13 +554,15 @@ def test_split_start_codon_and_deleted_start_base(cftr):
 
 
 def test_unresolved_and_cryptic_alternatives_are_not_known_unchanged(cftr):
-    primary = _effect(cftr, protein=cftr.protein_sequence)
-    unknown = Unresolved(primary.variant, cftr, mechanism="missing_sequence")
-    cryptic = CrypticExonCandidate(primary.variant, cftr.contig, cftr.start, cftr.start + 20)
-    for alternative in (unknown, cryptic):
+    for make_alt in (
+        lambda p: Unresolved(p.variant, cftr, mechanism="missing_sequence"),
+        lambda p: CrypticExonCandidate(p.variant, cftr.contig, cftr.start, cftr.start + 20),
+    ):
+        primary = _effect(cftr, protein=cftr.protein_sequence)
+        alternative = make_alt(primary)
         assert alternative.modifies_coding_sequence is None
         assert alternative.modifies_protein_sequence is None
-        primary._extra_candidates = (EffectCandidate(alternative, source="test"),)
+        primary.add_candidates((EffectCandidate(alternative, source="test"),))
         assert primary.modifies_protein_sequence is None
         assert len(EffectCollection([primary]).drop_silent_and_noncoding()) == 1
         assert len(EffectCollection([primary]).drop_silent_and_noncoding(False)) == 0
@@ -590,10 +592,10 @@ def test_annotation_without_cds_features_is_unknown(cftr, monkeypatch):
 
 def test_empty_and_cyclic_candidate_sets_are_unknown(cftr):
     first, second = _effect(cftr), _effect(cftr)
-    first._primary_effects = ()
+    first.primary_effects = ()
     assert first.modifies_protein_sequence is None
-    first._primary_effects = (second,)
-    second._primary_effects = (first,)
+    first.primary_effects = (second,)
+    second.primary_effects = (first,)
     assert first.modifies_protein_sequence is None
 
 

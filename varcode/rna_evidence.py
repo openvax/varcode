@@ -254,9 +254,9 @@ def apply_rna_evidence_to_effects(effects: Iterable, resolver) -> Iterable:
     Splice mechanism sets use RNA evidence as a reconciliation signal:
     a new set replaces the old one, retaining an audit trail of raw RNA
     evidence, added candidates, excluded DNA-predicted candidates, and
-    per-current-candidate RNA support. Other multi-outcome effects keep
-    the additive side-channel behavior: observed candidates are stashed
-    on ``_extra_candidates`` and exposed through ``.candidates``.
+    per-current-candidate RNA support. Other multi-outcome effects append
+    observed candidates via :meth:`~varcode.MutationEffect.add_candidates`
+    so they are exposed through ``.candidates``.
 
     Transcript-model effects reconcile observations through their existing
     phase/splice candidates. Exact full-cDNA matches rank supported products
@@ -292,7 +292,7 @@ def apply_rna_evidence_to_effects(effects: Iterable, resolver) -> Iterable:
         realized = getattr(effect, "realized_candidates", None)
         dna_paired = any(
             isinstance(c, EffectCandidate) and (
-                getattr(c, "_paired_outcomes", None)
+                bool(c.outcomes)
                 or (not is_structural and c.source == "varcode.dna")
             )
             for c in (effect.__dict__.get("candidates") or ())
@@ -329,8 +329,7 @@ def apply_rna_evidence_to_effects(effects: Iterable, resolver) -> Iterable:
             replacements.append(refined)
             changed = changed or refined is not effect
         else:
-            existing = getattr(effect, "_extra_candidates", ())
-            effect._extra_candidates = tuple(existing) + observed_tuple
+            effect.add_candidates(observed_tuple)
             replacements.append(effect)
     if changed:
         return replace_effects(effects, replacements)

@@ -45,6 +45,7 @@ def test_rna_support_selects_matching_normal_product_and_keeps_alternatives(inpu
     assert all("rna_support" not in o.mutant.evidence
                for c in original.candidates for o in c.outcomes)
     assert any(isinstance(c.effect, Deletion) for c in result.candidates)
+    assert "extra_candidates" not in result.__dict__
     assert not hasattr(result, "_extra_candidates")
 
 
