@@ -81,6 +81,10 @@ def test_effect_serialization_classes_is_finite_readonly_allowlist():
     assert registry[("varcode.splice_outcomes", "SpliceOutcomeSet")] is SpliceOutcomeSet
 
     # Backwards-compatible legacy serialized aliases
+    from varcode import PhaseHypothesis, PhasePartition
+
+    assert registry[("varcode.germline", "PhaseHypothesis")] is PhaseHypothesis
+    assert registry[("varcode.germline", "PhasePartition")] is PhasePartition
     assert registry[("varcode.effects.structural_serialization", "_EffectReference")] is EffectReference
     assert registry[("varcode.mutant_transcript", "_AssembledAllele")] is AssembledAllele
     assert registry[("varcode.effects.structural", "_AssembledAllele")] is AssembledAllele

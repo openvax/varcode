@@ -121,3 +121,34 @@ def test_effect_class_modules_are_split_by_domain():
     barrel_tree = ast.parse(inspect.getsource(effect_classes))
     barrel_classes = [n.name for n in barrel_tree.body if isinstance(n, ast.ClassDef)]
     assert barrel_classes == [], f"effect_classes.py should remain a barrel, found {barrel_classes}"
+
+
+def test_transforms_germline_and_splice_modules_are_split_by_domain():
+    from varcode import (
+        germline,
+        germline_phasing,
+        splice_exon_builders,
+        splice_intron_builders,
+        splice_outcomes,
+        transforms,
+    )
+    from varcode.transforms import breakends, cis_snvs, indels
+
+    for mod, limit in (
+        (breakends, 600),
+        (indels, 300),
+        (cis_snvs, 700),
+        (germline, 850),
+        (germline_phasing, 550),
+        (splice_outcomes, 700),
+        (splice_exon_builders, 500),
+        (splice_intron_builders, 700),
+    ):
+        source_lines = inspect.getsource(mod).splitlines()
+        assert len(source_lines) < limit, f"{mod.__name__} grew back to {len(source_lines)} lines"
+        assert inspect.getdoc(mod), f"{mod.__name__} is missing a module docstring"
+    transforms_tree = ast.parse(inspect.getsource(transforms))
+    transforms_defs = [
+        n.name for n in transforms_tree.body if isinstance(n, (ast.FunctionDef, ast.ClassDef))
+    ]
+    assert transforms_defs == [], f"transforms/__init__.py should remain a barrel, found {transforms_defs}"

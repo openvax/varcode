@@ -516,7 +516,7 @@ def retained_cds_start(model, transcript):
         ``transcript``'s start codon remain contiguous on the ``+`` segment
         strand (including across split segment boundaries), or ``None`` if lost.
     """
-    positions = [set(), set(), set()]
+    positions: list[set[int]] = [set(), set(), set()]
     start = min(transcript.start_codon_spliced_offsets)
     offset = 0
     for segment in model.reference_segments or ():
