@@ -66,7 +66,6 @@ if TYPE_CHECKING:
         EffectCollection as EffectCollection,
         EffectReference as EffectReference,
         GermlineAlleleOverlap as GermlineAlleleOverlap,
-        HypothesisLimit as HypothesisLimit,
         MultiOutcomeEffect as MultiOutcomeEffect,
         MutationEffect as MutationEffect,
         NonsilentCodingMutation as NonsilentCodingMutation,
@@ -323,7 +322,6 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "MultiOutcomeEffect": (".effects", "MultiOutcomeEffect"),
     "MutationEffect": (".effects", "MutationEffect"),
     "NonsilentCodingMutation": (".effects", "NonsilentCodingMutation"),
-    "HypothesisLimit": (".effects", "HypothesisLimit"),
     "Unresolved": (".effects", "Unresolved"),
     "GermlineAlleleOverlap": (".effects", "GermlineAlleleOverlap"),
     # proteome & protocols
@@ -490,7 +488,6 @@ __all__ = [
     "top_priority_effect",
     "MultiOutcomeEffect",
     "MutationEffect",
-    "HypothesisLimit",
     "Unresolved",
     "NonsilentCodingMutation",
 
@@ -551,6 +548,8 @@ def __getattr__(name: str) -> Any:
         value = getattr(module, attr_name)
         globals()[name] = value
         return value
+    if name == "HypothesisLimit":
+        return importlib.import_module(".effects", __name__).Unresolved
     if name in _LAZY_SUBMODULES:
         module = importlib.import_module(f".{name}", __name__)
         globals()[name] = module

@@ -25,7 +25,6 @@ from .base import (
     Failure,
     FivePrimeUTR,
     GermlineAlleleOverlap,
-    HypothesisLimit,
     IncompleteTranscript,
     Intergenic,
     Intragenic,
@@ -92,7 +91,6 @@ __all__ = [
     "GermlineAlleleOverlap",
     "Failure",
     "Unresolved",
-    "HypothesisLimit",
     "NoncodingTranscript",
     "IncompleteTranscript",
     "FivePrimeUTR",
@@ -141,3 +139,9 @@ __all__ = [
     "HaplotypeEffect",
     "PhaseCandidateSet",
 ]
+
+
+def __getattr__(name: str):
+    if name == "HypothesisLimit":
+        return Unresolved
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

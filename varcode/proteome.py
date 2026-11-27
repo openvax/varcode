@@ -16,7 +16,7 @@ from serializable.helpers import to_json
 from .effect_candidates import EffectCandidate
 from .effect_traversal import get_effect_candidates
 from .effect_hypotheses import ClassifiedOutcome, RealizedEffectCandidate
-from .effects import EffectCollection, Failure, HypothesisLimit, MutationEffect, Unresolved
+from .effects import EffectCollection, Failure, MutationEffect, Unresolved
 from .effects.structural_serialization import structural_effect_to_dict
 from .orf import ORFAnnotation, ORFOutcome
 from .orf_serialization import ReferenceGenomeSnapshot
@@ -104,8 +104,16 @@ def _outcome_contexts(value, contexts):
     return (*contexts, dict(source=value.source)) if isinstance(value, ORFOutcome) and value.source is not None else contexts
 
 
+def _is_hypothesis_limit(effect):
+    return isinstance(effect, Unresolved) and effect.mechanism == "hypothesis_limit"
+
+
 def _limits(effect):
-    return dict(max_hypotheses=effect.max_hypotheses) if isinstance(effect, HypothesisLimit) else {}
+    if _is_hypothesis_limit(effect):
+        max_hypotheses = effect.details.get("max_hypotheses")
+        if max_hypotheses is not None:
+            return {"max_hypotheses": max_hypotheses}
+    return {}
 
 
 def _label(effect, annotation=None, kind=None):
@@ -280,7 +288,7 @@ def _product(product=None, *, effect=None, baseline=False):
 
 
 def _status(effect, baseline, mutant, reason=None):
-    if isinstance(effect, HypothesisLimit):
+    if _is_hypothesis_limit(effect):
         return "hypothesis_limit", effect.reason
     if isinstance(effect, Failure):
         return "annotation_failure", str(effect.error) if effect.error is not None else "annotation failed"

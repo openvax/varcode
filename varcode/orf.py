@@ -237,10 +237,14 @@ def _product(view, product):
 
 
 def _effect(effect):
-    return {"type": type(effect).__name__, **{
+    data = {"type": type(effect).__name__, **{
         k: plain_json_value(getattr(effect, k)) for k in (
             "aa_mutation_start_offset", "aa_mutation_end_offset", "aa_ref", "aa_alt",
-            "reason", "mechanism", "max_hypotheses") if hasattr(effect, k)}}
+            "reason", "mechanism") if hasattr(effect, k)}}
+    details = getattr(effect, "details", None)
+    if isinstance(details, Mapping) and "max_hypotheses" in details:
+        data["max_hypotheses"] = plain_json_value(details["max_hypotheses"])
+    return data
 
 
 @dataclass(frozen=True)

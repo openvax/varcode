@@ -209,8 +209,8 @@ class GermlineContext:
     max_phase_hypotheses
         Most cis/trans phase hypotheses to enumerate for one somatic
         variant (default 8, i.e. up to three unphased germline variants
-        nearby). Beyond it, effects are
-        :class:`~varcode.HypothesisLimit`. Change it with
+        nearby). Beyond it, effects are :class:`~varcode.Unresolved` with
+        ``mechanism="hypothesis_limit"``. Change it with
         ``dataclasses.replace(ctx, max_phase_hypotheses=16)``.
 
     Examples

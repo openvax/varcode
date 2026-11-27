@@ -99,8 +99,9 @@ class HypothesisLimitError(ValueError):
     """Raised when a variant has more alternative outcomes than
     ``max_hypotheses`` allows, so they were not enumerated.
 
-    Annotators catch this and return a :class:`~varcode.HypothesisLimit`
-    effect instead of choosing among the outcomes.
+    Annotators catch this and return an :class:`~varcode.Unresolved` effect
+    with ``mechanism="hypothesis_limit"`` instead of choosing among the
+    outcomes.
     """
 
     def __init__(self, max_hypotheses):

@@ -118,12 +118,12 @@ count.
 
 When the combinations exceed the cap (default eight, so more than three
 independent unphased germline variants across the transcript), Varcode does not guess a phase. It
-returns a `HypothesisLimit` effect, a kind of `Unresolved`:
+returns an `Unresolved` effect with `mechanism="hypothesis_limit"`:
 
-- Its `phase` records which germline variants are known cis, known trans, or
-  unphased.
+- Its `details["phase"]` records which germline variants are known cis, known
+  trans, or unphased, and `details["max_hypotheses"]` records the cap.
 - Its `reference_effect` is the effect without germline context. The
-  `HypothesisLimit` is ranked like that effect.
+  `Unresolved` effect is ranked like that effect.
 
 To raise the cap, set it on the context:
 

@@ -56,8 +56,8 @@ the legacy annotator's local lookup. Sparse/hotspot contexts retain
 Through `effects(germline=...)`, the transcript model uses the context phase cap (`GermlineContext.max_phase_hypotheses`, default 8). It
 also caps the combined phase × baseline-splice × mutant-splice outcomes at `max_hypotheses=64`, which is
 the phase cap too when `predict_transcript_model_effect` is called directly.
-Exceeding either returns a [`HypothesisLimit`](germline.md#phase-enumeration-limit)
-rather than a partial set of candidates.
+Exceeding either returns an [`Unresolved`](germline.md#phase-enumeration-limit)
+effect with `mechanism="hypothesis_limit"` rather than a partial set of candidates.
 
 ### Mixed inherited and somatic haplotypes
 

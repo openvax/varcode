@@ -1,5 +1,28 @@
 # Change Log
 
+## v13.4.0
+
+### Fold `HypothesisLimit` into `Unresolved`
+
+- **Removed `HypothesisLimit` as a separate effect class**: when phase or splice
+  outcomes exceed `max_hypotheses`, annotators now return a plain
+  `Unresolved(..., mechanism="hypothesis_limit", details={"max_hypotheses": ..., "phase": ...})`
+  with the same `short_description` (`"unresolved-hypothesis-limit"`), `reason`,
+  `reference_effect`, and severity ranking (`priority_class`).
+- **Added optional `details: Mapping[str, Any] | None = None` to `Unresolved`**
+  for structured mechanism-specific context, with hashable `Unresolved.__hash__`.
+- **Preserved downstream and archive compatibility**:
+  - `to_proteome()` still emits `status="hypothesis_limit"` and
+    `limits={"max_hypotheses": ...}` and `orf._effect()` still exports
+    `max_hypotheses`.
+  - Pre-13.4 flat and effect-graph `HypothesisLimit` JSON archives decode cleanly
+    into `Unresolved(mechanism="hypothesis_limit", details=...)`.
+  - Removed `HypothesisLimit` from `__all__` and `docs/effect_types.md`, while
+    keeping a compatibility `__getattr__` alias returning `Unresolved` on
+    `varcode`, `varcode.effects`, and `varcode.effects.effect_classes` so
+    downstream class allowlists (such as `vaxrank/native_serialization.py`)
+    continue working without breaking.
+
 ## v13.3.0
 
 ### Modularize transforms, splice builders, and germline phasing; expand mypy & SPDX packaging

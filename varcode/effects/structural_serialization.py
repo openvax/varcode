@@ -291,8 +291,10 @@ def _registry_bundle() -> tuple[
         exported_cls = getattr(effect_classes, export_name)
         if isinstance(exported_cls, type) and exported_cls in reviewed:
             by_key.setdefault(("varcode.effects.effect_classes", exported_cls.__qualname__), exported_cls)
-    # Explicit legacy aliases for archives written under earlier 11.x-13.2 names.
+    # Explicit legacy aliases for archives written under earlier 11.x-13.3 names.
     by_key.update({
+        ("varcode.effects.base", "HypothesisLimit"): effect_classes.Unresolved,
+        ("varcode.effects.effect_classes", "HypothesisLimit"): effect_classes.Unresolved,
         ("varcode.germline", "PhaseHypothesis"): PhaseHypothesis,
         ("varcode.germline", "PhasePartition"): PhasePartition,
         ("varcode.effects.structural_serialization", "_EffectReference"): EffectReference,
@@ -492,6 +494,14 @@ def structural_effect_from_dict(
                     for name, item in restored.__dict__.items():
                         object.__setattr__(objects[index], name, item)
                 else:
+                    from .base import Unresolved, normalize_legacy_hypothesis_limit_state
+
+                    if (
+                        cls is Unresolved
+                        and "mechanism" not in values
+                        and ("max_hypotheses" in values or "phase" in values)
+                    ):
+                        values = normalize_legacy_hypothesis_limit_state(values)
                     cls.__init__(objects[index], **values)
                 decoded_attached = decode(attached)
                 for name, item in decoded_attached.items():

@@ -498,3 +498,89 @@ def test_registered_annotators_public_api():
 
         _REGISTRY.pop("custom_test_annotator", None)
     assert "custom_test_annotator" not in registered_annotators()
+
+
+def test_legacy_hypothesis_limit_archives_and_alias_resolve_to_unresolved():
+    import varcode
+    from varcode.effects import Unresolved, effect_classes
+    from varcode.germline import PhasePartition
+
+    # Removed from public __all__, but legacy getattr alias stays readable for
+    # downstream allowlists (e.g. vaxrank/native_serialization.py).
+    assert "HypothesisLimit" not in varcode.__all__
+    assert "HypothesisLimit" not in varcode.effects.__all__
+    assert "HypothesisLimit" not in effect_classes.__all__
+    assert getattr(varcode, "HypothesisLimit") is Unresolved
+    assert getattr(varcode.effects, "HypothesisLimit") is Unresolved
+    assert getattr(effect_classes, "HypothesisLimit") is Unresolved
+
+    classes = effect_serialization_classes()
+    assert classes[("varcode.effects.base", "HypothesisLimit")] is Unresolved
+    assert classes[("varcode.effects.effect_classes", "HypothesisLimit")] is Unresolved
+
+    genome = cached_release(81)
+    transcript = genome.transcript_by_id("ENST00000003084")
+    somatic = Variant("7", 117531100, "T", "A", genome)
+    germline = Variant("7", 117531101, "T", "C", genome)
+    phase = PhasePartition(germline=(germline,))
+    ref_effect = somatic.effect_on_transcript(transcript)
+
+    current = Unresolved(
+        somatic,
+        transcript,
+        mechanism="hypothesis_limit",
+        reason="More than 1 alternative outcomes (1 unphased germline variants)",
+        reference_effect=ref_effect,
+        details={"max_hypotheses": 1, "phase": phase},
+    )
+    round_tripped = effect_from_json(effect_to_json(current))
+    assert type(round_tripped) is Unresolved
+    assert round_tripped == current
+    assert round_tripped.details == {"max_hypotheses": 1, "phase": phase}
+
+    # Synthetic pre-13.4 flat HypothesisLimit JSON archive.
+    legacy_payload = json.loads(effect_to_json(current))
+    legacy_payload["__class__"] = {
+        "__module__": "varcode.effects.effect_classes",
+        "__name__": "HypothesisLimit",
+    }
+    legacy_payload.pop("mechanism")
+    legacy_payload.pop("reason")
+    legacy_details = legacy_payload.pop("details")
+    legacy_payload["max_hypotheses"] = legacy_details["max_hypotheses"]
+    legacy_payload["phase"] = legacy_details["phase"]
+
+    decoded_legacy = effect_from_json(json.dumps(legacy_payload))
+    assert type(decoded_legacy) is Unresolved
+    assert decoded_legacy.mechanism == "hypothesis_limit"
+    assert decoded_legacy.reason == current.reason
+    assert decoded_legacy.details == {"max_hypotheses": 1, "phase": phase}
+    assert decoded_legacy.reference_effect == ref_effect
+
+    # Synthetic pre-13.4 effect-graph HypothesisLimit archive (with variants attached).
+    current_graph = predict_transcript_model_effect(
+        (somatic,), transcript, germline_variants=(germline,), max_phase_hypotheses=1
+    )
+    graph_payload = json.loads(effect_to_json(current_graph))
+    graph_payload["__class__"] = {
+        "__module__": "varcode.effects.base",
+        "__name__": "HypothesisLimit",
+    }
+    root_node = graph_payload["nodes"]["__value__"][0]["__value__"]
+    root_node[0] = {
+        "__module__": "varcode.effects.base",
+        "__name__": "HypothesisLimit",
+    }
+    node_fields = root_node[1]
+    node_fields.pop("mechanism")
+    node_fields.pop("reason")
+    node_details = node_fields.pop("details")
+    node_fields["max_hypotheses"] = node_details["max_hypotheses"]
+    node_fields["phase"] = node_details["phase"]
+
+    decoded_graph = effect_from_json(json.dumps(graph_payload))
+    assert type(decoded_graph) is Unresolved
+    assert decoded_graph.mechanism == "hypothesis_limit"
+    assert decoded_graph.details["max_hypotheses"] == 1
+    assert decoded_graph.details["phase"] == phase
+    assert decoded_graph.variants == (somatic,)
