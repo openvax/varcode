@@ -64,7 +64,7 @@ def test_cli_and_package_import_avoid_heavy_dependencies(module_name):
         ("varcode.cli.main", "varcode ", {"effects", "genes"}),
         ("varcode.cli.main", "varcode effects --out", {"--output-csv", "--output"}),
         ("varcode.cli.main", "varcode genes --v", {"--vcf", "--variant", "--version"}),
-        ("varcode.cli.genes_script", "varcode-genes --out", {"--output-csv", "--output"}),
+        ("varcode.cli.main", "varcode genes --out", {"--output-csv", "--output"}),
     ],
 )
 def test_argcomplete_returns_expected_completions(

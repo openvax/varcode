@@ -36,7 +36,6 @@ include = ["varcode", "varcode.*"]
 "Bug Tracker" = "https://github.com/openvax/varcode/issues"
 
 [project.scripts]
-varcode-genes = "varcode.cli.genes_script:main"
 varcode = "varcode.cli.main:main"
 
 [dependency-groups]

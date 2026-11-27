@@ -7,8 +7,7 @@ Subcommands:
 ``genes``          annotate variants with overlapping genes
 
 For backward compatibility, ``varcode --vcf x.vcf ...`` with no subcommand is
-the same as ``varcode effects --vcf x.vcf ...``, and the separate
-``varcode-genes`` script is an alias for ``varcode genes``.
+the same as ``varcode effects --vcf x.vcf ...``.
 """
 
 import os
@@ -45,7 +44,7 @@ def build_parser(*, attach_subcommands=False):
     )
     genes_parser = subparsers.add_parser(
         "genes",
-        help="annotate variants with overlapping gene names (alias: the varcode-genes command)",
+        help="annotate variants with overlapping gene names",
     )
     if attach_subcommands:
         from .effects_script import attach_effects_parser
