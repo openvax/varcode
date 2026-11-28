@@ -194,7 +194,7 @@ When interpreting them:
 
 The `varcode` command annotates files without writing Python. Its subcommands
 are `effects` (the default when none is given) and `genes` (lists the genes each
-variant overlaps; the older `varcode-genes` command is an alias). `-o`/`--output` is a synonym for `--output-csv`.
+variant overlaps). `-o`/`--output` is a synonym for `--output-csv`.
 
 ```bash
 varcode effects --genome GRCh38 --vcf variants.vcf --output-csv effects.csv

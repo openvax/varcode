@@ -4,6 +4,7 @@ site_url: https://openvax.github.io/varcode/
 repo_url: https://github.com/openvax/varcode
 repo_name: openvax/varcode
 edit_uri: edit/main/docs/
+strict: true
 
 theme:
   name: material

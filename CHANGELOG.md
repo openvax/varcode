@@ -1,5 +1,16 @@
 # Change Log
 
+## v13.4.1
+
+### Remove standalone `varcode-genes` console script and enable strict MkDocs builds
+
+- **Consolidated console scripts onto `varcode` (`#785`)**: removed the
+  redundant standalone `varcode-genes` entry point from `[project.scripts]` in
+  `pyproject.toml`. Use `varcode genes` instead; the `varcode.cli.genes_script`
+  module remains intact for Python callers.
+- **Enabled `strict: true` in `mkdocs.yml`** so documentation builds fail on
+  warnings and broken links.
+
 ## v13.4.0
 
 ### Fold `HypothesisLimit` into `Unresolved`
